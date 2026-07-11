@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_agent_snapshot_generation_v0"
-status: "p4b4b_implemented"
+status: "p4b6c_operation_wide_generation_complete"
 purpose: >-
   Let the host agent generate and refresh the exact Admission snapshot needed
   by trusted MCP execution without asking the human to edit YAML.
@@ -19,6 +19,7 @@ command:
     - "execution_intent_digest for the detached attestation"
     - "authority_snapshot_token"
     - "credential/audience and claim/gate count audit fields"
+    - "effect_count for the complete ordered operation effect set"
 
 authority_derivation:
   claims: "solely from forge_core_store::derive_state over the sidecar claim WAL"
@@ -42,7 +43,7 @@ failure_policy:
   - "state-version mismatch fails before output"
   - "missing required WAL claim fails before output"
   - "claim projection diagnostics or corruption fail closed"
-  - "duplicate command refs and non-single-effect operations fail closed"
+  - "duplicate command/effect refs and zero or more than 64 operation effects fail closed"
   - "revoked, unknown, or underprivileged credentials fail closed"
 
 completed_follow_on:
@@ -52,6 +53,7 @@ completed_follow_on:
 references:
   - "contracts/spec/execution-authority-snapshot-binding-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
   - "contracts/spec/claims-integrity-spine-spec.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"

@@ -87,9 +87,10 @@ Active implementation plan:
   Adapter/kernel integration is required before Forge claims runtime enforcement.
 - The **Operation Effect Bundle Module** deepens the existing local effect-store
   transaction for multi-effect operations. The prepared kernel now binds and
-  commits that bundle under opaque authority; MCP activation remains a separate
-  Adapter boundary. Sagas remain future work for external or irreversible
-  commit domains.
+  commits that bundle under opaque authority; the MCP Adapter activates it only
+  through exact bounded ordered loading, scope-specific policy/opt-in, startup
+  reconciliation, and signed intent. Sagas remain future work for external or
+  irreversible commit domains.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

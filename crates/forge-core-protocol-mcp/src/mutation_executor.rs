@@ -24,10 +24,10 @@ pub(crate) fn verified_call_from_arguments(
     arguments: Option<&Map<String, Value>>,
 ) -> Result<VerifiedMcpExecutionCall, McpMutationRequestError> {
     let parsed = parse_execution_arguments(arguments)?;
-    let request = McpExecutionRequest::new(
+    let request = McpExecutionRequest::new_operation_wide(
         parsed.operation_contract_ref,
         parsed.command_contract_refs,
-        parsed.effect_contract_refs.into_iter().next(),
+        parsed.effect_contract_refs,
         parsed.payloads,
         parsed.risk_audit_rules_ref,
         parsed.require_citation,
@@ -47,9 +47,6 @@ pub enum McpMutationRequestError {
     BlankValue(String),
     InvalidPayloadBinding(String),
     InvalidPayloadDigest(String),
-    MultipleEffectsUnsupported {
-        count: usize,
-    },
 }
 
 impl fmt::Display for McpMutationRequestError {
@@ -71,10 +68,6 @@ impl fmt::Display for McpMutationRequestError {
             Self::InvalidPayloadDigest(binding) => write!(
                 formatter,
                 "payload binding '{binding}' must end in #sha256:<64 lowercase hex characters>"
-            ),
-            Self::MultipleEffectsUnsupported { count } => write!(
-                formatter,
-                "typed MCP execution admits at most one supplied effect in P4b.2 ({count} found)"
             ),
         }
     }
@@ -117,11 +110,6 @@ fn parse_execution_arguments(
         .and_then(|value| parse_single_path("--operation", value))?;
     let command_contract_refs = parse_path_list(arguments.get("--command"), "--command")?;
     let effect_contract_refs = parse_path_list(arguments.get("--effect"), "--effect")?;
-    if effect_contract_refs.len() > 1 {
-        return Err(McpMutationRequestError::MultipleEffectsUnsupported {
-            count: effect_contract_refs.len(),
-        });
-    }
     let payloads = parse_payloads(arguments.get("--payload"))?;
     let risk_audit_rules_ref = arguments
         .get("--require-risk-audit")
@@ -305,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn mutation_boundary_rejects_missing_operation_bad_types_and_multiple_effects() {
+    fn mutation_boundary_rejects_missing_operation_and_bad_types() {
         assert!(matches!(
             parse_execution_arguments(None),
             Err(McpMutationRequestError::MissingOperation)
@@ -321,10 +309,9 @@ mod tests {
             "--operation": "op.yaml",
             "--effect": ["a.yaml", "b.yaml"]
         }));
-        assert_eq!(
-            parse_execution_arguments(Some(&multiple_effects)),
-            Err(McpMutationRequestError::MultipleEffectsUnsupported { count: 2 })
-        );
+        let parsed =
+            parse_execution_arguments(Some(&multiple_effects)).expect("operation-wide effect list");
+        assert_eq!(parsed.effect_contract_refs.len(), 2);
     }
 
     #[test]

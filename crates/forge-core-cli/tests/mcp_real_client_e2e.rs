@@ -19,8 +19,10 @@ const AUDIENCE: &str = "forge-core:mcp:real-client";
 const OPERATION_REF: &str = "operation.yaml";
 const ASSURANCE_REF: &str = "contracts/assurance/case.yaml";
 const EFFECT_REF: &str = "contracts/effects/story-artifact-write-effect.yaml";
+const EFFECT_REF_2: &str = "contracts/effects/story-artifact-write-effect-2.yaml";
 const CLAIM_REF: &str = "contracts/claims/story-v2-010-active-claim.yaml";
 const EFFECT_TARGET: &str = ".forge-method/artifacts/p4b4d-real-client.yaml";
+const EFFECT_TARGET_2: &str = ".forge-method/artifacts/p4b6c-real-client-2.yaml";
 
 fn bin() -> AssertCommand {
     AssertCommand::cargo_bin("forge-core").expect("forge-core binary")
@@ -55,11 +57,18 @@ struct TrustedFixture {
     arguments: serde_json::Map<String, Value>,
     attestation: Value,
     target: PathBuf,
+    second_target: Option<PathBuf>,
+    deployment_id: String,
+    operation_wide: bool,
 }
 
 #[allow(clippy::too_many_lines)] // one end-to-end setup keeps every trust input visible
-fn trusted_fixture() -> TrustedFixture {
-    let parent = fresh_parent("mutation");
+fn trusted_fixture(operation_wide: bool) -> TrustedFixture {
+    let parent = fresh_parent(if operation_wide {
+        "operation-wide-mutation"
+    } else {
+        "single-effect-mutation"
+    });
     let project = parent.join("consumer");
     let state_root = parent.join("runtime/.forge-method");
     for dir in [
@@ -99,11 +108,6 @@ fn trusted_fixture() -> TrustedFixture {
         .coordination_scope
         .concurrency
         .agent_id = Some(StableId("agent".to_owned()));
-    fs::write(
-        project.join(OPERATION_REF),
-        yaml_serde::to_string(&operation).expect("operation YAML"),
-    )
-    .expect("operation");
 
     let mut effect: ToolEffectContractDocument =
         yaml_serde::from_str(&fs::read_to_string(source.join(EFFECT_REF)).expect("effect fixture"))
@@ -122,11 +126,31 @@ fn trusted_fixture() -> TrustedFixture {
     effect.tool_effect_contract.write_set[0]
         .reference
         .clone_from(&EFFECT_TARGET.to_owned());
+    let mut effects = vec![(EFFECT_REF, effect)];
+    if operation_wide {
+        let mut second = effects[0].1.clone();
+        second.tool_effect_contract.id = StableId("effect.p4b6c.real-client.second".to_owned());
+        second.tool_effect_contract.contract_ref =
+            forge_core_contracts::RepoPath(EFFECT_REF_2.to_owned());
+        EFFECT_TARGET_2.clone_into(&mut second.tool_effect_contract.write_set[0].reference);
+        effects.push((EFFECT_REF_2, second));
+        operation
+            .operation_contract
+            .effect_contract_refs
+            .push(forge_core_contracts::RepoPath(EFFECT_REF_2.to_owned()));
+    }
     fs::write(
-        project.join(EFFECT_REF),
-        yaml_serde::to_string(&effect).expect("effect YAML"),
+        project.join(OPERATION_REF),
+        yaml_serde::to_string(&operation).expect("operation YAML"),
     )
-    .expect("effect");
+    .expect("operation");
+    for (reference, effect) in &effects {
+        fs::write(
+            project.join(reference),
+            yaml_serde::to_string(effect).expect("effect YAML"),
+        )
+        .expect("effect");
+    }
 
     let now = i64::try_from(
         SystemTime::now()
@@ -219,17 +243,26 @@ fn trusted_fixture() -> TrustedFixture {
         .expect("snapshot");
     assert_success(&snapshot, "snapshot generation");
 
-    let payload_path = project.join("payloads/result.yaml");
     let payload = b"p4b4d: official client applied\n";
-    fs::write(&payload_path, payload).expect("payload");
-    let payload_binding = format!(
+    fs::write(project.join("payloads/result.yaml"), payload).expect("payload");
+    let mut payload_bindings = vec![format!(
         "{EFFECT_TARGET}=payloads/result.yaml#{}",
         sha256_content_hash(payload)
-    );
+    )];
+    let mut effect_refs = vec![EFFECT_REF];
+    if operation_wide {
+        let second_payload = b"p4b6c: official client applied second effect\n";
+        fs::write(project.join("payloads/result-2.yaml"), second_payload).expect("second payload");
+        payload_bindings.push(format!(
+            "{EFFECT_TARGET_2}=payloads/result-2.yaml#{}",
+            sha256_content_hash(second_payload)
+        ));
+        effect_refs.push(EFFECT_REF_2);
+    }
     let arguments = serde_json::json!({
         "--operation": OPERATION_REF,
-        "--effect": EFFECT_REF,
-        "--payload": payload_binding
+        "--effect": effect_refs,
+        "--payload": payload_bindings
     })
     .as_object()
     .expect("argument object")
@@ -265,19 +298,29 @@ fn trusted_fixture() -> TrustedFixture {
     )
     .expect("allowlist");
     let policy = parent.join("operator/deployment-policy.yaml");
+    let deployment_id = if operation_wide {
+        "trusted-real-client-operation-wide"
+    } else {
+        "trusted-real-client"
+    };
+    let (mode, effect_scope) = if operation_wide {
+        ("trusted_operation_wide", "operation_wide")
+    } else {
+        ("trusted_single_effect", "single_effect")
+    };
     fs::write(
         &policy,
         format!(
             r#"schema_version: "0.1"
 mcp_deployment_policy:
-  id: "trusted-real-client"
-  mode: "trusted_single_effect"
+  id: "{deployment_id}"
+  mode: "{mode}"
   required_audience: "{AUDIENCE}"
   mutating_tools: ["execute-operation"]
   startup_reconciliation: "required_before_listen"
   material_loading: "canonical_project_bound"
   snapshot_loading: "bounded_local_read_only"
-  effect_scope: "single_effect"
+  effect_scope: "{effect_scope}"
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
@@ -294,7 +337,7 @@ mcp_deployment_policy:
         .arg(&project)
         .arg("--anchor")
         .arg(&replay_anchor)
-        .args(["--deployment-id", "trusted-real-client", "--json"])
+        .args(["--deployment-id", deployment_id, "--json"])
         .output()
         .expect("provision replay anchor");
     assert_success(&anchor, "replay anchor provision");
@@ -324,6 +367,8 @@ mcp_deployment_policy:
     assert_success(&readiness, "readiness");
 
     let target = state_root.join("artifacts/p4b4d-real-client.yaml");
+    let second_target =
+        operation_wide.then(|| state_root.join("artifacts/p4b6c-real-client-2.yaml"));
     TrustedFixture {
         project,
         state_root,
@@ -336,6 +381,9 @@ mcp_deployment_policy:
         arguments,
         attestation,
         target,
+        second_target,
+        deployment_id: deployment_id.to_owned(),
+        operation_wide,
     }
 }
 
@@ -383,7 +431,16 @@ async fn official_rmcp_client_initializes_lists_and_calls_real_stdio_server() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn generated_config_drives_signed_mutation_through_official_rmcp_client() {
-    let fixture = trusted_fixture();
+    run_generated_config_fixture(trusted_fixture(false)).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generated_config_commits_operation_wide_call_through_official_rmcp_client() {
+    run_generated_config_fixture(trusted_fixture(true)).await;
+}
+
+#[allow(clippy::too_many_lines)] // one official-client assertion chain keeps the full trust path visible
+async fn run_generated_config_fixture(fixture: TrustedFixture) {
     let config: Value =
         serde_json::from_slice(&fs::read(&fixture.client_config).expect("generated client config"))
             .expect("client config JSON");
@@ -395,6 +452,12 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
         .iter()
         .map(|arg| arg.as_str().expect("string arg"))
         .collect::<Vec<_>>();
+    let expected_enable_flag = if fixture.operation_wide {
+        "--enable-trusted-operation-wide"
+    } else {
+        "--enable-trusted-single-effect"
+    };
+    assert!(args.contains(&expected_enable_flag));
     let anchor_arg = args
         .windows(2)
         .find(|pair| pair[0] == "--replay-anchor")
@@ -443,6 +506,19 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
         fs::read_to_string(&fixture.target).expect("committed target"),
         "p4b4d: official client applied\n"
     );
+    if let Some(second_target) = &fixture.second_target {
+        assert_eq!(
+            fs::read_to_string(second_target).expect("second committed target"),
+            "p4b6c: official client applied second effect\n"
+        );
+        assert_eq!(
+            envelope["result"]["receipt"]["effect_ids"]
+                .as_array()
+                .expect("operation-wide effect ids")
+                .len(),
+            2
+        );
+    }
     assert!(fixture.state_root.join("wal/replay.fmr1").exists());
     assert!(fixture.state_root.join("wal/effects.ndjson").exists());
     let traces = fs::read_to_string(fixture.state_root.join("traces/events.ndjson"))
@@ -458,7 +534,7 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
     let anchor: Value =
         serde_json::from_slice(&fs::read(&fixture.replay_anchor).expect("external replay anchor"))
             .expect("replay anchor JSON");
-    assert_eq!(anchor["deployment_id"], "trusted-real-client");
+    assert_eq!(anchor["deployment_id"], fixture.deployment_id);
     assert!(anchor["generation"]
         .as_u64()
         .is_some_and(|value| value >= 2));

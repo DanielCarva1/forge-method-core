@@ -26,10 +26,11 @@ use forge_core_command_surface::{command_names, COMMAND_MCP};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_protocol_mcp::{
     Allowlist, AttestationPolicy, AttestationVerifier, AuthorizedPrincipalRegistry,
-    ExplicitTrustedSingleEffectOptIn, ForgeMcpServer, McpMutationExecutor, McpServerConfig,
-    ReconciledTrustedMcpDeployment, TrustedMcpLoaderLimits, TrustedMcpMaterialLoader,
-    TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
-    DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+    ExplicitTrustedOperationWideOptIn, ExplicitTrustedSingleEffectOptIn, ForgeMcpServer,
+    McpMutationExecutor, McpServerConfig, ReconciledTrustedMcpDeployment, TrustedMcpLoaderLimits,
+    TrustedMcpMaterialLoader, TrustedOperationWideMcpExecutor, TrustedSingleEffectMcpExecutor,
+    ValidatedMcpDeploymentPolicy, DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+    DEFAULT_MAX_FUTURE_SKEW_SECONDS,
 };
 
 use crate::cli_error::ExitError;
@@ -125,8 +126,8 @@ fn print_mcp_usage() {
     println!("  serve runs the stdio JSON-RPC MCP server (ADR-0006). Default Allowlist");
     println!("  is read-only; --allowlist overrides with the named YAML file.");
     println!("  Any mutating allowlist also requires --principal-registry <yaml>.");
-    println!("  Trusted single-effect mutation additionally requires --deployment-policy,");
-    println!("  --snapshot, --replay-anchor, and the explicit enable flag.");
+    println!("  Trusted mutation additionally requires --deployment-policy, --snapshot,");
+    println!("  --replay-anchor, and exactly one scope-specific explicit enable flag.");
     println!("  snapshot generates a content-bound Admission snapshot from authoritative state.");
     println!("  credential provisions, rotates, revokes, and signs with operator-owned keys.");
     println!("  readiness validates deployment and emits client configuration.");
@@ -155,6 +156,7 @@ struct ServeArgs {
     snapshot: Option<PathBuf>,
     replay_anchor: Option<PathBuf>,
     enable_trusted_single_effect: bool,
+    enable_trusted_operation_wide: bool,
     root: Option<PathBuf>,
     want_json: bool,
 }
@@ -172,6 +174,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut snapshot = None;
     let mut replay_anchor = None;
     let mut enable_trusted_single_effect = false;
+    let mut enable_trusted_operation_wide = false;
     let mut root = None;
     let want_json = json_output_unless_text_selected(args);
 
@@ -210,6 +213,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
                 replay_anchor = Some(PathBuf::from(require_value(args, i, "--replay-anchor")?));
             }
             "--enable-trusted-single-effect" => enable_trusted_single_effect = true,
+            "--enable-trusted-operation-wide" => enable_trusted_operation_wide = true,
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
                 return Err(ServeArgsError::UnknownFlag(other.to_string()));
@@ -225,6 +229,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
         snapshot,
         replay_anchor,
         enable_trusted_single_effect,
+        enable_trusted_operation_wide,
         root,
         want_json,
     })
@@ -370,32 +375,48 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
             );
         }
     };
-    let (mutation_executor, trusted_deployment) = if parsed.enable_trusted_single_effect {
+    if parsed.enable_trusted_single_effect && parsed.enable_trusted_operation_wide {
+        return emit_config_err(
+            SERVE_COMMAND,
+            "--enable-trusted-single-effect and --enable-trusted-operation-wide are mutually exclusive",
+            parsed.want_json,
+        );
+    }
+    let trusted_flag = if parsed.enable_trusted_operation_wide {
+        "--enable-trusted-operation-wide"
+    } else {
+        "--enable-trusted-single-effect"
+    };
+    let trusted_enabled =
+        parsed.enable_trusted_single_effect || parsed.enable_trusted_operation_wide;
+    let (mutation_executor, trusted_deployment) = if trusted_enabled {
         let Some(policy_path) = parsed.deployment_policy.as_ref() else {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--enable-trusted-single-effect requires --deployment-policy <yaml>",
+                &format!("{trusted_flag} requires --deployment-policy <yaml>"),
                 parsed.want_json,
             );
         };
         let Some(snapshot_ref) = parsed.snapshot.as_ref() else {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--enable-trusted-single-effect requires --snapshot <state-relative-yaml>",
+                &format!("{trusted_flag} requires --snapshot <state-relative-yaml>"),
                 parsed.want_json,
             );
         };
         let Some(replay_anchor_path) = parsed.replay_anchor.as_ref() else {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--enable-trusted-single-effect requires --replay-anchor <absolute-operator-json>",
+                &format!("{trusted_flag} requires --replay-anchor <absolute-operator-json>"),
                 parsed.want_json,
             );
         };
         if parsed.allowlist.is_none() || parsed.principal_registry.is_none() {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--enable-trusted-single-effect requires explicit --allowlist and --principal-registry files",
+                &format!(
+                    "{trusted_flag} requires explicit --allowlist and --principal-registry files"
+                ),
                 parsed.want_json,
             );
         }
@@ -462,13 +483,24 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
         ) {
             return emit_config_err(SERVE_COMMAND, &error.to_string(), parsed.want_json);
         }
-        let activation = match ReconciledTrustedMcpDeployment::reconcile(
-            policy.clone(),
-            &root,
-            &state_root,
-            &replay_anchor_path,
-            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
-        ) {
+        let activation_result = if parsed.enable_trusted_operation_wide {
+            ReconciledTrustedMcpDeployment::reconcile_operation_wide(
+                policy.clone(),
+                &root,
+                &state_root,
+                &replay_anchor_path,
+                ExplicitTrustedOperationWideOptIn::from_operator_flag(),
+            )
+        } else {
+            ReconciledTrustedMcpDeployment::reconcile(
+                policy.clone(),
+                &root,
+                &state_root,
+                &replay_anchor_path,
+                ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+            )
+        };
+        let activation = match activation_result {
             Ok(activation) => Arc::new(activation),
             Err(error) => {
                 return emit_config_err(
@@ -494,7 +526,12 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
                 );
             }
         };
-        let executor = match TrustedSingleEffectMcpExecutor::new(loader, Arc::clone(&activation)) {
+        let executor = if parsed.enable_trusted_operation_wide {
+            TrustedOperationWideMcpExecutor::new(loader, Arc::clone(&activation))
+        } else {
+            TrustedSingleEffectMcpExecutor::new(loader, Arc::clone(&activation))
+        };
+        let executor = match executor {
             Ok(executor) => executor,
             Err(error) => {
                 return emit_config_err(
@@ -515,7 +552,7 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
         {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--deployment-policy/--snapshot/--replay-anchor require explicit --enable-trusted-single-effect",
+                "--deployment-policy/--snapshot/--replay-anchor require an explicit trusted mutation enable flag",
                 parsed.want_json,
             );
         }
@@ -667,6 +704,7 @@ mod tests {
         assert!(parsed.snapshot.is_none());
         assert!(parsed.replay_anchor.is_none());
         assert!(!parsed.enable_trusted_single_effect);
+        assert!(!parsed.enable_trusted_operation_wide);
     }
 
     #[test]
@@ -720,6 +758,15 @@ mod tests {
             Some(std::path::Path::new("/operator/replay-anchor.json"))
         );
         assert!(parsed.enable_trusted_single_effect);
+        assert!(!parsed.enable_trusted_operation_wide);
+    }
+
+    #[test]
+    fn parse_serve_reads_explicit_trusted_operation_wide_flag() {
+        let parsed = parse_serve_args(&args(&["--enable-trusted-operation-wide"]))
+            .expect("parse operation-wide enable flag");
+        assert!(!parsed.enable_trusted_single_effect);
+        assert!(parsed.enable_trusted_operation_wide);
     }
 
     #[test]

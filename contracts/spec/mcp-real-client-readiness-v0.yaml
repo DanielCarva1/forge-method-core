@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_real_client_readiness_v0"
-status: "p4b5_complete_principal_evidence_ready"
+status: "p4b6c_operation_wide_official_client_proven"
 purpose: >-
   Close the agent-operated trusted MCP setup loop with one readiness command,
   generated host configuration, durable replacement-agent resume, and proof
@@ -31,7 +31,7 @@ generated_client:
     - "exact allowlist, principal registry, and deployment policy paths"
     - "state-relative execution snapshot"
     - "canonical external replay anchor"
-    - "explicit trusted-single-effect opt-in"
+    - "scope-specific single-effect or operation-wide explicit opt-in derived from policy"
   excludes:
     - "private key bytes"
     - "caller-selected roots or durability"
@@ -44,7 +44,7 @@ real_client_proof:
     - "initialize the server from the generated config"
     - "list the exact execute-operation tool"
     - "transport _meta.attestation through RequestContext into the typed verifier"
-    - "apply one signed single effect"
+    - "apply signed single-effect and two-effect operation-wide calls in separate official-client proofs"
     - "verify target, effect WAL, and replay WAL in the Project Link sidecar"
     - "verify the external anchor advanced to the consumed replay head"
     - "verify the applied receipt and durable trace carry the registry-verified principal tuple"
@@ -60,10 +60,10 @@ replacement_agent:
 
 preserved_limits:
   - "read-only remains the default MCP deployment"
-  - "mutation requires explicit exact single-effect opt-in"
+  - "mutation requires a dedicated explicit opt-in matching the exact validated policy scope"
   - "same-user trust boundary is acknowledged, not presented as hostile-user isolation"
   - "coordinated rollback of both replay state and the external anchor requires stronger isolation"
-  - "operation-wide transaction and saga semantics are not claimed"
+  - "operation-wide local file-backed transaction is claimed; saga and external atomicity are not"
 
 completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
@@ -73,6 +73,7 @@ references:
   - "contracts/spec/mcp-secure-credential-lifecycle-v0.yaml"
   - "contracts/spec/mcp-agent-snapshot-generation-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
   - "contracts/spec/replay-external-anchor-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"

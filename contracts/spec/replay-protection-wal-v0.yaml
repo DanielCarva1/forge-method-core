@@ -3,8 +3,8 @@ spec: "replay_protection_wal_v0"
 status: "p4b5_complete_principal_bound_externally_anchored_runtime"
 purpose: >-
   Provide a durable, bounded, single-use nonce reservation and recovery
-  substrate integrated with the explicitly enabled trusted single-effect MCP
-  boundary without claiming broader CLI or multi-effect mutation.
+  substrate integrated with explicitly enabled trusted single-effect and
+  operation-wide MCP boundaries without claiming saga or broader CLI mutation.
 
 interface:
   rust_module: "forge_core_store::replay_wal"
@@ -124,7 +124,7 @@ current_boundary:
     - "P4b.2c consumes replay after one provenance-bound effect Commit while retaining effect authority"
     - "P4b.2c recovery consumes by persisted pseudonymous key hash without raw nonce material"
     - "exact already-consumed recovery is idempotent and completion is acknowledged in the effect WAL"
-    - "explicit reconciled P4b.3c MCP single-effect execution reserves and consumes this WAL"
+    - "explicit reconciled P4b.3c/P4b.6c MCP execution reserves and consumes this WAL for the complete transaction"
     - "P4b.5a trusted MCP startup and every execution verify and advance an external prefix-bound replay anchor"
   not_yet_claimed:
     - "effect-WAL commit and replay consume are one atomic transaction"

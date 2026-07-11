@@ -100,6 +100,7 @@ pub use trusted_loader::{
     MAX_TRUSTED_TOTAL_PAYLOAD_BYTES, MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
 };
 pub use trusted_runtime::{
-    ExplicitTrustedSingleEffectOptIn, ReconciledTrustedMcpDeployment, TrustedMcpActivationAudit,
-    TrustedMcpActivationError, TrustedSingleEffectMcpExecutor,
+    ExplicitTrustedOperationWideOptIn, ExplicitTrustedSingleEffectOptIn,
+    ReconciledTrustedMcpDeployment, TrustedMcpActivationAudit, TrustedMcpActivationError,
+    TrustedMcpExecutor, TrustedOperationWideMcpExecutor, TrustedSingleEffectMcpExecutor,
 };

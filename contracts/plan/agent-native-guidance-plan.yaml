@@ -122,7 +122,7 @@ phases:
       - "The final explanation is generated from typed state and evidence."
 
   - id: "P4-execution-assurance-hardening"
-    status: "in_progress"
+    status: "completed"
     outcome: "Agent-native guidance can safely authorize real mutations."
     completed_slices:
       - id: "P4a-read-only-execution-admission-pdp"
@@ -333,20 +333,31 @@ phases:
           Prepared operation-wide execution is Rust-only. Public MCP policy,
           bounded loading, snapshot generation, signing syntax, readiness, and
           official-client execution remain exact single-effect until P4b.6c.
+      - id: "P4b.6c-trusted-mcp-operation-wide-activation"
+        delivers:
+          - "closed trusted_operation_wide policy and dedicated typed operator opt-in"
+          - "bounded exact ordered 2..64 effect loading with complete snapshot and Admission binding"
+          - "MCP array syntax and detached exact-arguments signing with scalar single-effect compatibility"
+          - "readiness-derived scope-specific client configuration and startup reconciliation"
+          - "one operation-wide kernel transaction through the public in-process MCP executor"
+          - "official rmcp proof of two outputs, one Begin/Commit pair, principal evidence, replay anchor advancement, and sidecar confinement"
+        boundary: >-
+          P4 operation assurance hardening is complete for read-only, exact
+          single-effect, and local file-backed operation-wide transactions.
+          Typed saga compensation and external-system atomicity remain separate.
     current_program:
       id: "P4b.6-operation-wide-atomicity"
-      status: "in_progress"
+      status: "completed"
       scope:
         - "commit all local file-backed effects in one operation-wide WAL transaction"
         - "preserve authority, replay, provenance, and recovery across the complete effect set"
     next_slice:
-      id: "P4b.6c-trusted-mcp-operation-wide-activation"
-      status: "not_started"
+      id: "P5-workflow-migration"
+      status: "pending"
       scope:
-        - "extend deployment policy and bounded loaders to the complete ordered effect/payload set"
-        - "extend snapshot, signing, readiness, client configuration, and official rmcp proof without weakening single-effect compatibility"
+        - "migrate a small high-leverage workflow set into executable policies, obligations, playbooks, and evaluators"
+        - "measure compatibility and deletion behavior before retiring legacy workflow fields"
     following_slices:
-      - "P5 workflow migration"
       - "P6 domain-pack ecosystem"
     release_blockers: []
     exit:
@@ -408,11 +419,11 @@ first_executable_slice:
     - "P4b.5b verified Execution Principal propagation through claims, conflict attribution, Admission, effect-WAL provenance, durable traces, receipts, and MCP evidence"
     - "P4b.6a operation-wide WAL decision, deterministic effect bundle, atomic rollback/recovery tests, Admission support, and legacy partial-commit fail-closed guard"
     - "P4b.6b opaque prepared-kernel operation-wide authority, complete preflight/Admission/provenance commit, typed receipts, and replay reconciliation"
+    - "P4b.6c scope-specific trusted MCP operation-wide activation, complete ordered loading/snapshot/signing/readiness, and official rmcp two-effect proof"
   next_action: >-
-    P4b.6b is complete as a Rust-only governed commit path. Next implement
-    P4b.6c: extend trusted MCP policy, loaders, snapshot/signing/readiness, and
-    the official rmcp client proof to operation-wide execution while keeping
-    read-only default and exact single-effect compatibility.
+    P4 execution assurance hardening is complete. Next start P5 with one
+    high-leverage workflow migration that preserves legacy compatibility while
+    moving decisions into executable policies, obligations, and evaluators.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

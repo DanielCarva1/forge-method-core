@@ -6,8 +6,8 @@ purpose: >-
   effect-set, replay, claim, gate, and commit authority; evaluate Admission at
   both the late-preparation and immediate-commit boundaries; persist complete
   redacted provenance; commit one single-effect or operation-wide transaction;
-  and reconcile the durable effect-commit/replay-consume crash window without
-  enabling public MCP multi-effect mutation.
+  and reconcile the durable effect-commit/replay-consume crash window for both
+  scope-specific trusted MCP mutation modes.
 
 rust_interface:
   module: "forge_core_kernel crate-root re-exports over the private prepared_execution module"
@@ -132,7 +132,7 @@ intentional_limits:
   - "claim and gate authority is an exact typed revision snapshot, not an operating-system lock against a same-user bypass writer"
   - "same-user raw filesystem access remains outside the cooperative governance boundary"
   - "the P4b.2c/P4b.6b single-effect path is wired to explicitly reconciled P4b.3c MCP deployment"
-  - "operation-wide prepared execution remains Rust-only until P4b.6c loader, policy, readiness, and client proof"
+  - "operation-wide public execution requires the separate P4b.6c policy, loader, opt-in, readiness, and client proof"
   - "public MCP mutation remains disabled by default"
   - "saga semantics remain unsupported"
   - "coordinated rollback of replay state and its P4b.5a external anchor still requires stronger operator isolation"
@@ -152,3 +152,4 @@ references:
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
   - "contracts/spec/operation-wide-transaction-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"

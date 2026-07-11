@@ -22,10 +22,10 @@ current_mode:
   does_not_guarantee:
     - "confinement of a same-user agent that can invoke another mutating CLI or store path directly"
     - "protection when an agent can roll back both replay authority and the external anchor"
-    - "operation-wide atomicity, complete saga compensation, or same-user bypass resistance"
+    - "complete saga compensation, external-system atomicity, or same-user bypass resistance"
   required_description: >-
     Describe Forge as cooperative governance with an explicit reconciled
-    single-effect MCP authority boundary, not as a security sandbox or complete
+    scope-specific trusted MCP authority boundary, not as a security sandbox or complete
     local privilege boundary.
 
 planned_trusted_process_mode:
@@ -38,6 +38,7 @@ planned_trusted_process_mode:
     - "P4b.3c completed: explicit opt-in, Project Link sidecar state, startup reconciliation, kernel risk/citation gates, and narrow single-effect MCP dispatch are implemented."
     - "P4b.5a completed: policy-bound external replay head verification and automatic prefix advancement run at startup and around each execution."
     - "P4b.5b completed: the verified principal tuple is propagated and cross-checked across coordination, commit, recovery, trace, and result surfaces."
+    - "P4b.6c completed: operation-wide bounded loading, snapshot/signing/readiness, explicit activation, and official-client atomic commit proof are implemented."
   achievable_guarantee: >-
     A request entering the trusted Forge process cannot substitute its own
     registry identity, replay observation, or admission verdict before the

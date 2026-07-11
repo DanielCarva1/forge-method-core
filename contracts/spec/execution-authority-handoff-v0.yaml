@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_authority_handoff_v0"
-status: "p4b6b_operation_wide_kernel_handoff"
+status: "p4b6c_operation_wide_mcp_handoff"
 purpose: >-
   Preserve verified execution authority as a non-forgeable in-memory capability
   from operator-owned credential verification to a typed host executor without
@@ -70,14 +70,15 @@ adapter_handoff:
     ExecutionRequest::new preserves the legacy optional single-effect shape.
     ExecutionRequest::new_operation_wide carries an ordered set, while the
     legacy effect_contract_ref accessor returns None unless the set has exactly
-    one entry. Existing MCP loading therefore remains fail-closed.
+    one entry. MCP wire arrays preserve the complete order while legacy scalar
+    syntax and the old constructor remain source-compatible.
 
 public_surface:
-  mcp_stdio_mutation: "explicit_reconciled_single_effect_opt_in_only"
+  mcp_stdio_mutation: "explicit_reconciled_single_or_operation_wide_scope_opt_in"
   read_only_subprocesses: "unchanged"
   reason: >-
-    P4b.3c exposes this handoff only through exact operator policy, trusted
-    loading, startup reconciliation, and explicit single-effect opt-in.
+    P4b.6c exposes this handoff only through exact operator policy, trusted
+    loading, startup reconciliation, and a scope-matched typed opt-in.
 
 executable_evidence:
   - "compile-fail tests reject deserialization and cloning of the authority capability"
@@ -87,6 +88,7 @@ executable_evidence:
   - "a reconciled public-dispatch test delivers verified authority only to the injected executor and proves no CLI child was spawned"
   - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
   - "operation-wide requests expose the complete ordered set and cannot masquerade as one effect"
+  - "official rmcp client proof transports and commits an ordered two-effect request without subprocess authority serialization"
 
 completed_follow_on:
   id: "P4b.6b-prepared-kernel-operation-wide-integration"
@@ -102,3 +104,4 @@ references:
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"

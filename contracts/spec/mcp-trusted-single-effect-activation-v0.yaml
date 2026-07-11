@@ -68,11 +68,13 @@ project_bootstrap:
 
 unsupported:
   - "more than one effect"
-  - "operation-wide WAL transactions"
   - "saga semantics"
   - "caller-selected root, state root, durability, limits, or transaction id"
   - "mutation subprocess fallback"
   - "hostile-user isolation inside the acknowledged same-user boundary"
+
+separate_completed_scope:
+  operation_wide: "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
 
 completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"

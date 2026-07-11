@@ -31,13 +31,14 @@ use forge_core_store::sha256_content_hash;
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{McpDeploymentActivationState, ValidatedMcpDeploymentPolicy};
+use crate::{EffectScopePolicy, McpDeploymentActivationState, ValidatedMcpDeploymentPolicy};
 
 pub const MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION: &str = "0.1";
 pub const MAX_TRUSTED_CONTRACT_BYTES: u64 = 1024 * 1024;
 pub const MAX_TRUSTED_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_TRUSTED_TOTAL_PAYLOAD_BYTES: u64 = 32 * 1024 * 1024;
 pub const MAX_TRUSTED_SNAPSHOT_BYTES: u64 = 8 * 1024 * 1024;
+pub const MAX_TRUSTED_EFFECT_CONTRACTS: usize = 64;
 const CURATED_EVIDENCE_REF: &str = "contracts/research/field-evidence-20260625.yaml";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,7 +316,7 @@ pub struct LoadedMcpExecutionMaterial {
     admission_request: ExecutionAdmissionRequest,
     operation: OperationContractDocument,
     commands: Vec<CommandContractDocument>,
-    effect: ToolEffectContractDocument,
+    effects: Vec<ToolEffectContractDocument>,
     payloads: Vec<RuntimeOperationEffectPayload>,
     risk_audit_rules: Option<RiskAuditRuleSet>,
     citation_material: Option<TrustedCitationMaterial>,
@@ -338,12 +339,12 @@ impl LoadedMcpExecutionMaterial {
     }
 
     pub(crate) fn into_kernel_material(self) -> PreparedExecutionMaterial {
-        PreparedExecutionMaterial::new_with_adapter_requirements(
+        PreparedExecutionMaterial::new_operation_wide_with_adapter_requirements(
             self.call,
             self.admission_request,
             self.operation,
             self.commands,
-            self.effect,
+            self.effects,
             self.payloads,
             self.risk_audit_rules,
             self.citation_material,
@@ -356,7 +357,10 @@ impl LoadedMcpExecutionMaterial {
 pub struct LoadedMcpMaterialAudit {
     pub operation_id: String,
     pub command_count: usize,
+    /// First effect id retained for source-compatible single-effect consumers.
     pub effect_id: String,
+    pub effect_count: usize,
+    pub effect_ids: Vec<String>,
     pub payload_count: usize,
     pub total_payload_bytes: u64,
     pub payload_hashes: Vec<String>,
@@ -378,8 +382,8 @@ pub struct TrustedMcpMaterialLoader {
 struct LoadedContracts {
     operation: OperationContractDocument,
     commands: Vec<CommandContractDocument>,
-    effect_ref: PathBuf,
-    effect: ToolEffectContractDocument,
+    effect_refs: Vec<PathBuf>,
+    effects: Vec<ToolEffectContractDocument>,
 }
 
 impl TrustedMcpMaterialLoader {
@@ -466,8 +470,8 @@ impl TrustedMcpMaterialLoader {
         let LoadedContracts {
             operation,
             commands,
-            effect_ref,
-            effect,
+            effect_refs,
+            effects,
         } = self.load_contracts(request)?;
         let (payloads, total_payload_bytes) = self.load_payloads(request)?;
         let risk_audit_rules = self.load_risk_audit(request)?;
@@ -479,14 +483,19 @@ impl TrustedMcpMaterialLoader {
             &snapshot_document.execution_snapshot,
             &operation,
             &commands,
-            &effect_ref,
-            &effect,
+            &effect_refs,
+            &effects,
         )?;
         let snapshot = snapshot_document.execution_snapshot;
         let audit = LoadedMcpMaterialAudit {
             operation_id: operation.operation_contract.contract_id.0.clone(),
             command_count: commands.len(),
-            effect_id: effect.tool_effect_contract.id.0.clone(),
+            effect_id: effects[0].tool_effect_contract.id.0.clone(),
+            effect_count: effects.len(),
+            effect_ids: effects
+                .iter()
+                .map(|effect| effect.tool_effect_contract.id.0.clone())
+                .collect(),
             payload_count: payloads.len(),
             total_payload_bytes,
             payload_hashes: payloads
@@ -504,7 +513,7 @@ impl TrustedMcpMaterialLoader {
             admission_request: snapshot.admission_request,
             operation,
             commands,
-            effect,
+            effects,
             payloads,
             risk_audit_rules,
             citation_material,
@@ -531,18 +540,39 @@ impl TrustedMcpMaterialLoader {
                     .parse_yaml(reference, self.limits.max_contract_bytes)?,
             );
         }
-        let effect_ref = request
-            .effect_contract_ref()
-            .ok_or(TrustedMcpLoadError::SingleEffectRequired)?
-            .to_path_buf();
-        let effect: ToolEffectContractDocument = self
-            .reader
-            .parse_yaml(&effect_ref, self.limits.max_contract_bytes)?;
+        let effect_refs = request.effect_contract_refs();
+        match self.policy.document().mcp_deployment_policy.effect_scope {
+            EffectScopePolicy::SingleEffect if effect_refs.len() != 1 => {
+                return Err(TrustedMcpLoadError::SingleEffectRequired);
+            }
+            EffectScopePolicy::OperationWide if effect_refs.len() < 2 => {
+                return Err(TrustedMcpLoadError::OperationWideEffectSetRequired);
+            }
+            EffectScopePolicy::None => return Err(TrustedMcpLoadError::TrustedPolicyRequired),
+            EffectScopePolicy::SingleEffect | EffectScopePolicy::OperationWide => {}
+        }
+        if effect_refs.len() > MAX_TRUSTED_EFFECT_CONTRACTS {
+            return Err(TrustedMcpLoadError::EffectCountLimit {
+                observed: effect_refs.len(),
+                limit: MAX_TRUSTED_EFFECT_CONTRACTS,
+            });
+        }
+        let mut distinct_effect_refs = BTreeSet::new();
+        let mut effects = Vec::with_capacity(effect_refs.len());
+        for effect_ref in effect_refs {
+            if !distinct_effect_refs.insert(effect_ref.clone()) {
+                return Err(TrustedMcpLoadError::DuplicateReference(effect_ref.clone()));
+            }
+            effects.push(
+                self.reader
+                    .parse_yaml(effect_ref, self.limits.max_contract_bytes)?,
+            );
+        }
         Ok(LoadedContracts {
             operation,
             commands,
-            effect_ref,
-            effect,
+            effect_refs: effect_refs.to_vec(),
+            effects,
         })
     }
 
@@ -637,8 +667,8 @@ fn validate_signed_material(
     snapshot: &McpLocalExecutionSnapshot,
     operation: &OperationContractDocument,
     commands: &[CommandContractDocument],
-    effect_ref: &Path,
-    effect: &ToolEffectContractDocument,
+    effect_refs: &[PathBuf],
+    effects: &[ToolEffectContractDocument],
 ) -> Result<(), TrustedMcpLoadError> {
     let authorization = call.authorization();
     let principal = authorization.principal();
@@ -691,14 +721,7 @@ fn validate_signed_material(
             return Err(TrustedMcpLoadError::CommandBindingMismatch);
         }
     }
-    let effect_token = effect_contract_token(effect)
-        .map_err(|error| TrustedMcpLoadError::Binding(error.to_string()))?;
-    if admission.effect_bindings.len() != 1
-        || admission.effect_bindings[0].reference != path_string(effect_ref)?
-        || admission.effect_bindings[0].token != effect_token
-    {
-        return Err(TrustedMcpLoadError::EffectBindingMismatch);
-    }
+    validate_effect_bindings(admission, effect_refs, effects)?;
     if admission.expected_claim_snapshot_revision != snapshot.claim_snapshot.revision
         || admission.expected_gate_snapshot_revision != snapshot.gate_snapshot.revision
         || admission.expected_replay_reservation_revision != 1
@@ -737,6 +760,28 @@ fn validate_signed_material(
         || expected_gates != observed_gates
     {
         return Err(TrustedMcpLoadError::SnapshotRevisionMismatch);
+    }
+    Ok(())
+}
+
+fn validate_effect_bindings(
+    admission: &ExecutionAdmissionRequest,
+    effect_refs: &[PathBuf],
+    effects: &[ToolEffectContractDocument],
+) -> Result<(), TrustedMcpLoadError> {
+    if admission.effect_bindings.len() != effects.len() || effect_refs.len() != effects.len() {
+        return Err(TrustedMcpLoadError::EffectBindingMismatch);
+    }
+    for ((effect_ref, effect), binding) in effect_refs
+        .iter()
+        .zip(effects)
+        .zip(&admission.effect_bindings)
+    {
+        let effect_token = effect_contract_token(effect)
+            .map_err(|error| TrustedMcpLoadError::Binding(error.to_string()))?;
+        if binding.reference != path_string(effect_ref)? || binding.token != effect_token {
+            return Err(TrustedMcpLoadError::EffectBindingMismatch);
+        }
     }
     Ok(())
 }
@@ -831,6 +876,11 @@ pub enum TrustedMcpLoadError {
     AudienceMismatch,
     DuplicateReference(PathBuf),
     SingleEffectRequired,
+    OperationWideEffectSetRequired,
+    EffectCountLimit {
+        observed: usize,
+        limit: usize,
+    },
     DuplicatePayloadTarget(String),
     PayloadDigestRequired {
         target_ref: String,
@@ -926,6 +976,15 @@ impl fmt::Display for TrustedMcpLoadError {
             }
             Self::SingleEffectRequired => {
                 formatter.write_str("exactly one effect contract reference is required")
+            }
+            Self::OperationWideEffectSetRequired => {
+                formatter.write_str("operation-wide policy requires at least two effect references")
+            }
+            Self::EffectCountLimit { observed, limit } => {
+                write!(
+                    formatter,
+                    "effect set has {observed} entries, limit {limit}"
+                )
             }
             Self::DuplicatePayloadTarget(target) => {
                 write!(formatter, "duplicate payload target {target}")

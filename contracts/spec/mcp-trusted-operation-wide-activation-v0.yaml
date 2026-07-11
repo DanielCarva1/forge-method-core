@@ -1,0 +1,62 @@
+schema_version: "0.1"
+spec: "mcp_trusted_operation_wide_activation_v0"
+status: "p4b6c_complete"
+purpose: >-
+  Expose the prepared kernel's atomic operation-wide commit through MCP without
+  weakening read-only default, single-effect compatibility, or typed authority.
+
+activation:
+  policy_mode: "trusted_operation_wide"
+  effect_scope: "operation_wide"
+  operator_flag: "--enable-trusted-operation-wide"
+  mutually_exclusive_with: "--enable-trusted-single-effect"
+  required_proof: "ExplicitTrustedOperationWideOptIn"
+  startup:
+    - "resolve canonical Project Link project and state roots"
+    - "verify and advance the external policy-bound replay anchor"
+    - "recover replay state and reconcile prepared commits before listen"
+    - "bind loader, policy, root, and reconciled activation in process"
+
+ordered_material:
+  effect_count: "2..64"
+  wire_shape: "--effect accepts an ordered JSON array; scalar remains valid for single-effect"
+  bindings:
+    - "operation declaration equals supplied effect refs in exact order"
+    - "every source ref, loaded document, and content token matches Admission"
+    - "payload union binds every declared write target with signed SHA-256"
+  rejection:
+    - "zero, one, duplicate, reordered, extra, or missing effect refs"
+    - "scope/policy/flag mismatch"
+    - "second-or-later effect or payload drift"
+
+agent_operability:
+  snapshot: "forge-core mcp snapshot derives all ordered effect bindings and effect_count"
+  signing: "credential sign signs the exact JSON arguments object including ordered arrays"
+  readiness: "derives the scope-specific server flag from the validated deployment policy"
+  client_config: "contains no private key and no implicit mutation enablement"
+
+atomicity_and_evidence:
+  - "kernel derives one operation_transaction envelope"
+  - "all local file-backed writes share one lock and one effect-WAL Begin/Commit pair"
+  - "receipt and durable trace retain the verified principal and all constituent effect ids"
+  - "replay reserve/consume and external anchor advancement cover the whole operation"
+  - "official rmcp client proves two committed outputs in the Project Link sidecar"
+
+compatibility:
+  - "read-only MCP remains the default"
+  - "trusted_single_effect and --enable-trusted-single-effect remain supported"
+  - "ExecutionRequest::new and scalar --effect remain valid for exactly one effect"
+  - "operation-wide activation is never inferred from a multi-effect request"
+
+not_claimed:
+  - "typed saga compensation"
+  - "atomicity across external or irreversible systems"
+  - "hostile-user isolation inside the acknowledged same-user boundary"
+
+references:
+  - "contracts/spec/operation-wide-transaction-v0.yaml"
+  - "contracts/spec/mcp-deployment-policy-v0.yaml"
+  - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
+  - "contracts/spec/mcp-agent-snapshot-generation-v0.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/execution-authority-handoff-v0.yaml"

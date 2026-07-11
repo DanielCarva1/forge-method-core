@@ -80,7 +80,7 @@ public_surface:
   reason: >-
     P4b.3c binds this protocol to the trusted MCP executor only after explicit
     policy, bounded loading, replay verification, and startup reconciliation.
-    P4b.6b operation-wide use is Rust-only until the separate P4b.6c activation.
+    P4b.6c binds the same protocol to the separately opted-in operation-wide MCP executor.
 
 principal_evidence:
   pre_effect_trace: >-
@@ -100,3 +100,4 @@ references:
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
   - "contracts/spec/operation-wide-transaction-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"

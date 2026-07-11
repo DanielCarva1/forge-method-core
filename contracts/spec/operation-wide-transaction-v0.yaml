@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "operation_wide_transaction_v0"
-status: "p4b6b_prepared_kernel_integrated"
+status: "p4b6c_public_mcp_activation_complete"
 purpose: >-
   Prevent a multi-effect operation from becoming partially applied by compiling
   its complete ordered file-backed effect set into one internal effect-store
@@ -58,9 +58,9 @@ fail_closed_compatibility:
     staged effects before command evidence or project mutation. It no longer
     commits effects independently and risks silent partial application.
   trusted_mcp_path: >-
-    The opaque prepared kernel supports the complete ordered effect set in
-    P4b.6b, but public MCP loading, deployment policy, readiness, and client
-    syntax remain exact single-effect until P4b.6c.
+    P4b.6c extends bounded loading, snapshots, detached signing, readiness, and
+    public MCP dispatch to the complete ordered effect set behind a dedicated
+    validated policy and explicit operation-wide opt-in.
 
 prepared_kernel_guarantees:
   - "opaque verified authority carries an ordered effect-ref set without becoming serializable or cloneable"
@@ -87,11 +87,11 @@ verification:
     - "drift in the second effect blocks the complete prepared commit before effect WAL"
     - "prepared operation-wide commit emits one Begin and one Commit with complete provenance"
     - "operation-wide replay crash reconciliation is idempotent and does not reapply writes"
+    - "official rmcp stdio client commits two effects with one Begin/Commit and sidecar-only state"
 
 remaining_boundary:
-  next: "P4b.6c trusted MCP operation-wide activation"
+  next: "P5 workflow migration"
   not_yet_claimed:
-    - "public MCP multi-effect mutation"
     - "typed saga runtime or compensation execution"
     - "atomicity across external or irreversible systems"
 
@@ -108,3 +108,6 @@ references:
   - id: "sagas_technical_report"
     url: "https://www.cs.princeton.edu/research/techreps/598"
     supports: "Compensation is appropriate when a long-lived transaction cannot remain one atomic transaction."
+  - id: "forge_p4b6c_activation"
+    path: "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
+    supports: "Scope-specific policy, bounded loading, snapshot, readiness, and official-client activation evidence."

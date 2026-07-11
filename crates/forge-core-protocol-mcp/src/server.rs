@@ -15,7 +15,7 @@
 //!
 //! Mutation is deliberately different: verified authority is non-serializable
 //! and may cross only the typed, in-process executor seam. P4b.3c enables only
-//! the provenance-bound single-effect path after explicit operator opt-in,
+//! provenance-bound single-effect and operation-wide paths after scope-specific operator opt-in,
 //! trusted loading, replay verification, and startup reconciliation.
 //!
 //! # Enforcement order (per `tools/call`)
@@ -661,7 +661,7 @@ impl ServerHandler for ForgeMcpServer {
         info.instructions = Some(
             "Forge Method MCP adapter. Read-only tools are pass-throughs over \
              pinned `forge-core` CLI commands. The sole execute-operation mutation \
-             path requires explicit reconciled trusted single-effect deployment."
+             path requires explicit reconciled trusted deployment for its exact effect scope."
                 .into(),
         );
         info
@@ -822,7 +822,7 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         AllowlistPolicy::Mutate => format!(
             "Forge `{usage}` command (mutate). MCP stdio invocation requires explicit \
              operator policy, trusted material/snapshot loading, startup reconciliation, \
-             and reconciled single-effect enablement; output mode: {json_mode}."
+             and reconciled scope-specific enablement; output mode: {json_mode}."
         )
         .into(),
     };

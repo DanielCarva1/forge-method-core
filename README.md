@@ -526,12 +526,11 @@ single-use replay, claim/gate revision, and commit-guarantee observations. Any
 deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
-P4b consumes this decision in the explicit trusted single-effect MCP path: the
-kernel repeats mutable-authority Admission under retained locks immediately
-before the effect WAL begins. P4b.6a also admits a verified multi-effect
-`operation_wide_wal` observation in the pure Rust decision point, but the
-public MCP mutation path remains exact single-effect and read-only remains the
-default. Saga execution is not claimed.
+P4b consumes this decision in explicit trusted MCP paths: the kernel repeats
+mutable-authority Admission under retained locks immediately before the effect
+WAL begins. P4b.6c activates verified multi-effect `operation_wide_wal`
+execution behind a separate typed policy and operator flag. Read-only remains
+the default, exact single-effect remains compatible, and saga execution is not claimed.
 
 ### Compose one local transaction for multiple effects (P4b.6a)
 
@@ -564,17 +563,19 @@ one WAL Begin/Commit, and before-images for the complete write set; both an
 immediate later-write failure and crash recovery roll back all constituent
 writes. Original effect ids and refs remain available for provenance.
 
-The legacy runtime now rejects multiple independently committed effects before
-any side effect. P4b.6b consumes this substrate inside the opaque prepared
-kernel, but MCP policy/client activation remains a separate P4b.6c boundary. See
+The legacy runtime rejects multiple independently committed effects before any
+side effect. P4b.6b consumes this substrate inside the opaque prepared kernel;
+P4b.6c adds bounded MCP loading, snapshots, signing, readiness, and official
+client activation for the complete ordered effect set. See
 [`contracts/spec/operation-wide-transaction-v0.yaml`](contracts/spec/operation-wide-transaction-v0.yaml).
 
 ### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5)
 
 The built-in MCP surface remains read-only unless the operator explicitly
-enables the exact trusted single-effect posture. The normal path is agent
-operated; the human does not author a key, registry entry, snapshot, signature,
-or client configuration.
+enables an exact trusted scope: `--enable-trusted-single-effect` or the separate
+`--enable-trusted-operation-wide`. The validated policy must match that flag.
+The normal path is agent operated; the human does not author a key, registry
+entry, snapshot, signature, or client configuration.
 
 ```bash
 forge-core mcp credential provision \
@@ -778,9 +779,9 @@ Preparation does record one replay reservation; failed/dropped attempts remain
 seen rather than making replay authority erasable.
 
 Claim/gate revisions are exact typed snapshots, not an OS sandbox against a
-same-user bypass writer. Public MCP mutation is disabled by default and only
-the P4b.3c reconciled single-effect deployment can currently consume this path;
-operation-wide MCP activation remains P4b.6c. See
+same-user bypass writer. Public MCP mutation is disabled by default. P4b.3c's
+single-effect and P4b.6c's operation-wide deployments consume this path only
+after scope-specific policy validation, explicit opt-in, and reconciliation. See
 [`contracts/spec/prepared-execution-transaction-v0.yaml`](contracts/spec/prepared-execution-transaction-v0.yaml).
 
 ### Commit one admitted transaction with provenance and recovery (P4b.2c + P4b.6b)
@@ -813,9 +814,9 @@ provenance-bound transaction until a future governed archival boundary exists.
 
 The two WALs remain separate files. P4b.5a trusted MCP detects whole replay-pair
 rollback relative to its independently protected external head, but cannot
-detect coordinated rollback of both stores. Operation-wide semantics are now
-enforced by the Rust prepared kernel; public MCP remains exact single-effect
-until P4b.6c, and saga semantics remain unsupported. See
+detect coordinated rollback of both stores. P4b.6c exposes the operation-wide
+prepared kernel through exact trusted MCP policy and official-client evidence;
+saga semantics remain unsupported. See
 [`contracts/spec/execution-provenance-commit-v0.yaml`](contracts/spec/execution-provenance-commit-v0.yaml).
 
 ### Route work through the dual-lane autonomy router
@@ -997,9 +998,9 @@ gates.
   opaque in-process authority handoff, P4b.2b prepared late Admission, and
   P4b.2c provenance-bound one-effect commit plus crash reconciliation are
   the internal authority substrate consumed only by explicit P4b.3c activation.
-- P4b.3a adds a strict typed deployment policy: read-only is active by default,
-  while a coherent trusted single-effect posture is only
-  `policy_validated_dormant` and cannot enable the server.
+- P4b.3a/P4b.6c provide strict typed deployment policy: read-only is active by
+  default, while coherent trusted single-effect and operation-wide postures are
+  `policy_validated_dormant` and cannot enable the server without matching opt-in.
 - P4b.3b adds canonical bounded local loaders for typed execution contracts,
   risk-audit rules, complete authority snapshots, and payloads whose SHA-256
   digest is carried in the signed request. The in-process executor validates
@@ -1020,7 +1021,8 @@ gates.
 **Operational MCP proof complete**
 
 - **MCP operational UX** — `forge-core mcp serve` supports read-only stdio by
-  default and explicit reconciled single-effect mutation through P4b.3c.
+  default, explicit reconciled single-effect mutation through P4b.3c, and
+  scope-separated operation-wide mutation through P4b.6c.
   P4b.4a binds the complete mutable authority snapshot into the signed intent,
   and P4b.4b adds `forge-core mcp snapshot` to derive and atomically refresh it
   from authoritative project/sidecar state without manual YAML. P4b.4c adds
@@ -1033,8 +1035,9 @@ gates.
   automatic startup/request advancement, and whole-pair rollback detection.
   P4b.5b propagates the verified Execution Principal through claims, conflict
   attribution, Admission, effect-WAL provenance, recovery, durable traces,
-  receipts, and MCP evidence. Operation-wide, saga, and hostile-user isolation
-  remain intentionally absent.
+  receipts, and MCP evidence. P4b.6c adds complete ordered loading, snapshots,
+  exact signing, readiness, generated config, and an official `rmcp` two-effect
+  atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
 - **State derivation layer** — `forge_core_store::derive_state` is now the

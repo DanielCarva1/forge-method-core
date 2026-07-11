@@ -1,4 +1,4 @@
-//! Explicit P4b.3c activation and the trusted single-effect MCP executor.
+//! Explicit trusted MCP activation and operation-scoped execution.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -16,7 +16,10 @@ use forge_core_store::replay_anchor::advance_replay_anchor_for_deployment;
 use forge_core_store::replay_wal::recover_replay_wal;
 use serde::Serialize;
 
-use crate::{McpDeploymentActivationState, TrustedMcpMaterialLoader, ValidatedMcpDeploymentPolicy};
+use crate::{
+    EffectScopePolicy, McpDeploymentActivationState, TrustedMcpMaterialLoader,
+    ValidatedMcpDeploymentPolicy,
+};
 
 /// Deliberate operator signal required in addition to a trusted policy file.
 #[derive(Debug)]
@@ -24,6 +27,18 @@ pub struct ExplicitTrustedSingleEffectOptIn(());
 
 impl ExplicitTrustedSingleEffectOptIn {
     /// Construct only in response to an explicit operator-facing enable flag.
+    #[must_use]
+    pub const fn from_operator_flag() -> Self {
+        Self(())
+    }
+}
+
+/// Deliberate operator signal for operation-wide trusted mutation.
+#[derive(Debug)]
+pub struct ExplicitTrustedOperationWideOptIn(());
+
+impl ExplicitTrustedOperationWideOptIn {
+    /// Construct only in response to the dedicated operator-facing enable flag.
     #[must_use]
     pub const fn from_operator_flag() -> Self {
         Self(())
@@ -53,10 +68,54 @@ impl ReconciledTrustedMcpDeployment {
         replay_anchor_path: impl AsRef<Path>,
         _explicit_opt_in: ExplicitTrustedSingleEffectOptIn,
     ) -> Result<Self, TrustedMcpActivationError> {
+        Self::reconcile_for_scope(
+            policy,
+            project_root,
+            state_root,
+            replay_anchor_path,
+            EffectScopePolicy::SingleEffect,
+        )
+    }
+
+    /// Reconcile an explicitly enabled operation-wide trusted deployment.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed under the same conditions as [`Self::reconcile`] and when
+    /// the validated policy is not operation-wide.
+    pub fn reconcile_operation_wide(
+        policy: ValidatedMcpDeploymentPolicy,
+        project_root: impl AsRef<Path>,
+        state_root: impl AsRef<Path>,
+        replay_anchor_path: impl AsRef<Path>,
+        _explicit_opt_in: ExplicitTrustedOperationWideOptIn,
+    ) -> Result<Self, TrustedMcpActivationError> {
+        Self::reconcile_for_scope(
+            policy,
+            project_root,
+            state_root,
+            replay_anchor_path,
+            EffectScopePolicy::OperationWide,
+        )
+    }
+
+    fn reconcile_for_scope(
+        policy: ValidatedMcpDeploymentPolicy,
+        project_root: impl AsRef<Path>,
+        state_root: impl AsRef<Path>,
+        replay_anchor_path: impl AsRef<Path>,
+        expected_scope: EffectScopePolicy,
+    ) -> Result<Self, TrustedMcpActivationError> {
         if policy.activation_state() != McpDeploymentActivationState::PolicyValidatedDormant {
             return Err(TrustedMcpActivationError::TrustedPolicyRequired);
         }
         let policy_contract = &policy.document().mcp_deployment_policy;
+        if policy_contract.effect_scope != expected_scope {
+            return Err(TrustedMcpActivationError::EffectScopeOptInMismatch {
+                policy: policy_contract.effect_scope,
+                opt_in: expected_scope,
+            });
+        }
         let audience = policy_contract
             .required_audience
             .as_deref()
@@ -100,6 +159,7 @@ impl ReconciledTrustedMcpDeployment {
         .map_err(|error| TrustedMcpActivationError::ReplayAnchor(error.to_string()))?;
         let audit = TrustedMcpActivationAudit {
             policy_id: policy_contract.id.0.clone(),
+            effect_scope: policy_contract.effect_scope,
             canonical_project_root: environment.project_root().to_path_buf(),
             audience: audience.to_owned(),
             replay_records_before: replay_before.valid_record_count,
@@ -143,6 +203,7 @@ impl ReconciledTrustedMcpDeployment {
 #[serde(deny_unknown_fields)]
 pub struct TrustedMcpActivationAudit {
     pub policy_id: String,
+    pub effect_scope: EffectScopePolicy,
     pub canonical_project_root: PathBuf,
     pub audience: String,
     pub replay_records_before: usize,
@@ -156,12 +217,12 @@ pub struct TrustedMcpActivationAudit {
 
 /// Executor available only after [`ReconciledTrustedMcpDeployment`] exists.
 #[derive(Debug)]
-pub struct TrustedSingleEffectMcpExecutor {
+pub struct TrustedMcpExecutor {
     loader: TrustedMcpMaterialLoader,
     activation: Arc<ReconciledTrustedMcpDeployment>,
 }
 
-impl TrustedSingleEffectMcpExecutor {
+impl TrustedMcpExecutor {
     /// Bind a loader to the exact reconciled root and policy.
     ///
     /// # Errors
@@ -181,7 +242,7 @@ impl TrustedSingleEffectMcpExecutor {
     }
 }
 
-impl ExecutionExecutor for TrustedSingleEffectMcpExecutor {
+impl ExecutionExecutor for TrustedMcpExecutor {
     fn execute(&self, call: VerifiedExecutionCall) -> Result<ExecutionResult, ExecutionError> {
         advance_replay_anchor_for_deployment(
             self.activation.environment().state_root(),
@@ -216,7 +277,7 @@ impl ExecutionExecutor for TrustedSingleEffectMcpExecutor {
     }
 }
 
-impl TrustedSingleEffectMcpExecutor {
+impl TrustedMcpExecutor {
     fn execute_without_anchor(
         &self,
         call: VerifiedExecutionCall,
@@ -264,6 +325,12 @@ impl TrustedSingleEffectMcpExecutor {
     }
 }
 
+/// Backward-compatible name for the original single-effect activation path.
+pub type TrustedSingleEffectMcpExecutor = TrustedMcpExecutor;
+
+/// Executor name used by operation-wide trusted deployments.
+pub type TrustedOperationWideMcpExecutor = TrustedMcpExecutor;
+
 fn commit_execution_status(outcome: &ExecutionCommitOutcome) -> ExecutionStatus {
     match outcome {
         ExecutionCommitOutcome::Committed { receipt } => match receipt.status {
@@ -284,6 +351,10 @@ fn commit_execution_status(outcome: &ExecutionCommitOutcome) -> ExecutionStatus 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrustedMcpActivationError {
     TrustedPolicyRequired,
+    EffectScopeOptInMismatch {
+        policy: EffectScopePolicy,
+        opt_in: EffectScopePolicy,
+    },
     Environment(String),
     Replay(String),
     Reconciliation(String),
@@ -298,6 +369,10 @@ impl fmt::Display for TrustedMcpActivationError {
             Self::TrustedPolicyRequired => {
                 formatter.write_str("validated dormant trusted policy required")
             }
+            Self::EffectScopeOptInMismatch { policy, opt_in } => write!(
+                formatter,
+                "trusted policy effect scope {policy:?} does not match explicit {opt_in:?} opt-in"
+            ),
             Self::Environment(source) => write!(formatter, "trusted environment failed: {source}"),
             Self::Replay(source) => {
                 write!(formatter, "startup replay verification failed: {source}")

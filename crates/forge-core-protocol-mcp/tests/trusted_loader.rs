@@ -23,15 +23,17 @@ use forge_core_decisions::{
     GateSnapshotObservation, RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_protocol_mcp::{
-    DormantTrustedMcpExecutor, ExplicitTrustedSingleEffectOptIn, LocalMcpSnapshotSource,
-    McpDeploymentPolicyDocument, McpLocalExecutionSnapshot, McpLocalExecutionSnapshotDocument,
-    ReconciledTrustedMcpDeployment, TrustedMcpLoadError, TrustedMcpLoaderLimits,
-    TrustedMcpMaterialLoader, TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
+    DormantTrustedMcpExecutor, ExplicitTrustedOperationWideOptIn, ExplicitTrustedSingleEffectOptIn,
+    LocalMcpSnapshotSource, McpDeploymentPolicyDocument, McpLocalExecutionSnapshot,
+    McpLocalExecutionSnapshotDocument, ReconciledTrustedMcpDeployment, TrustedMcpLoadError,
+    TrustedMcpLoaderLimits, TrustedMcpMaterialLoader, TrustedOperationWideMcpExecutor,
+    TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
     MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
 };
 use forge_core_store::replay_anchor::{advance_replay_anchor, provision_replay_anchor};
 use forge_core_store::replay_wal::{initialize_replay_wal, replay_wal_path, reserve_replay_nonce};
 use forge_core_store::sha256_content_hash;
+use forge_core_store::{EffectWalRecord, EffectWalStage};
 use serde_json::{Map, Value};
 
 const AUDIENCE: &str = "forge-local";
@@ -40,6 +42,7 @@ const NONCE: &str = "p4b3b-loader-nonce-0001";
 const OPERATION_REF: &str = "contracts/operation.yaml";
 const COMMAND_REF: &str = "contracts/command.yaml";
 const EFFECT_REF: &str = "contracts/effect.yaml";
+const EFFECT_REF_2: &str = "contracts/effect-2.yaml";
 const RISK_REF: &str = "contracts/risk.yaml";
 const SNAPSHOT_REF: &str = ".forge-method/runtime/mcp-snapshot.yaml";
 const CLAIM_REF: &str = "contracts/claim.yaml";
@@ -99,9 +102,39 @@ mcp_deployment_policy:
     ValidatedMcpDeploymentPolicy::from_yaml(yaml).expect("trusted policy")
 }
 
+fn trusted_operation_wide_policy() -> ValidatedMcpDeploymentPolicy {
+    let yaml = r#"
+schema_version: "0.1"
+mcp_deployment_policy:
+  id: "trusted-local-operation-wide"
+  mode: "trusted_operation_wide"
+  required_audience: "forge-local"
+  mutating_tools: ["execute-operation"]
+  startup_reconciliation: "required_before_listen"
+  material_loading: "canonical_project_bound"
+  snapshot_loading: "bounded_local_read_only"
+  effect_scope: "operation_wide"
+  public_mutation: "explicit_opt_in"
+  root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
+  required_commit_protocol: "execution_provenance_commit_v0@0.1"
+  same_user_boundary_acknowledged: true
+"#;
+    ValidatedMcpDeploymentPolicy::from_yaml(yaml).expect("operation-wide policy")
+}
+
 fn provision_anchor(state_root: &std::path::Path, project_root: &std::path::Path) -> PathBuf {
+    provision_anchor_for_policy(state_root, project_root, "trusted-local-single-effect")
+}
+
+fn provision_anchor_for_policy(
+    state_root: &std::path::Path,
+    project_root: &std::path::Path,
+    policy_id: &str,
+) -> PathBuf {
     let anchor = project_root.join("operator-replay-anchor.json");
-    provision_replay_anchor(state_root, &anchor, "trusted-local-single-effect")
+    provision_replay_anchor(state_root, &anchor, policy_id)
         .expect("provision external replay anchor");
     anchor
 }
@@ -115,6 +148,24 @@ fn hex(bytes: &[u8]) -> String {
 
 #[allow(clippy::too_many_lines)] // one linear cryptographic fixture keeps all signed bindings visible
 fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> LoaderFixture {
+    fixture_for_scope(label, bind_payload_digests, require_citation, false)
+}
+
+fn operation_wide_fixture(
+    label: &str,
+    bind_payload_digests: bool,
+    require_citation: bool,
+) -> LoaderFixture {
+    fixture_for_scope(label, bind_payload_digests, require_citation, true)
+}
+
+#[allow(clippy::too_many_lines)] // one linear cryptographic fixture keeps all signed bindings visible
+fn fixture_for_scope(
+    label: &str,
+    bind_payload_digests: bool,
+    require_citation: bool,
+    operation_wide: bool,
+) -> LoaderFixture {
     let root = fresh_root(label);
     let mut operation: OperationContractDocument =
         parse_repo_yaml("docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml");
@@ -140,7 +191,6 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
         .agent_id = Some(StableId("codex-main".to_owned()));
     operation.operation_contract.coordination_scope.target.paths =
         vec![RepoPath("output/result.txt".to_owned())];
-    operation.operation_contract.effect_contract_refs = vec![RepoPath(EFFECT_REF.to_owned())];
     operation
         .operation_contract
         .coordination_scope
@@ -158,11 +208,33 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
     effect.tool_effect_contract.write_set.truncate(1);
     effect.tool_effect_contract.write_set[0].target_kind = EffectTargetKind::FilePath;
     "output/result.txt".clone_into(&mut effect.tool_effect_contract.write_set[0].reference);
+    let mut effects = vec![(EFFECT_REF, effect)];
+    if operation_wide {
+        let mut second = effects[0].1.clone();
+        second.tool_effect_contract.id = StableId("effect.story-artifact-write.second".to_owned());
+        second.tool_effect_contract.contract_ref = RepoPath(EFFECT_REF_2.to_owned());
+        "output/result-2.txt".clone_into(&mut second.tool_effect_contract.write_set[0].reference);
+        operation
+            .operation_contract
+            .coordination_scope
+            .target
+            .paths
+            .push(RepoPath("output/result-2.txt".to_owned()));
+        effects.push((EFFECT_REF_2, second));
+    }
+    operation.operation_contract.effect_contract_refs = effects
+        .iter()
+        .map(|(reference, _)| RepoPath((*reference).to_owned()))
+        .collect();
     claim.claim_contract.claim.claimant_principal_id =
         Some(PrincipalId("principal.codex-main".to_owned()));
     claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
     claim.claim_contract.claim.claimant_role = ActorRole::Driver;
-    claim.claim_contract.scope.paths = vec![RepoPath("output/result.txt".to_owned())];
+    claim
+        .claim_contract
+        .scope
+        .paths
+        .clone_from(&operation.operation_contract.coordination_scope.target.paths);
     claim.claim_contract.lease.expected_state_version = state_version;
     "2030-01-01T00:00:00Z".clone_into(&mut claim.claim_contract.lease.expires_at);
 
@@ -176,11 +248,13 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
         yaml_serde::to_string(&command).expect("command yaml"),
     )
     .expect("write command");
-    fs::write(
-        root.join(EFFECT_REF),
-        yaml_serde::to_string(&effect).expect("effect yaml"),
-    )
-    .expect("write effect");
+    for (reference, effect) in &effects {
+        fs::write(
+            root.join(reference),
+            yaml_serde::to_string(effect).expect("effect yaml"),
+        )
+        .expect("write effect");
+    }
     fs::copy(
         repo_root().join("contracts/risk-audits/fail-soft.yaml"),
         root.join(RISK_REF),
@@ -195,7 +269,11 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
 
     let mut payload_bindings = Vec::new();
     let mut first_payload = None;
-    for (index, write) in effect.tool_effect_contract.write_set.iter().enumerate() {
+    for (index, write) in effects
+        .iter()
+        .flat_map(|(_, effect)| &effect.tool_effect_contract.write_set)
+        .enumerate()
+    {
         let relative = PathBuf::from(format!("payloads/payload-{index}.bin"));
         let content = format!("trusted payload {index}\n").into_bytes();
         fs::write(root.join(&relative), &content).expect("write payload");
@@ -241,10 +319,13 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
             reference: command.command_contract.id.0.clone(),
             token: command_contract_token(&command).expect("command token"),
         }],
-        effect_bindings: vec![ContentAddressedBinding {
-            reference: EFFECT_REF.to_owned(),
-            token: effect_contract_token(&effect).expect("effect token"),
-        }],
+        effect_bindings: effects
+            .iter()
+            .map(|(reference, effect)| ContentAddressedBinding {
+                reference: (*reference).to_owned(),
+                token: effect_contract_token(effect).expect("effect token"),
+            })
+            .collect(),
         expected_claim_snapshot_revision: 11,
         expected_claim_revisions: vec![RevisionExpectation {
             reference: CLAIM_REF.to_owned(),
@@ -270,6 +351,12 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
         &intent_digest,
         payload_bindings,
         require_citation,
+        operation
+            .operation_contract
+            .effect_contract_refs
+            .iter()
+            .map(|reference| PathBuf::from(&reference.0))
+            .collect(),
     );
     let snapshot = McpLocalExecutionSnapshotDocument {
         schema_version: MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION.to_owned(),
@@ -289,7 +376,11 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
     .expect("write snapshot");
 
     let loader = TrustedMcpMaterialLoader::new(
-        trusted_policy(),
+        if operation_wide {
+            trusted_operation_wide_policy()
+        } else {
+            trusted_policy()
+        },
         &root,
         SNAPSHOT_REF,
         TrustedMcpLoaderLimits::default(),
@@ -311,6 +402,7 @@ fn verified_call(
     intent_digest: &str,
     payloads: Vec<ExecutionPayloadBinding>,
     require_citation: bool,
+    effect_refs: Vec<PathBuf>,
 ) -> VerifiedExecutionCall {
     let signing_key = SigningKey::from_bytes(&[23; 32]);
     let public_key_hex = hex(signing_key.verifying_key().as_bytes());
@@ -362,10 +454,10 @@ fn verified_call(
         .expect("authorization");
     VerifiedExecutionCall::new(
         authorization,
-        ExecutionRequest::new(
+        ExecutionRequest::new_operation_wide(
             PathBuf::from(OPERATION_REF),
             vec![PathBuf::from(COMMAND_REF)],
-            Some(PathBuf::from(EFFECT_REF)),
+            effect_refs,
             payloads,
             Some(PathBuf::from(RISK_REF)),
             require_citation,
@@ -388,6 +480,54 @@ fn trusted_loader_loads_exact_typed_material_and_signed_payloads() {
         .payload_hashes
         .iter()
         .all(|hash| hash.starts_with("sha256:")));
+}
+
+#[test]
+fn trusted_loader_rejects_request_count_that_does_not_match_policy_scope() {
+    let single = fixture("operation-wide-policy-single-request", true, false);
+    let operation_wide_loader = TrustedMcpMaterialLoader::new(
+        trusted_operation_wide_policy(),
+        &single.root,
+        SNAPSHOT_REF,
+        TrustedMcpLoaderLimits::default(),
+    )
+    .expect("operation-wide loader");
+    assert!(matches!(
+        operation_wide_loader.load(single.call),
+        Err(TrustedMcpLoadError::OperationWideEffectSetRequired)
+    ));
+
+    let operation_wide = operation_wide_fixture("single-policy-wide-request", true, false);
+    let single_loader = TrustedMcpMaterialLoader::new(
+        trusted_policy(),
+        &operation_wide.root,
+        SNAPSHOT_REF,
+        TrustedMcpLoaderLimits::default(),
+    )
+    .expect("single-effect loader");
+    assert!(matches!(
+        single_loader.load(operation_wide.call),
+        Err(TrustedMcpLoadError::SingleEffectRequired)
+    ));
+}
+
+#[test]
+fn trusted_loader_rejects_second_effect_drift_in_operation_wide_set() {
+    let fixture = operation_wide_fixture("second-effect-drift", true, false);
+    let path = fixture.root.join(EFFECT_REF_2);
+    let mut effect: ToolEffectContractDocument =
+        yaml_serde::from_str(&fs::read_to_string(&path).expect("second effect"))
+            .expect("typed second effect");
+    effect.tool_effect_contract.id = StableId("effect.tampered.second".to_owned());
+    fs::write(
+        path,
+        yaml_serde::to_string(&effect).expect("tampered effect YAML"),
+    )
+    .expect("tamper second effect");
+    assert!(matches!(
+        fixture.loader.load(fixture.call),
+        Err(TrustedMcpLoadError::EffectBindingMismatch)
+    ));
 }
 
 #[test]
@@ -531,6 +671,87 @@ fn reconciled_executor_commits_one_effect_and_consumes_replay() {
         .root
         .join(".forge-method/wal/effects.ndjson")
         .exists());
+}
+
+#[test]
+fn reconciled_operation_wide_executor_commits_every_effect_in_one_transaction() {
+    let fixture = operation_wide_fixture("active-operation-wide", true, true);
+    let loaded = fixture
+        .loader
+        .load(fixture.call)
+        .expect("load operation-wide material");
+    assert_eq!(loaded.audit().effect_count, 2);
+    assert_eq!(loaded.audit().effect_ids.len(), 2);
+
+    let state_root = fixture.root.join(".forge-method");
+    initialize_replay_wal(&state_root).expect("initialize replay");
+    let replay_anchor =
+        provision_anchor_for_policy(&state_root, &fixture.root, "trusted-local-operation-wide");
+    let activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile_operation_wide(
+            trusted_operation_wide_policy(),
+            &fixture.root,
+            &state_root,
+            &replay_anchor,
+            ExplicitTrustedOperationWideOptIn::from_operator_flag(),
+        )
+        .expect("operation-wide startup reconciliation"),
+    );
+    assert_eq!(
+        activation.audit().effect_scope,
+        forge_core_protocol_mcp::EffectScopePolicy::OperationWide
+    );
+
+    // Recreate the signed fixture because loading consumes the opaque call.
+    let fixture = operation_wide_fixture("active-operation-wide-commit", true, true);
+    let state_root = fixture.root.join(".forge-method");
+    initialize_replay_wal(&state_root).expect("initialize replay");
+    let replay_anchor =
+        provision_anchor_for_policy(&state_root, &fixture.root, "trusted-local-operation-wide");
+    let activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile_operation_wide(
+            trusted_operation_wide_policy(),
+            &fixture.root,
+            &state_root,
+            &replay_anchor,
+            ExplicitTrustedOperationWideOptIn::from_operator_flag(),
+        )
+        .expect("operation-wide startup reconciliation"),
+    );
+    let executor = TrustedOperationWideMcpExecutor::new(fixture.loader, activation)
+        .expect("operation-wide executor");
+    let result = executor.execute(fixture.call).expect("execute all effects");
+    assert_eq!(
+        result.status(),
+        forge_core_authority::ExecutionStatus::Applied
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("output/result.txt")).expect("first output"),
+        b"trusted payload 0\n"
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("output/result-2.txt")).expect("second output"),
+        b"trusted payload 1\n"
+    );
+    let records = fs::read_to_string(fixture.root.join(".forge-method/wal/effects.ndjson"))
+        .expect("effect WAL")
+        .lines()
+        .map(|line| serde_json::from_str::<EffectWalRecord>(line).expect("effect WAL record"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record.stage == EffectWalStage::Begin)
+            .count(),
+        1
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record.stage == EffectWalStage::Commit)
+            .count(),
+        1
+    );
 }
 
 #[test]

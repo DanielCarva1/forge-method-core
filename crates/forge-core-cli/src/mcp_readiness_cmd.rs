@@ -7,9 +7,9 @@ use forge_core_command_surface::command_names;
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_decisions::authority_snapshot_token;
 use forge_core_protocol_mcp::{
-    Allowlist, AuthorizedPrincipalRegistry, ExplicitTrustedSingleEffectOptIn,
-    McpLocalExecutionSnapshotDocument, PrincipalCredentialStatus, PrincipalRegistryDocument,
-    ReconciledTrustedMcpDeployment, ValidatedMcpDeploymentPolicy,
+    Allowlist, AuthorizedPrincipalRegistry, EffectScopePolicy, ExplicitTrustedOperationWideOptIn,
+    ExplicitTrustedSingleEffectOptIn, McpLocalExecutionSnapshotDocument, PrincipalCredentialStatus,
+    PrincipalRegistryDocument, ReconciledTrustedMcpDeployment, ValidatedMcpDeploymentPolicy,
     DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
     MCP_EXECUTE_OPERATION_TOOL, MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
 };
@@ -30,6 +30,7 @@ struct ReadinessReport {
     snapshot_ref: String,
     replay_anchor_path: String,
     credential_id: String,
+    effect_scope: EffectScopePolicy,
     client_config_path: Option<String>,
     next_actions: Vec<String>,
     replacement_agent_resume: String,
@@ -132,6 +133,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
     }
     let policy = ValidatedMcpDeploymentPolicy::from_yaml(&read(&policy_path, "deployment policy")?)
         .map_err(|error| ExitError::env_config(format!("invalid deployment policy: {error}")))?;
+    let effect_scope = policy.document().mcp_deployment_policy.effect_scope;
     if policy
         .document()
         .mcp_deployment_policy
@@ -171,13 +173,27 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
             "snapshot content binding or principal binding is stale".to_owned(),
         ));
     }
-    ReconciledTrustedMcpDeployment::reconcile(
-        policy,
-        &root,
-        &state_root,
-        &replay_anchor_path,
-        ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
-    )
+    match effect_scope {
+        EffectScopePolicy::SingleEffect => ReconciledTrustedMcpDeployment::reconcile(
+            policy,
+            &root,
+            &state_root,
+            &replay_anchor_path,
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        ),
+        EffectScopePolicy::OperationWide => {
+            ReconciledTrustedMcpDeployment::reconcile_operation_wide(
+                policy,
+                &root,
+                &state_root,
+                &replay_anchor_path,
+                ExplicitTrustedOperationWideOptIn::from_operator_flag(),
+            )
+        }
+        EffectScopePolicy::None => {
+            Err(forge_core_protocol_mcp::TrustedMcpActivationError::TrustedPolicyRequired)
+        }
+    }
     .map_err(|error| ExitError::env_config(format!("startup reconciliation failed: {error}")))?;
     let client_config_path = flags
         .get("--client-config-output")
@@ -191,6 +207,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
                 &policy_path,
                 &snapshot_ref,
                 &replay_anchor_path,
+                effect_scope,
             )
         })
         .transpose()?;
@@ -211,6 +228,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
         snapshot_ref: path_string(&snapshot_ref)?,
         replay_anchor_path: path_string(&replay_anchor_path)?,
         credential_id,
+        effect_scope,
         client_config_path,
         next_actions: vec![
             "sign the exact call with `forge-core mcp credential sign`".to_owned(),
@@ -220,6 +238,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
     })
 }
 
+#[allow(clippy::too_many_arguments)] // explicit authority paths keep the generated config auditable
 fn write_client_config(
     path: &Path,
     root: &Path,
@@ -228,13 +247,23 @@ fn write_client_config(
     policy: &Path,
     snapshot: &Path,
     replay_anchor: &Path,
+    effect_scope: EffectScopePolicy,
 ) -> Result<String, ExitError> {
     let exe = std::env::current_exe()
         .map_err(|error| ExitError::env_config(format!("cannot resolve executable: {error}")))?;
+    let enable_flag = match effect_scope {
+        EffectScopePolicy::SingleEffect => "--enable-trusted-single-effect",
+        EffectScopePolicy::OperationWide => "--enable-trusted-operation-wide",
+        EffectScopePolicy::None => {
+            return Err(ExitError::env_config(
+                "trusted readiness requires a mutating effect scope".to_owned(),
+            ));
+        }
+    };
     let value = serde_json::json!({
         "mcpServers": {"forge-method": {
             "command": path_string(&exe)?,
-            "args": ["mcp", "serve", "--root", path_string(root)?, "--allowlist", path_string(allowlist)?, "--principal-registry", path_string(registry)?, "--deployment-policy", path_string(policy)?, "--snapshot", path_string(snapshot)?, "--replay-anchor", path_string(replay_anchor)?, "--enable-trusted-single-effect"]
+            "args": ["mcp", "serve", "--root", path_string(root)?, "--allowlist", path_string(allowlist)?, "--principal-registry", path_string(registry)?, "--deployment-policy", path_string(policy)?, "--snapshot", path_string(snapshot)?, "--replay-anchor", path_string(replay_anchor)?, enable_flag]
         }}
     });
     let text = serde_json::to_string_pretty(&value)

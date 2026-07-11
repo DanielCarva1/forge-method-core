@@ -27,6 +27,7 @@ use crate::{
 };
 
 const MAX_BUILD_INPUT_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_SNAPSHOT_EFFECT_CONTRACTS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustedSnapshotPrincipal {
@@ -54,6 +55,7 @@ pub struct TrustedSnapshotBuildOutput {
     pub execution_intent_digest: String,
     pub authority_snapshot_token: String,
     pub operation_id: String,
+    pub effect_count: usize,
     pub claim_count: usize,
     pub gate_count: usize,
 }
@@ -81,9 +83,11 @@ pub fn build_trusted_execution_snapshot(
         .iter()
         .map(|reference| reader.parse_yaml(reference, MAX_BUILD_INPUT_BYTES))
         .collect::<Result<Vec<CommandContractDocument>, _>>()?;
-    let effect_ref = sole_effect_ref(&operation)?;
-    let effect: ToolEffectContractDocument =
-        reader.parse_yaml(Path::new(&effect_ref.0), MAX_BUILD_INPUT_BYTES)?;
+    let effect_refs = effect_refs(&operation)?;
+    let effects = effect_refs
+        .iter()
+        .map(|reference| reader.parse_yaml(Path::new(&reference.0), MAX_BUILD_INPUT_BYTES))
+        .collect::<Result<Vec<ToolEffectContractDocument>, _>>()?;
     let state_version = validate_state_versions(&operation, &assurance)?;
     let claim_snapshot = build_claim_snapshot(&reader, state_root.as_ref(), &operation)?;
     let gate_snapshot = build_gate_snapshot(&reader, &operation, state_version)?;
@@ -99,14 +103,15 @@ pub fn build_trusted_execution_snapshot(
         &operation,
         &assurance,
         &commands,
-        &effect_ref,
-        &effect,
+        effect_refs,
+        &effects,
         &claim_snapshot,
         &gate_snapshot,
         authority_token.clone(),
     )?;
     let intent_digest = execution_intent_digest(&request).map_err(binding_error)?;
     let operation_id = operation.operation_contract.contract_id.0.clone();
+    let effect_count = effects.len();
     let claim_count = claim_snapshot.claims.len();
     let gate_count = gate_snapshot.gates.len();
     Ok(TrustedSnapshotBuildOutput {
@@ -124,6 +129,7 @@ pub fn build_trusted_execution_snapshot(
         execution_intent_digest: intent_digest,
         authority_snapshot_token: authority_token,
         operation_id,
+        effect_count,
         claim_count,
         gate_count,
     })
@@ -151,14 +157,28 @@ fn validate_input(input: &TrustedSnapshotBuildInput) -> Result<(), TrustedSnapsh
     Ok(())
 }
 
-fn sole_effect_ref(
+fn effect_refs(
     operation: &OperationContractDocument,
-) -> Result<RepoPath, TrustedSnapshotBuildError> {
+) -> Result<&[RepoPath], TrustedSnapshotBuildError> {
     let refs = &operation.operation_contract.effect_contract_refs;
-    if refs.len() != 1 {
-        return Err(TrustedSnapshotBuildError::SingleEffectRequired(refs.len()));
+    if refs.is_empty() || refs.len() > MAX_SNAPSHOT_EFFECT_CONTRACTS {
+        return Err(TrustedSnapshotBuildError::InvalidEffectCount {
+            count: refs.len(),
+            maximum: MAX_SNAPSHOT_EFFECT_CONTRACTS,
+        });
     }
-    Ok(refs[0].clone())
+    if refs
+        .iter()
+        .map(|reference| reference.0.as_str())
+        .collect::<BTreeSet<_>>()
+        .len()
+        != refs.len()
+    {
+        return Err(TrustedSnapshotBuildError::InvalidInput(
+            "effect references must be unique".to_owned(),
+        ));
+    }
+    Ok(refs)
 }
 
 fn validate_state_versions(
@@ -289,8 +309,8 @@ fn build_admission_request(
     operation: &OperationContractDocument,
     assurance: &AssuranceCaseDocument,
     commands: &[CommandContractDocument],
-    effect_ref: &RepoPath,
-    effect: &ToolEffectContractDocument,
+    effect_refs: &[RepoPath],
+    effects: &[ToolEffectContractDocument],
     claim_snapshot: &ClaimSnapshotObservation,
     gate_snapshot: &GateSnapshotObservation,
     authority_snapshot_token: String,
@@ -301,6 +321,16 @@ fn build_admission_request(
             Ok(ContentAddressedBinding {
                 reference: command.command_contract.id.0.clone(),
                 token: command_contract_token(command).map_err(binding_error)?,
+            })
+        })
+        .collect::<Result<Vec<_>, TrustedSnapshotBuildError>>()?;
+    let effect_bindings = effect_refs
+        .iter()
+        .zip(effects)
+        .map(|(reference, effect)| {
+            Ok(ContentAddressedBinding {
+                reference: reference.0.clone(),
+                token: effect_contract_token(effect).map_err(binding_error)?,
             })
         })
         .collect::<Result<Vec<_>, TrustedSnapshotBuildError>>()?;
@@ -322,10 +352,7 @@ fn build_admission_request(
         assurance_case_id: assurance.assurance_case.id.clone(),
         assurance_case_token: assurance_case_token(assurance).map_err(binding_error)?,
         command_bindings,
-        effect_bindings: vec![ContentAddressedBinding {
-            reference: effect_ref.0.clone(),
-            token: effect_contract_token(effect).map_err(binding_error)?,
-        }],
+        effect_bindings,
         expected_claim_snapshot_revision: claim_snapshot.revision,
         expected_claim_revisions: claim_snapshot
             .claims
@@ -371,7 +398,10 @@ pub enum TrustedSnapshotBuildError {
     Load(TrustedMcpLoadError),
     ClaimAuthority(String),
     RequiredClaimMissing(String),
-    SingleEffectRequired(usize),
+    InvalidEffectCount {
+        count: usize,
+        maximum: usize,
+    },
     StateVersionMismatch {
         assurance: u64,
         operation: u64,
@@ -395,9 +425,10 @@ impl fmt::Display for TrustedSnapshotBuildError {
             Self::RequiredClaimMissing(id) => {
                 write!(formatter, "required claim '{id}' is absent from the claim WAL")
             }
-            Self::SingleEffectRequired(count) => {
-                write!(formatter, "exactly one effect is required, found {count}")
-            }
+            Self::InvalidEffectCount { count, maximum } => write!(
+                formatter,
+                "operation must declare between 1 and {maximum} effects, found {count}"
+            ),
             Self::StateVersionMismatch {
                 assurance,
                 operation,

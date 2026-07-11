@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_deployment_policy_v0"
-status: "p4b5_complete_principal_bound_external_replay"
+status: "p4b6c_operation_wide_activation_complete"
 purpose: >-
   Define a closed operator-owned deployment posture for the local MCP adapter
   without allowing policy validation itself to activate mutation.
@@ -29,24 +29,32 @@ modes:
       - "external monotonic replay-head policy"
       - "execution_provenance_commit_v0@0.1 pinned"
       - "same-user trust boundary explicitly acknowledged"
+  trusted_operation_wide:
+    activation_state: "policy_validated_dormant"
+    invariants:
+      - "all trusted-single-effect root, replay, audience, loader, and commit controls"
+      - "operation-wide effect scope only"
+      - "at least two and at most 64 unique ordered operation-declared effect refs"
+      - "dedicated explicit --enable-trusted-operation-wide operator opt-in"
 
 fail_closed_rules:
   - "unknown YAML fields and unknown enum values fail deserialization"
   - "blank identifiers, audiences, and protocol identifiers fail validation"
   - "duplicate, missing, or additional mutating tools fail validation"
-  - "operation-wide and saga effect scopes are not representable"
+  - "trusted mode and effect scope must match exactly"
+  - "saga effect scope is not representable"
   - "trusted policy validation exposes no activation capability"
 
 checkpoint_boundary:
   implemented: >-
     Typed policy plus canonical bounded contract, signed-payload, risk-audit,
-    and sidecar snapshot loaders. P4b.3c can activate exactly one effect only
-    through a separate explicit opt-in and reconciled deployment proof.
+    and sidecar snapshot loaders. P4b.6c activates either exact single-effect or
+    operation-wide scope only through separate typed opt-ins and reconciliation.
   not_implemented:
-    - "operation-wide transaction or saga semantics"
+    - "typed saga or cross-external-system atomicity"
     - "coordinated rollback of replay state and its independently protected external anchor"
     - "hostile-user isolation beyond the acknowledged same-user boundary"
-  next: "operation-wide transaction or complete typed saga semantics"
+  next: "P5 workflow migration; typed saga remains a later separate program"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"
@@ -54,6 +62,7 @@ references:
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/replay-external-anchor-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"

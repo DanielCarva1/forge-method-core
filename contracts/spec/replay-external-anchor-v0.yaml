@@ -84,7 +84,7 @@ security_boundary:
 
 preserved_limits:
   - "replay WAL compaction and rotation are not implemented"
-  - "operation-wide transactions and saga semantics are not implemented"
+  - "operation-wide local transactions reuse this anchor; saga semantics are not implemented"
 
 references:
   - "contracts/spec/replay-protection-wal-v0.yaml"

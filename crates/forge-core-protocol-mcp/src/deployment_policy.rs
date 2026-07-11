@@ -47,6 +47,7 @@ pub struct McpDeploymentPolicy {
 pub enum McpDeploymentMode {
     ReadOnly,
     TrustedSingleEffect,
+    TrustedOperationWide,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +76,7 @@ pub enum SnapshotLoadingPolicy {
 pub enum EffectScopePolicy {
     None,
     SingleEffect,
+    OperationWide,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,7 +148,7 @@ impl ValidatedMcpDeploymentPolicy {
         }
         let activation_state = match document.mcp_deployment_policy.mode {
             McpDeploymentMode::ReadOnly => McpDeploymentActivationState::ActiveReadOnly,
-            McpDeploymentMode::TrustedSingleEffect => {
+            McpDeploymentMode::TrustedSingleEffect | McpDeploymentMode::TrustedOperationWide => {
                 McpDeploymentActivationState::PolicyValidatedDormant
             }
         };
@@ -249,7 +251,12 @@ fn validate_document(document: &McpDeploymentPolicyDocument) -> Vec<McpDeploymen
 
     match policy.mode {
         McpDeploymentMode::ReadOnly => validate_read_only(policy, &mut issues),
-        McpDeploymentMode::TrustedSingleEffect => validate_trusted(policy, &mut issues),
+        McpDeploymentMode::TrustedSingleEffect => {
+            validate_trusted(policy, EffectScopePolicy::SingleEffect, &mut issues);
+        }
+        McpDeploymentMode::TrustedOperationWide => {
+            validate_trusted(policy, EffectScopePolicy::OperationWide, &mut issues);
+        }
     }
     issues
 }
@@ -335,7 +342,11 @@ fn validate_read_only(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployme
     );
 }
 
-fn validate_trusted(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeploymentPolicyIssue>) {
+fn validate_trusted(
+    policy: &McpDeploymentPolicy,
+    expected_effect_scope: EffectScopePolicy,
+    issues: &mut Vec<McpDeploymentPolicyIssue>,
+) {
     let code = McpDeploymentPolicyIssueCode::TrustedMutationInvariantViolated;
     require(
         issues,
@@ -379,10 +390,10 @@ fn validate_trusted(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployment
     );
     require(
         issues,
-        policy.effect_scope == EffectScopePolicy::SingleEffect,
+        policy.effect_scope == expected_effect_scope,
         code,
         "mcp_deployment_policy.effect_scope",
-        "trusted mode is limited to one effect",
+        "trusted mode effect scope must match its explicit deployment mode",
     );
     require(
         issues,
@@ -491,6 +502,15 @@ mod tests {
         document
     }
 
+    fn operation_wide_document() -> McpDeploymentPolicyDocument {
+        let mut document = trusted_document();
+        let policy = &mut document.mcp_deployment_policy;
+        policy.id = StableId("trusted-local-operation-wide".to_owned());
+        policy.mode = McpDeploymentMode::TrustedOperationWide;
+        policy.effect_scope = EffectScopePolicy::OperationWide;
+        document
+    }
+
     #[test]
     fn read_only_policy_is_active_and_safe_by_construction() {
         let validated =
@@ -533,6 +553,44 @@ mod tests {
             validated.activation_state(),
             McpDeploymentActivationState::PolicyValidatedDormant
         );
+    }
+
+    #[test]
+    fn operation_wide_policy_validates_but_remains_dormant() {
+        let validated = ValidatedMcpDeploymentPolicy::from_document(operation_wide_document())
+            .expect("coherent operation-wide policy");
+        assert_eq!(
+            validated.activation_state(),
+            McpDeploymentActivationState::PolicyValidatedDormant
+        );
+    }
+
+    #[test]
+    fn published_operation_wide_example_is_validated_but_not_activated() {
+        let yaml = include_str!(
+            "../../../contracts/examples/mcp-trusted-operation-wide-deployment-policy.yaml"
+        );
+        let validated =
+            ValidatedMcpDeploymentPolicy::from_yaml(yaml).expect("published operation-wide policy");
+        assert_eq!(
+            validated.document().mcp_deployment_policy.effect_scope,
+            EffectScopePolicy::OperationWide
+        );
+        assert_eq!(
+            validated.activation_state(),
+            McpDeploymentActivationState::PolicyValidatedDormant
+        );
+    }
+
+    #[test]
+    fn trusted_modes_reject_cross_scope_activation() {
+        let mut single = trusted_document();
+        single.mcp_deployment_policy.effect_scope = EffectScopePolicy::OperationWide;
+        assert!(ValidatedMcpDeploymentPolicy::from_document(single).is_err());
+
+        let mut operation_wide = operation_wide_document();
+        operation_wide.mcp_deployment_policy.effect_scope = EffectScopePolicy::SingleEffect;
+        assert!(ValidatedMcpDeploymentPolicy::from_document(operation_wide).is_err());
     }
 
     #[test]
@@ -583,7 +641,7 @@ mod tests {
     }
 
     #[test]
-    fn yaml_is_closed_to_unknown_fields_and_broader_effect_scopes() {
+    fn yaml_is_closed_and_read_only_rejects_operation_wide_scope() {
         let yaml = yaml_serde::to_string(&read_only_document()).expect("serialize fixture");
         let unknown = format!("{yaml}unknown_field: true\n");
         assert!(matches!(
@@ -594,7 +652,7 @@ mod tests {
         let broader = yaml.replace("effect_scope: none", "effect_scope: operation_wide");
         assert!(matches!(
             ValidatedMcpDeploymentPolicy::from_yaml(&broader),
-            Err(McpDeploymentPolicyError::Parse(_))
+            Err(McpDeploymentPolicyError::Invalid(_))
         ));
     }
 }

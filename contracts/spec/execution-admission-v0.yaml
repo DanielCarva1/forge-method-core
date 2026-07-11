@@ -109,7 +109,6 @@ current_boundary:
     - "effect WAL and replay WAL are one physically atomic transaction"
     - "detection when replay state and its P4b.5a external anchor are rolled back together"
     - "replay WAL compaction or rotation"
-    - "public MCP activation of operation-wide WAL across multiple effects"
     - "typed saga execution and complete compensation"
 
 references:

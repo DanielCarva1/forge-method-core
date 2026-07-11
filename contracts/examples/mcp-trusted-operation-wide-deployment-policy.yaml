@@ -1,0 +1,17 @@
+schema_version: "0.1"
+mcp_deployment_policy:
+  id: "trusted-local-operation-wide"
+  mode: "trusted_operation_wide"
+  required_audience: "forge-core:mcp:local"
+  mutating_tools:
+    - "execute-operation"
+  startup_reconciliation: "required_before_listen"
+  material_loading: "canonical_project_bound"
+  snapshot_loading: "bounded_local_read_only"
+  effect_scope: "operation_wide"
+  public_mutation: "explicit_opt_in"
+  root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
+  required_commit_protocol: "execution_provenance_commit_v0@0.1"
+  same_user_boundary_acknowledged: true

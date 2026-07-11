@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_trusted_material_loading_v0"
-status: "p4b3c_integrated_into_opt_in_executor"
+status: "p4b6c_single_and_operation_wide_integrated"
 purpose: >-
   Load the exact signed execution material and mutable-authority snapshot through
   bounded local reads without granting the MCP adapter mutation authority.
@@ -50,10 +50,11 @@ loaded_material:
 cross_checks:
   - "verified principal audience equals the deployment policy audience"
   - "Admission principal, agent, role, nonce, issue time, and digest equal verified authority"
-  - "content-addressed Assurance Case, operation, command, and effect bindings match"
+  - "content-addressed Assurance Case, operation, command, and every ordered effect binding match"
   - "claim and gate snapshot revisions and exact entries match the signed Admission"
   - "the complete mutable authority snapshot token matches before replay reservation"
-  - "duplicate contract references and payload targets fail closed"
+  - "duplicate contract references, effect refs, and payload targets fail closed"
+  - "single-effect policy requires exactly one effect; operation-wide policy requires 2..64 effects"
   - "citation-required requests remain blocked until their trusted integration lands"
 
 capability_boundary:
@@ -66,9 +67,9 @@ capability_boundary:
     - "kernel prepare, replay reserve, WAL append, or effect commit"
   executor_result: >-
     DormantTrustedMcpExecutor remains available for load-only verification;
-    TrustedSingleEffectMcpExecutor can consume the bundle only when constructed
-    with a reconciled activation proof.
-  public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
+    TrustedMcpExecutor can consume the bundle only when constructed with a
+    reconciled proof whose policy scope matches the dedicated operator opt-in.
+  public_mcp_mutation: "explicit_reconciled_exact_scope_opt_in_only"
 
 completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
@@ -80,5 +81,6 @@ references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-trusted-operation-wide-activation-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
