@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "operation_wide_transaction_v0"
-status: "p4b6a_rust_substrate"
+status: "p4b6b_prepared_kernel_integrated"
 purpose: >-
   Prevent a multi-effect operation from becoming partially applied by compiling
   its complete ordered file-backed effect set into one internal effect-store
@@ -10,7 +10,7 @@ architecture_decision:
   selected: "operation_wide_wal"
   applies_when:
     - "the complete operation effect set is known before commit"
-    - "every target is file-backed by the same local effect store"
+    - "every write target is file-backed by the same local effect store"
     - "all writes can share one lock and before-image WAL"
   rationale:
     - "local writes can provide atomic commit instead of compensating already committed steps"
@@ -28,15 +28,18 @@ rust_interface:
   output: "OperationEffectBundle"
   internal_effect_kind: "operation_transaction"
   visibility: "public Rust API; internal envelope is never caller authority"
+  prepared_authority_handoff: "ExecutionRequest::new_operation_wide"
+  prepared_material: "PreparedExecutionMaterial::new_operation_wide"
+  governed_commit: "LateAdmittedExecutionTransaction::commit"
 
 composition_invariants:
   - "at least two effects are required"
   - "loaded refs exactly equal the operation-declared ordered effect refs"
-  - "each effect contract_ref equals its corresponding declared ref"
+  - "the trusted prepared boundary binds each supplied source ref to its corresponding content-addressed effect token"
   - "operation and every source effect pass semantic validation"
   - "every effect binds the same operation and actor"
   - "effect ids are unique"
-  - "only file-backed target kinds are accepted"
+  - "every write is file-backed; non-file authority reads remain preserved for semantic validation"
   - "physical target resolution is identical to the effect store"
   - "case-folded, separator-normalized, logical/physical write aliases cannot overlap"
   - "conflicting reads fail closed"
@@ -54,26 +57,40 @@ fail_closed_compatibility:
     The pre-prepared execute_operation entrypoint now rejects two or more
     staged effects before command evidence or project mutation. It no longer
     commits effects independently and risks silent partial application.
-  trusted_single_effect_path: >-
-    The prepared kernel and public MCP deployment remain exact single-effect in
-    P4b.6a. They do not silently adopt this substrate without new authority,
-    provenance, payload, recovery, and deployment-policy bindings.
+  trusted_mcp_path: >-
+    The opaque prepared kernel supports the complete ordered effect set in
+    P4b.6b, but public MCP loading, deployment policy, readiness, and client
+    syntax remain exact single-effect until P4b.6c.
+
+prepared_kernel_guarantees:
+  - "opaque verified authority carries an ordered effect-ref set without becoming serializable or cloneable"
+  - "legacy effect_contract_ref access returns a value only for exactly one effect, so existing MCP loading fails closed on operation-wide input"
+  - "source refs, content-addressed effect tokens, operation declarations, documents, and payload targets match exactly before lock or replay reservation"
+  - "the kernel composes the verified sources into one transaction effect and derives operation_wide_wal plus whole_operation Admission facts"
+  - "initial, late, and immediate-commit preflights cover the complete transaction envelope"
+  - "the commit descriptor and canonical provenance bind both the envelope and every original effect in declared order"
+  - "one principal trace lists every source effect and every output target"
+  - "receipt carries the committed envelope id plus every constituent effect id"
+  - "crash reconciliation verifies effect scope and resumes replay without reapplying committed constituents"
 
 verification:
   focused_tests:
     - "deterministic composition preserves constituent identity"
-    - "reordered documents fail against declared refs"
+    - "reordered refs fail against the operation-declared sequence"
     - "case and separator aliases fail closed"
     - "ArtifactId/FilePath physical aliases fail closed"
     - "later-write failure rolls back the complete operation"
     - "missing Commit recovery rolls back the complete operation"
     - "legacy multi-effect execution emits zero side effects"
     - "Execution Admission admits only multi-effect whole-operation WAL with verified guarantees"
+    - "reordered opaque request refs fail before effect lock or replay reservation"
+    - "drift in the second effect blocks the complete prepared commit before effect WAL"
+    - "prepared operation-wide commit emits one Begin and one Commit with complete provenance"
+    - "operation-wide replay crash reconciliation is idempotent and does not reapply writes"
 
 remaining_boundary:
-  next: "P4b.6b prepared-kernel operation-wide commit integration"
+  next: "P4b.6c trusted MCP operation-wide activation"
   not_yet_claimed:
-    - "trusted prepared execution of multiple effects"
     - "public MCP multi-effect mutation"
     - "typed saga runtime or compensation execution"
     - "atomicity across external or irreversible systems"

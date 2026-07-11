@@ -88,7 +88,7 @@ impl VerifiedExecutionCall {
 pub struct ExecutionRequest {
     operation_contract_ref: PathBuf,
     command_contract_refs: Vec<PathBuf>,
-    effect_contract_ref: Option<PathBuf>,
+    effect_contract_refs: Vec<PathBuf>,
     payloads: Vec<ExecutionPayloadBinding>,
     risk_audit_rules_ref: Option<PathBuf>,
     require_citation: bool,
@@ -107,7 +107,28 @@ impl ExecutionRequest {
         Self {
             operation_contract_ref,
             command_contract_refs,
-            effect_contract_ref,
+            effect_contract_refs: effect_contract_ref.into_iter().collect(),
+            payloads,
+            risk_audit_rules_ref,
+            require_citation,
+        }
+    }
+
+    /// Construct an operation-wide request whose complete ordered effect set
+    /// is already covered by verified intent authority.
+    #[must_use]
+    pub fn new_operation_wide(
+        operation_contract_ref: PathBuf,
+        command_contract_refs: Vec<PathBuf>,
+        effect_contract_refs: Vec<PathBuf>,
+        payloads: Vec<ExecutionPayloadBinding>,
+        risk_audit_rules_ref: Option<PathBuf>,
+        require_citation: bool,
+    ) -> Self {
+        Self {
+            operation_contract_ref,
+            command_contract_refs,
+            effect_contract_refs,
             payloads,
             risk_audit_rules_ref,
             require_citation,
@@ -126,7 +147,13 @@ impl ExecutionRequest {
 
     #[must_use]
     pub fn effect_contract_ref(&self) -> Option<&Path> {
-        self.effect_contract_ref.as_deref()
+        (self.effect_contract_refs.len() == 1).then(|| self.effect_contract_refs[0].as_path())
+    }
+
+    /// Complete ordered effect set bound by this structured request.
+    #[must_use]
+    pub fn effect_contract_refs(&self) -> &[PathBuf] {
+        &self.effect_contract_refs
     }
 
     #[must_use]
@@ -237,3 +264,46 @@ impl fmt::Display for ExecutionError {
 }
 
 impl std::error::Error for ExecutionError {}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::ExecutionRequest;
+
+    #[test]
+    fn legacy_constructor_preserves_exact_single_effect_access() {
+        let request = ExecutionRequest::new(
+            PathBuf::from("operation.yaml"),
+            Vec::new(),
+            Some(PathBuf::from("effect.yaml")),
+            Vec::new(),
+            None,
+            false,
+        );
+
+        assert_eq!(
+            request.effect_contract_ref(),
+            Some(std::path::Path::new("effect.yaml"))
+        );
+        assert_eq!(request.effect_contract_refs().len(), 1);
+    }
+
+    #[test]
+    fn operation_wide_request_cannot_masquerade_as_single_effect() {
+        let request = ExecutionRequest::new_operation_wide(
+            PathBuf::from("operation.yaml"),
+            Vec::new(),
+            vec![PathBuf::from("first.yaml"), PathBuf::from("second.yaml")],
+            Vec::new(),
+            None,
+            false,
+        );
+
+        assert!(request.effect_contract_ref().is_none());
+        assert_eq!(
+            request.effect_contract_refs(),
+            [PathBuf::from("first.yaml"), PathBuf::from("second.yaml")]
+        );
+    }
+}

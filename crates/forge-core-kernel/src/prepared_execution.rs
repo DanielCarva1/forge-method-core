@@ -6,8 +6,9 @@
 //! then rebuilds and evaluates Execution Admission from a fresh trusted
 //! assurance/claim/gate snapshot. P4b.2c then revalidates mutable authority at
 //! the immediate commit call, persists redacted complete provenance, commits
-//! one effect, consumes replay, and reconciles the cross-WAL crash window.
-//! Public MCP mutation remains disabled pending explicit deployment policy.
+//! one effect-store transaction, consumes replay, and reconciles the cross-WAL
+//! crash window. P4b.6b deepens that transaction to cover the complete ordered
+//! local effect set. Public MCP remains exact single-effect pending P4b.6c.
 
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
@@ -57,7 +58,10 @@ use forge_core_validate::risk_audit::{
 use forge_core_validate::{validate_yaml_citation_references, DiagnosticSeverity};
 use serde::{Deserialize, Serialize};
 
-use crate::{RuntimeEffectPayloadKind, RuntimeOperationEffectPayload};
+use crate::{
+    compose_operation_effect_bundle, OperationEffectBundleError, RuntimeEffectPayloadKind,
+    RuntimeOperationEffectPayload,
+};
 
 pub const PREPARED_EXECUTION_SCHEMA_VERSION: &str = "0.1";
 pub const EXECUTION_COMMIT_PROVENANCE_SCHEMA_VERSION: &str = "0.1";
@@ -188,7 +192,7 @@ pub struct PreparedExecutionMaterial {
     admission_request: ExecutionAdmissionRequest,
     operation: OperationContractDocument,
     commands: Vec<CommandContractDocument>,
-    effect: ToolEffectContractDocument,
+    effects: Vec<ToolEffectContractDocument>,
     payloads: Vec<RuntimeOperationEffectPayload>,
     risk_audit_rules: Option<RiskAuditRuleSet>,
     citation_material: Option<TrustedCitationMaterial>,
@@ -205,7 +209,14 @@ impl fmt::Debug for PreparedExecutionMaterial {
                 &self.operation.operation_contract.contract_id,
             )
             .field("command_count", &self.commands.len())
-            .field("effect_id", &self.effect.tool_effect_contract.id)
+            .field(
+                "effect_ids",
+                &self
+                    .effects
+                    .iter()
+                    .map(|effect| &effect.tool_effect_contract.id)
+                    .collect::<Vec<_>>(),
+            )
             .field("payload_count", &self.payloads.len())
             .field("risk_audit_loaded", &self.risk_audit_rules.is_some())
             .field(
@@ -231,7 +242,7 @@ impl PreparedExecutionMaterial {
             admission_request,
             operation,
             commands,
-            effect,
+            effects: vec![effect],
             payloads,
             risk_audit_rules: None,
             citation_material: None,
@@ -258,7 +269,54 @@ impl PreparedExecutionMaterial {
             admission_request,
             operation,
             commands,
-            effect,
+            effects: vec![effect],
+            payloads,
+            risk_audit_rules,
+            citation_material,
+        }
+    }
+
+    /// Construct exact material for a complete operation-wide effect set.
+    #[must_use]
+    pub fn new_operation_wide(
+        call: VerifiedExecutionCall,
+        admission_request: ExecutionAdmissionRequest,
+        operation: OperationContractDocument,
+        commands: Vec<CommandContractDocument>,
+        effects: Vec<ToolEffectContractDocument>,
+        payloads: Vec<RuntimeOperationEffectPayload>,
+    ) -> Self {
+        Self {
+            call,
+            admission_request,
+            operation,
+            commands,
+            effects,
+            payloads,
+            risk_audit_rules: None,
+            citation_material: None,
+        }
+    }
+
+    /// Operation-wide constructor carrying every requested adapter gate.
+    #[must_use]
+    #[allow(clippy::too_many_arguments)] // one exact authority bundle; omission must not be possible
+    pub fn new_operation_wide_with_adapter_requirements(
+        call: VerifiedExecutionCall,
+        admission_request: ExecutionAdmissionRequest,
+        operation: OperationContractDocument,
+        commands: Vec<CommandContractDocument>,
+        effects: Vec<ToolEffectContractDocument>,
+        payloads: Vec<RuntimeOperationEffectPayload>,
+        risk_audit_rules: Option<RiskAuditRuleSet>,
+        citation_material: Option<TrustedCitationMaterial>,
+    ) -> Self {
+        Self {
+            call,
+            admission_request,
+            operation,
+            commands,
+            effects,
             payloads,
             risk_audit_rules,
             citation_material,
@@ -344,7 +402,12 @@ pub struct PreparedCommitDescriptor {
     pub operation_id: StableId,
     pub operation_token: String,
     pub commands: Vec<PreparedCommandBinding>,
+    /// The exact effect submitted to the effect store. For operation-wide WAL
+    /// this is the kernel-derived transaction envelope.
     pub effect: PreparedEffectBinding,
+    /// Original operation-declared effects in their authorized order.
+    pub constituent_effects: Vec<PreparedEffectBinding>,
+    pub commit_strategy: ExecutionCommitStrategy,
     pub payloads: Vec<PreparedPayloadBinding>,
     pub effect_lock_relative_path: String,
     pub effect_wal_relative_path: String,
@@ -422,7 +485,11 @@ pub enum ExecutionCommitStatus {
 pub struct ExecutionCommitReceipt {
     pub status: ExecutionCommitStatus,
     pub tx_id: String,
+    /// Effect id committed to the WAL. Operation-wide execution uses the
+    /// kernel-derived transaction envelope id here.
     pub effect_id: StableId,
+    /// Original authorized effect ids in operation-declared order.
+    pub effect_ids: Vec<StableId>,
     pub commit_digest: String,
     pub provenance_digest: String,
     pub execution_principal: ExecutionPrincipal,
@@ -494,8 +561,10 @@ pub struct PreparedExecutionTransaction {
     operation: OperationContractDocument,
     _command_refs: Vec<String>,
     commands: Vec<CommandContractDocument>,
-    effect_ref: RepoPath,
-    effect: ToolEffectContractDocument,
+    effect_refs: Vec<RepoPath>,
+    effects: Vec<ToolEffectContractDocument>,
+    transaction_effect: ToolEffectContractDocument,
+    commit_strategy: ExecutionCommitStrategy,
     _payloads: Vec<RuntimeOperationEffectPayload>,
     store_payloads: Vec<EffectApplicationPayload>,
     commit_descriptor: PreparedCommitDescriptor,
@@ -538,7 +607,7 @@ impl PreparedExecutionTransaction {
         &self.initial_preflight
     }
 
-    /// Revalidate the exact effect under retained locks, capture a fresh
+    /// Revalidate the exact transaction envelope under retained locks, capture a fresh
     /// mutable authority snapshot, and evaluate P4a immediately at the future
     /// pre-WAL boundary.
     ///
@@ -555,7 +624,7 @@ impl PreparedExecutionTransaction {
             self.environment.effect_store_root(),
             self.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
-            &self.effect,
+            &self.transaction_effect,
             &self.store_payloads,
         );
         if final_preflight.status != EffectPreflightStatus::Ready
@@ -603,10 +672,16 @@ impl PreparedExecutionTransaction {
                 assurance_case: snapshot.assurance_case,
                 operation: self.operation.clone(),
                 command_contracts: self.commands.clone(),
-                effect_contracts: vec![EffectContractBinding {
-                    effect_ref: self.effect_ref.clone(),
-                    document: self.effect.clone(),
-                }],
+                effect_contracts: self
+                    .effect_refs
+                    .iter()
+                    .cloned()
+                    .zip(self.effects.iter().cloned())
+                    .map(|(effect_ref, document)| EffectContractBinding {
+                        effect_ref,
+                        document,
+                    })
+                    .collect(),
                 principal: ExecutionPrincipalObservation {
                     principal_id: principal.principal_id().clone(),
                     agent_id: principal.agent_id().clone(),
@@ -627,8 +702,12 @@ impl PreparedExecutionTransaction {
                 claim_snapshot: snapshot.claim_snapshot,
                 gate_snapshot: snapshot.gate_snapshot,
                 commit: CommitAssuranceObservation {
-                    strategy: ExecutionCommitStrategy::SingleEffectWal,
-                    scope: ExecutionCommitScope::SingleEffect,
+                    strategy: self.commit_strategy,
+                    scope: if self.commit_strategy == ExecutionCommitStrategy::OperationWideWal {
+                        ExecutionCommitScope::WholeOperation
+                    } else {
+                        ExecutionCommitScope::SingleEffect
+                    },
                     wal_lock: GuaranteeStatus::Verified,
                     rollback_recovery: GuaranteeStatus::Verified,
                     durable_commit_record: GuaranteeStatus::Verified,
@@ -712,8 +791,9 @@ impl LateAdmittedExecutionTransaction {
     }
 
     /// Revalidate every mutable observation at the immediate commit call,
-    /// persist complete provenance, commit exactly one effect, consume replay,
-    /// and acknowledge replay completion in the effect WAL.
+    /// persist complete provenance, commit one single-effect or operation-wide
+    /// transaction envelope, consume replay, and acknowledge replay completion
+    /// in the effect WAL.
     ///
     /// A receipt with a pending status means the effect commit is already
     /// durable and must be reconciled, never retried as a new execution.
@@ -730,7 +810,7 @@ impl LateAdmittedExecutionTransaction {
             self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
-            &self.prepared.effect,
+            &self.prepared.transaction_effect,
             &self.prepared.store_payloads,
         );
         if commit_preflight.status != EffectPreflightStatus::Ready
@@ -756,7 +836,18 @@ impl LateAdmittedExecutionTransaction {
         }
 
         let tx_id = self.prepared.commit_descriptor.tx_id.clone();
-        let effect_id = self.prepared.effect.tool_effect_contract.id.clone();
+        let effect_id = self
+            .prepared
+            .transaction_effect
+            .tool_effect_contract
+            .id
+            .clone();
+        let effect_ids = self
+            .prepared
+            .effects
+            .iter()
+            .map(|effect| effect.tool_effect_contract.id.clone())
+            .collect::<Vec<_>>();
         let commit_digest = self.prepared.commit_digest.clone();
         let replay_reservation = self.prepared.replay_guard.reservation().clone();
         let authorization = self.prepared.authorization.audit();
@@ -803,7 +894,9 @@ impl LateAdmittedExecutionTransaction {
         let principal_trace = execution_principal_trace_event(
             &tx_id,
             &execution_principal,
-            &self.prepared.effect,
+            &self.prepared.effect_refs,
+            &self.prepared.effects,
+            &self.prepared.transaction_effect,
             commit_admission_input.execution_admission.now_unix,
             &authority_grants,
         );
@@ -814,7 +907,7 @@ impl LateAdmittedExecutionTransaction {
             self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
-            &self.prepared.effect,
+            &self.prepared.transaction_effect,
             &self.prepared.store_payloads,
             PREPARED_EFFECT_WAL_RELATIVE_PATH,
             tx_id.clone(),
@@ -839,6 +932,7 @@ impl LateAdmittedExecutionTransaction {
                         status: ExecutionCommitStatus::EffectCommittedReplayPending,
                         tx_id,
                         effect_id,
+                        effect_ids,
                         commit_digest,
                         provenance_digest,
                         execution_principal,
@@ -871,6 +965,7 @@ impl LateAdmittedExecutionTransaction {
                     status: ExecutionCommitStatus::Committed,
                     tx_id,
                     effect_id,
+                    effect_ids,
                     commit_digest,
                     provenance_digest,
                     execution_principal,
@@ -886,6 +981,7 @@ impl LateAdmittedExecutionTransaction {
                     status: ExecutionCommitStatus::EffectCommittedCompletionPending,
                     tx_id,
                     effect_id,
+                    effect_ids,
                     commit_digest,
                     provenance_digest,
                     execution_principal,
@@ -905,11 +1001,13 @@ impl LateAdmittedExecutionTransaction {
 fn execution_principal_trace_event(
     tx_id: &str,
     principal: &ExecutionPrincipal,
-    effect: &ToolEffectContractDocument,
+    effect_refs: &[RepoPath],
+    effects: &[ToolEffectContractDocument],
+    transaction_effect: &ToolEffectContractDocument,
     recorded_at_unix: i64,
     authority_grants: &[StableId],
 ) -> TraceEvent {
-    let contract = &effect.tool_effect_contract;
+    let contract = &transaction_effect.tool_effect_contract;
     let destructive = contract.write_set.iter().any(|write| write.destructive);
     TraceEvent::new(
         format!("execution.{tx_id}"),
@@ -917,7 +1015,10 @@ fn execution_principal_trace_event(
         format!("{tx_id}.principal.effect-staged"),
         TraceEventKind::EffectStaged,
         forge_core_decisions::unix_to_rfc3339(recorded_at_unix),
-        "verified execution principal staged one governed effect",
+        format!(
+            "verified execution principal staged {} governed effect contract(s) in one transaction",
+            effects.len()
+        ),
     )
     .with_actor(TraceActor::new(
         &principal.principal_id.0,
@@ -936,10 +1037,12 @@ fn execution_principal_trace_event(
             .map(|grant| grant.0.clone())
             .collect(),
     })
-    .with_inputs(vec![TraceRef::new(
-        "effect_contract",
-        &contract.contract_ref.0,
-    )])
+    .with_inputs(
+        effect_refs
+            .iter()
+            .map(|effect_ref| TraceRef::new("effect_contract", &effect_ref.0))
+            .collect(),
+    )
     .with_outputs(
         contract
             .write_set
@@ -982,6 +1085,15 @@ pub enum PrepareExecutionError {
     OperationBindingMismatch,
     CommandBindingMismatch,
     EffectBindingMismatch,
+    EffectSetMismatch {
+        requested: usize,
+        loaded: usize,
+        admitted: usize,
+        declared: usize,
+    },
+    OperationBundle(String),
+    /// Retained for source compatibility with P4b.2 callers. New preparation
+    /// reports [`Self::EffectSetMismatch`] for zero or inconsistent effect sets.
     SingleEffectRequired,
     PayloadBindingMismatch,
     AdapterRequirementNotIntegrated(&'static str),
@@ -1051,6 +1163,18 @@ impl fmt::Display for PrepareExecutionError {
             Self::EffectBindingMismatch => {
                 formatter.write_str("effect binding does not match exact typed material")
             }
+            Self::EffectSetMismatch {
+                requested,
+                loaded,
+                admitted,
+                declared,
+            } => write!(
+                formatter,
+                "prepared effect set mismatch: requested={requested}, loaded={loaded}, admitted={admitted}, declared={declared}"
+            ),
+            Self::OperationBundle(source) => {
+                write!(formatter, "operation-wide effect bundle failed: {source}")
+            }
             Self::SingleEffectRequired => {
                 formatter.write_str("prepared execution requires exactly one effect")
             }
@@ -1092,6 +1216,12 @@ impl From<EffectStoreLockError> for PrepareExecutionError {
 impl From<ReplayWalError> for PrepareExecutionError {
     fn from(error: ReplayWalError) -> Self {
         Self::Replay(error.to_string())
+    }
+}
+
+impl From<OperationEffectBundleError> for PrepareExecutionError {
+    fn from(error: OperationEffectBundleError) -> Self {
+        Self::OperationBundle(error.to_string())
     }
 }
 
@@ -1306,8 +1436,8 @@ fn requirement_rejection(
     }
 }
 
-/// Consume verified authority and prepare one replay-bound single-effect
-/// transaction without writing the effect WAL.
+/// Consume verified authority and prepare one replay-bound single-effect or
+/// operation-wide transaction without writing the effect WAL.
 ///
 /// # Errors
 ///
@@ -1322,7 +1452,7 @@ pub fn prepare_execution_transaction(
         admission_request,
         operation,
         commands,
-        effect,
+        effects,
         payloads,
         risk_audit_rules,
         citation_material,
@@ -1382,26 +1512,62 @@ pub fn prepare_execution_transaction(
         return Err(PrepareExecutionError::CommandBindingMismatch);
     }
 
-    let Some(effect_path) = execution_request.effect_contract_ref() else {
-        return Err(PrepareExecutionError::SingleEffectRequired);
-    };
-    if admission_request.effect_bindings.len() != 1
-        || operation.operation_contract.effect_contract_refs.len() != 1
+    let requested_effect_paths = execution_request.effect_contract_refs();
+    if requested_effect_paths.is_empty()
+        || requested_effect_paths.len() != effects.len()
+        || admission_request.effect_bindings.len() != effects.len()
+        || operation.operation_contract.effect_contract_refs.len() != effects.len()
     {
-        return Err(PrepareExecutionError::SingleEffectRequired);
+        return Err(PrepareExecutionError::EffectSetMismatch {
+            requested: requested_effect_paths.len(),
+            loaded: effects.len(),
+            admitted: admission_request.effect_bindings.len(),
+            declared: operation.operation_contract.effect_contract_refs.len(),
+        });
     }
-    let effect_ref = RepoPath(path_string(effect_path)?);
-    let effect_token = effect_contract_token(&effect)
-        .map_err(|error| PrepareExecutionError::ContractBinding(error.to_string()))?;
-    let request_effect = &admission_request.effect_bindings[0];
-    if request_effect.reference != effect_ref.0
-        || request_effect.token != effect_token
-        || operation.operation_contract.effect_contract_refs[0] != effect_ref
+    let effect_refs = requested_effect_paths
+        .iter()
+        .map(|path| path_string(path).map(RepoPath))
+        .collect::<Result<Vec<_>, _>>()?;
+    if effect_refs
+        .iter()
+        .map(|effect_ref| effect_ref.0.as_str())
+        .collect::<BTreeSet<_>>()
+        .len()
+        != effect_refs.len()
+        || operation.operation_contract.effect_contract_refs != effect_refs
     {
         return Err(PrepareExecutionError::EffectBindingMismatch);
     }
 
-    if !payload_bindings_match(&execution_request, &effect, &payloads) {
+    for ((effect_ref, effect), request_effect) in effect_refs
+        .iter()
+        .zip(&effects)
+        .zip(&admission_request.effect_bindings)
+    {
+        let effect_token = effect_contract_token(effect)
+            .map_err(|error| PrepareExecutionError::ContractBinding(error.to_string()))?;
+        if request_effect.reference != effect_ref.0 || request_effect.token != effect_token {
+            return Err(PrepareExecutionError::EffectBindingMismatch);
+        }
+    }
+
+    let (transaction_effect, commit_strategy) = if effects.len() == 1 {
+        (effects[0].clone(), ExecutionCommitStrategy::SingleEffectWal)
+    } else {
+        let bundle = compose_operation_effect_bundle(
+            environment.effect_store_root(),
+            &operation,
+            &effect_refs,
+            &effects,
+        )?;
+        (
+            bundle.into_transaction_effect(),
+            ExecutionCommitStrategy::OperationWideWal,
+        )
+    };
+
+    if !payload_bindings_match(&execution_request, &transaction_effect, &payloads) {
         return Err(PrepareExecutionError::PayloadBindingMismatch);
     }
     let store_payloads = store_effect_payloads(&payloads);
@@ -1417,9 +1583,10 @@ pub fn prepare_execution_transaction(
         &operation_token,
         &command_source_refs,
         &commands,
-        &effect_ref,
-        &effect,
-        &effect_token,
+        &effect_refs,
+        &effects,
+        &transaction_effect,
+        commit_strategy,
         execution_request.payloads(),
         &payloads,
         &intent_digest,
@@ -1437,7 +1604,7 @@ pub fn prepare_execution_transaction(
         environment.effect_store_root(),
         &effect_lock,
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
-        &effect,
+        &transaction_effect,
         &store_payloads,
     );
     if initial_preflight.status != EffectPreflightStatus::Ready {
@@ -1474,8 +1641,10 @@ pub fn prepare_execution_transaction(
         operation,
         _command_refs: command_source_refs,
         commands,
-        effect_ref,
-        effect,
+        effect_refs,
+        effects,
+        transaction_effect,
+        commit_strategy,
         _payloads: payloads,
         store_payloads,
         commit_descriptor: descriptor,
@@ -1539,6 +1708,7 @@ pub fn reconcile_prepared_execution_commits(
     for candidate in pending {
         validate_recovery_provenance(
             &candidate.tx_id,
+            &candidate.effect_id,
             &candidate.provenance.document,
             &candidate.replay_binding,
             &expected_project_root,
@@ -1627,6 +1797,18 @@ struct RecoveryCommitDescriptor {
     tx_id: String,
     effect_lock_relative_path: String,
     effect_wal_relative_path: String,
+    effect: RecoveryPreparedEffectBinding,
+    #[serde(default)]
+    constituent_effects: Option<Vec<RecoveryPreparedEffectBinding>>,
+    #[serde(default)]
+    commit_strategy: Option<ExecutionCommitStrategy>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+struct RecoveryPreparedEffectBinding {
+    source_ref: String,
+    effect_id: StableId,
+    token: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1640,6 +1822,7 @@ struct RecoveryReplayReservation {
 
 fn validate_recovery_provenance(
     tx_id: &str,
+    committed_effect_id: &StableId,
     document: &serde_json::Value,
     replay_binding: &EffectReplayCommitBinding,
     expected_project_root: &str,
@@ -1656,6 +1839,46 @@ fn validate_recovery_provenance(
     let descriptor = &view.commit_descriptor;
     let authorization_principal = view.authorization.get("principal");
     let expected_role = serde_json::to_value(view.execution_principal.role).ok();
+    let legacy_constituent;
+    let constituent_effects = if let Some(effect_bindings) = &descriptor.constituent_effects {
+        effect_bindings.as_slice()
+    } else {
+        legacy_constituent = [RecoveryPreparedEffectBinding {
+            source_ref: descriptor.effect.source_ref.clone(),
+            effect_id: descriptor.effect.effect_id.clone(),
+            token: descriptor.effect.token.clone(),
+        }];
+        &legacy_constituent
+    };
+    let commit_strategy = descriptor
+        .commit_strategy
+        .unwrap_or(ExecutionCommitStrategy::SingleEffectWal);
+    let distinct_constituent_ids = constituent_effects
+        .iter()
+        .map(|binding| binding.effect_id.0.as_str())
+        .collect::<BTreeSet<_>>();
+    let complete_bindings = constituent_effects
+        .iter()
+        .chain(std::iter::once(&descriptor.effect))
+        .all(|binding| {
+            !binding.source_ref.trim().is_empty()
+                && !binding.effect_id.0.trim().is_empty()
+                && binding.token.starts_with("sha256:")
+        });
+    let valid_effect_scope = match commit_strategy {
+        ExecutionCommitStrategy::SingleEffectWal => {
+            constituent_effects.len() == 1 && descriptor.effect == constituent_effects[0]
+        }
+        ExecutionCommitStrategy::OperationWideWal => {
+            constituent_effects.len() >= 2
+                && descriptor.effect.effect_id.0.starts_with("operation-wide.")
+                && descriptor
+                    .effect
+                    .source_ref
+                    .starts_with(".forge-method/runtime/operation-wide/")
+        }
+        ExecutionCommitStrategy::Saga => false,
+    };
     let principal_matches_authorization = authorization_principal.is_some_and(|principal| {
         principal.get("principal_id")
             == Some(&serde_json::Value::String(
@@ -1676,6 +1899,10 @@ fn validate_recovery_provenance(
         && descriptor.project_root == expected_project_root
         && descriptor.audience == expected_audience
         && descriptor.tx_id == tx_id
+        && descriptor.effect.effect_id == *committed_effect_id
+        && distinct_constituent_ids.len() == constituent_effects.len()
+        && complete_bindings
+        && valid_effect_scope
         && descriptor.effect_lock_relative_path == PREPARED_EFFECT_LOCK_RELATIVE_PATH
         && descriptor.effect_wal_relative_path == PREPARED_EFFECT_WAL_RELATIVE_PATH
         && reservation.key_hash == replay_binding.key_hash
@@ -1686,7 +1913,9 @@ fn validate_recovery_provenance(
     if !valid {
         return Err(ExecutionReplayReconciliationError::Provenance {
             tx_id: tx_id.to_owned(),
-            reason: "root, audience, descriptor, or replay reservation binding changed".to_owned(),
+            reason:
+                "root, audience, descriptor, effect scope, or replay reservation binding changed"
+                    .to_owned(),
         });
     }
     Ok(())
@@ -1755,9 +1984,10 @@ fn build_commit_descriptor(
     operation_token: &str,
     command_refs: &[String],
     commands: &[CommandContractDocument],
-    effect_ref: &RepoPath,
-    effect: &ToolEffectContractDocument,
-    effect_token: &str,
+    effect_refs: &[RepoPath],
+    effects: &[ToolEffectContractDocument],
+    transaction_effect: &ToolEffectContractDocument,
+    commit_strategy: ExecutionCommitStrategy,
     payload_bindings: &[forge_core_authority::ExecutionPayloadBinding],
     payloads: &[RuntimeOperationEffectPayload],
     intent_digest: &str,
@@ -1790,6 +2020,20 @@ fn build_commit_descriptor(
     }
     prepared_commands.sort_by(|left, right| left.command_id.0.cmp(&right.command_id.0));
     prepared_payloads.sort_by(|left, right| left.target_ref.cmp(&right.target_ref));
+    let transaction_token = effect_contract_token(transaction_effect)
+        .map_err(|error| PrepareExecutionError::CommitDescriptor(error.to_string()))?;
+    let constituent_effects = effect_refs
+        .iter()
+        .zip(effects)
+        .map(|(effect_ref, effect)| {
+            Ok(PreparedEffectBinding {
+                source_ref: effect_ref.0.clone(),
+                effect_id: effect.tool_effect_contract.id.clone(),
+                token: effect_contract_token(effect)
+                    .map_err(|error| PrepareExecutionError::CommitDescriptor(error.to_string()))?,
+            })
+        })
+        .collect::<Result<Vec<_>, PrepareExecutionError>>()?;
 
     Ok(PreparedCommitDescriptor {
         schema_version: PREPARED_EXECUTION_SCHEMA_VERSION.to_owned(),
@@ -1800,14 +2044,28 @@ fn build_commit_descriptor(
         operation_token: operation_token.to_owned(),
         commands: prepared_commands,
         effect: PreparedEffectBinding {
-            source_ref: effect_ref.0.clone(),
-            effect_id: effect.tool_effect_contract.id.clone(),
-            token: effect_token.to_owned(),
+            source_ref: if commit_strategy == ExecutionCommitStrategy::SingleEffectWal {
+                effect_refs[0].0.clone()
+            } else {
+                transaction_effect
+                    .tool_effect_contract
+                    .contract_ref
+                    .0
+                    .clone()
+            },
+            effect_id: transaction_effect.tool_effect_contract.id.clone(),
+            token: transaction_token,
         },
+        constituent_effects,
+        commit_strategy,
         payloads: prepared_payloads,
         effect_lock_relative_path: PREPARED_EFFECT_LOCK_RELATIVE_PATH.to_owned(),
         effect_wal_relative_path: PREPARED_EFFECT_WAL_RELATIVE_PATH.to_owned(),
-        tx_id: derived_tx_id(request_id, &effect.tool_effect_contract.id, intent_digest),
+        tx_id: derived_tx_id(
+            request_id,
+            &transaction_effect.tool_effect_contract.id,
+            intent_digest,
+        ),
         durability: "sync_on_append".to_owned(),
     })
 }

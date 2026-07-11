@@ -17,14 +17,14 @@ use forge_core_decisions::{
     effect_contract_token, execution_intent_digest, operation_contract_token, unix_to_rfc3339,
     ClaimRevisionObservation, ClaimSnapshotObservation, ContentAddressedBinding,
     ExecutionAdmissionIssueCode, ExecutionAdmissionRequest, ExecutionAdmissionStatus,
-    GateRevisionObservation, GateSnapshotObservation, ObligationEngineInputDocument,
-    RevisionExpectation, SnapshotCompleteness,
+    ExecutionCommitStrategy, GateRevisionObservation, GateSnapshotObservation,
+    ObligationEngineInputDocument, RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_kernel::{
     prepare_execution_transaction, reconcile_prepared_execution_commits, ExecutionCommitError,
     ExecutionCommitOutcome, ExecutionCommitStatus, ExecutionReplayReconciliationStatus,
     LateAdmissionError, LateAdmissionOutcome, LateExecutionSnapshot, LateExecutionSnapshotSource,
-    LateSnapshotError, PreparedExecutionMaterial, RuntimeEffectPayloadKind,
+    LateSnapshotError, PrepareExecutionError, PreparedExecutionMaterial, RuntimeEffectPayloadKind,
     RuntimeOperationEffectPayload, TrustedExecutionEnvironment, PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     PREPARED_EFFECT_WAL_RELATIVE_PATH,
 };
@@ -48,7 +48,9 @@ const NOW: i64 = 1_800_000_000;
 const CLAIM_REF: &str = "contracts/claims/story-v2-010-active-claim.yaml";
 const GATE_REF: &str = "contracts/gates/story-ready-lane-gate.yaml";
 const EFFECT_REF: &str = "contracts/effects/story-artifact-write-effect.yaml";
+const SECOND_EFFECT_REF: &str = "contracts/effects/p4b6b-second-effect.yaml";
 const EFFECT_TARGET: &str = "crates/forge-contracts/p4b2b-fixture.yaml";
+const SECOND_EFFECT_TARGET: &str = "crates/forge-contracts/p4b6b-fixture-second.yaml";
 const AUDIENCE: &str = "forge://workspace/p4b2b-fixture";
 const NONCE: &str = "nonce-p4b2b-fixture-000000000001";
 
@@ -107,6 +109,13 @@ impl LateExecutionSnapshotSource for FailingSnapshotSource {
 struct Fixture {
     project_root: PathBuf,
     target_path: PathBuf,
+    material: PreparedExecutionMaterial,
+    source: StaticSnapshotSource,
+}
+
+struct OperationWideFixture {
+    project_root: PathBuf,
+    target_paths: Vec<PathBuf>,
     material: PreparedExecutionMaterial,
     source: StaticSnapshotSource,
 }
@@ -260,9 +269,241 @@ where
     }
 }
 
+#[allow(clippy::too_many_lines)]
+fn operation_wide_fixture(label: &str, reverse_request_effect_refs: bool) -> OperationWideFixture {
+    let project_root = temp_project(label);
+    let assurance_case = verified_assurance_case();
+    let state_version = assurance_case.assurance_case.project_snapshot.state_version;
+
+    let mut operation: OperationContractDocument =
+        parse_yaml("docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml");
+    operation.operation_contract.project_ref.state_version = state_version;
+    operation
+        .operation_contract
+        .coordination_scope
+        .concurrency
+        .expected_state_version = state_version;
+    operation
+        .operation_contract
+        .coordination_scope
+        .concurrency
+        .agent_id = Some(StableId("codex-main".to_owned()));
+    operation.operation_contract.gates.required_before_mutation = vec![RequiredGate {
+        scope: OperationGateScope::Lane,
+        gate_contract_ref: RepoPath(GATE_REF.to_owned()),
+        reason: Some("commit-time representative evidence".to_owned()),
+    }];
+    operation.operation_contract.gates.gate_contract_refs = vec![RepoPath(GATE_REF.to_owned())];
+    operation.operation_contract.effect_contract_refs = vec![
+        RepoPath(EFFECT_REF.to_owned()),
+        RepoPath(SECOND_EFFECT_REF.to_owned()),
+    ];
+
+    let command: CommandContractDocument =
+        parse_yaml("contracts/commands/story-validation-fast.yaml");
+    let mut first: ToolEffectContractDocument = parse_yaml(EFFECT_REF);
+    first.tool_effect_contract.actor.agent_id = StableId("codex-main".to_owned());
+    first
+        .tool_effect_contract
+        .read_set
+        .retain(|read| read.target_kind != EffectTargetKind::FilePath);
+    first.tool_effect_contract.write_set.truncate(1);
+    first.tool_effect_contract.write_set[0].target_kind = EffectTargetKind::FilePath;
+    EFFECT_TARGET.clone_into(&mut first.tool_effect_contract.write_set[0].reference);
+
+    let mut second = first.clone();
+    second.tool_effect_contract.id = StableId("effect.p4b6b.second".to_owned());
+    SECOND_EFFECT_TARGET.clone_into(&mut second.tool_effect_contract.write_set[0].reference);
+
+    let mut claim: ClaimContractDocument = parse_yaml(CLAIM_REF);
+    claim.claim_contract.claim.claimant_principal_id =
+        Some(PrincipalId("principal.codex-main".to_owned()));
+    claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
+    claim.claim_contract.claim.claimant_role = ActorRole::Driver;
+    claim.claim_contract.lease.expected_state_version = state_version;
+    claim.claim_contract.lease.expires_at = unix_to_rfc3339(NOW + 600);
+    let gate: GateContractDocument = parse_yaml(GATE_REF);
+    let claim_snapshot = ClaimSnapshotObservation {
+        revision: 11,
+        completeness: SnapshotCompleteness::Complete,
+        claims: vec![ClaimRevisionObservation {
+            claim_ref: RepoPath(CLAIM_REF.to_owned()),
+            revision: 7,
+            document: claim,
+        }],
+    };
+    let gate_snapshot = GateSnapshotObservation {
+        revision: 5,
+        completeness: SnapshotCompleteness::Complete,
+        gates: vec![GateRevisionObservation {
+            gate_ref: RepoPath(GATE_REF.to_owned()),
+            revision: 3,
+            observed_state_version: state_version,
+            document: gate,
+        }],
+    };
+
+    let request = ExecutionAdmissionRequest {
+        id: StableId(format!("admission.request.{label}")),
+        principal_id: PrincipalId("principal.codex-main".to_owned()),
+        agent_id: StableId("codex-main".to_owned()),
+        principal_role: CallerRole::Driver,
+        operation_id: operation.operation_contract.contract_id.clone(),
+        operation_token: operation_contract_token(&operation).expect("operation token"),
+        assurance_case_id: assurance_case.assurance_case.id.clone(),
+        assurance_case_token: assurance_case_token(&assurance_case).expect("case token"),
+        command_bindings: vec![ContentAddressedBinding {
+            reference: command.command_contract.id.0.clone(),
+            token: command_contract_token(&command).expect("command token"),
+        }],
+        effect_bindings: vec![
+            ContentAddressedBinding {
+                reference: EFFECT_REF.to_owned(),
+                token: effect_contract_token(&first).expect("first effect token"),
+            },
+            ContentAddressedBinding {
+                reference: SECOND_EFFECT_REF.to_owned(),
+                token: effect_contract_token(&second).expect("second effect token"),
+            },
+        ],
+        expected_claim_snapshot_revision: 11,
+        expected_claim_revisions: vec![RevisionExpectation {
+            reference: CLAIM_REF.to_owned(),
+            revision: 7,
+        }],
+        expected_gate_snapshot_revision: 5,
+        expected_gate_revisions: vec![RevisionExpectation {
+            reference: GATE_REF.to_owned(),
+            revision: 3,
+        }],
+        authority_snapshot_token: authority_snapshot_token(
+            &claim_snapshot,
+            &gate_snapshot,
+            state_version,
+            NOW,
+        )
+        .expect("authority snapshot token"),
+        expected_replay_reservation_revision: 1,
+        nonce: NONCE.to_owned(),
+        issued_at_unix: NOW - 10,
+    };
+    let intent_digest = execution_intent_digest(&request).expect("intent digest");
+    let payloads = vec![
+        RuntimeOperationEffectPayload {
+            target_ref: EFFECT_TARGET.to_owned(),
+            payload_kind: RuntimeEffectPayloadKind::RuntimeGenerated,
+            content_hash: sha256_content_hash(b"p4b6b: first\n"),
+            content: b"p4b6b: first\n".to_vec(),
+        },
+        RuntimeOperationEffectPayload {
+            target_ref: SECOND_EFFECT_TARGET.to_owned(),
+            payload_kind: RuntimeEffectPayloadKind::RuntimeGenerated,
+            content_hash: sha256_content_hash(b"p4b6b: second\n"),
+            content: b"p4b6b: second\n".to_vec(),
+        },
+    ];
+    let call = verified_operation_wide_call(
+        &request,
+        &intent_digest,
+        &payloads,
+        reverse_request_effect_refs,
+    );
+    let material = PreparedExecutionMaterial::new_operation_wide(
+        call,
+        request,
+        operation,
+        vec![command],
+        vec![first, second],
+        payloads,
+    );
+    let source = StaticSnapshotSource {
+        snapshot: LateExecutionSnapshot {
+            assurance_case,
+            claim_snapshot,
+            gate_snapshot,
+            current_state_version: state_version,
+            now_unix: NOW,
+        },
+    };
+    OperationWideFixture {
+        target_paths: vec![
+            project_root.join(EFFECT_TARGET),
+            project_root.join(SECOND_EFFECT_TARGET),
+        ],
+        project_root,
+        material,
+        source,
+    }
+}
+
 fn verified_call(
     request: &ExecutionAdmissionRequest,
     intent_digest: &str,
+) -> VerifiedExecutionCall {
+    let execution_request = ExecutionRequest::new(
+        PathBuf::from("contracts/operations/p4b2b-operation.yaml"),
+        vec![PathBuf::from(
+            "contracts/commands/story-validation-fast.yaml",
+        )],
+        Some(PathBuf::from(EFFECT_REF)),
+        vec![ExecutionPayloadBinding::new(
+            EFFECT_TARGET.to_owned(),
+            PathBuf::from("payloads/p4b2b-fixture.yaml"),
+        )],
+        None,
+        false,
+    );
+    authorize_execution_call(
+        request,
+        intent_digest,
+        execution_request,
+        execution_arguments(),
+    )
+}
+
+fn verified_operation_wide_call(
+    request: &ExecutionAdmissionRequest,
+    intent_digest: &str,
+    payloads: &[RuntimeOperationEffectPayload],
+    reverse_effect_refs: bool,
+) -> VerifiedExecutionCall {
+    let mut effect_refs = vec![PathBuf::from(EFFECT_REF), PathBuf::from(SECOND_EFFECT_REF)];
+    if reverse_effect_refs {
+        effect_refs.reverse();
+    }
+    let payload_bindings = payloads
+        .iter()
+        .enumerate()
+        .map(|(index, payload)| {
+            ExecutionPayloadBinding::new(
+                payload.target_ref.clone(),
+                PathBuf::from(format!("payloads/p4b6b-{index}.yaml")),
+            )
+        })
+        .collect();
+    let execution_request = ExecutionRequest::new_operation_wide(
+        PathBuf::from("contracts/operations/p4b6b-operation.yaml"),
+        vec![PathBuf::from(
+            "contracts/commands/story-validation-fast.yaml",
+        )],
+        effect_refs,
+        payload_bindings,
+        None,
+        false,
+    );
+    authorize_execution_call(
+        request,
+        intent_digest,
+        execution_request,
+        operation_wide_execution_arguments(),
+    )
+}
+
+fn authorize_execution_call(
+    request: &ExecutionAdmissionRequest,
+    intent_digest: &str,
+    execution_request: ExecutionRequest,
+    arguments: Map<String, Value>,
 ) -> VerifiedExecutionCall {
     let signing_key = SigningKey::from_bytes(&[17; 32]);
     let public_key_hex = hex(signing_key.verifying_key().as_bytes());
@@ -284,7 +525,6 @@ fn verified_call(
     })
     .expect("registry");
 
-    let arguments = execution_arguments();
     let intent = CanonicalIntent {
         tool: "execute-operation".to_owned(),
         arguments: Value::Object(arguments),
@@ -314,19 +554,6 @@ fn verified_call(
             30,
         )
         .expect("verified authorization");
-    let execution_request = ExecutionRequest::new(
-        PathBuf::from("contracts/operations/p4b2b-operation.yaml"),
-        vec![PathBuf::from(
-            "contracts/commands/story-validation-fast.yaml",
-        )],
-        Some(PathBuf::from(EFFECT_REF)),
-        vec![ExecutionPayloadBinding::new(
-            EFFECT_TARGET.to_owned(),
-            PathBuf::from("payloads/p4b2b-fixture.yaml"),
-        )],
-        None,
-        false,
-    );
     VerifiedExecutionCall::new(authorization, execution_request)
 }
 
@@ -344,6 +571,33 @@ fn execution_arguments() -> Map<String, Value> {
     arguments.insert(
         "--payload".to_owned(),
         Value::String(format!("{EFFECT_TARGET}=payloads/p4b2b-fixture.yaml")),
+    );
+    arguments
+}
+
+fn operation_wide_execution_arguments() -> Map<String, Value> {
+    let mut arguments = Map::new();
+    arguments.insert(
+        "--operation".to_owned(),
+        Value::String("contracts/operations/p4b6b-operation.yaml".to_owned()),
+    );
+    arguments.insert(
+        "--command".to_owned(),
+        Value::String("contracts/commands/story-validation-fast.yaml".to_owned()),
+    );
+    arguments.insert(
+        "--effect".to_owned(),
+        Value::Array(vec![
+            Value::String(EFFECT_REF.to_owned()),
+            Value::String(SECOND_EFFECT_REF.to_owned()),
+        ]),
+    );
+    arguments.insert(
+        "--payload".to_owned(),
+        Value::Array(vec![
+            Value::String(format!("{EFFECT_TARGET}=payloads/p4b6b-0.yaml")),
+            Value::String(format!("{SECOND_EFFECT_TARGET}=payloads/p4b6b-1.yaml")),
+        ]),
     );
     arguments
 }
@@ -525,6 +779,271 @@ fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() 
     assert_eq!(trace["actor"]["principal_id"], "principal.codex-main");
     assert_eq!(trace["actor"]["agent_id"], "codex-main");
     assert_eq!(trace["authority"]["capability_ids"][0], "operation.execute");
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // one end-to-end assertion chain over the complete transaction
+fn prepared_operation_wide_commit_preserves_all_bindings_in_one_wal_transaction() {
+    let OperationWideFixture {
+        project_root,
+        target_paths,
+        material,
+        source,
+    } = operation_wide_fixture("operation-wide-commit", false);
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    assert_eq!(
+        prepared.commit_descriptor().commit_strategy,
+        ExecutionCommitStrategy::OperationWideWal
+    );
+    assert_eq!(prepared.commit_descriptor().constituent_effects.len(), 2);
+    assert_eq!(
+        prepared
+            .commit_descriptor()
+            .constituent_effects
+            .iter()
+            .map(|effect| effect.effect_id.0.as_str())
+            .collect::<Vec<_>>(),
+        vec!["effect.fixture.story_artifact_write", "effect.p4b6b.second"]
+    );
+    assert!(prepared
+        .commit_descriptor()
+        .effect
+        .effect_id
+        .0
+        .starts_with("operation-wide."));
+
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late admission")
+    else {
+        panic!("complete operation-wide snapshot must admit");
+    };
+    assert_eq!(
+        admitted.decision().status,
+        ExecutionAdmissionStatus::Admitted
+    );
+    let ExecutionCommitOutcome::Committed { receipt } =
+        admitted.commit(&source).expect("operation-wide commit")
+    else {
+        panic!("operation-wide transaction must commit");
+    };
+    assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+    assert!(receipt.effect_id.0.starts_with("operation-wide."));
+    assert_eq!(
+        receipt
+            .effect_ids
+            .iter()
+            .map(|effect_id| effect_id.0.as_str())
+            .collect::<Vec<_>>(),
+        vec!["effect.fixture.story_artifact_write", "effect.p4b6b.second"]
+    );
+    assert_eq!(
+        receipt.application.applied_refs,
+        vec![EFFECT_TARGET, SECOND_EFFECT_TARGET]
+    );
+    assert_eq!(
+        fs::read_to_string(&target_paths[0]).expect("first target"),
+        "p4b6b: first\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&target_paths[1]).expect("second target"),
+        "p4b6b: second\n"
+    );
+
+    let wal_text = fs::read_to_string(effect_wal(&project_root)).expect("effect WAL");
+    assert!(!wal_text.contains(NONCE));
+    let records = wal_text
+        .lines()
+        .map(|line| serde_json::from_str::<EffectWalRecord>(line).expect("effect WAL record"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record.stage == EffectWalStage::Begin)
+            .count(),
+        1
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record.stage == EffectWalStage::Commit)
+            .count(),
+        1
+    );
+    let provenance = &records[0]
+        .execution_provenance
+        .as_ref()
+        .expect("operation-wide provenance")
+        .document;
+    assert_eq!(
+        provenance["commit_descriptor"]["commit_strategy"],
+        "operation_wide_wal"
+    );
+    assert_eq!(
+        provenance["commit_descriptor"]["constituent_effects"]
+            .as_array()
+            .map(Vec::len),
+        Some(2)
+    );
+    let trace_text = fs::read_to_string(project_root.join(".forge-method/traces/events.ndjson"))
+        .expect("principal trace");
+    let trace: serde_json::Value =
+        serde_json::from_str(trace_text.lines().last().expect("trace line")).expect("trace JSON");
+    assert_eq!(trace["inputs"].as_array().map(Vec::len), Some(2));
+    assert_eq!(trace["inputs"][0]["ref"], EFFECT_REF);
+    assert_eq!(trace["inputs"][1]["ref"], SECOND_EFFECT_REF);
+    assert_eq!(
+        recover_replay_wal(project_root.join(".forge-method"), false)
+            .expect("replay")
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Consumed
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn reordered_operation_wide_request_fails_before_lock_or_replay_reservation() {
+    let OperationWideFixture {
+        project_root,
+        target_paths,
+        material,
+        source: _,
+    } = operation_wide_fixture("operation-wide-reordered", true);
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+
+    let error = prepare_execution_transaction(material, environment)
+        .expect_err("reordered request refs must fail closed");
+    assert_eq!(error, PrepareExecutionError::EffectBindingMismatch);
+    assert!(target_paths.iter().all(|path| !path.exists()));
+    assert!(!effect_wal(&project_root).exists());
+    assert_eq!(
+        recover_replay_wal(project_root.join(".forge-method"), false)
+            .expect("replay")
+            .valid_record_count,
+        0
+    );
+    assert!(
+        try_acquire_effect_store_lock(&project_root, PREPARED_EFFECT_LOCK_RELATIVE_PATH).is_ok()
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn second_effect_drift_after_operation_wide_admission_blocks_the_whole_commit() {
+    let OperationWideFixture {
+        project_root,
+        target_paths,
+        material,
+        source,
+    } = operation_wide_fixture("operation-wide-drift", false);
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late admission")
+    else {
+        panic!("complete operation-wide snapshot must admit");
+    };
+    fs::write(&target_paths[1], "same-user bypass\n").expect("simulate second-effect drift");
+
+    let error = admitted
+        .commit(&source)
+        .expect_err("drift in any constituent effect must block the operation");
+    assert!(matches!(
+        error,
+        ExecutionCommitError::EffectPreflightChanged { .. }
+    ));
+    assert!(!target_paths[0].exists());
+    assert_eq!(
+        fs::read_to_string(&target_paths[1]).expect("drift target"),
+        "same-user bypass\n"
+    );
+    assert!(!effect_wal(&project_root).exists());
+    assert_eq!(
+        recover_replay_wal(project_root.join(".forge-method"), false)
+            .expect("replay")
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Reserved
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn recovery_reconciles_operation_wide_commit_without_reapplying_constituents() {
+    let OperationWideFixture {
+        project_root,
+        target_paths,
+        material,
+        source,
+    } = operation_wide_fixture("operation-wide-recovery", false);
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment.clone()).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late admission")
+    else {
+        panic!("complete operation-wide snapshot must admit");
+    };
+    let ExecutionCommitOutcome::Committed { receipt } = admitted.commit(&source).expect("commit")
+    else {
+        panic!("operation-wide fixture must commit");
+    };
+    assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+
+    let wal_path = effect_wal(&project_root);
+    let wal_text = fs::read_to_string(&wal_path).expect("effect WAL");
+    let mut effect_lines = wal_text.lines().collect::<Vec<_>>();
+    let removed: EffectWalRecord =
+        serde_json::from_str(effect_lines.pop().expect("replay completion marker"))
+            .expect("completion JSON");
+    assert_eq!(removed.stage, EffectWalStage::ReplayConsumed);
+    fs::write(&wal_path, format!("{}\n", effect_lines.join("\n")))
+        .expect("remove completion marker");
+
+    let replay_before =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("replay before");
+    let reserve = &replay_before.records[0];
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&replay_before.wal_path)
+        .expect("open replay WAL")
+        .set_len(reserve.offset + reserve.record_len)
+        .expect("truncate replay to reserve");
+
+    let reconciled =
+        reconcile_prepared_execution_commits(&environment).expect("operation-wide reconcile");
+    assert_eq!(
+        reconciled.status,
+        ExecutionReplayReconciliationStatus::Reconciled
+    );
+    assert_eq!(reconciled.reconciled_transactions.len(), 1);
+    assert!(reconciled.replay_results[0].appended);
+    assert!(reconciled.completion_records[0].completion.recovered);
+    assert_eq!(
+        fs::read_to_string(&target_paths[0]).expect("first remains committed"),
+        "p4b6b: first\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&target_paths[1]).expect("second remains committed"),
+        "p4b6b: second\n"
+    );
+    assert_eq!(
+        reconcile_prepared_execution_commits(&environment)
+            .expect("idempotent reconcile")
+            .status,
+        ExecutionReplayReconciliationStatus::Noop
+    );
     fs::remove_dir_all(project_root).expect("cleanup");
 }
 

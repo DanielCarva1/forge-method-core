@@ -111,7 +111,7 @@ pub fn compose_operation_effect_bundle(
     let mut notification_required = false;
     let mut destructive = false;
 
-    for (effect_ref, document) in effect_refs.iter().zip(effects) {
+    for document in effects {
         let effect = &document.tool_effect_contract;
         let validation = validate_tool_effect(document);
         if validation
@@ -134,11 +134,6 @@ pub fn compose_operation_effect_bundle(
                 effect_id: effect.id.0.clone(),
             });
         }
-        if effect.contract_ref != *effect_ref {
-            return Err(OperationEffectBundleError::EffectRefMismatch {
-                effect_id: effect.id.0.clone(),
-            });
-        }
         if !seen_ids.insert(effect.id.0.clone()) {
             return Err(OperationEffectBundleError::DuplicateEffectId(
                 effect.id.0.clone(),
@@ -154,17 +149,16 @@ pub fn compose_operation_effect_bundle(
             actor = Some(effect.actor.clone());
         }
         for read in &effect.read_set {
-            if !file_backed_target(read.target_kind) {
-                return Err(OperationEffectBundleError::UnsupportedTarget {
-                    effect_id: effect.id.0.clone(),
-                    reference: read.reference.clone(),
-                });
-            }
-            let key = normalized_target(effect_store_root, read.target_kind, &read.reference)
-                .map_err(|()| OperationEffectBundleError::UnsupportedTarget {
-                    effect_id: effect.id.0.clone(),
-                    reference: read.reference.clone(),
-                })?;
+            let key = if file_backed_target(read.target_kind) {
+                normalized_target(effect_store_root, read.target_kind, &read.reference).map_err(
+                    |()| OperationEffectBundleError::UnsupportedTarget {
+                        effect_id: effect.id.0.clone(),
+                        reference: read.reference.clone(),
+                    },
+                )?
+            } else {
+                format!("logical:{:?}:{}", read.target_kind, read.reference).to_lowercase()
+            };
             if let Some(existing) = reads_by_target.get(&key) {
                 if existing != read {
                     return Err(OperationEffectBundleError::ConflictingRead {
@@ -383,9 +377,6 @@ pub enum OperationEffectBundleError {
     EffectBindingMismatch {
         effect_id: String,
     },
-    EffectRefMismatch {
-        effect_id: String,
-    },
     DuplicateEffectId(String),
     ActorMismatch {
         effect_id: String,
@@ -428,10 +419,6 @@ impl fmt::Display for OperationEffectBundleError {
             Self::EffectBindingMismatch { effect_id } => write!(
                 formatter,
                 "effect {effect_id} is not bound to the declared operation"
-            ),
-            Self::EffectRefMismatch { effect_id } => write!(
-                formatter,
-                "effect {effect_id} contract_ref does not match its declared operation ref"
             ),
             Self::DuplicateEffectId(effect_id) => {
                 write!(formatter, "duplicate operation effect id {effect_id}")

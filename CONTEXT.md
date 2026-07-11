@@ -73,6 +73,9 @@ Active implementation plan:
   that preserves the declared effect identities while placing the complete
   disjoint file-backed write set under one effect lock, WAL, and recovery
   outcome. It is implementation, not caller-selected authority.
+- **Constituent Effect**: one original content-addressed effect contract bound
+  to an operation-wide transaction. Its ref/id/token remain durable provenance
+  even though the store commits the derived envelope as one effect id.
 
 ## Architectural direction
 
@@ -83,8 +86,10 @@ Active implementation plan:
   The P4a decision module defines its fail-closed admission contract; the P4b
   Adapter/kernel integration is required before Forge claims runtime enforcement.
 - The **Operation Effect Bundle Module** deepens the existing local effect-store
-  transaction for multi-effect operations. Sagas remain a separate future
-  boundary for external or irreversible commit domains.
+  transaction for multi-effect operations. The prepared kernel now binds and
+  commits that bundle under opaque authority; MCP activation remains a separate
+  Adapter boundary. Sagas remain future work for external or irreversible
+  commit domains.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

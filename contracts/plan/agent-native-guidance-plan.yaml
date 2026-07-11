@@ -320,6 +320,19 @@ phases:
           kernel and public MCP deployment remain exact single-effect until
           P4b.6b/P4b.6c bind payloads, provenance, replay, recovery, policy, and
           real-client evidence to the complete operation.
+      - id: "P4b.6b-prepared-kernel-operation-wide-integration"
+        delivers:
+          - "opaque ExecutionRequest and PreparedExecutionMaterial support for a complete ordered effect set with legacy single-effect compatibility"
+          - "exact source-ref, content-token, operation declaration, effect document, and payload union binding before lock or replay reservation"
+          - "kernel-derived transaction envelope with operation_wide_wal and whole_operation Admission at late and immediate commit boundaries"
+          - "commit descriptor and canonical provenance binding the envelope plus every constituent ref, id, and token"
+          - "principal trace and receipt preserving all constituent effects while the WAL commits one envelope"
+          - "recovery validation of strategy/effect scope plus replay reconciliation without constituent reapplication"
+          - "adversarial proofs for reordered refs, second-effect drift, one Begin/Commit, and operation-wide crash recovery"
+        boundary: >-
+          Prepared operation-wide execution is Rust-only. Public MCP policy,
+          bounded loading, snapshot generation, signing syntax, readiness, and
+          official-client execution remain exact single-effect until P4b.6c.
     current_program:
       id: "P4b.6-operation-wide-atomicity"
       status: "in_progress"
@@ -327,13 +340,12 @@ phases:
         - "commit all local file-backed effects in one operation-wide WAL transaction"
         - "preserve authority, replay, provenance, and recovery across the complete effect set"
     next_slice:
-      id: "P4b.6b-prepared-kernel-operation-wide-integration"
+      id: "P4b.6c-trusted-mcp-operation-wide-activation"
       status: "not_started"
       scope:
-        - "prepare and bind the complete ordered effect/payload set under opaque verified authority"
-        - "commit one operation-wide envelope with complete provenance and replay reconciliation"
+        - "extend deployment policy and bounded loaders to the complete ordered effect/payload set"
+        - "extend snapshot, signing, readiness, client configuration, and official rmcp proof without weakening single-effect compatibility"
     following_slices:
-      - "P4b.6c trusted MCP policy, loaders, readiness, and official-client multi-effect proof"
       - "P5 workflow migration"
       - "P6 domain-pack ecosystem"
     release_blockers: []
@@ -395,11 +407,12 @@ first_executable_slice:
     - "P4b.5a operator-protected external replay head with policy binding, automatic runtime advancement, and whole-pair rollback detection"
     - "P4b.5b verified Execution Principal propagation through claims, conflict attribution, Admission, effect-WAL provenance, durable traces, receipts, and MCP evidence"
     - "P4b.6a operation-wide WAL decision, deterministic effect bundle, atomic rollback/recovery tests, Admission support, and legacy partial-commit fail-closed guard"
+    - "P4b.6b opaque prepared-kernel operation-wide authority, complete preflight/Admission/provenance commit, typed receipts, and replay reconciliation"
   next_action: >-
-    P4b.6a is complete as a Rust substrate. Next implement P4b.6b: bind the
-    complete ordered effect and payload set inside the opaque prepared kernel,
-    commit it once with operation-wide provenance, and reconcile replay without
-    enabling public MCP mutation yet.
+    P4b.6b is complete as a Rust-only governed commit path. Next implement
+    P4b.6c: extend trusted MCP policy, loaders, snapshot/signing/readiness, and
+    the official rmcp client proof to operation-wide execution while keeping
+    read-only default and exact single-effect compatibility.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

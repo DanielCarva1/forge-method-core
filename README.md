@@ -564,10 +564,9 @@ one WAL Begin/Commit, and before-images for the complete write set; both an
 immediate later-write failure and crash recovery roll back all constituent
 writes. Original effect ids and refs remain available for provenance.
 
-This checkpoint is a Rust substrate, not silent public activation. The legacy
-runtime now rejects multiple independently committed effects before any side
-effect; prepared-kernel integration is P4b.6b and MCP policy/client activation
-comes later. See
+The legacy runtime now rejects multiple independently committed effects before
+any side effect. P4b.6b consumes this substrate inside the opaque prepared
+kernel, but MCP policy/client activation remains a separate P4b.6c boundary. See
 [`contracts/spec/operation-wide-transaction-v0.yaml`](contracts/spec/operation-wide-transaction-v0.yaml).
 
 ### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5)
@@ -730,7 +729,7 @@ compatibility re-exports. The authority crate exposes the adapter-neutral
 `ExecutionExecutor`, which accepts one non-cloneable `VerifiedExecutionCall`
 in-process; MCP re-exports compatibility names such as `McpMutationExecutor`
 and `VerifiedMcpExecutionCall`. Its structured request admits only the
-operation, command/effect refs, payload bindings, risk-audit rules, and citation
+operation, ordered command/effect refs, payload bindings, risk-audit rules, and citation
 requirement. Caller-selected root, sync behavior, payload escape/size limits,
 transaction identity, commit timestamp, output flags, and unknown arguments
 are rejected before the executor.
@@ -741,7 +740,7 @@ tests prove public verified dispatch reaches the injected executor without
 spawning a CLI child, while incomplete configurations fail closed. See
 [`contracts/spec/execution-authority-handoff-v0.yaml`](contracts/spec/execution-authority-handoff-v0.yaml).
 
-### Prepare and admit one execution before the effect WAL (P4b.2b)
+### Prepare and admit one transaction before the effect WAL (P4b.2b + P4b.6b)
 
 `forge-core-kernel` now exposes an internal Rust-only preparation path that
 consumes `VerifiedExecutionCall` without making authority serializable. A
@@ -751,13 +750,22 @@ not the adapter, derives a canonical commit descriptor covering the project,
 audience, Operation/Command/Effect tokens, payload paths and hashes, effect
 lock/WAL paths, transaction id, and synchronous durability.
 
+P4b.6b extends the opaque request and material boundary to a complete ordered
+effect set. The kernel matches every source ref to its content-addressed token,
+the operation declaration, loaded document, and union of payload targets before
+it acquires the lock or reserves replay. Two or more local effects are compiled
+into the internal operation-wide envelope; single-effect construction remains
+source-compatible.
+
 Preparation acquires the fixed effect-store lock, runs a read-only file-effect
 preflight, durably reserves the nonce, then converts the effect lock and replay
 reservation into an owned effect-lock-first replay guard. At the late boundary
 it repeats the preflight byte-for-byte, captures only the mutable Assurance
 Case/claim/gate/state-version/time snapshot, reconstructs all principal,
 replay, contract, freshness, and commit observations inside the kernel, and
-runs `evaluate_execution_admission`.
+runs `evaluate_execution_admission`. The derived commit facts are
+`single_effect_wal`/`single_effect` or
+`operation_wide_wal`/`whole_operation`, never caller-selected.
 
 An admitted result becomes a non-cloneable, non-deserializable
 `LateAdmittedExecutionTransaction` that still owns both locks and the exact
@@ -771,10 +779,11 @@ seen rather than making replay authority erasable.
 
 Claim/gate revisions are exact typed snapshots, not an OS sandbox against a
 same-user bypass writer. Public MCP mutation is disabled by default and only
-the P4b.3c reconciled single-effect deployment can consume this path. See
+the P4b.3c reconciled single-effect deployment can currently consume this path;
+operation-wide MCP activation remains P4b.6c. See
 [`contracts/spec/prepared-execution-transaction-v0.yaml`](contracts/spec/prepared-execution-transaction-v0.yaml).
 
-### Commit one admitted effect with provenance and recovery (P4b.2c)
+### Commit one admitted transaction with provenance and recovery (P4b.2c + P4b.6b)
 
 `LateAdmittedExecutionTransaction::commit` consumes the opaque admitted value
 directly. At that immediate call it repeats file preflight under the retained
@@ -787,9 +796,12 @@ both Admission evaluations, all three preflights, the commit descriptor and
 digest, and the replay reservation. Raw nonce values in the persisted Admission
 projections are replaced with the verified nonce fingerprint. The resulting
 content-addressed provenance and pseudonymous replay binding are fsynced in the
-effect-WAL `begin` record before any project write. The kernel then commits
-exactly one effect, consumes replay while both locks are held, releases only the
-replay lock, and appends a typed `replay_consumed` marker under the effect lock.
+effect-WAL `begin` record before any project write. For operation-wide commits,
+the descriptor binds the derived envelope plus every original ref, id, and
+token in declared order. The kernel commits one envelope, consumes replay while
+both locks are held, releases only the replay lock, and appends a typed
+`replay_consumed` marker under the effect lock. The receipt exposes the envelope
+id and ordered constituent ids; the principal trace lists every source effect.
 
 If the process stops after effect `commit`, the durable receipt is explicitly
 pending rather than safe to retry. `reconcile_prepared_execution_commits`
@@ -801,8 +813,9 @@ provenance-bound transaction until a future governed archival boundary exists.
 
 The two WALs remain separate files. P4b.5a trusted MCP detects whole replay-pair
 rollback relative to its independently protected external head, but cannot
-detect coordinated rollback of both stores. Operation-wide/saga semantics are
-unsupported. See
+detect coordinated rollback of both stores. Operation-wide semantics are now
+enforced by the Rust prepared kernel; public MCP remains exact single-effect
+until P4b.6c, and saga semantics remain unsupported. See
 [`contracts/spec/execution-provenance-commit-v0.yaml`](contracts/spec/execution-provenance-commit-v0.yaml).
 
 ### Route work through the dual-lane autonomy router

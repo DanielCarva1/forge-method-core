@@ -56,7 +56,6 @@ fn operation_and_effects() -> (
         .clone_from(&refs);
 
     first.tool_effect_contract.id = StableId("effect.operation-wide.first".to_owned());
-    first.tool_effect_contract.contract_ref = refs[0].clone();
     first.tool_effect_contract.operation_ref = operation_id.clone();
     let shared_read = EffectRead {
         target_kind: EffectTargetKind::FilePath,
@@ -76,7 +75,6 @@ fn operation_and_effects() -> (
     }];
 
     second.tool_effect_contract.id = StableId("effect.operation-wide.second".to_owned());
-    second.tool_effect_contract.contract_ref = refs[1].clone();
     second.tool_effect_contract.operation_ref = operation_id;
     second.tool_effect_contract.read_set = vec![shared_read];
     second.tool_effect_contract.write_set = vec![EffectWrite {
@@ -149,16 +147,13 @@ fn normalized_overlapping_write_targets_fail_closed() {
 }
 
 #[test]
-fn reordered_effect_documents_fail_closed_against_declared_refs() {
-    let (operation, refs, mut effects) = operation_and_effects();
-    effects.swap(0, 1);
+fn reordered_effect_refs_fail_closed_against_the_operation() {
+    let (operation, mut refs, effects) = operation_and_effects();
+    refs.swap(0, 1);
 
     let error = compose_operation_effect_bundle(repo_root(), &operation, &refs, &effects)
-        .expect_err("reordered contracts must not change declared operation semantics");
-    assert!(matches!(
-        error,
-        OperationEffectBundleError::EffectRefMismatch { .. }
-    ));
+        .expect_err("reordered refs must not change declared operation semantics");
+    assert_eq!(error, OperationEffectBundleError::EffectSetMismatch);
 }
 
 #[test]

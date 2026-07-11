@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_admission_v0"
-status: "p4b6a_operation_wide_policy_and_rust_substrate"
+status: "p4b6b_operation_wide_prepared_kernel"
 purpose: >-
   Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
   one exact mutation intent before the Execution Assurance Kernel may admit it.
@@ -103,11 +103,13 @@ current_boundary:
     - "P4b.6a admits a verified multi-effect whole-operation WAL observation in the pure decision point"
     - "P4b.6a composes exact ordered file-backed effects into one deterministic internal transaction envelope"
     - "P4b.6a legacy multi-effect execution fails closed before command evidence or project writes"
+    - "P4b.6b prepared execution derives whole-operation Admission from the exact ordered effect and payload set"
+    - "P4b.6b repeats complete-envelope preflight and Admission at late and immediate-commit boundaries"
   not_yet_claimed:
     - "effect WAL and replay WAL are one physically atomic transaction"
     - "detection when replay state and its P4b.5a external anchor are rolled back together"
     - "replay WAL compaction or rotation"
-    - "prepared-kernel and public MCP activation of operation-wide WAL across multiple effects"
+    - "public MCP activation of operation-wide WAL across multiple effects"
     - "typed saga execution and complete compensation"
 
 references:

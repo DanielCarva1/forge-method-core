@@ -1,10 +1,10 @@
 schema_version: "0.1"
 spec: "execution_provenance_commit_v0"
-status: "p4b5b_principal_bound_and_active_in_trusted_mcp"
+status: "p4b6b_operation_wide_kernel_and_single_effect_mcp"
 purpose: >-
   Define the durable evidence and recovery protocol that binds one late-admitted
-  execution to one effect-WAL commit and one replay reservation without
-  serializing authority or exposing the raw nonce.
+  execution to one single-effect or operation-wide effect-WAL commit and one
+  replay reservation without serializing authority or exposing the raw nonce.
 
 provenance_envelope:
   store_type: "EffectExecutionProvenance"
@@ -23,6 +23,7 @@ provenance_envelope:
     - "immediate-commit Admission input and decision"
     - "initial, late, and immediate-commit effect preflights"
     - "canonical PreparedCommitDescriptor and digest"
+    - "commit strategy, committed envelope, and ordered constituent effect refs, ids, and tokens"
     - "pseudonymous replay reservation"
   redaction:
     forbidden_persisted_value: "raw nonce"
@@ -40,7 +41,7 @@ effect_wal_protocol:
       - "principal-bound canonical provenance digest"
     durability: "sync_on_append before any project write"
   effect_commit:
-    meaning: "all writes and the effect Commit marker are durable"
+    meaning: "all writes in the single transaction envelope and its Commit marker are durable"
   replay_consumed:
     requires:
       - "matching committed transaction"
@@ -69,6 +70,7 @@ fail_closed_rules:
   - "effect id cannot change inside one transaction"
   - "completion without a prior exact Commit is rejected"
   - "root, audience, tx id, descriptor paths, digests, or reservation drift blocks reconciliation"
+  - "committed effect id, strategy, envelope, duplicate constituent ids, or incomplete effect bindings block reconciliation"
   - "ordinary effect-WAL compaction retains all provenance-bound transaction records"
 
 public_surface:
@@ -78,6 +80,7 @@ public_surface:
   reason: >-
     P4b.3c binds this protocol to the trusted MCP executor only after explicit
     policy, bounded loading, replay verification, and startup reconciliation.
+    P4b.6b operation-wide use is Rust-only until the separate P4b.6c activation.
 
 principal_evidence:
   pre_effect_trace: >-
@@ -86,6 +89,8 @@ principal_evidence:
   receipt:
     - "execution_principal"
     - "principal_trace_event_id"
+    - "committed envelope effect_id"
+    - "ordered constituent effect_ids"
 
 references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
@@ -94,3 +99,4 @@ references:
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
+  - "contracts/spec/operation-wide-transaction-v0.yaml"

@@ -1,12 +1,13 @@
 schema_version: "0.1"
 spec: "prepared_execution_transaction_v0"
-status: "p4b2c_implemented_dormant"
+status: "p4b6b_operation_wide_kernel_integrated"
 purpose: >-
   Carry one opaque verified execution request through kernel-derived project,
-  effect, replay, claim, gate, and commit authority; evaluate Admission at both
-  the late-preparation and immediate-commit boundaries; persist complete
-  redacted provenance; commit exactly one effect; and reconcile the durable
-  effect-commit/replay-consume crash window without enabling public MCP mutation.
+  effect-set, replay, claim, gate, and commit authority; evaluate Admission at
+  both the late-preparation and immediate-commit boundaries; persist complete
+  redacted provenance; commit one single-effect or operation-wide transaction;
+  and reconcile the durable effect-commit/replay-consume crash window without
+  enabling public MCP multi-effect mutation.
 
 rust_interface:
   module: "forge_core_kernel crate-root re-exports over the private prepared_execution module"
@@ -27,7 +28,7 @@ trusted_environment:
     effect_lock: ".forge-method/locks/effects.lock"
     effect_wal: ".forge-method/wal/effects.ndjson"
     durability: "sync_on_append"
-    transaction_id: "derived from signed request id, effect id, and intent digest"
+    transaction_id: "derived from signed request id, committed envelope id, and intent digest"
   caller_cannot_select:
     - "root or state root"
     - "audience after environment construction"
@@ -41,16 +42,17 @@ prepare_sequence:
   - "consume the linear VerifiedExecutionCall into opaque authorization plus structured request"
   - "reject unintegrated risk-audit or citation requirements rather than silently ignoring them"
   - "recompute the ExecutionAdmissionRequest digest and compare it with signed verified authority"
-  - "verify principal, agent, role, nonce, issued-at, operation, command, effect, and payload bindings"
-  - "derive a canonical commit descriptor binding project root, audience, all contract refs/tokens, payload paths/hashes/lengths, lock, WAL, tx id, and durability"
+  - "verify principal, agent, role, nonce, issued-at, operation, command, ordered effect-set, and complete payload bindings"
+  - "for two or more local effects, derive one deterministic OperationEffectBundle after content-addressed source-ref binding"
+  - "derive a canonical commit descriptor binding project root, audience, transaction envelope, every constituent ref/id/token, strategy, payload paths/hashes/lengths, lock, WAL, tx id, and durability"
   - "acquire the exact effect-store lock"
-  - "run a read-only file-effect preflight under that retained lock"
+  - "run a read-only complete-transaction preflight under that retained lock"
   - "durably reserve the nonce while the effect lock is already held"
   - "convert effect lock plus replay reservation into OwnedReplayCommitGuard, retaining effect-lock then replay-lock order"
 
 late_boundary:
   revalidation:
-    - "repeat exact file-effect preflight under the retained effect lock"
+    - "repeat exact transaction-envelope preflight under the retained effect lock"
     - "require byte-equivalent typed preflight observations; any drift fails closed"
   trusted_snapshot_source_may_supply_only:
     - "Assurance Case"
@@ -65,8 +67,8 @@ late_boundary:
     - "registry-authorized principal observation"
     - "exact audience and grants"
     - "fresh reserved replay observation and revision"
-    - "operation, command, and effect documents"
-    - "single-effect WAL commit guarantees"
+    - "operation, command, and complete ordered effect documents"
+    - "single-effect or operation-wide WAL strategy, scope, and commit guarantees"
     - "attestation freshness windows retained by verified authorization"
   decision: "evaluate_execution_admission"
   admitted_result: >-
@@ -76,14 +78,14 @@ late_boundary:
 
 immediate_commit_boundary:
   sequence:
-    - "repeat exact effect preflight and require equality with the late-admitted preflight"
+    - "repeat exact complete-transaction preflight and require equality with the late-admitted preflight"
     - "capture a new bounded assurance/claim/gate/state/time snapshot"
     - "rebuild and evaluate Execution Admission; a new policy block writes no effect WAL"
     - "build complete typed provenance for authorization, both Admissions, all three preflights, descriptor, digest, and replay reservation"
     - "replace raw nonce fields in persisted Admission projections with the verified nonce fingerprint"
     - "canonicalize and hash the provenance document"
     - "append provenance plus pseudonymous replay binding in the effect-WAL begin record before any project write"
-    - "commit exactly one effect with synchronous effect-WAL durability"
+    - "commit exactly one effect-store transaction envelope with synchronous WAL durability"
     - "consume replay while both locks remain held"
     - "release replay lock but retain effect lock, then append replay_consumed completion evidence"
   result_states:
@@ -119,21 +121,26 @@ executable_evidence:
   - "effect-WAL compaction retains complete provenance-bound transactions"
   - "prepared and admitted typestates remain non-cloneable and non-deserializable"
   - "commit provenance, durable pre-effect trace, and receipt carry the exact verified ExecutionPrincipal"
+  - "operation-wide commit binds two ordered source effects and payloads into one Begin/Commit pair"
+  - "reordered effect refs fail before lock or replay reservation"
+  - "drift in any constituent effect blocks the entire commit before effect WAL"
+  - "operation-wide replay reconciliation preserves both committed targets without reapplication"
 
 intentional_limits:
   - "effect and replay WALs are not physically atomic; typed pending receipts plus deterministic recovery close the crash window"
   - "a failed or dropped pre-commit attempt leaves its replay nonce permanently seen"
   - "claim and gate authority is an exact typed revision snapshot, not an operating-system lock against a same-user bypass writer"
   - "same-user raw filesystem access remains outside the cooperative governance boundary"
-  - "the P4b.2c path is wired only to explicitly reconciled P4b.3c single-effect MCP deployment"
+  - "the P4b.2c/P4b.6b single-effect path is wired to explicitly reconciled P4b.3c MCP deployment"
+  - "operation-wide prepared execution remains Rust-only until P4b.6c loader, policy, readiness, and client proof"
   - "public MCP mutation remains disabled by default"
-  - "operation-wide atomicity and saga semantics remain unsupported"
+  - "saga semantics remain unsupported"
   - "coordinated rollback of replay state and its P4b.5a external anchor still requires stronger operator isolation"
 
 completed_follow_on:
-  id: "P4b.5b-execution-principal-propagation"
+  id: "P4b.6b-prepared-kernel-operation-wide-integration"
   delivered:
-    - "verified principal identity in claims, traces, WAL provenance, receipts, and MCP evidence"
+    - "complete ordered effect authority, operation-wide Admission, provenance, receipt, and replay recovery"
 
 references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
@@ -144,3 +151,4 @@ references:
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
+  - "contracts/spec/operation-wide-transaction-v0.yaml"

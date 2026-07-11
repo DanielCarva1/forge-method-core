@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_authority_handoff_v0"
-status: "p4b2c_implemented_dormant_end_to_end"
+status: "p4b6b_operation_wide_kernel_handoff"
 purpose: >-
   Preserve verified execution authority as a non-forgeable in-memory capability
   from operator-owned credential verification to a typed host executor without
@@ -53,7 +53,7 @@ adapter_handoff:
   allowed_request_fields:
     - "operation contract ref"
     - "command contract refs"
-    - "at most one effect contract ref"
+    - "one or more ordered effect contract refs"
     - "payload target/path bindings"
     - "risk-audit rules ref"
     - "require-citation flag"
@@ -66,6 +66,11 @@ adapter_handoff:
     - "recorded-at or commit timestamp"
     - "output-mode flags"
     - "unknown arguments"
+  compatibility_rule: >-
+    ExecutionRequest::new preserves the legacy optional single-effect shape.
+    ExecutionRequest::new_operation_wide carries an ordered set, while the
+    legacy effect_contract_ref accessor returns None unless the set has exactly
+    one entry. Existing MCP loading therefore remains fail-closed.
 
 public_surface:
   mcp_stdio_mutation: "explicit_reconciled_single_effect_opt_in_only"
@@ -81,11 +86,12 @@ executable_evidence:
   - "argument tests reject every caller-controlled authority knob"
   - "a reconciled public-dispatch test delivers verified authority only to the injected executor and proves no CLI child was spawned"
   - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
+  - "operation-wide requests expose the complete ordered set and cannot masquerade as one effect"
 
 completed_follow_on:
-  id: "P4b.5b-execution-principal-propagation"
+  id: "P4b.6b-prepared-kernel-operation-wide-integration"
   delivered:
-    - "verified principal identity in claims, traces, WAL provenance, receipts, and MCP evidence"
+    - "opaque authority binds the complete ordered effect set through prepared commit and recovery"
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"

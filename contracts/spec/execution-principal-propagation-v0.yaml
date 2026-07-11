@@ -66,7 +66,8 @@ preserved_limits:
   - "claimant_principal_id remains optional on legacy wire documents"
   - "effect WAL remains recovery authority; the trace is an audit projection"
   - "cooperative same-user governance is not hostile-user isolation"
-  - "operation-wide transactions and complete typed saga semantics remain unsupported"
+  - "operation-wide prepared-kernel transactions preserve the same principal tuple, but MCP activation remains P4b.6c"
+  - "complete typed saga semantics remain unsupported"
 
 references:
   - "contracts/spec/execution-authority-handoff-v0.yaml"
@@ -74,4 +75,5 @@ references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/claims-integrity-spine-spec.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/operation-wide-transaction-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"
