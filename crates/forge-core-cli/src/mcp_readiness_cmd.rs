@@ -28,6 +28,7 @@ struct ReadinessReport {
     project_root: String,
     state_root: String,
     snapshot_ref: String,
+    replay_anchor_path: String,
     credential_id: String,
     client_config_path: Option<String>,
     next_actions: Vec<String>,
@@ -63,12 +64,21 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
         "deployment policy",
     )?;
     let snapshot_ref = required_path(flags, "--snapshot")?;
+    let replay_anchor_path = canonical(
+        required_path(flags, "--replay-anchor")?,
+        "external replay anchor",
+    )?;
     let secret_dir = canonical(
         crate::mcp_credential_cmd::absolute_path(required_path(flags, "--secret-dir")?)?,
         "secret directory",
     )?;
     crate::mcp_credential_cmd::ensure_operator_owned_location(&registry_path, &root, &state_root)?;
     crate::mcp_credential_cmd::ensure_operator_owned_location(&secret_dir, &root, &state_root)?;
+    crate::mcp_credential_cmd::ensure_operator_owned_location(
+        &replay_anchor_path,
+        &root,
+        &state_root,
+    )?;
     let credential_id = required(flags, "--credential-id")?.to_owned();
 
     let allowlist_text = read(&allowlist_path, "allowlist")?;
@@ -165,6 +175,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
         policy,
         &root,
         &state_root,
+        &replay_anchor_path,
         ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
     )
     .map_err(|error| ExitError::env_config(format!("startup reconciliation failed: {error}")))?;
@@ -179,6 +190,7 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
                 &registry_path,
                 &policy_path,
                 &snapshot_ref,
+                &replay_anchor_path,
             )
         })
         .transpose()?;
@@ -192,10 +204,12 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
             "policy_audience_match",
             "snapshot_content_binding",
             "replay_clean_and_reconciled",
+            "external_replay_anchor_current",
         ],
         project_root: path_string(&root)?,
         state_root: path_string(&state_root)?,
         snapshot_ref: path_string(&snapshot_ref)?,
+        replay_anchor_path: path_string(&replay_anchor_path)?,
         credential_id,
         client_config_path,
         next_actions: vec![
@@ -213,13 +227,14 @@ fn write_client_config(
     registry: &Path,
     policy: &Path,
     snapshot: &Path,
+    replay_anchor: &Path,
 ) -> Result<String, ExitError> {
     let exe = std::env::current_exe()
         .map_err(|error| ExitError::env_config(format!("cannot resolve executable: {error}")))?;
     let value = serde_json::json!({
         "mcpServers": {"forge-method": {
             "command": path_string(&exe)?,
-            "args": ["mcp", "serve", "--root", path_string(root)?, "--allowlist", path_string(allowlist)?, "--principal-registry", path_string(registry)?, "--deployment-policy", path_string(policy)?, "--snapshot", path_string(snapshot)?, "--enable-trusted-single-effect"]
+            "args": ["mcp", "serve", "--root", path_string(root)?, "--allowlist", path_string(allowlist)?, "--principal-registry", path_string(registry)?, "--deployment-policy", path_string(policy)?, "--snapshot", path_string(snapshot)?, "--replay-anchor", path_string(replay_anchor)?, "--enable-trusted-single-effect"]
         }}
     });
     let text = serde_json::to_string_pretty(&value)
@@ -259,6 +274,7 @@ fn parse_flags(args: &[String]) -> Result<BTreeMap<String, String>, ExitError> {
         "--principal-registry",
         "--deployment-policy",
         "--snapshot",
+        "--replay-anchor",
         "--secret-dir",
         "--credential-id",
         "--client-config-output",

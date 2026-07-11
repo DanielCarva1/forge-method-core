@@ -531,7 +531,7 @@ the kernel repeats mutable-authority Admission under retained locks immediately
 before the effect WAL begins. Read-only remains the default, and broader
 operation-wide/saga mutation is not claimed.
 
-### Operate trusted MCP without hand-editing authority (P4b.4)
+### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5a)
 
 The built-in MCP surface remains read-only unless the operator explicitly
 enables the exact trusted single-effect posture. The normal path is agent
@@ -545,6 +545,11 @@ forge-core mcp credential provision \
   --secret-dir <absolute-operator-dir>/secrets \
   --credential-id key.agent.1 --principal-id principal.agent \
   --agent-id agent --role driver --audience forge-core:mcp:local
+
+forge-core mcp replay-anchor provision \
+  --root <project> \
+  --anchor <absolute-operator-dir>/replay-anchor.json \
+  --deployment-id <trusted-policy-id>
 
 forge-core mcp snapshot \
   --root <project> --operation <operation-ref> --assurance <assurance-ref> \
@@ -565,6 +570,7 @@ forge-core mcp readiness \
   --principal-registry <absolute-operator-dir>/principal-registry.yaml \
   --deployment-policy <trusted-policy.yaml> \
   --snapshot runtime/mcp-execution-snapshot.yaml \
+  --replay-anchor <absolute-operator-dir>/replay-anchor.json \
   --secret-dir <absolute-operator-dir>/secrets \
   --credential-id key.agent.1 \
   --client-config-output <absolute-operator-dir>/client-config.json
@@ -572,9 +578,20 @@ forge-core mcp readiness \
 
 `mcp readiness` fails closed unless the Project Link, exact allowlist, active
 credential, operator key, audience, fresh content-bound snapshot, replay WAL,
-and startup reconciliation agree. Its generated JSON pins the current binary
-and every trusted server argument. A replacement agent resumes by rerunning the
-same readiness command from durable paths, not chat history.
+external replay anchor, and startup reconciliation agree. Its generated JSON
+pins the current binary and every trusted server argument. A replacement agent
+resumes by rerunning the same readiness command from durable paths, not chat
+history.
+
+The replay anchor is strict bounded JSON in an operator-managed directory
+outside both project and Forge state. It binds the deployment-policy id, a
+random epoch, monotonic generation, manifest digest, and exact trusted WAL byte
+prefix. Trusted startup and every mutation verify/advance it automatically;
+restoring an older complete replay pair therefore fails closed while the
+external anchor survives. Provisioning is trust-on-first-use, and an actor able
+to roll back **both** stores remains outside this cooperative same-user
+guarantee. Use independent OS permissions, remote compare-and-swap storage, or
+equivalent isolation when that attacker is in scope.
 
 The mutating `tools/call` carries `_meta.attestation` fields
 `credential_id`, `audience`, `execution_intent_digest`, `nonce`, `ts`,
@@ -587,8 +604,9 @@ canonical call signature against that selected key. A caller-selected key and
 The official `rmcp` end-to-end test builds this setup, initializes from the
 generated client configuration, lists the exact `execute-operation` tool,
 transports the attestation over stdio, and applies one governed sidecar effect.
-It also proves that effect/replay WALs stay in the Project Link state root and
-that no consumer-local `.forge-method` is created.
+It also proves that effect/replay WALs stay in the Project Link state root, the
+external head advances through replay consume, and no consumer-local
+`.forge-method` is created.
 
 Read-only tool subprocesses no longer resolve `forge-core` through `PATH` or
 inherit the host's full environment. The server pins its current executable,
@@ -618,7 +636,7 @@ by the future Execution Assurance Kernel:
 - `recover_replay_wal` verifies framing and can repair only an incomplete final
   header or payload; other corruption fails closed.
 
-The authority files live under the supplied existing Forge state root at
+The WAL authority files live under the supplied existing Forge state root at
 `wal/replay.fmr1`, `replay-wal.manifest.json`, and
 `locks/replay.wal.lock`. That root is a trust boundary: keep it outside
 agent-writable project artifacts or protect it with equivalent OS permissions.
@@ -628,12 +646,12 @@ it is **pseudonymous, not confidential**; guessable inputs remain guessable.
 Replay is intentionally bounded to 8 MiB and 10,000 records and fails closed at
 either limit (the record cap alone allows at most 5,000 completed
 reserve/consume lifecycles when each uses two records; the byte cap may allow
-fewer, and unconsumed reservations change that mix). There is no
-compaction or rotation yet. Runtime reserve never recreates a missing pair and
-a missing manifest/WAL half-pair is detected. The explicit initializer still
-cannot distinguish first bootstrap from deletion or rollback of the complete
-pair, so it must remain an operator-controlled action; enforced deployment also
-needs an externally protected epoch/head or explicit initialization policy.
+fewer, and unconsumed reservations change that mix). There is no compaction or
+rotation yet. Runtime reserve never recreates a missing pair and a missing
+manifest/WAL half-pair is detected. The explicit initializer alone still cannot
+distinguish first bootstrap from deletion or rollback of the complete pair, so
+it remains operator-controlled. P4b.5a trusted MCP now requires the external
+head described above and detects rollback relative to that surviving head.
 The effect-lock-first guard does not make the effect WAL and replay WAL one
 physically atomic transaction. P4b.2c now closes that crash window with typed
 pending receipts, a persisted pseudonymous replay binding, and deterministic
@@ -643,6 +661,8 @@ This began as a **Rust API only** checkpoint. P4b.3c now consumes it only under
 explicit reconciled trusted single-effect MCP deployment; read-only remains the
 default and missing replay authority fails startup. See
 [`contracts/spec/replay-protection-wal-v0.yaml`](contracts/spec/replay-protection-wal-v0.yaml)
+and
+[`contracts/spec/replay-external-anchor-v0.yaml`](contracts/spec/replay-external-anchor-v0.yaml)
 and
 [`contracts/spec/execution-trust-boundary-v0.yaml`](contracts/spec/execution-trust-boundary-v0.yaml)
 for the exact guarantees and remaining boundaries.
@@ -730,10 +750,10 @@ incomplete final marker is safely truncated under the effect lock and an
 already-consumed exact replay is idempotent. Effect-WAL compaction retains every
 provenance-bound transaction until a future governed archival boundary exists.
 
-The two WALs remain separate files, whole replay-pair rollback detection still
-needs an externally protected epoch/head, and operation-wide/saga semantics are
-unsupported. This path remains Rust-only and dormant; MCP/CLI mutation and the
-legacy `execute_operation` path are unchanged. See
+The two WALs remain separate files. P4b.5a trusted MCP detects whole replay-pair
+rollback relative to its independently protected external head, but cannot
+detect coordinated rollback of both stores. Operation-wide/saga semantics are
+unsupported. See
 [`contracts/spec/execution-provenance-commit-v0.yaml`](contracts/spec/execution-provenance-commit-v0.yaml).
 
 ### Route work through the dual-lane autonomy router
@@ -940,9 +960,11 @@ gates.
   signing without emitting private keys. P4b.4d adds `forge-core mcp readiness`,
   generates the exact stdio client configuration, survives replacement-agent
   reruns, and is proven through the official `rmcp` client from initialization
-  and `tools/list` through a signed applied sidecar mutation. Operation-wide,
-  saga, externally anchored replay rollback detection, and hostile-user
-  isolation remain intentionally absent.
+  and `tools/list` through a signed applied sidecar mutation. P4b.5a adds the
+  required operator-protected external replay head, policy identity binding,
+  automatic startup/request advancement, and whole-pair rollback detection.
+  Complete Execution Principal propagation is next; operation-wide, saga, and
+  hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
 - **State derivation layer** — `forge_core_store::derive_state` is now the

@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_deployment_policy_v0"
-status: "p4b3c_explicit_single_effect_activation_implemented"
+status: "p4b5a_external_replay_anchor_required"
 purpose: >-
   Define a closed operator-owned deployment posture for the local MCP adapter
   without allowing policy validation itself to activate mutation.
@@ -26,6 +26,7 @@ modes:
       - "explicit operator opt-in"
       - "canonical configured root binding"
       - "Project Link resolved sidecar state-root binding"
+      - "external monotonic replay-head policy"
       - "execution_provenance_commit_v0@0.1 pinned"
       - "same-user trust boundary explicitly acknowledged"
 
@@ -43,9 +44,9 @@ checkpoint_boundary:
     through a separate explicit opt-in and reconciled deployment proof.
   not_implemented:
     - "operation-wide transaction or saga semantics"
-    - "externally anchored whole-pair replay rollback detection"
+    - "coordinated rollback of replay state and its independently protected external anchor"
     - "hostile-user isolation beyond the acknowledged same-user boundary"
-  next: "P4b.5 external replay anchoring and complete principal propagation"
+  next: "P4b.5b complete Execution Principal propagation"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"
@@ -54,3 +55,4 @@ references:
   - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/replay-external-anchor-v0.yaml"

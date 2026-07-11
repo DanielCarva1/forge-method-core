@@ -46,10 +46,8 @@ failure_policy:
   - "revoked, unknown, or underprivileged credentials fail closed"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
-  goal: >-
-    Externally anchor replay rollback detection and propagate verified
-    principal identity through runtime evidence.
+  id: "P4b.5b-execution-principal-propagation"
+  goal: "Propagate verified principal identity through claims, traces, WAL, and evidence."
 
 references:
   - "contracts/spec/execution-authority-snapshot-binding-v0.yaml"

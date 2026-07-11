@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_trusted_single_effect_activation_v0"
-status: "p4b3c_implemented_opt_in"
+status: "p4b5a_external_replay_anchor_enforced"
 purpose: >-
   Enable exactly one trusted execute-operation effect over MCP stdio only after
   explicit operator opt-in, complete startup reconciliation, and current
@@ -16,20 +16,23 @@ operator_activation:
   command: >-
     forge-core mcp serve --root <project> --allowlist <yaml>
     --principal-registry <yaml> --deployment-policy <yaml>
-    --snapshot <state-relative-yaml> --enable-trusted-single-effect
+    --snapshot <state-relative-yaml> --replay-anchor <absolute-operator-json>
+    --enable-trusted-single-effect
   required_bindings:
     - "allowlist has exactly one mutating tool: execute-operation"
     - "principal registry audience equals deployment-policy audience"
     - "canonical server root equals reconciled project root"
     - "runtime snapshot root is the Project Link resolved sidecar state root"
+    - "external replay anchor is outside project/state and bound to the deployment-policy id"
     - "loader policy equals the reconciled activation policy"
 
 startup_order:
   - "resolve canonical project and Project Link sidecar state roots"
   - "require an already initialized replay manifest/WAL pair"
+  - "verify or prefix-advance the external replay anchor"
   - "recover and verify the replay WAL"
   - "repair safe torn effect-WAL tail and run P4b.2c reconciliation"
-  - "verify replay WAL again after reconciliation"
+  - "verify replay WAL and advance the external anchor after reconciliation"
   - "construct a non-serializable reconciled activation proof"
   - "bind the trusted loader and single-effect executor"
   - "validate the complete server configuration before listening"
@@ -45,6 +48,7 @@ request_order:
   - "immediate-commit preflight and Admission"
   - "provenance-bound one-effect WAL commit"
   - "replay consume and replay-completion evidence"
+  - "advance the external replay anchor after every durable replay transition"
 
 result_states:
   applied: "effect, replay consume, and completion evidence are durable"
@@ -56,9 +60,10 @@ result_states:
 project_bootstrap:
   behavior: "project init/start now initializes the replay manifest/WAL pair in the sidecar state root"
   anti_rollback_boundary: >-
-    Whole-pair deletion or rollback still requires an externally protected
-    epoch/head or stronger deployment isolation; normal request processing
-    never initializes missing replay authority.
+    P4b.5a detects whole-pair deletion or rollback relative to the surviving
+    external head. Coordinated rollback of both stores still requires stronger
+    operator isolation; normal request processing never initializes either
+    authority.
 
 unsupported:
   - "more than one effect"
@@ -69,10 +74,8 @@ unsupported:
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
-  goal: >-
-    Externally anchor replay rollback detection and propagate verified
-    principal identity through claims, traces, WAL, and evidence.
+  id: "P4b.5b-execution-principal-propagation"
+  goal: "Propagate verified principal identity through claims, traces, WAL, and evidence."
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
@@ -80,3 +83,4 @@ references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/replay-external-anchor-v0.yaml"

@@ -127,12 +127,11 @@ intentional_limits:
   - "the P4b.2c path is wired only to explicitly reconciled P4b.3c single-effect MCP deployment"
   - "public MCP mutation remains disabled by default"
   - "operation-wide atomicity and saga semantics remain unsupported"
-  - "whole replay manifest/WAL pair deletion or rollback detection still requires an externally protected epoch/head"
+  - "coordinated rollback of replay state and its P4b.5a external anchor still requires stronger operator isolation"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
+  id: "P4b.5b-execution-principal-propagation"
   required:
-    - "externally protected replay epoch/head"
     - "verified principal identity in claims, traces, WAL, and evidence"
 
 references:

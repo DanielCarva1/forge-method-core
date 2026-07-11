@@ -1,0 +1,95 @@
+schema_version: "0.1"
+spec: "replay_external_anchor_v0"
+status: "p4b5a_implemented"
+purpose: >-
+  Detect restoration, deletion, or replacement of the complete replay
+  manifest/WAL authority by binding its latest trusted byte prefix to a
+  separately managed operator-protected document.
+
+interface:
+  rust_module: "forge_core_store::replay_anchor"
+  provision: "provision_replay_anchor"
+  verify: "verify_replay_anchor"
+  advance: "advance_replay_anchor"
+  bound_runtime_advance: "advance_replay_anchor_for_deployment"
+  cli: "forge-core mcp replay-anchor <provision|verify|advance>"
+
+anchor_document:
+  encoding: "strict bounded JSON"
+  fields:
+    - "schema version"
+    - "deployment-policy id"
+    - "OS-random 256-bit epoch"
+    - "monotonic generation"
+    - "digest of the preceding anchor document after generation 1"
+    - "replay manifest SHA-256 digest"
+    - "trusted WAL-prefix SHA-256 digest, byte length, record count, and last sequence"
+  deployment_binding: >-
+    Trusted MCP startup requires anchor deployment_id to equal the validated
+    deployment-policy id.
+
+lifecycle:
+  provision: >-
+    Adopts the current clean replay head as generation 1. This is an explicit
+    trust-on-first-use operator action and cannot retroactively prove earlier
+    history.
+  verify:
+    current: "the manifest and exact anchored WAL head match"
+    advance_required: "the current clean WAL is a strict extension of the trusted byte prefix"
+    rejected: "the WAL is older, shorter, divergent, corrupt, or bound to another manifest"
+  advance: >-
+    Under an external anchor lock, atomically replaces the document only with a
+    prefix-valid higher replay head and increments generation. Equal heads are
+    idempotent.
+
+trusted_runtime:
+  startup:
+    - "verify or advance the external head before replay recovery"
+    - "verify deployment-policy id binding"
+    - "reconcile incomplete effect commits"
+    - "advance again after reconciliation before listening"
+  request:
+    - "verify or advance before loading and reserving a request"
+    - "advance after every applied, blocked, or failed execution attempt so durable reservations cannot be erased"
+    - "return recovery_required if execution completed but the new replay head could not be persisted"
+  readiness: >-
+    The generated MCP client configuration pins the canonical external anchor
+    path and trusted serve refuses an anchor inside project or Forge state.
+
+storage_boundary:
+  required: >-
+    The anchor is an absolute regular non-symlink file outside the Forge state
+    root. Agent-facing CLI and trusted MCP deployment additionally require it
+    outside the project root in an operator-managed location.
+  durability: "file fsync plus atomic replacement; parent-directory fsync where supported"
+  concurrency: "separate external file lock with bounded retry on captured-head drift"
+  operator_requirement: >-
+    Protect the anchor directory independently with OS permissions, a remote
+    compare-and-swap store, TPM-backed monotonic state, or an equivalent
+    deployment control.
+
+security_boundary:
+  detects:
+    - "whole replay-pair rollback relative to the surviving external anchor"
+    - "same-length divergent WAL replacement"
+    - "manifest substitution"
+    - "deployment-policy/anchor identity mismatch"
+  does_not_detect:
+    - "coordinated rollback or deletion of both replay state and the external anchor"
+    - "malicious writes by an actor that controls both authority stores"
+  required_claim: >-
+    This is external-head anti-rollback under an independently protected
+    operator boundary, not a hardware monotonic counter and not hostile-user
+    isolation by itself.
+
+preserved_limits:
+  - "replay WAL compaction and rotation are not implemented"
+  - "operation-wide transactions and saga semantics are not implemented"
+  - "complete Execution Principal propagation is P4b.5b"
+
+references:
+  - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/spec/mcp-deployment-policy-v0.yaml"
+  - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"

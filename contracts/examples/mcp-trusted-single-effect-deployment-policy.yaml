@@ -12,5 +12,6 @@ mcp_deployment_policy:
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true

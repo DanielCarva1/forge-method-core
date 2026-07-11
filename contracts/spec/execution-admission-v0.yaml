@@ -100,7 +100,7 @@ current_boundary:
     - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
   not_yet_claimed:
     - "effect WAL and replay WAL are one physically atomic transaction"
-    - "whole replay manifest/WAL pair deletion or rollback detection"
+    - "detection when replay state and its P4b.5a external anchor are rolled back together"
     - "replay WAL compaction or rotation"
     - "Execution Principal propagation beyond commit provenance into claims, traces, and general evidence"
     - "operation-wide WAL across multiple effects"

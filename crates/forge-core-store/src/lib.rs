@@ -27,6 +27,7 @@ use yaml_serde::Value;
 
 pub mod claim_wal;
 pub mod derive_state;
+pub mod replay_anchor;
 pub mod replay_wal;
 
 /// The sole authority constructor for claim state. Replays the append-only

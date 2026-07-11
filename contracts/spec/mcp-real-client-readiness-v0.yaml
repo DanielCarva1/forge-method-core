@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_real_client_readiness_v0"
-status: "p4b4d_implemented"
+status: "p4b5a_external_replay_anchor_ready"
 purpose: >-
   Close the agent-operated trusted MCP setup loop with one readiness command,
   generated host configuration, durable replacement-agent resume, and proof
@@ -16,6 +16,7 @@ command:
     - "deployment policy and registry audiences match"
     - "snapshot authority token and principal binding are current"
     - "snapshot issued time is inside the server attestation freshness window"
+    - "external replay anchor is operator-owned, policy-bound, and current or prefix-advanceable"
     - "replay WAL is clean and incomplete commits reconcile before listen"
   output:
     - "ready verdict with named checks"
@@ -29,6 +30,7 @@ generated_client:
     - "canonical project root"
     - "exact allowlist, principal registry, and deployment policy paths"
     - "state-relative execution snapshot"
+    - "canonical external replay anchor"
     - "explicit trusted-single-effect opt-in"
   excludes:
     - "private key bytes"
@@ -44,6 +46,7 @@ real_client_proof:
     - "transport _meta.attestation through RequestContext into the typed verifier"
     - "apply one signed single effect"
     - "verify target, effect WAL, and replay WAL in the Project Link sidecar"
+    - "verify the external anchor advanced to the consumed replay head"
     - "verify no consumer-local .forge-method is created"
 
 replacement_agent:
@@ -51,23 +54,23 @@ replacement_agent:
     - "project and Project Link"
     - "claim WAL and generated snapshot"
     - "operator registry, secret directory, policy, and allowlist"
+    - "operator-protected external replay anchor"
   behavior: "rerunning readiness reproduces the same checks without chat-only state"
 
 preserved_limits:
   - "read-only remains the default MCP deployment"
   - "mutation requires explicit exact single-effect opt-in"
   - "same-user trust boundary is acknowledged, not presented as hostile-user isolation"
-  - "whole replay-pair rollback is not externally detectable yet"
+  - "coordinated rollback of both replay state and the external anchor requires stronger isolation"
   - "operation-wide transaction and saga semantics are not claimed"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
-  goal: >-
-    Add externally protected replay epoch/head enforcement and propagate the
-    verified Execution Principal through claims, traces, WAL, and evidence.
+  id: "P4b.5b-execution-principal-propagation"
+  goal: "Propagate the verified Execution Principal through claims, traces, WAL, and evidence."
 
 references:
   - "contracts/spec/mcp-secure-credential-lifecycle-v0.yaml"
   - "contracts/spec/mcp-agent-snapshot-generation-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/replay-external-anchor-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

@@ -1163,6 +1163,13 @@ mod tests {
         std::fs::create_dir_all(&state_root).expect("test state root");
         forge_core_store::replay_wal::initialize_replay_wal(&state_root)
             .expect("test replay initialization");
+        let replay_anchor = root.join("test-replay-anchor.json");
+        forge_core_store::replay_anchor::provision_replay_anchor(
+            &state_root,
+            &replay_anchor,
+            "test-trusted-single-effect",
+        )
+        .expect("test replay anchor provisioning");
         let policy = crate::ValidatedMcpDeploymentPolicy::from_yaml(
             r#"
 schema_version: "0.1"
@@ -1178,6 +1185,7 @@ mcp_deployment_policy:
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true
 "#,
@@ -1187,6 +1195,7 @@ mcp_deployment_policy:
             policy,
             &root,
             &state_root,
+            &replay_anchor,
             crate::ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
         )
         .expect("test startup reconciliation");

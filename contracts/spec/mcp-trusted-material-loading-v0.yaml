@@ -71,9 +71,8 @@ capability_boundary:
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
+  id: "P4b.5b-execution-principal-propagation"
   requires:
-    - "externally protected replay epoch/head"
     - "verified principal identity in claims, traces, WAL, and evidence"
 
 references:

@@ -69,9 +69,9 @@ pub use deployment_policy::{
     EffectScopePolicy, MaterialLoadingPolicy, McpDeploymentActivationState, McpDeploymentMode,
     McpDeploymentPolicy, McpDeploymentPolicyDocument, McpDeploymentPolicyError,
     McpDeploymentPolicyIssue, McpDeploymentPolicyIssueCode, PublicMutationPolicy,
-    RootBindingPolicy, SnapshotLoadingPolicy, StartupReconciliationPolicy, StateRootBindingPolicy,
-    ValidatedMcpDeploymentPolicy, MCP_DEPLOYMENT_POLICY_SCHEMA_VERSION,
-    MCP_EXECUTION_COMMIT_PROTOCOL,
+    ReplayRollbackProtectionPolicy, RootBindingPolicy, SnapshotLoadingPolicy,
+    StartupReconciliationPolicy, StateRootBindingPolicy, ValidatedMcpDeploymentPolicy,
+    MCP_DEPLOYMENT_POLICY_SCHEMA_VERSION, MCP_EXECUTION_COMMIT_PROTOCOL,
 };
 pub use error::{McpAdapterError, ServerRunError};
 pub use mutation_executor::{

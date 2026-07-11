@@ -330,11 +330,26 @@ mcp_deployment_policy:
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true
 "#,
     )
     .expect("policy");
+    let replay_anchor_path = parent.join("operator/replay-anchor.json");
+    let anchor = bin()
+        .args(["mcp", "replay-anchor", "provision", "--root"])
+        .arg(&project)
+        .arg("--anchor")
+        .arg(&replay_anchor_path)
+        .args(["--deployment-id", "trusted-test", "--json"])
+        .output()
+        .expect("provision replay anchor");
+    assert!(
+        anchor.status.success(),
+        "anchor failed: {}",
+        String::from_utf8_lossy(&anchor.stdout)
+    );
     let client_config = parent.join("operator/client-config.json");
     let readiness = || {
         bin()
@@ -349,8 +364,10 @@ mcp_deployment_policy:
             .args([
                 "--snapshot",
                 "runtime/mcp-execution-snapshot.yaml",
-                "--secret-dir",
+                "--replay-anchor",
             ])
+            .arg(&replay_anchor_path)
+            .args(["--secret-dir"])
             .arg(&secret_dir)
             .args(["--credential-id", "key.agent.1", "--client-config-output"])
             .arg(&client_config)

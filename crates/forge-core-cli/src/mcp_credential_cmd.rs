@@ -390,7 +390,7 @@ pub(crate) fn ensure_operator_owned_location(
 ) -> Result<(), ExitError> {
     if path.starts_with(project) || path.starts_with(state) {
         return Err(ExitError::env_config(
-            "registry and secret directory must remain outside project and Forge state roots"
+            "operator-owned authority paths must remain outside both project and Forge state roots"
                 .to_owned(),
         ));
     }

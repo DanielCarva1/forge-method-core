@@ -50,6 +50,9 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
         Ok(McpArgs::Snapshot(args)) => crate::mcp_snapshot_cmd::run_snapshot_command(&args),
         Ok(McpArgs::Credential(args)) => crate::mcp_credential_cmd::run_credential_command(&args),
         Ok(McpArgs::Readiness(args)) => crate::mcp_readiness_cmd::run_readiness_command(&args),
+        Ok(McpArgs::ReplayAnchor(args)) => {
+            crate::mcp_replay_anchor_cmd::run_replay_anchor_command(&args)
+        }
         Ok(McpArgs::Help) => {
             print_mcp_usage();
             Ok(())
@@ -60,7 +63,7 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
         }) => emit_err(
             MCP_COMMAND,
             &mcp_message_with_usage(&format!(
-                "unknown subcommand '{subcommand}'. Try: serve, snapshot, credential, or readiness"
+                "unknown subcommand '{subcommand}'. Try: serve, snapshot, credential, replay-anchor, or readiness"
             )),
             want_json,
         ),
@@ -78,6 +81,7 @@ enum McpArgs {
     Snapshot(Vec<String>),
     Credential(Vec<String>),
     Readiness(Vec<String>),
+    ReplayAnchor(Vec<String>),
     Help,
 }
 
@@ -106,6 +110,7 @@ fn parse_mcp_args(args: &[String]) -> Result<McpArgs, McpArgsError> {
         "snapshot" => Ok(McpArgs::Snapshot(args[2..].to_vec())),
         "credential" => Ok(McpArgs::Credential(args[2..].to_vec())),
         "readiness" => Ok(McpArgs::Readiness(args[2..].to_vec())),
+        "replay-anchor" => Ok(McpArgs::ReplayAnchor(args[2..].to_vec())),
         "--help" | "-h" | "help" => Ok(McpArgs::Help),
         other => Err(McpArgsError::UnknownSubcommand {
             subcommand: other.to_string(),
@@ -121,10 +126,11 @@ fn print_mcp_usage() {
     println!("  is read-only; --allowlist overrides with the named YAML file.");
     println!("  Any mutating allowlist also requires --principal-registry <yaml>.");
     println!("  Trusted single-effect mutation additionally requires --deployment-policy,");
-    println!("  --snapshot (state-root relative), and the explicit enable flag.");
+    println!("  --snapshot, --replay-anchor, and the explicit enable flag.");
     println!("  snapshot generates a content-bound Admission snapshot from authoritative state.");
     println!("  credential provisions, rotates, revokes, and signs with operator-owned keys.");
     println!("  readiness validates deployment and emits client configuration.");
+    println!("  replay-anchor provisions, verifies, and advances external replay heads.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {
@@ -147,6 +153,7 @@ struct ServeArgs {
     principal_registry: Option<PathBuf>,
     deployment_policy: Option<PathBuf>,
     snapshot: Option<PathBuf>,
+    replay_anchor: Option<PathBuf>,
     enable_trusted_single_effect: bool,
     root: Option<PathBuf>,
     want_json: bool,
@@ -163,6 +170,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut principal_registry = None;
     let mut deployment_policy = None;
     let mut snapshot = None;
+    let mut replay_anchor = None;
     let mut enable_trusted_single_effect = false;
     let mut root = None;
     let want_json = json_output_unless_text_selected(args);
@@ -197,6 +205,10 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
                 i += 1;
                 snapshot = Some(PathBuf::from(require_value(args, i, "--snapshot")?));
             }
+            "--replay-anchor" => {
+                i += 1;
+                replay_anchor = Some(PathBuf::from(require_value(args, i, "--replay-anchor")?));
+            }
             "--enable-trusted-single-effect" => enable_trusted_single_effect = true,
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
@@ -211,6 +223,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
         principal_registry,
         deployment_policy,
         snapshot,
+        replay_anchor,
         enable_trusted_single_effect,
         root,
         want_json,
@@ -372,6 +385,13 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
                 parsed.want_json,
             );
         };
+        let Some(replay_anchor_path) = parsed.replay_anchor.as_ref() else {
+            return emit_config_err(
+                SERVE_COMMAND,
+                "--enable-trusted-single-effect requires --replay-anchor <absolute-operator-json>",
+                parsed.want_json,
+            );
+        };
         if parsed.allowlist.is_none() || parsed.principal_registry.is_none() {
             return emit_config_err(
                 SERVE_COMMAND,
@@ -415,11 +435,38 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
                 );
             }
         };
-        let state_root = PathBuf::from(resolved.state_root);
+        let state_root = match std::fs::canonicalize(PathBuf::from(resolved.state_root)) {
+            Ok(path) => path,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("trusted MCP state root cannot be resolved: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        let replay_anchor_path = match std::fs::canonicalize(replay_anchor_path) {
+            Ok(path) => path,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("external replay anchor cannot be resolved: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        if let Err(error) = crate::mcp_credential_cmd::ensure_operator_owned_location(
+            &replay_anchor_path,
+            &root,
+            &state_root,
+        ) {
+            return emit_config_err(SERVE_COMMAND, &error.to_string(), parsed.want_json);
+        }
         let activation = match ReconciledTrustedMcpDeployment::reconcile(
             policy.clone(),
             &root,
             &state_root,
+            &replay_anchor_path,
             ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
         ) {
             Ok(activation) => Arc::new(activation),
@@ -462,10 +509,13 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
             Some(activation),
         )
     } else {
-        if parsed.deployment_policy.is_some() || parsed.snapshot.is_some() {
+        if parsed.deployment_policy.is_some()
+            || parsed.snapshot.is_some()
+            || parsed.replay_anchor.is_some()
+        {
             return emit_config_err(
                 SERVE_COMMAND,
-                "--deployment-policy/--snapshot require explicit --enable-trusted-single-effect",
+                "--deployment-policy/--snapshot/--replay-anchor require explicit --enable-trusted-single-effect",
                 parsed.want_json,
             );
         }
@@ -570,6 +620,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_mcp_args_routes_replay_anchor_lifecycle() {
+        let parsed = parse_mcp_args(&args(&[
+            "mcp",
+            "replay-anchor",
+            "verify",
+            "--root",
+            "/proj",
+        ]))
+        .expect("parse replay anchor command");
+        assert_eq!(
+            parsed,
+            McpArgs::ReplayAnchor(args(&["verify", "--root", "/proj"]))
+        );
+    }
+
+    #[test]
     fn parse_mcp_args_preserves_json_preference_on_errors() {
         let serve_error =
             parse_mcp_args(&args(&["mcp", "serve", "--no-json", "--allowlist"])).unwrap_err();
@@ -599,6 +665,7 @@ mod tests {
         assert!(parsed.principal_registry.is_none());
         assert!(parsed.deployment_policy.is_none());
         assert!(parsed.snapshot.is_none());
+        assert!(parsed.replay_anchor.is_none());
         assert!(!parsed.enable_trusted_single_effect);
     }
 
@@ -635,6 +702,8 @@ mod tests {
             "contracts/mcp-policy.yaml",
             "--snapshot",
             "runtime/mcp-snapshot.yaml",
+            "--replay-anchor",
+            "/operator/replay-anchor.json",
             "--enable-trusted-single-effect",
         ]))
         .expect("parse trusted deployment flags");
@@ -645,6 +714,10 @@ mod tests {
         assert_eq!(
             parsed.snapshot.as_deref(),
             Some(std::path::Path::new("runtime/mcp-snapshot.yaml"))
+        );
+        assert_eq!(
+            parsed.replay_anchor.as_deref(),
+            Some(std::path::Path::new("/operator/replay-anchor.json"))
         );
         assert!(parsed.enable_trusted_single_effect);
     }

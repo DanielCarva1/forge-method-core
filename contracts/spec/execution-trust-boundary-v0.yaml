@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_trust_boundary_v0"
-status: "p4b3c_explicit_cooperative_single_effect_activation"
+status: "p4b5a_cooperative_single_effect_with_external_replay_head"
 purpose: >-
   Separate the guarantees Forge can provide inside a trusted local process
   from the stronger isolation required to resist an agent that already has raw
@@ -17,9 +17,10 @@ current_mode:
     - "The explicit trusted mode derives canonical commit authority, reserves replay, retains effect and replay locks, and evaluates late plus immediate-commit Admission."
     - "The admitted typestate persists complete redacted provenance, commits one effect, consumes replay, and records completion without releasing authority early."
     - "Typed pending receipts plus deterministic idempotent reconciliation close the effect-Commit/replay-Consume crash window."
+    - "An independently protected external head detects whole replay-pair rollback and divergence relative to its last trusted prefix."
   does_not_guarantee:
     - "confinement of a same-user agent that can invoke another mutating CLI or store path directly"
-    - "protection from deletion or rollback by an agent with write access to the authority root"
+    - "protection when an agent can roll back both replay authority and the external anchor"
     - "operation-wide atomicity, complete saga compensation, or same-user bypass resistance"
   required_description: >-
     Describe Forge as cooperative governance with an explicit reconciled
@@ -34,6 +35,7 @@ planned_trusted_process_mode:
     - "P4b.2c completed: complete redacted provenance, one-effect commit, replay completion, pending receipts, and deterministic recovery are implemented and tested; public MCP mutation stays blocked."
     - "P4b.3a/P4b.3b completed: closed deployment policy and trusted bounded loaders are implemented."
     - "P4b.3c completed: explicit opt-in, Project Link sidecar state, startup reconciliation, kernel risk/citation gates, and narrow single-effect MCP dispatch are implemented."
+    - "P4b.5a completed: policy-bound external replay head verification and automatic prefix advancement run at startup and around each execution."
   achievable_guarantee: >-
     A request entering the trusted Forge process cannot substitute its own
     registry identity, replay observation, or admission verdict before the
@@ -67,4 +69,5 @@ references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/spec/replay-external-anchor-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"

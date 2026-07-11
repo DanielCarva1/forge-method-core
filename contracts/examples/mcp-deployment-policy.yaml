@@ -11,5 +11,6 @@ mcp_deployment_policy:
   public_mutation: "disabled"
   root_binding: "canonical_configured_root"
   state_root_binding: "disabled"
+  replay_rollback_protection: "disabled"
   required_commit_protocol: null
   same_user_boundary_acknowledged: false

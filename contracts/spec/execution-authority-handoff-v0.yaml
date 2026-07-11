@@ -83,9 +83,8 @@ executable_evidence:
   - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
 
 next_boundary:
-  id: "P4b.5-external-replay-and-principal-propagation"
+  id: "P4b.5b-execution-principal-propagation"
   required:
-    - "externally protected replay epoch/head"
     - "verified principal identity in claims, traces, WAL, and evidence"
 
 references:

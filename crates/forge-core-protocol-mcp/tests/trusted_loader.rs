@@ -29,7 +29,8 @@ use forge_core_protocol_mcp::{
     TrustedMcpMaterialLoader, TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
     MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
 };
-use forge_core_store::replay_wal::initialize_replay_wal;
+use forge_core_store::replay_anchor::{advance_replay_anchor, provision_replay_anchor};
+use forge_core_store::replay_wal::{initialize_replay_wal, replay_wal_path, reserve_replay_nonce};
 use forge_core_store::sha256_content_hash;
 use serde_json::{Map, Value};
 
@@ -91,10 +92,18 @@ mcp_deployment_policy:
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true
 "#;
     ValidatedMcpDeploymentPolicy::from_yaml(yaml).expect("trusted policy")
+}
+
+fn provision_anchor(state_root: &std::path::Path, project_root: &std::path::Path) -> PathBuf {
+    let anchor = project_root.join("operator-replay-anchor.json");
+    provision_replay_anchor(state_root, &anchor, "trusted-local-single-effect")
+        .expect("provision external replay anchor");
+    anchor
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -492,12 +501,15 @@ fn loader_requires_validated_trusted_policy() {
 #[test]
 fn reconciled_executor_commits_one_effect_and_consumes_replay() {
     let fixture = fixture("active-single-effect", true, true);
-    initialize_replay_wal(fixture.root.join(".forge-method")).expect("initialize replay");
+    let state_root = fixture.root.join(".forge-method");
+    initialize_replay_wal(&state_root).expect("initialize replay");
+    let replay_anchor = provision_anchor(&state_root, &fixture.root);
     let activation = std::sync::Arc::new(
         ReconciledTrustedMcpDeployment::reconcile(
             trusted_policy(),
             &fixture.root,
-            fixture.root.join(".forge-method"),
+            &state_root,
+            &replay_anchor,
             ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
         )
         .expect("startup reconciliation"),
@@ -526,10 +538,68 @@ fn activation_requires_preinitialized_replay_authority() {
         trusted_policy(),
         &fixture.root,
         fixture.root.join(".forge-method"),
+        fixture.root.join("operator-replay-anchor.json"),
         ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
     )
     .expect_err("missing replay pair must fail startup");
     assert!(error.to_string().contains("replay"));
+}
+
+#[test]
+fn activation_rejects_anchor_from_another_deployment_policy() {
+    let fixture = fixture("activation-wrong-anchor-deployment", true, false);
+    let state_root = fixture.root.join(".forge-method");
+    initialize_replay_wal(&state_root).expect("initialize replay");
+    let anchor = fixture.root.join("operator-replay-anchor.json");
+    provision_replay_anchor(&state_root, &anchor, "different-policy").expect("provision anchor");
+    let error = ReconciledTrustedMcpDeployment::reconcile(
+        trusted_policy(),
+        &fixture.root,
+        &state_root,
+        &anchor,
+        ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+    )
+    .expect_err("cross-deployment anchor must fail startup");
+    assert!(error
+        .to_string()
+        .contains("does not match expected deployment"));
+}
+
+#[test]
+fn active_executor_rejects_whole_replay_pair_rollback_before_loading_call() {
+    let fixture = fixture("active-replay-rollback", true, true);
+    let state_root = fixture.root.join(".forge-method");
+    initialize_replay_wal(&state_root).expect("initialize replay");
+    let replay_anchor = provision_anchor(&state_root, &fixture.root);
+    let activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile(
+            trusted_policy(),
+            &fixture.root,
+            &state_root,
+            &replay_anchor,
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        )
+        .expect("startup reconciliation"),
+    );
+    let empty_wal = fs::read(replay_wal_path(&state_root)).expect("empty replay WAL");
+    reserve_replay_nonce(
+        &state_root,
+        &PrincipalId("principal.rollback-probe".to_owned()),
+        AUDIENCE,
+        "trusted-runtime-rollback-probe",
+        &format!("sha256:{}", "a".repeat(64)),
+        &format!("sha256:{}", "b".repeat(64)),
+    )
+    .expect("append rollback probe");
+    advance_replay_anchor(&state_root, &replay_anchor).expect("advance external head");
+    fs::write(replay_wal_path(&state_root), empty_wal).expect("restore older replay WAL");
+
+    let executor =
+        TrustedSingleEffectMcpExecutor::new(fixture.loader, activation).expect("active executor");
+    let error = executor
+        .execute(fixture.call)
+        .expect_err("rollback must reject before loading the call");
+    assert!(error.to_string().contains("rollback detected"));
 }
 
 #[test]
@@ -538,10 +608,12 @@ fn activation_accepts_project_link_resolved_external_sidecar_state() {
     let external_state = fresh_root("external-sidecar-state").join("state/.forge-method");
     fs::create_dir_all(&external_state).expect("external state root");
     initialize_replay_wal(&external_state).expect("external replay initialization");
+    let replay_anchor = provision_anchor(&external_state, &fixture.root);
     let activation = ReconciledTrustedMcpDeployment::reconcile(
         trusted_policy(),
         &fixture.root,
         &external_state,
+        &replay_anchor,
         ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
     )
     .expect("external sidecar activation");
@@ -572,12 +644,15 @@ rules:
 "#,
     )
     .expect("blocking risk rule");
-    initialize_replay_wal(risk_fixture.root.join(".forge-method")).expect("initialize replay");
+    let risk_state = risk_fixture.root.join(".forge-method");
+    initialize_replay_wal(&risk_state).expect("initialize replay");
+    let risk_anchor = provision_anchor(&risk_state, &risk_fixture.root);
     let risk_activation = std::sync::Arc::new(
         ReconciledTrustedMcpDeployment::reconcile(
             trusted_policy(),
             &risk_fixture.root,
-            risk_fixture.root.join(".forge-method"),
+            &risk_state,
+            &risk_anchor,
             ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
         )
         .expect("risk startup"),
@@ -603,12 +678,15 @@ rules:
         "schema_version: '0.1'\nsource_id: definitely_missing_source\n",
     )
     .expect("unresolved citation");
-    initialize_replay_wal(citation_fixture.root.join(".forge-method")).expect("initialize replay");
+    let citation_state = citation_fixture.root.join(".forge-method");
+    initialize_replay_wal(&citation_state).expect("initialize replay");
+    let citation_anchor = provision_anchor(&citation_state, &citation_fixture.root);
     let citation_activation = std::sync::Arc::new(
         ReconciledTrustedMcpDeployment::reconcile(
             trusted_policy(),
             &citation_fixture.root,
-            citation_fixture.root.join(".forge-method"),
+            &citation_state,
+            &citation_anchor,
             ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
         )
         .expect("citation startup"),

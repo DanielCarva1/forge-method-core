@@ -233,9 +233,10 @@ phases:
           of scope.
     checkpoint_sequence:
       rule: >-
-        P4b.2a, P4b.2b, P4b.2c, and each P4b.3 sub-checkpoint land as separate validated commits so
-        source users can fast-forward pull a usable checkpoint without
-        implicitly enabling the next authority boundary.
+        P4b.2a, P4b.2b, P4b.2c, and each later P4b sub-checkpoint land as
+        separate validated commits so source users can fast-forward pull a
+        usable checkpoint without implicitly enabling the next authority
+        boundary.
     completed_p4b4_checkpoints:
       - id: "P4b.4a-signed-mutable-authority-snapshot-binding"
         delivers:
@@ -280,24 +281,32 @@ phases:
           opt-in, same-user trusted, and locally replay-protected; externally
           anchored whole-pair rollback detection, complete Execution Principal
           propagation, and operation-wide/saga semantics remain separate work.
+    completed_p4b5_checkpoints:
+      - id: "P4b.5a-external-replay-anchor"
+        delivers:
+          - "operator-protected external replay anchor with random epoch, monotonic generation, and exact manifest/WAL-prefix digests"
+          - "agent-facing provision, verify, and advance lifecycle with Project Link resolution and operator-path confinement"
+          - "deployment-policy identity binding and required external_monotonic_head posture"
+          - "startup, reconciliation, pre-request, and post-request automatic anchor enforcement"
+          - "official-client proof that an applied mutation advances the external head plus rollback rejection tests"
+        boundary: >-
+          The external anchor detects whole replay-pair rollback only while the
+          independently protected anchor survives. Coordinated rollback of both
+          stores remains outside Forge's cooperative same-user guarantee.
     current_program:
-      id: "P4b.4-agent-operated-trusted-mcp"
-      status: "completed"
-      scope:
-        - "agent-operated snapshot, credential, readiness, generated client, and replacement-agent flow"
-        - "real official-client applied mutation evidence"
-        - "preserved P4b.3c authority, replay, gate, sidecar, and single-effect limits"
-    next_slice:
       id: "P4b.5-external-replay-and-principal-propagation"
-      status: "not_started"
+      status: "in_progress"
       scope:
         - "externally protect replay epoch/head against whole-pair rollback"
         - "propagate Execution Principal through claims, traces, WAL, and evidence"
+    next_slice:
+      id: "P4b.5b-execution-principal-propagation"
+      status: "not_started"
+      scope:
+        - "propagate Execution Principal through claims, traces, WAL, and evidence"
     following_slices:
       - "operation-wide transaction or complete typed saga semantics"
-      - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
-      - "externally protected replay epoch/head or enforced deployment isolation"
       - "Execution Principal propagated through claims, traces, WAL, and evidence"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
@@ -354,10 +363,11 @@ first_executable_slice:
     - "P4b.4b agent-facing atomic Admission snapshot generation from Project Link and authoritative claim/gate state"
     - "P4b.4c operator-owned credential provision, rotation, revocation, and exact-intent signing without private-key disclosure"
     - "P4b.4d conversational readiness, generated client configuration, replacement-agent resume, and official rmcp applied sidecar mutation proof"
+    - "P4b.5a operator-protected external replay head with policy binding, automatic runtime advancement, and whole-pair rollback detection"
   next_action: >-
-    P4b.4 is complete. The next separately scoped hardening program is P4b.5:
-    externally anchored replay rollback detection plus complete Execution
-    Principal propagation. Operation-wide/saga semantics remain a later slice.
+    P4b.5a is complete. Continue with P4b.5b: propagate the verified Execution
+    Principal through claims, traces, WAL, and evidence. Operation-wide/saga
+    semantics remain a later slice.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

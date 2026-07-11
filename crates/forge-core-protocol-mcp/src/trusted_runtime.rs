@@ -12,6 +12,7 @@ use forge_core_kernel::{
     ExecutionCommitStatus, ExecutionReplayReconciliationResult, LateAdmissionOutcome,
     TrustedExecutionEnvironment,
 };
+use forge_core_store::replay_anchor::advance_replay_anchor_for_deployment;
 use forge_core_store::replay_wal::recover_replay_wal;
 use serde::Serialize;
 
@@ -34,6 +35,7 @@ impl ExplicitTrustedSingleEffectOptIn {
 pub struct ReconciledTrustedMcpDeployment {
     policy: ValidatedMcpDeploymentPolicy,
     environment: TrustedExecutionEnvironment,
+    replay_anchor_path: PathBuf,
     audit: TrustedMcpActivationAudit,
 }
 
@@ -48,6 +50,7 @@ impl ReconciledTrustedMcpDeployment {
         policy: ValidatedMcpDeploymentPolicy,
         project_root: impl AsRef<Path>,
         state_root: impl AsRef<Path>,
+        replay_anchor_path: impl AsRef<Path>,
         _explicit_opt_in: ExplicitTrustedSingleEffectOptIn,
     ) -> Result<Self, TrustedMcpActivationError> {
         if policy.activation_state() != McpDeploymentActivationState::PolicyValidatedDormant {
@@ -64,6 +67,13 @@ impl ReconciledTrustedMcpDeployment {
             audience,
         )
         .map_err(|error| TrustedMcpActivationError::Environment(error.to_string()))?;
+        let anchor_before = advance_replay_anchor_for_deployment(
+            environment.state_root(),
+            replay_anchor_path,
+            &policy_contract.id.0,
+        )
+        .map_err(|error| TrustedMcpActivationError::ReplayAnchor(error.to_string()))?;
+        let replay_anchor_path = anchor_before.anchor_path.clone();
         let replay_before = recover_replay_wal(environment.state_root(), true)
             .map_err(|error| TrustedMcpActivationError::Replay(error.to_string()))?;
         if !replay_before.is_clean() {
@@ -82,17 +92,28 @@ impl ReconciledTrustedMcpDeployment {
                 replay_after.stop_reason
             )));
         }
+        let anchor_after = advance_replay_anchor_for_deployment(
+            environment.state_root(),
+            &replay_anchor_path,
+            &policy_contract.id.0,
+        )
+        .map_err(|error| TrustedMcpActivationError::ReplayAnchor(error.to_string()))?;
         let audit = TrustedMcpActivationAudit {
             policy_id: policy_contract.id.0.clone(),
             canonical_project_root: environment.project_root().to_path_buf(),
             audience: audience.to_owned(),
             replay_records_before: replay_before.valid_record_count,
             replay_records_after: replay_after.valid_record_count,
+            replay_anchor_path: replay_anchor_path.clone(),
+            replay_anchor_generation_before: anchor_before.anchor.generation,
+            replay_anchor_generation_after: anchor_after.anchor.generation,
+            replay_anchor_advanced: anchor_before.changed || anchor_after.changed,
             reconciliation,
         };
         Ok(Self {
             policy,
             environment,
+            replay_anchor_path,
             audit,
         })
     }
@@ -105,6 +126,11 @@ impl ReconciledTrustedMcpDeployment {
     #[must_use]
     pub const fn environment(&self) -> &TrustedExecutionEnvironment {
         &self.environment
+    }
+
+    #[must_use]
+    pub fn replay_anchor_path(&self) -> &Path {
+        &self.replay_anchor_path
     }
 
     #[must_use]
@@ -121,6 +147,10 @@ pub struct TrustedMcpActivationAudit {
     pub audience: String,
     pub replay_records_before: usize,
     pub replay_records_after: usize,
+    pub replay_anchor_path: PathBuf,
+    pub replay_anchor_generation_before: u64,
+    pub replay_anchor_generation_after: u64,
+    pub replay_anchor_advanced: bool,
     pub reconciliation: ExecutionReplayReconciliationResult,
 }
 
@@ -153,6 +183,44 @@ impl TrustedSingleEffectMcpExecutor {
 
 impl ExecutionExecutor for TrustedSingleEffectMcpExecutor {
     fn execute(&self, call: VerifiedExecutionCall) -> Result<ExecutionResult, ExecutionError> {
+        advance_replay_anchor_for_deployment(
+            self.activation.environment().state_root(),
+            self.activation.replay_anchor_path(),
+            &self.activation.audit().policy_id,
+        )
+        .map_err(|error| {
+            ExecutionError::Rejected(format!("external replay anchor rejected call: {error}"))
+        })?;
+        let execution = self.execute_without_anchor(call);
+        let anchored = advance_replay_anchor_for_deployment(
+            self.activation.environment().state_root(),
+            self.activation.replay_anchor_path(),
+            &self.activation.audit().policy_id,
+        );
+        match (execution, anchored) {
+            (Ok(result), Ok(_)) => Ok(result),
+            (Ok(result), Err(error)) => Ok(ExecutionResult::new(
+                ExecutionStatus::RecoveryRequired,
+                serde_json::json!({
+                    "stage": "external_replay_anchor",
+                    "execution_status": format!("{:?}", result.status()).to_ascii_lowercase(),
+                    "execution_result": result.payload(),
+                    "anchor_error": error.to_string(),
+                }),
+            )),
+            (Err(error), Ok(_)) => Err(error),
+            (Err(error), Err(anchor_error)) => Err(ExecutionError::Internal(format!(
+                "{error}; external replay anchor also requires recovery: {anchor_error}"
+            ))),
+        }
+    }
+}
+
+impl TrustedSingleEffectMcpExecutor {
+    fn execute_without_anchor(
+        &self,
+        call: VerifiedExecutionCall,
+    ) -> Result<ExecutionResult, ExecutionError> {
         let loaded = self
             .loader
             .load(call)
@@ -219,6 +287,7 @@ pub enum TrustedMcpActivationError {
     Environment(String),
     Replay(String),
     Reconciliation(String),
+    ReplayAnchor(String),
     PolicyMismatch,
     RootMismatch,
 }
@@ -238,6 +307,9 @@ impl fmt::Display for TrustedMcpActivationError {
                     formatter,
                     "startup execution reconciliation failed: {source}"
                 )
+            }
+            Self::ReplayAnchor(source) => {
+                write!(formatter, "external replay anchor failed: {source}")
             }
             Self::PolicyMismatch => {
                 formatter.write_str("trusted loader policy differs from reconciled policy")

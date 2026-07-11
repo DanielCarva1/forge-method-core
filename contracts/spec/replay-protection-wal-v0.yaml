@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "replay_protection_wal_v0"
-status: "p4b2c_integrated_dormant"
+status: "p4b5a_externally_anchored_trusted_runtime"
 purpose: >-
   Provide a durable, bounded, single-use nonce reservation and recovery
   substrate integrated with the dormant P4b.2c single-effect kernel boundary
@@ -44,13 +44,13 @@ state_layout:
     The manifest and WAL must exist together. A half-pair, corrupt manifest,
     non-regular authority file, or path resolving outside the trusted root
     fails closed.
-  anti_rollback_limit: >-
+  anti_rollback_boundary: >-
     Runtime reserve never recreates a missing pair. The explicit initializer
     cannot distinguish first bootstrap from deletion or rollback of both the
-    manifest and WAL together, however. Initialization must therefore remain
-    operator-controlled, and enforced deployment still needs an
-    operator-protected root plus an external durable epoch/head or explicit
-    initialization policy.
+    manifest and WAL together by itself. P4b.5a trusted MCP deployment now
+    requires a separately managed replay anchor that binds the manifest and
+    latest trusted WAL prefix. Coordinated rollback of both stores remains
+    outside the guarantee and requires independent operator protection.
 
 transitions:
   reserve:
@@ -125,9 +125,10 @@ current_boundary:
     - "P4b.2c recovery consumes by persisted pseudonymous key hash without raw nonce material"
     - "exact already-consumed recovery is idempotent and completion is acknowledged in the effect WAL"
     - "explicit reconciled P4b.3c MCP single-effect execution reserves and consumes this WAL"
+    - "P4b.5a trusted MCP startup and every execution verify and advance an external prefix-bound replay anchor"
   not_yet_claimed:
     - "effect-WAL commit and replay consume are one atomic transaction"
-    - "whole-pair deletion or rollback detection"
+    - "detection when both replay state and the external anchor are rolled back together"
     - "compaction, rotation, or online migration"
 
 references:
@@ -136,4 +137,5 @@ references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/spec/replay-external-anchor-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

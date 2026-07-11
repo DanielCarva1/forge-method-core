@@ -50,6 +50,7 @@ struct TrustedFixture {
     secret_dir: PathBuf,
     allowlist: PathBuf,
     policy: PathBuf,
+    replay_anchor: PathBuf,
     client_config: PathBuf,
     arguments: serde_json::Map<String, Value>,
     attestation: Value,
@@ -277,12 +278,23 @@ mcp_deployment_policy:
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
   state_root_binding: "project_link_resolved"
+  replay_rollback_protection: "external_monotonic_head"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true
 "#
         ),
     )
     .expect("policy");
+    let replay_anchor = parent.join("operator/replay-anchor.json");
+    let anchor = bin()
+        .args(["mcp", "replay-anchor", "provision", "--root"])
+        .arg(&project)
+        .arg("--anchor")
+        .arg(&replay_anchor)
+        .args(["--deployment-id", "trusted-real-client", "--json"])
+        .output()
+        .expect("provision replay anchor");
+    assert_success(&anchor, "replay anchor provision");
     let client_config = parent.join("operator/client-config.json");
     let readiness = bin()
         .args(["mcp", "readiness", "--root"])
@@ -296,8 +308,10 @@ mcp_deployment_policy:
         .args([
             "--snapshot",
             "runtime/mcp-execution-snapshot.yaml",
-            "--secret-dir",
+            "--replay-anchor",
         ])
+        .arg(&replay_anchor)
+        .args(["--secret-dir"])
         .arg(&secret_dir)
         .args(["--credential-id", CREDENTIAL_ID, "--client-config-output"])
         .arg(&client_config)
@@ -314,6 +328,7 @@ mcp_deployment_policy:
         secret_dir,
         allowlist,
         policy,
+        replay_anchor,
         client_config,
         arguments,
         attestation,
@@ -377,6 +392,15 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
         .iter()
         .map(|arg| arg.as_str().expect("string arg"))
         .collect::<Vec<_>>();
+    let anchor_arg = args
+        .windows(2)
+        .find(|pair| pair[0] == "--replay-anchor")
+        .map(|pair| PathBuf::from(pair[1]))
+        .expect("generated config replay anchor");
+    assert_eq!(
+        fs::canonicalize(anchor_arg).expect("configured replay anchor"),
+        fs::canonicalize(&fixture.replay_anchor).expect("fixture replay anchor")
+    );
     let mut command = tokio::process::Command::new(command_path);
     command.args(args).kill_on_drop(true);
     let transport = TokioChildProcess::new(command).expect("generated child-process transport");
@@ -410,6 +434,14 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
     );
     assert!(fixture.state_root.join("wal/replay.fmr1").exists());
     assert!(fixture.state_root.join("wal/effects.ndjson").exists());
+    let anchor: Value =
+        serde_json::from_slice(&fs::read(&fixture.replay_anchor).expect("external replay anchor"))
+            .expect("replay anchor JSON");
+    assert_eq!(anchor["deployment_id"], "trusted-real-client");
+    assert!(anchor["generation"]
+        .as_u64()
+        .is_some_and(|value| value >= 2));
+    assert_eq!(anchor["head"]["last_seq"], 2);
     assert!(
         !fixture.project.join(".forge-method").exists(),
         "trusted mutation must preserve the Project Link sidecar boundary"

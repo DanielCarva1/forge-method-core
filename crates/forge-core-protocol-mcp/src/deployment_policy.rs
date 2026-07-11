@@ -36,6 +36,8 @@ pub struct McpDeploymentPolicy {
     pub public_mutation: PublicMutationPolicy,
     pub root_binding: RootBindingPolicy,
     pub state_root_binding: StateRootBindingPolicy,
+    #[serde(default)]
+    pub replay_rollback_protection: ReplayRollbackProtectionPolicy,
     pub required_commit_protocol: Option<String>,
     pub same_user_boundary_acknowledged: bool,
 }
@@ -93,6 +95,14 @@ pub enum RootBindingPolicy {
 pub enum StateRootBindingPolicy {
     Disabled,
     ProjectLinkResolved,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplayRollbackProtectionPolicy {
+    #[default]
+    Disabled,
+    ExternalMonotonicHead,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -311,6 +321,13 @@ fn validate_read_only(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployme
     );
     require(
         issues,
+        policy.replay_rollback_protection == ReplayRollbackProtectionPolicy::Disabled,
+        code,
+        "mcp_deployment_policy.replay_rollback_protection",
+        "read-only mode must keep replay rollback protection disabled",
+    );
+    require(
+        issues,
         !policy.same_user_boundary_acknowledged,
         code,
         "mcp_deployment_policy.same_user_boundary_acknowledged",
@@ -390,6 +407,13 @@ fn validate_trusted(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployment
     );
     require(
         issues,
+        policy.replay_rollback_protection == ReplayRollbackProtectionPolicy::ExternalMonotonicHead,
+        code,
+        "mcp_deployment_policy.replay_rollback_protection",
+        "trusted mode requires an external monotonic replay head",
+    );
+    require(
+        issues,
         policy.same_user_boundary_acknowledged,
         code,
         "mcp_deployment_policy.same_user_boundary_acknowledged",
@@ -441,6 +465,7 @@ mod tests {
                 public_mutation: PublicMutationPolicy::Disabled,
                 root_binding: RootBindingPolicy::CanonicalConfiguredRoot,
                 state_root_binding: StateRootBindingPolicy::Disabled,
+                replay_rollback_protection: ReplayRollbackProtectionPolicy::Disabled,
                 required_commit_protocol: None,
                 same_user_boundary_acknowledged: false,
             },
@@ -461,6 +486,7 @@ mod tests {
         policy.public_mutation = PublicMutationPolicy::ExplicitOptIn;
         policy.required_commit_protocol = Some(MCP_EXECUTION_COMMIT_PROTOCOL.to_owned());
         policy.state_root_binding = StateRootBindingPolicy::ProjectLinkResolved;
+        policy.replay_rollback_protection = ReplayRollbackProtectionPolicy::ExternalMonotonicHead;
         policy.same_user_boundary_acknowledged = true;
         document
     }
@@ -518,7 +544,10 @@ mod tests {
         else {
             panic!("expected typed validation issues");
         };
-        assert_eq!(issues.len(), 10);
+        assert_eq!(issues.len(), 11);
+        assert!(issues
+            .iter()
+            .any(|issue| { issue.field == "mcp_deployment_policy.replay_rollback_protection" }));
     }
 
     #[test]
