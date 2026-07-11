@@ -27,6 +27,7 @@ fn generated_schemas_cover_v0_contract_surface() {
         "assurance_case",
         "contract_family_inventory",
         "field_evidence_registry",
+        "workflow_migration_plan",
     ] {
         assert!(families.contains(expected), "missing schema for {expected}");
     }

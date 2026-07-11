@@ -346,18 +346,20 @@ phases:
           single-effect, and local file-backed operation-wide transactions.
           Typed saga compensation and external-system atomicity remain separate.
     current_program:
-      id: "P4b.6-operation-wide-atomicity"
-      status: "completed"
+      id: "P5-workflow-migration"
+      status: "in_progress"
       scope:
-        - "commit all local file-backed effects in one operation-wide WAL transaction"
-        - "preserve authority, replay, provenance, and recovery across the complete effect set"
+        - "move workflow authority from ordered prose into executable governance"
+        - "preserve compatibility and prove deletion safety before retiring legacy fields"
     next_slice:
-      id: "P5a-workflow-migration-foundation"
+      id: "P5b-executable-workflow-governance-kernel"
       status: "pending"
       scope:
-        - "inventory/classify the complete catalog and create a typed migration manifest"
-        - "select the high-leverage golden-path set and establish shadow parity plus deletion baselines"
+        - "define closed workflow policy, obligation, evaluator, and playbook contracts"
+        - "make eligibility, blockers, evidence, and next actions deterministic runtime results"
     following_slices:
+      - "P5c golden-path workflow migration"
+      - "P5d catalog rollout and legacy retirement"
       - "P6 domain-pack ecosystem"
     release_blockers: []
     exit:
@@ -365,7 +367,7 @@ phases:
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
 
   - id: "P5-workflow-migration"
-    status: "pending"
+    status: "in_progress"
     outcome: "The catalog is incrementally expressed as policies, obligations, Assurance Claims, playbooks, and evaluators."
     strategy:
       - "Choose a small set of high-leverage workflows used by the golden path."
@@ -385,6 +387,7 @@ phases:
       exception: "security or data-integrity hotfixes may ship independently"
     slices:
       - id: "P5a-workflow-migration-foundation"
+        status: "completed"
         size: "large"
         outcome: >-
           Forge can inventory and classify the complete workflow catalog,
@@ -404,6 +407,7 @@ phases:
           - "existing guide/MCP/CLI consumers remain byte- or semantically compatible"
         publication: "one pullable foundation checkpoint after full workspace gates"
       - id: "P5b-executable-workflow-governance-kernel"
+        status: "pending"
         size: "large"
         depends_on: ["P5a-workflow-migration-foundation"]
         outcome: >-
@@ -423,6 +427,7 @@ phases:
           - "no model-specific script or word-for-word dialogue enters core authority"
         publication: "one pullable executable-kernel checkpoint after full workspace gates"
       - id: "P5c-golden-path-workflow-migration"
+        status: "pending"
         size: "large"
         depends_on: ["P5b-executable-workflow-governance-kernel"]
         outcome: >-
@@ -442,6 +447,7 @@ phases:
           - "legacy and migrated paths have measured, reviewed behavioral differences"
         publication: "one pullable golden-path migration checkpoint after full workspace gates"
       - id: "P5d-catalog-rollout-and-legacy-retirement"
+        status: "pending"
         size: "medium_to_large"
         depends_on: ["P5c-golden-path-workflow-migration"]
         outcome: >-
@@ -592,12 +598,13 @@ first_executable_slice:
     - "P4b.6a operation-wide WAL decision, deterministic effect bundle, atomic rollback/recovery tests, Admission support, and legacy partial-commit fail-closed guard"
     - "P4b.6b opaque prepared-kernel operation-wide authority, complete preflight/Admission/provenance commit, typed receipts, and replay reconciliation"
     - "P4b.6c scope-specific trusted MCP operation-wide activation, complete ordered loading/snapshot/signing/readiness, and official rmcp two-effect proof"
+    - "P5a complete 110-workflow typed migration manifest with 15 golden-path, 18 domain-pack-candidate, and 77 compatibility-only classifications"
+    - "P5a exact read-only legacy projection parity, full-catalog digest binding, deletion-loss detection, and explicit no-retirement boundary"
   next_action: >-
-    P4 execution assurance hardening is complete. Next execute the large P5a
-    foundation slice: inventory and classify the complete workflow catalog,
-    create the typed migration manifest, select the representative golden-path
-    set, and establish shadow-parity/deletion baselines without changing current
-    user-visible behavior.
+    P5a is complete. Next execute the large P5b executable-governance-kernel
+    slice: define closed policy, obligation, evidence, evaluator, and advisory
+    playbook contracts; evaluate eligibility, blockers, completion, and ranked
+    next actions without granting procedural prose authority.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

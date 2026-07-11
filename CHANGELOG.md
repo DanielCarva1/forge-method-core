@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P5a workflow migration foundation.** A closed typed plan and pure
+  `forge-core-decisions` evaluator now inventory all 110 workflow documents,
+  classify 15 golden-path workflows, 18 domain-pack candidates, and 77
+  compatibility playbooks, and emit a deterministic content-addressed
+  migration manifest with future policy, obligation, claim, playbook, and
+  evaluator links.
+- `forge-core guide migration-audit` exposes the complete read-only audit to a
+  host agent from embedded defaults or explicit catalog/plan paths. Exact
+  110/110 legacy projection parity, schema/count/digest drift, overlapping or
+  unknown classification, malformed plans, and unsafe retirement policy are
+  covered by unit, adversarial, and real-binary tests.
+- A full-catalog SHA-256 deletion baseline binds every typed workflow field,
+  including procedural steps that are absent from the legacy routing
+  projection, so silent content loss blocks P5b readiness.
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
 - **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.
@@ -53,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The official `rmcp` client proof now initializes the generated operation-wide server, lists and invokes `execute-operation`, commits two sidecar outputs in one WAL transaction, preserves both effect ids and the verified principal in evidence, consumes replay, advances the external anchor, and creates no consumer-local `.forge-method`.
 
 ### Changed
+- The contract-family inventory and generated schema views now register the
+  workflow migration plan as a non-authoritative migration manifest. P5 remains
+  in progress; no workflow execution or legacy retirement authority moved in
+  P5a.
 - The P3 conversational resume token now uses the shared canonical Assurance Case token implementation consumed by execution admission.
 - MCP stdio remains read-only by default. Mutation is admitted only for the sole `execute-operation` tool when exact policy scope, registry, loader, Project Link sidecar root, startup reconciliation, and its dedicated enable flag all agree. Incomplete, cross-scope, or broader configurations fail closed.
 - Read-only MCP subprocesses now pin the current executable instead of resolving `forge-core` through `PATH`, run in the canonical repo root, clear the inherited environment before copying a minimal OS/runtime allowlist, and receive null stdin so the JSON-RPC stream cannot leak into child commands.

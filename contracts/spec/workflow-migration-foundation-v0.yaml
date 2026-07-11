@@ -1,0 +1,84 @@
+schema_version: "0.1"
+spec: "workflow_migration_foundation_v0"
+status: "p5a_implemented"
+purpose: >-
+  Inventory and classify the complete legacy workflow catalog, link every
+  workflow to future executable-governance targets, and establish read-only
+  shadow parity plus a deletion baseline before any legacy authority retires.
+
+module:
+  name: "Workflow Migration Foundation Module"
+  interface:
+    - "WorkflowMigrationPlanDocument"
+    - "load_workflow_documents / load_embedded_workflow_documents"
+    - "evaluate_workflow_migration"
+    - "forge-core guide migration-audit"
+  depth: >-
+    Callers provide one closed plan and the current typed catalog; the Module
+    returns complete classification, target links, parity, deletion evidence,
+    and actionable issues without exposing classification procedure.
+
+legacy_field_roles:
+  phases: "phase projection, never readiness authority"
+  trigger: "routing signal candidate"
+  inputs: "input observation candidate"
+  steps: "advisory playbook; never obligation or completion authority"
+  outputs: "artifact projection; presence alone is not evidence of done"
+  done_when: "completion claim candidate requiring a future evaluator"
+  blocked_when: "blocking Capability Gap or Decision Request candidate"
+  handoff: "continuity projection"
+  module: "grouping projection"
+
+classification:
+  golden_path: "15 high-leverage workflows spanning intent through release and resume"
+  domain_pack_candidate: "18 game-domain workflows preserved for the later P6 pack boundary"
+  compatibility_playbook: "all other classified workflows remain non-authoritative legacy projections"
+  quarantined: "explicit only; requires a non-blank reason"
+  unresolved: "blocks the audit rather than falling into an optimistic default"
+
+shadow_parity:
+  mode: "read_only_exact_projection"
+  exact_fields:
+    - "id"
+    - "phases"
+    - "workflow_ref"
+    - "triggers"
+    - "prerequisites"
+    - "outputs"
+  guarantee: "evaluation performs no filesystem write, mutation, or authority transition"
+  drift_policy: "missing, extra, duplicate, or changed legacy projection blocks readiness for P5b"
+
+deletion_baseline:
+  binds: "canonical SHA-256 of every complete typed workflow document in stable id order"
+  counts:
+    - "phase, trigger, input, step, output, done_when, blocked_when, handoff, and module slots"
+  retirement_allowed: false
+  future_gates:
+    - "executable coverage"
+    - "shadow parity"
+    - "deletion test"
+    - "human review"
+
+fail_closed_rules:
+  - "the plan schema, workflow schema, expected catalog count, and complete catalog digest must match"
+  - "every legacy field must map once to its exact safe role"
+  - "golden, domain-pack, and quarantine classifications cannot overlap"
+  - "all referenced workflow ids must exist in the complete inventory"
+  - "P5a cannot enable mutation or legacy retirement"
+  - "steps/playbooks cannot become authority"
+
+agent_experience:
+  - "one read-only command reports complete migration state and next blockers"
+  - "the human neither reads nor edits the manifest"
+  - "a replacement agent receives the same deterministic audit and catalog digest"
+  - "domain-specific workflows become visible pack candidates instead of core special cases"
+
+next: >-
+  P5b implements executable workflow policies, obligations, claims, evidence
+  rules, evaluators, and the legacy compatibility Adapter over their results.
+
+references:
+  - "contracts/policies/workflow-migration-foundation-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/spec/agent-native-assurance-architecture.yaml"
+  - "contracts/policies/agent-native-product-constitution.yaml"

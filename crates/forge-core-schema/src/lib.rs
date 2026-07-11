@@ -5,6 +5,7 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
+    WorkflowMigrationPlanDocument,
 };
 use schemars::{schema_for, JsonSchema};
 use serde::Serialize;
@@ -136,6 +137,12 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "AssuranceCaseDocument",
             Some("assurance_case"),
             "evidence-backed obligations and target-specific readiness; agent confidence is not authority",
+        ),
+        schema_artifact::<WorkflowMigrationPlanDocument>(
+            "workflow_migration_plan",
+            "WorkflowMigrationPlanDocument",
+            Some("workflow_migration_plan"),
+            "read-only migration classification policy; does not authorize execution or retirement",
         ),
     ]
 }
@@ -272,6 +279,9 @@ fn authority_note(family_id: &str) -> &'static str {
         "coordination_eval_contract" => "coordination readiness requires failure-mode coverage",
         "assurance_case" => {
             "readiness requires coherent obligations, claims, evidence, blockers, and waivers"
+        }
+        "workflow_migration_plan" => {
+            "classification is read-only; runtime mutation and retirement remain forbidden"
         }
         _ => "generated view; Rust validation remains authority",
     }

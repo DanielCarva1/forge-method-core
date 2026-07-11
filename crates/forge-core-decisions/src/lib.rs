@@ -37,10 +37,12 @@ pub mod guide_validation;
 pub mod isolation;
 pub mod obligation_engine;
 pub mod phase_transition;
+pub mod workflow_migration;
 
 pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
-    CatalogFileError, CatalogLoadReport,
+    load_embedded_workflow_documents, load_workflow_documents, CatalogFileError, CatalogLoadReport,
+    LoadedWorkflowDocument, WorkflowDocumentLoadReport,
 };
 pub use embedded_contracts::{
     embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,
@@ -95,6 +97,12 @@ pub use obligation_engine::{
 pub use coordination_eval::{
     coordination_fixture_gaps, score_coordination, validate_coordination_contract,
     CoordinationOutcome, CoordinationScore, CoordinationValidationError, CoordinationVerdict,
+};
+pub use workflow_migration::{
+    evaluate_workflow_migration, LegacyWorkflowFieldCounts, WorkflowDeletionBaseline,
+    WorkflowMigrationAssessment, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
+    WorkflowMigrationIssue, WorkflowMigrationIssueCode, WorkflowMigrationManifest,
+    WorkflowMigrationTargetLinks, WorkflowShadowParity, WorkflowShadowParitySummary,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

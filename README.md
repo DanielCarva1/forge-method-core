@@ -480,6 +480,31 @@ forge-core guide describe              # list every workflow in the catalog
 forge-core guide status --phase 1-discovery   # what's required in this phase?
 ```
 
+### Audit workflow migration safety (P5a)
+
+This is an agent-facing, read-only migration surface. It inventories all 110
+typed workflow documents, classifies each one, derives stable links to future
+policies/obligations/claims/playbooks/evaluators, and compares the derived
+compatibility projection with the existing guide catalog:
+
+```bash
+forge-core guide migration-audit --json
+```
+
+The embedded defaults make the command usable from an installed binary; repo
+maintainers can override them with `--catalog-dir` and `--plan-file`. A clean
+result is `ready_for_shadow`, not permission to execute or retire workflows.
+The manifest binds the complete catalog with SHA-256, requires exact legacy
+projection parity, reports field-count deletion evidence, and keeps
+`mutation_allowed: false` plus `retirement_allowed: false`. Catalog loss,
+schema drift, projection drift, ambiguous classification, or an unsafe plan
+fails closed with actionable typed issues.
+
+The current foundation classifies 15 representative golden-path workflows, 18
+domain-pack candidates, and 77 compatibility-only playbooks. Procedural
+`steps` remain advice: P5b must make obligations and evidence executable before
+any workflow can be presented as governed runtime authority.
+
 ### Derive agent-native assurance guidance
 
 This is a host-agent surface, not a human authoring workflow. The human states
@@ -984,6 +1009,10 @@ gates.
 - The workspace verification suite is green locally: `cargo check`,
   `cargo clippy`, `cargo fmt`, and `cargo test`.
 - The full 7-phase method and 110-workflow catalog.
+- P5a read-only workflow migration foundation: complete deterministic manifest,
+  15 golden-path + 18 domain-pack-candidate + 77 compatibility classifications,
+  exact 110/110 legacy projection parity, full-catalog deletion binding, and no
+  runtime mutation or retirement authority.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1040,6 +1069,10 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
+- **P5b executable workflow governance** — the P5a manifest is classification
+  and compatibility evidence only. Eligibility, blockers, completion claims,
+  evidence rules, and ranked next actions still need to move into the
+  executable governance kernel before migrated workflows gain authority.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

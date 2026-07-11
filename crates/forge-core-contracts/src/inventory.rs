@@ -86,4 +86,5 @@ pub enum FamilyKind {
     RuntimeHandoff,
     CoordinationEval,
     HealthRecovery,
+    MigrationManifest,
 }

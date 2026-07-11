@@ -1,0 +1,144 @@
+schema_version: "0.1"
+workflow_migration_plan:
+  id: "workflow-migration.p5a.foundation"
+  expected_catalog_count: 110
+  expected_catalog_digest: "sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850"
+  expected_workflow_schema_version: "0.1"
+  field_mappings:
+    - field: "phases"
+      role: "phase_projection"
+    - field: "trigger"
+      role: "routing_signal"
+    - field: "inputs"
+      role: "input_observation_candidate"
+    - field: "steps"
+      role: "advisory_playbook"
+    - field: "outputs"
+      role: "artifact_projection"
+    - field: "done_when"
+      role: "completion_claim_candidate"
+    - field: "blocked_when"
+      role: "blocking_gap_candidate"
+    - field: "handoff"
+      role: "continuity_projection"
+    - field: "module"
+      role: "grouping_projection"
+  golden_path_selections:
+    - workflow_id: "discover-intent"
+      leverage: "critical"
+      risk: "critical"
+      coverage: ["intent"]
+      rationale: "Prevents a fluent agent from building against an unverified interpretation of human intent."
+    - workflow_id: "domain-scan"
+      leverage: "high"
+      risk: "critical"
+      coverage: ["domain_unknowns"]
+      rationale: "Surfaces missing domain method, hazards, and competence before artifacts create false confidence."
+    - workflow_id: "technical-feasibility-scan"
+      leverage: "high"
+      risk: "critical"
+      coverage: ["feasibility"]
+      rationale: "Forces consequential technical assumptions toward evidence before planning commits to them."
+    - workflow_id: "product-requirements"
+      leverage: "critical"
+      risk: "high"
+      coverage: ["requirements"]
+      rationale: "Turns validated intent and constraints into outcome obligations without scripting implementation."
+    - workflow_id: "write-spec"
+      leverage: "high"
+      risk: "high"
+      coverage: ["specification"]
+      rationale: "Provides a precise acceptance boundary while keeping prose subordinate to executable evidence."
+    - workflow_id: "architecture"
+      leverage: "high"
+      risk: "high"
+      coverage: ["architecture"]
+      rationale: "Covers structural and interface decisions whose late correction would be expensive."
+    - workflow_id: "plan-sprint"
+      leverage: "high"
+      risk: "medium"
+      coverage: ["planning"]
+      rationale: "Translates governed outcomes into a coherent delivery increment without making order authority."
+    - workflow_id: "story-creation"
+      leverage: "high"
+      risk: "medium"
+      coverage: ["work_slicing"]
+      rationale: "Creates bounded agent-operable work with explicit proof expectations and dependencies."
+    - workflow_id: "build-story"
+      leverage: "critical"
+      risk: "high"
+      coverage: ["implementation"]
+      rationale: "Represents the main mutation path where authority, evidence, and completion must remain distinct."
+    - workflow_id: "test-strategy"
+      leverage: "high"
+      risk: "critical"
+      coverage: ["verification"]
+      rationale: "Selects evidence strength against risk instead of treating generated tests as sufficient by presence."
+    - workflow_id: "reality-evidence-gate"
+      leverage: "critical"
+      risk: "critical"
+      coverage: ["reality_feedback"]
+      rationale: "Requires representative execution so artifact progress cannot masquerade as a working product."
+    - workflow_id: "correct-course"
+      leverage: "high"
+      risk: "high"
+      coverage: ["correction"]
+      rationale: "Makes disproven claims and new evidence produce governed recovery rather than hidden drift."
+    - workflow_id: "readiness-check"
+      leverage: "critical"
+      risk: "critical"
+      coverage: ["readiness"]
+      rationale: "Aggregates obligation and evidence state before any completion or release claim is accepted."
+    - workflow_id: "ready-release"
+      leverage: "critical"
+      risk: "critical"
+      coverage: ["release"]
+      rationale: "Covers the irreversible user-facing boundary where unsupported readiness must fail closed."
+    - workflow_id: "context-recovery"
+      leverage: "high"
+      risk: "high"
+      coverage: ["continuity"]
+      rationale: "Proves a replacement agent can resume governed truth and next action without chat memory."
+  domain_pack_candidate_ids:
+    - "game-brief"
+    - "game-context"
+    - "game-e2e-scaffold"
+    - "game-prd"
+    - "game-project"
+    - "game-qa-review"
+    - "game-retrospective"
+    - "game-sprint-planning"
+    - "game-sprint-status"
+    - "game-story-creation"
+    - "game-test-automation"
+    - "game-test-framework"
+    - "game-ux-design"
+    - "gdd"
+    - "mechanics-design"
+    - "narrative-design"
+    - "playtest-plan"
+    - "visual-alignment-prototype"
+  quarantine: []
+  compatibility_projection:
+    mode: "read_only_exact_projection"
+    exact_fields:
+      - "id"
+      - "phases"
+      - "workflow_ref"
+      - "triggers"
+      - "prerequisites"
+      - "outputs"
+    mutation_allowed: false
+  target_namespaces:
+    policy: "policy.workflow."
+    obligation: "obligation.workflow."
+    claim: "claim.workflow."
+    playbook: "playbook.workflow."
+    evaluator: "evaluator.workflow."
+  retirement_policy:
+    required_gates:
+      - "executable_coverage"
+      - "shadow_parity"
+      - "deletion_test"
+      - "human_review"
+    retirement_allowed_during_foundation: false

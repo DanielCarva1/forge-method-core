@@ -56,6 +56,10 @@ Active implementation plan:
   obligation.
 - **Domain Pack**: an extension that contributes domain-specific obligations,
   hazards, playbooks, evaluators, evidence rules, and capability requirements.
+- **Workflow Migration Manifest**: a deterministic, content-bound inventory
+  that classifies every legacy workflow and links it to candidate governance
+  targets. In P5a it is compatibility evidence only, never execution or
+  retirement authority.
 - **Phase Projection**: a human- and agent-friendly summary of maturity derived
   from satisfied obligations. It is not the primary source of authority.
 - **Execution Principal**: the authenticated and authorized caller identity and
@@ -91,6 +95,10 @@ Active implementation plan:
   through exact bounded ordered loading, scope-specific policy/opt-in, startup
   reconciliation, and signed intent. Sagas remain future work for external or
   irreversible commit domains.
+- The **Workflow Migration Foundation Module** reads the complete typed catalog
+  and a repository-owned plan, then returns one deterministic classification,
+  target-link, shadow-parity, and deletion-baseline manifest. Its Interface is
+  read-only; P5a deliberately cannot execute, mutate, or retire workflows.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

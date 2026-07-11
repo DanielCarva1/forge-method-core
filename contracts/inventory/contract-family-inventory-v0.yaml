@@ -38,6 +38,7 @@ enums:
     - "runtime_handoff"
     - "coordination_eval"
     - "health_recovery"
+    - "migration_manifest"
   validation_surface:
     - "rust_contract_validator"
     - "reserved"

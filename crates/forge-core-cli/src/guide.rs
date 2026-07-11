@@ -7,16 +7,24 @@
 use crate::project_cmd::resolve_project;
 use forge_core_command_surface::COMMAND_GUIDE;
 use forge_core_contracts::{
-    Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
+    Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, WorkflowMigrationPlanDocument,
+    ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
-use forge_core_decisions::{load_catalog, load_embedded_catalog, CatalogLoadReport};
+use forge_core_decisions::{
+    evaluate_workflow_migration, load_catalog, load_embedded_catalog,
+    load_embedded_workflow_documents, load_workflow_documents, CatalogLoadReport,
+    WorkflowDocumentLoadReport, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
+};
 use forge_core_decisions::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
 };
 use std::path::Path;
 
 use crate::cli_error::ExitError;
+
+const DEFAULT_WORKFLOW_MIGRATION_PLAN_REF: &str =
+    "contracts/policies/workflow-migration-foundation-v0.yaml";
 
 // ============================================================================
 // guide describe — the compact routing surface (R3 token cliff, DD13).
@@ -134,6 +142,19 @@ fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
     }
 }
 
+fn resolve_workflow_documents(catalog_dir: Option<&Path>) -> WorkflowDocumentLoadReport {
+    if let Some(dir) = catalog_dir {
+        load_workflow_documents(dir)
+    } else {
+        let local = Path::new("contracts/workflows");
+        if local.is_dir() {
+            load_workflow_documents(local)
+        } else {
+            load_embedded_workflow_documents()
+        }
+    }
+}
+
 #[must_use]
 pub fn run_describe(catalog_dir: Option<&Path>) -> CliEnvelope<DescribePayload> {
     let report = resolve_catalog(catalog_dir);
@@ -150,6 +171,75 @@ pub fn run_describe(catalog_dir: Option<&Path>) -> CliEnvelope<DescribePayload> 
 
 // Re-export the load report type for callers that want the raw errors.
 pub type DescribeReport = CatalogLoadReport;
+
+/// Run the complete read-only P5a inventory, classification, target-link,
+/// shadow-parity, and deletion-baseline audit.
+#[must_use]
+pub fn run_migration_audit(
+    catalog_dir: Option<&Path>,
+    plan_file: Option<&Path>,
+) -> CliEnvelope<WorkflowMigrationAudit> {
+    let workflows = resolve_workflow_documents(catalog_dir);
+    let catalog = resolve_catalog(catalog_dir);
+    if !workflows.is_clean() || !catalog.is_clean() {
+        return CliEnvelope::err(
+            "guide.migration-audit",
+            ExitReason::EnvConfig,
+            format!(
+                "complete workflow inventory failed: {} workflow error(s), {} catalog error(s)",
+                workflows.errors.len(),
+                catalog.errors.len()
+            ),
+        );
+    }
+    let plan_text = match plan_file {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(text) => Some(text),
+            Err(error) => {
+                return CliEnvelope::err(
+                    "guide.migration-audit",
+                    ExitReason::EnvConfig,
+                    format!(
+                        "cannot read workflow migration plan {}: {error}",
+                        path.display()
+                    ),
+                );
+            }
+        },
+        None => forge_core_decisions::read_contract_text(
+            Path::new("."),
+            DEFAULT_WORKFLOW_MIGRATION_PLAN_REF,
+        ),
+    };
+    let Some(plan_text) = plan_text else {
+        return CliEnvelope::err(
+            "guide.migration-audit",
+            ExitReason::EnvConfig,
+            "workflow migration plan is unavailable",
+        );
+    };
+    let plan: WorkflowMigrationPlanDocument = match yaml_serde::from_str(&plan_text) {
+        Ok(plan) => plan,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.migration-audit",
+                ExitReason::InvalidDecisionShape,
+                format!("workflow migration plan is invalid: {error}"),
+            );
+        }
+    };
+    let audit = evaluate_workflow_migration(&plan, &workflows.workflows, &catalog.catalog);
+    if audit.status == WorkflowMigrationAuditStatus::ReadyForShadow {
+        CliEnvelope::ok("guide.migration-audit", audit)
+    } else {
+        CliEnvelope::reject(
+            "guide.migration-audit",
+            ExitReason::RejectedByGate,
+            "workflow migration foundation is blocked; inspect typed issues and drift",
+            audit,
+        )
+    }
+}
 
 // ============================================================================
 // guide decide — validate a host-proposed GuideDecision (R2).
@@ -479,7 +569,7 @@ fn gate_str(g: GateKind) -> String {
 }
 /// Dispatch entrypoint for the `forge-core guide` subcommand tree.
 ///
-/// Routes to `describe`, `decide`, or `status` based on `args[1]`, and
+/// Routes to the concrete guide subcommand based on `args[1]`, and
 /// prints usage on `--help` / unknown subcommand.
 ///
 /// # Errors
@@ -495,6 +585,7 @@ pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
         "describe" => run_guide_describe(&args[2..]),
         "decide" => run_guide_decide(&args[2..]),
         "status" => run_guide_status(&args[2..]),
+        "migration-audit" => run_guide_migration_audit(&args[2..]),
         "--help" | "-h" | "help" => {
             print_guide_usage();
             Ok(())
@@ -744,6 +835,57 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
 
     let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
     emit_guide(env, want_json)
+}
+
+/// Runs the P5a read-only migration audit.
+///
+/// # Errors
+///
+/// Returns a usage/config error for malformed flags and propagates a typed
+/// rejection when the audit finds unresolved classification or parity drift.
+pub fn run_guide_migration_audit(args: &[String]) -> Result<(), ExitError> {
+    let mut catalog_dir = None;
+    let mut plan_file = None;
+    let want_json = !args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "--no-json" | "--text"));
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--catalog-dir" => {
+                index += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "migration-audit",
+                    "catalog-dir",
+                )?));
+            }
+            "--plan-file" => {
+                index += 1;
+                plan_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "migration-audit",
+                    "plan-file",
+                )?));
+            }
+            "--json" | "--no-json" | "--text" => {}
+            "--help" | "-h" => {
+                println!(
+                    "{}",
+                    guide_command_surface_usage_line_for("migration-audit")
+                );
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("migration-audit", other)),
+        }
+        index += 1;
+    }
+    emit_guide(
+        run_migration_audit(catalog_dir.as_deref(), plan_file.as_deref()),
+        want_json,
+    )
 }
 
 /// Resolve the authoritative current phase for a project root. Reads
@@ -1111,7 +1253,10 @@ mod tests {
                 "guide usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
             );
         }
-        assert_eq!(guide_subcommand_hint(), "describe | decide | status");
+        assert_eq!(
+            guide_subcommand_hint(),
+            "describe | decide | status | migration-audit"
+        );
     }
 
     #[test]
@@ -1176,6 +1321,40 @@ mod tests {
         let result = run_guide_status(&status_args);
 
         assert!(result.is_ok(), "explicit --json should parse");
+    }
+
+    #[test]
+    fn migration_audit_classifies_real_catalog_without_mutation_or_drift() {
+        let envelope = run_migration_audit(Some(&real_catalog_dir()), None);
+        assert!(envelope.ok, "migration audit: {:?}", envelope.error);
+        let audit = envelope.data.expect("migration audit payload");
+        assert_eq!(audit.catalog_count, 110);
+        assert_eq!(audit.classified_count, 110);
+        assert_eq!(audit.shadow_parity.equivalent_count, 110);
+        assert_eq!(audit.shadow_parity.drift_count, 0);
+        assert!(!audit.shadow_parity.mutation_allowed);
+        assert!(!audit.deletion_baseline.retirement_allowed);
+        assert_eq!(audit.manifest.entries.len(), 110);
+        assert!(audit.manifest.manifest_digest.starts_with("sha256:"));
+    }
+
+    #[test]
+    fn migration_audit_parser_accepts_explicit_sources_and_rejects_unknown_flags() {
+        let plan = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../contracts/policies/workflow-migration-foundation-v0.yaml");
+        let result = run_guide_migration_audit(&args(&[
+            "--catalog-dir",
+            real_catalog_dir().to_str().expect("catalog utf-8"),
+            "--plan-file",
+            plan.to_str().expect("plan utf-8"),
+            "--json",
+        ]));
+        assert!(result.is_ok());
+
+        let error = run_guide_migration_audit(&args(&["--mutate-legacy"]))
+            .expect_err("authority-like flag must fail");
+        assert!(error.to_string().contains("unrecognized argument"));
+        assert!(error.to_string().contains("guide migration-audit"));
     }
 
     // ------------------------------------------------------------------------

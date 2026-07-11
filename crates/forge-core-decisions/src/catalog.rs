@@ -33,6 +33,29 @@ pub struct CatalogLoadReport {
     pub errors: Vec<CatalogFileError>,
 }
 
+/// Full typed workflow plus its stable repo-relative reference. P5 migration
+/// analysis needs the complete legacy state machine, not only the routing view.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct LoadedWorkflowDocument {
+    pub workflow_ref: RepoPath,
+    pub document: WorkflowDocument,
+}
+
+/// Accumulating full-document loader used by migration analysis and catalog
+/// projection. A non-empty error set makes the complete inventory unusable.
+#[derive(Debug, Clone, Default)]
+pub struct WorkflowDocumentLoadReport {
+    pub workflows: Vec<LoadedWorkflowDocument>,
+    pub errors: Vec<CatalogFileError>,
+}
+
+impl WorkflowDocumentLoadReport {
+    #[must_use]
+    pub fn is_clean(&self) -> bool {
+        self.errors.is_empty()
+    }
+}
+
 impl CatalogLoadReport {
     /// True if every file parsed cleanly.
     #[must_use]
@@ -48,7 +71,23 @@ impl CatalogLoadReport {
 /// [`CatalogLoadReport::is_clean`].
 #[must_use]
 pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
-    let mut report = CatalogLoadReport::default();
+    let loaded = load_workflow_documents(dir);
+    CatalogLoadReport {
+        catalog: Catalog {
+            entries: loaded
+                .workflows
+                .iter()
+                .map(catalog_entry_from_workflow)
+                .collect(),
+        },
+        errors: loaded.errors,
+    }
+}
+
+/// Load every full workflow document under `dir` in deterministic path order.
+#[must_use]
+pub fn load_workflow_documents(dir: &Path) -> WorkflowDocumentLoadReport {
+    let mut report = WorkflowDocumentLoadReport::default();
     let Ok(entries) = fs::read_dir(dir) else {
         report.errors.push(CatalogFileError {
             path: RepoPath(dir.to_string_lossy().into_owned()),
@@ -79,8 +118,8 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
             || path.to_string_lossy().into_owned(),
             |n| n.to_string_lossy().into_owned(),
         );
-        match load_one(&path, dir) {
-            Ok(entry) => report.catalog.entries.push(entry),
+        match load_one_document(&path, dir) {
+            Ok(workflow) => report.workflows.push(workflow),
             Err(error) => report.errors.push(CatalogFileError {
                 path: RepoPath(rel),
                 reason: error.to_string(),
@@ -91,7 +130,7 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
     report
 }
 
-fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, CatalogLoadError> {
+fn load_one_document(path: &Path, dir: &Path) -> Result<LoadedWorkflowDocument, CatalogLoadError> {
     let text = fs::read_to_string(path).map_err(|source| CatalogLoadError::Read {
         source: source.to_string(),
     })?;
@@ -100,7 +139,7 @@ fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, CatalogLoadError> {
         |_| path.to_string_lossy().into_owned(),
         |rel| rel.to_string_lossy().into_owned(),
     );
-    parse_workflow_yaml(&workflow_ref, &text)
+    parse_workflow_document_yaml(&workflow_ref, &text)
 }
 
 /// Hand-rolled error enum for the catalog YAML loader. Replaces the legacy
@@ -130,20 +169,30 @@ impl std::error::Error for CatalogLoadError {}
 /// Parse a single workflow YAML document from its text. Shared by the disk
 /// loader ([`load_one`]) and the embedded loader ([`load_embedded_catalog`])
 /// so both paths produce identical [`CatalogEntry`]s.
-fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, CatalogLoadError> {
+fn parse_workflow_document_yaml(
+    workflow_ref: &str,
+    text: &str,
+) -> Result<LoadedWorkflowDocument, CatalogLoadError> {
     let doc: WorkflowDocument =
         yaml_serde::from_str(text).map_err(|source| CatalogLoadError::Deserialize {
             source: source.to_string(),
         })?;
-    let wf = doc.workflow;
-    Ok(CatalogEntry {
-        id: wf.id,
-        phases: wf.phases,
+    Ok(LoadedWorkflowDocument {
         workflow_ref: RepoPath(format!("contracts/workflows/{workflow_ref}")),
-        triggers: wf.trigger,
-        prerequisites: wf.inputs,
-        outputs: wf.outputs,
+        document: doc,
     })
+}
+
+fn catalog_entry_from_workflow(workflow: &LoadedWorkflowDocument) -> CatalogEntry {
+    let legacy = &workflow.document.workflow;
+    CatalogEntry {
+        id: legacy.id.clone(),
+        phases: legacy.phases.clone(),
+        workflow_ref: workflow.workflow_ref.clone(),
+        triggers: legacy.trigger.clone(),
+        prerequisites: legacy.inputs.clone(),
+        outputs: legacy.outputs.clone(),
+    }
 }
 
 // ============================================================================
@@ -171,13 +220,29 @@ static EMBEDDED_WORKFLOWS: Dir<'static> =
 /// exists (the build fails if `contracts/workflows/` is missing).
 #[must_use]
 pub fn load_embedded_catalog() -> CatalogLoadReport {
-    let mut report = CatalogLoadReport::default();
+    let loaded = load_embedded_workflow_documents();
+    CatalogLoadReport {
+        catalog: Catalog {
+            entries: loaded
+                .workflows
+                .iter()
+                .map(catalog_entry_from_workflow)
+                .collect(),
+        },
+        errors: loaded.errors,
+    }
+}
+
+/// Load the complete workflow documents compiled into the binary.
+#[must_use]
+pub fn load_embedded_workflow_documents() -> WorkflowDocumentLoadReport {
+    let mut report = WorkflowDocumentLoadReport::default();
     let mut files: Vec<(String, &str)> = Vec::new();
     collect_yaml(&EMBEDDED_WORKFLOWS, &mut files);
     files.sort();
     for (name, text) in &files {
-        match parse_workflow_yaml(name, text) {
-            Ok(entry) => report.catalog.entries.push(entry),
+        match parse_workflow_document_yaml(name, text) {
+            Ok(workflow) => report.workflows.push(workflow),
             Err(error) => report.errors.push(CatalogFileError {
                 path: RepoPath(name.clone()),
                 reason: error.to_string(),

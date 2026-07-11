@@ -33,6 +33,7 @@ pub mod telemetry;
 pub mod tool_effect;
 pub mod verification_goal;
 pub mod workflow;
+pub mod workflow_migration;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
 pub use assurance::{
@@ -100,3 +101,11 @@ pub use research::{
 };
 pub use typed_failure::TypedFailure;
 pub use workflow::{Workflow, WorkflowDocument};
+pub use workflow_migration::{
+    LegacyWorkflowField, LegacyWorkflowFieldMapping, LegacyWorkflowFieldRole,
+    WorkflowCompatibilityField, WorkflowCompatibilityProjectionPolicy, WorkflowGoldenPathCoverage,
+    WorkflowGoldenPathSelection, WorkflowMigrationAuthority, WorkflowMigrationDisposition,
+    WorkflowMigrationPlan, WorkflowMigrationPlanDocument, WorkflowMigrationQuarantine,
+    WorkflowMigrationTargetNamespaces, WorkflowRetirementGate, WorkflowRetirementPolicy,
+    WorkflowSelectionTier, WorkflowShadowMode, WORKFLOW_MIGRATION_PLAN_SCHEMA_VERSION,
+};
