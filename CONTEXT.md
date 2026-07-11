@@ -60,6 +60,18 @@ Active implementation plan:
   that classifies every legacy workflow and links it to candidate governance
   targets. In P5a it is compatibility evidence only, never execution or
   retirement authority.
+- **Workflow Policy**: the closed, kernel-evaluated definition of workflow
+  eligibility, prerequisite policies, obligations, claims, evaluator rules,
+  capability requirements, and irreducible Decision Requests. It defines what
+  must be true, never the words or implementation strategy an agent must use.
+- **Workflow Governance Simulation**: a pure deterministic candidate result
+  derived from one Workflow Policy and caller-authored observations. It is
+  always `simulation_only`; even candidate completion cannot unlock progression,
+  completion, mutation, or Execution Admission.
+- **Verified Workflow Governance Decision**: an opaque, non-deserializable
+  kernel typestate derived only from a trusted Project Snapshot. It, not raw
+  YAML or playbook position, may carry progression/completion authority once a
+  live Adapter supplies authoritative receipts.
 - **Phase Projection**: a human- and agent-friendly summary of maturity derived
   from satisfied obligations. It is not the primary source of authority.
 - **Execution Principal**: the authenticated and authorized caller identity and
@@ -99,6 +111,13 @@ Active implementation plan:
   and a repository-owned plan, then returns one deterministic classification,
   target-link, shadow-parity, and deletion-baseline manifest. Its Interface is
   read-only; P5a deliberately cannot execute, mutate, or retire workflows.
+- The **Workflow Governance Kernel Module** validates a closed policy bundle
+  and separates two lanes. `guide govern-simulate` derives candidate guidance
+  from raw YAML and is never authority. The opaque verified lane requires a
+  trusted Project Snapshot whose phase/state, prerequisite completion,
+  capabilities, human decisions, evaluator results, and freshness come from
+  durable snapshot/receipt sources. Its Interface is pure and mutation-free;
+  advisory playbooks and legacy simulation projections sit outside authority.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

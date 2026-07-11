@@ -502,8 +502,53 @@ fails closed with actionable typed issues.
 
 The current foundation classifies 15 representative golden-path workflows, 18
 domain-pack candidates, and 77 compatibility-only playbooks. Procedural
-`steps` remain advice: P5b must make obligations and evidence executable before
-any workflow can be presented as governed runtime authority.
+`steps` remain advice. P5b supplies the closed contracts, a non-authoritative
+simulation lane, and an opaque verified-kernel typestate seam. P5c must connect
+that seam to trusted project state before any migrated workflow gains live
+progression or completion authority.
+
+### Simulate workflow governance (P5b)
+
+P5b adds a pure Workflow Governance Kernel Module with two deliberately
+different lanes. The public CLI accepts caller-authored YAML only for
+`simulation_only` planning. It derives candidate eligibility, progression,
+claim/obligation state, completion, Capability Gaps, Decision Requests, and
+ranked next actions without granting those candidates runtime authority:
+
+```bash
+forge-core guide govern-simulate \
+  --bundle-file contracts/workflow-governance/kernel-v0.yaml \
+  --input-file docs/fixtures/workflow-governance-kernel-v0/complete.yaml \
+  --legacy-workflow-file contracts/workflows/build-story.yaml \
+  --json
+```
+
+`active`, `blocked`, `complete`, and `ineligible` are candidate simulation
+outcomes rather than command failures. Structural policy/input defects fail
+closed, but even a candidate `complete` result cannot unlock progression,
+completion, mutation, or Execution Admission. Caller-authored phase, evidence,
+capability, decision, and freshness fields are proposals, never provenance.
+
+The second lane accepts only an opaque trusted snapshot and returns an opaque
+verified decision. It has no YAML/JSON constructor. Its authority inputs must
+be derived from the Project Snapshot Adapter: the repository-owned admitted
+policy bundle is loaded inside the Adapter/kernel and bound by canonical digest,
+never caller-selected; phase and state come from the durable project snapshot;
+prerequisite completion from completion receipts; capability availability from
+registry/probe receipts; human decisions from authorized decision receipts;
+evaluator outcomes from evidence receipts with provenance; and freshness from
+trusted receipt and observation times rather than caller assertions. P5b
+establishes this typestate boundary; P5c implements and integrates the live
+Adapter and receipt sources.
+
+Playbooks remain available as flexible strategy. They have no authority field,
+and deletion/replacement tests prove that changing their steps cannot change
+candidate eligibility, progression, obligations, claims, or completion. The
+optional legacy simulation Adapter preserves the existing `CatalogEntry` while
+marking its projected status and blockers as compatibility simulation only.
+The Module performs no IO or project mutation. P5c remains responsible for the
+trusted Project Snapshot Adapter, live receipt derivation, migrated representative
+golden path, and conversational/resume integration.
 
 ### Derive agent-native assurance guidance
 
@@ -1013,6 +1058,10 @@ gates.
   15 golden-path + 18 domain-pack-candidate + 77 compatibility classifications,
   exact 110/110 legacy projection parity, full-catalog deletion binding, and no
   runtime mutation or retirement authority.
+- P5b workflow governance boundary: closed policy/evaluation contracts,
+  semantic and dependency-graph validation, an explicit `simulation_only`
+  CLI, deterministic candidate gaps/actions, and a non-deserializable opaque
+  verified-kernel typestate seam for a future trusted Project Snapshot Adapter.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1069,10 +1118,11 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5b executable workflow governance** — the P5a manifest is classification
-  and compatibility evidence only. Eligibility, blockers, completion claims,
-  evidence rules, and ranked next actions still need to move into the
-  executable governance kernel before migrated workflows gain authority.
+- **P5c trusted governance integration and golden-path migration** — P5b's raw
+  `guide govern-simulate` lane cannot grant authority. P5c must implement the
+  Project Snapshot Adapter and authoritative receipt derivation, then migrate
+  the 15 selected behaviors with chat-only human experience, replacement-agent
+  resume, and measured legacy shadow proof.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

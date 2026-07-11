@@ -239,6 +239,7 @@ pub enum DiagnosticCode {
     AssuranceCapabilityGapResolutionEmpty,
     AssuranceNextActionRankInvalid,
     AssuranceReadinessInconsistent,
+    WorkflowGovernanceInvalid,
     MissingReference,
     ReferenceKindMismatch,
     // F11 — Risk Audit (AI-induced anti-patterns).

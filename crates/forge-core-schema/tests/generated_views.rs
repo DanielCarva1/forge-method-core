@@ -28,6 +28,8 @@ fn generated_schemas_cover_v0_contract_surface() {
         "contract_family_inventory",
         "field_evidence_registry",
         "workflow_migration_plan",
+        "workflow_governance_bundle",
+        "workflow_governance_evaluation",
     ] {
         assert!(families.contains(expected), "missing schema for {expected}");
     }
@@ -57,4 +59,27 @@ fn compact_agent_views_are_derived_and_nonempty() {
             );
         }
     }
+}
+
+#[test]
+fn workflow_governance_views_make_non_mutation_boundary_explicit() {
+    let views = compact_agent_views();
+    let bundle = views
+        .iter()
+        .find(|view| view.family_id == "workflow_governance_bundle")
+        .expect("bundle schema view");
+    assert_eq!(bundle.root_key, Some("workflow_governance_bundle"));
+    assert!(bundle.authority_note.contains("simulation-only"));
+    assert!(bundle
+        .authority_note
+        .contains("opaque trusted kernel snapshot"));
+
+    let evaluation = views
+        .iter()
+        .find(|view| view.family_id == "workflow_governance_evaluation")
+        .expect("evaluation schema view");
+    assert_eq!(evaluation.root_key, Some("workflow_governance_evaluation"));
+    assert!(evaluation
+        .authority_note
+        .contains("candidate completion is not authority"));
 }

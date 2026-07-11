@@ -352,13 +352,12 @@ phases:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
     next_slice:
-      id: "P5b-executable-workflow-governance-kernel"
+      id: "P5c-golden-path-workflow-migration"
       status: "pending"
       scope:
-        - "define closed workflow policy, obligation, evaluator, and playbook contracts"
-        - "make eligibility, blockers, evidence, and next actions deterministic runtime results"
+        - "migrate the 15 selected high-leverage behaviors onto executable governance"
+        - "prove chat-only guidance, representative execution, compatibility, and replacement-agent resume"
     following_slices:
-      - "P5c golden-path workflow migration"
       - "P5d catalog rollout and legacy retirement"
       - "P6 domain-pack ecosystem"
     release_blockers: []
@@ -407,25 +406,27 @@ phases:
           - "existing guide/MCP/CLI consumers remain byte- or semantically compatible"
         publication: "one pullable foundation checkpoint after full workspace gates"
       - id: "P5b-executable-workflow-governance-kernel"
-        status: "pending"
+        status: "completed"
         size: "large"
         depends_on: ["P5a-workflow-migration-foundation"]
         outcome: >-
-          Workflow authority moves from step ordering into executable policies,
-          obligations, claims, evidence rules, and evaluators while playbooks
+          Forge establishes closed workflow policies, a simulation-only raw
+          lane, and an opaque verified-kernel typestate seam while playbooks
           remain non-authoritative strategies available to capable agents.
         delivers:
           - "closed typed contracts and semantic validation for workflow policy, obligation/evidence mapping, evaluator binding, and advisory playbook projection"
-          - "deterministic runtime evaluation of eligibility, blocking gaps, completion evidence, and next-best actions"
-          - "explicit Decision Request and Capability Gap production instead of guessed workflow progression"
-          - "legacy workflow compatibility Adapter backed by the executable governance result"
+          - "deterministic simulation_only evaluation of candidate eligibility, blocking gaps, completion evidence, and next-best actions from caller-authored YAML"
+          - "explicit candidate Decision Request and Capability Gap production instead of guessed workflow progression"
+          - "opaque, non-deserializable verified decision typestate that requires an opaque trusted snapshot"
+          - "legacy workflow compatibility simulation that cannot grant progression or completion authority"
           - "adversarial tests for missing evidence, contradictory predicates, invented completion, cyclic dependencies, and playbook-as-authority attempts"
         exit:
-          - "the kernel, not catalog step position, decides whether governed progression is allowed"
+          - "raw input and candidate complete output are visibly simulation_only and cannot unlock progression, completion, mutation, or Execution Admission"
+          - "only the opaque trusted-snapshot lane can produce a verified governance decision"
           - "playbook deletion or replacement cannot bypass obligations or fabricate readiness"
-          - "legacy projections are derived from the new result for migrated fixtures"
+          - "legacy projections are explicitly simulation-only for migrated fixtures"
           - "no model-specific script or word-for-word dialogue enters core authority"
-        publication: "one pullable executable-kernel checkpoint after full workspace gates"
+        publication: "one pullable contract/simulation/opaque-typestate checkpoint after full workspace gates"
       - id: "P5c-golden-path-workflow-migration"
         status: "pending"
         size: "large"
@@ -435,6 +436,9 @@ phases:
           executable governance while the human remains in chat and a replacement
           agent can resume without knowing or selecting a workflow.
         delivers:
+          - "repository-owned admitted policy loading with canonical bundle digest binding inside the trusted Adapter/kernel"
+          - "trusted Project Snapshot Adapter deriving phase/state from durable project state"
+          - "authoritative prerequisite completion, capability registry/probe, human-decision, and evaluator-evidence receipts with freshness derived from trusted times"
           - "migration of the selected high-leverage discovery, planning, build, verification, correction, and readiness behaviors"
           - "agent-facing guidance generated from obligations, gaps, evidence, decisions, and evaluator results"
           - "representative vertical-slice requirement that prevents artifact-only progress from appearing ready"
@@ -444,6 +448,7 @@ phases:
           - "the human edits no Forge artifact and selects no workflow"
           - "critical unknowns and missing competence block readiness with actionable next steps"
           - "a fresh agent resumes the same governed state and next action"
+          - "completion consumption rechecks project, policy digest, state version, phase, and readiness target scope"
           - "legacy and migrated paths have measured, reviewed behavioral differences"
         publication: "one pullable golden-path migration checkpoint after full workspace gates"
       - id: "P5d-catalog-rollout-and-legacy-retirement"
@@ -600,11 +605,16 @@ first_executable_slice:
     - "P4b.6c scope-specific trusted MCP operation-wide activation, complete ordered loading/snapshot/signing/readiness, and official rmcp two-effect proof"
     - "P5a complete 110-workflow typed migration manifest with 15 golden-path, 18 domain-pack-candidate, and 77 compatibility-only classifications"
     - "P5a exact read-only legacy projection parity, full-catalog digest binding, deletion-loss detection, and explicit no-retirement boundary"
+    - "P5b closed Workflow Governance Policy/Evaluation contracts and pure deterministic simulation_only candidate evaluation"
+    - "P5b opaque verified-kernel typestate seam, advisory-playbook deletion proof, and simulation-only legacy compatibility Adapter"
   next_action: >-
-    P5a is complete. Next execute the large P5b executable-governance-kernel
-    slice: define closed policy, obligation, evidence, evaluator, and advisory
-    playbook contracts; evaluate eligibility, blockers, completion, and ranked
-    next actions without granting procedural prose authority.
+    P5a and P5b are complete. Next execute the large P5c golden-path migration
+    slice: implement the trusted Project Snapshot Adapter and authoritative
+    completion/capability/decision/evaluator receipt derivation, then express the
+    15 selected discovery-through-release/resume behaviors as governed policies,
+    integrate agent-facing chat guidance and representative vertical-slice
+    proof, and demonstrate legacy shadow comparison plus fresh replacement-agent
+    resume without asking the human to select workflows.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

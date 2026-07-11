@@ -39,6 +39,7 @@ enums:
     - "coordination_eval"
     - "health_recovery"
     - "migration_manifest"
+    - "workflow_governance_policy"
   validation_surface:
     - "rust_contract_validator"
     - "reserved"

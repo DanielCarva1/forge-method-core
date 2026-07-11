@@ -268,6 +268,7 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
                 "       forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--json|--no-json]",
                 "       forge-core guide status --phase <phase> [--catalog-dir <path>] [--json|--no-json]",
                 "       forge-core guide migration-audit [--catalog-dir <path>] [--plan-file <yaml>] [--json|--no-json]",
+                "       forge-core guide govern-simulate --bundle-file <yaml> --input-file <yaml> [--legacy-workflow-file <yaml>] [--json|--no-json]",
             ],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
@@ -868,7 +869,13 @@ mod tests {
             COMMAND_GUIDE
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
-            vec!["describe", "decide", "status", "migration-audit"]
+            vec![
+                "describe",
+                "decide",
+                "status",
+                "migration-audit",
+                "govern-simulate"
+            ]
         );
         assert_eq!(
             COMMAND_CONTRACT

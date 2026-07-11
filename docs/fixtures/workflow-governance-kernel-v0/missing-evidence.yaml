@@ -1,0 +1,16 @@
+schema_version: "0.1"
+workflow_governance_evaluation:
+  observation_set_id: observations.build-story.missing-evidence
+  state_version: 9
+  bundle_id: bundle.workflow-governance.kernel-v0
+  policy_id: policy.workflow.build-story
+  current_phase: 4-build-verify
+  target: execute
+  completed_policy_refs:
+    - policy.workflow.write-spec
+  available_capability_refs:
+    - capability.representative-runtime
+  resolved_decision_refs:
+    - decision.product-direction
+  evidence: []
+  completion_assertion: not_asserted

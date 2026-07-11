@@ -1,0 +1,38 @@
+schema_version: "0.1"
+workflow_governance_evaluation:
+  observation_set_id: observations.build-story.human-decision
+  state_version: 11
+  bundle_id: bundle.workflow-governance.kernel-v0
+  policy_id: policy.workflow.build-story
+  current_phase: 4-build-verify
+  target: execute
+  completed_policy_refs:
+    - policy.workflow.write-spec
+  available_capability_refs:
+    - capability.representative-runtime
+  decision_need_refs:
+    - decision.product-direction
+  resolved_decision_refs: []
+  evidence:
+    - evidence_ref: evidence.acceptance.current
+      claim_ref: claim.acceptance-defined
+      evaluator_ref: evaluator.acceptance-inspection
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.runtime.deterministic
+      claim_ref: claim.representative-execution
+      evaluator_ref: evaluator.runtime-verification
+      kind: deterministic_check
+      strength: deterministic_verification
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.runtime.representative
+      claim_ref: claim.representative-execution
+      evaluator_ref: evaluator.runtime-verification
+      kind: representative_execution
+      strength: representative_execution
+      freshness: current
+      outcome: pass
+  completion_assertion: not_asserted

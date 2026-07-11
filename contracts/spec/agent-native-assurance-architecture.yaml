@@ -162,7 +162,11 @@ obligation_engine_module:
     retain Locality.
 
 workflow_migration:
-  current: "Workflows contain directional strings and phase eligibility and are treated as the primary guide catalog."
+  current: >-
+    P5a classifies the complete catalog. P5b provides closed governance
+    contracts, a simulation-only raw-input lane, and an opaque verified-kernel
+    typestate seam. The 110 legacy workflows remain compatibility surfaces
+    until P5c/P5d trusted integration and migration.
   target:
     policy: "what is mandatory"
     obligation: "what must become true"
@@ -174,6 +178,25 @@ workflow_migration:
     Existing workflows remain available as playbooks during migration. Their
     steps stop being implied authority once equivalent obligations and
     evaluators exist.
+  governance_kernel:
+    policy: "closed obligations, claims, evaluators, prerequisites, capabilities, and human-decision rules"
+    simulation_lane: >-
+      Caller-authored YAML produces simulation_only candidate eligibility,
+      progression, completion, blockers, and next actions. It cannot authorize
+      progression, completion, mutation, or Execution Admission.
+    verified_lane: >-
+      Only an opaque trusted snapshot can produce an opaque verified decision;
+      neither type has a raw YAML/JSON authority constructor.
+    trusted_sources:
+      phase_and_state: "durable Project Snapshot"
+      prerequisite_completion: "completion receipts bound to policy and project state"
+      capabilities: "capability registry and probe receipts"
+      human_decisions: "authorized decision receipts with principal and selected alternative"
+      evaluator_evidence: "evaluator receipts carrying evidence provenance"
+      freshness: "computed from trusted receipt and observation times, never caller asserted"
+    playbook_boundary: "copied for agent leverage but excluded from every authority calculation"
+    legacy_boundary: "raw-input CatalogEntry projection is compatibility simulation only"
+    integration_boundary: "P5c implements the live Project Snapshot Adapter and receipt derivation"
 
 domain_pack_model:
   core_owns:
@@ -196,6 +219,8 @@ architecture_modules:
     responsibility: "Derive the Assurance Case, guidance, gaps, and next-best action."
   - module: "Execution Assurance Kernel"
     responsibility: "Admit only authorized, contracted, and safely committable mutations."
+  - module: "Workflow Governance Kernel Module"
+    responsibility: "Simulate candidate guidance from raw input and evaluate opaque verified snapshots without IO or mutation; only the latter may carry governance authority."
   - module: "Evidence Module"
     responsibility: "Record provenance, evaluator results, representativeness, and claim support."
   - module: "Continuity Module"
@@ -224,5 +249,10 @@ open_questions:
     question: "What evidence and independence thresholds trigger a second agent, second model, specialist, or human expert?"
   - id: "AQ-ASSURANCE-004"
     question: "How are Domain Packs admitted, versioned, conflicted, and promoted from local learning without poisoning the core?"
+
+resolved_questions:
   - id: "AQ-ASSURANCE-005"
-    question: "Which existing workflow fields can migrate compatibly and which require a new versioned contract family?"
+    resolution: >-
+      P5a maps every legacy field explicitly; P5b adds a versioned Workflow
+      Governance Policy family while preserving the legacy CatalogEntry and
+      advisory playbook through a derived compatibility Adapter.

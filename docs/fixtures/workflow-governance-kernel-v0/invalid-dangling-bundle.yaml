@@ -1,0 +1,50 @@
+schema_version: "0.1"
+workflow_governance_bundle:
+  id: bundle.workflow-governance.invalid-dangling
+  policies:
+    - id: policy.workflow.build-story
+      compatibility_workflow_id: build-story
+      eligible_phases: [4-build-verify]
+      prerequisite_policy_refs: [policy.workflow.missing]
+      obligations:
+        - id: obligation.story-inspected
+          description: The story was inspected.
+          criticality: required
+          claim_refs: [claim.missing]
+      claims:
+        - id: claim.story-inspected
+          statement: The story was inspected.
+          evaluator_ref: evaluator.missing
+      evaluators:
+        - id: evaluator.story-inspection
+          accepted_evidence_kinds: [artifact_inspection]
+          minimum_strength: inspected_artifact
+          minimum_passing_observations: 1
+          freshness: current_only
+          disproof_policy: reject_any_disproof
+      capability_requirements:
+        - id: capability.story-review
+          kind: evaluator
+          description: Story reviewer.
+          affected_claim_refs: [claim.missing]
+          resolution_options: [Acquire a story reviewer.]
+          blocks_before: execute
+      decision_rules:
+        - id: decision.invalid-claim
+          activation: claim_unresolved
+          claim_ref: claim.missing
+          question: Which path should be selected?
+          reason: product_direction
+          alternatives:
+            - id: alternative.one
+              description: First path.
+              consequences: [First consequence.]
+            - id: alternative.two
+              description: Second path.
+              consequences: [Second consequence.]
+          recommended_alternative_ref: alternative.one
+          blocking: true
+          blocks_before: execute
+      advisory_playbook:
+        id: playbook.build-story
+        steps: []

@@ -31,6 +31,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A full-catalog SHA-256 deletion baseline binds every typed workflow field,
   including procedural steps that are absent from the legacy routing
   projection, so silent content loss blocks P5b readiness.
+- **P5b workflow governance authority boundary.** Closed bundle/evaluation
+  contracts and a pure deterministic Module derive candidate phase/dependency
+  eligibility, progression, claims/obligations, completion, Capability Gaps,
+  Decision Requests, and ranked next actions for simulation.
+- Evidence rules bind accepted kinds, strength floors, freshness, passing
+  thresholds, and disproof behavior. Missing, weak, stale, inconclusive, or
+  contradictory evidence cannot fabricate even a candidate verified claim;
+  caller-asserted completion remains incomplete until simulated obligations
+  are satisfied, and the raw result remains non-authoritative either way.
+- `forge-core guide govern-simulate` exposes explicitly `simulation_only`
+  active/blocked/complete candidates and an optional simulation-only legacy
+  compatibility projection. These raw YAML results cannot unlock progression,
+  completion, mutation, or Execution Admission. A representative
+  `write-spec`/`build-story` corpus proves cyclic/dangling policy rejection,
+  input-order determinism, playbook deletion independence, explicit ignorance,
+  and legacy workflow-id mismatch fail-closed behavior.
+- The live-authority lane is an opaque, non-deserializable kernel typestate
+  that requires a trusted snapshot rather than caller-authored observations.
+  The admitted policy bundle is encapsulated in that snapshot and receives an
+  internally computed canonical digest; verified completion remains bound to
+  project, state version, phase, and readiness target. Serializable audits
+  cannot reconstruct authority.
+  P5c must implement the Project Snapshot Adapter that derives phase/state,
+  prerequisite completion receipts, capability registry/probe receipts,
+  authorized human-decision receipts, evaluator evidence receipts, and
+  computed freshness before migrated workflows receive runtime authority.
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
 - **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.
@@ -71,6 +97,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow migration plan as a non-authoritative migration manifest. P5 remains
   in progress; no workflow execution or legacy retirement authority moved in
   P5a.
+- The repository validator now semantically validates the canonical Workflow
+  Governance Policy bundle, and the clean-check regression anchor advances to
+  126. P5 remains in progress: P5b completes the contract, simulation, and
+  opaque typestate seam only; it does not supply the live trusted-state Adapter,
+  mutate project state, migrate the complete golden path, or retire any legacy
+  field.
 - The P3 conversational resume token now uses the shared canonical Assurance Case token implementation consumed by execution admission.
 - MCP stdio remains read-only by default. Mutation is admitted only for the sole `execute-operation` tool when exact policy scope, registry, loader, Project Link sidecar root, startup reconciliation, and its dedicated enable flag all agree. Incomplete, cross-scope, or broader configurations fail closed.
 - Read-only MCP subprocesses now pin the current executable instead of resolving `forge-core` through `PATH`, run in the canonical repo root, clear the inherited environment before copying a minimal OS/runtime allowlist, and receive null stdin so the JSON-RPC stream cannot leak into child commands.

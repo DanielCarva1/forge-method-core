@@ -1,0 +1,81 @@
+schema_version: "0.1"
+contract: "workflow_governance_policy"
+status: "active"
+purpose: >-
+  Define the closed P5b policy and observation contract family whose Rust
+  evaluator derives deterministic candidate guidance from raw observations and
+  whose same policy semantics can be reused only behind the kernel's opaque
+  trusted-snapshot boundary for verified authority.
+rust_compatibility:
+  bundle_document: "WorkflowGovernanceBundleDocument"
+  evaluation_document: "WorkflowGovernanceEvaluationDocument"
+  serialization: "serde deny_unknown_fields"
+  schema_generation: "schemars"
+  semantic_validator: "validate_workflow_governance_bundle"
+authority:
+  simulation_derives:
+    - "candidate workflow eligibility and prerequisite-policy evaluation"
+    - "candidate claim evaluator binding and obligation satisfaction"
+    - "candidate Capability Gap and Decision Request activation"
+    - "candidate completion and ranked next-action guidance"
+  verified_use: >-
+    Authority exists only when these policy semantics evaluate an opaque
+    TrustedWorkflowGovernanceSnapshot inside forge-core-kernel. Raw YAML,
+    JSON, evaluation documents, and serialized audit projections are never
+    authority.
+  does_not_own:
+    - "agent wording, persona, or implementation strategy"
+    - "project mutation or Execution Admission"
+    - "legacy workflow retirement"
+  playbook_rule: "AdvisoryWorkflowPlaybook contains strategy only and cannot affect authority verdicts."
+required_bundle_fields:
+  - "schema_version"
+  - "workflow_governance_bundle.id"
+  - "workflow_governance_bundle.policies"
+  - "policies[].id"
+  - "policies[].compatibility_workflow_id"
+  - "policies[].eligible_phases"
+  - "policies[].obligations"
+  - "policies[].claims"
+  - "policies[].evaluators"
+  - "policies[].advisory_playbook"
+required_evaluation_fields:
+  - "schema_version"
+  - "workflow_governance_evaluation.observation_set_id"
+  - "workflow_governance_evaluation.state_version"
+  - "workflow_governance_evaluation.bundle_id"
+  - "workflow_governance_evaluation.policy_id"
+  - "workflow_governance_evaluation.current_phase"
+  - "workflow_governance_evaluation.target"
+  - "workflow_governance_evaluation.completion_assertion"
+closed_semantics:
+  evidence_strength_order:
+    - "artifact_presence"
+    - "inspected_artifact"
+    - "deterministic_verification"
+    - "representative_execution"
+    - "independent_confirmation"
+    - "authoritative_acceptance"
+  completion_assertion:
+    - "not_asserted"
+    - "asserted"
+  decision_activation:
+    - "observed_need"
+    - "claim_unresolved"
+    - "claim_disproven"
+semantic_rules:
+  - "all identifiers and refs are non-blank and unique in their declared scope"
+  - "every obligation claim, claim evaluator, capability claim, decision claim, and prerequisite policy ref resolves"
+  - "the prerequisite-policy graph is acyclic"
+  - "non-advisory completion requires every referenced claim to be verified by its bound evaluator"
+  - "weak, stale, inconclusive, or contradictory evidence cannot fabricate verification"
+  - "observed human-decision need must be explicit; policy start alone cannot force contact"
+  - "playbook deletion or replacement cannot change eligibility, progression, claims, obligations, or completion"
+  - "legacy compatibility projection requires an exact workflow-id match"
+  - "raw evaluation output and legacy projection are always simulation_only and cannot authorize progression, completion, mutation, or Execution Admission"
+evidence_basis:
+  - "llm_as_code_2606_15874"
+  - "code_as_agent_harness_2605_18747"
+references:
+  - "contracts/spec/workflow-governance-kernel-v0.yaml"
+  - "contracts/workflow-governance/kernel-v0.yaml"

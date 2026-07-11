@@ -7,14 +7,17 @@
 use crate::project_cmd::resolve_project;
 use forge_core_command_surface::COMMAND_GUIDE;
 use forge_core_contracts::{
-    Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, WorkflowMigrationPlanDocument,
-    ENVELOPE_SCHEMA_VERSION,
+    Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, RepoPath, WorkflowDocument,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
+    WorkflowMigrationPlanDocument, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
 use forge_core_decisions::{
     evaluate_workflow_migration, load_catalog, load_embedded_catalog,
-    load_embedded_workflow_documents, load_workflow_documents, CatalogLoadReport,
-    WorkflowDocumentLoadReport, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
+    load_embedded_workflow_documents, load_workflow_documents,
+    project_legacy_workflow_compatibility, simulate_workflow_governance, CatalogLoadReport,
+    LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport, WorkflowGovernanceSimulation,
+    WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
 };
 use forge_core_decisions::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
@@ -239,6 +242,175 @@ pub fn run_migration_audit(
             audit,
         )
     }
+}
+
+// ============================================================================
+// guide govern-simulate -- inspect a non-authoritative P5b candidate result.
+// ============================================================================
+
+/// Agent-facing projection of one non-authoritative workflow simulation. The
+/// legacy projection is present only when the caller explicitly supplies a
+/// legacy workflow document; it remains simulation-only compatibility output.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub struct GovernSimulationPayload {
+    pub simulation: WorkflowGovernanceSimulation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legacy_projection: Option<LegacyWorkflowGovernanceProjection>,
+}
+
+/// Simulate one closed workflow-governance bundle and caller-authored input.
+///
+/// The output is explicitly `simulation_only`: candidate verdicts can guide
+/// exploration but cannot unlock progression, completion, or execution. Only
+/// malformed or structurally invalid contracts fail with
+/// `invalid_decision_shape`.
+#[must_use]
+pub fn run_govern_simulate(
+    bundle_file: &Path,
+    input_file: &Path,
+    legacy_workflow_file: Option<&Path>,
+) -> CliEnvelope<GovernSimulationPayload> {
+    let bundle_text = match std::fs::read_to_string(bundle_file) {
+        Ok(text) => text,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.govern-simulate",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "cannot read workflow governance bundle {}: {error}",
+                    bundle_file.display()
+                ),
+            );
+        }
+    };
+    let bundle: WorkflowGovernanceBundleDocument = match yaml_serde::from_str(&bundle_text) {
+        Ok(bundle) => bundle,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.govern-simulate",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "workflow governance bundle {} is not a closed valid contract: {error}",
+                    bundle_file.display()
+                ),
+            );
+        }
+    };
+
+    let input_text = match std::fs::read_to_string(input_file) {
+        Ok(text) => text,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.govern-simulate",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "cannot read workflow governance input {}: {error}",
+                    input_file.display()
+                ),
+            );
+        }
+    };
+    let input: WorkflowGovernanceEvaluationDocument = match yaml_serde::from_str(&input_text) {
+        Ok(input) => input,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.govern-simulate",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "workflow governance input {} is not a closed valid contract: {error}",
+                    input_file.display()
+                ),
+            );
+        }
+    };
+
+    let simulation = match simulate_workflow_governance(&bundle, &input) {
+        Ok(simulation) => simulation,
+        Err(rejection) => {
+            let details = rejection
+                .issues
+                .iter()
+                .map(|issue| format!("{:?} at {}: {}", issue.code, issue.path, issue.message))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return CliEnvelope::err(
+                "guide.govern-simulate",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "workflow governance contracts were structurally rejected ({} issue(s)): {details}",
+                    rejection.issues.len()
+                ),
+            );
+        }
+    };
+
+    let legacy_projection = match legacy_workflow_file {
+        Some(path) => {
+            let text = match std::fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(error) => {
+                    return CliEnvelope::err(
+                        "guide.govern-simulate",
+                        ExitReason::InvalidDecisionShape,
+                        format!("cannot read legacy workflow {}: {error}", path.display()),
+                    );
+                }
+            };
+            let document: WorkflowDocument = match yaml_serde::from_str(&text) {
+                Ok(document) => document,
+                Err(error) => {
+                    return CliEnvelope::err(
+                        "guide.govern-simulate",
+                        ExitReason::InvalidDecisionShape,
+                        format!(
+                            "legacy workflow {} is not a closed valid WorkflowDocument: {error}",
+                            path.display()
+                        ),
+                    );
+                }
+            };
+            let workflow = document.workflow;
+            let entry = CatalogEntry {
+                id: workflow.id,
+                phases: workflow.phases,
+                workflow_ref: legacy_workflow_ref(path),
+                triggers: workflow.trigger,
+                prerequisites: workflow.inputs,
+                outputs: workflow.outputs,
+            };
+            match project_legacy_workflow_compatibility(&simulation, &entry) {
+                Ok(projection) => Some(projection),
+                Err(error) => {
+                    return CliEnvelope::err(
+                        "guide.govern-simulate",
+                        ExitReason::InvalidDecisionShape,
+                        format!(
+                            "legacy compatibility projection was rejected at {}: {}",
+                            error.issue.path, error.issue.message
+                        ),
+                    );
+                }
+            }
+        }
+        None => None,
+    };
+
+    CliEnvelope::ok(
+        "guide.govern-simulate",
+        GovernSimulationPayload {
+            simulation,
+            legacy_projection,
+        },
+    )
+}
+
+fn legacy_workflow_ref(path: &Path) -> RepoPath {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    let marker = "contracts/workflows/";
+    let reference = normalized
+        .rfind(marker)
+        .map_or(normalized.as_str(), |index| &normalized[index..]);
+    RepoPath(reference.to_owned())
 }
 
 // ============================================================================
@@ -586,6 +758,7 @@ pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
         "decide" => run_guide_decide(&args[2..]),
         "status" => run_guide_status(&args[2..]),
         "migration-audit" => run_guide_migration_audit(&args[2..]),
+        "govern-simulate" => run_guide_govern_simulate(&args[2..]),
         "--help" | "-h" | "help" => {
             print_guide_usage();
             Ok(())
@@ -888,6 +1061,79 @@ pub fn run_guide_migration_audit(args: &[String]) -> Result<(), ExitError> {
     )
 }
 
+/// Runs the P5b deterministic, non-authoritative workflow simulation adapter.
+///
+/// # Errors
+///
+/// Returns a usage error for missing/unrecognized arguments and propagates an
+/// `invalid_decision_shape` envelope when either closed contract, its semantic
+/// structure, or an explicitly requested legacy projection is invalid.
+pub fn run_guide_govern_simulate(args: &[String]) -> Result<(), ExitError> {
+    let mut bundle_file = None;
+    let mut input_file = None;
+    let mut legacy_workflow_file = None;
+    let mut want_json = true;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--bundle-file" => {
+                index += 1;
+                bundle_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "govern-simulate",
+                    "bundle-file",
+                )?));
+            }
+            "--input-file" => {
+                index += 1;
+                input_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "govern-simulate",
+                    "input-file",
+                )?));
+            }
+            "--legacy-workflow-file" => {
+                index += 1;
+                legacy_workflow_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "govern-simulate",
+                    "legacy-workflow-file",
+                )?));
+            }
+            "--json" => want_json = true,
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!(
+                    "{}",
+                    guide_command_surface_usage_line_for("govern-simulate")
+                );
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("govern-simulate", other)),
+        }
+        index += 1;
+    }
+
+    let bundle_file = bundle_file.ok_or_else(|| {
+        let message = "guide govern-simulate: --bundle-file is required";
+        eprintln!("{message}");
+        guide_invalid_value_with_usage("govern-simulate", message)
+    })?;
+    let input_file = input_file.ok_or_else(|| {
+        let message = "guide govern-simulate: --input-file is required";
+        eprintln!("{message}");
+        guide_invalid_value_with_usage("govern-simulate", message)
+    })?;
+
+    emit_guide(
+        run_govern_simulate(&bundle_file, &input_file, legacy_workflow_file.as_deref()),
+        want_json,
+    )
+}
+
 /// Resolve the authoritative current phase for a project root. Reads
 /// `<state_root>/state.yaml` via `resolve_project`; on any failure or missing
 /// file, returns `"1-discovery"` as the funnel entry point. This makes the
@@ -1021,7 +1267,13 @@ mod tests {
             message.contains(projected),
             "error should project {subcommand} Command Surface usage {projected:?}: {message}"
         );
-        for sibling in ["describe", "decide", "status"] {
+        for sibling in [
+            "describe",
+            "decide",
+            "status",
+            "migration-audit",
+            "govern-simulate",
+        ] {
             if sibling != subcommand {
                 let sibling_usage = COMMAND_GUIDE
                     .usage_line_for_subcommand(sibling)
@@ -1255,13 +1507,19 @@ mod tests {
         }
         assert_eq!(
             guide_subcommand_hint(),
-            "describe | decide | status | migration-audit"
+            "describe | decide | status | migration-audit | govern-simulate"
         );
     }
 
     #[test]
     fn guide_subcommand_help_lookup_projects_full_command_surface_lines() {
-        for subcommand in ["describe", "decide", "status"] {
+        for subcommand in [
+            "describe",
+            "decide",
+            "status",
+            "migration-audit",
+            "govern-simulate",
+        ] {
             let usage = guide_command_surface_usage_line_for(subcommand);
             assert_eq!(
                 Some(usage),
@@ -1307,6 +1565,13 @@ mod tests {
         // the authoritative `state.yaml` phase (or `1-discovery` when no root
         // is provided). Only `--decision-file` is required on `decide`.
         run_guide_status(&args(&[])).expect("status falls back to 1-discovery");
+
+        let govern_error = run_guide_govern_simulate(&args(&[])).expect_err("missing bundle file");
+        assert_guide_error_projects_only_subcommand_usage(
+            &govern_error,
+            "govern-simulate",
+            "guide govern-simulate: --bundle-file is required",
+        );
     }
 
     #[test]
@@ -1355,6 +1620,25 @@ mod tests {
             .expect_err("authority-like flag must fail");
         assert!(error.to_string().contains("unrecognized argument"));
         assert!(error.to_string().contains("guide migration-audit"));
+    }
+
+    #[test]
+    fn govern_simulate_parser_requires_both_closed_contracts_and_rejects_unknown_flags() {
+        let missing_input = run_guide_govern_simulate(&args(&["--bundle-file", "bundle.yaml"]))
+            .expect_err("input file is required");
+        assert_guide_error_projects_only_subcommand_usage(
+            &missing_input,
+            "govern-simulate",
+            "guide govern-simulate: --input-file is required",
+        );
+
+        let unknown = run_guide_govern_simulate(&args(&["--invent-completion"]))
+            .expect_err("unknown authority flag");
+        assert_guide_error_projects_only_subcommand_usage(
+            &unknown,
+            "govern-simulate",
+            "guide govern-simulate: unrecognized argument '--invent-completion'",
+        );
     }
 
     // ------------------------------------------------------------------------

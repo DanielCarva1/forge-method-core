@@ -87,4 +87,5 @@ pub enum FamilyKind {
     CoordinationEval,
     HealthRecovery,
     MigrationManifest,
+    WorkflowGovernancePolicy,
 }

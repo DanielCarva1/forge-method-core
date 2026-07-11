@@ -37,6 +37,7 @@ pub mod guide_validation;
 pub mod isolation;
 pub mod obligation_engine;
 pub mod phase_transition;
+pub mod workflow_governance;
 pub mod workflow_migration;
 
 pub use catalog::{
@@ -97,6 +98,15 @@ pub use obligation_engine::{
 pub use coordination_eval::{
     coordination_fixture_gaps, score_coordination, validate_coordination_contract,
     CoordinationOutcome, CoordinationScore, CoordinationValidationError, CoordinationVerdict,
+};
+pub use workflow_governance::{
+    project_legacy_workflow_compatibility, simulate_workflow_governance,
+    validate_workflow_governance_bundle, LegacyWorkflowGovernanceProjection,
+    LegacyWorkflowProjectionAuthority, LegacyWorkflowProjectionError, WorkflowClaimResult,
+    WorkflowClaimResultStatus, WorkflowCompletionVerdict, WorkflowEligibilityVerdict,
+    WorkflowGovernanceIssue, WorkflowGovernanceIssueCode, WorkflowGovernanceRejection,
+    WorkflowGovernanceSimulation, WorkflowGovernanceSimulationAuthority, WorkflowGovernanceStatus,
+    WorkflowObligationResult, WorkflowProgressionVerdict,
 };
 pub use workflow_migration::{
     evaluate_workflow_migration, LegacyWorkflowFieldCounts, WorkflowDeletionBaseline,

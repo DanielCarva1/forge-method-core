@@ -33,6 +33,7 @@ pub mod telemetry;
 pub mod tool_effect;
 pub mod verification_goal;
 pub mod workflow;
+pub mod workflow_governance;
 pub mod workflow_migration;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
@@ -101,6 +102,16 @@ pub use research::{
 };
 pub use typed_failure::TypedFailure;
 pub use workflow::{Workflow, WorkflowDocument};
+pub use workflow_governance::{
+    AdvisoryWorkflowPlaybook, WorkflowCapabilityRequirement, WorkflowClaimPolicy,
+    WorkflowCompletionAssertion, WorkflowDecisionActivation, WorkflowDecisionRule,
+    WorkflowDisproofPolicy, WorkflowEvaluatorBinding, WorkflowEvidenceFreshness,
+    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
+    WorkflowEvidenceStrength, WorkflowFreshnessRequirement, WorkflowGovernanceBundle,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy, WorkflowObligationPolicy,
+    WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+};
 pub use workflow_migration::{
     LegacyWorkflowField, LegacyWorkflowFieldMapping, LegacyWorkflowFieldRole,
     WorkflowCompatibilityField, WorkflowCompatibilityProjectionPolicy, WorkflowGoldenPathCoverage,

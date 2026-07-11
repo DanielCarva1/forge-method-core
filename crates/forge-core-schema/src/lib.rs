@@ -5,6 +5,7 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
     WorkflowMigrationPlanDocument,
 };
 use schemars::{schema_for, JsonSchema};
@@ -144,6 +145,18 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             Some("workflow_migration_plan"),
             "read-only migration classification policy; does not authorize execution or retirement",
         ),
+        schema_artifact::<WorkflowGovernanceBundleDocument>(
+            "workflow_governance_bundle",
+            "WorkflowGovernanceBundleDocument",
+            Some("workflow_governance_bundle"),
+            "governance policy; raw-document evaluation produces simulation-only candidate guidance",
+        ),
+        schema_artifact::<WorkflowGovernanceEvaluationDocument>(
+            "workflow_governance_evaluation",
+            "WorkflowGovernanceEvaluationDocument",
+            Some("workflow_governance_evaluation"),
+            "untrusted observation proposal; output cannot create authority, completion, progression, or mutation",
+        ),
     ]
 }
 
@@ -282,6 +295,12 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"
+        }
+        "workflow_governance_bundle" => {
+            "raw policy evaluation is simulation-only; verified use requires an opaque trusted kernel snapshot"
+        }
+        "workflow_governance_evaluation" => {
+            "caller observations are untrusted proposals; candidate completion is not authority"
         }
         _ => "generated view; Rust validation remains authority",
     }

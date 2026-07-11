@@ -278,6 +278,17 @@ contract_family_inventory:
       evidence_refs:
         - "llm_as_code_2606_15874"
         - "code_as_agent_harness_2605_18747"
+    - id: "workflow_governance_policy"
+      family_kind: "workflow_governance_policy"
+      schema_ref: "contracts/workflow-governance/workflow-governance-contract-v0.yaml"
+      instance_globs:
+        - "contracts/workflow-governance/*.yaml"
+      validator_function: "validate_workflow_governance_bundle"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
     - id: "assurance_case"
       family_kind: "assurance_case"
       schema_ref: "contracts/assurance/assurance-case-contract-v0.yaml"

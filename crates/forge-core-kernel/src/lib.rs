@@ -84,6 +84,7 @@ mod planning;
 mod prepared_execution;
 mod staging;
 mod wal_orchestration;
+pub mod workflow_governance;
 
 // V3.A: the two built-in mutation gates (risk-audit, citation). Public so the
 // CLI can construct them from config and attach them to the execution context.
@@ -99,6 +100,7 @@ pub use planning::*;
 pub use prepared_execution::*;
 pub use staging::*;
 pub use wal_orchestration::*;
+pub use workflow_governance::*;
 
 // Shared private helper used by both `staging` (`stage_operation_effects`
 //) and `planning` (`preview_operation_from_plan`, `preview_runtime_plan`).

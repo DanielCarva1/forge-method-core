@@ -1,0 +1,54 @@
+schema_version: "0.1"
+workflow_governance_bundle:
+  id: bundle.workflow-governance.invalid-cycle
+  policies:
+    - id: policy.workflow.write-spec
+      compatibility_workflow_id: write-spec
+      eligible_phases: [2-specification]
+      prerequisite_policy_refs: [policy.workflow.build-story]
+      obligations:
+        - id: obligation.specification-inspected
+          description: The specification was inspected.
+          criticality: required
+          claim_refs: [claim.specification-inspected]
+      claims:
+        - id: claim.specification-inspected
+          statement: The specification was inspected.
+          evaluator_ref: evaluator.specification-inspection
+      evaluators:
+        - id: evaluator.specification-inspection
+          accepted_evidence_kinds: [artifact_inspection]
+          minimum_strength: inspected_artifact
+          minimum_passing_observations: 1
+          freshness: current_only
+          disproof_policy: reject_any_disproof
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.write-spec
+        steps: []
+    - id: policy.workflow.build-story
+      compatibility_workflow_id: build-story
+      eligible_phases: [4-build-verify]
+      prerequisite_policy_refs: [policy.workflow.write-spec]
+      obligations:
+        - id: obligation.story-inspected
+          description: The story was inspected.
+          criticality: required
+          claim_refs: [claim.story-inspected]
+      claims:
+        - id: claim.story-inspected
+          statement: The story was inspected.
+          evaluator_ref: evaluator.story-inspection
+      evaluators:
+        - id: evaluator.story-inspection
+          accepted_evidence_kinds: [artifact_inspection]
+          minimum_strength: inspected_artifact
+          minimum_passing_observations: 1
+          freshness: current_only
+          disproof_policy: reject_any_disproof
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.build-story
+        steps: []

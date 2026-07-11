@@ -630,6 +630,7 @@ fn add_contract_definitions(index: &mut ReferenceIndex) {
         "contracts/requests/request-contract-v0.yaml",
         "contracts/recovery/health-recovery-contract-v0.yaml",
         "contracts/runtimes/runtime-handoff-contract-v0.yaml",
+        "contracts/workflow-governance/workflow-governance-contract-v0.yaml",
     ] {
         index.insert(reference, ReferenceKind::ContractDefinition);
     }

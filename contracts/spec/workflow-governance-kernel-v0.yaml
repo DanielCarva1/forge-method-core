@@ -1,0 +1,124 @@
+schema_version: "0.1"
+spec: "workflow_governance_kernel_v0"
+status: "p5b_implemented"
+purpose: >-
+  Move workflow structure out of legacy step ordering while preventing
+  caller-authored observations from becoming authority. P5b defines closed
+  policy contracts, a simulation-only lane, and an opaque verified-kernel
+  typestate seam; P5c supplies the live trusted Project Snapshot Adapter.
+
+module:
+  name: "Workflow Governance Kernel Module"
+  interfaces:
+    simulation:
+      - "WorkflowGovernanceBundleDocument"
+      - "WorkflowGovernanceEvaluationDocument"
+      - "validate_workflow_governance_bundle"
+      - "simulate_workflow_governance"
+      - "project_legacy_workflow_compatibility"
+      - "forge-core guide govern-simulate"
+    verified:
+      - "TrustedWorkflowGovernanceSnapshot"
+      - "VerifiedWorkflowGovernanceDecision"
+      - "evaluate_verified_workflow_governance"
+  depth: >-
+    One closed bundle plus raw observations can produce deterministic candidate
+    guidance only. Executable governance authority requires an opaque trusted
+    snapshot and produces an opaque verified decision. Neither lane performs IO
+    or project mutation.
+
+authority_model:
+  raw_input: >-
+    Caller-authored phase, state, prerequisite completion, capability,
+    decision, evidence, outcome, and freshness fields are untrusted proposals.
+  simulation_result: >-
+    Always simulation_only. Candidate eligibility, progression, completion,
+    gaps, requests, claims, obligations, and legacy projections cannot unlock
+    progression, completion, mutation, or Execution Admission.
+  verified_result: >-
+    Opaque and non-deserializable. It can be constructed only by the kernel
+    from an opaque TrustedWorkflowGovernanceSnapshot supplied by a trusted
+    Adapter, never from YAML/JSON or a simulation result.
+  policy: "defines governed outcomes and the receipt rules that bind them"
+  playbook: "advisory strategy only; deleting or replacing it cannot change authority verdicts"
+
+trusted_snapshot_sources:
+  policy_bundle:
+    source: "repository-owned admitted policy bundle"
+    rule: "load inside the Adapter/kernel and bind its canonical digest; never accept a caller-selected bundle"
+  phase_and_state:
+    source: "durable Project Snapshot"
+    rule: "derive current phase and state; never accept caller-selected values"
+  prerequisite_completion:
+    source: "completion receipts"
+    rule: "bind every receipt to project, policy, revision, and durable state"
+  capabilities:
+    source: "capability registry and probe receipts"
+    rule: "derive availability and scope from registered/probed capability evidence"
+  human_decisions:
+    source: "authorized human decision receipts"
+    rule: "bind principal, decision ref, selected alternative, scope, and time"
+  evaluator_evidence:
+    source: "evaluator evidence receipts"
+    rule: "bind evaluator outcome to evidence provenance, subject, and observation time"
+  freshness:
+    source: "trusted receipt and observation timestamps"
+    rule: "compute freshness against policy; never accept a caller freshness assertion"
+  p5c_boundary: >-
+    P5c implements the live Project Snapshot Adapter and receipt derivation.
+    Until then, no CLI/raw-document path yields verified governance authority.
+
+simulation_evaluation:
+  structural_rejection:
+    - "unknown schema, bundle, policy, phase, claim, evaluator, capability, or decision reference"
+    - "duplicate ids/refs, blank values, malformed evaluators/decisions, or cyclic policy dependencies"
+    - "evidence bound to any evaluator other than the claim's declared evaluator"
+  candidate_verdicts:
+    eligibility: "eligible phase plus every proposed prerequisite policy completed"
+    progression: "candidate eligible and free of candidate blockers due at the requested target"
+    completion: "candidate progression allowed and every required/critical obligation appears satisfied"
+  completion_assertion: >-
+    An agent completion assertion is checked inside the simulation but never
+    trusted. Even a candidate complete result remains simulation_only.
+
+ignorance_handling:
+  capability_gap: >-
+    A declared capability absent from observations becomes an explicit
+    candidate Capability Gap with affected claims and resolution options.
+  decision_request: >-
+    A policy-defined irreducible value/preference/cost/risk/authority decision
+    becomes a candidate Decision Request only when its activation rule is due.
+  next_actions: >-
+    Simulation deterministically ranks eligibility repair, capability
+    acquisition, human decisions, correction of disproven claims, evidence
+    acquisition, or candidate progression. It does not script agent wording.
+
+compatibility:
+  guarantee: "the original CatalogEntry remains semantically identical"
+  authority: "simulation_compatibility_only"
+  mismatch: "a governed workflow cannot be projected onto another legacy workflow id"
+  migration_boundary: >-
+    P5b proves the contracts, simulation, and opaque typestate seam. P5c adds
+    trusted snapshot/receipt integration and migrates the selected golden path.
+
+adversarial_requirements:
+  - "fabricated raw complete input can produce only a simulation_only candidate"
+  - "simulation output cannot construct or substitute for an opaque verified decision"
+  - "missing or contradictory evidence cannot produce candidate verified claims"
+  - "dependency cycles, dangling refs, blanks, and duplicates reject the policy bundle"
+  - "playbook deletion/replacement cannot alter candidate semantic evaluation"
+  - "legacy workflow id mismatch rejects compatibility projection"
+
+non_goals:
+  - "no model-specific prompt, persona, or word-for-word dialogue"
+  - "no expression language or caller-authored executable code"
+  - "no raw-input progression, completion, mutation, or Execution Admission authority"
+  - "no live Project Snapshot Adapter or receipt derivation before P5c"
+  - "no claim that all 110 workflows are executable in P5b"
+  - "no legacy field retirement before P5d evidence and review"
+
+references:
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/spec/workflow-migration-foundation-v0.yaml"
+  - "contracts/spec/agent-native-assurance-architecture.yaml"
+  - "contracts/policies/agent-native-product-constitution.yaml"

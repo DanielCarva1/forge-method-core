@@ -24,8 +24,9 @@ use forge_core_contracts::{
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
-    ToolEffectContractDocument,
+    ToolEffectContractDocument, WorkflowGovernanceBundleDocument,
 };
+use forge_core_decisions::{validate_workflow_governance_bundle, WorkflowGovernanceIssue};
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
     validate_assurance_case, validate_claim, validate_claim_cross_references, validate_command,
@@ -291,10 +292,45 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_operation_fixtures(root, &index, &mut summary);
         validate_side_contracts(root, &index, &mut summary);
         validate_runtime_contracts(root, &index, &mut summary);
+        validate_workflow_governance_contracts(root, &mut summary);
     }
 
     summary.finish();
     summary
+}
+
+/// Validate the core-owned workflow policy bundles. P5b registers
+/// the canonical kernel bundle only; consumer and domain-pack bundles are not
+/// admitted by this pass yet and remain work for P5c/P6. The check therefore
+/// stays behind the core-only boundary in [`run_validate`].
+fn validate_workflow_governance_contracts(root: &Path, summary: &mut ValidateSummary) {
+    let dir = root.join("contracts/workflow-governance");
+    for path in yaml_files(&dir, summary) {
+        if path.file_name().and_then(|value| value.to_str())
+            == Some("workflow-governance-contract-v0.yaml")
+        {
+            continue;
+        }
+        if let Some(bundle) = read_yaml::<WorkflowGovernanceBundleDocument>(&path, summary) {
+            let issues = validate_workflow_governance_bundle(&bundle);
+            summary.add_report(
+                &format!("workflow_governance_bundle:{}", repo_relative(root, &path)),
+                workflow_governance_validation_report(issues),
+            );
+        }
+    }
+}
+
+fn workflow_governance_validation_report(issues: Vec<WorkflowGovernanceIssue>) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    for issue in issues {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            issue.path,
+            format!("workflow governance {:?}: {}", issue.code, issue.message),
+        ));
+    }
+    report
 }
 
 fn validate_operation_fixtures(root: &Path, index: &ReferenceIndex, summary: &mut ValidateSummary) {
@@ -764,6 +800,18 @@ mod tests {
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn workflow_governance_issues_keep_typed_kind_in_canonical_diagnostic() {
+        let report = workflow_governance_validation_report(vec![WorkflowGovernanceIssue {
+            code: forge_core_decisions::WorkflowGovernanceIssueCode::DependencyCycle,
+            path: "workflow_governance_bundle.policies".to_owned(),
+            message: "cycle detected".to_owned(),
+        }]);
+        let diagnostic = &report.diagnostics()[0];
+        assert_eq!(diagnostic.code, DiagnosticCode::WorkflowGovernanceInvalid);
+        assert!(diagnostic.message.contains("DependencyCycle"));
     }
 
     #[test]
