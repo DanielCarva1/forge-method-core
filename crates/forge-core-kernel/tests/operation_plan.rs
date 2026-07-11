@@ -773,6 +773,35 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
 }
 
 #[test]
+fn legacy_execution_blocks_multiple_effects_before_any_side_effect() {
+    let document = fixture("read-write-conflict-notify.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let temp_root = fresh_temp_root("operation-wide-required");
+    let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
+
+    let execution = forge_core_kernel::execute_operation(
+        &document,
+        RuntimeReadSnapshot::new(&index),
+        &[],
+        &[],
+        &[],
+        &context,
+    )
+    .expect("execute_operation should not be rejected by gates");
+
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::OperationWideCommitRequired]
+    );
+    assert!(execution.command_executions.is_empty());
+    assert_eq!(execution.command_evidence_appended, 0);
+    assert!(execution.effect_transactions.is_empty());
+    assert!(execution.effect_applications.is_empty());
+    assert!(!temp_root.join(".forge-method").exists());
+}
+
+#[test]
 fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock() {
     let document = fixture("mechanical-story-execute.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");

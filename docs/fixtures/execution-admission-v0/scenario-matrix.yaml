@@ -68,10 +68,10 @@ scenarios:
     mutation: "per_effect_commit"
     expected_status: "blocked"
     expected_issue: "commit_scope_insufficient"
-  - id: "block_operation_wide_wal_until_runtime_support"
+  - id: "admit_operation_wide_wal_with_complete_scope"
     mutation: "operation_wide_commit"
-    expected_status: "blocked"
-    expected_issue: "commit_strategy_unsupported"
+    expected_status: "admitted"
+    expected_issue: null
   - id: "block_saga_until_runtime_support"
     mutation: "saga_commit"
     expected_status: "blocked"

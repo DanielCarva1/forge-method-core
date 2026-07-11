@@ -79,6 +79,7 @@ use tracing::instrument;
 
 mod evidence;
 pub mod gate;
+mod operation_effect_bundle;
 mod planning;
 mod prepared_execution;
 mod staging;
@@ -93,6 +94,7 @@ pub mod builtin_gates;
 pub use builtin_gates::*;
 pub use evidence::*;
 pub use gate::*;
+pub use operation_effect_bundle::*;
 pub use planning::*;
 pub use prepared_execution::*;
 pub use staging::*;

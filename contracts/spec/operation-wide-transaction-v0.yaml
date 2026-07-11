@@ -1,0 +1,93 @@
+schema_version: "0.1"
+spec: "operation_wide_transaction_v0"
+status: "p4b6a_rust_substrate"
+purpose: >-
+  Prevent a multi-effect operation from becoming partially applied by compiling
+  its complete ordered file-backed effect set into one internal effect-store
+  transaction with one lock, one WAL Begin/Commit pair, and one recovery domain.
+
+architecture_decision:
+  selected: "operation_wide_wal"
+  applies_when:
+    - "the complete operation effect set is known before commit"
+    - "every target is file-backed by the same local effect store"
+    - "all writes can share one lock and before-image WAL"
+  rationale:
+    - "local writes can provide atomic commit instead of compensating already committed steps"
+    - "one durable commit marker gives recovery a single operation outcome"
+    - "the existing effect store already restores before-images for an incomplete transaction"
+  saga_deferred_for:
+    - "external systems that cannot join the local transaction"
+    - "irreversible or long-lived effects that require explicit typed compensation"
+    - "effects whose independent commit domains make a true atomic WAL impossible"
+
+rust_interface:
+  module: "forge_core_kernel::operation_effect_bundle"
+  constructor: "compose_operation_effect_bundle"
+  commit: "apply_operation_effect_bundle_with_wal_lock"
+  output: "OperationEffectBundle"
+  internal_effect_kind: "operation_transaction"
+  visibility: "public Rust API; internal envelope is never caller authority"
+
+composition_invariants:
+  - "at least two effects are required"
+  - "loaded refs exactly equal the operation-declared ordered effect refs"
+  - "each effect contract_ref equals its corresponding declared ref"
+  - "operation and every source effect pass semantic validation"
+  - "every effect binds the same operation and actor"
+  - "effect ids are unique"
+  - "only file-backed target kinds are accepted"
+  - "physical target resolution is identical to the effect store"
+  - "case-folded, separator-normalized, logical/physical write aliases cannot overlap"
+  - "conflicting reads fail closed"
+  - "source effect ids and refs remain separately available for provenance"
+
+atomicity_guarantees:
+  - "constituent writes are submitted as one ToolEffect transaction"
+  - "the effect store acquires one effect lock for the complete write set"
+  - "one WAL Begin contains before-images for every constituent write"
+  - "an immediate later-write failure rolls back earlier constituent writes"
+  - "recovery without the single Commit marker restores every constituent before-image"
+
+fail_closed_compatibility:
+  legacy_runtime: >-
+    The pre-prepared execute_operation entrypoint now rejects two or more
+    staged effects before command evidence or project mutation. It no longer
+    commits effects independently and risks silent partial application.
+  trusted_single_effect_path: >-
+    The prepared kernel and public MCP deployment remain exact single-effect in
+    P4b.6a. They do not silently adopt this substrate without new authority,
+    provenance, payload, recovery, and deployment-policy bindings.
+
+verification:
+  focused_tests:
+    - "deterministic composition preserves constituent identity"
+    - "reordered documents fail against declared refs"
+    - "case and separator aliases fail closed"
+    - "ArtifactId/FilePath physical aliases fail closed"
+    - "later-write failure rolls back the complete operation"
+    - "missing Commit recovery rolls back the complete operation"
+    - "legacy multi-effect execution emits zero side effects"
+    - "Execution Admission admits only multi-effect whole-operation WAL with verified guarantees"
+
+remaining_boundary:
+  next: "P4b.6b prepared-kernel operation-wide commit integration"
+  not_yet_claimed:
+    - "trusted prepared execution of multiple effects"
+    - "public MCP multi-effect mutation"
+    - "typed saga runtime or compensation execution"
+    - "atomicity across external or irreversible systems"
+
+references:
+  - id: "sqlite_atomic_commit"
+    url: "https://www2.sqlite.org/atomiccommit.html"
+    supports: "A rollback journal plus durable commit point provides atomic local commit and crash recovery."
+  - id: "sqlite_transactional"
+    url: "https://www.sqlite.org/transactional.html"
+    supports: "Transactions remain atomic across program, operating-system, and power failures."
+  - id: "sagas_paper"
+    url: "https://doi.org/10.1145/38713.38742"
+    supports: "A saga is a sequence of independently committed transactions with compensating transactions."
+  - id: "sagas_technical_report"
+    url: "https://www.cs.princeton.edu/research/techreps/598"
+    supports: "Compensation is appropriate when a long-lived transaction cannot remain one atomic transaction."

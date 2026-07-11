@@ -305,18 +305,35 @@ phases:
           Serialized principal identity is evidence, never authority. Historical
           agent-only claims remain readable for coordination but cannot authorize
           trusted mutation. Operation-wide/saga semantics remain separate work.
+    completed_p4b6_checkpoints:
+      - id: "P4b.6a-operation-wide-wal-substrate"
+        delivers:
+          - "architecture decision selecting one operation-wide WAL for complete local file-backed effect sets"
+          - "deterministic OperationEffectBundle preserving constituent refs and ids"
+          - "semantic, actor, operation, ordered-ref, and unique-id binding"
+          - "store-equivalent physical target resolution and cross-kind alias overlap rejection"
+          - "one-lock, one-Begin/Commit, complete before-image rollback and crash-recovery proof"
+          - "pure Execution Admission support for verified multi-effect whole-operation WAL scope"
+          - "legacy multi-effect executor fail-closed before command evidence or project mutation"
+        boundary: >-
+          This is a Rust transaction and policy substrate. The opaque prepared
+          kernel and public MCP deployment remain exact single-effect until
+          P4b.6b/P4b.6c bind payloads, provenance, replay, recovery, policy, and
+          real-client evidence to the complete operation.
     current_program:
-      id: "P4b.5-external-replay-and-principal-propagation"
-      status: "completed"
-      scope:
-        - "externally protect replay epoch/head against whole-pair rollback"
-        - "propagate Execution Principal through claims, traces, WAL, and evidence"
-    next_slice:
       id: "P4b.6-operation-wide-atomicity"
+      status: "in_progress"
+      scope:
+        - "commit all local file-backed effects in one operation-wide WAL transaction"
+        - "preserve authority, replay, provenance, and recovery across the complete effect set"
+    next_slice:
+      id: "P4b.6b-prepared-kernel-operation-wide-integration"
       status: "not_started"
       scope:
-        - "select and implement operation-wide transaction semantics or complete typed saga compensation"
+        - "prepare and bind the complete ordered effect/payload set under opaque verified authority"
+        - "commit one operation-wide envelope with complete provenance and replay reconciliation"
     following_slices:
+      - "P4b.6c trusted MCP policy, loaders, readiness, and official-client multi-effect proof"
       - "P5 workflow migration"
       - "P6 domain-pack ecosystem"
     release_blockers: []
@@ -377,10 +394,12 @@ first_executable_slice:
     - "P4b.4d conversational readiness, generated client configuration, replacement-agent resume, and official rmcp applied sidecar mutation proof"
     - "P4b.5a operator-protected external replay head with policy binding, automatic runtime advancement, and whole-pair rollback detection"
     - "P4b.5b verified Execution Principal propagation through claims, conflict attribution, Admission, effect-WAL provenance, durable traces, receipts, and MCP evidence"
+    - "P4b.6a operation-wide WAL decision, deterministic effect bundle, atomic rollback/recovery tests, Admission support, and legacy partial-commit fail-closed guard"
   next_action: >-
-    P4b.5 is complete. The next planned authority slice is P4b.6: select and
-    implement operation-wide transaction semantics or complete typed saga
-    compensation before claiming multi-effect atomicity.
+    P4b.6a is complete as a Rust substrate. Next implement P4b.6b: bind the
+    complete ordered effect and payload set inside the opaque prepared kernel,
+    commit it once with operation-wide provenance, and reconcile replay without
+    enabling public MCP mutation yet.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

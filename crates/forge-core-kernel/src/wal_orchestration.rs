@@ -232,6 +232,9 @@ pub enum RuntimeOperationExecutionReason {
     MissingOptionalCommandContract,
     RequiredCommandUnsuccessful,
     CommandEvidenceAppendFailed,
+    /// Legacy execution cannot apply multiple effects as separate commits.
+    /// Use the operation-wide commit path so the whole write set shares one WAL.
+    OperationWideCommitRequired,
     MissingEffectContract,
     EffectTransactionBlocked,
     EffectApplicationFailed,
@@ -378,6 +381,25 @@ fn execute_operation_inner(
         reasons.push(RuntimeOperationExecutionReason::OperationCompleted);
         return RuntimeOperationExecution {
             status: RuntimeOperationExecutionStatus::Completed,
+            operation_id,
+            plan,
+            staging: Some(staging),
+            command_executions: Vec::new(),
+            command_evidence_appended: 0,
+            effect_transactions: Vec::new(),
+            effect_applications: Vec::new(),
+            reasons,
+        };
+    }
+
+    // The legacy executor historically committed each effect independently.
+    // A later failure could therefore leave an operation partially applied.
+    // Until this entrypoint is wired to the operation-wide bundle, reject the
+    // unsafe shape before command evidence or any file mutation is emitted.
+    if staging.effect_contract_refs.len() > 1 {
+        reasons.push(RuntimeOperationExecutionReason::OperationWideCommitRequired);
+        return RuntimeOperationExecution {
+            status: RuntimeOperationExecutionStatus::Blocked,
             operation_id,
             plan,
             staging: Some(staging),

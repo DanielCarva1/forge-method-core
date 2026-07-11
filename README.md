@@ -526,10 +526,49 @@ single-use replay, claim/gate revision, and commit-guarantee observations. Any
 deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
-P4b now consumes this decision in the explicit trusted single-effect MCP path:
-the kernel repeats mutable-authority Admission under retained locks immediately
-before the effect WAL begins. Read-only remains the default, and broader
-operation-wide/saga mutation is not claimed.
+P4b consumes this decision in the explicit trusted single-effect MCP path: the
+kernel repeats mutable-authority Admission under retained locks immediately
+before the effect WAL begins. P4b.6a also admits a verified multi-effect
+`operation_wide_wal` observation in the pure Rust decision point, but the
+public MCP mutation path remains exact single-effect and read-only remains the
+default. Saga execution is not claimed.
+
+### Compose one local transaction for multiple effects (P4b.6a)
+
+`forge-core-kernel` can now derive an `OperationEffectBundle` from an operation's
+complete ordered file-backed effect set:
+
+```rust
+let bundle = forge_core_kernel::compose_operation_effect_bundle(
+    effect_store_root,
+    &operation,
+    &effect_refs,
+    &effects,
+)?;
+
+let result = forge_core_kernel::apply_operation_effect_bundle_with_wal_lock(
+    effect_store_root,
+    &bundle,
+    &payloads,
+    ".forge-method/wal/effects.ndjson",
+    ".forge-method/locks/effects.lock",
+    transaction_id,
+);
+```
+
+The Module validates the operation and every effect, binds each document to its
+declared ref, resolves logical targets through the same physical mapping used
+by the store, rejects overlapping aliases, and creates one internal
+`operation_transaction` envelope. Applying that envelope uses one effect lock,
+one WAL Begin/Commit, and before-images for the complete write set; both an
+immediate later-write failure and crash recovery roll back all constituent
+writes. Original effect ids and refs remain available for provenance.
+
+This checkpoint is a Rust substrate, not silent public activation. The legacy
+runtime now rejects multiple independently committed effects before any side
+effect; prepared-kernel integration is P4b.6b and MCP policy/client activation
+comes later. See
+[`contracts/spec/operation-wide-transaction-v0.yaml`](contracts/spec/operation-wide-transaction-v0.yaml).
 
 ### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5)
 

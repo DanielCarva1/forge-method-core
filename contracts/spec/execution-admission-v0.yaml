@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_admission_v0"
-status: "p4b5b_principal_bound_trusted_single_effect"
+status: "p4b6a_operation_wide_policy_and_rust_substrate"
 purpose: >-
   Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
   one exact mutation intent before the Execution Assurance Kernel may admit it.
@@ -59,9 +59,9 @@ authority_bindings:
     - "every passing required gate records evidence refs and a non-empty checker identity"
   commit:
     - "single_effect_wal admits exactly one effect with verified lock, rollback recovery, and durable commit record"
-    - "operation_wide_wal and saga remain typed but fail closed as unsupported in P4a"
-    - "future operation_wide_wal support requires whole-operation scope and the same verified guarantees"
-    - "future saga support requires whole-operation scope and complete typed compensation for every effect"
+    - "operation_wide_wal requires at least two effects, whole-operation scope, and the same verified WAL guarantees"
+    - "a single effect disguised as operation_wide_wal fails closed for insufficient scope"
+    - "saga remains typed but unsupported and additionally requires whole-operation scope plus complete compensation"
 
 trust_boundary:
   accepted_observation_sources:
@@ -100,11 +100,15 @@ current_boundary:
     - "MCP stdio mutation stays fail-closed unless P4b.3c explicit policy, trusted loading, and exact-root startup reconciliation all succeed"
     - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
     - "P4b.5b propagates the verified ExecutionPrincipal through claims, conflict attribution, effect-WAL provenance, durable pre-effect traces, receipts, and MCP evidence"
+    - "P4b.6a admits a verified multi-effect whole-operation WAL observation in the pure decision point"
+    - "P4b.6a composes exact ordered file-backed effects into one deterministic internal transaction envelope"
+    - "P4b.6a legacy multi-effect execution fails closed before command evidence or project writes"
   not_yet_claimed:
     - "effect WAL and replay WAL are one physically atomic transaction"
     - "detection when replay state and its P4b.5a external anchor are rolled back together"
     - "replay WAL compaction or rotation"
-    - "operation-wide WAL across multiple effects"
+    - "prepared-kernel and public MCP activation of operation-wide WAL across multiple effects"
+    - "typed saga execution and complete compensation"
 
 references:
   - id: "mcp_authorization_2025_11_25"
@@ -127,3 +131,4 @@ local_specs:
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/execution-principal-propagation-v0.yaml"
+  - "contracts/spec/operation-wide-transaction-v0.yaml"

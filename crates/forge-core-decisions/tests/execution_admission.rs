@@ -214,6 +214,31 @@ fn rebind_effect_token(document: &mut ExecutionAdmissionInputDocument) {
     rebind_intent(document);
 }
 
+fn convert_to_operation_wide(document: &mut ExecutionAdmissionInputDocument) {
+    const SECOND_EFFECT_REF: &str = "contracts/effects/p4b6-second-effect.yaml";
+    let input = &mut document.execution_admission;
+    let mut second = input.effect_contracts[0].clone();
+    second.effect_ref = RepoPath(SECOND_EFFECT_REF.to_owned());
+    second.document.tool_effect_contract.id = StableId("effect.p4b6.second".to_owned());
+    "crates/forge-contracts/p4a-fixture-second.yaml"
+        .clone_into(&mut second.document.tool_effect_contract.write_set[0].reference);
+    input
+        .operation
+        .operation_contract
+        .effect_contract_refs
+        .push(RepoPath(SECOND_EFFECT_REF.to_owned()));
+    input.request.effect_bindings.push(ContentAddressedBinding {
+        reference: SECOND_EFFECT_REF.to_owned(),
+        token: effect_contract_token(&second.document).expect("second effect token"),
+    });
+    input.effect_contracts.push(second);
+    input.request.operation_token =
+        operation_contract_token(&input.operation).expect("operation token");
+    input.commit.strategy = ExecutionCommitStrategy::OperationWideWal;
+    input.commit.scope = ExecutionCommitScope::WholeOperation;
+    rebind_intent(document);
+}
+
 fn issue_codes(document: &ExecutionAdmissionInputDocument) -> Vec<ExecutionAdmissionIssueCode> {
     evaluate_execution_admission(document)
         .expect("typed input should evaluate")
@@ -456,12 +481,22 @@ fn non_transactional_scope_is_blocked() {
 }
 
 #[test]
-fn operation_wide_wal_is_fail_closed_until_runtime_support_exists() {
+fn operation_wide_wal_admits_complete_whole_operation_effect_set() {
+    let mut input = admitted_input();
+    convert_to_operation_wide(&mut input);
+
+    let decision = evaluate_execution_admission(&input).expect("operation-wide decision");
+    assert_eq!(decision.status, ExecutionAdmissionStatus::Admitted);
+    assert!(decision.issues.is_empty());
+}
+
+#[test]
+fn operation_wide_wal_rejects_single_effect_disguised_as_whole_operation() {
     let mut input = admitted_input();
     input.execution_admission.commit.strategy = ExecutionCommitStrategy::OperationWideWal;
     input.execution_admission.commit.scope = ExecutionCommitScope::WholeOperation;
 
-    assert!(issue_codes(&input).contains(&ExecutionAdmissionIssueCode::CommitStrategyUnsupported));
+    assert!(issue_codes(&input).contains(&ExecutionAdmissionIssueCode::CommitScopeInsufficient));
 }
 
 #[test]
@@ -704,8 +739,7 @@ fn apply_fixture_mutation(
             input.execution_admission.commit.scope = ExecutionCommitScope::PerEffectOnly;
         }
         AdmissionFixtureMutation::OperationWideCommit => {
-            input.execution_admission.commit.strategy = ExecutionCommitStrategy::OperationWideWal;
-            input.execution_admission.commit.scope = ExecutionCommitScope::WholeOperation;
+            convert_to_operation_wide(input);
         }
         AdmissionFixtureMutation::SagaCommit => {
             input.execution_admission.commit.strategy = ExecutionCommitStrategy::Saga;

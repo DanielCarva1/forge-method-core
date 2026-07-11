@@ -69,6 +69,10 @@ Active implementation plan:
   a revision, and the canonical execution-intent digest.
 - **Commit Assurance**: verified guarantees that the chosen WAL or saga scope
   can recover, roll back, or compensate the complete authorized mutation.
+- **Operation Effect Bundle**: a kernel-derived internal transaction envelope
+  that preserves the declared effect identities while placing the complete
+  disjoint file-backed write set under one effect lock, WAL, and recovery
+  outcome. It is implementation, not caller-selected authority.
 
 ## Architectural direction
 
@@ -78,6 +82,9 @@ Active implementation plan:
 - The **Execution Assurance Kernel** governs authority and durable mutation.
   The P4a decision module defines its fail-closed admission contract; the P4b
   Adapter/kernel integration is required before Forge claims runtime enforcement.
+- The **Operation Effect Bundle Module** deepens the existing local effect-store
+  transaction for multi-effect operations. Sagas remain a separate future
+  boundary for external or irreversible commit domains.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

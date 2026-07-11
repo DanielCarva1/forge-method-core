@@ -1225,12 +1225,7 @@ fn evaluate_commit(input: &ExecutionAdmissionInput, issues: &mut Vec<ExecutionAd
             require_wal_guarantees(commit, issues);
         }
         ExecutionCommitStrategy::OperationWideWal => {
-            push_issue(
-                issues,
-                ExecutionAdmissionIssueCode::CommitStrategyUnsupported,
-                "operation_wide_wal",
-            );
-            if commit.scope != ExecutionCommitScope::WholeOperation {
+            if effects.len() < 2 || commit.scope != ExecutionCommitScope::WholeOperation {
                 push_issue(
                     issues,
                     ExecutionAdmissionIssueCode::CommitScopeInsufficient,
