@@ -41,6 +41,9 @@ fn acquire_req(agent: &str, paths: &[&str]) -> AcquireRequest {
     AcquireRequest {
         scope_kind: ClaimScopeKind::Story,
         scope_id: ScopeId("S5.0".to_string()),
+        principal_id: Some(forge_core_contracts::PrincipalId(format!(
+            "principal.{agent}"
+        ))),
         agent_id: StableId(agent.to_string()),
         role: ActorRole::Worker,
         ttl_seconds: 600,

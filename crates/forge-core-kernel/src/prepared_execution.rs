@@ -17,7 +17,7 @@ use forge_core_authority::{
     VerifiedExecutionAuthorization, VerifiedExecutionAuthorizationAudit, VerifiedExecutionCall,
 };
 use forge_core_contracts::{
-    AssuranceCaseDocument, CommandContractDocument, FieldEvidenceRegistry,
+    AssuranceCaseDocument, CommandContractDocument, ExecutionPrincipal, FieldEvidenceRegistry,
     OperationContractDocument, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
@@ -37,14 +37,19 @@ use forge_core_store::replay_wal::{
     ReplayWalError,
 };
 use forge_core_store::{
-    acquire_effect_store_lock, append_effect_replay_completion_under_lock,
+    acquire_effect_store_lock, append_effect_replay_completion_under_lock, append_trace_event,
     apply_file_effect_transaction_with_provenance_under_lock, collect_validation_yaml_documents,
     pending_effect_replay_commits_under_lock, preflight_file_effect_transaction_under_lock,
     recover_effect_wal, repair_effect_wal_tail_under_lock, sha256_content_hash,
-    EffectApplicationPayload, EffectApplicationResult, EffectApplicationStatus,
-    EffectExecutionProvenance, EffectExecutionProvenanceError, EffectPreflightResult,
-    EffectPreflightStatus, EffectReplayCommitBinding, EffectReplayCompletionResult,
-    EffectReplayReconciliationError, EffectStoreLockError, EffectWalRecoveryStatus,
+    AppendJsonLineError, EffectApplicationPayload, EffectApplicationResult,
+    EffectApplicationStatus, EffectExecutionProvenance, EffectExecutionProvenanceError,
+    EffectPreflightResult, EffectPreflightStatus, EffectReplayCommitBinding,
+    EffectReplayCompletionResult, EffectReplayReconciliationError, EffectStoreLockError,
+    EffectWalRecoveryStatus,
+};
+use forge_core_trace::{
+    TraceActor, TraceAuthority, TraceCost, TraceEvent, TraceEventKind, TraceRef, TraceRisk,
+    TraceRiskLevel,
 };
 use forge_core_validate::risk_audit::{
     collect_risk_audit_targets, evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
@@ -386,6 +391,7 @@ pub struct ExecutionCommitProvenanceDocument {
     pub tx_id: String,
     pub project_root: String,
     pub audience: String,
+    pub execution_principal: ExecutionPrincipal,
     pub authorization: VerifiedExecutionAuthorizationAudit,
     pub late_admission_input: serde_json::Value,
     pub late_admission_decision: ExecutionAdmissionDecision,
@@ -419,6 +425,8 @@ pub struct ExecutionCommitReceipt {
     pub effect_id: StableId,
     pub commit_digest: String,
     pub provenance_digest: String,
+    pub execution_principal: ExecutionPrincipal,
+    pub principal_trace_event_id: String,
     pub application: EffectApplicationResult,
     pub replay: Option<ReplayConsumeResult>,
     pub completion: Option<EffectReplayCompletionResult>,
@@ -435,6 +443,8 @@ pub enum ExecutionCommitOutcome {
     NotCommitted {
         application: Box<EffectApplicationResult>,
         provenance_digest: String,
+        execution_principal: ExecutionPrincipal,
+        principal_trace_event_id: String,
     },
     Blocked {
         decision: Box<ExecutionAdmissionDecision>,
@@ -750,6 +760,8 @@ impl LateAdmittedExecutionTransaction {
         let commit_digest = self.prepared.commit_digest.clone();
         let replay_reservation = self.prepared.replay_guard.reservation().clone();
         let authorization = self.prepared.authorization.audit();
+        let execution_principal = authorization.principal.execution_principal();
+        let authority_grants = authorization.principal.authority_grants.clone();
         let late_admission_input = redacted_admission_projection(
             &self.admission_document,
             &authorization.nonce_fingerprint,
@@ -764,6 +776,7 @@ impl LateAdmittedExecutionTransaction {
             project_root: path_string(self.prepared.environment.project_root())
                 .map_err(|error| ExecutionCommitError::Provenance(error.to_string()))?,
             audience: self.prepared.environment.required_audience().to_owned(),
+            execution_principal: execution_principal.clone(),
             authorization,
             late_admission_input,
             late_admission_decision: self.decision,
@@ -787,6 +800,16 @@ impl LateAdmittedExecutionTransaction {
             replay_reservation.commit_digest,
             replay_reservation.revision,
         );
+        let principal_trace = execution_principal_trace_event(
+            &tx_id,
+            &execution_principal,
+            &self.prepared.effect,
+            commit_admission_input.execution_admission.now_unix,
+            &authority_grants,
+        );
+        let principal_trace_event_id = principal_trace.event_id.clone();
+        append_trace_event(self.prepared.environment.state_root(), &principal_trace)
+            .map_err(ExecutionCommitError::PrincipalTrace)?;
         let application = apply_file_effect_transaction_with_provenance_under_lock(
             self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
@@ -802,6 +825,8 @@ impl LateAdmittedExecutionTransaction {
             return Ok(ExecutionCommitOutcome::NotCommitted {
                 application: Box::new(application),
                 provenance_digest,
+                execution_principal,
+                principal_trace_event_id,
             });
         }
 
@@ -816,6 +841,8 @@ impl LateAdmittedExecutionTransaction {
                         effect_id,
                         commit_digest,
                         provenance_digest,
+                        execution_principal,
+                        principal_trace_event_id,
                         application,
                         replay: None,
                         completion: None,
@@ -846,6 +873,8 @@ impl LateAdmittedExecutionTransaction {
                     effect_id,
                     commit_digest,
                     provenance_digest,
+                    execution_principal,
+                    principal_trace_event_id,
                     application,
                     replay: Some(replay),
                     completion: Some(completion),
@@ -859,6 +888,8 @@ impl LateAdmittedExecutionTransaction {
                     effect_id,
                     commit_digest,
                     provenance_digest,
+                    execution_principal,
+                    principal_trace_event_id,
                     application,
                     replay: Some(replay),
                     completion: None,
@@ -869,6 +900,62 @@ impl LateAdmittedExecutionTransaction {
             }),
         }
     }
+}
+
+fn execution_principal_trace_event(
+    tx_id: &str,
+    principal: &ExecutionPrincipal,
+    effect: &ToolEffectContractDocument,
+    recorded_at_unix: i64,
+    authority_grants: &[StableId],
+) -> TraceEvent {
+    let contract = &effect.tool_effect_contract;
+    let destructive = contract.write_set.iter().any(|write| write.destructive);
+    TraceEvent::new(
+        format!("execution.{tx_id}"),
+        tx_id,
+        format!("{tx_id}.principal.effect-staged"),
+        TraceEventKind::EffectStaged,
+        forge_core_decisions::unix_to_rfc3339(recorded_at_unix),
+        "verified execution principal staged one governed effect",
+    )
+    .with_actor(TraceActor::new(
+        &principal.principal_id.0,
+        &principal.agent_id.0,
+        match principal.role {
+            forge_core_contracts::operation::CallerRole::Driver => "driver",
+            forge_core_contracts::operation::CallerRole::Worker => "worker",
+            forge_core_contracts::operation::CallerRole::Runtime => "runtime",
+            forge_core_contracts::operation::CallerRole::Unknown => "unknown",
+        },
+    ))
+    .with_authority(TraceAuthority {
+        operation_id: Some(contract.operation_ref.0.clone()),
+        capability_ids: authority_grants
+            .iter()
+            .map(|grant| grant.0.clone())
+            .collect(),
+    })
+    .with_inputs(vec![TraceRef::new(
+        "effect_contract",
+        &contract.contract_ref.0,
+    )])
+    .with_outputs(
+        contract
+            .write_set
+            .iter()
+            .map(|write| TraceRef::new("effect_target", &write.reference))
+            .collect(),
+    )
+    .with_risk(TraceRisk::new(
+        if destructive {
+            TraceRiskLevel::High
+        } else {
+            TraceRiskLevel::Low
+        },
+        destructive,
+    ))
+    .with_cost(TraceCost::zero())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1044,6 +1131,7 @@ pub enum ExecutionCommitError {
     Evaluation(ExecutionAdmissionRejection),
     Provenance(String),
     ProvenanceEnvelope(EffectExecutionProvenanceError),
+    PrincipalTrace(AppendJsonLineError),
 }
 
 impl fmt::Display for ExecutionCommitError {
@@ -1058,6 +1146,12 @@ impl fmt::Display for ExecutionCommitError {
             }
             Self::ProvenanceEnvelope(error) => {
                 write!(formatter, "commit provenance failed: {error}")
+            }
+            Self::PrincipalTrace(error) => {
+                write!(
+                    formatter,
+                    "execution principal trace append failed: {error}"
+                )
             }
         }
     }
@@ -1504,8 +1598,9 @@ struct RecoveryProvenanceView {
     tx_id: String,
     project_root: String,
     audience: String,
+    execution_principal: ExecutionPrincipal,
     #[serde(rename = "authorization")]
-    _authorization: serde_json::Value,
+    authorization: serde_json::Value,
     #[serde(rename = "late_admission_input")]
     _late_admission_input: serde_json::Value,
     #[serde(rename = "late_admission_decision")]
@@ -1559,10 +1654,24 @@ fn validate_recovery_provenance(
         })?;
     let reservation = &view.replay_reservation;
     let descriptor = &view.commit_descriptor;
+    let authorization_principal = view.authorization.get("principal");
+    let expected_role = serde_json::to_value(view.execution_principal.role).ok();
+    let principal_matches_authorization = authorization_principal.is_some_and(|principal| {
+        principal.get("principal_id")
+            == Some(&serde_json::Value::String(
+                view.execution_principal.principal_id.0.clone(),
+            ))
+            && principal.get("agent_id")
+                == Some(&serde_json::Value::String(
+                    view.execution_principal.agent_id.0.clone(),
+                ))
+            && principal.get("role") == expected_role.as_ref()
+    });
     let valid = view.schema_version == EXECUTION_COMMIT_PROVENANCE_SCHEMA_VERSION
         && view.tx_id == tx_id
         && view.project_root == expected_project_root
         && view.audience == expected_audience
+        && principal_matches_authorization
         && view.commit_digest == replay_binding.commit_digest
         && descriptor.project_root == expected_project_root
         && descriptor.audience == expected_audience

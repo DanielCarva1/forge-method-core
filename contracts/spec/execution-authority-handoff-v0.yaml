@@ -82,10 +82,10 @@ executable_evidence:
   - "a reconciled public-dispatch test delivers verified authority only to the injected executor and proves no CLI child was spawned"
   - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
 
-next_boundary:
+completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
-  required:
-    - "verified principal identity in claims, traces, WAL, and evidence"
+  delivered:
+    - "verified principal identity in claims, traces, WAL provenance, receipts, and MCP evidence"
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"
@@ -95,3 +95,4 @@ references:
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

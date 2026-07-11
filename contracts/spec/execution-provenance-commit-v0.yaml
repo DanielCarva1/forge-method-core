@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_provenance_commit_v0"
-status: "p4b2c_implemented_dormant"
+status: "p4b5b_principal_bound_and_active_in_trusted_mcp"
 purpose: >-
   Define the durable evidence and recovery protocol that binds one late-admitted
   execution to one effect-WAL commit and one replay reservation without
@@ -17,6 +17,7 @@ provenance_envelope:
     - "crash reconciliation"
   complete_document_fields:
     - "trusted canonical project root and audience"
+    - "typed ExecutionPrincipal derived from verified authority"
     - "redacted VerifiedExecutionAuthorizationAudit"
     - "late Admission input and decision"
     - "immediate-commit Admission input and decision"
@@ -27,12 +28,16 @@ provenance_envelope:
     forbidden_persisted_value: "raw nonce"
     replacement: "verified nonce fingerprint in both persisted Admission projections"
     recovery_identity: "replay key hash plus intent/commit digests and reservation revision"
+  principal_integrity:
+    rule: "explicit execution_principal must exactly match the authorization audit principal"
+    recovery_failure: "mismatch blocks replay reconciliation"
 
 effect_wal_protocol:
   begin:
     requires:
       - "complete verified provenance envelope"
       - "EffectReplayCommitBinding"
+      - "principal-bound canonical provenance digest"
     durability: "sync_on_append before any project write"
   effect_commit:
     meaning: "all writes and the effect Commit marker are durable"
@@ -74,9 +79,18 @@ public_surface:
     P4b.3c binds this protocol to the trusted MCP executor only after explicit
     policy, bounded loading, replay verification, and startup reconciliation.
 
+principal_evidence:
+  pre_effect_trace: >-
+    A durable effect_staged trace is appended after immediate Admission and
+    before effect-WAL Begin or any project write. Trace failure blocks commit.
+  receipt:
+    - "execution_principal"
+    - "principal_trace_event_id"
+
 references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

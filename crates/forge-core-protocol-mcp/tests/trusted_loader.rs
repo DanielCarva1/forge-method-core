@@ -158,6 +158,8 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
     effect.tool_effect_contract.write_set.truncate(1);
     effect.tool_effect_contract.write_set[0].target_kind = EffectTargetKind::FilePath;
     "output/result.txt".clone_into(&mut effect.tool_effect_contract.write_set[0].reference);
+    claim.claim_contract.claim.claimant_principal_id =
+        Some(PrincipalId("principal.codex-main".to_owned()));
     claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
     claim.claim_contract.claim.claimant_role = ActorRole::Driver;
     claim.claim_contract.scope.paths = vec![RepoPath("output/result.txt".to_owned())];

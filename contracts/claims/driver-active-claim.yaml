@@ -4,6 +4,7 @@ claim_contract:
   contract_ref: "contracts/claims/claim-contract-v0.yaml"
   claim:
     kind: "driver"
+    claimant_principal_id: "principal.codex-main"
     claimant_agent_id: "codex-main"
     claimant_role: "driver"
     registry_ref: ".forge-method/agents/registry.yaml"

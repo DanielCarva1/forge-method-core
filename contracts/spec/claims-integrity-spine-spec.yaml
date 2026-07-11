@@ -2,7 +2,7 @@ schema_version: "0.1.0"
 spec:
   id: claims-integrity-spine
   title: "Claims integrity spine — append-only WAL + derive_state (P2.1 + P2.2)"
-  status: ready
+  status: implemented_with_p4b5b_additive_principal_identity
   created: 2026-06-27
   parent_roadmap: forge-rust-v1-specification
   closes_discovery: contracts/discovery/claims-integrity-spine-discovery.yaml
@@ -63,6 +63,23 @@ spec:
       change: "claim.rs: load_claims (line 451) becomes debug/fallback. Authority path: claim status / acquire / release all go through derive_state. A `--from-cache` debug flag preserves the legacy YAML read for diagnostics."
     forge_core_contracts:
       change: "ClaimContract gains NO new fields in v1.1 (no signature field — that is the additive F1b layer). The WAL record payloads are projected FROM ClaimContract, not stored as raw YAML."
+
+  p4b5b_principal_addition:
+    historical_note: >-
+      The original v1.1 spine intentionally added no ClaimContract fields.
+      P4b.5b is a later backwards-compatible additive evidence layer.
+    field: "ClaimIdentity.claimant_principal_id"
+    compatibility: "optional on the wire so historical claim WAL records remain readable"
+    acquisition: "forge-core claim acquire accepts --principal-id"
+    projection: "derive_state, active claim summaries, reconcile output, and conflict events preserve the principal"
+    trusted_execution_rule: >-
+      Execution Admission requires exact principal id, agent id, and role for a
+      required execution claim. Missing legacy principal identity fails closed
+      for trusted mutation without revoking the claim's legacy coordination use.
+    authority_boundary: >-
+      A claim principal is attribution evidence only. It cannot replace the
+      operator-registry-derived opaque VerifiedExecutionAuthorization.
+    reference: "contracts/spec/execution-principal-propagation-v0.yaml"
 
   acceptance_criteria:
     ac1_exploit_closed:

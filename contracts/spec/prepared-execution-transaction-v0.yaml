@@ -118,6 +118,7 @@ executable_evidence:
   - "tampered provenance digest fails closed"
   - "effect-WAL compaction retains complete provenance-bound transactions"
   - "prepared and admitted typestates remain non-cloneable and non-deserializable"
+  - "commit provenance, durable pre-effect trace, and receipt carry the exact verified ExecutionPrincipal"
 
 intentional_limits:
   - "effect and replay WALs are not physically atomic; typed pending receipts plus deterministic recovery close the crash window"
@@ -129,10 +130,10 @@ intentional_limits:
   - "operation-wide atomicity and saga semantics remain unsupported"
   - "coordinated rollback of replay state and its P4b.5a external anchor still requires stronger operator isolation"
 
-next_boundary:
+completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
-  required:
-    - "verified principal identity in claims, traces, WAL, and evidence"
+  delivered:
+    - "verified principal identity in claims, traces, WAL provenance, receipts, and MCP evidence"
 
 references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
@@ -142,3 +143,4 @@ references:
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

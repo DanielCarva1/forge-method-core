@@ -4,6 +4,7 @@ claim_contract:
   contract_ref: "contracts/claims/claim-contract-v0.yaml"
   claim:
     kind: "story"
+    claimant_principal_id: "principal.cursor-worker-1"
     claimant_agent_id: "cursor-worker-1"
     claimant_role: "worker"
     registry_ref: ".forge-method/agents/registry.yaml"

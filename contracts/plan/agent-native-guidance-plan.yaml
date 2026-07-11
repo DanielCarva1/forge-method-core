@@ -293,21 +293,33 @@ phases:
           The external anchor detects whole replay-pair rollback only while the
           independently protected anchor survives. Coordinated rollback of both
           stores remains outside Forge's cooperative same-user guarantee.
+      - id: "P4b.5b-execution-principal-propagation"
+        delivers:
+          - "canonical portable ExecutionPrincipal evidence DTO derived from opaque verified authority"
+          - "backwards-compatible claimant principal identity in claim WAL projections, summaries, and conflict attribution"
+          - "exact principal, agent, and role matching for required trusted execution claims"
+          - "principal-bound effect-WAL provenance with recovery cross-checks"
+          - "durable pre-effect principal trace plus principal and trace id in kernel/MCP receipts"
+          - "official-client proof of principal propagation from registry through applied evidence"
+        boundary: >-
+          Serialized principal identity is evidence, never authority. Historical
+          agent-only claims remain readable for coordination but cannot authorize
+          trusted mutation. Operation-wide/saga semantics remain separate work.
     current_program:
       id: "P4b.5-external-replay-and-principal-propagation"
-      status: "in_progress"
+      status: "completed"
       scope:
         - "externally protect replay epoch/head against whole-pair rollback"
         - "propagate Execution Principal through claims, traces, WAL, and evidence"
     next_slice:
-      id: "P4b.5b-execution-principal-propagation"
+      id: "P4b.6-operation-wide-atomicity"
       status: "not_started"
       scope:
-        - "propagate Execution Principal through claims, traces, WAL, and evidence"
+        - "select and implement operation-wide transaction semantics or complete typed saga compensation"
     following_slices:
-      - "operation-wide transaction or complete typed saga semantics"
-    release_blockers:
-      - "Execution Principal propagated through claims, traces, WAL, and evidence"
+      - "P5 workflow migration"
+      - "P6 domain-pack ecosystem"
+    release_blockers: []
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -364,10 +376,11 @@ first_executable_slice:
     - "P4b.4c operator-owned credential provision, rotation, revocation, and exact-intent signing without private-key disclosure"
     - "P4b.4d conversational readiness, generated client configuration, replacement-agent resume, and official rmcp applied sidecar mutation proof"
     - "P4b.5a operator-protected external replay head with policy binding, automatic runtime advancement, and whole-pair rollback detection"
+    - "P4b.5b verified Execution Principal propagation through claims, conflict attribution, Admission, effect-WAL provenance, durable traces, receipts, and MCP evidence"
   next_action: >-
-    P4b.5a is complete. Continue with P4b.5b: propagate the verified Execution
-    Principal through claims, traces, WAL, and evidence. Operation-wide/saga
-    semantics remain a later slice.
+    P4b.5 is complete. The next planned authority slice is P4b.6: select and
+    implement operation-wide transaction semantics or complete typed saga
+    compensation before claiming multi-effect atomicity.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

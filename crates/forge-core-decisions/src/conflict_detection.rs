@@ -59,7 +59,7 @@
 
 use forge_core_contracts::{
     claim::ClaimContract,
-    common::{ClaimId, RepoPath, StableId},
+    common::{ClaimId, PrincipalId, RepoPath, StableId},
     tool_effect::ConflictCode,
 };
 
@@ -74,6 +74,9 @@ pub struct BlockDetail {
     pub blocking_claim_id: ClaimId,
     /// The agent that currently holds the blocking claim.
     pub claimant: StableId,
+    /// The execution principal that holds the claim, when the claim predates
+    /// the P4b.5b identity field this remains absent.
+    pub claimant_principal_id: Option<PrincipalId>,
     /// Why the write was blocked (typed, DD10 self-correction surface).
     pub conflict_code: ConflictCode,
 }
@@ -127,6 +130,38 @@ pub fn check_write_against_claims(
     claims: &[ClaimContract],
     now_unix: i64,
 ) -> WriteCheck {
+    check_write_against_claims_internal(targets, None, writer_agent_id, claims, now_unix)
+}
+
+/// Check writes for a registry-verified execution principal.
+///
+/// Unlike the legacy agent-only classifier, a claim is self-owned only when
+/// both its principal and agent match. A legacy claim without principal
+/// identity therefore cannot authorize a trusted execution write.
+#[must_use]
+pub fn check_write_against_claims_for_principal(
+    targets: &[RepoPath],
+    writer_principal_id: &PrincipalId,
+    writer_agent_id: &StableId,
+    claims: &[ClaimContract],
+    now_unix: i64,
+) -> WriteCheck {
+    check_write_against_claims_internal(
+        targets,
+        Some(writer_principal_id),
+        writer_agent_id,
+        claims,
+        now_unix,
+    )
+}
+
+fn check_write_against_claims_internal(
+    targets: &[RepoPath],
+    writer_principal_id: Option<&PrincipalId>,
+    writer_agent_id: &StableId,
+    claims: &[ClaimContract],
+    now_unix: i64,
+) -> WriteCheck {
     // Deterministic inspection order: sort a shallow copy of claim refs by id.
     // We never mutate the caller's slice.
     let mut ordered: Vec<&ClaimContract> = claims.iter().collect();
@@ -138,7 +173,14 @@ pub fn check_write_against_claims(
 
     for target in targets {
         let target_norm = normalize_segments(&target.0);
-        match classify_target(target, &target_norm, &ordered, writer_agent_id, now_unix) {
+        match classify_target(
+            target,
+            &target_norm,
+            &ordered,
+            writer_principal_id,
+            writer_agent_id,
+            now_unix,
+        ) {
             TargetClass::Ungoverned => ungoverned.push(target.clone()),
             TargetClass::GovernedBySelf => governed_by_self.push(target.clone()),
             TargetClass::BlockedBy(detail) => blocks.push(detail),
@@ -191,6 +233,7 @@ fn classify_target(
     raw_target: &RepoPath,
     target_segments: &[String],
     claims: &[&ClaimContract],
+    writer_principal_id: Option<&PrincipalId>,
     writer_agent_id: &StableId,
     now_unix: i64,
 ) -> TargetClass {
@@ -211,7 +254,10 @@ fn classify_target(
         }
 
         let holder = &claim.claim.claimant_agent_id;
-        if holder == writer_agent_id {
+        let principal_matches = writer_principal_id.is_none_or(|principal_id| {
+            claim.claim.claimant_principal_id.as_ref() == Some(principal_id)
+        });
+        if holder == writer_agent_id && principal_matches {
             // Own claim covers it — authorized. Keep scanning in case another
             // live claim by a peer also covers it (then it is still blocked).
             seen_live_self = true;
@@ -221,6 +267,7 @@ fn classify_target(
                 blocked_path: raw_target.clone(),
                 blocking_claim_id: claim.id.clone(),
                 claimant: holder.clone(),
+                claimant_principal_id: claim.claim.claimant_principal_id.clone(),
                 conflict_code: ConflictCode::WriteTargetClaimed,
             });
         }
@@ -393,6 +440,7 @@ mod tests {
             contract_ref: RepoPath("contracts/claims/x.yaml".to_string()),
             claim: ClaimIdentity {
                 kind: ClaimKind::Story,
+                claimant_principal_id: None,
                 claimant_agent_id: StableId(agent.to_string()),
                 claimant_role: ActorRole::Worker,
                 registry_ref: None,
@@ -469,6 +517,40 @@ mod tests {
             }
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn trusted_write_requires_principal_and_agent_identity() {
+        let mut claim = live_claim("c1", "shared-agent", &["contracts/stories/S4.5.yaml"]);
+        claim.claim.claimant_principal_id = Some(PrincipalId("principal.alpha".to_owned()));
+        let targets = [RepoPath("contracts/stories/S4.5.yaml".to_owned())];
+
+        let allowed = check_write_against_claims_for_principal(
+            &targets,
+            &PrincipalId("principal.alpha".to_owned()),
+            &StableId("shared-agent".to_owned()),
+            std::slice::from_ref(&claim),
+            NOW,
+        );
+        assert!(!allowed.is_blocked());
+
+        let blocked = check_write_against_claims_for_principal(
+            &targets,
+            &PrincipalId("principal.beta".to_owned()),
+            &StableId("shared-agent".to_owned()),
+            &[claim],
+            NOW,
+        );
+        let WriteCheck::Blocked { blocks } = blocked else {
+            panic!("same agent label cannot substitute for the claim principal");
+        };
+        assert_eq!(
+            blocks[0]
+                .claimant_principal_id
+                .as_ref()
+                .map(|id| id.0.as_str()),
+            Some("principal.alpha")
+        );
     }
 
     #[test]

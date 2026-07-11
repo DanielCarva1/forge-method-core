@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_trusted_single_effect_activation_v0"
-status: "p4b5a_external_replay_anchor_enforced"
+status: "p4b5_complete_principal_bound_external_replay"
 purpose: >-
   Enable exactly one trusted execute-operation effect over MCP stdio only after
   explicit operator opt-in, complete startup reconciliation, and current
@@ -46,6 +46,7 @@ request_order:
   - "kernel-derived descriptor, effect preflight, and replay reservation"
   - "late Admission under retained locks"
   - "immediate-commit preflight and Admission"
+  - "durable registry-verified principal trace before effect-WAL Begin"
   - "provenance-bound one-effect WAL commit"
   - "replay consume and replay-completion evidence"
   - "advance the external replay anchor after every durable replay transition"
@@ -73,9 +74,9 @@ unsupported:
   - "mutation subprocess fallback"
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
-next_boundary:
+completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
-  goal: "Propagate verified principal identity through claims, traces, WAL, and evidence."
+  result: "Applied results now carry principal-bound receipts and durable trace evidence."
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
@@ -84,3 +85,4 @@ references:
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/replay-external-anchor-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

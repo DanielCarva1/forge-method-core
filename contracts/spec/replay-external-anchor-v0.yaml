@@ -85,7 +85,6 @@ security_boundary:
 preserved_limits:
   - "replay WAL compaction and rotation are not implemented"
   - "operation-wide transactions and saga semantics are not implemented"
-  - "complete Execution Principal propagation is P4b.5b"
 
 references:
   - "contracts/spec/replay-protection-wal-v0.yaml"

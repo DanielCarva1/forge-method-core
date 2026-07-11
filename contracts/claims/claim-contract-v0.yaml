@@ -11,6 +11,8 @@ design_rules:
     rule: "Heartbeat freshness is evidence used by Forge Core before allowing claim reuse, release, or recovery."
   - id: "reclaim_is_typed"
     rule: "Reclaim behavior must be closed enum policy; host agents may not steal or release a claim by improvising."
+  - id: "execution_principal_is_explicit"
+    rule: "Trusted execution claims must bind principal id, agent id, and role; legacy agent-only claims remain readable but cannot satisfy Execution Admission."
 rust_compatibility:
   serialization: "serde"
   id_policy: "stable_ascii_ids"
@@ -66,6 +68,7 @@ field_contract:
   id: "Stable claim contract id."
   claim:
     kind: "Closed claim_kind enum."
+    claimant_principal_id: "Optional for legacy storage compatibility; required and matched exactly by trusted Execution Admission."
     claimant_agent_id: "Agent/runtime id holding the claim."
     claimant_role: "Closed actor_role enum."
     registry_ref: "Optional fleet registry used to verify the claimant."
@@ -97,3 +100,4 @@ failure_modes_prevented:
   - "expired claim silently releases work without context"
   - "another agent steals a lane without driver/human review"
   - "heartbeat exists but recovery behavior remains prompt-dependent"
+  - "two credentials reuse an agent label and silently inherit each other's claim authority"

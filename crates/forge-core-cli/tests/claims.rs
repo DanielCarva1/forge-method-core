@@ -40,6 +40,9 @@ fn acquire_req(agent: &str, scope_id: &str, paths: &[&str]) -> AcquireRequest {
     AcquireRequest {
         scope_kind: ClaimScopeKind::Story,
         scope_id: ScopeId(scope_id.to_string()),
+        principal_id: Some(forge_core_contracts::PrincipalId(format!(
+            "principal.{agent}"
+        ))),
         agent_id: StableId(agent.to_string()),
         role: ActorRole::Worker,
         ttl_seconds: TTL_SECONDS,
@@ -106,6 +109,7 @@ fn acquire_success_persists_active_live_claim() {
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     assert_eq!(acquired.exit_code(), ExitReason::Ok.as_code());
     let payload = acquired.data.expect("ok acquire must carry data");
+    assert_eq!(payload.principal_id.as_deref(), Some("principal.alice"));
     assert_eq!(payload.agent_id, "alice");
     assert_eq!(payload.scope_id, "S6.1");
     assert_eq!(payload.status, "active");
@@ -113,6 +117,12 @@ fn acquire_success_persists_active_live_claim() {
     let claim = load_one_claim(&dir);
     assert_eq!(claim.id, ClaimId("claim.story.S6.1.S6.1".to_string()));
     assert_eq!(claim.claim.claimant_agent_id, StableId("alice".to_string()));
+    assert_eq!(
+        claim.claim.claimant_principal_id,
+        Some(forge_core_contracts::PrincipalId(
+            "principal.alice".to_string()
+        ))
+    );
     assert_eq!(
         claim.scope.paths,
         vec![RepoPath("contracts/stories/S6.1.yaml".to_string())]

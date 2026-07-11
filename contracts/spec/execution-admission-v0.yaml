@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_admission_v0"
-status: "p4b2c_dormant_commit_recovery_boundary"
+status: "p4b5b_principal_bound_trusted_single_effect"
 purpose: >-
   Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
   one exact mutation intent before the Execution Assurance Kernel may admit it.
@@ -48,7 +48,8 @@ authority_bindings:
     - "claim snapshot is complete and its revision equals the signed expectation"
     - "duplicate signed expectations or observed claim refs are rejected"
     - "required claim revision is revalidated from the commit-time snapshot"
-    - "required claim is live, belongs to the principal identity and role, and targets the current state version"
+    - "required claim is live, matches principal id, agent id, and role, and targets the current state version"
+    - "legacy agent-only claims cannot stand in for the verified execution principal"
     - "file-backed writes, including artifacts, evidence, ledgers, and request streams, are governed by the caller claim and do not conflict with another live claim"
   gates:
     - "gate snapshot is complete and its revision equals the signed expectation"
@@ -98,11 +99,11 @@ current_boundary:
     - "effect-lock-first ReplayCommitGuard retains the future kernel lock order through consume or drop"
     - "MCP stdio mutation stays fail-closed unless P4b.3c explicit policy, trusted loading, and exact-root startup reconciliation all succeed"
     - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
+    - "P4b.5b propagates the verified ExecutionPrincipal through claims, conflict attribution, effect-WAL provenance, durable pre-effect traces, receipts, and MCP evidence"
   not_yet_claimed:
     - "effect WAL and replay WAL are one physically atomic transaction"
     - "detection when replay state and its P4b.5a external anchor are rolled back together"
     - "replay WAL compaction or rotation"
-    - "Execution Principal propagation beyond commit provenance into claims, traces, and general evidence"
     - "operation-wide WAL across multiple effects"
 
 references:
@@ -125,3 +126,4 @@ local_specs:
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

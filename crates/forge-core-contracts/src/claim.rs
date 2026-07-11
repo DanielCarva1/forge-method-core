@@ -1,4 +1,4 @@
-use crate::common::{ClaimId, RepoPath, ScopeId, StableId};
+use crate::common::{ClaimId, PrincipalId, RepoPath, ScopeId, StableId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +26,8 @@ pub struct ClaimContract {
 #[serde(deny_unknown_fields)]
 pub struct ClaimIdentity {
     pub kind: ClaimKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimant_principal_id: Option<PrincipalId>,
     pub claimant_agent_id: StableId,
     pub claimant_role: ActorRole,
     pub registry_ref: Option<RepoPath>,

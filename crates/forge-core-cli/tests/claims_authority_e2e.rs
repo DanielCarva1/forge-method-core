@@ -119,6 +119,8 @@ fn acquire(app: &Path, scope_id: &str, agent: &str, path: &str, now_unix: i64) -
             scope_id,
             "--agent",
             agent,
+            "--principal-id",
+            &format!("principal.{agent}"),
             "--path",
             path,
             "--now-unix",
@@ -127,7 +129,9 @@ fn acquire(app: &Path, scope_id: &str, agent: &str, path: &str, now_unix: i64) -
         ])
         .output()
         .expect("run claim acquire");
-    assert_success(&output, "claim acquire")
+    let json = assert_success(&output, "claim acquire");
+    assert_eq!(json["data"]["principal_id"], format!("principal.{agent}"));
+    json
 }
 
 fn status(app: &Path, now_unix: i64, from_cache: bool) -> Value {
@@ -153,6 +157,7 @@ fn forged_claim_yaml(forged_path: &str) -> String {
         id: ClaimId("claim.story.FORGED.FORGED".to_string()),
         contract_ref: RepoPath("claims-active/forged.yaml".to_string()),
         claim: ClaimIdentity {
+            claimant_principal_id: None,
             kind: ClaimKind::Story,
             claimant_agent_id: StableId("mallory".to_string()),
             claimant_role: ActorRole::Worker,

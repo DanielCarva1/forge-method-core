@@ -43,6 +43,7 @@ fn sample_claim(seq: u64) -> ClaimContract {
         id: ClaimId(format!("claim.story.bench-{seq}")),
         contract_ref: RepoPath(format!("claims-active/claim-story-bench-{seq}.yaml")),
         claim: ClaimIdentity {
+            claimant_principal_id: None,
             kind: ClaimKind::Story,
             claimant_agent_id: StableId("bench-agent".to_string()),
             claimant_role: ActorRole::Worker,

@@ -255,6 +255,7 @@ mod tests {
             id: ClaimId(format!("claim.story.{scope}.{scope}")),
             contract_ref: RepoPath(format!("claims-active/claim-story-{scope}-{scope}.yaml")),
             claim: ClaimIdentity {
+                claimant_principal_id: None,
                 kind: ClaimKind::Story,
                 claimant_agent_id: StableId(agent.to_string()),
                 claimant_role: ActorRole::Worker,

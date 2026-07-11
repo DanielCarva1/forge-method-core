@@ -45,12 +45,13 @@ failure_policy:
   - "duplicate command refs and non-single-effect operations fail closed"
   - "revoked, unknown, or underprivileged credentials fail closed"
 
-next_boundary:
+completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
-  goal: "Propagate verified principal identity through claims, traces, WAL, and evidence."
+  result: "Snapshot principal binding now continues through claims, traces, WAL provenance, receipts, and MCP evidence."
 
 references:
   - "contracts/spec/execution-authority-snapshot-binding-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/claims-integrity-spine-spec.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

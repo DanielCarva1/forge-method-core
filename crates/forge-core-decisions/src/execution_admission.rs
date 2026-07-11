@@ -10,7 +10,7 @@
 //! The MCP/CLI adapter must derive the observations from trusted runtime state,
 //! and the kernel must evaluate this decision immediately before mutation.
 
-use crate::{check_write_against_claims, is_live, WriteCheck};
+use crate::{is_live, WriteCheck};
 use forge_core_contracts::{
     claim::{ActorRole, ClaimContractDocument},
     command::{CommandSideEffectPolicy, NetworkPolicy},
@@ -1032,7 +1032,9 @@ fn evaluate_claims(
                 &required_ref.0,
             );
         }
-        if claim.claim.claimant_agent_id != input.principal.agent_id {
+        if claim.claim.claimant_principal_id.as_ref() != Some(&input.principal.principal_id)
+            || claim.claim.claimant_agent_id != input.principal.agent_id
+        {
             push_issue(
                 issues,
                 ExecutionAdmissionIssueCode::ClaimPrincipalMismatch,
@@ -1077,8 +1079,9 @@ fn evaluate_claims(
             .iter()
             .map(|claim| claim.document.claim_contract.clone())
             .collect::<Vec<_>>();
-        match check_write_against_claims(
+        match crate::check_write_against_claims_for_principal(
             &file_targets,
+            &input.principal.principal_id,
             &input.principal.agent_id,
             &claims,
             input.now_unix,

@@ -81,6 +81,8 @@ fn admitted_input() -> ExecutionAdmissionInputDocument {
         .clone_into(&mut effect.tool_effect_contract.write_set[0].reference);
 
     let mut claim: ClaimContractDocument = parse_yaml(CLAIM_REF);
+    claim.claim_contract.claim.claimant_principal_id =
+        Some(PrincipalId("principal.codex-main".to_owned()));
     claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
     claim.claim_contract.claim.claimant_role = ActorRole::Driver;
     claim.claim_contract.lease.expected_state_version = state_version;
@@ -230,6 +232,24 @@ fn complete_single_effect_wal_snapshot_is_admitted() {
     assert_eq!(decision.validated_claim_revisions.len(), 1);
     assert_eq!(decision.validated_gate_revisions.len(), 1);
     assert!(decision.intent_digest.starts_with("sha256:"));
+}
+
+#[test]
+fn agent_only_claim_cannot_stand_in_for_verified_execution_principal() {
+    let mut input = admitted_input();
+    input.execution_admission.claim_snapshot.claims[0]
+        .document
+        .claim_contract
+        .claim
+        .claimant_principal_id = None;
+    rebind_authority_snapshot(&mut input);
+    rebind_intent(&mut input);
+    let decision = evaluate_execution_admission(&input).expect("deterministic decision");
+    assert_eq!(decision.status, ExecutionAdmissionStatus::Blocked);
+    assert!(decision
+        .issues
+        .iter()
+        .any(|issue| issue.code == ExecutionAdmissionIssueCode::ClaimPrincipalMismatch));
 }
 
 #[test]

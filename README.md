@@ -531,7 +531,7 @@ the kernel repeats mutable-authority Admission under retained locks immediately
 before the effect WAL begins. Read-only remains the default, and broader
 operation-wide/saga mutation is not claimed.
 
-### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5a)
+### Operate trusted MCP without hand-editing authority (P4b.4 + P4b.5)
 
 The built-in MCP surface remains read-only unless the operator explicitly
 enables the exact trusted single-effect posture. The normal path is agent
@@ -593,6 +593,15 @@ to roll back **both** stores remains outside this cooperative same-user
 guarantee. Use independent OS permissions, remote compare-and-swap storage, or
 equivalent isolation when that attacker is in scope.
 
+P4b.5b carries the registry-verified `ExecutionPrincipal` tuple
+(`principal_id`, `agent_id`, and `role`) through the complete governed path.
+Required execution claims must match all three fields; the effect-WAL Begin
+binds the tuple in canonical provenance; recovery cross-checks it against the
+authorization audit; and a durable `effect_staged` trace is written before the
+effect transaction begins. Applied kernel/MCP receipts expose both the
+principal and trace event id. The portable tuple is evidence, not authority:
+only the opaque registry-derived authorization capability can permit mutation.
+
 The mutating `tools/call` carries `_meta.attestation` fields
 `credential_id`, `audience`, `execution_intent_digest`, `nonce`, `ts`,
 `signature`, and `public_key_hex`. Forge selects the authoritative public key
@@ -606,7 +615,8 @@ generated client configuration, lists the exact `execute-operation` tool,
 transports the attestation over stdio, and applies one governed sidecar effect.
 It also proves that effect/replay WALs stay in the Project Link state root, the
 external head advances through replay consume, and no consumer-local
-`.forge-method` is created.
+`.forge-method` is created. The proof also checks that the receipt and durable
+trace contain the exact registry principal rather than only an agent label.
 
 Read-only tool subprocesses no longer resolve `forge-core` through `PATH` or
 inherit the host's full environment. The server pins its current executable,
@@ -800,6 +810,7 @@ forge-core autonomy route --policy-file policy-manual.yaml --no-json
 forge-core claim acquire \
   --root . \
   --scope story --id my-feature \
+  --principal-id principal.codex-worker-1 \
   --agent codex-worker-1 \
   --path src/auth.rs
 
@@ -815,6 +826,11 @@ forge-core claim release --root . --id claim.story.my-feature.my-feature --agent
 `--claims-dir` is an advanced override for tests, migrations, and emergency
 repair. Omit it for normal repo work so the CLI uses the resolved Forge project
 state root and its sidecar `claims-active/` directory.
+
+`--principal-id` preserves the verified actor across claim WAL projections and
+conflict evidence. It is optional only to keep historical claims readable;
+trusted MCP execution fails closed when its required claim lacks the exact
+verified principal, agent, and role tuple.
 
 ### Recover an expired handoff-required claim
 
@@ -963,8 +979,10 @@ gates.
   and `tools/list` through a signed applied sidecar mutation. P4b.5a adds the
   required operator-protected external replay head, policy identity binding,
   automatic startup/request advancement, and whole-pair rollback detection.
-  Complete Execution Principal propagation is next; operation-wide, saga, and
-  hostile-user isolation remain intentionally absent.
+  P4b.5b propagates the verified Execution Principal through claims, conflict
+  attribution, Admission, effect-WAL provenance, recovery, durable traces,
+  receipts, and MCP evidence. Operation-wide, saga, and hostile-user isolation
+  remain intentionally absent.
 
 **Not yet (roadmap)**
 - **State derivation layer** — `forge_core_store::derive_state` is now the

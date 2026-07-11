@@ -53,6 +53,8 @@ pub struct ClaimResult {
     pub claim_id: String,
     pub scope_kind: String,
     pub scope_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_id: Option<String>,
     pub agent_id: String,
     pub status: String,
     pub acquired_at: String,
@@ -117,6 +119,8 @@ pub struct ClaimReconcileTransitionSummary {
     pub claim_id: String,
     pub scope_kind: String,
     pub scope_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_id: Option<String>,
     pub agent_id: String,
     pub from: String,
     pub to: String,
@@ -132,6 +136,8 @@ pub struct ExpiredHandoffRequiredClaimSummary {
     pub claim_id: String,
     pub scope_kind: String,
     pub scope_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_id: Option<String>,
     pub agent_id: String,
     pub role: String,
     pub acquired_at: String,
@@ -178,6 +184,11 @@ impl ClaimResult {
             claim_id: c.id.0.clone(),
             scope_kind: scope_kind_slug(c.scope.kind),
             scope_id: c.scope.id.0.clone(),
+            principal_id: c
+                .claim
+                .claimant_principal_id
+                .as_ref()
+                .map(|principal| principal.0.clone()),
             agent_id: c.claim.claimant_agent_id.0.clone(),
             status: status_slug(c.status.value),
             acquired_at: c.lease.acquired_at.clone(),
@@ -619,6 +630,11 @@ fn expired_handoff_required_summary(
         claim_id: claim.id.0.clone(),
         scope_kind: scope_kind_slug(claim.scope.kind),
         scope_id: claim.scope.id.0.clone(),
+        principal_id: claim
+            .claim
+            .claimant_principal_id
+            .as_ref()
+            .map(|principal| principal.0.clone()),
         agent_id: claim.claim.claimant_agent_id.0.clone(),
         role: actor_role_slug(claim.claim.claimant_role),
         acquired_at: claim.lease.acquired_at.clone(),
@@ -662,6 +678,12 @@ fn reconcile_transition_summary(
         claim_id: transition.claim_id.0.clone(),
         scope_kind: scope_kind_slug(transition.updated.scope.kind),
         scope_id: transition.updated.scope.id.0.clone(),
+        principal_id: transition
+            .updated
+            .claim
+            .claimant_principal_id
+            .as_ref()
+            .map(|principal| principal.0.clone()),
         agent_id: transition.updated.claim.claimant_agent_id.0.clone(),
         from: status_slug(transition.from),
         to: status_slug(transition.to),
@@ -1184,6 +1206,9 @@ mod tests {
         AcquireRequest {
             scope_kind: ClaimScopeKind::Story,
             scope_id: ScopeId(scope_id.into()),
+            principal_id: Some(forge_core_contracts::PrincipalId(format!(
+                "principal.{agent}"
+            ))),
             agent_id: StableId(agent.into()),
             role: ActorRole::Worker,
             ttl_seconds: 600,
@@ -1742,11 +1767,12 @@ pub fn resolve_claims_dir_or_err(
 /// acquire operation surfaces a non-zero exit code.
 pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::{parse_role, parse_scope_kind, run_acquire};
-    use forge_core_contracts::{RepoPath, ScopeId, StableId};
+    use forge_core_contracts::{PrincipalId, RepoPath, ScopeId, StableId};
     use forge_core_decisions::AcquireRequest;
 
     let mut scope_kind: Option<String> = None;
     let mut scope_id: Option<String> = None;
+    let mut principal_id: Option<String> = None;
     let mut agent_id: Option<String> = None;
     let mut role = "worker".to_string();
     let mut ttl: u64 = 600;
@@ -1775,6 +1801,10 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
             "--agent" => {
                 idx += 1;
                 agent_id = Some(require_value_or_err(args, idx, "agent")?);
+            }
+            "--principal-id" => {
+                idx += 1;
+                principal_id = Some(require_value_or_err(args, idx, "principal-id")?);
             }
             "--role" => {
                 idx += 1;
@@ -1845,6 +1875,7 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     let req = AcquireRequest {
         scope_kind: sk,
         scope_id: ScopeId(scope_id),
+        principal_id: principal_id.map(PrincipalId),
         agent_id: StableId(agent_id),
         role: role_kind,
         ttl_seconds: ttl,

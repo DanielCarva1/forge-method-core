@@ -110,6 +110,9 @@ fn consumer_fixture(label: &str) -> ConsumerFixture {
     let claim_req = AcquireRequest {
         scope_kind: forge_core_contracts::claim::ClaimScopeKind::Story,
         scope_id: forge_core_contracts::ScopeId("story-current".to_string()),
+        principal_id: Some(forge_core_contracts::PrincipalId(
+            "principal.host".to_string(),
+        )),
         agent_id: forge_core_contracts::StableId("host".to_string()),
         role: forge_core_contracts::claim::ActorRole::Worker,
         ttl_seconds: 600,

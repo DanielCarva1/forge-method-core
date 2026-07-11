@@ -70,10 +70,10 @@ capability_boundary:
     with a reconciled activation proof.
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
-next_boundary:
+completed_follow_on:
   id: "P4b.5b-execution-principal-propagation"
-  requires:
-    - "verified principal identity in claims, traces, WAL, and evidence"
+  delivered:
+    - "verified principal identity in claims, traces, WAL provenance, receipts, and MCP evidence"
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
@@ -81,3 +81,4 @@ references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

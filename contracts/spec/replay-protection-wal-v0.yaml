@@ -1,10 +1,10 @@
 schema_version: "0.1"
 spec: "replay_protection_wal_v0"
-status: "p4b5a_externally_anchored_trusted_runtime"
+status: "p4b5_complete_principal_bound_externally_anchored_runtime"
 purpose: >-
   Provide a durable, bounded, single-use nonce reservation and recovery
-  substrate integrated with the dormant P4b.2c single-effect kernel boundary
-  without claiming that MCP or CLI mutation is enabled.
+  substrate integrated with the explicitly enabled trusted single-effect MCP
+  boundary without claiming broader CLI or multi-effect mutation.
 
 interface:
   rust_module: "forge_core_store::replay_wal"

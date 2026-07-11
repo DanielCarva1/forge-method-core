@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_deployment_policy_v0"
-status: "p4b5a_external_replay_anchor_required"
+status: "p4b5_complete_principal_bound_external_replay"
 purpose: >-
   Define a closed operator-owned deployment posture for the local MCP adapter
   without allowing policy validation itself to activate mutation.
@@ -46,7 +46,7 @@ checkpoint_boundary:
     - "operation-wide transaction or saga semantics"
     - "coordinated rollback of replay state and its independently protected external anchor"
     - "hostile-user isolation beyond the acknowledged same-user boundary"
-  next: "P4b.5b complete Execution Principal propagation"
+  next: "operation-wide transaction or complete typed saga semantics"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"
@@ -56,3 +56,4 @@ references:
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/mcp-real-client-readiness-v0.yaml"
   - "contracts/spec/replay-external-anchor-v0.yaml"
+  - "contracts/spec/execution-principal-propagation-v0.yaml"

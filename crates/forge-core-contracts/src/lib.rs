@@ -14,6 +14,7 @@ pub mod coordination_eval;
 pub mod decision;
 pub mod eval_run;
 pub mod evidence;
+pub mod execution_principal;
 pub mod gate;
 pub mod governance;
 pub mod guide_decision;
@@ -57,6 +58,7 @@ pub use decision::{
 };
 pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
+pub use execution_principal::ExecutionPrincipal;
 pub use gate::{GateContract, GateContractDocument};
 pub use governance::{
     ConflictContract, ConflictDetectionReason, ConflictPolicy, ConflictResolutionState,

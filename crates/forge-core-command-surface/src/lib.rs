@@ -276,7 +276,7 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
 pub const COMMAND_CLAIM: CommandSpec = CommandSpec {
     name: "claim",
     usage_lines:     &[
-                "       forge-core claim acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--principal-id <id>] [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
                 "       forge-core claim heartbeat [--root <path>] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
                 "       forge-core claim release [--root <path>] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
                 "       forge-core claim handoff [--root <path>] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
@@ -828,7 +828,7 @@ mod tests {
     fn local_usage_lines_strip_only_the_current_command_prefix() {
         assert_eq!(
             COMMAND_CLAIM.local_usage_line(COMMAND_CLAIM.usage_lines[0]),
-            "acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]"
+            "acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--principal-id <id>] [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]"
         );
         assert_eq!(
             COMMAND_PROJECT.local_usage_line(COMMAND_PROJECT.usage_lines[0]),

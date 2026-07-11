@@ -138,6 +138,9 @@ fn trusted_fixture() -> TrustedFixture {
     let mut claim: ClaimContractDocument =
         yaml_serde::from_str(&fs::read_to_string(source.join(CLAIM_REF)).expect("claim fixture"))
             .expect("typed claim");
+    claim.claim_contract.claim.claimant_principal_id = Some(forge_core_contracts::PrincipalId(
+        "principal.agent".to_owned(),
+    ));
     claim.claim_contract.claim.claimant_agent_id = StableId("agent".to_owned());
     claim.claim_contract.claim.claimant_role = ActorRole::Driver;
     claim.claim_contract.scope.paths = vec![forge_core_contracts::RepoPath(
@@ -429,11 +432,29 @@ async fn generated_config_drives_signed_mutation_through_official_rmcp_client() 
     let envelope: Value = serde_json::from_str(&text.text).expect("mutation envelope JSON");
     assert_eq!(envelope["status"], "applied");
     assert_eq!(
+        envelope["result"]["receipt"]["execution_principal"]["principal_id"],
+        "principal.agent"
+    );
+    assert_eq!(
+        envelope["result"]["receipt"]["execution_principal"]["agent_id"],
+        "agent"
+    );
+    assert_eq!(
         fs::read_to_string(&fixture.target).expect("committed target"),
         "p4b4d: official client applied\n"
     );
     assert!(fixture.state_root.join("wal/replay.fmr1").exists());
     assert!(fixture.state_root.join("wal/effects.ndjson").exists());
+    let traces = fs::read_to_string(fixture.state_root.join("traces/events.ndjson"))
+        .expect("principal trace log");
+    let principal_trace: Value = serde_json::from_str(
+        traces
+            .lines()
+            .find(|line| line.contains("principal.effect-staged"))
+            .expect("principal trace line"),
+    )
+    .expect("principal trace JSON");
+    assert_eq!(principal_trace["actor"]["principal_id"], "principal.agent");
     let anchor: Value =
         serde_json::from_slice(&fs::read(&fixture.replay_anchor).expect("external replay anchor"))
             .expect("replay anchor JSON");

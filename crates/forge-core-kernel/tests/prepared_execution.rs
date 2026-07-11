@@ -159,6 +159,8 @@ where
         .clone_from(&EFFECT_TARGET.to_owned());
 
     let mut claim: ClaimContractDocument = parse_yaml(CLAIM_REF);
+    claim.claim_contract.claim.claimant_principal_id =
+        Some(PrincipalId("principal.codex-main".to_owned()));
     claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
     claim.claim_contract.claim.claimant_role = ActorRole::Driver;
     claim.claim_contract.lease.expected_state_version = state_version;
@@ -462,6 +464,14 @@ fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() 
         panic!("valid admitted execution must commit");
     };
     assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+    assert_eq!(
+        receipt.execution_principal.principal_id.0,
+        "principal.codex-main"
+    );
+    assert_eq!(receipt.execution_principal.agent_id.0, "codex-main");
+    assert!(receipt
+        .principal_trace_event_id
+        .ends_with(".principal.effect-staged"));
     assert_eq!(receipt.application.applied_refs, vec![EFFECT_TARGET]);
     assert!(receipt
         .replay
@@ -491,6 +501,14 @@ fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() 
         .and_then(|record| record.execution_provenance.as_ref())
         .is_some());
     assert_eq!(
+        records[0]
+            .execution_provenance
+            .as_ref()
+            .expect("provenance")
+            .document["execution_principal"]["principal_id"],
+        "principal.codex-main"
+    );
+    assert_eq!(
         records.last().map(|record| record.stage),
         Some(EffectWalStage::ReplayConsumed)
     );
@@ -499,6 +517,14 @@ fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() 
     let reservation = replay.reservations.values().next().expect("reservation");
     assert_eq!(reservation.state, ReplayReservationState::Consumed);
     assert_eq!(replay.valid_record_count, 2);
+    let trace_text = fs::read_to_string(project_root.join(".forge-method/traces/events.ndjson"))
+        .expect("execution principal trace");
+    let trace: serde_json::Value =
+        serde_json::from_str(trace_text.lines().last().expect("trace line")).expect("trace JSON");
+    assert_eq!(trace["event_id"], receipt.principal_trace_event_id);
+    assert_eq!(trace["actor"]["principal_id"], "principal.codex-main");
+    assert_eq!(trace["actor"]["agent_id"], "codex-main");
+    assert_eq!(trace["authority"]["capability_ids"][0], "operation.execute");
     fs::remove_dir_all(project_root).expect("cleanup");
 }
 

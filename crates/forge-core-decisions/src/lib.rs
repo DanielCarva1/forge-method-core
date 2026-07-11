@@ -78,7 +78,8 @@ pub use claim_engine::{
 };
 
 pub use conflict_detection::{
-    check_write_against_claims, repo_paths_overlap, BlockDetail, WriteCheck,
+    check_write_against_claims, check_write_against_claims_for_principal, repo_paths_overlap,
+    BlockDetail, WriteCheck,
 };
 pub use isolation::{
     branch_name_for, detect_isolation_conflict, is_live as isolation_is_live, propose_merge,

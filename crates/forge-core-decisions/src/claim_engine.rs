@@ -133,6 +133,7 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 pub struct AcquireRequest {
     pub scope_kind: ClaimScopeKind,
     pub scope_id: ScopeId,
+    pub principal_id: Option<PrincipalId>,
     pub agent_id: StableId,
     pub role: ActorRole,
     /// Lease time-to-live in seconds. After this elapses without heartbeat the
@@ -234,6 +235,8 @@ pub struct ActiveClaimSummary {
     pub claim_id: String,
     pub scope_kind: String,
     pub scope_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_id: Option<String>,
     pub agent_id: String,
     pub role: String,
     pub acquired_at: String,
@@ -349,8 +352,8 @@ pub fn acquire(
                 // F07.4: emit a structured ConflictContract only when the holder
                 // is a distinct principal from the requester (a real A↔B conflict).
                 conflict: build_conflict(
-                    &req.agent_id,
-                    &holder,
+                    ConflictActor::new(req.principal_id.as_ref(), &req.agent_id),
+                    ConflictActor::new(c.claim.claimant_principal_id.as_ref(), &holder),
                     IntentScopeKind::Project,
                     req.scope_id.0.as_str(),
                     ConflictDetectionReason::AuthorityScopeOverlap,
@@ -385,8 +388,8 @@ pub fn acquire(
             // distinct principal from the requester. The contested scope is the
             // overlapping path prefix (PathOverlap detection reason).
             let conflict = build_conflict(
-                &req.agent_id,
-                &holder,
+                ConflictActor::new(req.principal_id.as_ref(), &req.agent_id),
+                ConflictActor::new(c.claim.claimant_principal_id.as_ref(), &holder),
                 IntentScopeKind::PathPrefix,
                 path.0.as_str(),
                 ConflictDetectionReason::PathOverlap,
@@ -430,6 +433,7 @@ pub fn acquire(
         contract_ref: RepoPath("contracts/claims/claim-contract-v0.yaml".into()),
         claim: ClaimIdentity {
             kind: req.default_kind(),
+            claimant_principal_id: req.principal_id.clone(),
             claimant_agent_id: req.agent_id.clone(),
             claimant_role: req.role,
             registry_ref: None,
@@ -740,6 +744,11 @@ pub fn project_active(claims: &[ClaimContract], now_unix: i64) -> ActiveClaimsVi
             claim_id: c.id.0.clone(),
             scope_kind: scope_kind_slug(c.scope.kind),
             scope_id: c.scope.id.0.clone(),
+            principal_id: c
+                .claim
+                .claimant_principal_id
+                .as_ref()
+                .map(|principal| principal.0.clone()),
             agent_id: c.claim.claimant_agent_id.0.clone(),
             role: actor_role_slug(c.claim.claimant_role),
             acquired_at: c.lease.acquired_at.clone(),
@@ -789,20 +798,38 @@ fn first_overlapping_path(requested: &[RepoPath], existing: &[RepoPath]) -> Opti
 /// F07.5 deduplicates on it). `now_unix` drives `detected_at`; the resolution
 /// starts `Pending` (F07.5 moves it to `Resolved`/`Escalated`).
 #[must_use]
+#[derive(Clone, Copy)]
+struct ConflictActor<'a> {
+    principal: Option<&'a PrincipalId>,
+    agent: &'a StableId,
+}
+
+impl<'a> ConflictActor<'a> {
+    const fn new(principal: Option<&'a PrincipalId>, agent: &'a StableId) -> Self {
+        Self { principal, agent }
+    }
+}
+
 fn build_conflict(
-    requester: &StableId,
-    holder: &StableId,
+    requester: ConflictActor<'_>,
+    holder: ConflictActor<'_>,
     scope_kind: IntentScopeKind,
     contested_target: &str,
     reason: ConflictDetectionReason,
     now_unix: i64,
 ) -> Option<ConflictContract> {
+    let principal_a = requester
+        .principal
+        .cloned()
+        .unwrap_or_else(|| PrincipalId(requester.agent.0.clone()));
+    let principal_b = holder
+        .principal
+        .cloned()
+        .unwrap_or_else(|| PrincipalId(holder.agent.0.clone()));
     // Same principal re-acquiring is continuation (heartbeat), not conflict.
-    if requester == holder {
+    if principal_a == principal_b {
         return None;
     }
-    let principal_a = PrincipalId(requester.0.clone());
-    let principal_b = PrincipalId(holder.0.clone());
     // Deterministic, ordering-independent id: the two principals are sorted so
     // alice-vs-bob and bob-vs-alice produce the same conflict_id.
     let (lo, hi) = if principal_a.0 <= principal_b.0 {
@@ -815,8 +842,8 @@ fn build_conflict(
         conflict_id,
         // Intent refs are not yet wired (F07.5 ledger links them); use the
         // principals + scope as the identifying tuple for now.
-        intent_a: StableId(requester.0.clone()),
-        intent_b: StableId(holder.0.clone()),
+        intent_a: StableId(principal_a.0.clone()),
+        intent_b: StableId(principal_b.0.clone()),
         principal_a,
         principal_b,
         contested_scope: IntentScope {
@@ -892,6 +919,7 @@ mod tests {
         AcquireRequest {
             scope_kind: ClaimScopeKind::Story,
             scope_id: ScopeId(scope_id.into()),
+            principal_id: Some(PrincipalId(agent.into())),
             agent_id: StableId(agent.into()),
             role: ActorRole::Worker,
             ttl_seconds: 600,
@@ -1113,6 +1141,25 @@ mod tests {
     }
 
     #[test]
+    fn distinct_principals_sharing_agent_label_still_emit_conflict() {
+        let mut holder = manual_claim("shared", "agent-shared", T0 + 600, ClaimStatus::Active);
+        holder.claim.claimant_principal_id = Some(PrincipalId("principal.alpha".into()));
+        let mut request = req("shared", "agent-shared");
+        request.principal_id = Some(PrincipalId("principal.beta".into()));
+
+        let ClaimLifecycleDecision::Rejected(ClaimRejection::AlreadyClaimedByOther {
+            conflict: Some(conflict),
+            ..
+        }) = acquire(&[holder], &request, T0)
+        else {
+            panic!("distinct execution principals must produce a conflict");
+        };
+        let principals = [conflict.principal_a.0, conflict.principal_b.0];
+        assert!(principals.iter().any(|value| value == "principal.alpha"));
+        assert!(principals.iter().any(|value| value == "principal.beta"));
+    }
+
+    #[test]
     fn acquire_emits_conflict_with_correct_attribution() {
         // Two distinct principals contesting a scope → full attribution check.
         let holder = manual_claim("s1", "alice", T0 + 600, ClaimStatus::Active);
@@ -1322,6 +1369,7 @@ mod tests {
         let view = project_active(&[live, expired, released], T0);
         assert_eq!(view.active.len(), 1);
         assert_eq!(view.active[0].scope_id, "s1");
+        assert_eq!(view.active[0].principal_id.as_deref(), Some("agentA"));
         assert_eq!(view.active[0].agent_id, "agentA");
     }
 
@@ -1331,6 +1379,7 @@ mod tests {
         let view = project_active(&[live], T0);
         let json = serde_json::to_string(&view).unwrap();
         assert!(json.contains("\"scope_id\":\"s1\""));
+        assert!(json.contains("\"principal_id\":\"agentA\""));
         assert!(json.contains("\"agent_id\":\"agentA\""));
         assert!(json.contains("\"status\":\"active\""));
     }

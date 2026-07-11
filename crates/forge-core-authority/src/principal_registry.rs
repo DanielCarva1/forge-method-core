@@ -10,6 +10,7 @@ use std::fmt;
 
 use forge_core_command_surface::command_by_name;
 use forge_core_contracts::operation::CallerRole;
+use forge_core_contracts::ExecutionPrincipal;
 use forge_core_contracts::{PrincipalId, StableId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -114,6 +115,11 @@ impl AuthorizedPrincipal {
     }
 
     #[must_use]
+    pub fn execution_principal(&self) -> ExecutionPrincipal {
+        ExecutionPrincipal::new(self.principal_id.clone(), self.agent_id.clone(), self.role)
+    }
+
+    #[must_use]
     pub fn audit(&self) -> AuthorizedPrincipalAudit {
         AuthorizedPrincipalAudit {
             credential_id: self.credential_id.clone(),
@@ -140,6 +146,13 @@ pub struct AuthorizedPrincipalAudit {
     pub audience: String,
     pub authority_grants: Vec<StableId>,
     pub public_key_fingerprint: String,
+}
+
+impl AuthorizedPrincipalAudit {
+    #[must_use]
+    pub fn execution_principal(&self) -> ExecutionPrincipal {
+        ExecutionPrincipal::new(self.principal_id.clone(), self.agent_id.clone(), self.role)
+    }
 }
 
 /// Opaque proof that an operator-registry principal authorized one exact
@@ -911,6 +924,14 @@ mod tests {
         assert_eq!(principal.role(), CallerRole::Driver);
         assert_eq!(principal.authority_grants()[0].0, "operation.execute");
         assert!(principal.public_key_fingerprint().starts_with("sha256:"));
+        assert_eq!(
+            principal.execution_principal(),
+            ExecutionPrincipal::new(
+                PrincipalId("principal.codex-main".to_owned()),
+                StableId("codex-main".to_owned()),
+                CallerRole::Driver,
+            )
+        );
         let audit = serde_json::to_value(principal.audit()).expect("serialize audit projection");
         assert_eq!(audit["principal_id"], "principal.codex-main");
     }
