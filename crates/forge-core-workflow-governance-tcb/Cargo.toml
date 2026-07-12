@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "forge-core-workflow-governance-tcb"
 version.workspace = true
 edition.workspace = true

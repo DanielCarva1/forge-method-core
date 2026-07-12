@@ -8,3 +8,4 @@
 *.json text eol=lf
 *.ndjson text eol=lf
 *.toml text eol=lf
+*.rs text eol=lf
