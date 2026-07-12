@@ -60,6 +60,23 @@ Active implementation plan:
   that classifies every legacy workflow and links it to candidate governance
   targets. In P5a it is compatibility evidence only, never execution or
   retirement authority.
+- **Workflow Governance Release Manifest**: versioned, content-addressed P5d
+  rollout intent under a stable lineage. It lists one explicit disposition for
+  every catalog workflow and an ordered set of candidate batches. A raw
+  manifest cannot claim executable or retired state.
+- **Workflow Migration Batch**: a candidate-only set of workflow/legacy-digest/
+  policy bindings plus representative, adversarial, and shadow evidence refs.
+  Only global release composition may validate a batch; deserialization never
+  activates it.
+- **Workflow Release Scorecard**: a deterministic read-only projection derived
+  from the manifest, exact catalog, P5a audit, batches, composed policy graph,
+  and content-integrity-checked embedded evidence refs. P5d.1 does not prove
+  behavioral sufficiency; its states are structural candidate/compatibility/
+  quarantine/domain/retirement-pending only, not runtime authority.
+- **Workflow Retirement Authorization**: a closed signed proposal binding the
+  exact legacy workflow, replacement policy, release, compatibility window,
+  shadow evidence, deletion evidence, reviewer registry, audience, and time.
+  Trusted signature and semantic verification are required before retirement.
 - **Workflow Policy**: the closed, kernel-evaluated definition of workflow
   eligibility, prerequisite policies, obligations, claims, evaluator rules,
   capability requirements, and irreducible Decision Requests. It defines what
@@ -125,6 +142,12 @@ Active implementation plan:
   and a repository-owned plan, then returns one deterministic classification,
   target-link, shadow-parity, and deletion-baseline manifest. Its Interface is
   read-only; P5a deliberately cannot execute, mutate, or retire workflows.
+- The **Workflow Governance Release Module** validates closed P5d release and
+  batch candidates against the complete P5a inventory, canonical digests,
+  embedded evidence, and the globally composed policy graph. `guide
+  rollout-audit` exposes only `candidate_only` results. Runtime release
+  admission, project pinning/upgrades, and trusted retirement remain later P5d
+  slices.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -141,9 +164,12 @@ Active implementation plan:
 
 P5c completed executable governance for the selected 15-policy golden path,
 including its signed observation boundary, adversarial golden-path proof, and
-full workspace gates. P5d now owns
-remaining-catalog rollout, quarantine, and evidence-backed retirement of legacy
-authority. The P5c workflow path targets the local agent-facing CLI; allowlist
+full workspace gates. P5d.1 now establishes versioned release/batch contracts,
+explicit catalog disposition, content-addressed evidence validation, and a
+candidate-only scorecard; it does not activate a new release or retire legacy
+authority. Later P5d slices own opaque release admission, project pinning,
+reviewed rollout, behavioral comparison, quarantine, and signed deletion-backed
+retirement. The P5c workflow path targets the local agent-facing CLI; allowlist
 metadata does not constitute an end-to-end MCP workflow Adapter.
 
 The workflow ledger's internal hash chain detects record tampering,

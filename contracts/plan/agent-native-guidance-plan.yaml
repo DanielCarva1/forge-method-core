@@ -485,7 +485,7 @@ phases:
           isolation boundary.
         publication: "one pullable golden-path migration checkpoint after full workspace gates"
       - id: "P5d-catalog-rollout-and-legacy-retirement"
-        status: "pending"
+        status: "in_progress"
         size: "medium_to_large"
         depends_on: ["P5c-golden-path-workflow-migration"]
         outcome: >-
@@ -503,6 +503,70 @@ phases:
           - "retirement requires observed compatibility and successful deletion behavior"
           - "unknown or ambiguous workflows remain visible and non-authoritative"
           - "P5 completion status is evidence-backed rather than catalog-count theater"
+        slices:
+          - id: "P5d.1-versioned-release-batch-and-scorecard-foundation"
+            status: "completed"
+            size: "medium_to_large"
+            outcome: >-
+              Closed release, batch, quarantine, compatibility, retirement,
+              and derived scorecard contracts make every catalog disposition
+              explicit without granting executable or retirement authority.
+            delivers:
+              - "stable governance lineage plus versioned content-addressed release and batch identity"
+              - "exhaustive per-workflow disposition intent with no optimistic fallback"
+              - "global composition validation and deterministic candidate scorecard"
+              - "schema and CLI audit surfaces that remain read-only and candidate-only"
+            exit:
+              - "raw manifest or batch YAML cannot claim executable or retired state"
+              - "missing, duplicate, cross-batch, domain-leak, digest, version, and composition errors fail closed"
+              - "scorecard state is derived from validated inputs and cannot improve through authored labels or counts"
+          - id: "P5d.2-opaque-release-admission-and-project-pinning"
+            status: "pending"
+            size: "large"
+            depends_on: ["P5d.1-versioned-release-batch-and-scorecard-foundation"]
+            outcome: >-
+              Projects remain pinned to their admitted governance release and
+              move releases only through an atomic, auditable kernel upgrade.
+            exit:
+              - "installing a newer binary cannot silently change the active project release"
+              - "failed upgrade preserves the prior release and replacement-agent recovery selects the same release"
+              - "caller paths and local contract overrides cannot enter runtime admission"
+          - id: "P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"
+            status: "pending"
+            size: "large"
+            depends_on: ["P5d.2-opaque-release-admission-and-project-pinning"]
+            outcome: >-
+              The first non-golden batch is compiled from typed overlays,
+              unresolved semantics are quarantined, and behavioral comparison
+              measures governed outcomes rather than catalog projection bytes.
+            exit:
+              - "free-form legacy prose never becomes runtime authority"
+              - "every migrated workflow has positive, negative, ambiguity, false-completion, stale, resume, and ablation evidence"
+              - "quarantine remains visible and cannot satisfy routing, prerequisites, readiness, or completion"
+          - id: "P5d.4-remaining-catalog-reviewed-rollout"
+            status: "pending"
+            size: "large"
+            depends_on: ["P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"]
+            outcome: >-
+              Remaining core candidates roll out in reviewed bounded batches;
+              domain-specific or extension-authoring knowledge remains outside
+              core authority for P6.
+            exit:
+              - "every one of the 110 catalog workflows has one explicit visible disposition"
+              - "batch composition and selection remain deterministic at catalog scale"
+              - "P6 candidates cannot leak into the core executable denominator"
+          - id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
+            status: "pending"
+            size: "large"
+            depends_on: ["P5d.4-remaining-catalog-reviewed-rollout"]
+            outcome: >-
+              Legacy authority is retired only by a verified authorization
+              bound to exact replacement, release, compatibility, shadow, and
+              deletion evidence.
+            exit:
+              - "removing retired legacy documents cannot change routing, readiness, verdicts, receipts, or continuation"
+              - "consumer compatibility window and typed replacement diagnostics are observed before retirement"
+              - "final scorecard separates executable, compatibility-only, quarantined, domain-pack, and retired states with evidence digests"
         publication: "one pullable P5 completion checkpoint after full workspace gates"
 
   - id: "P6-domain-pack-ecosystem"
@@ -642,12 +706,14 @@ first_executable_slice:
     - "P5b opaque verified-kernel typestate seam, advisory-playbook deletion proof, and simulation-only legacy compatibility Adapter"
     - "P5c admitted 15-policy golden path, signed receipt-backed Project Snapshot Adapter, atomic multi-record ledger TCB, agent-facing CLI, shadow comparison, and replacement-agent continuity"
     - "P5c adversarial stale/contradictory evidence, capability, applicability, waiver, replay, future-policy, junction-safe real-binary, validator, clippy, formatting, all-target, and full-workspace gates"
+    - "P5d.1 closed versioned release, candidate batch, explicit disposition, quarantine, compatibility lifecycle, and retirement proposal contracts"
+    - "P5d.1 canonical generated 110-entry foundation, real embedded 15-policy batch, content-integrity-only evidence refs, deterministic structural scorecard, CLI audit, and aggregate repo validator"
   next_action: >-
-    P5a, P5b, and P5c are complete. Next execute P5d catalog rollout and legacy
-    retirement: convert the remaining catalog in reviewed batches, quarantine
-    unresolved or ambiguous workflows, measure migrated-versus-legacy behavior,
-    and retire authority only where executable coverage and deletion evidence
-    prove that no safety-critical behavior is lost.
+    P5d.1 is complete as a candidate-only release foundation. Next execute
+    P5d.2 opaque release admission and project pinning: separate stable lineage
+    from active release identity, preserve existing P5c ledgers, and require an
+    atomic auditable upgrade before any newly composed batch can govern live
+    work.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

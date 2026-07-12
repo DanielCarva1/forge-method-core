@@ -88,4 +88,7 @@ pub enum FamilyKind {
     HealthRecovery,
     MigrationManifest,
     WorkflowGovernancePolicy,
+    WorkflowGovernanceRelease,
+    WorkflowMigrationBatch,
+    WorkflowRetirementAuthorization,
 }

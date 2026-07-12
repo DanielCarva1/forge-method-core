@@ -1,0 +1,135 @@
+schema_version: "0.1"
+spec: "workflow_governance_release_v0"
+status: "p5d_1_implemented"
+purpose: >-
+  Define the versioned, fail-closed catalog rollout boundary that can scale
+  beyond the P5c golden-path bundle without silently changing existing project
+  authority or presenting prose migration as executable governance.
+
+problem:
+  immutable_p5c_identity: >-
+    P5c ledger records are bound to one admitted bundle digest. Appending
+    policies to that bundle would change its identity and can strand an
+    existing project. P5d therefore introduces stable lineage, versioned
+    releases, and content-addressed batches before runtime rollout.
+  catalog_count_theater: >-
+    P5a exact projection proves catalog inventory compatibility, not behavioral
+    coverage. Free-form triggers, steps, done conditions, blockers, and handoff
+    text cannot become predicates, evaluators, capabilities, or completion
+    authority through automatic conversion.
+
+contracts:
+  release_manifest:
+    rust_type: "WorkflowGovernanceReleaseManifestDocument"
+    role: "repository-owned release intent; never runtime admission by deserialization"
+    binds:
+      - "stable lineage and versioned release identity"
+      - "previous release digest and legacy catalog digest"
+      - "ordered content-addressed candidate batches"
+      - "one explicit disposition intent for every catalog workflow"
+      - "non-authoritative compatibility and consumer diagnostic policy"
+  migration_batch:
+    rust_type: "WorkflowMigrationBatchDocument"
+    authority: "candidate_only"
+    binds:
+      - "source catalog digest"
+      - "workflow, legacy digest, policy reference, and closed policy content"
+      - "batch version and predecessor when present"
+  retirement_authorization:
+    rust_type: "WorkflowRetirementAuthorizationDocument"
+    role: "closed signed authorization proposal; trusted verification is still required"
+    binds:
+      - "workflow and exact legacy digest"
+      - "replacement policy and policy digest"
+      - "governance release digest"
+      - "executable coverage, shadow, deletion, and consumer compatibility evidence"
+      - "compatibility window, reviewer credential registry, audience, nonce, and expiry"
+
+authored_disposition_intents:
+  migration_candidate: "names a batch and policy candidate; does not claim executable"
+  compatibility_only: "preserves a visible read-only legacy projection with a typed reason"
+  quarantined: "records ambiguous or unsafe semantics, owner, blockers, and typed reason"
+  domain_pack_candidate: "defers domain-specific knowledge, evaluator, lifecycle, or Adapter needs to P6"
+  retirement_candidate: "names a proposed replacement and authorization; does not claim retired"
+  forbidden_authored_states:
+    - "executable"
+    - "retired"
+
+derived_scorecard:
+  authority: "pure read-only audit output"
+  candidate_states:
+    - "migration_candidate_structurally_valid"
+    - "compatibility_only"
+    - "quarantined"
+    - "domain_pack_candidate"
+    - "retirement_pending_verification"
+  rules:
+    - "catalog entries are exhaustive and unique; no unlisted fallback exists"
+    - "release, batch, workflow, policy, and legacy digests are canonical and exact"
+    - "batch order, ids, versions, bindings, policies, priorities, and references are globally unique and deterministic"
+    - "the composed policy graph passes the same closed governance validator as an individual bundle"
+    - "domain-pack and quarantined entries cannot enter a core migration batch"
+    - "retirement stays pending until trusted signature, time, compatibility, shadow, deletion, and replacement verification all pass"
+    - "authored labels and counts never improve a derived state"
+  evidence_assurance: >-
+    P5d.1 verifies only that referenced evidence artifacts are repository-owned,
+    embedded, and content-addressed by exact SHA-256. It does not infer that an
+    arbitrary artifact is behaviorally sufficient. Typed scenario/result and
+    workflow/policy bindings are required by P5d.3 before runtime admission.
+
+runtime_boundary:
+  p5d_1: >-
+    Release and batch documents remain audit input only. P5d.1 does not replace
+    the P5c admitted bundle, rewrite ledger identity, activate a batch, or
+    authorize retirement.
+  p5d_2: >-
+    A later opaque admitted-release loader must use only embedded registry
+    inputs, pin the active release per project, and upgrade atomically under the
+    kernel lock. Caller paths and disk overrides remain simulation/audit-only.
+  p6: >-
+    Domain Pack composition, lifecycle, installation, and trust stay outside
+    this core release contract.
+
+initial_catalog_assessment:
+  executable_p5c: 15
+  profile_ready_only_after_typed_overlay: 41
+  explicit_quarantine_candidates: 19
+  declared_domain_pack_candidates: 18
+  extension_or_domain_lane_candidates_for_p6_review: 17
+  automatically_safe_from_free_form_yaml: 0
+  retirement_ready_outside_golden_path: 0
+  note: >-
+    These counts guide the next reviewed batches but are not authority. The
+    release audit must bind exact workflow ids and evidence before deriving any
+    candidate state.
+
+adversarial_requirements:
+  - "unknown fields, versions, algorithms, dispositions, policies, and reason codes reject"
+  - "missing, duplicate, overlapping, or extra workflow entries reject"
+  - "bad content digest, predecessor, embedded ref, batch order, or catalog identity rejects"
+  - "cross-batch duplicate workflow, policy, content id, or priority rejects"
+  - "dangling cross-batch prerequisites and cycles reject"
+  - "raw candidate batch cannot become executable authority"
+  - "quarantine and domain-pack candidates cannot satisfy core readiness"
+  - "retirement authorization replay across workflow, policy, release, audience, nonce, or digest rejects"
+  - "changing only authored labels or counts cannot improve the scorecard"
+
+non_goals:
+  - "no automatic interpretation of legacy prose as predicates or evidence rules"
+  - "no silent activation when a newer Forge binary is installed"
+  - "no P5c ledger migration or project release upgrade in P5d.1"
+  - "no claim that the remaining 95 workflows are executable or retirement-ready"
+  - "no Domain Pack runtime or game-specific special case in core"
+
+references:
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/spec/workflow-migration-foundation-v0.yaml"
+  - "contracts/spec/workflow-governance-kernel-v0.yaml"
+  - "contracts/spec/workflow-governance-golden-path-v0.yaml"
+  - "contracts/policies/workflow-migration-foundation-v0.yaml"
+  - "contracts/workflow-governance/golden-path-v0.yaml"
+  - "contracts/migration/workflow-governance-release-foundation-v0.yaml"
+  - "contracts/migration/workflow-governance-batch-golden-path-v0.yaml"
+  - "contracts/evidence/workflow-release-representative-fixtures-v0.yaml"
+  - "contracts/evidence/workflow-release-adversarial-fixtures-v0.yaml"
+  - "contracts/evidence/workflow-release-shadow-report-v0.yaml"

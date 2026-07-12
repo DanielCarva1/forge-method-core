@@ -28,6 +28,9 @@ fn generated_schemas_cover_v0_contract_surface() {
         "contract_family_inventory",
         "field_evidence_registry",
         "workflow_migration_plan",
+        "workflow_governance_release_manifest",
+        "workflow_migration_batch",
+        "workflow_retirement_authorization",
         "workflow_governance_bundle",
         "workflow_governance_evaluation",
         "workflow_governance_ledger",
@@ -84,4 +87,45 @@ fn workflow_governance_views_make_non_mutation_boundary_explicit() {
     assert!(evaluation
         .authority_note
         .contains("candidate completion is not authority"));
+}
+
+#[test]
+fn workflow_release_views_keep_candidate_and_trusted_authority_boundaries_explicit() {
+    let views = compact_agent_views();
+
+    let manifest = views
+        .iter()
+        .find(|view| view.family_id == "workflow_governance_release_manifest")
+        .expect("release manifest schema view");
+    assert_eq!(
+        manifest.root_key,
+        Some("workflow_governance_release_manifest")
+    );
+    assert!(manifest.authority_note.contains("intent only"));
+    assert!(manifest
+        .authority_note
+        .contains("trusted derived admission"));
+
+    let batch = views
+        .iter()
+        .find(|view| view.family_id == "workflow_migration_batch")
+        .expect("migration batch schema view");
+    assert_eq!(batch.root_key, Some("workflow_migration_batch"));
+    assert!(batch.authority_note.contains("candidate-only"));
+    assert!(batch
+        .authority_note
+        .contains("never grant executable authority"));
+
+    let retirement = views
+        .iter()
+        .find(|view| view.family_id == "workflow_retirement_authorization")
+        .expect("retirement authorization schema view");
+    assert_eq!(
+        retirement.root_key,
+        Some("workflow_retirement_authorization")
+    );
+    assert!(retirement.authority_note.contains("signature verification"));
+    assert!(retirement
+        .authority_note
+        .contains("deserialization is not authority"));
 }

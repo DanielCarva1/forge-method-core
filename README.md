@@ -21,51 +21,63 @@ forge-core start --root <repo> --json
 ```
 
 - **Fresh repo** (no `.forge-method.yaml`): `start` creates the Project Link
-  + sibling sidecar and seeds the authoritative phase record (`1-discovery`),
-  so the agent gets a ready project in one command.
+  + sibling sidecar and seeds the bootstrap compatibility phase record
+  (`1-discovery`), so the agent gets a ready project in one command. The
+  workflow ledger becomes P5 governance authority after `workflow init`.
 - **Broken sidecar** (link exists but state root missing): `start` repairs it
   idempotently. A link pointing at a non-default sidecar fails closed rather
   than silently overwriting.
-- **Healthy project**: `start` reports the current bootstrap state and the
-  concrete next step (typically `guide describe` or authoring the first
-  operation contract).
+- **Healthy project**: `start` reports the current bootstrap state and returns
+  structured argv for `workflow init`. Initialization is idempotent, including
+  for an existing governed project; the agent then calls `workflow next`.
 
-Re-run `forge-core start` whenever you open a new chat on the project for
-legacy orientation. For the P5c executable golden path, the agent runs
-`forge-core workflow init --root <repo> --json` once and
-`forge-core workflow resume --root <repo> --json` in later chats. Workflow,
-phase, policy bundle, and readiness target are derived by the kernel; the agent
-does not pass them on the command line. `state.yaml` remains a compatibility
-projection and is not workflow-governance authority.
+Re-run `forge-core start` whenever you open a new chat on the project. The host
+agent executes the returned idempotent `workflow init` argv and then calls
+`workflow next`; an integration that already knows the ledger is initialized
+may use `workflow resume` to reconstruct the same durable guidance. Workflow,
+phase, policy bundle, and readiness target are derived by the kernel; neither
+the human nor the agent passes them on the command line. `state.yaml` remains a
+compatibility projection and is not workflow-governance authority.
 
-### The orchestrator loop: `start → decide → execute`
+### The agent-native loop: `start → workflow init/resume → workflow next`
 
-Once bootstrapped, the agent follows a three-step loop where each command
-feeds the next:
+Once bootstrapped, the agent follows the governed loop:
 
 1. **`forge-core start --root <repo> --json`** — bootstraps/orients, returns
-   the current phase.
-2. **`forge-core guide decide --root <repo> --decision-file <intent.yaml> --json`**
-   — the intelligent router. Returns the recommended workflow **and a binding
-   `enforcement_policy`**: whether a claim is required (`claim_required`), the
-   autonomy lane (`fast`/`rigorous`), and which gates the runtime will attach.
-   The agent reads the policy and complies (acquire a claim if required).
-3. **`forge-core execute-operation --root <repo> --operation <op.yaml> --json`**
-   — executes the operation. The kernel runs `ClaimCoverageGate` + `PhaseGate`
-   before any WAL append, enforcing the policy the guide emitted.
+   the project bootstrap state.
+2. **`forge-core workflow init --root <repo> --json`** — idempotently creates
+   the governed workflow ledger. In later chats use **`workflow resume`**.
+3. **`forge-core workflow next --root <repo> --json`** — derives the current
+   policy, obligations, evidence/capability gaps, decisions, and ranked next
+   actions without caller-selected workflow or phase.
+4. The host agent performs the returned action, records only authorized
+   observations, and asks `workflow next` again. When an action needs a trusted
+   repository mutation, `execute-operation` independently applies its existing
+   Claim Coverage and Phase gates before any WAL append.
 
-This is the "protocol that guarantees quality" made concrete: the agent is
-guided through the best path, and the runtime refuses anything that violates
-coordination — proportionally, so low-autonomy work never gets constrained.
+This makes quality governance concrete: the agent is guided through an
+evidence-backed path, and the runtime refuses violations of authority it has
+actually admitted. Forge reduces hidden gaps and false progress; it does not
+claim that any protocol can guarantee product quality or discover every
+unknown unknown.
 
-### One command per chat (the `start-forge` skill)
+`guide describe`, `guide status`, and `guide decide` remain available as
+read-only compatibility and diagnostic surfaces for existing consumers. They
+may describe eligible legacy workflows or validate a caller-authored legacy
+recommendation, but they are non-authoritative for P5 workflow governance: they
+cannot select the executable policy, advance phase, authorize completion, or
+write the workflow ledger. New agent integrations should use `workflow
+init|next|resume` instead.
 
-For the best experience, wire the **`start-forge` skill** (`skill/start-forge/SKILL.md`)
-into your host agent (Codex, Zed, Claude, Cursor, …). It collapses the flow above
-into a single invocation: the agent runs `forge-core start`, and if the project is
-new it performs `project init` and re-orients; if the project is in progress it
-routes straight to discovery/guide. One command per chat — re-run it only when you
-open a new chat on the project.
+### One bootstrap command per chat (the `start-forge` skill)
+
+For zero-config onboarding, wire the **`start-forge` skill**
+(`skill/start-forge/SKILL.md`) into your host agent (Codex, Zed, Claude, Cursor,
+…). It gives the agent one bootstrap invocation: run `forge-core start`, create
+or repair the Project Link and sidecar when needed, and inspect the returned
+state. Once the project is ready, the agent-native workflow continuation is
+`workflow init` or `workflow resume`, followed by `workflow next`. Re-run the
+skill when opening a new chat; do not ask the human to operate the commands.
 
 Forge ships the skill as a canonical file but **does not assume an install path**:
 save it wherever your agent runtime reads skills from (common conventions include
@@ -98,19 +110,23 @@ Forge replaces that chaos with **one source of truth enforced at the boundary**:
 The result: **people stop worrying about versioning.** Coordination is not a
 meeting or a branch policy — it is a property of the system.
 
-### It is also a complete build method
+### It is growing into a complete build method
 
-Governance is only half of it. Forge is the **full workflow** from idea to
-delivery, expressed as a typed catalog of 110 workflows spanning seven phases:
+Governance is only half of the product vision. Forge carries a typed catalog of
+110 legacy workflows spanning the intended path from idea to delivery across
+seven phases:
 
 ```
 0-route → 1-discovery → 2-specification → 3-plan → 4-build-verify → 5-ready-operate → 6-evolve
 ```
 
-A creative idea enters at `1-discovery`, gets interrogated, scoped, designed, and
-broken into stories; the stories are built, verified, and shipped; the shipped
-system evolves. Each phase has named entry and exit gates, so an agent never
-guesses whether it is "done".
+The target experience interrogates and scopes an idea, designs and slices it,
+builds and verifies representative behavior, proves readiness, and preserves
+continuity after release. Today, the P5c runtime admits 15 policies covering the
+representative golden path. The other 95 catalog workflows remain explicit
+compatibility, migration, quarantine, or future Domain Pack material until P5d
+and P6 provide equivalent governed evidence. Named gates reduce guesswork, but
+only admitted policies and verified receipts can authorize progression or done.
 
 ---
 
@@ -133,9 +149,10 @@ automatically based on the project's resolved phase:
   `0-route`/`1-discovery` (the human-heavy interrogation phase).
 
 This is the "scale with agent, never constrain" rule made executable: the
-agent reads its binding policy from `guide decide` and complies; the runtime
-enforces regardless. As the host model gets smarter, execution inside the
-gates improves automatically — Forge never caps the model's ceiling.
+agent reads its governed action from `workflow next`, while the execution
+runtime independently derives and enforces its Claim Coverage and Phase gates.
+As the host model gets smarter, execution inside the gates improves
+automatically — Forge never caps the model's ceiling.
 
 ### 2. Typed contracts, not documents
 
@@ -477,12 +494,17 @@ local `.forge-method/` explicitly:
 forge-core project resolve --root . --allow-bootstrap-core --json
 ```
 
-### Ask the guide what to do
+### Inspect the legacy guide compatibility surface
 
 ```bash
 forge-core guide describe              # list every workflow in the catalog
 forge-core guide status --phase 1-discovery   # what's required in this phase?
 ```
+
+These read-only commands preserve existing catalog consumers and are useful for
+migration diagnostics. Their caller-provided workflow/phase view is not P5
+workflow-governance authority and is not the normal path for a new host agent.
+Use `workflow init|next|resume` for executable agent-native guidance.
 
 ### Audit workflow migration safety (P5a)
 
@@ -505,13 +527,42 @@ schema drift, projection drift, ambiguous classification, or an unsafe plan
 fails closed with actionable typed issues.
 
 The foundation classifies 15 representative golden-path workflows, 18
-domain-pack candidates, and 77 compatibility-only playbooks. Procedural
+domain-pack candidates, and 77 compatibility-only playbooks. None of the 95
+workflows outside the golden path is retirement-ready today. Procedural
 `steps` remain advice. P5b supplied the closed contracts, a non-authoritative
 simulation lane, and an opaque verified-kernel typestate seam. P5c connects that
 seam to a trusted, receipt-backed Project Snapshot Adapter for the selected
 15-policy golden path and has passed its signed-boundary, adversarial,
 real-binary, and full-workspace gates. The remaining catalog is still migration
 or compatibility evidence for P5d; no legacy field is retired by P5c.
+
+### Audit a versioned catalog rollout candidate (P5d.1)
+
+P5d.1 adds a closed release manifest, candidate-only migration batches, an
+explicit quarantine/compatibility/domain disposition for every catalog entry,
+and a deterministic derived scorecard:
+
+```bash
+forge-core guide rollout-audit \
+  --manifest-file contracts/migration/workflow-governance-release-foundation-v0.yaml \
+  --batch-file contracts/migration/workflow-governance-batch-golden-path-v0.yaml \
+  --json
+```
+
+`--batch-file` is repeatable and may be absent when the manifest declares no
+migration candidates. The evaluator reuses the complete P5a audit, verifies
+canonical catalog/legacy/batch digests, ordered global policy composition, and
+the actual embedded bytes behind representative, adversarial, and shadow
+evidence references. Missing entries, compatibility shrinkage, domain leakage,
+cross-batch conflicts, or unverified retirement fail closed.
+
+Even a successful result has `authority: candidate_only`,
+`evidence_assurance: content_integrity_only`, and states such as
+`migration_candidate_structurally_valid`, `compatibility_only`, `quarantined`,
+or `domain_pack_candidate`; it never means behaviorally sufficient,
+`executable`, or `retired`. P5d.2 still must add opaque runtime release
+admission and per-project release pinning before any new batch can govern live
+work; P5d.3 adds typed behavioral evidence semantics.
 
 ### Simulate workflow governance (P5b)
 
@@ -1140,7 +1191,9 @@ gates.
 
 - The workspace verification suite is green locally: `cargo check`,
   `cargo clippy`, `cargo fmt`, and `cargo test`.
-- The full 7-phase method and 110-workflow catalog.
+- The complete 7-phase intent map and 110-workflow legacy catalog. Runtime
+  authority is narrower and listed explicitly below; catalog presence is not
+  executable coverage.
 - P5a read-only workflow migration foundation: complete deterministic manifest,
   15 golden-path + 18 domain-pack-candidate + 77 compatibility classifications,
   exact 110/110 legacy projection parity, full-catalog deletion binding, and no
@@ -1156,6 +1209,12 @@ gates.
   replacement-agent resume, isolated ledger TCB, atomic multi-record commits,
   and adversarial plus full-workspace proof. P5d remains responsible for the
   rest of the catalog and safe legacy retirement.
+- P5d.1 versioned release foundation: closed release/batch/retirement proposal
+  contracts, one explicit disposition per workflow, a canonical generated
+  110-entry foundation manifest and 15-policy candidate batch, real embedded
+  content/digest verification, aggregate repository validation, and
+  `guide rollout-audit`. Its scorecard is structural and `candidate_only` with
+  `content_integrity_only`; it does not activate a release or retire anything.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1212,15 +1271,15 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5c release hardening** -- close the signed observation boundary, prove
-  Decision Need and repeated signal episodes, run the adversarial golden-path
-  corpus plus full workspace gates, and publish one coherent pullable checkpoint.
-- **P5d catalog rollout and legacy retirement** -- P5c governs the selected
-  15-policy golden path only after its release gates pass; the remaining
-  workflows are still compatibility, domain-pack-candidate, or migration
-  evidence. P5d must migrate them in reviewed batches, quarantine unresolved
-  cases, and retire legacy authority only after measured compatibility and
-  deletion tests prove it safe.
+- **P5d.2-P5d.5 runtime rollout and legacy retirement** -- P5d.1 is complete as
+  a candidate-only release foundation. Next, Forge must pin an opaque admitted
+  release per project, upgrade it atomically, add typed behavioral evidence and
+  reviewed non-golden batches, quarantine unresolved semantics, and verify
+  signed retirement authorizations. All 95 workflows outside the golden path
+  remain compatibility, domain-pack, or migration evidence today; none is
+  retirement-ready. Retirement requires measured behavioral compatibility,
+  deletion/ablation evidence, consumer migration diagnostics, and human review
+  rather than catalog-count parity.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

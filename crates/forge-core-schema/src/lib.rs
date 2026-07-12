@@ -7,7 +7,8 @@ use forge_core_contracts::{
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
     WorkflowGovernanceLedgerDocument, WorkflowGovernanceReceiptDocument,
-    WorkflowMigrationPlanDocument,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
+    WorkflowMigrationPlanDocument, WorkflowRetirementAuthorizationDocument,
 };
 use schemars::{schema_for, JsonSchema};
 use serde::Serialize;
@@ -145,6 +146,24 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "WorkflowMigrationPlanDocument",
             Some("workflow_migration_plan"),
             "read-only migration classification policy; does not authorize execution or retirement",
+        ),
+        schema_artifact::<WorkflowGovernanceReleaseManifestDocument>(
+            "workflow_governance_release_manifest",
+            "WorkflowGovernanceReleaseManifestDocument",
+            Some("workflow_governance_release_manifest"),
+            "versioned rollout intent only; deserialization does not admit executable or retired workflow authority",
+        ),
+        schema_artifact::<WorkflowMigrationBatchDocument>(
+            "workflow_migration_batch",
+            "WorkflowMigrationBatchDocument",
+            Some("workflow_migration_batch"),
+            "candidate policy batch only; trusted composition and admission are required before executable use",
+        ),
+        schema_artifact::<WorkflowRetirementAuthorizationDocument>(
+            "workflow_retirement_authorization",
+            "WorkflowRetirementAuthorizationDocument",
+            Some("workflow_retirement_authorization"),
+            "retirement proposal requires trusted binding and signature verification; deserialization is not authority",
         ),
         schema_artifact::<WorkflowGovernanceBundleDocument>(
             "workflow_governance_bundle",
@@ -308,6 +327,15 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"
+        }
+        "workflow_governance_release_manifest" => {
+            "manifest entries are rollout intent only; executable and retired states require trusted derived admission"
+        }
+        "workflow_migration_batch" => {
+            "batch policies are candidate-only; deserialization and presence never grant executable authority"
+        }
+        "workflow_retirement_authorization" => {
+            "retirement requires trusted evidence binding and signature verification; deserialization is not authority"
         }
         "workflow_governance_bundle" => {
             "raw policy evaluation is simulation-only; verified use requires an opaque trusted kernel snapshot"

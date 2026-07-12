@@ -104,6 +104,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consumption, deterministic replacement-agent resume, stale/contradictory
   evidence, scope/time-bounded authorized waivers, mid-flight replacement-agent
   resume, and junction-backed workspaces. All P5c publication gates pass.
+- **P5d.1 versioned workflow-release foundation.** Closed Rust contracts now
+  model stable release lineage, ordered content-addressed candidate batches,
+  exhaustive per-workflow disposition intent, explicit quarantine, versioned
+  compatibility/deprecation diagnostics, domain-pack deferral, and signed
+  retirement proposals. Authored documents have no `executable` or `retired`
+  state, and every raw batch is fixed to `candidate_only`.
+- A pure release evaluator binds the exact 110-workflow P5a inventory, canonical
+  legacy and batch digests, zero-based batch order, embedded evidence byte
+  integrity (explicitly not behavioral sufficiency),
+  workflow/policy bindings, and the globally composed policy graph. It emits a
+  deterministic candidate-only structural scorecard and fails closed on missing/duplicate
+  entries, domain leakage, evidence drift, cross-batch conflicts, compatibility
+  shrinkage, and unverified retirement.
+- `forge-core guide rollout-audit` exposes the P5d.1 evaluator as a read-only
+  agent surface with repeatable batch inputs and typed blocked results. A real
+  binary E2E builds an explicit 110-entry manifest over the actual 15-policy
+  golden bundle and proves no assessment can serialize as executable or
+  retired.
+- Guided start now hands every healthy sidecar to idempotent `workflow init`
+  and then `workflow next` with an explicit structured root argv. Legacy guide,
+  operation-contract, and preview material remain compatibility diagnostics,
+  while the shipped `start-forge` skill fails closed on unexpected routing or
+  ledger errors instead of asking a human/agent to select workflow or phase.
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
 - **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.
@@ -140,6 +163,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The official `rmcp` client proof now initializes the generated operation-wide server, lists and invokes `execute-operation`, commits two sidecar outputs in one WAL transaction, preserves both effect ids and the verified principal in evidence, consumes replay, advances the external anchor, and creates no consumer-local `.forge-method`.
 
 ### Changed
+- Contract-family inventory and generated schema views now include workflow
+  governance releases, migration batches, and retirement authorization
+  proposals. `FamilyKind` gains the corresponding variants; exhaustive Rust
+  matches must handle them. These schema surfaces remain candidate/support
+  only and do not activate a runtime release or trusted retirement verifier.
 - The contract-family inventory and generated schema views now register the
   workflow migration plan as a non-authoritative migration manifest. P5 remains
   in progress; no workflow execution or legacy retirement authority moved in

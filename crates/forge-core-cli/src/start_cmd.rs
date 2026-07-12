@@ -1,23 +1,19 @@
-//! `forge-core start` — F12 Guided Start: read-only bootstrap diagnostic.
+//! `forge-core start` — F12 Guided Start and zero-config bootstrap.
 //!
 //! `start` advances a Consumer Project Repo from an empty state to the point
-//! where the `guide` surface can take over. It is a *diagnostic*, not a
-//! wizard: it inspects the real project state, classifies it into one of five
-//! [`BootstrapState`]s, and emits a payload describing where the project is
-//! and what the concrete next step is. It never executes effects and never
-//! creates files — it composes with `project init` (which it *recommends*,
-//! never invokes) and with `guide` (to which it *hands off* once
-//! prerequisites exist).
+//! where agent-native workflow governance can take over. It inspects the real
+//! project state, creates or repairs the canonical Project Link/sidecar when
+//! required, preserves one of five compatibility [`BootstrapState`] wire
+//! values, and emits a structured next step. Every healthy sidecar hands off
+//! to idempotent `workflow init`, followed by `workflow next`; legacy operation
+//! material is secondary compatibility context only.
 //!
-//! ## Why read-only
+//! ## Authority boundary
 //!
-//! Per the F12 grill (Option A on every question), the agent is the
-//! bidirectional interpreter between human and product. The CLI emits a
-//! payload; the agent decides the action. `start` carrying an effect side
-//! (running `init`, writing a scaffold) would hide authority behind a
-//! diagnostic and re-introduce the "adapter reinterprets Forge state" risk
-//! the spec calls out. Read-only also means `start` needs no claim and no
-//! `check-write`: it touches nothing governed.
+//! Bootstrap mutation is confined to the canonical Project Link and sibling
+//! sidecar lifecycle implemented by `project init`. `start` does not choose a
+//! workflow, phase, bundle, target, evidence result, or completion. Those are
+//! derived later by the workflow kernel and its ledger.
 //!
 //! ## State machine
 //!
@@ -26,11 +22,11 @@
 //!
 //! | state                         | next step                                  |
 //! |-------------------------------|--------------------------------------------|
-//! | `no_link`                     | `forge-core project init`                  |
-//! | `link_present_no_sidecar`     | `forge-core project resolve` (diagnose)    |
-//! | `sidecar_ready_no_contract`   | author a minimal operation contract        |
-//! | `contract_present`            | `forge-core guide describe`                |
-//! | `preview_run`                 | none (onboarded; use `guide`/`preview`)    |
+//! | `no_link`                     | bootstrap, then `workflow init --root …`   |
+//! | `link_present_no_sidecar`     | repair, then `workflow init --root …`      |
+//! | `sidecar_ready_no_contract`   | `workflow init --root …`                   |
+//! | `contract_present`            | `workflow init --root …`                   |
+//! | `preview_run`                 | `workflow init --root …`                   |
 //!
 //! `start` recomputes from the real project on every call, so re-running
 //! after an advance jumps to the correct state.
@@ -38,11 +34,11 @@
 //! ## Anti-script-de-novela (G1)
 //!
 //! `start` is parametric, not prescriptive: it adapts its output to the
-//! project's real state and never dictates spec content. The
-//! `sidecar_ready_no_contract` payload points at canonical reference
-//! scenarios and the validation command, but the agent (with the human)
-//! decides *what* to specify. The deletion test holds: state detection +
-//! adaptive next-step selection is non-trivial behaviour, not a linear
+//! project's real state and never dictates spec content or lets compatibility
+//! prose select governance. The `sidecar_ready_no_contract` payload retains
+//! canonical operation scenarios and validation commands as secondary
+//! references. The deletion test holds: state detection plus safe bootstrap
+//! and structured handoff is non-trivial behaviour, not a linear
 //! script.
 
 use std::path::{Path, PathBuf};
@@ -269,8 +265,9 @@ pub struct ProjectContext {
     pub state_root: String,
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
-    /// Current phase read from the authoritative `state.yaml`. `None` when no
-    /// state file exists yet; callers fall back to `1-discovery`.
+    /// Bootstrap compatibility phase read from `state.yaml`. P5 workflow
+    /// governance derives its phase from the workflow ledger instead. `None`
+    /// when no compatibility state file exists yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_phase: Option<String>,
 }
@@ -287,6 +284,44 @@ fn command_next_step_with_references(
         description: description.into(),
         references,
     }
+}
+
+/// Build the default P5 agent-native handoff for every healthy sidecar state.
+///
+/// `workflow init` is intentionally the single bootstrap handoff: it is
+/// idempotent and returns `AlreadyInitialized` when the ledger already exists.
+/// The immediately following `workflow next` reference uses the same explicit
+/// project root. Legacy operation-contract and preview material may remain as
+/// secondary compatibility references, but never replaces this authority path.
+#[must_use]
+fn workflow_init_next_step(
+    project_root: &Path,
+    description: impl Into<String>,
+    mut secondary_references: Vec<String>,
+) -> NextStep {
+    let root = project_root.display().to_string();
+    let init_argv = vec![
+        "forge-core".to_string(),
+        "workflow".to_string(),
+        "init".to_string(),
+        "--root".to_string(),
+        root.clone(),
+    ];
+    let next_argv = vec![
+        "forge-core".to_string(),
+        "workflow".to_string(),
+        "next".to_string(),
+        "--root".to_string(),
+        root,
+    ];
+    secondary_references.insert(
+        0,
+        format!(
+            "next: {} — derive the current governed action after idempotent initialization",
+            render_command_for_display(&next_argv)
+        ),
+    );
+    command_next_step_with_references(init_argv, description, secondary_references)
 }
 
 #[must_use]
@@ -580,9 +615,10 @@ fn classify(
         );
     }
 
-    // State tree healthy: look for evidence of progress on top of it. A
-    // preview having run is the terminal "onboarded" signal; an operation
-    // contract existing is the "ready for guide" signal.
+    // State tree healthy: look for compatibility evidence of progress on top
+    // of it while keeping the same agent-native workflow handoff in every
+    // healthy state. Preview and operation-contract signals affect only the
+    // preserved BootstrapState wire value and secondary references.
     let has_preview = preview_has_run(resolved);
     let has_contract = operation_contract_present(project_root);
 
@@ -590,19 +626,13 @@ fn classify(
         return (
             BootstrapState::PreviewRun,
             "A preview has already been produced; the project is onboarded.".to_string(),
-            Some(command_next_step_with_references(
+            Some(workflow_init_next_step(
+                project_root,
+                "Initialize or recover agent-native workflow governance; initialization is idempotent.",
                 vec![
-                    "forge-core".to_string(),
-                    "guide".to_string(),
-                    "describe".to_string(),
-                ],
-                "Project onboarded. start has nothing more to add; guide orients \
-                 ongoing work (phases, workflows, gates).",
-                vec![
-                    "next: forge-core guide status --phase <current-phase>  \
-                     — workflows eligible now + forward gate pending"
+                    "compatibility: a preview trace already exists; preserve it as supporting material, not workflow authority."
                         .to_string(),
-                    "start will keep reporting preview_run; it is a terminal bootstrap state."
+                    "start will keep reporting preview_run; the BootstrapState wire value remains stable."
                         .to_string(),
                 ],
             )),
@@ -612,54 +642,39 @@ fn classify(
     if has_contract {
         return (
             BootstrapState::ContractPresent,
-            "An operation contract exists; the project is ready for the guide surface.".to_string(),
-            Some(command_next_step_with_references(
+            "An operation contract exists; the project is ready for agent-native workflow governance."
+                .to_string(),
+            Some(workflow_init_next_step(
+                project_root,
+                "Initialize or recover agent-native workflow governance; initialization is idempotent.",
                 vec![
-                    "forge-core".to_string(),
-                    "guide".to_string(),
-                    "describe".to_string(),
-                ],
-                "Hand off to guide; it orients phase, workflows, and gates. start's \
-                 bootstrap job is done.",
-                vec![
-                    "then: forge-core guide status --phase discovery  \
-                     — first phase; lists eligible workflows + the grill forward gate"
-                        .to_string(),
-                    "then: forge-core preview --operation <your-contract>  \
-                     — validate the contract end-to-end before driving work"
+                    "compatibility: forge-core preview --operation <your-contract> — validate the existing operation contract independently"
                         .to_string(),
                 ],
             )),
         );
     }
 
-    // State tree healthy, nothing on top of it yet: the agent (with the
-    // human) authors a minimal operation contract. start points at two
-    // hand-picked starter fixtures (not the whole directory) and the
-    // validation command, but does NOT generate the spec — the authority
-    // boundary is the validated contract, not a template.
+    // State tree healthy, nothing on top of it yet. Agent-native workflow
+    // governance is the default handoff. Starter operation fixtures remain as
+    // secondary compatibility material and never select workflow or phase.
     (
         BootstrapState::SidecarReadyNoContract,
         "State tree is healthy but no operation contract exists yet.".to_string(),
-        Some(NextStep {
-            command: None,
-            argv: Vec::new(),
-            description: "Author a minimal operation contract modelled on a starter fixture, \
-                          then validate it with preview."
-                .to_string(),
-            references: vec![
+        Some(workflow_init_next_step(
+            project_root,
+            "Initialize agent-native workflow governance; initialization is idempotent.",
+            vec![
                 format!(
-                    "starter (observe): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_OBSERVE}  \
-                     — simplest read-only shape"
+                    "compatibility starter (observe): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_OBSERVE} — simplest read-only operation shape"
                 ),
                 format!(
-                    "starter (execute): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_EXECUTE}  \
-                     — simplest write shape (shows authority.mutation_policy)"
+                    "compatibility starter (execute): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_EXECUTE} — simplest write operation shape"
                 ),
-                format!("more scenarios: {OPERATION_CONTRACT_REFERENCE_DIR}"),
-                format!("validate with: {OPERATION_VALIDATION_COMMAND}"),
+                format!("compatibility scenarios: {OPERATION_CONTRACT_REFERENCE_DIR}"),
+                format!("compatibility validation: {OPERATION_VALIDATION_COMMAND}"),
             ],
-        }),
+        )),
     )
 }
 
@@ -775,6 +790,55 @@ mod tests {
 
     fn argv(parts: &[&str]) -> Vec<String> {
         parts.iter().map(|part| (*part).to_string()).collect()
+    }
+
+    fn expected_workflow_init_argv(root: &Path) -> Vec<String> {
+        vec![
+            "forge-core".to_string(),
+            "workflow".to_string(),
+            "init".to_string(),
+            "--root".to_string(),
+            root.display().to_string(),
+        ]
+    }
+
+    fn assert_agent_native_healthy_next_step(next: &NextStep, root: &Path) {
+        let expected = expected_workflow_init_argv(root);
+        assert_eq!(next.argv, expected, "healthy start must emit exact argv");
+        assert_eq!(
+            next.command.as_deref(),
+            Some(render_command_for_display(&expected).as_str()),
+            "display command must be rendered from the structured argv"
+        );
+        let expected_next = render_command_for_display(&[
+            "forge-core".to_string(),
+            "workflow".to_string(),
+            "next".to_string(),
+            "--root".to_string(),
+            root.display().to_string(),
+        ]);
+        assert!(
+            next.references
+                .first()
+                .is_some_and(|reference| reference.contains(&expected_next)),
+            "workflow next with the same explicit root must be the immediate reference: {:?}",
+            next.references
+        );
+        assert!(
+            next.description.to_ascii_lowercase().contains("idempotent"),
+            "workflow init handoff must explain idempotence"
+        );
+        let projected = format!(
+            "{} {} {}",
+            next.command.as_deref().unwrap_or_default(),
+            next.description,
+            next.references.join(" ")
+        )
+        .to_ascii_lowercase();
+        assert!(
+            !projected.contains("guide describe") && !projected.contains("guide status"),
+            "healthy next step must not recommend legacy guide routing: {projected}"
+        );
     }
 
     fn assert_start_error_uses_command_surface_usage(message: &str, expected_diagnostic: &str) {
@@ -959,13 +1023,17 @@ mod tests {
             payload.project.is_some(),
             "no_link has project context after bootstrap"
         );
-        // The authoritative phase record is seeded at 1-discovery so the
-        // runtime does not have to trust the host's --phase string.
+        // The bootstrap compatibility phase is seeded at 1-discovery. P5
+        // workflow authority begins in the separate ledger after workflow init.
         let project = payload.project.as_ref().expect("project context");
         assert_eq!(
             project.current_phase.as_deref(),
             Some("1-discovery"),
             "start should seed state.yaml with the 1-discovery entry phase"
+        );
+        assert_agent_native_healthy_next_step(
+            payload.next_step.as_ref().expect("workflow handoff"),
+            &root,
         );
     }
 
@@ -991,6 +1059,10 @@ mod tests {
         assert!(
             root.join(PROJECT_LINK_FILE_NAME).exists(),
             "start should create the Project Link even with a space in the path"
+        );
+        assert_agent_native_healthy_next_step(
+            payload.next_step.as_ref().expect("workflow handoff"),
+            &root,
         );
     }
 
@@ -1050,6 +1122,10 @@ mod tests {
             vec!["repaired_sidecar".to_string()],
             "state 2 should report it repaired the sidecar"
         );
+        assert_agent_native_healthy_next_step(
+            payload.next_step.as_ref().expect("workflow handoff"),
+            &app,
+        );
     }
 
     #[test]
@@ -1067,6 +1143,7 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
         let next = payload.next_step.as_ref().expect("next step");
+        assert_agent_native_healthy_next_step(next, &app);
         assert!(
             next.references
                 .iter()
@@ -1094,10 +1171,6 @@ mod tests {
                 .any(|r| r.contains(STARTER_FIXTURE_EXECUTE)),
             "state 3 should name the execute starter fixture"
         );
-        assert!(
-            next.command.is_none(),
-            "state 3's step is authoring, not a command"
-        );
     }
 
     #[test]
@@ -1117,15 +1190,8 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::ContractPresent);
         let next = payload.next_step.as_ref().expect("next step");
-        assert_eq!(next.command.as_deref(), Some("forge-core guide describe"));
-        // F12.4: state 4 references must point the agent past `guide describe`
-        // to the concrete next actions (status discovery + preview validate).
-        assert!(
-            next.references
-                .iter()
-                .any(|r| r.contains("guide status --phase discovery")),
-            "state 4 should point at guide status for the first phase"
-        );
+        assert_agent_native_healthy_next_step(next, &app);
+        // Existing operation material remains secondary compatibility evidence.
         assert!(
             next.references
                 .iter()
@@ -1155,22 +1221,19 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::PreviewRun);
         let next = payload.next_step.as_ref().expect("next step");
-        // F12.4: state 5 is terminal bootstrap; it points at guide status
-        // (ongoing orientation) and is explicit that start has nothing more.
-        assert_eq!(next.command.as_deref(), Some("forge-core guide describe"));
+        assert_agent_native_healthy_next_step(next, &app);
         assert!(
             next.references
                 .iter()
-                .any(|r| r.contains("guide status --phase")),
-            "state 5 should point at guide status for ongoing orientation"
+                .any(|r| r.contains("preview trace") && r.contains("not workflow authority")),
+            "state 5 should retain preview evidence only as compatibility material"
         );
     }
 
     #[test]
     fn start_is_idempotent_running_twice_keeps_same_state() {
-        // Read-only invariant: running start twice on the same repo must not
-        // advance or regress the state. (If it wrote anything, the second
-        // call could observe different state.)
+        // Running start twice must preserve both the BootstrapState and the
+        // exact idempotent workflow-init handoff.
         let parent = temp_root("idempotent");
         let app = parent.join("app");
         let state = parent.join("forge-app").join(".forge-method");
@@ -1183,6 +1246,20 @@ mod tests {
         assert_eq!(
             first.data.as_ref().unwrap().state,
             second.data.as_ref().unwrap().state
+        );
+        assert_eq!(
+            first.data.as_ref().unwrap().next_step,
+            second.data.as_ref().unwrap().next_step
+        );
+        assert_agent_native_healthy_next_step(
+            second
+                .data
+                .as_ref()
+                .unwrap()
+                .next_step
+                .as_ref()
+                .expect("workflow handoff"),
+            &app,
         );
     }
 }

@@ -27,6 +27,9 @@ jobs:
       - name: Check generated command surface docs
         run: cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
 
+      - name: Check generated workflow release foundation
+        run: cargo run -p forge-core-decisions --example generate_workflow_release_foundation -- --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -39,11 +42,11 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchor (127 clean diagnostics)
+      - name: Regression anchor (128 clean checks)
         run: |
           count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
-          echo "Anchor count: $count (expected 127)"
-          test "$count" = "127"
+          echo "Anchor count: $count (expected 128)"
+          test "$count" = "128"
 
   platform:
     name: ${{ matrix.os }} cargo all-targets

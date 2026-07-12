@@ -1,0 +1,18 @@
+schema_version: '0.1'
+workflow_release_publication_evidence:
+  id: workflow-release-evidence.adversarial-fixtures.v0
+  evidence_class: adversarial_fixtures
+  publication_scope: p5d_1_release_publication
+  integrity_claim: Indexes concrete P5c fail-closed cases for contradictory evidence, stale evidence, replay, drift, and waiver boundaries.
+  behavioral_sufficiency: not_asserted
+  limitation: This artifact is a publication evidence reference. P5d.1 validates its embedded path and exact content digest only; it does not prove that the referenced behavior is sufficient, current, or passing.
+  references:
+  - repo_path: crates/forge-core-decisions/tests/workflow_governance.rs
+    anchor: contradictory_evidence_and_invented_completion_fail_closed
+    relevance: Pure decision-layer adversarial evidence against invented or contested completion.
+  - repo_path: crates/forge-core-kernel/tests/workflow_governance_golden_path.rs
+    anchor: expired_evidence_is_recomputed_as_stale_and_blocks_completion; signed_snapshot_and_head_bound_authorizations_reject_replay_and_drift
+    relevance: Trusted-kernel adversarial coverage for stale evidence, replay, and snapshot drift.
+  - repo_path: contracts/spec/workflow-governance-golden-path-v0.yaml
+    anchor: acceptance_surfaces
+    relevance: Repository-owned P5c specification defining the boundaries exercised by the adversarial suites.

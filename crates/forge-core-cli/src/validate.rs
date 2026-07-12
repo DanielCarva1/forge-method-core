@@ -25,8 +25,15 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
     ToolEffectContractDocument, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
+    WorkflowMigrationPlanDocument,
 };
-use forge_core_decisions::{validate_workflow_governance_bundle, WorkflowGovernanceIssue};
+use forge_core_decisions::{
+    evaluate_workflow_migration, evaluate_workflow_release, load_catalog, load_workflow_documents,
+    validate_workflow_governance_bundle, WorkflowGovernanceIssue, WorkflowReleaseEvaluation,
+    WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
+    WorkflowReleaseEvidenceAssurance,
+};
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
     validate_assurance_case, validate_claim, validate_claim_cross_references, validate_command,
@@ -293,6 +300,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_side_contracts(root, &index, &mut summary);
         validate_runtime_contracts(root, &index, &mut summary);
         validate_workflow_governance_contracts(root, &mut summary);
+        validate_workflow_release_foundation(root, &mut summary);
     }
 
     summary.finish();
@@ -331,6 +339,275 @@ fn workflow_governance_validation_report(issues: Vec<WorkflowGovernanceIssue>) -
         ));
     }
     report
+}
+
+const WORKFLOW_RELEASE_SPEC_REF: &str = "contracts/spec/workflow-governance-release-v0.yaml";
+const WORKFLOW_RELEASE_FOUNDATION_REF: &str =
+    "contracts/migration/workflow-governance-release-foundation-v0.yaml";
+const WORKFLOW_RELEASE_FOUNDATION_BATCH_REF: &str =
+    "contracts/migration/workflow-governance-batch-golden-path-v0.yaml";
+const WORKFLOW_MIGRATION_PLAN_REF: &str =
+    "contracts/policies/workflow-migration-foundation-v0.yaml";
+
+/// Validate the repository-owned P5d.1 aggregate, rather than merely claiming
+/// its evaluator in the inventory. Compatibility/domain blockers are expected
+/// foundation dispositions; only malformed, non-canonical, non-candidate-only,
+/// or semantically invalid aggregate input fails this structural check.
+fn validate_workflow_release_foundation(root: &Path, summary: &mut ValidateSummary) {
+    let report = workflow_release_foundation_validation_report(root);
+    summary.add_report("workflow_governance_release_foundation", report);
+}
+
+#[allow(clippy::too_many_lines)]
+fn workflow_release_foundation_validation_report(root: &Path) -> ValidationReport {
+    let mut report = ValidationReport::new();
+
+    // The human-readable spec is part of the aggregate boundary too. Comparing
+    // parsed YAML against the compiled repository copy detects missing or
+    // semantically changed checkout content without depending on line endings.
+    if read_canonical_release_yaml::<serde_json::Value>(
+        root,
+        WORKFLOW_RELEASE_SPEC_REF,
+        &mut report,
+    )
+    .is_none()
+    {
+        return report;
+    }
+
+    let Some(manifest) = read_canonical_release_yaml::<WorkflowGovernanceReleaseManifestDocument>(
+        root,
+        WORKFLOW_RELEASE_FOUNDATION_REF,
+        &mut report,
+    ) else {
+        return report;
+    };
+
+    let batch_refs = &manifest.workflow_governance_release_manifest.batches;
+    if batch_refs.len() != 1
+        || batch_refs[0].embedded_ref.0 != WORKFLOW_RELEASE_FOUNDATION_BATCH_REF
+    {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            format!("P5d.1 foundation must bind exactly {WORKFLOW_RELEASE_FOUNDATION_BATCH_REF}"),
+        ));
+    }
+
+    let mut batches = Vec::with_capacity(batch_refs.len());
+    for reference in batch_refs {
+        let repo_ref = reference.embedded_ref.0.as_str();
+        if !is_safe_migration_repo_ref(repo_ref) {
+            report.push(Diagnostic::error(
+                DiagnosticCode::WorkflowGovernanceInvalid,
+                format!(
+                    "{WORKFLOW_RELEASE_FOUNDATION_REF}.batches.{}.embedded_ref",
+                    reference.batch_id.0
+                ),
+                "batch embedded_ref must be a safe contracts/migration repo-relative YAML path",
+            ));
+            continue;
+        }
+        if let Some(batch) = read_canonical_release_yaml::<WorkflowMigrationBatchDocument>(
+            root,
+            repo_ref,
+            &mut report,
+        ) {
+            batches.push(batch);
+        }
+    }
+
+    let Some(plan) = read_release_yaml::<WorkflowMigrationPlanDocument>(
+        root,
+        WORKFLOW_MIGRATION_PLAN_REF,
+        &mut report,
+    ) else {
+        return report;
+    };
+
+    let catalog_dir = root.join("contracts/workflows");
+    let workflows = load_workflow_documents(&catalog_dir);
+    for error in &workflows.errors {
+        report.push(Diagnostic::error(
+            DiagnosticCode::ParseYamlFailed,
+            format!("contracts/workflows/{}", error.path.0),
+            error.reason.clone(),
+        ));
+    }
+    let catalog = load_catalog(&catalog_dir);
+    for error in &catalog.errors {
+        report.push(Diagnostic::error(
+            DiagnosticCode::ParseYamlFailed,
+            format!("contracts/workflows/{}", error.path.0),
+            error.reason.clone(),
+        ));
+    }
+    if !workflows.is_clean() || !catalog.is_clean() {
+        return report;
+    }
+
+    let migration_audit =
+        evaluate_workflow_migration(&plan, &workflows.workflows, &catalog.catalog);
+    let evaluation =
+        evaluate_workflow_release(&manifest, &batches, &migration_audit, &workflows.workflows);
+
+    for issue in &evaluation.issues {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            issue.path.clone(),
+            format!("workflow release {:?}: {}", issue.code, issue.message),
+        ));
+    }
+    if evaluation.authority != WorkflowReleaseEvaluationAuthority::CandidateOnly {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            "P5d.1 repository validation may only derive candidate_only authority",
+        ));
+    }
+    if evaluation.status != WorkflowReleaseEvaluationStatus::StructurallyValid
+        && evaluation.issues.is_empty()
+    {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            "P5d.1 foundation is not structurally_valid",
+        ));
+    }
+    validate_workflow_release_foundation_baseline(&evaluation, &mut report);
+
+    report
+}
+
+fn validate_workflow_release_foundation_baseline(
+    evaluation: &WorkflowReleaseEvaluation,
+    report: &mut ValidationReport,
+) {
+    if evaluation.evidence_assurance != WorkflowReleaseEvidenceAssurance::ContentIntegrityOnly {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            "P5d.1 foundation evidence assurance must remain content_integrity_only",
+        ));
+    }
+
+    let counts = &evaluation.counts;
+    let actual_counts = (
+        counts.migration_candidate_structurally_valid,
+        counts.compatibility_only,
+        counts.quarantined,
+        counts.domain_pack_candidate,
+        counts.retirement_pending_verification,
+    );
+    let expected_counts = (15, 77, 0, 18, 0);
+    if actual_counts != expected_counts {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            format!(
+                "P5d.1 derived scorecard drift: expected migration/compatibility/quarantine/domain/retirement {expected_counts:?}, found {actual_counts:?}"
+            ),
+        ));
+    }
+    if evaluation.assessments.len() != 110 {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            format!(
+                "P5d.1 foundation must derive 110 assessments, found {}",
+                evaluation.assessments.len()
+            ),
+        ));
+    }
+    if evaluation.non_executable_gaps.len() != 95 {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_FOUNDATION_REF,
+            format!(
+                "P5d.1 foundation must preserve 95 explicit non-executable gaps, found {}",
+                evaluation.non_executable_gaps.len()
+            ),
+        ));
+    }
+}
+
+fn read_canonical_release_yaml<T>(
+    root: &Path,
+    repo_ref: &str,
+    report: &mut ValidationReport,
+) -> Option<T>
+where
+    T: serde::de::DeserializeOwned + PartialEq,
+{
+    let disk = read_release_yaml::<T>(root, repo_ref, report)?;
+    let Some(embedded_text) = forge_core_decisions::embedded_text(repo_ref) else {
+        report.push(Diagnostic::error(
+            DiagnosticCode::MissingReference,
+            repo_ref,
+            "canonical release artifact is not embedded in this Forge binary",
+        ));
+        return None;
+    };
+    let embedded = match yaml_serde::from_str::<T>(embedded_text) {
+        Ok(value) => value,
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
+                repo_ref,
+                format!("embedded canonical release YAML is invalid: {error}"),
+            ));
+            return None;
+        }
+    };
+    if disk != embedded {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            repo_ref,
+            "checkout YAML does not match the canonical artifact embedded in this Forge binary",
+        ));
+        return None;
+    }
+    Some(disk)
+}
+
+fn read_release_yaml<T: serde::de::DeserializeOwned>(
+    root: &Path,
+    repo_ref: &str,
+    report: &mut ValidationReport,
+) -> Option<T> {
+    let path = root.join(repo_ref);
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                repo_ref,
+                error.to_string(),
+            ));
+            return None;
+        }
+    };
+    match yaml_serde::from_str(&text) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
+                repo_ref,
+                error.to_string(),
+            ));
+            None
+        }
+    }
+}
+
+fn is_safe_migration_repo_ref(repo_ref: &str) -> bool {
+    let path = Path::new(repo_ref);
+    !path.is_absolute()
+        && repo_ref.starts_with("contracts/migration/")
+        && path.extension().and_then(|value| value.to_str()) == Some("yaml")
+        && path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
 fn validate_operation_fixtures(root: &Path, index: &ReferenceIndex, summary: &mut ValidateSummary) {

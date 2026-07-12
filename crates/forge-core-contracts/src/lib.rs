@@ -35,6 +35,7 @@ pub mod verification_goal;
 pub mod workflow;
 pub mod workflow_governance;
 pub mod workflow_migration;
+pub mod workflow_release;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
 pub use assurance::{
@@ -129,4 +130,22 @@ pub use workflow_migration::{
     WorkflowMigrationPlan, WorkflowMigrationPlanDocument, WorkflowMigrationQuarantine,
     WorkflowMigrationTargetNamespaces, WorkflowRetirementGate, WorkflowRetirementPolicy,
     WorkflowSelectionTier, WorkflowShadowMode, WORKFLOW_MIGRATION_PLAN_SCHEMA_VERSION,
+};
+pub use workflow_release::{
+    WorkflowCompatibilityLifecycle, WorkflowCompatibilityReason, WorkflowCompatibilityReasonCode,
+    WorkflowConsumerDiagnosticsPolicy, WorkflowDomainPackCandidate,
+    WorkflowDomainPackDeferralReason, WorkflowGovernanceReleaseManifest,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowLegacyCompatibilityAuthority,
+    WorkflowMigrationBatch, WorkflowMigrationBatchAuthority, WorkflowMigrationBatchBinding,
+    WorkflowMigrationBatchDocument, WorkflowMigrationBatchEvidence,
+    WorkflowMigrationEvidenceReference, WorkflowQuarantine, WorkflowQuarantineReasonCode,
+    WorkflowQuarantineRiskTier, WorkflowReleaseBatchReference, WorkflowReleaseCompatibilityPolicy,
+    WorkflowReleaseCompatibilityProjectionMode, WorkflowReleaseDispositionIntent,
+    WorkflowReleaseWorkflowEntry, WorkflowRetirementAdmissionPolicy,
+    WorkflowRetirementAuthorization, WorkflowRetirementAuthorizationDocument,
+    WorkflowRetirementAuthorizationReference, WorkflowRetirementCompatibilityWindow,
+    WorkflowRetirementEvidenceBinding, WorkflowRetirementReviewer,
+    WorkflowRetirementSignatureAlgorithm, WorkflowRetirementSignatureEnvelope,
+    WORKFLOW_GOVERNANCE_RELEASE_MANIFEST_SCHEMA_VERSION, WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION,
+    WORKFLOW_RETIREMENT_AUTHORIZATION_SCHEMA_VERSION,
 };

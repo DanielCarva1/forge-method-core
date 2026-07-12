@@ -115,6 +115,35 @@ fn make_state_tree(state: &Path) {
     }
 }
 
+fn assert_agent_native_workflow_handoff(env: &Value, app: &Path, state: &str) {
+    let root = app.display().to_string();
+    assert_eq!(
+        env["data"]["next_step"]["argv"],
+        serde_json::json!(["forge-core", "workflow", "init", "--root", root]),
+        "{state} should expose typed workflow init argv"
+    );
+    assert!(
+        env["data"]["next_step"]["command"]
+            .as_str()
+            .is_some_and(|command| command.starts_with("forge-core workflow init --root ")),
+        "{state} should hand off to workflow init"
+    );
+
+    let references = env["data"]["next_step"]["references"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{state} references should be an array"));
+    assert!(
+        references
+            .first()
+            .and_then(Value::as_str)
+            .is_some_and(|reference| {
+                reference.contains("next: forge-core workflow next --root")
+                    && reference.contains(&app.display().to_string())
+            }),
+        "{state} should make workflow next for the same root the first reference"
+    );
+}
+
 #[test]
 fn state_one_no_link_bootstraps_the_project_in_one_command() {
     // Scenario A: empty repo, no Project Link. `start` now bootstraps the
@@ -253,6 +282,7 @@ fn state_three_sidecar_ready_points_at_starter_fixtures() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_SIDECAR_READY);
+    assert_agent_native_workflow_handoff(&env, &app, "state 3");
     let refs = env["data"]["next_step"]["references"]
         .as_array()
         .expect("state 3 references is an array");
@@ -273,18 +303,10 @@ fn state_three_sidecar_ready_points_at_starter_fixtures() {
         refs_joined.contains("preview --operation"),
         "state 3 should point at the validation command"
     );
-    assert!(
-        env["data"]["next_step"]["command"].is_null(),
-        "state 3's step is authoring, not a command"
-    );
-    assert!(
-        env["data"]["next_step"]["argv"].is_null(),
-        "state 3 should not expose argv when there is no command to execute"
-    );
 }
 
 #[test]
-fn state_four_contract_present_hands_off_to_guide() {
+fn state_four_contract_present_hands_off_to_workflow() {
     // Scenario D: state tree + an operation-contract-looking file.
     let parent = FreshParent::new("with-contract");
     let app = parent.path.join("app");
@@ -298,15 +320,7 @@ fn state_four_contract_present_hands_off_to_guide() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_CONTRACT_PRESENT);
-    assert_eq!(
-        env["data"]["next_step"]["command"], "forge-core guide describe",
-        "state 4 hands off to guide describe"
-    );
-    assert_eq!(
-        env["data"]["next_step"]["argv"],
-        serde_json::json!(["forge-core", "guide", "describe"]),
-        "state 4 should expose typed guide argv"
-    );
+    assert_agent_native_workflow_handoff(&env, &app, "state 4");
     let refs = env["data"]["next_step"]["references"]
         .as_array()
         .expect("state 4 references is an array");
@@ -316,13 +330,13 @@ fn state_four_contract_present_hands_off_to_guide() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
-        refs_joined.contains("guide status --phase discovery"),
-        "state 4 should point at the first-phase guide status"
+        refs_joined.contains("compatibility: forge-core preview --operation"),
+        "state 4 should retain legacy operation validation only as compatibility context"
     );
 }
 
 #[test]
-fn state_five_preview_run_is_terminal() {
+fn state_five_preview_run_keeps_workflow_authority() {
     // Scenario E: state tree + non-empty traces dir => preview has run.
     let parent = FreshParent::new("preview-run");
     let app = parent.path.join("app");
@@ -337,14 +351,15 @@ fn state_five_preview_run_is_terminal() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_PREVIEW_RUN);
-    assert_eq!(
-        env["data"]["next_step"]["command"], "forge-core guide describe",
-        "state 5 still points at guide (ongoing orientation)"
-    );
-    assert_eq!(
-        env["data"]["next_step"]["argv"],
-        serde_json::json!(["forge-core", "guide", "describe"]),
-        "state 5 should expose typed guide argv"
+    assert_agent_native_workflow_handoff(&env, &app, "state 5");
+    let refs = env["data"]["next_step"]["references"]
+        .as_array()
+        .expect("state 5 references is an array");
+    assert!(
+        refs.iter().filter_map(Value::as_str).any(|reference| {
+            reference.contains("preview trace") && reference.contains("not workflow authority")
+        }),
+        "state 5 should retain preview evidence only as compatibility material"
     );
 }
 

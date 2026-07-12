@@ -1,0 +1,18 @@
+schema_version: '0.1'
+workflow_release_publication_evidence:
+  id: workflow-release-evidence.shadow-report.v0
+  evidence_class: shadow_report
+  publication_scope: p5d_1_release_publication
+  integrity_claim: Indexes real P5c recovery/resume results and the P5a exact-projection audit consumed by the P5d.1 release evaluator.
+  behavioral_sufficiency: not_asserted
+  limitation: This artifact is a publication evidence reference. P5d.1 validates its embedded path and exact content digest only; it does not prove that the referenced behavior is sufficient, current, or passing.
+  references:
+  - repo_path: crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs
+    anchor: fresh_agent_resumes_same_automatically_selected_governance_state
+    relevance: Real binary result proving fresh-agent recovery observes the same governed state.
+  - repo_path: docs/fixtures/workflow-governance-golden-path-v0/ledger-all-events.yaml
+    anchor: workflow_governance_ledger
+    relevance: Durable P5c event fixture spanning the admitted governance event families.
+  - repo_path: crates/forge-core-cli/tests/workflow_migration_cli_e2e.rs
+    anchor: agent_receives_complete_p5a_manifest_from_one_read_only_command
+    relevance: The exact 110-workflow shadow-parity result that P5d.1 reuses as its migration baseline.

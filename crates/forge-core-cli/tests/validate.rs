@@ -59,7 +59,7 @@ use forge_core_command_surface as command_surface;
 use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind};
-use forge_core_contracts::StableId;
+use forge_core_contracts::{StableId, WorkflowMigrationBatchDocument};
 use forge_core_store::{
     append_json_line, sha256_content_hash, EffectMetadataConsumerUse,
     EffectTargetMetadataIndexQueryStatus, EffectTargetMetadataIndexRebuildStatus,
@@ -1494,6 +1494,80 @@ fn validate_library_passes_current_repo() {
         summary.diagnostics
     );
     assert!(!summary.checks.is_empty());
+    let release_checks = summary
+        .checks
+        .iter()
+        .filter(|check| check.name == "workflow_governance_release_foundation")
+        .collect::<Vec<_>>();
+    assert_eq!(release_checks.len(), 1, "one aggregate release check");
+    assert_eq!(release_checks[0].status, ValidationStatus::Passed);
+    assert_eq!(release_checks[0].diagnostics, 0);
+}
+
+fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_governance_release_foundation")
+        .expect("aggregate release check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+#[test]
+fn workflow_release_foundation_validation_fails_for_missing_or_tampered_canonical_input() {
+    const SPEC_REF: &str = "contracts/spec/workflow-governance-release-v0.yaml";
+    const BATCH_REF: &str = "contracts/migration/workflow-governance-batch-golden-path-v0.yaml";
+
+    let missing_spec = merged_validation_root("release-foundation-missing-spec");
+    fs::remove_file(missing_spec.join(SPEC_REF)).expect("remove release spec");
+    let summary = run_validate(&missing_spec);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_foundation_check_failed(&summary, SPEC_REF);
+
+    let tampered_spec = merged_validation_root("release-foundation-tampered-spec");
+    let spec_path = tampered_spec.join(SPEC_REF);
+    let mut spec: Value =
+        yaml_serde::from_str(&fs::read_to_string(&spec_path).expect("read release spec"))
+            .expect("parse release spec");
+    spec["status"] = json!("tampered_test_only");
+    fs::write(
+        &spec_path,
+        yaml_serde::to_string(&spec).expect("serialize tampered release spec"),
+    )
+    .expect("write tampered release spec");
+    let summary = run_validate(&tampered_spec);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_foundation_check_failed(&summary, SPEC_REF);
+
+    let missing_batch = merged_validation_root("release-foundation-missing-batch");
+    fs::remove_file(missing_batch.join(BATCH_REF)).expect("remove release batch");
+    let summary = run_validate(&missing_batch);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_foundation_check_failed(&summary, BATCH_REF);
+
+    let tampered_batch = merged_validation_root("release-foundation-tampered-batch");
+    let batch_path = tampered_batch.join(BATCH_REF);
+    let mut batch: WorkflowMigrationBatchDocument =
+        yaml_serde::from_str(&fs::read_to_string(&batch_path).expect("read release batch"))
+            .expect("parse release batch");
+    batch.workflow_migration_batch.source_catalog_digest = format!("sha256:{}", "0".repeat(64));
+    fs::write(
+        &batch_path,
+        yaml_serde::to_string(&batch).expect("serialize tampered release batch"),
+    )
+    .expect("write tampered release batch");
+    let summary = run_validate(&tampered_batch);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_foundation_check_failed(&summary, BATCH_REF);
 }
 
 #[test]

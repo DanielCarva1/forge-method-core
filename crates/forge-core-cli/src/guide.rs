@@ -9,15 +9,17 @@ use forge_core_command_surface::COMMAND_GUIDE;
 use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, RepoPath, WorkflowDocument,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
     WorkflowMigrationPlanDocument, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
 use forge_core_decisions::{
-    evaluate_workflow_migration, load_catalog, load_embedded_catalog,
+    evaluate_workflow_migration, evaluate_workflow_release, load_catalog, load_embedded_catalog,
     load_embedded_workflow_documents, load_workflow_documents,
     project_legacy_workflow_compatibility, simulate_workflow_governance, CatalogLoadReport,
     LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport, WorkflowGovernanceSimulation,
-    WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
+    WorkflowMigrationAudit, WorkflowMigrationAuditStatus, WorkflowReleaseEvaluation,
+    WorkflowReleaseEvaluationStatus,
 };
 use forge_core_decisions::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
@@ -242,6 +244,99 @@ pub fn run_migration_audit(
             audit,
         )
     }
+}
+
+/// Evaluate one complete P5d.1 rollout candidate without granting execution or
+/// retirement authority. The typed evaluator always reports `candidate_only`.
+#[must_use]
+pub fn run_rollout_audit(
+    manifest_file: &Path,
+    batch_files: &[std::path::PathBuf],
+    catalog_dir: Option<&Path>,
+    plan_file: Option<&Path>,
+) -> CliEnvelope<WorkflowReleaseEvaluation> {
+    let manifest: WorkflowGovernanceReleaseManifestDocument =
+        match read_closed_rollout_yaml(manifest_file, "workflow governance release manifest") {
+            Ok(manifest) => manifest,
+            Err((exit_reason, message)) => {
+                return CliEnvelope::err("guide.rollout-audit", exit_reason, message);
+            }
+        };
+
+    let mut batches = Vec::with_capacity(batch_files.len());
+    for batch_file in batch_files {
+        match read_closed_rollout_yaml::<WorkflowMigrationBatchDocument>(
+            batch_file,
+            "workflow migration batch",
+        ) {
+            Ok(batch) => batches.push(batch),
+            Err((exit_reason, message)) => {
+                return CliEnvelope::err("guide.rollout-audit", exit_reason, message);
+            }
+        }
+    }
+
+    // Reuse the P5a command path so catalog loading, plan fallback, typed plan
+    // parsing, and audit derivation cannot drift between migration and rollout.
+    let migration_envelope = run_migration_audit(catalog_dir, plan_file);
+    let Some(migration_audit) = migration_envelope.data else {
+        let exit = match migration_envelope.exit_reason.0.as_str() {
+            "invalid_decision_shape" => ExitReason::InvalidDecisionShape,
+            "rejected_by_gate" => ExitReason::RejectedByGate,
+            _ => ExitReason::EnvConfig,
+        };
+        let message = migration_envelope.error.map_or_else(
+            || "P5a workflow migration audit is unavailable".to_owned(),
+            |error| error.message,
+        );
+        return CliEnvelope::err("guide.rollout-audit", exit, message);
+    };
+
+    let workflows = resolve_workflow_documents(catalog_dir);
+    if !workflows.is_clean() {
+        return CliEnvelope::err(
+            "guide.rollout-audit",
+            ExitReason::EnvConfig,
+            format!(
+                "complete workflow inventory failed: {} workflow error(s)",
+                workflows.errors.len()
+            ),
+        );
+    }
+
+    let evaluation =
+        evaluate_workflow_release(&manifest, &batches, &migration_audit, &workflows.workflows);
+    if evaluation.status == WorkflowReleaseEvaluationStatus::StructurallyValid {
+        CliEnvelope::ok("guide.rollout-audit", evaluation)
+    } else {
+        CliEnvelope::reject(
+            "guide.rollout-audit",
+            ExitReason::RejectedByGate,
+            "workflow rollout structure is blocked; inspect typed issues and non-executable gaps",
+            evaluation,
+        )
+    }
+}
+
+fn read_closed_rollout_yaml<T>(path: &Path, label: &str) -> Result<T, (ExitReason, String)>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let text = std::fs::read_to_string(path).map_err(|error| {
+        (
+            ExitReason::EnvConfig,
+            format!("cannot read {label} {}: {error}", path.display()),
+        )
+    })?;
+    yaml_serde::from_str(&text).map_err(|error| {
+        (
+            ExitReason::InvalidDecisionShape,
+            format!(
+                "{label} {} is not a closed valid contract: {error}",
+                path.display()
+            ),
+        )
+    })
 }
 
 // ============================================================================
@@ -758,6 +853,7 @@ pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
         "decide" => run_guide_decide(&args[2..]),
         "status" => run_guide_status(&args[2..]),
         "migration-audit" => run_guide_migration_audit(&args[2..]),
+        "rollout-audit" => run_guide_rollout_audit(&args[2..]),
         "govern-simulate" => run_guide_govern_simulate(&args[2..]),
         "--help" | "-h" | "help" => {
             print_guide_usage();
@@ -1061,6 +1157,87 @@ pub fn run_guide_migration_audit(args: &[String]) -> Result<(), ExitError> {
     )
 }
 
+/// Runs the P5d.1 read-only release rollout audit.
+///
+/// # Errors
+///
+/// Returns a usage error for missing/unrecognized arguments, an
+/// `invalid_decision_shape` envelope for malformed closed YAML contracts, and
+/// a `rejected_by_gate` envelope with the typed evaluation when rollout gates
+/// remain blocked.
+pub fn run_guide_rollout_audit(args: &[String]) -> Result<(), ExitError> {
+    let mut manifest_file = None;
+    let mut batch_files = Vec::new();
+    let mut catalog_dir = None;
+    let mut plan_file = None;
+    let mut want_json = true;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--manifest-file" => {
+                index += 1;
+                manifest_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "rollout-audit",
+                    "manifest-file",
+                )?));
+            }
+            "--batch-file" => {
+                index += 1;
+                batch_files.push(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "rollout-audit",
+                    "batch-file",
+                )?));
+            }
+            "--catalog-dir" => {
+                index += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "rollout-audit",
+                    "catalog-dir",
+                )?));
+            }
+            "--plan-file" => {
+                index += 1;
+                plan_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    index,
+                    "rollout-audit",
+                    "plan-file",
+                )?));
+            }
+            "--json" => want_json = true,
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("{}", guide_command_surface_usage_line_for("rollout-audit"));
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("rollout-audit", other)),
+        }
+        index += 1;
+    }
+
+    let manifest_file = manifest_file.ok_or_else(|| {
+        let message = "guide rollout-audit: --manifest-file is required";
+        eprintln!("{message}");
+        guide_invalid_value_with_usage("rollout-audit", message)
+    })?;
+
+    emit_guide(
+        run_rollout_audit(
+            &manifest_file,
+            &batch_files,
+            catalog_dir.as_deref(),
+            plan_file.as_deref(),
+        ),
+        want_json,
+    )
+}
+
 /// Runs the P5b deterministic, non-authoritative workflow simulation adapter.
 ///
 /// # Errors
@@ -1272,6 +1449,7 @@ mod tests {
             "decide",
             "status",
             "migration-audit",
+            "rollout-audit",
             "govern-simulate",
         ] {
             if sibling != subcommand {
@@ -1507,7 +1685,7 @@ mod tests {
         }
         assert_eq!(
             guide_subcommand_hint(),
-            "describe | decide | status | migration-audit | govern-simulate"
+            "describe | decide | status | migration-audit | rollout-audit | govern-simulate"
         );
     }
 
@@ -1518,6 +1696,7 @@ mod tests {
             "decide",
             "status",
             "migration-audit",
+            "rollout-audit",
             "govern-simulate",
         ] {
             let usage = guide_command_surface_usage_line_for(subcommand);
@@ -1571,6 +1750,13 @@ mod tests {
             &govern_error,
             "govern-simulate",
             "guide govern-simulate: --bundle-file is required",
+        );
+
+        let rollout_error = run_guide_rollout_audit(&args(&[])).expect_err("missing manifest file");
+        assert_guide_error_projects_only_subcommand_usage(
+            &rollout_error,
+            "rollout-audit",
+            "guide rollout-audit: --manifest-file is required",
         );
     }
 
@@ -1638,6 +1824,25 @@ mod tests {
             &unknown,
             "govern-simulate",
             "guide govern-simulate: unrecognized argument '--invent-completion'",
+        );
+    }
+
+    #[test]
+    fn rollout_audit_parser_accepts_repeated_batches_and_rejects_unknown_flags() {
+        let missing_value = run_guide_rollout_audit(&args(&["--manifest-file", "--json"]))
+            .expect_err("manifest value is required");
+        assert_guide_error_projects_only_subcommand_usage(
+            &missing_value,
+            "rollout-audit",
+            "guide rollout-audit: --manifest-file requires a value",
+        );
+
+        let unknown = run_guide_rollout_audit(&args(&["--grant-authority"]))
+            .expect_err("unknown authority flag");
+        assert_guide_error_projects_only_subcommand_usage(
+            &unknown,
+            "rollout-audit",
+            "guide rollout-audit: unrecognized argument '--grant-authority'",
         );
     }
 

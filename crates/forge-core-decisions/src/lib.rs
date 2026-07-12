@@ -39,6 +39,7 @@ pub mod obligation_engine;
 pub mod phase_transition;
 pub mod workflow_governance;
 pub mod workflow_migration;
+pub mod workflow_release;
 
 pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
@@ -113,6 +114,13 @@ pub use workflow_migration::{
     WorkflowMigrationAssessment, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
     WorkflowMigrationIssue, WorkflowMigrationIssueCode, WorkflowMigrationManifest,
     WorkflowMigrationTargetLinks, WorkflowShadowParity, WorkflowShadowParitySummary,
+};
+pub use workflow_release::{
+    evaluate_workflow_release, workflow_migration_batch_digest, workflow_release_legacy_digest,
+    workflow_release_policy_digest, WorkflowReleaseAssessment, WorkflowReleaseDerivedState,
+    WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
+    WorkflowReleaseEvidenceAssurance, WorkflowReleaseGap, WorkflowReleaseGapCode,
+    WorkflowReleaseIssue, WorkflowReleaseIssueCode, WorkflowReleaseScorecardCounts,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

@@ -1,0 +1,18 @@
+schema_version: '0.1'
+workflow_release_publication_evidence:
+  id: workflow-release-evidence.representative-fixtures.v0
+  evidence_class: representative_fixtures
+  publication_scope: p5d_1_release_publication
+  integrity_claim: Indexes representative P5c policy, trusted-kernel, and real CLI integration coverage used for release publication traceability.
+  behavioral_sufficiency: not_asserted
+  limitation: This artifact is a publication evidence reference. P5d.1 validates its embedded path and exact content digest only; it does not prove that the referenced behavior is sufficient, current, or passing.
+  references:
+  - repo_path: contracts/workflow-governance/golden-path-v0.yaml
+    anchor: workflow_governance_bundle
+    relevance: The admitted fifteen-policy P5c golden-path composition used verbatim by the candidate batch.
+  - repo_path: crates/forge-core-kernel/tests/workflow_governance_golden_path.rs
+    anchor: all_admitted_required_policies_use_signed_authority_and_reach_terminal_resume
+    relevance: Representative trusted-kernel execution across every admitted required policy.
+  - repo_path: crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs
+    anchor: signed_cli_flow_completes_first_policy_and_resumes_capability_gap
+    relevance: Real binary integration coverage for signed progression and resumable capability gaps.

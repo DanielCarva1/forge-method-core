@@ -278,6 +278,38 @@ contract_family_inventory:
       evidence_refs:
         - "llm_as_code_2606_15874"
         - "code_as_agent_harness_2605_18747"
+    - id: "workflow_governance_release_manifest"
+      family_kind: "workflow_governance_release"
+      schema_ref: "contracts/spec/workflow-governance-release-v0.yaml"
+      instance_globs:
+        - "contracts/migration/workflow-governance-release-foundation-v0.yaml"
+      validator_function: "evaluate_workflow_release"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "workflow_migration_batch"
+      family_kind: "workflow_migration_batch"
+      schema_ref: "contracts/spec/workflow-governance-release-v0.yaml"
+      instance_globs:
+        - "contracts/migration/workflow-governance-batch-golden-path-v0.yaml"
+      validator_function: "evaluate_workflow_release"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "workflow_retirement_authorization"
+      family_kind: "workflow_retirement_authorization"
+      schema_ref: "contracts/spec/workflow-governance-release-v0.yaml"
+      instance_globs: []
+      validator_function: "none"
+      validation_surface: "reserved"
+      status: "support_only"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
     - id: "workflow_governance_policy"
       family_kind: "workflow_governance_policy"
       schema_ref: "contracts/workflow-governance/workflow-governance-contract-v0.yaml"
