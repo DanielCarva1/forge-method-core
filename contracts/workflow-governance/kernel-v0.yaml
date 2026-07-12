@@ -1,113 +1,148 @@
-schema_version: "0.1"
+schema_version: '0.1'
 workflow_governance_bundle:
   id: bundle.workflow-governance.kernel-v0
   policies:
-    - id: policy.workflow.write-spec
-      compatibility_workflow_id: write-spec
-      eligible_phases:
-        - 2-specification
-      prerequisite_policy_refs: []
-      obligations:
-        - id: obligation.specification-inspected
-          description: The specification exists and has been inspected against its acceptance surface.
-          criticality: required
-          claim_refs:
-            - claim.specification-inspected
-      claims:
-        - id: claim.specification-inspected
-          statement: The current specification is present and has passed direct inspection.
-          evaluator_ref: evaluator.specification-inspection
-      evaluators:
-        - id: evaluator.specification-inspection
-          accepted_evidence_kinds:
-            - artifact_inspection
-            - independent_review
-          minimum_strength: inspected_artifact
-          minimum_passing_observations: 1
-          freshness: current_only
-          disproof_policy: require_uncontested_support
-      capability_requirements: []
-      decision_rules: []
-      advisory_playbook:
-        id: playbook.write-spec
-        steps:
-          - Inspect the current product intent and known constraints.
-          - Produce the smallest specification that makes acceptance observable.
-
-    - id: policy.workflow.build-story
-      compatibility_workflow_id: build-story
-      eligible_phases:
-        - 4-build-verify
-      prerequisite_policy_refs:
-        - policy.workflow.write-spec
-      obligations:
-        - id: obligation.acceptance-defined
-          description: Acceptance expectations are concrete and independently inspectable.
-          criticality: required
-          claim_refs:
-            - claim.acceptance-defined
-        - id: obligation.representative-execution
-          description: The implementation has passed deterministic and representative execution checks.
-          criticality: critical
-          claim_refs:
-            - claim.representative-execution
-      claims:
-        - id: claim.acceptance-defined
-          statement: Acceptance expectations are concrete enough to inspect without guessing.
-          evaluator_ref: evaluator.acceptance-inspection
-        - id: claim.representative-execution
-          statement: The implementation behaves correctly in deterministic and representative execution.
-          evaluator_ref: evaluator.runtime-verification
-      evaluators:
-        - id: evaluator.acceptance-inspection
-          accepted_evidence_kinds:
-            - artifact_inspection
-            - independent_review
-          minimum_strength: inspected_artifact
-          minimum_passing_observations: 1
-          freshness: current_only
-          disproof_policy: require_uncontested_support
-        - id: evaluator.runtime-verification
-          accepted_evidence_kinds:
-            - deterministic_check
-            - representative_execution
-          minimum_strength: deterministic_verification
-          minimum_passing_observations: 2
-          freshness: current_only
-          disproof_policy: require_uncontested_support
-      capability_requirements:
-        - id: capability.representative-runtime
-          kind: environment
-          description: A representative runtime is required to exercise the implemented story.
-          affected_claim_refs:
-            - claim.representative-execution
-          resolution_options:
-            - Provision or select a representative runtime environment.
-            - Declare the environment gap and defer completion.
-          blocks_before: execute
-      decision_rules:
-        - id: decision.product-direction
-          activation: observed_need
-          claim_ref: null
-          question: Which product trade-off should govern the implementation when both options are technically valid?
-          reason: product_direction
-          alternatives:
-            - id: alternative.preserve-scope
-              description: Preserve the agreed scope and accept the additional implementation cost.
-              consequences:
-                - Delivery may take longer.
-                - The agreed product intent remains intact.
-            - id: alternative.reduce-scope
-              description: Reduce scope while preserving the highest-value outcome.
-              consequences:
-                - Delivery risk decreases.
-                - Some intended behavior is deferred.
-          recommended_alternative_ref: alternative.preserve-scope
-          blocking: true
-          blocks_before: execute
-      advisory_playbook:
-        id: playbook.build-story
-        steps:
-          - Inspect the acceptance surface and choose an implementation strategy.
-          - Implement incrementally and gather qualifying evidence.
-          - Challenge the result in a representative runtime before claiming completion.
+  - id: policy.workflow.write-spec
+    compatibility_workflow_id: write-spec
+    routing:
+      priority: 100
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 2-specification
+    prerequisites: []
+    obligations:
+    - id: obligation.specification-inspected
+      description: The specification exists and has been inspected against its acceptance surface.
+      criticality: required
+      claim_refs:
+      - claim.specification-inspected
+      required_before: execute
+    claims:
+    - id: claim.specification-inspected
+      statement: The current specification is present and has passed direct inspection.
+      evaluator_ref: evaluator.specification-inspection
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.delivery
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.specification-inspection
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+      provider: repository_inspector
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.write-spec
+      steps:
+      - Inspect the current product intent and known constraints.
+      - Produce the smallest specification that makes acceptance observable.
+  - id: policy.workflow.build-story
+    compatibility_workflow_id: build-story
+    routing:
+      priority: 200
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    prerequisites:
+    - policy_ref: policy.workflow.write-spec
+      requirement: always
+    obligations:
+    - id: obligation.acceptance-defined
+      description: Acceptance expectations are concrete and independently inspectable.
+      criticality: required
+      claim_refs:
+      - claim.acceptance-defined
+      required_before: execute
+    - id: obligation.representative-execution
+      description: The implementation has passed deterministic and representative execution checks.
+      criticality: critical
+      claim_refs:
+      - claim.representative-execution
+      required_before: execute
+    claims:
+    - id: claim.acceptance-defined
+      statement: Acceptance expectations are concrete enough to inspect without guessing.
+      evaluator_ref: evaluator.acceptance-inspection
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.delivery
+        max_age_seconds: 86400
+    - id: claim.representative-execution
+      statement: The implementation behaves correctly in deterministic and representative execution.
+      evaluator_ref: evaluator.runtime-verification
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.acceptance-inspection
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+      provider: repository_inspector
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+    - id: evaluator.runtime-verification
+      accepted_evidence_kinds:
+      - deterministic_check
+      - representative_execution
+      minimum_strength: deterministic_verification
+      minimum_passing_observations: 2
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+      provider: representative_runtime
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+    capability_requirements:
+    - id: capability.representative-runtime
+      kind: environment
+      description: A representative runtime is required to exercise the implemented story.
+      affected_claim_refs:
+      - claim.representative-execution
+      resolution_options:
+      - Provision or select a representative runtime environment.
+      - Declare the environment gap and defer completion.
+      blocks_before: execute
+      probe_kind: runtime_handshake
+    decision_rules:
+    - id: decision.product-direction
+      activation: observed_need
+      claim_ref: null
+      question: Which product trade-off should govern the implementation when both options are technically valid?
+      reason: product_direction
+      alternatives:
+      - id: alternative.preserve-scope
+        description: Preserve the agreed scope and accept the additional implementation cost.
+        consequences:
+        - Delivery may take longer.
+        - The agreed product intent remains intact.
+      - id: alternative.reduce-scope
+        description: Reduce scope while preserving the highest-value outcome.
+        consequences:
+        - Delivery risk decreases.
+        - Some intended behavior is deferred.
+      recommended_alternative_ref: alternative.preserve-scope
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.build-story
+      steps:
+      - Inspect the acceptance surface and choose an implementation strategy.
+      - Implement incrementally and gather qualifying evidence.
+      - Challenge the result in a representative runtime before claiming completion.

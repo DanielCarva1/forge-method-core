@@ -16,6 +16,7 @@ name = "forge-core"
 path = "src/main.rs"
 
 [dependencies]
+forge-core-authority = { path = "../forge-core-authority" }
 forge-core-command-surface = { path = "../forge-core-command-surface" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-crypto = { path = "../forge-core-crypto" }

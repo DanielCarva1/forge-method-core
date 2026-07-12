@@ -1024,6 +1024,7 @@ fn execution_principal_trace_event(
         &principal.principal_id.0,
         &principal.agent_id.0,
         match principal.role {
+            forge_core_contracts::operation::CallerRole::Human => "human",
             forge_core_contracts::operation::CallerRole::Driver => "driver",
             forge_core_contracts::operation::CallerRole::Worker => "worker",
             forge_core_contracts::operation::CallerRole::Runtime => "runtime",

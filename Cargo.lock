@@ -814,6 +814,7 @@ dependencies = [
  "assert_cmd",
  "base64",
  "ed25519-dalek",
+ "forge-core-authority",
  "forge-core-command-surface",
  "forge-core-contracts",
  "forge-core-crypto",
@@ -976,6 +977,7 @@ dependencies = [
  "forge-core-store",
  "forge-core-trace",
  "forge-core-validate",
+ "forge-core-workflow-governance-tcb",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
@@ -1089,6 +1091,19 @@ dependencies = [
  "serde_yaml",
  "serde_yml",
  "tracing",
+ "yaml_serde",
+]
+
+[[package]]
+name = "forge-core-workflow-governance-tcb"
+version = "0.4.0"
+dependencies = [
+ "forge-core-contracts",
+ "forge-core-store",
+ "getrandom 0.3.4",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
  "yaml_serde",
 ]
 

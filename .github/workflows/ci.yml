@@ -39,11 +39,11 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchor (126 clean diagnostics)
+      - name: Regression anchor (127 clean diagnostics)
         run: |
           count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
-          echo "Anchor count: $count (expected 126)"
-          test "$count" = "126"
+          echo "Anchor count: $count (expected 127)"
+          test "$count" = "127"
 
   platform:
     name: ${{ matrix.os }} cargo all-targets

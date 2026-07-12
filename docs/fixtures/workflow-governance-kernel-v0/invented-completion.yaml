@@ -2,6 +2,7 @@ schema_version: "0.1"
 workflow_governance_evaluation:
   observation_set_id: observations.build-story.invented-completion
   state_version: 13
+  observed_at_unix: 1720000000
   bundle_id: bundle.workflow-governance.kernel-v0
   policy_id: policy.workflow.build-story
   current_phase: 4-build-verify

@@ -53,10 +53,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   internally computed canonical digest; verified completion remains bound to
   project, state version, phase, and readiness target. Serializable audits
   cannot reconstruct authority.
-  P5c must implement the Project Snapshot Adapter that derives phase/state,
-  prerequisite completion receipts, capability registry/probe receipts,
-  authorized human-decision receipts, evaluator evidence receipts, and
-  computed freshness before migrated workflows receive runtime authority.
+- **P5c executable golden-path governance.** A repository-owned admitted bundle
+  now migrates the 15 selected discovery, planning, build, verification,
+  correction, continuity, readiness, and release behaviors into closed typed
+  policies with deterministic priority, activation, prerequisites, due targets,
+  capabilities, decisions, evaluators, evidence rules, and waiver limits.
+- The trusted Project Snapshot Adapter derives policy selection, phase, state
+  version, applicability, prerequisite completion, active signals, capabilities,
+  human decisions, evidence freshness, waivers, registry revocation, and continuity from
+  the admitted bundle plus durable receipts. Caller-authored workflow, phase,
+  bundle, target, availability, evidence freshness, and completion are not
+  authority.
+- The kernel-owned workflow-governance ledger is confined to the Forge state
+  root, exclusively locked, fsynced, capacity-bounded, and hash-chained over
+  project/bundle/state identity. Recovery rejects corruption, malformed or torn-tail truncation,
+  sequence gaps, previous-head mismatch, duplicate records, and illegal state
+  regression rather than repairing authority-bearing history. Without an
+  external monotonic anchor it cannot detect clean truncation to a valid prefix
+  or a same-user rollback of the complete internally consistent ledger.
+- `forge-core workflow init|next|resume|shadow` exposes the chat-host
+  path without workflow selection. Applicability, capability, evidence, human
+  signal, decision, and waiver receipts require exact registry-authorized signed intents
+  bound to the current project/snapshot/ledger context; unsafe caller-authored
+  direct observation commands are not part of the authority surface.
+- Completion is a one-use opaque transition: consumption re-locks and rechecks
+  the project snapshot, admitted bundle digest, ledger head, state version,
+  phase, selected policy, readiness target, and current evidence before appending
+  policy-completion and replacement-agent continuity receipts. Drift fails
+  closed without a completion append.
+- Fixed-registry consumption now compares the complete signed principal audience,
+  tool, role, key, and grant set, so a caller-owned registry cannot escalate an
+  otherwise valid fixed credential. Signal episodes are monotonic across
+  freshness/snapshot drift, semantic evidence identities deduplicate repeated
+  scenarios, and Release completions reopen after project drift.
+- Raw semantic ledger mutation moved into the dedicated
+  `forge-core-workflow-governance-tcb` crate, which is a direct dependency only
+  of the kernel Adapter. Store, CLI, and MCP no longer receive an unchecked
+  workflow mutation API through Cargo feature unification. Multi-record
+  governance operations prepare under one lock and replace the WAL only once,
+  so late preparation failures cannot durably apply a prefix.
+- Policy-scoped applicability, capability, decision, evidence, and waiver
+  receipts are accepted only for the currently selected policy or an explicit
+  live boundary recheck. Snapshot drift invalidates applicability and every
+  completion target; future-policy evidence and pre-authorized waivers fail
+  closed. Direct same-user state-root writes remain outside the isolation claim.
+- Read-only shadow output compares migrated and legacy projections for the same
+  live snapshot while denying mutation and retirement. Kernel and real-binary
+  consumer tests exercise automatic 15-policy routing,
+  artifact-only rejection, representative execution, late completion
+  consumption, deterministic replacement-agent resume, stale/contradictory
+  evidence, scope/time-bounded authorized waivers, mid-flight replacement-agent
+  resume, and junction-backed workspaces. All P5c publication gates pass.
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
 - **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.
@@ -98,11 +145,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in progress; no workflow execution or legacy retirement authority moved in
   P5a.
 - The repository validator now semantically validates the canonical Workflow
-  Governance Policy bundle, and the clean-check regression anchor advances to
-  126. P5 remains in progress: P5b completes the contract, simulation, and
-  opaque typestate seam only; it does not supply the live trusted-state Adapter,
-  mutate project state, migrate the complete golden path, or retire any legacy
-  field.
+  Governance Policy bundles. P5b advanced the clean-check regression anchor to
+  126; the admitted P5c golden-path bundle advances this checkpoint to 127. P5
+  remains in progress: P5c completed executable governance for the selected
+  15-policy golden path and passed its publication gates; P5d remains responsible
+  for governed rollout across the remaining catalog and evidence-backed legacy
+  retirement.
+- The workflow governance ledger, not `state.yaml`, is authoritative for the
+  P5c path. `state.yaml` remains a compatibility projection. The internal hash
+  chain detects record-level tampering and malformed/torn tails but has no
+  external monotonic anchor; clean truncation to a valid prefix and malicious
+  same-user rollback of an entire internally consistent ledger are not detected.
+  P5c targets the local CLI path and does not claim an end-to-end MCP workflow
+  Adapter or hostile-user isolation.
+- **P5c Rust migration:** `CallerRole` adds `Human`; exhaustive downstream Rust
+  matches must handle the new variant. Workflow-governance bundle/evaluation
+  contracts add typed routing, prerequisites, due targets, evaluator providers,
+  waiver policy, receipt subjects/provenance, freshness, principal diversity,
+  and durable ledger events. Raw P5b simulation remains non-authoritative.
 - The P3 conversational resume token now uses the shared canonical Assurance Case token implementation consumed by execution admission.
 - MCP stdio remains read-only by default. Mutation is admitted only for the sole `execute-operation` tool when exact policy scope, registry, loader, Project Link sidecar root, startup reconciliation, and its dedicated enable flag all agree. Incomplete, cross-scope, or broader configurations fail closed.
 - Read-only MCP subprocesses now pin the current executable instead of resolving `forge-core` through `PATH`, run in the canonical repo root, clear the inherited environment before copying a minimal OS/runtime allowlist, and receive null stdin so the JSON-RPC stream cannot leak into child commands.

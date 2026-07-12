@@ -275,6 +275,30 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+/// Trusted P5c workflow-governance runtime. `next`, `resume`, and `shadow` are
+/// read-only; initialization, evidence/applicability recording, human
+/// decisions, waivers, and completion append to the kernel-owned governance
+/// ledger under its exclusive lock.
+pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
+    name: "workflow",
+    usage_lines: &[
+        "       forge-core workflow init [--root <path>] [--json|--no-json]",
+        "       forge-core workflow next [--root <path>] [--json|--no-json]",
+        "       forge-core workflow resume [--root <path>] [--json|--no-json]",
+        "       forge-core workflow shadow [--root <path>] [--json|--no-json]",
+        "       forge-core workflow applicability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+        "       forge-core workflow capability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+        "       forge-core workflow complete [--root <path>] --if-snapshot <sha256> [--principal <id>] [--json|--no-json]",
+        "       forge-core workflow decision-resolve [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+        "       forge-core workflow evidence-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+        "       forge-core workflow signal-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+        "       forge-core workflow waiver-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
 pub const COMMAND_CLAIM: CommandSpec = CommandSpec {
     name: "claim",
     usage_lines:     &[
@@ -719,6 +743,7 @@ pub const COMMAND_RESEARCH: CommandSpec = CommandSpec {
 #[rustfmt::skip]
 pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_GUIDE,
+    COMMAND_WORKFLOW,
     COMMAND_CLAIM,
     COMMAND_AUTONOMY,
     COMMAND_ASSURANCE,

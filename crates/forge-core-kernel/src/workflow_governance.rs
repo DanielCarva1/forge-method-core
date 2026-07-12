@@ -22,6 +22,15 @@ use forge_core_decisions::{
 use forge_core_store::sha256_content_hash;
 use serde::Serialize;
 
+mod adapter;
+mod policy;
+
+pub use adapter::*;
+pub use policy::{
+    load_admitted_workflow_governance_bundle, AdmittedWorkflowGovernanceBundle,
+    AdmittedWorkflowGovernanceBundleError, ADMITTED_GOLDEN_PATH_BUNDLE_REF,
+};
+
 /// Snapshot admitted by trusted kernel-owned adapters.
 ///
 /// This type intentionally has no public constructor and implements neither

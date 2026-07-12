@@ -103,13 +103,23 @@ pub use research::{
 pub use typed_failure::TypedFailure;
 pub use workflow::{Workflow, WorkflowDocument};
 pub use workflow_governance::{
-    AdvisoryWorkflowPlaybook, WorkflowCapabilityRequirement, WorkflowClaimPolicy,
-    WorkflowCompletionAssertion, WorkflowDecisionActivation, WorkflowDecisionRule,
-    WorkflowDisproofPolicy, WorkflowEvaluatorBinding, WorkflowEvidenceFreshness,
+    AdvisoryWorkflowPlaybook, ApplicabilityAssessedEvent, CapabilityProbedEvent,
+    ContinuityRecordedEvent, DecisionNeedRaisedEvent, DecisionResolvedEvent,
+    EvaluatorObservedEvent, PhaseAdvancedEvent, PolicyCompletedEvent, ProjectImportedEvent,
+    ReceiptRevokedEvent, SignalChangedEvent, WaiverAuthorizedEvent, WorkflowCapabilityProbeKind,
+    WorkflowCapabilityRequirement, WorkflowClaimPolicy, WorkflowClaimWaiverObservation,
+    WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowContentAddressedReference,
+    WorkflowDecisionActivation, WorkflowDecisionRule, WorkflowDisproofPolicy,
+    WorkflowEvaluatorBinding, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowEvidenceStrength, WorkflowFreshnessRequirement, WorkflowGovernanceBundle,
+    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
+    WorkflowEvidenceSubjectKind, WorkflowFreshnessRequirement, WorkflowGovernanceBundle,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy, WorkflowObligationPolicy,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedger,
+    WorkflowGovernanceLedgerDocument, WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy,
+    WorkflowGovernanceReceiptDocument, WorkflowGovernanceSignal, WorkflowObligationPolicy,
+    WorkflowPolicyActivation, WorkflowPolicyRouting, WorkflowPrerequisite,
+    WorkflowPrerequisiteRequirement, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 pub use workflow_migration::{

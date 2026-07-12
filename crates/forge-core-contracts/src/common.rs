@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 /// Use this for ids that are NEVER compared against a claim id in the R8 sense
 /// (agent ids, product-area ids, reason codes). For the two ids that WERE confused
 /// in R8, use the dedicated newtypes below.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(transparent)]
 pub struct StableId(pub String);
 

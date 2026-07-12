@@ -30,6 +30,8 @@ fn generated_schemas_cover_v0_contract_surface() {
         "workflow_migration_plan",
         "workflow_governance_bundle",
         "workflow_governance_evaluation",
+        "workflow_governance_ledger",
+        "workflow_governance_receipt",
     ] {
         assert!(families.contains(expected), "missing schema for {expected}");
     }

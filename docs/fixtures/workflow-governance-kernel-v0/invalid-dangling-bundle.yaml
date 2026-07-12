@@ -4,27 +4,41 @@ workflow_governance_bundle:
   policies:
     - id: policy.workflow.build-story
       compatibility_workflow_id: build-story
+      routing:
+        priority: 100
+        readiness_target: execute
+        activation: required
+        signals: []
       eligible_phases: [4-build-verify]
-      prerequisite_policy_refs: [policy.workflow.missing]
+      prerequisites:
+        - policy_ref: policy.workflow.missing
+          requirement: always
       obligations:
         - id: obligation.story-inspected
           description: The story was inspected.
           criticality: required
+          required_before: execute
           claim_refs: [claim.missing]
       claims:
         - id: claim.story-inspected
           statement: The story was inspected.
           evaluator_ref: evaluator.missing
+          waiver:
+            kind: not_waivable
       evaluators:
         - id: evaluator.story-inspection
+          provider: repository_inspector
           accepted_evidence_kinds: [artifact_inspection]
           minimum_strength: inspected_artifact
           minimum_passing_observations: 1
+          minimum_distinct_principals: 0
+          max_age_seconds: 86400
           freshness: current_only
           disproof_policy: reject_any_disproof
       capability_requirements:
         - id: capability.story-review
           kind: evaluator
+          probe_kind: static_registry
           description: Story reviewer.
           affected_claim_refs: [claim.missing]
           resolution_options: [Acquire a story reviewer.]

@@ -1,0 +1,818 @@
+schema_version: '0.1'
+workflow_governance_bundle:
+  id: bundle.workflow-governance.golden-path-v0
+  policies:
+  - id: policy.workflow.context-recovery
+    compatibility_workflow_id: context-recovery
+    routing:
+      priority: 10
+      readiness_target: explore
+      activation: on_signal
+      signals:
+      - context_recovery_required
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.context-recovery.continuity-restored
+      description: A replacement agent can recover governed state and the next action without chat memory.
+      criticality: critical
+      required_before: explore
+      claim_refs:
+      - claim.workflow.context-recovery.continuity-restored
+    claims:
+    - id: claim.workflow.context-recovery.continuity-restored
+      statement: Durable state, decisions, evidence, blockers, and next action are sufficient for replacement-agent continuation.
+      evaluator_ref: evaluator.workflow.context-recovery.continuity-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.context-recovery.continuity-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.context-recovery
+      steps:
+      - Load durable project state and governance receipts rather than relying on chat memory.
+      - Reconstruct blockers, accepted decisions, evidence provenance, and the next governed action.
+  - id: policy.workflow.correct-course
+    compatibility_workflow_id: correct-course
+    routing:
+      priority: 20
+      readiness_target: execute
+      activation: on_signal
+      signals:
+      - course_correction_required
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.correct-course.contradiction-resolved
+      description: Disproven assumptions and material drift are resolved or explicitly rerouted.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.correct-course.contradiction-resolved
+    claims:
+    - id: claim.workflow.correct-course.contradiction-resolved
+      statement: The corrected direction addresses current contradictory evidence without hiding scope or risk.
+      evaluator_ref: evaluator.workflow.correct-course.correction-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.correct-course.correction-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      - deterministic_check
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.correct-course
+      steps:
+      - Inspect the disproof, drift, or changed constraint and identify affected governed claims.
+      - Propose the smallest correction that restores evidence-backed coherence and reroute dependent work.
+  - id: policy.workflow.discover-intent
+    compatibility_workflow_id: discover-intent
+    routing:
+      priority: 100
+      readiness_target: explore
+      activation: required
+      signals: []
+    eligible_phases:
+    - 1-discovery
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.discover-intent.intent-grounded
+      description: Human intent, audience, constraints, non-goals, and observable success are explicit.
+      criticality: critical
+      required_before: explore
+      claim_refs:
+      - claim.workflow.discover-intent.intent-grounded
+    claims:
+    - id: claim.workflow.discover-intent.intent-grounded
+      statement: The product direction is specific enough to distinguish success from a fluent but wrong interpretation.
+      evaluator_ref: evaluator.workflow.discover-intent.intent-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.discover-intent.intent-review
+      provider: authorized_human
+      accepted_evidence_kinds:
+      - human_acceptance
+      - artifact_inspection
+      minimum_strength: authoritative_acceptance
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.discover-intent
+      steps:
+      - Clarify the outcome, affected people, constraints, non-goals, and observable proof.
+      - Persist accepted intent and route unresolved material choices as decisions.
+  - id: policy.workflow.domain-scan
+    compatibility_workflow_id: domain-scan
+    routing:
+      priority: 110
+      readiness_target: explore
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 1-discovery
+    - 2-specification
+    prerequisites:
+    - policy_ref: policy.workflow.discover-intent
+      requirement: always
+    obligations:
+    - id: obligation.workflow.domain-scan.domain-risks-bounded
+      description: Material domain rules, harms, duties, and expert-review needs are explicit.
+      criticality: critical
+      required_before: explore
+      claim_refs:
+      - claim.workflow.domain-scan.domain-risks-bounded
+    claims:
+    - id: claim.workflow.domain-scan.domain-risks-bounded
+      statement: Domain-sensitive assumptions are supported, rejected, or blocked by traceable sources and qualified review.
+      evaluator_ref: evaluator.workflow.domain-scan.domain-review
+      waiver:
+        kind: authorized
+        max_target: explore
+        authority_scope: project.domain
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.domain-scan.domain-review
+      provider: external_authority
+      accepted_evidence_kinds:
+      - external_authority
+      - research
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.domain-scan.qualified-review
+      kind: knowledge
+      probe_kind: external_verification
+      description: Qualified domain review is available when risk requires it.
+      affected_claim_refs:
+      - claim.workflow.domain-scan.domain-risks-bounded
+      resolution_options:
+      - Acquire qualified review with traceable scope.
+      - Narrow the product boundary until the unsupported domain claim is removed.
+      blocks_before: execute
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.domain-scan
+      steps:
+      - Identify rules, harms, trust boundaries, source quality, and qualified-review needs.
+      - Separate evidence, expert judgment, inference, and assumptions before downstream planning.
+  - id: policy.workflow.technical-feasibility-scan
+    compatibility_workflow_id: technical-feasibility-scan
+    routing:
+      priority: 120
+      readiness_target: explore
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 1-discovery
+    - 2-specification
+    prerequisites:
+    - policy_ref: policy.workflow.discover-intent
+      requirement: always
+    obligations:
+    - id: obligation.workflow.technical-feasibility-scan.feasibility-bounded
+      description: Consequential technical promises have a falsifiable proof path and explicit limits.
+      criticality: critical
+      required_before: explore
+      claim_refs:
+      - claim.workflow.technical-feasibility-scan.feasibility-bounded
+    claims:
+    - id: claim.workflow.technical-feasibility-scan.feasibility-bounded
+      statement: Required platforms, data, permissions, cost, and physical constraints support a plausible proof path.
+      evaluator_ref: evaluator.workflow.technical-feasibility-scan.feasibility-review
+      waiver:
+        kind: authorized
+        max_target: explore
+        authority_scope: project.technical
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.technical-feasibility-scan.feasibility-review
+      provider: deterministic_tool
+      accepted_evidence_kinds:
+      - research
+      - deterministic_check
+      - representative_execution
+      minimum_strength: deterministic_verification
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.technical-feasibility-scan.proof-environment
+      kind: environment
+      probe_kind: runtime_handshake
+      description: A representative environment can test the riskiest feasibility assumption.
+      affected_claim_refs:
+      - claim.workflow.technical-feasibility-scan.feasibility-bounded
+      resolution_options:
+      - Provision a representative proof environment.
+      - Reduce the promise to an evidence-supported boundary.
+      blocks_before: execute
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.technical-feasibility-scan
+      steps:
+      - Name the riskiest assumption, success threshold, failure cost, and falsifier.
+      - Test the cheapest representative proof before architecture or delivery commitments.
+  - id: policy.workflow.product-requirements
+    compatibility_workflow_id: product-requirements
+    routing:
+      priority: 130
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 2-specification
+    prerequisites:
+    - policy_ref: policy.workflow.discover-intent
+      requirement: always
+    - policy_ref: policy.workflow.domain-scan
+      requirement: when_applicable
+    - policy_ref: policy.workflow.technical-feasibility-scan
+      requirement: when_applicable
+    obligations:
+    - id: obligation.workflow.product-requirements.requirements-testable
+      description: Outcomes, requirements, constraints, non-goals, and acceptance evidence are testable.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.product-requirements.requirements-testable
+    claims:
+    - id: claim.workflow.product-requirements.requirements-testable
+      statement: Requirements trace to accepted intent and expose contradictions, decisions, risks, and evidence expectations.
+      evaluator_ref: evaluator.workflow.product-requirements.requirements-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.product-requirements.requirements-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules:
+    - id: decision.workflow.product-requirements.product-direction
+      activation: claim_unresolved
+      claim_ref: claim.workflow.product-requirements.requirements-testable
+      question: Which materially different product outcome should govern the requirements?
+      reason: product_direction
+      alternatives:
+      - id: alternative.preserve-intent
+        description: Preserve the accepted outcome and adjust implementation constraints.
+        consequences:
+        - May increase delivery cost.
+        - Retains the accepted user value.
+      - id: alternative.reduce-outcome
+        description: Reduce the outcome to fit current constraints.
+        consequences:
+        - Decreases delivery risk.
+        - Defers part of the accepted user value.
+      recommended_alternative_ref: alternative.preserve-intent
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.product-requirements
+      steps:
+      - Translate accepted intent into outcome obligations, non-goals, constraints, and acceptance evidence.
+      - Expose contradictions and irreducible product choices rather than inventing an answer.
+  - id: policy.workflow.write-spec
+    compatibility_workflow_id: write-spec
+    routing:
+      priority: 140
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 2-specification
+    prerequisites:
+    - policy_ref: policy.workflow.product-requirements
+      requirement: always
+    obligations:
+    - id: obligation.workflow.write-spec.spec-inspected
+      description: A compact specification preserves load-bearing requirements and observable acceptance boundaries.
+      criticality: required
+      required_before: execute
+      claim_refs:
+      - claim.workflow.write-spec.spec-inspected
+    claims:
+    - id: claim.workflow.write-spec.spec-inspected
+      statement: The specification is internally coherent, traceable, and directly inspectable without relying on prose volume.
+      evaluator_ref: evaluator.workflow.write-spec.spec-review
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.specification
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.write-spec.spec-review
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.write-spec
+      steps:
+      - Distill load-bearing capabilities, constraints, non-goals, success signals, and preservation mappings.
+      - Keep prose subordinate to executable evidence and record unresolved assumptions.
+  - id: policy.workflow.architecture
+    compatibility_workflow_id: architecture
+    routing:
+      priority: 150
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 3-plan
+    prerequisites:
+    - policy_ref: policy.workflow.product-requirements
+      requirement: always
+    - policy_ref: policy.workflow.write-spec
+      requirement: always
+    obligations:
+    - id: obligation.workflow.architecture.architecture-bounded
+      description: Material system boundaries, interfaces, ownership, risks, and rejected alternatives are explicit.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.architecture.architecture-bounded
+    claims:
+    - id: claim.workflow.architecture.architecture-bounded
+      statement: Architecture decisions trace to requirements and expose validation hooks for expensive or irreversible choices.
+      evaluator_ref: evaluator.workflow.architecture.architecture-review
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.architecture
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.architecture.architecture-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.architecture.repository-inventory
+      kind: tool
+      probe_kind: static_registry
+      description: Current repository and integration boundaries can be inspected.
+      affected_claim_refs:
+      - claim.workflow.architecture.architecture-bounded
+      resolution_options:
+      - Acquire repository and integration inventory access.
+      - Constrain architecture scope to the inspectable boundary.
+      blocks_before: execute
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.architecture
+      steps:
+      - Compare plausible boundaries and record interfaces, data ownership, risks, test hooks, and rejected alternatives.
+      - Trace decisions to governed requirements rather than preferred technology alone.
+  - id: policy.workflow.test-strategy
+    compatibility_workflow_id: test-strategy
+    routing:
+      priority: 160
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 3-plan
+    prerequisites:
+    - policy_ref: policy.workflow.write-spec
+      requirement: always
+    - policy_ref: policy.workflow.architecture
+      requirement: when_applicable
+    obligations:
+    - id: obligation.workflow.test-strategy.evidence-strategy-fit
+      description: Verification layers and evidence strength match product and technical risk.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.test-strategy.evidence-strategy-fit
+    claims:
+    - id: claim.workflow.test-strategy.evidence-strategy-fit
+      statement: The strategy covers critical claims with the cheapest reliable evidence and representative checks where needed.
+      evaluator_ref: evaluator.workflow.test-strategy.strategy-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.test-strategy.strategy-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.test-strategy
+      steps:
+      - Map risks and acceptance claims to appropriate unit, integration, system, representative, and human evidence.
+      - Avoid test presence as proof; define disproof and coverage limits.
+  - id: policy.workflow.plan-sprint
+    compatibility_workflow_id: plan-sprint
+    routing:
+      priority: 170
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 3-plan
+    prerequisites:
+    - policy_ref: policy.workflow.write-spec
+      requirement: always
+    - policy_ref: policy.workflow.architecture
+      requirement: when_applicable
+    - policy_ref: policy.workflow.test-strategy
+      requirement: always
+    obligations:
+    - id: obligation.workflow.plan-sprint.increment-coherent
+      description: The delivery increment has bounded dependencies, proof expectations, and a coherent order.
+      criticality: required
+      required_before: execute
+      claim_refs:
+      - claim.workflow.plan-sprint.increment-coherent
+    claims:
+    - id: claim.workflow.plan-sprint.increment-coherent
+      statement: Planned work traces to governed outcomes and can be executed without hiding dependency or evidence gaps.
+      evaluator_ref: evaluator.workflow.plan-sprint.plan-review
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.delivery
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.plan-sprint.plan-review
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.plan-sprint
+      steps:
+      - Choose a coherent increment based on governed outcomes, dependencies, capability gaps, and proof needs.
+      - Keep sequence advisory except where typed prerequisites make ordering necessary.
+  - id: policy.workflow.story-creation
+    compatibility_workflow_id: story-creation
+    routing:
+      priority: 180
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 3-plan
+    prerequisites:
+    - policy_ref: policy.workflow.plan-sprint
+      requirement: always
+    obligations:
+    - id: obligation.workflow.story-creation.story-agent-operable
+      description: The work slice is bounded, dependency-aware, and has explicit acceptance evidence.
+      criticality: required
+      required_before: execute
+      claim_refs:
+      - claim.workflow.story-creation.story-agent-operable
+    claims:
+    - id: claim.workflow.story-creation.story-agent-operable
+      statement: An agent can implement the slice without guessing scope, authority, constraints, or proof expectations.
+      evaluator_ref: evaluator.workflow.story-creation.story-review
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.delivery
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.story-creation.story-review
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - independent_review
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.story-creation
+      steps:
+      - Define the smallest coherent mutation slice with dependencies, constraints, non-goals, and proof expectations.
+      - Preserve traceability to product, architecture, and verification obligations.
+  - id: policy.workflow.build-story
+    compatibility_workflow_id: build-story
+    routing:
+      priority: 190
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    prerequisites:
+    - policy_ref: policy.workflow.story-creation
+      requirement: always
+    - policy_ref: policy.workflow.test-strategy
+      requirement: always
+    obligations:
+    - id: obligation.workflow.build-story.implementation-conforms
+      description: Implementation conforms to the bounded story and governed constraints.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.build-story.implementation-conforms
+    - id: obligation.workflow.build-story.representative-execution
+      description: The built behavior passes deterministic and representative execution.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.build-story.representative-execution
+    claims:
+    - id: claim.workflow.build-story.implementation-conforms
+      statement: Repository changes satisfy the accepted story without unrelated or hidden scope.
+      evaluator_ref: evaluator.workflow.build-story.implementation-review
+      waiver:
+        kind: authorized
+        max_target: execute
+        authority_scope: project.delivery
+        max_age_seconds: 86400
+    - id: claim.workflow.build-story.representative-execution
+      statement: The implemented behavior works under a representative runtime and failure surface.
+      evaluator_ref: evaluator.workflow.build-story.runtime-verification
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.build-story.implementation-review
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      - deterministic_check
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.build-story.runtime-verification
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - deterministic_check
+      - representative_execution
+      minimum_strength: representative_execution
+      minimum_passing_observations: 2
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.build-story.representative-runtime
+      kind: environment
+      probe_kind: runtime_handshake
+      description: A representative runtime can execute the changed behavior.
+      affected_claim_refs:
+      - claim.workflow.build-story.representative-execution
+      resolution_options:
+      - Provision or select a representative runtime.
+      - Keep completion blocked and record the environment gap.
+      blocks_before: release
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.build-story
+      steps:
+      - Implement the bounded story incrementally and collect deterministic evidence.
+      - Exercise changed behavior in a representative runtime before any completion claim.
+  - id: policy.workflow.reality-evidence-gate
+    compatibility_workflow_id: reality-evidence-gate
+    routing:
+      priority: 200
+      readiness_target: release
+      activation: required
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    prerequisites:
+    - policy_ref: policy.workflow.build-story
+      requirement: always
+    obligations:
+    - id: obligation.workflow.reality-evidence-gate.reality-feedback
+      description: Representative execution challenges the product claim on its real user or operational surface.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.reality-evidence-gate.reality-feedback
+    claims:
+    - id: claim.workflow.reality-evidence-gate.reality-feedback
+      statement: Current representative evidence supports the intended behavior and exposes remaining limitations or disproof.
+      evaluator_ref: evaluator.workflow.reality-evidence-gate.reality-verification
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.reality-evidence-gate.reality-verification
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - representative_execution
+      - human_acceptance
+      minimum_strength: representative_execution
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.reality-evidence-gate
+      steps:
+      - Select a representative user or operational path and observe the actual result.
+      - Treat failures, visual defects, and missing lifecycle steps as disproof or gaps, not polish to ignore.
+  - id: policy.workflow.readiness-check
+    compatibility_workflow_id: readiness-check
+    routing:
+      priority: 210
+      readiness_target: release
+      activation: required
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    prerequisites:
+    - policy_ref: policy.workflow.build-story
+      requirement: always
+    - policy_ref: policy.workflow.reality-evidence-gate
+      requirement: always
+    obligations:
+    - id: obligation.workflow.readiness-check.release-obligations-satisfied
+      description: All release-due obligations, decisions, capabilities, evidence, and waivers are valid for the current snapshot.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.readiness-check.release-obligations-satisfied
+    claims:
+    - id: claim.workflow.readiness-check.release-obligations-satisfied
+      statement: The current project snapshot is supported for release by unexpired, unretracted, target-appropriate receipts.
+      evaluator_ref: evaluator.workflow.readiness-check.readiness-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.readiness-check.readiness-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      - deterministic_check
+      - representative_execution
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements: []
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.readiness-check
+      steps:
+      - Aggregate target-due governance receipts against the current project and bundle digests.
+      - Fail closed on missing, stale, revoked, contradictory, or incorrectly scoped proof.
+  - id: policy.workflow.ready-release
+    compatibility_workflow_id: ready-release
+    routing:
+      priority: 220
+      readiness_target: release
+      activation: on_signal
+      signals:
+      - readiness_requested
+      - build_completed
+    eligible_phases:
+    - 4-build-verify
+    prerequisites:
+    - policy_ref: policy.workflow.readiness-check
+      requirement: always
+    obligations:
+    - id: obligation.workflow.ready-release.release-authorized
+      description: The exact release subject is authorized, reproducible, and backed by current readiness evidence.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.ready-release.release-authorized
+    - id: obligation.workflow.ready-release.release-observed
+      description: The release path and rollback or recovery controls have representative evidence.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.ready-release.release-observed
+    claims:
+    - id: claim.workflow.ready-release.release-authorized
+      statement: The release subject digest matches the governed ready snapshot and authorized release scope.
+      evaluator_ref: evaluator.workflow.ready-release.release-authorization
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.ready-release.release-observed
+      statement: Release and recovery behavior have current representative evidence.
+      evaluator_ref: evaluator.workflow.ready-release.release-execution
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.ready-release.release-authorization
+      provider: authorized_human
+      accepted_evidence_kinds:
+      - human_acceptance
+      - external_authority
+      minimum_strength: authoritative_acceptance
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.ready-release.release-execution
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - deterministic_check
+      - representative_execution
+      minimum_strength: representative_execution
+      minimum_passing_observations: 2
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.ready-release.release-channel
+      kind: authority
+      probe_kind: credential_check
+      description: The authorized release channel and rollback controls are available.
+      affected_claim_refs:
+      - claim.workflow.ready-release.release-authorized
+      - claim.workflow.ready-release.release-observed
+      resolution_options:
+      - Acquire scoped release authority and verify rollback controls.
+      - Keep release blocked and preserve the ready artifact.
+      blocks_before: release
+    decision_rules: []
+    advisory_playbook:
+      id: playbook.workflow.ready-release
+      steps:
+      - Bind the exact release subject to the ready snapshot and authorized channel.
+      - Exercise release and recovery controls, then preserve resulting receipts and continuity.

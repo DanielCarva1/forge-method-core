@@ -220,7 +220,7 @@ impl Default for PreflightInput {
             root: PathBuf::from("."),
             json: false,
             gates: Vec::new(),
-            expected_anchor: 125,
+            expected_anchor: 127,
             profile_override: None,
         }
     }
@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(input.root, std::path::PathBuf::from("."));
         assert!(!input.json);
         assert!(input.gates.is_empty());
-        assert_eq!(input.expected_anchor, 125);
+        assert_eq!(input.expected_anchor, 127);
     }
 
     #[test]

@@ -92,6 +92,7 @@ fn run_explain(args: &[String]) -> Result<(), ExitError> {
 #[rustfmt::skip]
 pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec::from_surface(&surface::COMMAND_GUIDE, crate::guide::run_guide_command),
+    CommandSpec::from_surface(&surface::COMMAND_WORKFLOW, crate::workflow_cmd::run_workflow_command),
     CommandSpec::from_surface(&surface::COMMAND_CLAIM, crate::claim::run_claim_command),
     CommandSpec::from_surface(&surface::COMMAND_AUTONOMY, crate::autonomy_cmd::run_autonomy_command),
     CommandSpec::from_surface(&surface::COMMAND_ASSURANCE, crate::assurance_cmd::run_assurance_command),

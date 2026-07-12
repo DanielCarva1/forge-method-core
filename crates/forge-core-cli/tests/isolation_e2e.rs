@@ -180,11 +180,17 @@ fn isolation_propose_defaults_to_resolved_sidecar_isolations_dir() {
             .as_str()
             .expect("contract path"),
     );
+    let canonical_contract = contract_path
+        .canonicalize()
+        .expect("canonical isolation contract");
+    let canonical_expected_dir = expected_dir
+        .canonicalize()
+        .expect("canonical isolation directory");
     assert!(
-        contract_path.starts_with(&expected_dir),
+        canonical_contract.starts_with(&canonical_expected_dir),
         "contract should be written under sidecar isolation dir\nexpected: {}\nactual: {}",
-        expected_dir.display(),
-        contract_path.display()
+        canonical_expected_dir.display(),
+        canonical_contract.display()
     );
     assert_eq!(yaml_file_count(&expected_dir), 1);
     assert!(

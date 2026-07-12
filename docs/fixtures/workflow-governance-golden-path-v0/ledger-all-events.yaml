@@ -1,0 +1,286 @@
+schema_version: '0.1'
+workflow_governance_ledger:
+  records:
+  - record_id: receipt.golden-path.1
+    sequence: 1
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 1
+    previous_record_digest: null
+    record_digest: sha256:cb74673921e286be194ed42ccbb0a9b1675314c0cae4f7bb53168ed4e6c92a33
+    recorded_at_unix: 1783780001
+    event:
+      type: project_imported
+      payload:
+        source_ref: repo:D:/project
+        source_digest: sha256:41cf6794ba4200b839c53531555f0f3998df4cbb01a4d5cb0b94e3ca5e23947d
+        snapshot_digest: sha256:79c6d61344be00e74b64db50b5b9639bbfd2d845d2d686ec380526eb898a9d8a
+        initial_phase: 1-discovery
+  - record_id: receipt.golden-path.2
+    sequence: 2
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 2
+    previous_record_digest: sha256:cb74673921e286be194ed42ccbb0a9b1675314c0cae4f7bb53168ed4e6c92a33
+    record_digest: sha256:c606b6aa3046b6825e65aef1cf05a21e30c70e7248838fd93db05c0b4725a05c
+    recorded_at_unix: 1783780002
+    event:
+      type: phase_advanced
+      payload:
+        from_phase: 1-discovery
+        to_phase: 2-specification
+        snapshot_digest: sha256:1303575f6f144a4c65bea20994202cce34ef994afdb2755c9311ebbda248f86d
+  - record_id: receipt.golden-path.3
+    sequence: 3
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 3
+    previous_record_digest: sha256:c606b6aa3046b6825e65aef1cf05a21e30c70e7248838fd93db05c0b4725a05c
+    record_digest: sha256:24da32366fb3da26e14eb2dba481068fbba8699e37ca320d021c0dcee3a62fa9
+    recorded_at_unix: 1783780003
+    event:
+      type: applicability_assessed
+      payload:
+        policy_ref: policy.workflow.domain-scan
+        applicable: true
+        assessed_by: principal.domain-reviewer
+        evaluator_ref: evaluator.workflow.domain-scan.domain-review
+        basis_digest: sha256:7433bf262156193878a09029047dd3b74e6fda75ecb0853b4cfece07e4a37495
+        observed_at_unix: 1783780000
+        expires_at_unix: 1783866400
+        credential_id: credential.domain-reviewer
+        public_key_fingerprint: sha256:1b1402481fbae8ef8efddbb8e5cb174b15d71fbc04fa0e426d763ae442b925e2
+        authorization_registry_digest: sha256:fd5f7daf44dd8bc08b4ff3cd881c76bc57d9d0a7c773e8ed9858f41ef3391615
+        basis:
+        - subject_ref: evidence:domain-brief
+          subject_digest: sha256:cc6908b21b651f231f78ef4d6df5986b053efa4cac744a0a2b6c76ddde04fa4c
+        snapshot_digest: sha256:a1468627f850a00d79851d404d76285f9f53a8d47d6e7e382ead777348acd334
+        ledger_head_digest: sha256:c606b6aa3046b6825e65aef1cf05a21e30c70e7248838fd93db05c0b4725a05c
+  - record_id: receipt.golden-path.4
+    sequence: 4
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 4
+    previous_record_digest: sha256:24da32366fb3da26e14eb2dba481068fbba8699e37ca320d021c0dcee3a62fa9
+    record_digest: sha256:0193de5cc0d36d139fc3d16bebafaf5edfe5d601c7dcf2d713455bf5c73d8c7d
+    recorded_at_unix: 1783780004
+    event:
+      type: signal_changed
+      payload:
+        signal: course_correction_required
+        active: true
+        changed_by: principal.agent.coordinator
+        episode_id: episode.course-correction.1
+        generation: 1
+        credential_id: credential.runtime.coordinator
+        public_key_fingerprint: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        authorization_registry_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        basis:
+        - subject_ref: evidence:test-disproof
+          subject_digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+        basis_digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+        snapshot_digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+        ledger_head_digest: sha256:24da32366fb3da26e14eb2dba481068fbba8699e37ca320d021c0dcee3a62fa9
+        observed_at_unix: 1783780004
+        expires_at_unix: 1783866404
+  - record_id: receipt.golden-path.5
+    sequence: 5
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 5
+    previous_record_digest: sha256:0193de5cc0d36d139fc3d16bebafaf5edfe5d601c7dcf2d713455bf5c73d8c7d
+    record_digest: sha256:f1590ae6aa2c20d52b0548e1e9486207f020d6c744e474675f9a749e3bf1ce7e
+    recorded_at_unix: 1783780005
+    event:
+      type: capability_probed
+      payload:
+        policy_ref: policy.workflow.build-story
+        capability_ref: capability.workflow.build-story.representative-runtime
+        probe_kind: runtime_handshake
+        available: true
+        probe_ref: probe:runtime:42
+        probe_digest: sha256:8dad786c4f1c6f91cbd9e0fdb27ed0c9ab100896a814d59ab0abb9e3257ab0b2
+        subject: &id001
+          kind: project_snapshot
+          subject_ref: snapshot:project.demo:8
+          subject_digest: sha256:aabf51d20bc37fa806e0ce35f7815a8e791a85433b93d980b3cab3e87b42ae26
+        observed_at_unix: 1783780100
+        expires_at_unix: 1783866500
+        credential_id: credential.runtime-probe
+        public_key_fingerprint: sha256:da5ef5bbb54a55f421a9a02802ff9762ba25e5ea397caadb02e3b58a6e17f657
+        authorization_registry_digest: sha256:fd5f7daf44dd8bc08b4ff3cd881c76bc57d9d0a7c773e8ed9858f41ef3391615
+        snapshot_digest: sha256:396d1034665ee358f85c77c9fc69543800ebbc280a13ed0666279e28ec081a1f
+        ledger_head_digest: sha256:0193de5cc0d36d139fc3d16bebafaf5edfe5d601c7dcf2d713455bf5c73d8c7d
+  - record_id: receipt.golden-path.6
+    sequence: 6
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 6
+    previous_record_digest: sha256:f1590ae6aa2c20d52b0548e1e9486207f020d6c744e474675f9a749e3bf1ce7e
+    record_digest: sha256:2226e059144bf2b9b3214678cd7beb4ab05596e67cda39b00375832089156154
+    recorded_at_unix: 1783780006
+    event:
+      type: decision_need_raised
+      payload:
+        policy_ref: policy.workflow.product-requirements
+        decision_ref: decision.workflow.product-requirements.product-direction
+        authority_scope: project.product
+        question_digest: sha256:1f5087db919ced5c123c7f507d3fcce818cb0cf6e77c2f95a8a35e951e03fdb9
+  - record_id: receipt.golden-path.7
+    sequence: 7
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 7
+    previous_record_digest: sha256:2226e059144bf2b9b3214678cd7beb4ab05596e67cda39b00375832089156154
+    record_digest: sha256:fc3109ad97c559715a20e6934fd6dd89a3ece0ed22c5a40bb58994df67f106b9
+    recorded_at_unix: 1783780007
+    event:
+      type: decision_resolved
+      payload:
+        policy_ref: policy.workflow.product-requirements
+        decision_ref: decision.workflow.product-requirements.product-direction
+        selected_alternative_ref: alternative.preserve-intent
+        principal: principal.product-owner
+        authority_scope: project.product
+        authorization_intent_digest: sha256:5d2778d53d320ed131d56fc10c7a6bb7762bc2f512856cc3e8e52704509c4116
+        signature_fingerprint: sha256:7cb75f8f959f8e12001c8d912ce12cec86895ea5689659dc332cd9cfe6e4a06a
+        resolved_at_unix: 1783780200
+        credential_id: credential.product-owner
+        public_key_fingerprint: sha256:8d213f3e0061e74ab9f701e3c435ce402e8a23d9eb445647ceffd8935b113201
+        authorization_registry_digest: sha256:fd5f7daf44dd8bc08b4ff3cd881c76bc57d9d0a7c773e8ed9858f41ef3391615
+        snapshot_digest: sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+        ledger_head_digest: sha256:2226e059144bf2b9b3214678cd7beb4ab05596e67cda39b00375832089156154
+  - record_id: receipt.golden-path.8
+    sequence: 8
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 8
+    previous_record_digest: sha256:fc3109ad97c559715a20e6934fd6dd89a3ece0ed22c5a40bb58994df67f106b9
+    record_digest: sha256:82c3020a7eac1cd33f859fa34f0eb6d911883eae16f4300768cd941ceabf7c28
+    recorded_at_unix: 1783780008
+    event:
+      type: evaluator_observed
+      payload:
+        policy_ref: policy.workflow.build-story
+        claim_ref: claim.workflow.build-story.representative-execution
+        evaluator_ref: evaluator.workflow.build-story.runtime-verification
+        provider: representative_runtime
+        kind: representative_execution
+        strength: representative_execution
+        outcome: pass
+        provenance:
+          source_ref: run:representative:42
+          source_digest: sha256:92234f8bb000a4aaec76c3fc1624a58008bde97845e4a916c7e705236410c87a
+          producer_ref: runtime.test-harness
+          principal: null
+          method: isolated representative execution
+          scenario_digest: sha256:5c7f12c21c9369b12ba430ed2495ac52110ca9372866e9c82ff1031565f382cf
+          semantic_identity: scenario.build-story.representative-execution.v1
+        subject: *id001
+        observed_at_unix: 1783780300
+        expires_at_unix: 1783866700
+        credential_id: credential.runtime-evaluator
+        public_key_fingerprint: sha256:c551e7428f2f072e9a72e95744b40cdcfb9c9c53e8def6a48b902757804f047b
+        authorization_registry_digest: sha256:fd5f7daf44dd8bc08b4ff3cd881c76bc57d9d0a7c773e8ed9858f41ef3391615
+        snapshot_digest: sha256:254b5b7c36918129bb6a693efc16386cbb7e83c3d25b2be07e0617bacff3098b
+        ledger_head_digest: sha256:fc3109ad97c559715a20e6934fd6dd89a3ece0ed22c5a40bb58994df67f106b9
+  - record_id: receipt.golden-path.9
+    sequence: 9
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 9
+    previous_record_digest: sha256:82c3020a7eac1cd33f859fa34f0eb6d911883eae16f4300768cd941ceabf7c28
+    record_digest: sha256:694c9fdfe27f16e445a7eca9eb194ca895f82ab65f0d490e9b8264af1654467e
+    recorded_at_unix: 1783780009
+    event:
+      type: waiver_authorized
+      payload:
+        policy_ref: policy.workflow.write-spec
+        claim_ref: claim.workflow.write-spec.spec-inspected
+        principal: principal.product-owner
+        authority_scope: project.specification
+        max_target: execute
+        subject: *id001
+        authorization_intent_digest: sha256:3f4dc099e1f3340542508f53655081558ad95492e58ea0e3c2b6028c0ed6c34e
+        signature_fingerprint: sha256:40364d2303f8523d50b5630cffbfd3dc7ee74ca8a9b95c150221ec3cb8517a3a
+        consequences_digest: sha256:1a9dc42d581b02eb5e5f322d5e555167a44b14694d4c370cb7277a1d4dca8b3c
+        authorized_at_unix: 1783780400
+        expires_at_unix: 1783866800
+        credential_id: credential.product-owner
+        public_key_fingerprint: sha256:8d213f3e0061e74ab9f701e3c435ce402e8a23d9eb445647ceffd8935b113201
+        authorization_registry_digest: sha256:fd5f7daf44dd8bc08b4ff3cd881c76bc57d9d0a7c773e8ed9858f41ef3391615
+        snapshot_digest: sha256:aabf51d20bc37fa806e0ce35f7815a8e791a85433b93d980b3cab3e87b42ae26
+        ledger_head_digest: sha256:82c3020a7eac1cd33f859fa34f0eb6d911883eae16f4300768cd941ceabf7c28
+  - record_id: receipt.golden-path.10
+    sequence: 10
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 10
+    previous_record_digest: sha256:694c9fdfe27f16e445a7eca9eb194ca895f82ab65f0d490e9b8264af1654467e
+    record_digest: sha256:f91d2ce638210cadcfcaa1395688d3b0a594fa1ea8544504299ad8c1ee34853b
+    recorded_at_unix: 1783780010
+    event:
+      type: policy_completed
+      payload:
+        policy_ref: policy.workflow.build-story
+        target: execute
+        phase: 4-build-verify
+        snapshot_digest: sha256:c72744f7c53f165bb68fb53d4306403b04b24a7e6609fdc51c126c551cb8821a
+        subject: *id001
+        completed_at_unix: 1783780500
+        ledger_head_digest: sha256:694c9fdfe27f16e445a7eca9eb194ca895f82ab65f0d490e9b8264af1654467e
+        dependency_receipt_digests:
+        - sha256:1268d916bfefa28f636f4ad7967697fbfc8adc1f700c7d183ed310e9206a01b0
+        evidence_receipt_digests:
+        - sha256:390b619fa8fe9c6ed900e214a984b05d371ff57f494c31936c2ce9191010398e
+        unresolved_deferred_obligation_refs:
+        - obligation.workflow.build-story.representative-execution
+        unresolved_deferred_capability_refs:
+        - capability.workflow.build-story.representative-runtime
+  - record_id: receipt.golden-path.11
+    sequence: 11
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 11
+    previous_record_digest: sha256:f91d2ce638210cadcfcaa1395688d3b0a594fa1ea8544504299ad8c1ee34853b
+    record_digest: sha256:70cda9e08ee09e48323216b6c96c341c5cccfa3ba94f3cb0c931213385f08170
+    recorded_at_unix: 1783780011
+    event:
+      type: receipt_revoked
+      payload:
+        revoked_record_id: receipt.golden-path.9
+        revoked_record_digest: sha256:ca22a29ba4a44ed3118737f247a93383ba58e88317f50c38dc4851615f0712ed
+        principal: principal.product-owner
+        authority_scope: project.specification
+        reason: The waived subject changed after authorization.
+        revoked_at_unix: 1783780600
+  - record_id: receipt.golden-path.12
+    sequence: 12
+    project_id: project.demo
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+    state_version: 12
+    previous_record_digest: sha256:70cda9e08ee09e48323216b6c96c341c5cccfa3ba94f3cb0c931213385f08170
+    record_digest: sha256:9b9585b344f29dff37bd5563b7433ae2e0917ae64788a0e1fea4fabb55059168
+    recorded_at_unix: 1783780012
+    event:
+      type: continuity_recorded
+      payload:
+        from_principal: principal.agent.builder
+        to_principal: principal.agent.replacement
+        snapshot_digest: sha256:c72744f7c53f165bb68fb53d4306403b04b24a7e6609fdc51c126c551cb8821a
+        context_digest: sha256:c0463a8abbb53dc6a63e1078896c9eb1454fe6925b71b3b395e0764cb783f3b2
+        next_policy_ref: policy.workflow.readiness-check
+        next_action: Evaluate release-due obligations against the current snapshot.
+        continuity_at_unix: 1783780700

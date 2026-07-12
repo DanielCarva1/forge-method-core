@@ -70,8 +70,22 @@ Active implementation plan:
   completion, mutation, or Execution Admission.
 - **Verified Workflow Governance Decision**: an opaque, non-deserializable
   kernel typestate derived only from a trusted Project Snapshot. It, not raw
-  YAML or playbook position, may carry progression/completion authority once a
-  live Adapter supplies authoritative receipts.
+  YAML or playbook position, is the intended progression/completion authority
+  for the admitted P5c golden path when the live Adapter derives it from
+  authoritative receipts. P5c integration is complete for that admitted set.
+- **Admitted Workflow Governance Bundle**: the repository-owned, embedded
+  15-policy golden-path bundle selected inside the kernel and bound by a
+  canonical digest. A caller cannot replace it with a preferred workflow,
+  policy, phase, or readiness target.
+- **Workflow Governance Ledger**: the state-root-confined, exclusively locked,
+  fsynced, hash-chained receipt history from which the P5c Adapter derives
+  workflow state. `state.yaml` is a compatibility projection, not authority for
+  this path.
+- **Workflow Governance Receipt**: a typed, content-bound observation of project
+  import, applicability, signal, capability probe, human decision, evaluator
+  evidence, waiver, completion, revocation, phase advancement, or replacement-
+  agent continuity. Freshness and revocation are computed from receipt data and
+  trusted observation time rather than caller labels.
 - **Phase Projection**: a human- and agent-friendly summary of maturity derived
   from satisfied obligations. It is not the primary source of authority.
 - **Execution Principal**: the authenticated and authorized caller identity and
@@ -113,15 +127,38 @@ Active implementation plan:
   read-only; P5a deliberately cannot execute, mutate, or retire workflows.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
-  from raw YAML and is never authority. The opaque verified lane requires a
+  from raw YAML and is never authority. The opaque verified lane receives a
   trusted Project Snapshot whose phase/state, prerequisite completion,
-  capabilities, human decisions, evaluator results, and freshness come from
-  durable snapshot/receipt sources. Its Interface is pure and mutation-free;
-  advisory playbooks and legacy simulation projections sit outside authority.
+  applicability, signals, capabilities, human decisions, evaluator results,
+  waivers, revocations, and freshness come from the admitted P5c bundle and
+  durable receipt ledger. `workflow next|resume` exposes its guidance to a host
+  agent; completion is consumed only after a lock-scoped late recheck. Advisory
+  playbooks and legacy simulation/shadow projections sit outside authority.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,
   obligations, playbooks, and evaluators.
+
+P5c completed executable governance for the selected 15-policy golden path,
+including its signed observation boundary, adversarial golden-path proof, and
+full workspace gates. P5d now owns
+remaining-catalog rollout, quarantine, and evidence-backed retirement of legacy
+authority. The P5c workflow path targets the local agent-facing CLI; allowlist
+metadata does not constitute an end-to-end MCP workflow Adapter.
+
+The workflow ledger's internal hash chain detects record tampering,
+malformed/torn tails, sequence gaps, and head mismatch within the history it
+receives, but it has no external monotonic anchor. It cannot distinguish clean
+truncation to a previously valid prefix from legitimate history. A malicious
+same-user rollback of the entire internally consistent ledger is therefore an
+explicit residual threat, and hostile-user isolation is not claimed.
+The shipped CLI confines raw workflow-ledger mutation to
+`forge-core-workflow-governance-tcb`, a direct dependency only of
+`forge-core-kernel`. `forge-core-store`, CLI, and MCP expose no semantic append
+surface, preventing Cargo feature unification from widening the TCB. The
+kernel Adapter and the dedicated ledger crate form the shipped workflow TCB;
+direct same-user state-root writes remain outside the P5c isolation claim and
+this process boundary is not a cryptographic sandbox.
 
 These Modules should earn **Depth** by keeping their **Interface** smaller than
 their **Implementation**, increasing **Leverage** for callers and **Locality** for

@@ -6,6 +6,7 @@ use forge_core_contracts::{
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
+    WorkflowGovernanceLedgerDocument, WorkflowGovernanceReceiptDocument,
     WorkflowMigrationPlanDocument,
 };
 use schemars::{schema_for, JsonSchema};
@@ -157,6 +158,18 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             Some("workflow_governance_evaluation"),
             "untrusted observation proposal; output cannot create authority, completion, progression, or mutation",
         ),
+        schema_artifact::<WorkflowGovernanceLedgerDocument>(
+            "workflow_governance_ledger",
+            "WorkflowGovernanceLedgerDocument",
+            Some("workflow_governance_ledger"),
+            "hash-chained durable receipt history; trusted only after strict store recovery and adapter binding",
+        ),
+        schema_artifact::<WorkflowGovernanceReceiptDocument>(
+            "workflow_governance_receipt",
+            "WorkflowGovernanceReceiptDocument",
+            Some("workflow_governance_receipt"),
+            "single hash-chained governance receipt; serialization alone is not authority",
+        ),
     ]
 }
 
@@ -301,6 +314,12 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_governance_evaluation" => {
             "caller observations are untrusted proposals; candidate completion is not authority"
+        }
+        "workflow_governance_ledger" => {
+            "strict hash-chain recovery plus project and admitted-bundle binding are required"
+        }
+        "workflow_governance_receipt" => {
+            "serialized receipts require chain, freshness, subject, scope, and revocation validation"
         }
         _ => "generated view; Rust validation remains authority",
     }

@@ -1,0 +1,124 @@
+schema_version: "0.1"
+spec: "workflow_governance_golden_path_v0"
+status: "p5c_contract"
+purpose: >-
+  Replace legacy workflow-step authority for the selected P5a golden path with
+  typed outcome, routing, prerequisite, evaluator, waiver, capability, and
+  durable receipt policies. Agent strategy remains adaptive and conversational.
+authority:
+  bundle: "repository-owned and admitted by canonical digest"
+  ledger: "append-only hash chain bound to project, bundle digest, and state version"
+  adapter: "derives opaque trusted snapshots only from admitted, unexpired, unrevoked receipts"
+  legacy_steps: "advisory playbook only; wording and order cannot authorize progression or completion"
+activation_model:
+  required: "due on the main governed path when phase and typed prerequisites are satisfied"
+  when_applicable: "due only after an unexpired ApplicabilityAssessed receipt says applicable; absence is unknown, never false"
+  on_signal: "due only while a closed, durable WorkflowGovernanceSignal is active"
+selected_policy_ids:
+  - "policy.workflow.discover-intent"
+  - "policy.workflow.domain-scan"
+  - "policy.workflow.technical-feasibility-scan"
+  - "policy.workflow.product-requirements"
+  - "policy.workflow.write-spec"
+  - "policy.workflow.architecture"
+  - "policy.workflow.plan-sprint"
+  - "policy.workflow.story-creation"
+  - "policy.workflow.build-story"
+  - "policy.workflow.test-strategy"
+  - "policy.workflow.reality-evidence-gate"
+  - "policy.workflow.correct-course"
+  - "policy.workflow.readiness-check"
+  - "policy.workflow.ready-release"
+  - "policy.workflow.context-recovery"
+routing_contract:
+  unique_priority: true
+  closed_signals:
+    - "context_recovery_required"
+    - "course_correction_required"
+    - "readiness_requested"
+    - "build_completed"
+  required_main_path:
+    - "policy.workflow.discover-intent"
+    - "policy.workflow.product-requirements"
+    - "policy.workflow.write-spec"
+    - "policy.workflow.test-strategy"
+    - "policy.workflow.plan-sprint"
+    - "policy.workflow.story-creation"
+    - "policy.workflow.build-story"
+    - "policy.workflow.reality-evidence-gate"
+    - "policy.workflow.readiness-check"
+  when_applicable:
+    - "policy.workflow.domain-scan"
+    - "policy.workflow.technical-feasibility-scan"
+    - "policy.workflow.architecture"
+  on_signal:
+    context_recovery_required: "policy.workflow.context-recovery"
+    course_correction_required: "policy.workflow.correct-course"
+    readiness_or_build_complete: "policy.workflow.ready-release"
+receipt_contract:
+  chain_fields:
+    - "record_id"
+    - "sequence"
+    - "project_id"
+    - "bundle_id"
+    - "bundle_digest"
+    - "state_version"
+    - "previous_record_digest"
+    - "record_digest"
+    - "recorded_at_unix"
+  event_types:
+    - "project_imported"
+    - "phase_advanced"
+    - "applicability_assessed"
+    - "signal_changed"
+    - "capability_probed"
+    - "decision_need_raised"
+    - "decision_resolved"
+    - "evaluator_observed"
+    - "waiver_authorized"
+    - "policy_completed"
+    - "receipt_revoked"
+    - "continuity_recorded"
+  unknown_field_policy: "reject"
+  freshness: "computed from trusted unix observation/expiry times, never caller labels"
+  revocation: "a valid ReceiptRevoked record removes the referenced receipt from trusted derivation"
+  captured_state: >-
+    Applicability, capability, evaluator, and completion receipts bind both the
+    captured project snapshot digest and the ledger head they evaluated.
+  signed_event_trust_root: >-
+    Signed applicability, capability, decision, evaluator, and waiver receipts
+    bind credential id, public-key fingerprint, and authorization-registry digest.
+  active_policy_binding: >-
+    Policy-scoped receipts are admitted only for the currently selected policy
+    or an explicit live boundary recheck; future-policy pre-authorization fails closed.
+  atomic_multi_record_commit: >-
+    One governed operation prepares every receipt, phase transition, and
+    continuity record under one lock and replaces the ledger once or not at all.
+  mutation_tcb: >-
+    Raw semantic append exists only in forge-core-workflow-governance-tcb,
+    which is a direct dependency of the kernel and is not exposed to store,
+    CLI, or MCP through feature unification.
+  applicability_basis: "every basis item is content-addressed and committed by an aggregate basis digest"
+  signal_episode: "episode id plus monotonic generation distinguishes repeated activation of the same closed signal"
+  evidence_identity: "scenario digest plus semantic identity prevents unrelated executions from satisfying a claim"
+  completion_receipt_sets: >-
+    Policy completion commits dependency and evidence receipt digests and
+    explicitly carries obligations and capabilities deferred to a later target.
+waiver_contract:
+  default: "not implied; every claim declares NotWaivable or Authorized"
+  authorized_fields:
+    - "max_target"
+    - "authority_scope"
+    - "max_age_seconds"
+  invariant: "a waiver cannot exceed policy target, declared scope, declared age, subject binding, or authorization intent"
+  hard_boundaries:
+    - "representative execution claims are non-waivable"
+    - "readiness and release claims are non-waivable"
+completion_contract:
+  required_before: "only obligations due at or before the requested target block that target"
+  subject_binding: "PolicyCompleted binds policy, target, phase, project snapshot digest, and evidence subject"
+  no_prose_authority: "advisory playbook content is excluded from governance verdicts and receipt authority"
+references:
+  - "contracts/policies/workflow-migration-foundation-v0.yaml"
+  - "contracts/workflow-governance/golden-path-v0.yaml"
+  - "contracts/spec/workflow-governance-kernel-v0.yaml"

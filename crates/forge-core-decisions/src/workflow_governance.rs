@@ -15,11 +15,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use forge_core_contracts::{
     AdvisoryWorkflowPlaybook, CapabilityGap, CatalogEntry, DecisionRequest, NextAction,
     NextActionKind, ObligationCriticality, ObligationStatus, Phase, ReadinessTarget, StableId,
-    WorkflowCompletionAssertion, WorkflowDecisionActivation, WorkflowDisproofPolicy,
-    WorkflowEvaluatorBinding, WorkflowEvidenceFreshness, WorkflowEvidenceObservation,
-    WorkflowEvidenceOutcome, WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy,
-    WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
+    WorkflowDecisionActivation, WorkflowDisproofPolicy, WorkflowEvaluatorBinding,
+    WorkflowEvidenceFreshness, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
+    WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy, WorkflowPolicyActivation,
+    WorkflowPrerequisiteRequirement, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use serde::Serialize;
 
@@ -90,6 +91,7 @@ pub struct WorkflowObligationResult {
     pub obligation_id: String,
     pub description: String,
     pub criticality: ObligationCriticality,
+    pub required_before: ReadinessTarget,
     pub status: ObligationStatus,
     pub claim_refs: Vec<StableId>,
 }
@@ -110,6 +112,7 @@ pub enum WorkflowClaimResultStatus {
     Unknown,
     Supported,
     Verified,
+    Waived,
     Disproven,
     Contradictory,
 }
@@ -145,6 +148,10 @@ pub enum WorkflowGovernanceIssueCode {
     ContradictoryEvidence,
     PhaseIneligible,
     MissingPrerequisite,
+    UnknownApplicability,
+    InvalidWaiver,
+    ExpiredWaiver,
+    InsufficientPrincipalDiversity,
     InventedCompletionClaim,
     LegacyProjectionMismatch,
 }
@@ -205,6 +212,7 @@ pub fn validate_workflow_governance_bundle(
 
     let mut policy_ids = BTreeSet::new();
     let mut workflow_ids = BTreeSet::new();
+    let mut routing_priorities = BTreeSet::new();
     for policy in &bundle.policies {
         let path = format!("workflow_governance_bundle.policies.{}", policy.id.0);
         require_nonblank(&mut issues, format!("{path}.id"), &policy.id.0);
@@ -225,10 +233,68 @@ pub fn validate_workflow_governance_bundle(
             &policy.compatibility_workflow_id.0,
             format!("{path}.compatibility_workflow_id"),
         );
+        if !routing_priorities.insert(policy.routing.priority) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::DuplicateIdentifier,
+                format!("{path}.routing.priority"),
+                format!(
+                    "routing priority {} occurs more than once",
+                    policy.routing.priority
+                ),
+            );
+        }
     }
 
     for policy in &bundle.policies {
         validate_policy(policy, &policy_ids, &mut issues);
+    }
+    let mut global_content_ids = BTreeSet::new();
+    for policy in &bundle.policies {
+        let policy_path = format!("workflow_governance_bundle.policies.{}", policy.id.0);
+        for obligation in &policy.obligations {
+            insert_unique(
+                &mut issues,
+                &mut global_content_ids,
+                &obligation.id.0,
+                format!("{policy_path}.obligations.{}.id", obligation.id.0),
+            );
+        }
+        for claim in &policy.claims {
+            insert_unique(
+                &mut issues,
+                &mut global_content_ids,
+                &claim.id.0,
+                format!("{policy_path}.claims.{}.id", claim.id.0),
+            );
+        }
+        for evaluator in &policy.evaluators {
+            insert_unique(
+                &mut issues,
+                &mut global_content_ids,
+                &evaluator.id.0,
+                format!("{policy_path}.evaluators.{}.id", evaluator.id.0),
+            );
+        }
+        for capability in &policy.capability_requirements {
+            insert_unique(
+                &mut issues,
+                &mut global_content_ids,
+                &capability.id.0,
+                format!(
+                    "{policy_path}.capability_requirements.{}.id",
+                    capability.id.0
+                ),
+            );
+        }
+        for decision in &policy.decision_rules {
+            insert_unique(
+                &mut issues,
+                &mut global_content_ids,
+                &decision.id.0,
+                format!("{policy_path}.decision_rules.{}.id", decision.id.0),
+            );
+        }
     }
     validate_dependency_graph(&bundle.policies, &policy_ids, &mut issues);
     sorted_issues(issues)
@@ -271,7 +337,14 @@ pub fn simulate_workflow_governance(
     };
 
     let mut runtime_issues = Vec::new();
-    let claim_results = evaluate_claims(policy, &input.evidence, &mut runtime_issues);
+    let claim_results = evaluate_claims(
+        policy,
+        &input.evidence,
+        &input.waivers,
+        input.target,
+        input.observed_at_unix,
+        &mut runtime_issues,
+    );
     let claim_statuses = claim_results
         .iter()
         .map(|result| (result.claim_id.as_str(), result.status))
@@ -292,6 +365,7 @@ pub fn simulate_workflow_governance(
     };
     let required_obligations_complete = obligation_results.iter().all(|obligation| {
         obligation.criticality == ObligationCriticality::Advisory
+            || obligation.required_before.rank() > input.target.rank()
             || obligation.status == ObligationStatus::Satisfied
     });
     let completion =
@@ -405,6 +479,41 @@ fn validate_policy(
     issues: &mut Vec<WorkflowGovernanceIssue>,
 ) {
     let path = format!("workflow_governance_bundle.policies.{}", policy.id.0);
+    match policy.routing.activation {
+        WorkflowPolicyActivation::Required | WorkflowPolicyActivation::WhenApplicable
+            if !policy.routing.signals.is_empty() =>
+        {
+            issue(
+                issues,
+                WorkflowGovernanceIssueCode::InvalidPolicy,
+                format!("{path}.routing.signals"),
+                "required and when-applicable policies cannot declare activation signals",
+            );
+        }
+        WorkflowPolicyActivation::OnSignal if policy.routing.signals.is_empty() => {
+            issue(
+                issues,
+                WorkflowGovernanceIssueCode::InvalidPolicy,
+                format!("{path}.routing.signals"),
+                "on-signal policies must declare at least one activation signal",
+            );
+        }
+        _ => {}
+    }
+    let unique_signals = policy
+        .routing
+        .signals
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if unique_signals.len() != policy.routing.signals.len() {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::DuplicateReference,
+            format!("{path}.routing.signals"),
+            "activation signal occurs more than once",
+        );
+    }
     if policy.eligible_phases.is_empty() {
         issue(
             issues,
@@ -428,17 +537,21 @@ fn validate_policy(
             );
         }
     }
-    validate_unique_refs(
-        issues,
-        &policy.prerequisite_policy_refs,
-        format!("{path}.prerequisite_policy_refs"),
-    );
-    for dependency in &policy.prerequisite_policy_refs {
-        if !known_policy_ids.contains(dependency.0.as_str()) {
+    let mut prerequisite_refs = BTreeSet::new();
+    for dependency in &policy.prerequisites {
+        if !prerequisite_refs.insert(dependency.policy_ref.0.as_str()) {
+            issue(
+                issues,
+                WorkflowGovernanceIssueCode::DuplicateReference,
+                format!("{path}.prerequisites.{}", dependency.policy_ref.0),
+                "prerequisite policy occurs more than once",
+            );
+        }
+        if !known_policy_ids.contains(dependency.policy_ref.0.as_str()) {
             issue(
                 issues,
                 WorkflowGovernanceIssueCode::DanglingReference,
-                format!("{path}.prerequisite_policy_refs.{}", dependency.0),
+                format!("{path}.prerequisites.{}", dependency.policy_ref.0),
                 "prerequisite policy does not exist in bundle",
             );
         }
@@ -500,6 +613,26 @@ fn validate_policy(
             format!("{path}.claims.{}.statement", claim.id.0),
             &claim.statement,
         );
+        if let WorkflowClaimWaiverPolicy::Authorized {
+            authority_scope,
+            max_age_seconds,
+            ..
+        } = &claim.waiver
+        {
+            require_nonblank(
+                issues,
+                format!("{path}.claims.{}.waiver.authority_scope", claim.id.0),
+                &authority_scope.0,
+            );
+            if *max_age_seconds == 0 {
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::InvalidPolicy,
+                    format!("{path}.claims.{}.waiver.max_age_seconds", claim.id.0),
+                    "authorized waiver must have a positive maximum age",
+                );
+            }
+        }
     }
     for evaluator in &policy.evaluators {
         validate_local_id(
@@ -516,12 +649,14 @@ fn validate_policy(
         if evaluator.minimum_passing_observations == 0
             || kinds.is_empty()
             || kinds.len() != evaluator.accepted_evidence_kinds.len()
+            || evaluator.max_age_seconds == 0
+            || evaluator.minimum_distinct_principals > evaluator.minimum_passing_observations
         {
             issue(
                 issues,
                 WorkflowGovernanceIssueCode::InvalidEvaluator,
                 format!("{path}.evaluators.{}", evaluator.id.0),
-                "evaluator requires unique accepted kinds and a positive passing threshold",
+                "evaluator requires unique accepted kinds, positive thresholds and maximum age, and achievable principal diversity",
             );
         }
     }
@@ -695,10 +830,10 @@ fn validate_dependency_graph(
         .iter()
         .map(|policy| {
             let dependencies = policy
-                .prerequisite_policy_refs
+                .prerequisites
                 .iter()
-                .filter(|dependency| known_ids.contains(dependency.0.as_str()))
-                .map(|dependency| dependency.0.as_str())
+                .filter(|dependency| known_ids.contains(dependency.policy_ref.0.as_str()))
+                .map(|dependency| dependency.policy_ref.0.as_str())
                 .collect::<BTreeSet<_>>();
             (policy.id.0.as_str(), dependencies)
         })
@@ -725,7 +860,7 @@ fn validate_dependency_graph(
         issue(
             issues,
             WorkflowGovernanceIssueCode::DependencyCycle,
-            "workflow_governance_bundle.policies.prerequisite_policy_refs",
+            "workflow_governance_bundle.policies.prerequisites",
             format!(
                 "cyclic policy dependencies involve {}",
                 remaining.keys().copied().collect::<Vec<_>>().join(", ")
@@ -794,6 +929,11 @@ fn validate_evaluation_input(
     );
     validate_unique_refs(
         &mut issues,
+        &input.not_applicable_policy_refs,
+        "workflow_governance_evaluation.not_applicable_policy_refs",
+    );
+    validate_unique_refs(
+        &mut issues,
         &input.available_capability_refs,
         "workflow_governance_evaluation.available_capability_refs",
     );
@@ -819,6 +959,30 @@ fn validate_evaluation_input(
             &policy_ref.0,
             "workflow_governance_evaluation.completed_policy_refs",
         );
+    }
+    let completed_policy_refs = input
+        .completed_policy_refs
+        .iter()
+        .map(|policy_ref| policy_ref.0.as_str())
+        .collect::<BTreeSet<_>>();
+    for policy_ref in &input.not_applicable_policy_refs {
+        require_known_ref(
+            &mut issues,
+            &known_policy_ids,
+            &policy_ref.0,
+            "workflow_governance_evaluation.not_applicable_policy_refs",
+        );
+        if completed_policy_refs.contains(policy_ref.0.as_str()) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::InvalidPolicy,
+                "workflow_governance_evaluation.not_applicable_policy_refs",
+                format!(
+                    "policy {} cannot be both complete and not applicable",
+                    policy_ref.0
+                ),
+            );
+        }
     }
     let known_capabilities = policy
         .capability_requirements
@@ -860,6 +1024,41 @@ fn validate_evaluation_input(
         .iter()
         .map(|claim| (claim.id.0.as_str(), claim))
         .collect::<BTreeMap<_, _>>();
+    let mut waiver_claim_refs = BTreeSet::new();
+    for (index, waiver) in input.waivers.iter().enumerate() {
+        let path = format!("workflow_governance_evaluation.waivers[{index}]");
+        if !waiver_claim_refs.insert(waiver.claim_ref.0.as_str()) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::DuplicateIdentifier,
+                format!("{path}.claim_ref"),
+                "claim waiver occurs more than once",
+            );
+        }
+        if !claims.contains_key(waiver.claim_ref.0.as_str()) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::DanglingReference,
+                format!("{path}.claim_ref"),
+                "waiver references an unknown claim",
+            );
+        }
+        require_nonblank(
+            &mut issues,
+            format!("{path}.principal"),
+            &waiver.principal.0,
+        );
+        require_nonblank(
+            &mut issues,
+            format!("{path}.authority_scope"),
+            &waiver.authority_scope.0,
+        );
+        require_nonblank(
+            &mut issues,
+            format!("{path}.authorization_intent_digest"),
+            &waiver.authorization_intent_digest,
+        );
+    }
     let evaluators = policy
         .evaluators
         .iter()
@@ -910,6 +1109,9 @@ fn validate_evaluation_input(
 fn evaluate_claims(
     policy: &WorkflowGovernancePolicy,
     evidence: &[WorkflowEvidenceObservation],
+    waivers: &[WorkflowClaimWaiverObservation],
+    target: ReadinessTarget,
+    observed_at_unix: u64,
     issues: &mut Vec<WorkflowGovernanceIssue>,
 ) -> Vec<WorkflowClaimResult> {
     let evaluators = policy
@@ -925,7 +1127,16 @@ fn evaluate_claims(
             let evaluator = evaluators
                 .get(claim.evaluator_ref.0.as_str())
                 .expect("bundle validation resolves evaluator");
-            evaluate_claim(claim, evaluator, evidence, issues)
+            let waiver = waivers.iter().find(|waiver| waiver.claim_ref == claim.id);
+            evaluate_claim(
+                claim,
+                evaluator,
+                evidence,
+                waiver,
+                target,
+                observed_at_unix,
+                issues,
+            )
         })
         .collect()
 }
@@ -934,9 +1145,13 @@ fn evaluate_claim(
     claim: &forge_core_contracts::WorkflowClaimPolicy,
     evaluator: &WorkflowEvaluatorBinding,
     evidence: &[WorkflowEvidenceObservation],
+    waiver: Option<&WorkflowClaimWaiverObservation>,
+    target: ReadinessTarget,
+    observed_at_unix: u64,
     issues: &mut Vec<WorkflowGovernanceIssue>,
 ) -> WorkflowClaimResult {
     let mut accepted = Vec::new();
+    let mut accepted_principals = BTreeSet::new();
     let mut rejected = Vec::new();
     let mut disproofs = Vec::new();
     for observation in evidence
@@ -996,6 +1211,9 @@ fn evaluate_claim(
                     );
                 } else {
                     accepted.push(observation.evidence_ref.clone());
+                    if let Some(principal) = &observation.principal {
+                        accepted_principals.insert(principal.0.as_str());
+                    }
                 }
             }
         }
@@ -1006,8 +1224,23 @@ fn evaluate_claim(
     rejected.sort();
     rejected.dedup();
 
-    let enough_support = accepted.len() >= evaluator.minimum_passing_observations;
-    let status = match (
+    let enough_observations = accepted.len() >= evaluator.minimum_passing_observations;
+    let enough_principal_diversity =
+        accepted_principals.len() >= evaluator.minimum_distinct_principals;
+    if enough_observations && !enough_principal_diversity {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InsufficientPrincipalDiversity,
+            format!("workflow_governance_policy.claims.{}", claim.id.0),
+            format!(
+                "claim requires {} distinct evidence principals but has {}",
+                evaluator.minimum_distinct_principals,
+                accepted_principals.len()
+            ),
+        );
+    }
+    let enough_support = enough_observations && enough_principal_diversity;
+    let mut status = match (
         enough_support,
         disproofs.is_empty(),
         evaluator.disproof_policy,
@@ -1029,6 +1262,10 @@ fn evaluate_claim(
         (false, true, _) if accepted.is_empty() => WorkflowClaimResultStatus::Unknown,
         (false, true, _) => WorkflowClaimResultStatus::Supported,
     };
+    if waiver.is_some_and(|waiver| validate_waiver(claim, waiver, target, observed_at_unix, issues))
+    {
+        status = WorkflowClaimResultStatus::Waived;
+    }
     WorkflowClaimResult {
         claim_id: claim.id.0.clone(),
         statement: claim.statement.clone(),
@@ -1036,6 +1273,77 @@ fn evaluate_claim(
         accepted_evidence_refs: accepted,
         rejected_evidence_refs: rejected,
     }
+}
+
+fn validate_waiver(
+    claim: &forge_core_contracts::WorkflowClaimPolicy,
+    waiver: &WorkflowClaimWaiverObservation,
+    target: ReadinessTarget,
+    observed_at_unix: u64,
+    issues: &mut Vec<WorkflowGovernanceIssue>,
+) -> bool {
+    let path = format!(
+        "workflow_governance_evaluation.waivers.{}",
+        waiver.claim_ref.0
+    );
+    let WorkflowClaimWaiverPolicy::Authorized {
+        max_target: policy_max_target,
+        authority_scope,
+        max_age_seconds,
+    } = &claim.waiver
+    else {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidWaiver,
+            &path,
+            "claim policy does not permit a waiver",
+        );
+        return false;
+    };
+
+    let mut valid = true;
+    if waiver.authority_scope != *authority_scope {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidWaiver,
+            format!("{path}.authority_scope"),
+            format!("waiver requires authority scope {}", authority_scope.0),
+        );
+        valid = false;
+    }
+    if waiver.max_target.rank() > policy_max_target.rank()
+        || target.rank() > waiver.max_target.rank()
+    {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidWaiver,
+            format!("{path}.max_target"),
+            "waiver target exceeds either its authorization or the admitted claim policy",
+        );
+        valid = false;
+    }
+    if waiver.authorized_at_unix > observed_at_unix
+        || waiver.expires_at_unix < waiver.authorized_at_unix
+    {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidWaiver,
+            &path,
+            "waiver authorization interval is invalid for the evaluation clock",
+        );
+        valid = false;
+    } else if observed_at_unix > waiver.expires_at_unix
+        || observed_at_unix.saturating_sub(waiver.authorized_at_unix) > *max_age_seconds
+    {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::ExpiredWaiver,
+            &path,
+            "waiver is expired or older than the admitted claim policy permits",
+        );
+        valid = false;
+    }
+    valid
 }
 
 fn evaluate_obligations(
@@ -1052,10 +1360,12 @@ fn evaluate_obligations(
                 .iter()
                 .map(|claim_ref| claim_statuses[claim_ref.0.as_str()])
                 .collect::<Vec<_>>();
-            let status = if statuses
-                .iter()
-                .all(|status| *status == WorkflowClaimResultStatus::Verified)
-            {
+            let status = if statuses.iter().all(|status| {
+                matches!(
+                    status,
+                    WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+                )
+            }) {
                 ObligationStatus::Satisfied
             } else if statuses.iter().any(|status| {
                 matches!(
@@ -1071,6 +1381,7 @@ fn evaluate_obligations(
                 obligation_id: obligation.id.0.clone(),
                 description: obligation.description.clone(),
                 criticality: obligation.criticality,
+                required_before: obligation.required_before,
                 status,
                 claim_refs: obligation.claim_refs.clone(),
             }
@@ -1131,7 +1442,10 @@ fn decision_requests(
             }
             WorkflowDecisionActivation::ClaimUnresolved => {
                 decision.claim_ref.as_ref().is_some_and(|claim_ref| {
-                    claim_statuses[claim_ref.0.as_str()] != WorkflowClaimResultStatus::Verified
+                    !matches!(
+                        claim_statuses[claim_ref.0.as_str()],
+                        WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+                    )
                 })
             }
             WorkflowDecisionActivation::ClaimDisproven => {
@@ -1184,20 +1498,47 @@ fn evaluate_eligibility(
         .iter()
         .map(|policy_ref| policy_ref.0.as_str())
         .collect::<BTreeSet<_>>();
-    let missing = policy
-        .prerequisite_policy_refs
+    let not_applicable = input
+        .not_applicable_policy_refs
         .iter()
-        .filter(|policy_ref| !completed.contains(policy_ref.0.as_str()))
-        .collect::<Vec<_>>();
-    for prerequisite in &missing {
-        issue(
-            issues,
-            WorkflowGovernanceIssueCode::MissingPrerequisite,
-            "workflow_governance_evaluation.completed_policy_refs",
-            format!("required policy {} is not complete", prerequisite.0),
-        );
+        .map(|policy_ref| policy_ref.0.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut prerequisite_blockers = 0_u32;
+    for prerequisite in &policy.prerequisites {
+        if completed.contains(prerequisite.policy_ref.0.as_str()) {
+            continue;
+        }
+        match prerequisite.requirement {
+            WorkflowPrerequisiteRequirement::Always => {
+                prerequisite_blockers = prerequisite_blockers.saturating_add(1);
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::MissingPrerequisite,
+                    "workflow_governance_evaluation.completed_policy_refs",
+                    format!(
+                        "required policy {} is not complete",
+                        prerequisite.policy_ref.0
+                    ),
+                );
+            }
+            WorkflowPrerequisiteRequirement::WhenApplicable
+                if !not_applicable.contains(prerequisite.policy_ref.0.as_str()) =>
+            {
+                prerequisite_blockers = prerequisite_blockers.saturating_add(1);
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::UnknownApplicability,
+                    "workflow_governance_evaluation.not_applicable_policy_refs",
+                    format!(
+                        "conditional prerequisite {} lacks a complete or not-applicable receipt",
+                        prerequisite.policy_ref.0
+                    ),
+                );
+            }
+            WorkflowPrerequisiteRequirement::WhenApplicable => {}
+        }
     }
-    if phase_eligible && missing.is_empty() {
+    if phase_eligible && prerequisite_blockers == 0 {
         WorkflowEligibilityVerdict::Eligible
     } else {
         WorkflowEligibilityVerdict::Ineligible
@@ -1294,6 +1635,7 @@ fn next_actions(
                 governance_issue.code,
                 WorkflowGovernanceIssueCode::PhaseIneligible
                     | WorkflowGovernanceIssueCode::MissingPrerequisite
+                    | WorkflowGovernanceIssueCode::UnknownApplicability
             )
         }) {
             drafts.push(Draft {

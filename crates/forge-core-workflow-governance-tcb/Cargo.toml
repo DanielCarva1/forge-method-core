@@ -1,0 +1,19 @@
+﻿[package]
+name = "forge-core-workflow-governance-tcb"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-store = { path = "../forge-core-store" }
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+yaml_serde.workspace = true
+
+[[test]]
+name = "workflow_governance_ledger"
+path = "tests/workflow_governance_ledger.rs"

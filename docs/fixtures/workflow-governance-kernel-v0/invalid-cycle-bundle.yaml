@@ -4,22 +4,35 @@ workflow_governance_bundle:
   policies:
     - id: policy.workflow.write-spec
       compatibility_workflow_id: write-spec
+      routing:
+        priority: 100
+        readiness_target: execute
+        activation: required
+        signals: []
       eligible_phases: [2-specification]
-      prerequisite_policy_refs: [policy.workflow.build-story]
+      prerequisites:
+        - policy_ref: policy.workflow.build-story
+          requirement: always
       obligations:
         - id: obligation.specification-inspected
           description: The specification was inspected.
           criticality: required
+          required_before: execute
           claim_refs: [claim.specification-inspected]
       claims:
         - id: claim.specification-inspected
           statement: The specification was inspected.
           evaluator_ref: evaluator.specification-inspection
+          waiver:
+            kind: not_waivable
       evaluators:
         - id: evaluator.specification-inspection
+          provider: repository_inspector
           accepted_evidence_kinds: [artifact_inspection]
           minimum_strength: inspected_artifact
           minimum_passing_observations: 1
+          minimum_distinct_principals: 0
+          max_age_seconds: 86400
           freshness: current_only
           disproof_policy: reject_any_disproof
       capability_requirements: []
@@ -29,22 +42,35 @@ workflow_governance_bundle:
         steps: []
     - id: policy.workflow.build-story
       compatibility_workflow_id: build-story
+      routing:
+        priority: 200
+        readiness_target: execute
+        activation: required
+        signals: []
       eligible_phases: [4-build-verify]
-      prerequisite_policy_refs: [policy.workflow.write-spec]
+      prerequisites:
+        - policy_ref: policy.workflow.write-spec
+          requirement: always
       obligations:
         - id: obligation.story-inspected
           description: The story was inspected.
           criticality: required
+          required_before: execute
           claim_refs: [claim.story-inspected]
       claims:
         - id: claim.story-inspected
           statement: The story was inspected.
           evaluator_ref: evaluator.story-inspection
+          waiver:
+            kind: not_waivable
       evaluators:
         - id: evaluator.story-inspection
+          provider: repository_inspector
           accepted_evidence_kinds: [artifact_inspection]
           minimum_strength: inspected_artifact
           minimum_passing_observations: 1
+          minimum_distinct_principals: 0
+          max_age_seconds: 86400
           freshness: current_only
           disproof_policy: reject_any_disproof
       capability_requirements: []

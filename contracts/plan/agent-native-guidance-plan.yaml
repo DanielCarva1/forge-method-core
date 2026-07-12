@@ -21,7 +21,7 @@ constraints:
   - "Do not expose YAML authoring or workflow selection as normal human work."
   - "Do not migrate all 110 workflows before proving one vertical slice."
   - "Do not let documentation claims outrun executable evidence."
-  - "Operation-wide atomicity and end-to-end MCP authorization/replay enforcement remain release blockers."
+  - "Do not imply that the agent-facing workflow CLI is exposed through MCP; that Adapter is a separate authority boundary."
 
 delivery_strategy:
   principle: "Prove one deep vertical slice before broad catalog migration."
@@ -42,6 +42,10 @@ delivery_strategy:
       scope: "P4b.1a operator-owned principal registry, trusted identity derivation, and hardened read-only MCP subprocess boundary"
     - commit: "8bc03eb"
       scope: "P4b.1b bounded durable replay WAL and effect-lock-first commit guard substrate"
+    - commit: "6b9b798"
+      scope: "P5a complete-catalog migration foundation and deterministic shadow baseline"
+    - commit: "1124841"
+      scope: "P5b closed governance contracts, simulation-only lane, and opaque verified typestate"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -351,16 +355,24 @@ phases:
       scope:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
-    next_slice:
+    active_checkpoint:
       id: "P5c-golden-path-workflow-migration"
-      status: "pending"
+      status: "completed"
       scope:
         - "migrate the 15 selected high-leverage behaviors onto executable governance"
         - "prove chat-only guidance, representative execution, compatibility, and replacement-agent resume"
+    next_slice:
+      id: "P5d-catalog-rollout-and-legacy-retirement"
+      status: "pending"
+      scope:
+        - "roll out executable governance across the remaining catalog in reviewed batches"
+        - "retire legacy authority only after compatibility and deletion evidence prove it safe"
     following_slices:
-      - "P5d catalog rollout and legacy retirement"
       - "P6 domain-pack ecosystem"
-    release_blockers: []
+    checkpoint_evidence:
+      - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
+      - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
+      - "golden-path, real-binary consumer, validator, workspace test, clippy, formatting, and generated-surface gates pass"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -428,7 +440,7 @@ phases:
           - "no model-specific script or word-for-word dialogue enters core authority"
         publication: "one pullable contract/simulation/opaque-typestate checkpoint after full workspace gates"
       - id: "P5c-golden-path-workflow-migration"
-        status: "pending"
+        status: "completed"
         size: "large"
         depends_on: ["P5b-executable-workflow-governance-kernel"]
         outcome: >-
@@ -450,6 +462,27 @@ phases:
           - "a fresh agent resumes the same governed state and next action"
           - "completion consumption rechecks project, policy digest, state version, phase, and readiness target scope"
           - "legacy and migrated paths have measured, reviewed behavioral differences"
+        implementation_evidence:
+          - "contracts/workflow-governance/golden-path-v0.yaml admits exactly 15 typed policies with closed activation, routing, prerequisites, obligations, claims, capabilities, decisions, evaluators, and waiver limits"
+          - "crates/forge-core-workflow-governance-tcb provides the confined hash-chained ledger, atomic multi-record batch, and lock-scoped recovery/append boundary without exposing semantic mutation to store, CLI, or MCP"
+          - "crates/forge-core-kernel/src/workflow_governance/adapter.rs derives policy, phase, state, applicability, capabilities, decisions, evidence freshness, completion, continuity, and shadow comparison from policy plus receipts"
+          - "crates/forge-core-cli/src/workflow_cmd.rs exposes the agent-facing init/next/resume/shadow/receipt/completion command family without workflow, phase, bundle, or target selection"
+          - "crates/forge-core-kernel/tests/workflow_governance_golden_path.rs and crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs are the required proof surfaces for 15-policy routing, representative evidence, late completion consumption, replacement-agent resume, and consumer CLI behavior"
+        boundary: >-
+          P5c completed executable governance for the selected 15-policy golden
+          path through the local CLI and repository-owned bundle. The remaining
+          catalog stays compatibility or migration evidence until P5d. The ledger
+          hash chain detects internal record tampering and malformed/torn tails
+          but has no external monotonic anchor: clean truncation to a previously
+          valid prefix and malicious same-user rollback of the entire internally
+          consistent ledger are not detected. The state.yaml file is a
+          compatibility projection only, and no end-to-end workflow MCP Adapter
+          or hostile-user isolation is claimed. The dedicated
+          forge-core-workflow-governance-tcb crate plus forge-core-kernel form
+          the shipped workflow trusted computing base; store, CLI, and MCP have
+          no direct unchecked semantic append dependency. Explicit hostile
+          linkage or direct same-user state writes remain outside this
+          isolation boundary.
         publication: "one pullable golden-path migration checkpoint after full workspace gates"
       - id: "P5d-catalog-rollout-and-legacy-retirement"
         status: "pending"
@@ -607,14 +640,14 @@ first_executable_slice:
     - "P5a exact read-only legacy projection parity, full-catalog digest binding, deletion-loss detection, and explicit no-retirement boundary"
     - "P5b closed Workflow Governance Policy/Evaluation contracts and pure deterministic simulation_only candidate evaluation"
     - "P5b opaque verified-kernel typestate seam, advisory-playbook deletion proof, and simulation-only legacy compatibility Adapter"
+    - "P5c admitted 15-policy golden path, signed receipt-backed Project Snapshot Adapter, atomic multi-record ledger TCB, agent-facing CLI, shadow comparison, and replacement-agent continuity"
+    - "P5c adversarial stale/contradictory evidence, capability, applicability, waiver, replay, future-policy, junction-safe real-binary, validator, clippy, formatting, all-target, and full-workspace gates"
   next_action: >-
-    P5a and P5b are complete. Next execute the large P5c golden-path migration
-    slice: implement the trusted Project Snapshot Adapter and authoritative
-    completion/capability/decision/evaluator receipt derivation, then express the
-    15 selected discovery-through-release/resume behaviors as governed policies,
-    integrate agent-facing chat guidance and representative vertical-slice
-    proof, and demonstrate legacy shadow comparison plus fresh replacement-agent
-    resume without asking the human to select workflows.
+    P5a, P5b, and P5c are complete. Next execute P5d catalog rollout and legacy
+    retirement: convert the remaining catalog in reviewed batches, quarantine
+    unresolved or ambiguous workflows, measure migrated-versus-legacy behavior,
+    and retire authority only where executable coverage and deletion evidence
+    prove that no safety-critical behavior is lost.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

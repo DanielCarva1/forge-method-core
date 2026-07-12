@@ -13,6 +13,7 @@
 pub mod attestation;
 pub mod execution_handoff;
 pub mod principal_registry;
+pub mod workflow_authority;
 
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
@@ -29,4 +30,17 @@ pub use principal_registry::{
     PrincipalRegistryIssue, PrincipalRegistryIssueCode, VerifiedExecutionAuthorization,
     VerifiedExecutionAuthorizationAudit, DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
     DEFAULT_MAX_FUTURE_SKEW_SECONDS, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
+};
+pub use workflow_authority::{
+    VerifiedWorkflowApplicabilityAuthorization, VerifiedWorkflowApplicabilityAuthorizationAudit,
+    VerifiedWorkflowCapabilityAuthorization, VerifiedWorkflowCapabilityAuthorizationAudit,
+    VerifiedWorkflowDecisionAuthorization, VerifiedWorkflowDecisionAuthorizationAudit,
+    VerifiedWorkflowEvidenceAuthorization, VerifiedWorkflowEvidenceAuthorizationAudit,
+    VerifiedWorkflowSignalAuthorization, VerifiedWorkflowSignalAuthorizationAudit,
+    VerifiedWorkflowWaiverAuthorization, VerifiedWorkflowWaiverAuthorizationAudit,
+    WorkflowApplicabilityAuthorization, WorkflowApplicabilityAuthorizationRequest,
+    WorkflowAuthorityError, WorkflowCapabilityAuthorization,
+    WorkflowCapabilityAuthorizationRequest, WorkflowDecisionAuthorizationRequest,
+    WorkflowEvidenceAuthorizationRequest, WorkflowSignalAuthorization,
+    WorkflowSignalAuthorizationRequest, WorkflowWaiverAuthorizationRequest, WorkflowWaiverSubject,
 };

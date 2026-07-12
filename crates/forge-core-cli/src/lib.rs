@@ -69,6 +69,7 @@ pub mod start_cmd;
 pub mod telemetry_cmd;
 pub mod tracing_init;
 pub mod validate;
+pub mod workflow_cmd;
 
 // Re-export the execute-operation API at the crate root so that the binary
 // entrypoint (`main.rs`) and integration tests (`tests/validate.rs`) keep

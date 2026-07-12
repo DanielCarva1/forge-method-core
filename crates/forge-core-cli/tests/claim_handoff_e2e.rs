@@ -134,11 +134,17 @@ fn assert_handoff_artifact(
         "handoff artifact should exist at {}",
         handoff_path.display()
     );
+    let canonical_handoff = handoff_path
+        .canonicalize()
+        .expect("canonical handoff artifact path");
+    let canonical_expected_root = expected_root
+        .canonicalize()
+        .expect("canonical handoff root");
     assert!(
-        handoff_path.starts_with(&expected_root),
+        canonical_handoff.starts_with(&canonical_expected_root),
         "handoff artifact should be under {}, got {}",
-        expected_root.display(),
-        handoff_path.display()
+        canonical_expected_root.display(),
+        canonical_handoff.display()
     );
 
     let artifact = std::fs::read_to_string(&handoff_path).expect("read handoff artifact");

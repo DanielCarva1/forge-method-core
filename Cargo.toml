@@ -9,6 +9,7 @@ members = [
   "crates/forge-core-crypto",
   "crates/forge-core-eventlog",
   "crates/forge-core-store",
+  "crates/forge-core-workflow-governance-tcb",
   "crates/forge-core-memory",
   "crates/forge-core-validate",
   "crates/forge-core-kernel",

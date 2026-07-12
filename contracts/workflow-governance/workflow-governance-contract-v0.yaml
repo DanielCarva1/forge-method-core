@@ -2,7 +2,7 @@ schema_version: "0.1"
 contract: "workflow_governance_policy"
 status: "active"
 purpose: >-
-  Define the closed P5b policy and observation contract family whose Rust
+  Define the closed P5b/P5c policy, observation, and durable receipt contract family whose Rust
   evaluator derives deterministic candidate guidance from raw observations and
   whose same policy semantics can be reused only behind the kernel's opaque
   trusted-snapshot boundary for verified authority.
@@ -35,6 +35,11 @@ required_bundle_fields:
   - "policies[].id"
   - "policies[].compatibility_workflow_id"
   - "policies[].eligible_phases"
+  - "policies[].routing.priority"
+  - "policies[].routing.readiness_target"
+  - "policies[].routing.activation"
+  - "policies[].prerequisites[].policy_ref"
+  - "policies[].prerequisites[].requirement"
   - "policies[].obligations"
   - "policies[].claims"
   - "policies[].evaluators"
@@ -43,6 +48,7 @@ required_evaluation_fields:
   - "schema_version"
   - "workflow_governance_evaluation.observation_set_id"
   - "workflow_governance_evaluation.state_version"
+  - "workflow_governance_evaluation.observed_at_unix"
   - "workflow_governance_evaluation.bundle_id"
   - "workflow_governance_evaluation.policy_id"
   - "workflow_governance_evaluation.current_phase"
@@ -63,6 +69,21 @@ closed_semantics:
     - "observed_need"
     - "claim_unresolved"
     - "claim_disproven"
+  policy_activation:
+    - "required"
+    - "when_applicable"
+    - "on_signal"
+  prerequisite_requirement:
+    - "always"
+    - "when_applicable"
+  governance_signal:
+    - "context_recovery_required"
+    - "course_correction_required"
+    - "readiness_requested"
+    - "build_completed"
+  claim_waiver:
+    - "not_waivable"
+    - "authorized"
 semantic_rules:
   - "all identifiers and refs are non-blank and unique in their declared scope"
   - "every obligation claim, claim evaluator, capability claim, decision claim, and prerequisite policy ref resolves"
@@ -73,9 +94,49 @@ semantic_rules:
   - "playbook deletion or replacement cannot change eligibility, progression, claims, obligations, or completion"
   - "legacy compatibility projection requires an exact workflow-id match"
   - "raw evaluation output and legacy projection are always simulation_only and cannot authorize progression, completion, mutation, or Execution Admission"
+  - "when-applicable policy absence is unknown; only an unexpired applicability receipt can establish applicable or not applicable"
+  - "every obligation declares its readiness target boundary in required_before"
+  - "representative execution, readiness, and release claims are non-waivable in the golden path"
+durable_receipts:
+  schema_version: "0.1"
+  hash_chain: "record digest commits project, admitted bundle digest, state version, prior record digest, time, and closed event"
+  documents:
+    - "WorkflowGovernanceLedgerDocument"
+    - "WorkflowGovernanceReceiptDocument"
+  closed_events:
+    - "project_imported"
+    - "phase_advanced"
+    - "applicability_assessed"
+    - "signal_changed"
+    - "capability_probed"
+    - "decision_need_raised"
+    - "decision_resolved"
+    - "evaluator_observed"
+    - "waiver_authorized"
+    - "policy_completed"
+    - "receipt_revoked"
+    - "continuity_recorded"
+  authority_rule: "receipt payloads are trusted only after store hash-chain, bundle, project, state, freshness, subject, scope, signature, and revocation validation"
+  captured_state_binding:
+    - "snapshot_digest"
+    - "ledger_head_digest"
+  signed_event_trust_root:
+    - "credential_id"
+    - "public_key_fingerprint"
+    - "authorization_registry_digest"
+  stable_evidence_identity:
+    - "scenario_digest"
+    - "semantic_identity"
+  completion_receipt_sets:
+    - "dependency_receipt_digests"
+    - "evidence_receipt_digests"
+    - "unresolved_deferred_obligation_refs"
+    - "unresolved_deferred_capability_refs"
 evidence_basis:
   - "llm_as_code_2606_15874"
   - "code_as_agent_harness_2605_18747"
 references:
   - "contracts/spec/workflow-governance-kernel-v0.yaml"
   - "contracts/workflow-governance/kernel-v0.yaml"
+  - "contracts/spec/workflow-governance-golden-path-v0.yaml"
+  - "contracts/workflow-governance/golden-path-v0.yaml"

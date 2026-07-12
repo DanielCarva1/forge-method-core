@@ -360,7 +360,14 @@ fn graph_validate_resolves_project_before_relative_graph_path() {
     assert_eq!(json["project_id"], "app");
     assert_eq!(json["status"], "passed");
     assert!(Path::new(json["graph_path"].as_str().unwrap()).ends_with("graphs/valid.yaml"));
-    assert_eq!(json["state_root"], sidecar.display().to_string());
+    assert_eq!(
+        Path::new(json["state_root"].as_str().unwrap())
+            .canonicalize()
+            .expect("canonical reported state root"),
+        sidecar
+            .canonicalize()
+            .expect("canonical expected state root")
+    );
     assert!(!app.join(".forge-method").exists());
 }
 
@@ -394,7 +401,14 @@ fn graph_run_dry_run_uses_sidecar_resolution_without_creating_local_state() {
     assert_eq!(json["status"], "passed");
     assert_eq!(json["dry_run_executed"], true);
     assert!(json["report"].is_object());
-    assert_eq!(json["state_root"], sidecar.display().to_string());
+    assert_eq!(
+        Path::new(json["state_root"].as_str().unwrap())
+            .canonicalize()
+            .expect("canonical reported state root"),
+        sidecar
+            .canonicalize()
+            .expect("canonical expected state root")
+    );
     assert!(!app.join(".forge-method").exists());
 }
 
@@ -621,6 +635,9 @@ fn graph_run_allows_nonexistent_graph_file_inside_project_until_read() {
 #[test]
 fn graph_run_with_missing_state_root_reports_env_config() {
     let (app, sidecar) = fresh_project("missing-state-root");
+    let canonical_sidecar = sidecar
+        .canonicalize()
+        .expect("canonical sidecar before removal");
     install_read_operation(&app, "contracts/operations/read-a.yaml");
     install_read_operation(&app, "contracts/operations/read-b.yaml");
     write_graph(&app, "valid.yaml", valid_graph());
@@ -648,7 +665,14 @@ fn graph_run_with_missing_state_root_reports_env_config() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("env_config"));
     assert!(stderr.contains("state_root"));
-    assert!(stderr.contains(&sidecar.display().to_string()));
+    let canonical_sidecar_text = canonical_sidecar.display().to_string();
+    let reported_sidecar_text = canonical_sidecar_text
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&canonical_sidecar_text);
+    assert!(
+        stderr.contains(reported_sidecar_text),
+        "missing canonical sidecar path {reported_sidecar_text} in stderr:\n{stderr}"
+    );
     assert!(!app.join(".forge-method").exists());
     assert!(!sidecar.exists());
     assert!(!sidecar_root.exists());

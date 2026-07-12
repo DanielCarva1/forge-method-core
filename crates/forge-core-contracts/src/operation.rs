@@ -315,6 +315,7 @@ pub enum TargetKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CallerRole {
+    Human,
     Driver,
     Worker,
     Runtime,
@@ -377,7 +378,15 @@ pub enum OperationGateScope {
 
 #[cfg(test)]
 mod tests {
-    use super::OperationGateStatus;
+    use super::{CallerRole, OperationGateStatus};
+
+    #[test]
+    fn human_caller_role_has_stable_wire_format() {
+        let human = yaml_serde::to_string(&CallerRole::Human).unwrap();
+        assert_eq!(human.trim(), "human");
+        let round_trip: CallerRole = yaml_serde::from_str("human").unwrap();
+        assert_eq!(round_trip, CallerRole::Human);
+    }
 
     #[test]
     fn operation_gate_status_wire_format_remains_snake_case() {

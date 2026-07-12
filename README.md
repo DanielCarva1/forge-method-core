@@ -30,9 +30,13 @@ forge-core start --root <repo> --json
   concrete next step (typically `guide describe` or authoring the first
   operation contract).
 
-Re-run `forge-core start` whenever you open a new chat on the project to pick
-up exactly where things left off. The runtime owns the current phase
-(`state.yaml`); you do not pass it on the command line.
+Re-run `forge-core start` whenever you open a new chat on the project for
+legacy orientation. For the P5c executable golden path, the agent runs
+`forge-core workflow init --root <repo> --json` once and
+`forge-core workflow resume --root <repo> --json` in later chats. Workflow,
+phase, policy bundle, and readiness target are derived by the kernel; the agent
+does not pass them on the command line. `state.yaml` remains a compatibility
+projection and is not workflow-governance authority.
 
 ### The orchestrator loop: `start → decide → execute`
 
@@ -500,12 +504,14 @@ projection parity, reports field-count deletion evidence, and keeps
 schema drift, projection drift, ambiguous classification, or an unsafe plan
 fails closed with actionable typed issues.
 
-The current foundation classifies 15 representative golden-path workflows, 18
+The foundation classifies 15 representative golden-path workflows, 18
 domain-pack candidates, and 77 compatibility-only playbooks. Procedural
-`steps` remain advice. P5b supplies the closed contracts, a non-authoritative
-simulation lane, and an opaque verified-kernel typestate seam. P5c must connect
-that seam to trusted project state before any migrated workflow gains live
-progression or completion authority.
+`steps` remain advice. P5b supplied the closed contracts, a non-authoritative
+simulation lane, and an opaque verified-kernel typestate seam. P5c connects that
+seam to a trusted, receipt-backed Project Snapshot Adapter for the selected
+15-policy golden path and has passed its signed-boundary, adversarial,
+real-binary, and full-workspace gates. The remaining catalog is still migration
+or compatibility evidence for P5d; no legacy field is retired by P5c.
 
 ### Simulate workflow governance (P5b)
 
@@ -538,17 +544,98 @@ prerequisite completion from completion receipts; capability availability from
 registry/probe receipts; human decisions from authorized decision receipts;
 evaluator outcomes from evidence receipts with provenance; and freshness from
 trusted receipt and observation times rather than caller assertions. P5b
-establishes this typestate boundary; P5c implements and integrates the live
-Adapter and receipt sources.
+established this typestate boundary; P5c implements and integrates the live
+Adapter and receipt sources for the selected golden path.
 
 Playbooks remain available as flexible strategy. They have no authority field,
 and deletion/replacement tests prove that changing their steps cannot change
 candidate eligibility, progression, obligations, claims, or completion. The
 optional legacy simulation Adapter preserves the existing `CatalogEntry` while
 marking its projected status and blockers as compatibility simulation only.
-The Module performs no IO or project mutation. P5c remains responsible for the
-trusted Project Snapshot Adapter, live receipt derivation, migrated representative
-golden path, and conversational/resume integration.
+The P5b simulation Module still performs no IO or project mutation. Runtime
+authority enters only through the P5c Adapter described below.
+
+### Exercise the executable golden path (P5c)
+
+P5c is the completed agent-facing golden-path workflow-governance checkpoint. The human continues to
+describe goals, answer value judgments, and review results in chat; the host
+agent operates Forge. Neither party selects a workflow, phase, policy bundle,
+or readiness target. These commands describe the published P5c integration surface:
+
+```bash
+forge-core workflow init --root <repo> --json
+forge-core workflow next --root <repo> --json
+forge-core workflow resume --root <repo> --json
+forge-core workflow shadow --root <repo> --json
+```
+
+`next` is designed to route deterministically across the admitted 15-policy golden path and
+returns obligations, gaps, Decision Requests, Capability Gaps, evidence state,
+and ranked next actions. `resume` derives the same governed state from the
+ledger for a replacement agent; chat history is not authority. `shadow` compares
+the migrated and legacy projection for the same snapshot and always reports
+`mutation_allowed: false` and `retirement_allowed: false`.
+
+Authority-bearing observations use exact signed request/attestation pairs rather
+than caller-selected facts or direct status editing:
+
+```bash
+forge-core workflow applicability-authorize --root <repo> \
+  --request-file <signed-applicability-request.json> \
+  --attestation-file <attestation.json> --json
+forge-core workflow capability-authorize --root <repo> \
+  --request-file <signed-capability-request.json> \
+  --attestation-file <attestation.json> --json
+forge-core workflow evidence-authorize --root <repo> \
+  --request-file <signed-evidence-request.json> \
+  --attestation-file <attestation.json> --json
+forge-core workflow signal-authorize --root <repo> \
+  --request-file <signed-signal-request.json> \
+  --attestation-file <attestation.json> --json
+forge-core workflow decision-resolve --root <repo> \
+  --request-file <signed-decision-request.json> \
+  --attestation-file <attestation.json> --json
+forge-core workflow waiver-authorize --root <repo> \
+  --request-file <signed-waiver-request.json> \
+  --attestation-file <attestation.json> --json
+```
+
+The Adapter loads the operator-owned workflow principal registry from its fixed
+state-sidecar location; the CLI cannot substitute a preferred registry. Signed
+applicability, capability, evidence, signal, decision, and waiver intents bind the
+project, admitted bundle, policy, state/snapshot, ledger head, authority scope,
+and observation subject required by that action. Serialized request or receipt
+data alone cannot mint authority. Representative-execution, readiness, and
+release claims are non-waivable.
+
+When guidance reaches `ready_to_complete`, the agent consumes it with the exact
+snapshot returned by `next`:
+
+```bash
+forge-core workflow complete --root <repo> --if-snapshot <sha256> --json
+```
+
+The completion path re-locks and rechecks the admitted bundle digest, project snapshot,
+ledger head, state version, phase, selected policy, target, and current evidence
+before atomically appending completion, phase, and continuity receipts. The
+adversarial and full-workspace gates prove this behavior end to end.
+
+The intended authoritative history is the state-root-confined, fsynced, hash-chained
+`wal/workflow-governance.ndjson`; `state.yaml` is compatibility-only. The chain
+detects record tampering, malformed/torn tails, sequence gaps, and mismatched
+heads inside the history it receives. It cannot distinguish a clean truncation
+to a previously valid prefix from legitimate history, and P5c has no external
+monotonic anchor for this ledger. A malicious same-user rollback of the entire
+internally consistent ledger therefore remains outside the threat boundary.
+This checkpoint targets the local CLI path; command-surface allowlist
+metadata is not an end-to-end MCP workflow Adapter, and hostile-user isolation
+is not claimed.
+The released CLI confines raw workflow-ledger mutation to the dedicated
+`forge-core-workflow-governance-tcb` crate, which is a direct dependency only
+of the kernel Adapter. `forge-core-store`, the CLI, and MCP expose no semantic
+append API, so Cargo feature unification cannot accidentally widen that
+boundary. Direct same-user writes to the state root remain outside P5c's
+process-isolation guarantee.
 
 ### Derive agent-native assurance guidance
 
@@ -1061,7 +1148,14 @@ gates.
 - P5b workflow governance boundary: closed policy/evaluation contracts,
   semantic and dependency-graph validation, an explicit `simulation_only`
   CLI, deterministic candidate gaps/actions, and a non-deserializable opaque
-  verified-kernel typestate seam for a future trusted Project Snapshot Adapter.
+  verified-kernel typestate seam.
+- P5c executable golden path: a repository-owned 15-policy admitted bundle,
+  trusted receipt-backed Project Snapshot Adapter, confined hash-chained
+  governance ledger, signed applicability/capability/evidence/decision/waiver
+  authority, late completion recheck, read-only legacy shadow comparison, and
+  replacement-agent resume, isolated ledger TCB, atomic multi-record commits,
+  and adversarial plus full-workspace proof. P5d remains responsible for the
+  rest of the catalog and safe legacy retirement.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1118,11 +1212,15 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5c trusted governance integration and golden-path migration** — P5b's raw
-  `guide govern-simulate` lane cannot grant authority. P5c must implement the
-  Project Snapshot Adapter and authoritative receipt derivation, then migrate
-  the 15 selected behaviors with chat-only human experience, replacement-agent
-  resume, and measured legacy shadow proof.
+- **P5c release hardening** -- close the signed observation boundary, prove
+  Decision Need and repeated signal episodes, run the adversarial golden-path
+  corpus plus full workspace gates, and publish one coherent pullable checkpoint.
+- **P5d catalog rollout and legacy retirement** -- P5c governs the selected
+  15-policy golden path only after its release gates pass; the remaining
+  workflows are still compatibility, domain-pack-candidate, or migration
+  evidence. P5d must migrate them in reviewed batches, quarantine unresolved
+  cases, and retire legacy authority only after measured compatibility and
+  deletion tests prove it safe.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
