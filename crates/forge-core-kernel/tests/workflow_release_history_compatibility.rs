@@ -26,6 +26,7 @@ const FOUNDATION_RECORD_DIGEST: &str =
     "sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45";
 const FOUNDATION_RELEASE_ID: &str = "workflow-governance.release.foundation-v0";
 const FOUNDATION_BUNDLE_ID: &str = "bundle.workflow-governance.release-foundation-v0";
+const CORE_ASSURANCE_RELEASE_ID: &str = "workflow-governance.release.core-assurance-v0";
 const FUTURE_CANDIDATE_RELEASE_ID: &str = "workflow-governance.release.reviewed-batch-v0";
 
 fn unique_root(label: &str) -> PathBuf {
@@ -268,8 +269,16 @@ fn foundation_pin_governs_next_resume_readiness_and_completion_paths() {
         status.active.runtime_bundle.bundle_id.0,
         FOUNDATION_BUNDLE_ID
     );
-    assert!(status.available_successor.is_none());
-    assert!(status.upgrade_argv.is_none());
+    assert_eq!(
+        status
+            .available_successor
+            .as_ref()
+            .expect("reviewed adjacent successor")
+            .release_id
+            .0,
+        CORE_ASSURANCE_RELEASE_ID
+    );
+    assert!(status.upgrade_argv.is_some());
 
     let next = project.adapter.next().expect("foundation next");
     let resumed = project.adapter.resume().expect("foundation resume");
@@ -296,10 +305,18 @@ fn foundation_pin_governs_next_resume_readiness_and_completion_paths() {
 }
 
 #[test]
-fn old_registry_exposes_no_candidate_and_rejects_a_structurally_valid_future_pin() {
+fn reviewed_registry_exposes_only_admitted_successor_and_rejects_an_unknown_future_pin() {
     let project = UpgradedProject::new("future-pin");
     let status = project.adapter.release_status().expect("foundation status");
-    assert!(status.available_successor.is_none());
+    assert_eq!(
+        status
+            .available_successor
+            .as_ref()
+            .expect("reviewed adjacent successor")
+            .release_id
+            .0,
+        CORE_ASSURANCE_RELEASE_ID
+    );
     assert!(matches!(
         project.adapter.release_upgrade(
             &StableId(FUTURE_CANDIDATE_RELEASE_ID.to_owned()),

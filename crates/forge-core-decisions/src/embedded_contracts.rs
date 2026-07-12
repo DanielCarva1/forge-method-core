@@ -117,34 +117,24 @@ pub fn embedded_exists(rel_path: &str) -> bool {
 #[must_use]
 pub fn embedded_yaml_paths() -> Vec<String> {
     use include_dir::DirEntry;
-    fn walk<'a>(dir: &'a Dir<'a>, prefix: &str, out: &mut Vec<String>) {
+    fn walk<'a>(dir: &'a Dir<'a>, out: &mut Vec<String>) {
         for entry in dir.entries() {
             match entry {
-                DirEntry::Dir(d) => {
-                    let name = d.path().to_string_lossy();
-                    let child_prefix = if prefix.is_empty() {
-                        name.into_owned()
-                    } else {
-                        format!("{prefix}/{name}")
-                    };
-                    walk(d, &child_prefix, out);
-                }
+                // include_dir paths are already relative to the embedded root;
+                // carrying a second recursive prefix duplicates directory
+                // components on Windows (for example evidence/evidence/...).
+                DirEntry::Dir(d) => walk(d, out),
                 DirEntry::File(f) => {
                     if f.path().extension().is_some_and(|ext| ext == "yaml") {
-                        let name = f.path().to_string_lossy();
-                        let full = if prefix.is_empty() {
-                            format!("contracts/{name}")
-                        } else {
-                            format!("contracts/{prefix}/{name}")
-                        };
-                        out.push(full);
+                        let relative = f.path().to_string_lossy().replace('\\', "/");
+                        out.push(format!("contracts/{relative}"));
                     }
                 }
             }
         }
     }
     let mut out = Vec::new();
-    walk(&EMBEDDED_CONTRACTS, "", &mut out);
+    walk(&EMBEDDED_CONTRACTS, &mut out);
     out.sort();
     out
 }
@@ -183,6 +173,23 @@ mod tests {
     fn embedded_returns_none_for_absent() {
         assert!(!embedded_exists("contracts/does/not/exist.yaml"));
         assert!(embedded_text("contracts/does/not/exist.yaml").is_none());
+    }
+
+    #[test]
+    fn embedded_yaml_paths_are_unique_repo_relative_paths() {
+        let paths = embedded_yaml_paths();
+        assert!(paths.contains(
+            &"contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml".to_owned()
+        ));
+        assert!(paths.iter().all(|path| {
+            !path.contains("/evidence/evidence/")
+                && !path.contains("/migration/migration/")
+                && !path.contains("/workflow-governance/workflow-governance/")
+        }));
+        let mut unique = paths.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(paths.len(), unique.len());
     }
 
     #[test]

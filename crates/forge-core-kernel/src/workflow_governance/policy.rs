@@ -4,18 +4,34 @@
 //! fixed embedded registry, resolves only its embedded references, validates
 //! the complete closed chain, and then mints opaque admitted release values.
 
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::OnceLock,
+};
+
+use forge_core_authority::{
+    verify_workflow_release_admission_authorization, VerifiedWorkflowReleaseAdmissionAuthorization,
+};
 use forge_core_contracts::{
-    StableId, WorkflowGovernanceBundleDocument, WorkflowGovernanceReleaseIdentity,
+    RepoPath, StableId, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusSetDocument,
+    WorkflowBehavioralCoveragePolicyDocument, WorkflowBehavioralReviewSubjectDocument,
+    WorkflowBehavioralScenarioCorpusDocument, WorkflowBehavioralScenarioExecution,
+    WorkflowBehavioralShadowReportDocument, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceReleaseIdentity, WorkflowGovernanceReleaseManifestDocument,
     WorkflowGovernanceReleaseRegistryDocument, WorkflowGovernanceReleaseRegistryEntry,
-    WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryAuthority,
-    WorkflowReleaseRegistryProvenance, WorkflowReleaseRegistrySource,
-    WorkflowRuntimeBundleIdentity,
+    WorkflowMigrationBatchDocument, WorkflowReceiptCarryover,
+    WorkflowReleaseAdmissionAuthorizationDocument, WorkflowReleaseAdmissionProof,
+    WorkflowReleaseRegistryAuthority, WorkflowReleaseRegistryProvenance,
+    WorkflowReleaseRegistrySource, WorkflowReleaseReviewIndexDocument,
+    WorkflowReleaseReviewerRegistryDocument, WorkflowRuntimeBundleIdentity,
 };
 use forge_core_decisions::{
-    embedded_text, evaluate_workflow_release_registry, validate_workflow_governance_bundle,
-    workflow_policy_set_digest, workflow_runtime_bundle_digest,
-    WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
-    WorkflowReleaseRegistryIssue,
+    embedded_text, embedded_yaml_paths, evaluate_workflow_release_admission_candidate,
+    evaluate_workflow_release_registry, validate_workflow_governance_bundle,
+    workflow_policy_set_digest, workflow_runtime_bundle_digest, WorkflowBehavioralBundleInput,
+    WorkflowBehavioralReportIdentity, WorkflowReleaseAdmissionCandidateInput,
+    WorkflowReleaseAdmissionEvaluationStatus, WorkflowReleaseRegistryEvaluationAuthority,
+    WorkflowReleaseRegistryEvaluationStatus, WorkflowReleaseRegistryIssue,
 };
 use forge_core_store::sha256_content_hash;
 
@@ -23,6 +39,18 @@ pub const ADMITTED_GOLDEN_PATH_BUNDLE_REF: &str =
     "contracts/workflow-governance/golden-path-v0.yaml";
 pub const ADMITTED_WORKFLOW_RELEASE_REGISTRY_REF: &str =
     "contracts/migration/workflow-governance-release-registry-v0.yaml";
+pub const REVIEWED_WORKFLOW_RELEASE_REGISTRY_REF: &str =
+    "contracts/migration/workflow-governance-release-registry-core-assurance-v0.yaml";
+pub const WORKFLOW_RELEASE_REVIEW_INDEX_REF: &str =
+    "contracts/migration/workflow-core-assurance-review-index-v0.yaml";
+pub const WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF: &str =
+    "contracts/policies/workflow-release-reviewer-registry-v0.yaml";
+pub const WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF: &str =
+    "contracts/migration/workflow-core-assurance-admission-authorization-v0.yaml";
+pub const REVIEWED_WORKFLOW_RUNTIME_BUNDLE_REF: &str =
+    "contracts/workflow-governance/runtime-core-assurance-v0.yaml";
+pub const WORKFLOW_RELEASE_ADMISSION_AUDIENCE: &str =
+    "forge-core:workflow-release-admission:embedded";
 
 /// Opaque repository-admitted policy bundle retained for P5c API compatibility.
 ///
@@ -96,6 +124,22 @@ impl AdmittedWorkflowGovernanceRelease {
         self.receipt_carryover
     }
 
+    /// Reporting-only policy count for the admitted immutable bundle.
+    #[must_use]
+    pub fn policy_count(&self) -> usize {
+        self.bundle.workflow_governance_bundle.policies.len()
+    }
+
+    /// Reporting-only membership observation; it cannot mint release authority.
+    #[must_use]
+    pub fn contains_workflow_policy(&self, workflow_id: &str) -> bool {
+        self.bundle
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .any(|policy| policy.compatibility_workflow_id.0 == workflow_id)
+    }
+
     pub(crate) const fn document(&self) -> &WorkflowGovernanceBundleDocument {
         &self.bundle
     }
@@ -129,6 +173,24 @@ impl AdmittedWorkflowGovernanceReleaseRegistry {
     #[must_use]
     pub fn registry_digest(&self) -> &str {
         &self.registry_digest
+    }
+
+    #[must_use]
+    pub fn release_count(&self) -> usize {
+        self.releases.len()
+    }
+
+    /// Last release in the closed append-only registry, for audit and explicit
+    /// adjacent-upgrade selection inside trusted kernel adapters.
+    ///
+    /// # Panics
+    /// This cannot panic for a value minted by either closed loader because
+    /// both reject empty registries before constructing the opaque value.
+    #[must_use]
+    pub fn latest_release(&self) -> &AdmittedWorkflowGovernanceRelease {
+        self.releases
+            .last()
+            .expect("admitted registry always has a closed non-empty shape")
     }
 
     pub(crate) fn genesis(&self) -> &AdmittedWorkflowGovernanceRelease {
@@ -220,6 +282,12 @@ pub enum AdmittedWorkflowGovernanceReleaseError {
     PolicySetDigestMismatch(String),
     UnsupportedEntryAuthority,
     UnsupportedEntrySource,
+    ReviewArtifactMissing(String),
+    ReviewArtifactParse { reference: String, source: String },
+    ReviewEvaluationBlocked,
+    ReviewEvaluationDigestMismatch,
+    ReviewAuthorizationBindingMismatch,
+    ReviewAuthorizationInvalid(String),
     Canonicalize(String),
 }
 
@@ -317,6 +385,356 @@ pub fn load_admitted_workflow_governance_release_registry(
         registry_version: registry.registry_version,
         registry_digest: evaluation.registry_digest,
         releases,
+    })
+}
+
+/// Admit the fixed three-release registry after independently recomputing its
+/// review and consuming the repository-verified authorization capability.
+///
+/// The historical two-release loader remains a separate exact path. No caller
+/// can supply a registry, bundle, reviewer registry, authorization, or project
+/// path to this function.
+///
+/// # Errors
+/// Fails closed on any missing byte, review mismatch, signature failure,
+/// non-adjacent promotion, policy drift, receipt carryover, or shape change.
+#[allow(clippy::too_many_lines)]
+pub fn load_admitted_workflow_governance_reviewed_release_registry(
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    static ADMITTED: OnceLock<
+        Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError>,
+    > = OnceLock::new();
+    match ADMITTED.get_or_init(load_admitted_workflow_governance_reviewed_release_registry_uncached)
+    {
+        Ok(registry) => Ok(duplicate_admitted_registry(registry)),
+        Err(error) => Err(error.clone()),
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn load_admitted_workflow_governance_reviewed_release_registry_uncached(
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    let input = load_review_candidate_input()?;
+    let evaluation = evaluate_workflow_release_admission_candidate(&input);
+    if evaluation.status
+        != WorkflowReleaseAdmissionEvaluationStatus::ReadyForIndependentAuthorization
+        || !evaluation.issues.is_empty()
+        || evaluation.predecessor_policy_count != 15
+        || evaluation.candidate_policy_count != 20
+        || evaluation.reviewed_workflow_count != 5
+        || evaluation.quarantine_count != 3
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked);
+    }
+
+    let reviewer_raw = required_embedded_text(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF)?;
+    let reviewer_registry: WorkflowReleaseReviewerRegistryDocument =
+        parse_review_artifact(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF, reviewer_raw)?;
+    let authorization_raw = required_embedded_text(WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF)?;
+    let authorization: WorkflowReleaseAdmissionAuthorizationDocument = parse_review_artifact(
+        WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF,
+        authorization_raw,
+    )?;
+    let payload = &authorization
+        .workflow_release_admission_authorization
+        .payload;
+    let index = &input.review_index.workflow_release_review_index;
+    if payload.evaluation_digest != evaluation.evaluation_digest
+        || payload.review_index_id != index.id
+        || payload.review_index_version != index.index_version
+        || payload.review_index_raw_digest
+            != sha256_content_hash(
+                required_embedded_text(WORKFLOW_RELEASE_REVIEW_INDEX_REF)?.as_bytes(),
+            )
+        || payload.review_index_canonical_digest != evaluation.review_index_digest
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationDigestMismatch);
+    }
+    if payload.promotion != index.promotion
+        || payload.workflow_decisions != index.workflow_decisions
+        || payload.quarantine_decisions != index.quarantine_decisions
+        || payload.dimension_decisions != index.dimension_decisions
+        || !payload.invalidate_all_receipts
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationBindingMismatch);
+    }
+    let capability = verify_workflow_release_admission_authorization(
+        &reviewer_registry,
+        reviewer_raw.as_bytes(),
+        &authorization,
+        WORKFLOW_RELEASE_ADMISSION_AUDIENCE,
+    )
+    .map_err(|error| {
+        AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationInvalid(error.to_string())
+    })?;
+    admit_reviewed_registry(input, capability)
+}
+
+fn duplicate_admitted_registry(
+    registry: &AdmittedWorkflowGovernanceReleaseRegistry,
+) -> AdmittedWorkflowGovernanceReleaseRegistry {
+    AdmittedWorkflowGovernanceReleaseRegistry {
+        registry_id: registry.registry_id.clone(),
+        registry_version: registry.registry_version.clone(),
+        registry_digest: registry.registry_digest.clone(),
+        releases: registry
+            .releases
+            .iter()
+            .map(|release| AdmittedWorkflowGovernanceRelease {
+                release: release.release.clone(),
+                runtime_bundle: release.runtime_bundle.clone(),
+                bundle: release.bundle.clone(),
+                predecessor_release_id: release.predecessor_release_id.clone(),
+                predecessor_release_digest: release.predecessor_release_digest.clone(),
+                receipt_carryover: release.receipt_carryover,
+            })
+            .collect(),
+    }
+}
+
+fn admit_reviewed_registry(
+    input: WorkflowReleaseAdmissionCandidateInput,
+    capability: VerifiedWorkflowReleaseAdmissionAuthorization,
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    let promotion = &input.review_index.workflow_release_review_index.promotion;
+    if capability.candidate_release() != &promotion.candidate_release
+        || capability.candidate_runtime_bundle() != &promotion.candidate_runtime_bundle
+        || capability.promoted_runtime_bundle() != &promotion.promoted_runtime_bundle
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationBindingMismatch);
+    }
+    let registry = input.proposed_registry.workflow_governance_release_registry;
+    if registry.releases.len() != 3
+        || registry.default_successor_release_id != registry.releases[2].release.release_id
+        || registry.releases[2].receipt_carryover != WorkflowReceiptCarryover::InvalidateAll
+        || registry.releases[2].authority != WorkflowReleaseRegistryAuthority::CandidateOnly
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    let registry_digest =
+        forge_core_decisions::workflow_release_registry_digest(
+            &WorkflowGovernanceReleaseRegistryDocument {
+                schema_version:
+                    forge_core_contracts::WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION
+                        .to_owned(),
+                workflow_governance_release_registry: registry.clone(),
+            },
+        )
+        .map_err(AdmittedWorkflowGovernanceReleaseError::Canonicalize)?;
+    let mut releases = Vec::with_capacity(3);
+    for (entry, bundle) in registry
+        .releases
+        .clone()
+        .into_iter()
+        .zip(input.registry_bundles)
+    {
+        releases.push(admit_entry(entry, bundle)?);
+    }
+    if releases[2]
+        .document()
+        .workflow_governance_bundle
+        .policies
+        .len()
+        != 20
+        || !releases[2].is_adjacent_successor_of(&releases[1])
+        || releases[0].is_adjacent_successor_of(&releases[2])
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    // Moving the non-cloneable capability into this function is the authority
+    // consumption boundary. Only reporting-safe observations remain here.
+    let _authorization_audit = capability.audit();
+    drop(capability);
+    Ok(AdmittedWorkflowGovernanceReleaseRegistry {
+        registry_id: registry.registry_id,
+        registry_version: registry.registry_version,
+        registry_digest,
+        releases,
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn load_review_candidate_input(
+) -> Result<WorkflowReleaseAdmissionCandidateInput, AdmittedWorkflowGovernanceReleaseError> {
+    let review_index: WorkflowReleaseReviewIndexDocument =
+        load_review_artifact(WORKFLOW_RELEASE_REVIEW_INDEX_REF)?;
+    let index = &review_index.workflow_release_review_index;
+    if index.predecessor_registry.embedded_ref.0 != ADMITTED_WORKFLOW_RELEASE_REGISTRY_REF
+        || index.proposed_registry.embedded_ref.0 != REVIEWED_WORKFLOW_RELEASE_REGISTRY_REF
+        || index.promoted_runtime_bundle.embedded_ref.0 != REVIEWED_WORKFLOW_RUNTIME_BUNDLE_REF
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    let coverage_policy: WorkflowBehavioralCoveragePolicyDocument =
+        load_binding(&index.coverage_policy)?;
+    let corpus_set: WorkflowBehavioralCorpusSetDocument = load_binding(&index.corpus_set)?;
+    let representative_corpus: WorkflowBehavioralScenarioCorpusDocument =
+        load_binding(&index.representative_corpus)?;
+    let adversarial_corpus: WorkflowBehavioralScenarioCorpusDocument =
+        load_binding(&index.adversarial_corpus)?;
+    let review_subject: WorkflowBehavioralReviewSubjectDocument = load_binding(
+        index
+            .review_subjects
+            .first()
+            .ok_or(AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)?,
+    )?;
+    let authored_shadow_report: WorkflowBehavioralShadowReportDocument =
+        load_binding(&index.shadow_report)?;
+    let migration_batches = index
+        .migration_batches
+        .iter()
+        .map(load_binding)
+        .collect::<Result<Vec<WorkflowMigrationBatchDocument>, _>>()?;
+    let candidate_manifest: WorkflowGovernanceReleaseManifestDocument =
+        load_binding(&index.release_manifest)?;
+    let candidate_runtime_bundle = load_binding(&index.candidate_runtime_bundle)?;
+    let promoted_runtime_bundle = load_binding(&index.promoted_runtime_bundle)?;
+    let predecessor_registry = load_binding(&index.predecessor_registry)?;
+    let proposed_registry: WorkflowGovernanceReleaseRegistryDocument =
+        load_binding(&index.proposed_registry)?;
+
+    let mut source_bytes = HashMap::new();
+    for path in embedded_yaml_paths() {
+        if let Some(text) = embedded_text(&path) {
+            source_bytes.insert(RepoPath(path), text.as_bytes().to_vec());
+        }
+    }
+    source_bytes.insert(
+        index.evaluator_source.embedded_ref.clone(),
+        include_bytes!("../../../forge-core-decisions/src/workflow_behavior.rs").to_vec(),
+    );
+    source_bytes.insert(
+        index.frozen_history.embedded_ref.clone(),
+        include_bytes!("../../tests/fixtures/p5d2-foundation-history.ndjson").to_vec(),
+    );
+
+    let mut behavioral_bundles = BTreeMap::new();
+    for path in collect_behavioral_bundle_refs(&representative_corpus)
+        .into_iter()
+        .chain(collect_behavioral_bundle_refs(&adversarial_corpus))
+    {
+        let document: WorkflowGovernanceBundleDocument = load_review_artifact(&path)?;
+        let bytes = source_bytes.get(&RepoPath(path.clone())).ok_or_else(|| {
+            AdmittedWorkflowGovernanceReleaseError::ReviewArtifactMissing(path.clone())
+        })?;
+        let artifact = WorkflowBehavioralArtifactReference {
+            id: document.workflow_governance_bundle.id.clone(),
+            embedded_ref: RepoPath(path),
+            expected_digest: sha256_content_hash(bytes),
+        };
+        behavioral_bundles.insert(
+            workflow_runtime_bundle_digest(&document)
+                .map_err(AdmittedWorkflowGovernanceReleaseError::Canonicalize)?,
+            WorkflowBehavioralBundleInput { artifact, document },
+        );
+    }
+    let report = &authored_shadow_report.workflow_behavioral_shadow_report;
+    let report_identity = WorkflowBehavioralReportIdentity {
+        report_id: report.id.clone(),
+        report_version: report.report_version.clone(),
+        corpus_set: WorkflowBehavioralArtifactReference {
+            id: corpus_set.workflow_behavioral_corpus_set.id.clone(),
+            embedded_ref: index.corpus_set.embedded_ref.clone(),
+            expected_digest: index.corpus_set.raw_digest.clone(),
+        },
+        coverage_policy: WorkflowBehavioralArtifactReference {
+            id: coverage_policy
+                .workflow_behavioral_coverage_policy
+                .id
+                .clone(),
+            embedded_ref: index.coverage_policy.embedded_ref.clone(),
+            expected_digest: index.coverage_policy.raw_digest.clone(),
+        },
+    };
+    let registry_bundles = proposed_registry
+        .workflow_governance_release_registry
+        .releases
+        .iter()
+        .map(|entry| load_review_artifact(&entry.runtime_bundle.embedded_ref.0))
+        .collect::<Result<Vec<WorkflowGovernanceBundleDocument>, _>>()?;
+    Ok(WorkflowReleaseAdmissionCandidateInput {
+        review_index,
+        report_identity,
+        coverage_policy,
+        corpus_set,
+        representative_corpus,
+        adversarial_corpus,
+        review_subject,
+        behavioral_bundles,
+        authored_shadow_report,
+        migration_batches,
+        candidate_manifest,
+        candidate_runtime_bundle,
+        promoted_runtime_bundle,
+        predecessor_registry,
+        proposed_registry,
+        registry_bundles,
+        source_bytes,
+    })
+}
+
+fn collect_behavioral_bundle_refs(
+    corpus: &WorkflowBehavioralScenarioCorpusDocument,
+) -> BTreeSet<String> {
+    let mut refs = BTreeSet::new();
+    for workflow in &corpus.workflow_behavioral_scenario_corpus.workflow_evidence {
+        for scenario in &workflow.scenarios {
+            match &scenario.execution {
+                WorkflowBehavioralScenarioExecution::Single { input, .. } => {
+                    refs.insert(input.bundle.embedded_ref.0.clone());
+                }
+                WorkflowBehavioralScenarioExecution::Resume {
+                    checkpoint_input,
+                    resumed_input,
+                    ..
+                } => {
+                    refs.insert(checkpoint_input.bundle.embedded_ref.0.clone());
+                    refs.insert(resumed_input.bundle.embedded_ref.0.clone());
+                }
+                WorkflowBehavioralScenarioExecution::Ablation {
+                    control_input,
+                    ablated_input,
+                    ..
+                } => {
+                    refs.insert(control_input.bundle.embedded_ref.0.clone());
+                    refs.insert(ablated_input.bundle.embedded_ref.0.clone());
+                }
+            }
+        }
+    }
+    refs
+}
+
+fn load_binding<T: serde::de::DeserializeOwned>(
+    binding: &forge_core_contracts::WorkflowReleaseReviewArtifactBinding,
+) -> Result<T, AdmittedWorkflowGovernanceReleaseError> {
+    load_review_artifact(&binding.embedded_ref.0)
+}
+
+fn load_review_artifact<T: serde::de::DeserializeOwned>(
+    reference: &str,
+) -> Result<T, AdmittedWorkflowGovernanceReleaseError> {
+    let raw = required_embedded_text(reference)?;
+    parse_review_artifact(reference, raw)
+}
+
+fn required_embedded_text(
+    reference: &str,
+) -> Result<&'static str, AdmittedWorkflowGovernanceReleaseError> {
+    embedded_text(reference).ok_or_else(|| {
+        AdmittedWorkflowGovernanceReleaseError::ReviewArtifactMissing(reference.to_owned())
+    })
+}
+
+fn parse_review_artifact<T: serde::de::DeserializeOwned>(
+    reference: &str,
+    raw: &str,
+) -> Result<T, AdmittedWorkflowGovernanceReleaseError> {
+    yaml_serde::from_str(raw).map_err(|error| {
+        AdmittedWorkflowGovernanceReleaseError::ReviewArtifactParse {
+            reference: reference.to_owned(),
+            source: error.to_string(),
+        }
     })
 }
 
@@ -486,5 +904,35 @@ mod tests {
                 )
                 .expect("current proof")
         );
+    }
+
+    #[test]
+    fn verified_capability_cannot_authorize_a_different_promotion() {
+        let mut input = load_review_candidate_input().expect("review candidate");
+        let reviewer_raw =
+            required_embedded_text(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF).expect("reviewers");
+        let reviewers: WorkflowReleaseReviewerRegistryDocument =
+            parse_review_artifact(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF, reviewer_raw)
+                .expect("reviewers");
+        let authorization: WorkflowReleaseAdmissionAuthorizationDocument =
+            load_review_artifact(WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF)
+                .expect("authorization");
+        let capability = verify_workflow_release_admission_authorization(
+            &reviewers,
+            reviewer_raw.as_bytes(),
+            &authorization,
+            WORKFLOW_RELEASE_ADMISSION_AUDIENCE,
+        )
+        .expect("verified capability");
+        input
+            .review_index
+            .workflow_release_review_index
+            .promotion
+            .promoted_runtime_bundle
+            .bundle_digest = format!("sha256:{}", "0".repeat(64));
+        assert!(matches!(
+            admit_reviewed_registry(input, capability),
+            Err(AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationBindingMismatch)
+        ));
     }
 }

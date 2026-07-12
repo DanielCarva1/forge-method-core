@@ -34,6 +34,9 @@ fn generated_schemas_cover_v0_contract_surface() {
         "workflow_behavioral_scenario_corpus",
         "workflow_behavioral_corpus_set",
         "workflow_behavioral_shadow_report",
+        "workflow_release_review_index",
+        "workflow_release_reviewer_registry",
+        "workflow_release_admission_authorization",
         "workflow_governance_release_manifest",
         "workflow_migration_batch",
         "workflow_retirement_authorization",
@@ -235,4 +238,48 @@ fn p5d3_behavioral_schemas_expose_closed_authority_and_verdict_enums() {
     assert!(review
         .enum_definitions
         .contains(&"WorkflowBehavioralReviewSubjectAuthority".to_owned()));
+}
+
+#[test]
+fn p5d4_review_schemas_expose_candidate_only_authority_boundaries() {
+    let views = compact_agent_views();
+    let expected = [
+        (
+            "workflow_release_review_index",
+            "workflow_release_review_index",
+            "workflow_decisions",
+        ),
+        (
+            "workflow_release_reviewer_registry",
+            "workflow_release_reviewer_registry",
+            "credentials",
+        ),
+        (
+            "workflow_release_admission_authorization",
+            "workflow_release_admission_authorization",
+            "signatures",
+        ),
+    ];
+
+    for (family, root, required) in expected {
+        let view = views
+            .iter()
+            .find(|view| view.family_id == family)
+            .unwrap_or_else(|| panic!("missing P5d.4 schema view {family}"));
+        assert_eq!(view.root_key, Some(root));
+        assert!(view.contract_required_fields.contains(&required.to_owned()));
+        assert!(view.authority_note.contains("candidate"));
+        assert!(view.authority_note.contains("cannot") || view.authority_note.contains("required"));
+    }
+
+    let authorization = views
+        .iter()
+        .find(|view| view.family_id == "workflow_release_admission_authorization")
+        .expect("authorization view");
+    assert!(authorization
+        .enum_definitions
+        .contains(&"WorkflowReleaseAdmissionAuthorizationAuthority".to_owned()));
+    assert!(authorization
+        .enum_definitions
+        .contains(&"WorkflowReleaseReviewerRole".to_owned()));
 }

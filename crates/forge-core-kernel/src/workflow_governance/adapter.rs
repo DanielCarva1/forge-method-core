@@ -9,11 +9,11 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use super::{
-    evaluate_verified_workflow_governance, load_admitted_workflow_governance_release_registry,
-    AdmittedWorkflowGovernanceRelease, AdmittedWorkflowGovernanceReleaseError,
-    AdmittedWorkflowGovernanceReleaseRegistry, TrustedWorkflowGovernanceSnapshot,
-    TrustedWorkflowGovernanceSnapshotError, VerifiedWorkflowGovernanceCompletion,
-    VerifiedWorkflowGovernanceDecision,
+    evaluate_verified_workflow_governance,
+    load_admitted_workflow_governance_reviewed_release_registry, AdmittedWorkflowGovernanceRelease,
+    AdmittedWorkflowGovernanceReleaseError, AdmittedWorkflowGovernanceReleaseRegistry,
+    TrustedWorkflowGovernanceSnapshot, TrustedWorkflowGovernanceSnapshotError,
+    VerifiedWorkflowGovernanceCompletion, VerifiedWorkflowGovernanceDecision,
 };
 use forge_core_authority::workflow_authority::{
     WORKFLOW_APPLICABILITY_AUTHORITY_SCOPE, WORKFLOW_APPLICABILITY_EVALUATOR_REF,
@@ -124,7 +124,7 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn initialize(
         &self,
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let genesis = registry.genesis();
         let identity = self.identity(genesis);
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
@@ -176,7 +176,7 @@ impl WorkflowGovernanceProjectAdapter {
     /// Returns a typed error when binding, recovery, or policy evaluation fails.
     pub fn next(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -201,7 +201,7 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn release_status(
         &self,
     ) -> Result<WorkflowGovernanceReleaseStatus, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let active = self.resolve_active_release(&registry, &projection)?;
@@ -253,7 +253,7 @@ impl WorkflowGovernanceProjectAdapter {
         expected_head_digest: &str,
         expected_snapshot_digest: &str,
     ) -> Result<WorkflowGovernanceReleaseUpgradeReceipt, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let source = self.resolve_active_release(&registry, &projection)?;
@@ -420,7 +420,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowApplicabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -494,7 +494,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowCapabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -569,7 +569,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowEvidenceAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -699,7 +699,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowDecisionAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -774,7 +774,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowWaiverAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -868,7 +868,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowSignalAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -958,7 +958,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1003,7 +1003,7 @@ impl WorkflowGovernanceProjectAdapter {
             ));
         }
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_release_registry()?;
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -3041,8 +3041,8 @@ mod tests {
         fs::write(root.join("new-domain-input.md"), b"new domain constraint\n")
             .expect("snapshot drift");
         let current_snapshot = project_snapshot_digest(&root).expect("current snapshot");
-        let registry =
-            load_admitted_workflow_governance_release_registry().expect("admitted registry");
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+            .expect("admitted registry");
         let admitted = registry.genesis();
         let derived = derive_receipts(
             admitted.document(),
@@ -3100,8 +3100,8 @@ mod tests {
 
         fs::write(root.join("README.md"), b"changed after completion\n").expect("snapshot drift");
         let current_snapshot = project_snapshot_digest(&root).expect("current snapshot");
-        let registry =
-            load_admitted_workflow_governance_release_registry().expect("admitted registry");
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+            .expect("admitted registry");
         let admitted = registry.genesis();
         let derived = derive_receipts(
             admitted.document(),

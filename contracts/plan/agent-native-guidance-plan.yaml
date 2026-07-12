@@ -52,6 +52,9 @@ delivery_strategy:
       scope: "P5d.1 versioned candidate release/batch foundation, structural scorecard, and rollout audit"
     - commit: "8e6ea14"
       scope: "P5d.2 opaque release admission, durable project pinning, and crash-recoverable upgrade"
+    - commit: "d18006c"
+      followups: ["109ac22", "a79301c"]
+      scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -362,17 +365,17 @@ phases:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
     active_checkpoint:
-      id: "P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"
+      id: "P5d.4a-independent-review-and-first-new-policy-admission"
       status: "completed"
       scope:
-        - "compile five core-assurance candidates from typed overlays without admitting new runtime behavior"
-        - "quarantine three unresolved workflows and prove governed outcomes through a 35-scenario shadow corpus"
+        - "bind the complete reviewed candidate graph into an independently signed authorization quorum"
+        - "admit the first five new core policies only through an opaque kernel-owned verified capability"
     next_slice:
-      id: "P5d.4-remaining-catalog-reviewed-rollout"
+      id: "P5d.4b-remaining-core-reviewed-batches"
       status: "pending"
       scope:
-        - "independently authorize the reviewed candidate before controlled runtime admission"
         - "roll out the remaining core catalog in bounded reviewed batches"
+        - "keep unsafe, ambiguous, and domain-specific semantics outside executable core authority"
     following_slices:
       - "P5d.5 signed retirement, deletion proof, and final scorecard"
       - "P6 domain-pack ecosystem"
@@ -383,6 +386,8 @@ phases:
       - "P5d.2 legacy-ledger compatibility, opaque admission, atomic transition, crash recovery, CAS/idempotency, override rejection, and replacement-agent gates pass"
       - "P5d.3 compiles five candidates, keeps three workflows quarantined, and evaluates 35 positive, negative, ambiguity, false-completion, stale-evidence, resume, and ablation scenarios with zero mismatches or errors"
       - "P5d.3 preserves the exact P5d.2 admitted registry and proves historical replay against a frozen upgraded-WAL fixture before any third release can be admitted"
+      - "P5d.4a binds the complete review graph into two distinct Ed25519 roles and admits only the exact append-only 20-policy successor through an opaque kernel capability"
+      - "P5d.4a proves foundation-to-core-assurance CAS upgrade, invalidate_all receipt semantics, prepared-authority invalidation, replacement-agent resume, quarantine exclusion, and 139-check repository validation"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -567,10 +572,27 @@ phases:
               - "every migrated workflow has positive, negative, ambiguity, false-completion, stale, resume, and ablation evidence"
               - "quarantine remains visible and cannot satisfy routing, prerequisites, readiness, or completion"
               - "self-authored shadow parity cannot mint admission, executable state, retirement, or receipt carryover"
-          - id: "P5d.4-remaining-catalog-reviewed-rollout"
-            status: "pending"
+          - id: "P5d.4a-independent-review-and-first-new-policy-admission"
+            status: "completed"
             size: "large"
             depends_on: ["P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"]
+            outcome: >-
+              The P5d.3 candidate can enter runtime only after a complete review
+              graph is recomputed, approved by distinct cryptographic roles, and
+              consumed by a kernel-owned opaque admission capability.
+            delivers:
+              - "content-addressed Review Index over every candidate, corpus, evaluator, registry, and promoted runtime artifact"
+              - "semantic-reviewer plus release-authorizer quorum with distinct principals, credentials, and public keys"
+              - "append-only three-release registry whose new 20-policy successor invalidates all prior receipts"
+              - "explicit adjacent project upgrade and replacement-agent continuity without genesis skipping"
+            exit:
+              - "candidate YAML, shadow verdict, signatures, and audit projections cannot mint runtime authority"
+              - "the five new policies are executable only after an explicit foundation-to-core-assurance upgrade"
+              - "the three quarantined workflows remain non-authoritative and absent from routing and completion"
+          - id: "P5d.4b-remaining-core-reviewed-batches"
+            status: "pending"
+            size: "large"
+            depends_on: ["P5d.4a-independent-review-and-first-new-policy-admission"]
             outcome: >-
               Remaining core candidates roll out in reviewed bounded batches;
               domain-specific or extension-authoring knowledge remains outside
@@ -582,7 +604,7 @@ phases:
           - id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
             status: "pending"
             size: "large"
-            depends_on: ["P5d.4-remaining-catalog-reviewed-rollout"]
+            depends_on: ["P5d.4b-remaining-core-reviewed-batches"]
             outcome: >-
               Legacy authority is retired only by a verified authorization
               bound to exact replacement, release, compatibility, shadow, and
@@ -736,12 +758,14 @@ first_executable_slice:
     - "P5d.2 backward-compatible active-release ledger replay, CAS-bound idempotent upgrade, digest-bound crash recovery, receipt carryover boundary, agent CLI/skill, adversarial E2E, 130-check validation, and full workspace gates"
     - "P5d.3 typed overlay and candidate release for five core-assurance workflows, with three explicit quarantines and no new admitted runtime behavior"
     - "P5d.3 35-scenario governed-outcome corpus, content-addressed resume checkpoints, load-bearing ablations, append-only registry evolution, frozen P5d.2 WAL compatibility, and full workspace gates"
+    - "P5d.4a closed Review Index, pure admission evaluator, distinct semantic-reviewer/release-authorizer signatures, and opaque verified kernel capability"
+    - "P5d.4a append-only three-release registry, explicit 15-to-20-policy foundation upgrade, invalidate_all receipt window, quarantine exclusion, and replacement-agent continuity"
   next_action: >-
-    P5d.3 is complete without admitting new policy behavior. Next execute
-    P5d.4: independently authorize the reviewed candidate, admit it through a
-    controlled release transition only if that authorization passes, and roll
-    out the remaining core dispositions in bounded reviewed batches while
-    preserving visible quarantine and the P6 domain boundary.
+    P5d.4a is complete: the first five non-golden policies are independently
+    authorized and admitted only through an explicit adjacent upgrade. Execute
+    P5d.4b next by classifying the remaining core-compatible workflows into
+    bounded reviewed batches, preserving visible quarantine and the P6 domain
+    boundary before any further admission.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

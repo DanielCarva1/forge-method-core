@@ -8,7 +8,7 @@ Workspace members: **21**
 | Package | Path | Targets | Direct workspace dependencies |
 |---|---|---|---|
 | `forge-contract-validator` | `crates/forge-contract-validator` | bin, test | forge-core-cli |
-| `forge-core-authority` | `crates/forge-core-authority` | lib | forge-core-command-surface, forge-core-contracts |
+| `forge-core-authority` | `crates/forge-core-authority` | lib, test | forge-core-command-surface, forge-core-contracts |
 | `forge-core-cli` | `crates/forge-core-cli` | lib, bin, test | forge-core-authority, forge-core-command-surface, forge-core-contracts, forge-core-crypto, forge-core-decisions, forge-core-eval, forge-core-eval-harness, forge-core-governance, forge-core-graph, forge-core-kernel, forge-core-memory, forge-core-protocol-mcp, forge-core-research, forge-core-store, forge-core-trace, forge-core-validate |
 | `forge-core-command-surface` | `crates/forge-core-command-surface` | lib, example | - |
 | `forge-core-contracts` | `crates/forge-core-contracts` | lib, test | - |

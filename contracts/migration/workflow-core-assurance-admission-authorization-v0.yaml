@@ -1,0 +1,127 @@
+schema_version: '0.1'
+workflow_release_admission_authorization:
+  authority: candidate_authorization
+  payload:
+    authorization_id: workflow-release-admission.core-assurance-v0
+    review_index_id: workflow-release-review.core-assurance-v0
+    review_index_version: 0.1.0
+    review_index_raw_digest: sha256:84df234a5c545ffd5c259d320c71bd0050262616541390bc16787a11abb56684
+    review_index_canonical_digest: sha256:6946907128e7221fc7bbacaf1b93e2466712981e161fce0b17a25a9d455f9f64
+    evaluation_digest: sha256:87d574cacb8eb8f7c75a3f9fb32547bc721cba8720e064ee88a93e8448e4eaad
+    reviewer_registry_id: workflow-release-reviewers.core-assurance-v0
+    reviewer_registry_version: 0.1.0
+    reviewer_registry_raw_digest: sha256:5b975d044f691b1e37a65aff30d991abb838f432ef271fd003df36fb4dd10fa0
+    reviewer_registry_canonical_digest: sha256:1d75148e57d4e875c464c7e062ff5f193a8c7afdd2df6f8de2b69a8159de4f3b
+    promotion:
+      predecessor:
+        release_id: workflow-governance.release.foundation-v0
+        release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      candidate_release:
+        lineage_id: workflow-governance.core
+        release_id: workflow-governance.release.core-assurance-v0
+        release_version: 0.2.0
+        release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+      candidate_runtime_bundle:
+        bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+        bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+        policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      promoted_runtime_bundle:
+        bundle_id: bundle.workflow-governance.core-assurance-v0
+        bundle_digest: sha256:2cc9477475a3d4a74470671a6a04e7ee0148bd0628426e35438338260704b531
+        policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+    invalidate_all_receipts: true
+    workflow_decisions:
+    - workflow_id: adversarial-review
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: code-review
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: nfr-evidence-audit
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: risk-register
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: traceability-gate
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    quarantine_decisions:
+    - workflow_id: edge-case-review
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: release-readiness
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: track-decision
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    dimension_decisions:
+    - dimension: status
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: eligibility
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: progression
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: completion
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: obligations
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: claims
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: decisions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: capabilities
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: issues
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: next_actions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    audience: forge-core:workflow-release-admission:embedded
+    domain: forge-method:workflow-release-admission:v1
+    nonce: release-admission.core-assurance-v0
+    issued_at_unix: 1783864800
+    expires_at_unix: 1815314400
+  signatures:
+  - principal_id: principal.release-review.semantic-v0
+    credential_id: reviewer.workflow-release.semantic-v0
+    role: semantic_reviewer
+    algorithm: ed25519
+    payload_digest: sha256:c6dff7278a1b0e48ec2e2ec567c3f147f7692ff6a0f7fd6755e741e9da745160
+    signature: c6a26b53d31add6104f3d4afab9573c9e65a3eac35edc7ee1e6fb0da1bc620c721f923337ba3b876afa8c4aa8ef0274298b8dd50db943ad94c3e4d53462b7b04
+    signed_at_unix: 1783864800
+  - principal_id: principal.release-review.authorizer-v0
+    credential_id: reviewer.workflow-release.authorizer-v0
+    role: release_authorizer
+    algorithm: ed25519
+    payload_digest: sha256:c6dff7278a1b0e48ec2e2ec567c3f147f7692ff6a0f7fd6755e741e9da745160
+    signature: 7c5a66880fd21d5d4eb2f3806bcce060f79997fb65f4b5cc6fffcc1107b85e8724849d383058b90e5295f5470cc4a1abe588573ce50a15ff804fe16cdbeda805
+    signed_at_unix: 1783864800

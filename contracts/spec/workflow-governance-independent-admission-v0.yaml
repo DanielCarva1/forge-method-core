@@ -1,0 +1,102 @@
+schema_version: "0.1"
+spec: "workflow_governance_independent_admission_v0"
+status: "p5d_4a_implemented"
+purpose: >-
+  Convert the reviewed P5d.3 core-assurance candidate into the first runtime
+  release with new policy behavior without allowing the candidate, its shadow
+  report, its authors, or caller-selected material to authorize themselves.
+
+product_boundary:
+  human_experience: >-
+    The human continues to work only through chat. The host agent may explain
+    the release, request an explicit project upgrade, and resume it, but cannot
+    choose reviewer keys, rewrite the reviewed payload, or bypass the quorum.
+  candidate_boundary: >-
+    Every raw YAML, derived verdict, signature document, and audit projection
+    remains non-authoritative. Only a fixed kernel loader may consume a verified
+    opaque authorization capability.
+  honest_limit: >-
+    Forge proves distinct cryptographic roles, credentials, principals, and
+    keys. It cannot prove organizational or cognitive independence when one
+    operator controls both key custodians; separate custody is an operational
+    requirement and must not be overstated by product claims.
+
+review_index:
+  must_bind_exactly:
+    - "P5d.3 review subject and behavioral coverage policy"
+    - "representative and adversarial corpora, corpus set, and shadow report"
+    - "candidate batch, release manifest, and evaluator source"
+    - "P5d.2 predecessor registry and append-only expanded registry"
+    - "candidate runtime bundle and promoted runtime bundle"
+    - "frozen P5d.2 upgraded-WAL history fixture"
+  digest_rules:
+    - "raw SHA-256 and canonical JCS digests are distinct named identities"
+    - "authored labels and counts never replace deterministic recomputation"
+    - "candidate and promoted bundles may differ only in their envelope identity; their ordered policy set is exact"
+
+independent_quorum:
+  roles:
+    - "semantic_reviewer"
+    - "release_authorizer"
+  separation:
+    - "roles use different principals"
+    - "roles use different credential ids"
+    - "roles use different Ed25519 public-key fingerprints"
+    - "one signature cannot satisfy both roles"
+  credential_rules:
+    - "keys come only from the fixed embedded reviewer registry"
+    - "revoked credentials and signatures outside the credential window fail closed"
+    - "validity is evaluated at signed_at_unix so a static admitted release does not expire with wall-clock time"
+    - "private keys never enter the repository, generated artifacts, stdout, logs, or runtime bundle"
+  signature_domain: "forge-method:workflow-release-admission:v1\\0"
+
+admission_requirements:
+  evaluation:
+    - "behavioral report recomputes to behaviorally_consistent_candidate/review_candidate"
+    - "all 35 scenarios have zero mismatches and zero evaluation errors"
+    - "five candidate workflows and three quarantines are exact and exhaustive for this batch"
+    - "registry evolution is append-only and preserves frozen P5d.2 history"
+    - "successor contains exactly the original 15 policies plus the reviewed five"
+    - "receipt carryover is invalidate_all because the policy set changes"
+  runtime:
+    - "registry YAML authority stays candidate_only"
+    - "historical P5c and P5d.2 entries remain admitted only by their existing closed path"
+    - "the third entry is admitted only with VerifiedWorkflowReleaseAdmissionAuthorization"
+    - "project and caller paths cannot select registry, reviewer registry, authorization, or bundle material"
+    - "genesis cannot skip directly to the new successor"
+    - "foundation-to-core-assurance upgrade is CAS-bound, atomic, crash recoverable, and idempotent"
+    - "pre-upgrade receipts, prepared completion, decisions, waivers, and evidence cannot carry into the changed policy set"
+
+required_adversarial_evidence:
+  - "wrong key, audience, signature domain, release, index, registry, or evaluator digest"
+  - "duplicate role, principal, credential, key fingerprint, or signature"
+  - "revoked or out-of-window credential"
+  - "one missing role or one explicit rejection/blocking finding"
+  - "candidate/promoted policy drift and quarantine leakage"
+  - "historical registry mutation, reorder, removal, or direct genesis skip"
+  - "raw document and audit projection cannot construct or deserialize the opaque capability"
+  - "upgrade fault injection resolves to exact source or exact target release"
+  - "replacement-agent resume selects the same active release and next action"
+
+non_goals:
+  - "no retirement or deletion authority; P5d.5 owns deletion proof"
+  - "no admission of the remaining compatibility-only catalog; P5d.4b owns reviewed rollout"
+  - "no Domain Pack admission; P6 owns domain extensions"
+  - "no claim that cryptographic role separation proves independent human organizations"
+  - "no default MCP mutation or user-facing YAML workflow"
+
+exit:
+  - "review evaluation is ready_for_independent_authorization and non_authoritative"
+  - "both distinct reviewer roles verify against the exact same closed payload"
+  - "kernel loader admits exactly three releases and 20 policies in the successor"
+  - "five new policies execute only after explicit adjacent upgrade"
+  - "three quarantines remain visible but cannot satisfy runtime governance"
+  - "P5d.2 projects, ledgers, receipts, and frozen history remain compatible"
+  - "generated checks, aggregate validation, formatting, pedantic clippy, workspace tests, and cross-platform CI pass"
+
+references:
+  - "contracts/spec/workflow-behavioral-evidence-v0.yaml"
+  - "contracts/spec/workflow-governance-release-admission-v0.yaml"
+  - "contracts/migration/workflow-core-assurance-review-subject-v0.yaml"
+  - "contracts/evidence/workflow-core-assurance-shadow-report-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"

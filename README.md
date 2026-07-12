@@ -640,6 +640,33 @@ deterministic consistency, not independent semantic approval. P5d.4 must bind
 an independent review to the final subject, corpus, report, batch, and manifest
 before the kernel can admit a new policy set.
 
+### Upgrade to the independently reviewed core-assurance release (P5d.4a)
+
+P5d.4a closes that boundary. A content-addressed Review Index binds the exact
+P5d.3 subject, corpora, shadow report, evaluator source, frozen history,
+candidate/final bundles, and append-only registry. Two Ed25519 signatures from
+distinct semantic-reviewer and release-authorizer principals, credentials, and
+public keys authorize the same closed payload. The YAML documents remain
+`candidate_only`; only the fixed kernel loader can combine a recomputed
+`ready_for_independent_authorization` evaluation with the opaque verified
+capability.
+
+```bash
+cargo run -p forge-core-decisions --example generate_workflow_core_assurance_admission -- --check
+forge-core workflow release-status --root <project> --json
+# execute the returned upgrade_argv: P5c -> foundation, then foundation -> core-assurance
+forge-core workflow release-status --root <project> --json
+```
+
+The admitted successor contains the original fifteen policies plus the five
+reviewed core-assurance policies. Because the policy set changes, the adjacent
+upgrade is `invalidate_all`: old evidence/receipts and prepared completion
+authority cannot cross the transition. `workflow resume` deterministically
+returns the new pin, while `edge-case-review`, `track-decision`, and
+`release-readiness` remain quarantined and absent from runtime routing. Forge
+proves cryptographic role separation, not organizational independence; separate
+key custody remains an explicit release-operation requirement.
+
 ### Simulate workflow governance (P5b)
 
 P5b adds a pure Workflow Governance Kernel Module with two deliberately
@@ -1360,12 +1387,11 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.4-P5d.5 reviewed rollout and legacy retirement** -- P5d.3 now provides
-  typed behavioral evidence for five non-golden review candidates and three
-  explicit quarantines, but deliberately admits none of them. Next, Forge must
-  independently authorize reviewed bounded batches, cover the remaining 90
-  compatibility/quarantine/domain dispositions, and verify signed retirement
-  authorizations. No non-golden workflow is runtime executable or
+- **P5d.4b-P5d.5 remaining rollout and legacy retirement** -- P5d.4a now
+  independently authorizes and admits the first five non-golden policies while
+  preserving three explicit quarantines. Next, Forge must cover the remaining
+  compatibility/quarantine/domain dispositions in reviewed bounded batches and
+  verify signed retirement authorizations. No quarantined or unreviewed workflow is runtime executable or
   retirement-ready yet. Retirement requires measured behavioral compatibility,
   deletion/ablation evidence, consumer migration diagnostics, and human review
   rather than catalog-count parity.

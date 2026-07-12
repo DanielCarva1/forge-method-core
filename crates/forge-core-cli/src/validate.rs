@@ -34,7 +34,8 @@ use forge_core_contracts::{
     WorkflowGovernanceBundleDocument, WorkflowGovernancePolicyOverlayDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
     WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument,
-    WorkflowReleaseDispositionIntent,
+    WorkflowReleaseAdmissionAuthorizationDocument, WorkflowReleaseDispositionIntent,
+    WorkflowReleaseReviewIndexDocument, WorkflowReleaseReviewerRegistryDocument,
 };
 use forge_core_decisions::{
     evaluate_workflow_behavior, evaluate_workflow_migration, evaluate_workflow_release,
@@ -314,6 +315,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_release_foundation(root, &mut summary);
         validate_workflow_release_registry(root, &mut summary);
         validate_workflow_behavioral_evidence(root, &mut summary);
+        validate_workflow_release_independent_admission(root, &mut summary);
     }
 
     summary.finish();
@@ -1016,6 +1018,127 @@ fn workflow_behavioral_evidence_validation_report(root: &Path) -> ValidationRepo
     validate_behavioral_candidate_release(root, &candidate_manifest, &candidate_batch, &mut report);
     validate_candidate_absent_from_admission(root, &review_subject, &mut report);
     report
+}
+
+const WORKFLOW_RELEASE_INDEPENDENT_ADMISSION_SPEC_REF: &str =
+    "contracts/spec/workflow-governance-independent-admission-v0.yaml";
+const WORKFLOW_RELEASE_REVIEW_INDEX_REF: &str =
+    "contracts/migration/workflow-core-assurance-review-index-v0.yaml";
+const WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF: &str =
+    "contracts/policies/workflow-release-reviewer-registry-v0.yaml";
+const WORKFLOW_RELEASE_AUTHORIZATION_REF: &str =
+    "contracts/migration/workflow-core-assurance-admission-authorization-v0.yaml";
+const WORKFLOW_RELEASE_REVIEWED_REGISTRY_REF: &str =
+    "contracts/migration/workflow-governance-release-registry-core-assurance-v0.yaml";
+const WORKFLOW_RELEASE_REVIEWED_BUNDLE_REF: &str =
+    "contracts/workflow-governance/runtime-core-assurance-v0.yaml";
+const WORKFLOW_RELEASE_INDEPENDENT_REVIEW_REF: &str =
+    "contracts/evidence/workflow-core-assurance-independent-review-v0.yaml";
+
+fn validate_workflow_release_independent_admission(root: &Path, summary: &mut ValidateSummary) {
+    let mut report = ValidationReport::new();
+    let required_refs = [
+        WORKFLOW_RELEASE_INDEPENDENT_ADMISSION_SPEC_REF,
+        WORKFLOW_RELEASE_REVIEW_INDEX_REF,
+        WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF,
+        WORKFLOW_RELEASE_AUTHORIZATION_REF,
+        WORKFLOW_RELEASE_REVIEWED_REGISTRY_REF,
+        WORKFLOW_RELEASE_REVIEWED_BUNDLE_REF,
+        WORKFLOW_RELEASE_INDEPENDENT_REVIEW_REF,
+    ];
+    for reference in required_refs {
+        let disk = match fs::read(root.join(reference)) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                behavioral_error(
+                    &mut report,
+                    reference,
+                    format!("P5d.4a fixed artifact is missing: {error}"),
+                );
+                continue;
+            }
+        };
+        if let Some(embedded) = forge_core_decisions::embedded_text(reference) {
+            if disk != embedded.as_bytes() {
+                behavioral_error(
+                    &mut report,
+                    reference,
+                    "P5d.4a repository artifact differs from the fixed embedded bytes",
+                );
+            }
+        } else {
+            behavioral_error(
+                &mut report,
+                reference,
+                "P5d.4a artifact is absent from the fixed embedded contract tree",
+            );
+        }
+    }
+
+    if let Some(index) = read_canonical_release_yaml::<WorkflowReleaseReviewIndexDocument>(
+        root,
+        WORKFLOW_RELEASE_REVIEW_INDEX_REF,
+        &mut report,
+    ) {
+        for issue in index.validate() {
+            behavioral_error(
+                &mut report,
+                WORKFLOW_RELEASE_REVIEW_INDEX_REF,
+                format!("{}: {}", issue.path, issue.message),
+            );
+        }
+    }
+    if let Some(registry) = read_canonical_release_yaml::<WorkflowReleaseReviewerRegistryDocument>(
+        root,
+        WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF,
+        &mut report,
+    ) {
+        for issue in registry.validate() {
+            behavioral_error(
+                &mut report,
+                WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF,
+                format!("{}: {}", issue.path, issue.message),
+            );
+        }
+    }
+    if let Some(authorization) = read_canonical_release_yaml::<
+        WorkflowReleaseAdmissionAuthorizationDocument,
+    >(root, WORKFLOW_RELEASE_AUTHORIZATION_REF, &mut report)
+    {
+        for issue in authorization.validate() {
+            behavioral_error(
+                &mut report,
+                WORKFLOW_RELEASE_AUTHORIZATION_REF,
+                format!("{}: {}", issue.path, issue.message),
+            );
+        }
+    }
+
+    match forge_core_kernel::load_admitted_workflow_governance_reviewed_release_registry() {
+        Ok(registry) => {
+            let latest = registry.latest_release();
+            if registry.release_count() != 3
+                || latest.policy_count() != 20
+                || latest.receipt_carryover()
+                    != forge_core_contracts::WorkflowReceiptCarryover::InvalidateAll
+                || ["edge-case-review", "track-decision", "release-readiness"]
+                    .iter()
+                    .any(|workflow| latest.contains_workflow_policy(workflow))
+            {
+                behavioral_error(
+                    &mut report,
+                    WORKFLOW_RELEASE_REVIEWED_REGISTRY_REF,
+                    "P5d.4a trusted loader must derive exactly 3 releases, 20 successor policies, invalidate_all, and zero quarantined policies",
+                );
+            }
+        }
+        Err(error) => behavioral_error(
+            &mut report,
+            WORKFLOW_RELEASE_AUTHORIZATION_REF,
+            format!("P5d.4a trusted admission failed: {error:?}"),
+        ),
+    }
+    summary.add_report("workflow_release_independent_admission", report);
 }
 
 fn validate_behavioral_report_baseline(

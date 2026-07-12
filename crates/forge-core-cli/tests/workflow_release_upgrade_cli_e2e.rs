@@ -155,6 +155,50 @@ fn assert_rejections_do_not_mutate(project: &LegacyProject, status: &Value, init
     assert_eq!(fs::read(project.wal()).expect("unknown WAL"), initial_wal);
 }
 
+fn upgrade_foundation_to_core_assurance(project: &LegacyProject) {
+    let foundation_status = assert_ok(
+        &project.run(&["release-status", "--json"]),
+        "workflow.release_status",
+    );
+    assert_eq!(
+        required_string(&foundation_status, "/data/available_successor/release_id"),
+        "workflow-governance.release.core-assurance-v0"
+    );
+    let core_argv = foundation_status["data"]["upgrade_argv"]
+        .as_array()
+        .expect("core-assurance upgrade argv")
+        .iter()
+        .map(|value| value.as_str().expect("argv string").to_owned())
+        .collect::<Vec<_>>();
+    let core = assert_ok(&run_owned(&core_argv[1..]), "workflow.release_upgrade");
+    assert_eq!(core["data"]["status"], "upgraded");
+    assert_eq!(
+        required_string(&core, "/data/active/release/release_id"),
+        "workflow-governance.release.core-assurance-v0"
+    );
+    assert_eq!(
+        core["data"]["transition_record"]["event"]["payload"]["receipt_carryover"],
+        "invalidate_all"
+    );
+    let core_status = assert_ok(
+        &project.run(&["release-status", "--json"]),
+        "workflow.release_status",
+    );
+    assert_eq!(core_status["data"]["available_successor"], Value::Null);
+    assert_eq!(core_status["data"]["upgrade_argv"], Value::Null);
+    let core_resumed = assert_ok(&project.run(&["resume", "--json"]), "workflow.resume");
+    assert_eq!(
+        required_string(&core_resumed, "/data/release/release/release_id"),
+        "workflow-governance.release.core-assurance-v0"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&fs::read(project.wal()).expect("core WAL"))
+            .matches("release_upgraded")
+            .count(),
+        2
+    );
+}
+
 #[test]
 fn legacy_project_upgrade_is_opaque_cas_bound_resumable_and_idempotent() {
     let project = LegacyProject::new("golden");
@@ -244,6 +288,8 @@ fn legacy_project_upgrade_is_opaque_cas_bound_resumable_and_idempotent() {
         upgraded["data"]["ledger_head_digest"]
     );
     assert_eq!(fs::read(project.wal()).expect("replay WAL"), upgraded_wal);
+
+    upgrade_foundation_to_core_assurance(&project);
 }
 
 #[test]

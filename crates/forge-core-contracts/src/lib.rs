@@ -37,6 +37,7 @@ pub mod workflow_behavior;
 pub mod workflow_governance;
 pub mod workflow_migration;
 pub mod workflow_release;
+pub mod workflow_release_review;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
 pub use assurance::{
@@ -158,3 +159,4 @@ pub use workflow_release::{
     WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION, WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION,
     WORKFLOW_RETIREMENT_AUTHORIZATION_SCHEMA_VERSION,
 };
+pub use workflow_release_review::*;

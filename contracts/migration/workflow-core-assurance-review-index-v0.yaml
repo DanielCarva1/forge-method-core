@@ -1,0 +1,171 @@
+schema_version: '0.1'
+workflow_release_review_index:
+  id: workflow-release-review.core-assurance-v0
+  index_version: 0.1.0
+  authority: candidate_only
+  promotion:
+    predecessor:
+      release_id: workflow-governance.release.foundation-v0
+      release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+    candidate_release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.core-assurance-v0
+      release_version: 0.2.0
+      release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+    candidate_runtime_bundle:
+      bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+    promoted_runtime_bundle:
+      bundle_id: bundle.workflow-governance.core-assurance-v0
+      bundle_digest: sha256:2cc9477475a3d4a74470671a6a04e7ee0148bd0628426e35438338260704b531
+      policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+  release_manifest:
+    artifact_id: release-manifest.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-release-core-assurance-candidate-v0.yaml
+    raw_digest: sha256:372dc98a3b77eb5a6fe224fa7681199f73e3d88fee190539ecc6ac3abfde751c
+    canonical_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+  migration_batches:
+  - artifact_id: migration-batch.golden-path-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-golden-path-v0.yaml
+    raw_digest: sha256:3d5fb1c4ffe7d9c3bdc8f23de0a4ff046f9bef2850751d4570a5b983b8edbc80
+    canonical_digest: sha256:35877b93a73b0101aabd0e80620bfbea877d03449ed7bf70a9c50f643f19e90b
+  - artifact_id: migration-batch.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-core-assurance-v0.yaml
+    raw_digest: sha256:4e92f44a7b6eb84616f798a1fcfc0445d043ba4bcf7a7c9e4554a2f6a5fbfb9c
+    canonical_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
+  review_subjects:
+  - artifact_id: review-subject.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+    raw_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+    canonical_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+  coverage_policy:
+    artifact_id: coverage-policy.core-assurance-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+    raw_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+    canonical_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+  corpus_set:
+    artifact_id: corpus-set.core-assurance-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-corpus-set-v0.yaml
+    raw_digest: sha256:1101f74a4408a71070f699d21271ad9ac6a22d3282470cd55a62c266bbe95306
+    canonical_digest: sha256:c2895665bae80ba8b39c84290729aa713c413cbda396753bace73ebcec19ca16
+  representative_corpus:
+    artifact_id: corpus.workflow-core-assurance.representative-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-representative-v0.yaml
+    raw_digest: sha256:b9404cf7f3720acf15159017fef991b323356360267e85f95d4900f1600d9a07
+    canonical_digest: sha256:4ecfaf319f437e0ab99c8206d839c281f485a7c4d7b1f8b8f21c4c12cd94b348
+  adversarial_corpus:
+    artifact_id: corpus.workflow-core-assurance.adversarial-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-adversarial-v0.yaml
+    raw_digest: sha256:c32421f5c0eb32600e65cf209e833a623e67f6875cdd56914b1c928bdbb38065
+    canonical_digest: sha256:efa4d5668406b4ad14f39f83adca3ae0eeeac88240ce7882ed714fd7eb114473
+  shadow_report:
+    artifact_id: shadow-report.core-assurance-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-shadow-report-v0.yaml
+    raw_digest: sha256:3817570884380e37b1717777c4ca2cd709436cdd5ac56d9dadbc28dcea0f6e69
+    canonical_digest: sha256:65417b422c1519fca33d906e68e23fcc223eb4ea28a1066a30bd56d301071c0c
+  candidate_runtime_bundle:
+    artifact_id: runtime-bundle.core-assurance-candidate-v0
+    embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+    raw_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+    canonical_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+  promoted_runtime_bundle:
+    artifact_id: bundle.workflow-governance.core-assurance-v0
+    embedded_ref: contracts/workflow-governance/runtime-core-assurance-v0.yaml
+    raw_digest: sha256:1c7d697f7e34af3e56b6d0bed76707cb10550c95f2e72fd9f751ffba7c35e3d6
+    canonical_digest: sha256:2cc9477475a3d4a74470671a6a04e7ee0148bd0628426e35438338260704b531
+  predecessor_registry:
+    artifact_id: registry.foundation-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-v0.yaml
+    raw_digest: sha256:f8e556011b0d4f9450c0905661096561f2294e83fc5ec43af1a48574d5599a07
+    canonical_digest: sha256:5b57c505760dad916433f4beb447d932456ca4d5ee15adcddf0e5119e7c80104
+  proposed_registry:
+    artifact_id: workflow-governance.registry.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-core-assurance-v0.yaml
+    raw_digest: sha256:0015c2eb50c7b5b092ae9c7dd13818f1e8d6e9fd3fa11304d43c0b5be42d42a5
+    canonical_digest: sha256:df3f1cd4927f5430038842562fa17c873f45463443f5265ac7536807adbab047
+  evaluator_source:
+    artifact_id: evaluator.workflow-behavior-v0
+    embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+    raw_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    canonical_digest: sha256:ccc03d7af23ab1d19310f0d530e2b505c1ce584be8fc48f9495c9fa1e0147adb
+  frozen_history:
+    artifact_id: history.p5d2-foundation-v0
+    embedded_ref: crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson
+    raw_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+    canonical_digest: sha256:b023f3282cee6ca4d825649c6ffd897e74549c69dabbfeb7dccc7bc1737ac463
+  workflow_decisions:
+  - workflow_id: adversarial-review
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: code-review
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: nfr-evidence-audit
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: risk-register
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: traceability-gate
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  quarantine_decisions:
+  - workflow_id: edge-case-review
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: release-readiness
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: track-decision
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  dimension_decisions:
+  - dimension: status
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: eligibility
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: progression
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: completion
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: obligations
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: claims
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: decisions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: capabilities
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: issues
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: next_actions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []

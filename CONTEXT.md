@@ -174,8 +174,11 @@ Active implementation plan:
   release pinning, and adjacent CAS-bound upgrades; the audit result itself
   still cannot activate anything. P5d.3 adds a five-policy typed overlay,
   three quarantines, exact raw/canonical digest separation, and 35 recomputed
-  behavioral scenarios while keeping the registry unchanged. New-policy
-  admission and trusted retirement remain later P5d slices.
+  behavioral scenarios while keeping the registry unchanged. P5d.4a binds that
+  complete graph into distinct semantic-reviewer and release-authorizer
+  signatures, then lets only a fixed kernel loader consume the opaque verified
+  capability. The append-only third release contains 20 policies and uses
+  `invalidate_all`; remaining rollout and trusted retirement stay in P5d.4b/P5d.5.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -201,9 +204,11 @@ candidate-only scorecard; it does not activate a new release or retire legacy
 authority. P5d.2 now admits only a policy-equivalent foundation successor,
 preserves unchanged P5c ledgers, derives the active release from durable
 history, and moves it only through a crash-recoverable adjacent transition.
-P5d.3 now owns candidate-only behavioral comparison and quarantine for the
-first reviewed batch. Later P5d slices own independent new-policy admission,
-remaining-catalog rollout, and signed deletion-backed retirement. The workflow
+P5d.3 owns candidate-only behavioral comparison and quarantine for the first
+reviewed batch. P5d.4a now admits those five policies only after independent
+cryptographic review, exact evaluator recomputation, and an explicit adjacent
+project upgrade. P5d.4b and P5d.5 own remaining-catalog rollout and signed
+deletion-backed retirement. The workflow
 path targets the local agent-facing CLI; allowlist metadata does not constitute
 an end-to-end MCP workflow Adapter.
 

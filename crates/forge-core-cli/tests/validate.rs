@@ -1528,6 +1528,13 @@ fn validate_library_passes_current_repo() {
         .expect("aggregate behavioral evidence check");
     assert_eq!(behavioral_check.status, ValidationStatus::Passed);
     assert_eq!(behavioral_check.diagnostics, 0);
+    let admission_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_release_independent_admission")
+        .expect("aggregate independent admission check");
+    assert_eq!(admission_check.status, ValidationStatus::Passed);
+    assert_eq!(admission_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
@@ -1582,6 +1589,45 @@ fn assert_behavioral_check_failed(summary: &forge_core_cli::ValidateSummary, pat
         "expected behavioral diagnostic containing {path:?}, found {:?}",
         summary.diagnostics
     );
+}
+
+fn assert_independent_admission_check_failed(
+    summary: &forge_core_cli::ValidateSummary,
+    path: &str,
+) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_release_independent_admission")
+        .expect("aggregate independent admission check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected independent-admission diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+#[test]
+fn workflow_release_independent_admission_rejects_tampered_signature_bytes() {
+    const AUTH_REF: &str =
+        "contracts/migration/workflow-core-assurance-admission-authorization-v0.yaml";
+    let root = merged_validation_root("workflow-release-admission-tampered-signature");
+    let path = root.join(AUTH_REF);
+    let text = fs::read_to_string(&path).expect("read admission authorization");
+    let marker = "signature: ";
+    let offset = text.find(marker).expect("signature field") + marker.len();
+    let mut bytes = text.into_bytes();
+    bytes[offset] = if bytes[offset] == b'0' { b'1' } else { b'0' };
+    fs::write(&path, bytes).expect("tamper admission signature");
+
+    let summary = run_validate(&root);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_independent_admission_check_failed(&summary, AUTH_REF);
 }
 
 #[test]

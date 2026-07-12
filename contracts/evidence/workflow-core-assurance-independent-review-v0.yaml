@@ -1,0 +1,15 @@
+schema_version: '0.1'
+workflow_release_admission_evaluation:
+  status: ready_for_independent_authorization
+  authority: non_authoritative
+  review_index_id: workflow-release-review.core-assurance-v0
+  review_index_digest: sha256:6946907128e7221fc7bbacaf1b93e2466712981e161fce0b17a25a9d455f9f64
+  candidate_release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+  candidate_policy_count: 20
+  predecessor_policy_count: 15
+  reviewed_workflow_count: 5
+  quarantine_count: 3
+  behavioral_mismatch_count: 0
+  behavioral_evaluation_error_count: 0
+  issues: []
+  evaluation_digest: sha256:87d574cacb8eb8f7c75a3f9fb32547bc721cba8720e064ee88a93e8448e4eaad

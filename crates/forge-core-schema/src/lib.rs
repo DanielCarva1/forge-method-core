@@ -11,7 +11,9 @@ use forge_core_contracts::{
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceLedgerDocument,
     WorkflowGovernancePolicyOverlayDocument, WorkflowGovernanceReceiptDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
-    WorkflowMigrationPlanDocument, WorkflowRetirementAuthorizationDocument,
+    WorkflowMigrationPlanDocument, WorkflowReleaseAdmissionAuthorizationDocument,
+    WorkflowReleaseReviewIndexDocument, WorkflowReleaseReviewerRegistryDocument,
+    WorkflowRetirementAuthorizationDocument,
 };
 use schemars::{schema_for, JsonSchema};
 use serde::Serialize;
@@ -185,6 +187,24 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "WorkflowBehavioralShadowReportDocument",
             Some("workflow_behavioral_shadow_report"),
             "non-authoritative consistency candidate only; a shadow pass cannot grant executable, completion, retirement, or release authority",
+        ),
+        schema_artifact::<WorkflowReleaseReviewIndexDocument>(
+            "workflow_release_review_index",
+            "WorkflowReleaseReviewIndexDocument",
+            Some("workflow_release_review_index"),
+            "candidate-only independent-review index; artifact bindings and review decisions cannot admit a runtime release",
+        ),
+        schema_artifact::<WorkflowReleaseReviewerRegistryDocument>(
+            "workflow_release_reviewer_registry",
+            "WorkflowReleaseReviewerRegistryDocument",
+            Some("workflow_release_reviewer_registry"),
+            "candidate-only credential registry input; trusted status, key, role, time, and independence verification is required",
+        ),
+        schema_artifact::<WorkflowReleaseAdmissionAuthorizationDocument>(
+            "workflow_release_admission_authorization",
+            "WorkflowReleaseAdmissionAuthorizationDocument",
+            Some("workflow_release_admission_authorization"),
+            "candidate authorization envelope only; deserialization or signatures without trusted verification cannot admit runtime authority",
         ),
         schema_artifact::<WorkflowGovernanceReleaseManifestDocument>(
             "workflow_governance_release_manifest",
@@ -401,6 +421,15 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_behavioral_shadow_report" => {
             "non-authoritative shadow consistency is candidate-only; it cannot grant executable or release authority"
+        }
+        "workflow_release_review_index" => {
+            "candidate-only review index; exact artifact bindings and review decisions cannot admit runtime authority"
+        }
+        "workflow_release_reviewer_registry" => {
+            "candidate-only credential registry; trusted key, role, status, time, and independence verification is required"
+        }
+        "workflow_release_admission_authorization" => {
+            "candidate authorization only; trusted cryptographic and semantic verification is required before admission"
         }
         "workflow_governance_release_manifest" => {
             "manifest entries are rollout intent only; executable and retired states require trusted derived admission"

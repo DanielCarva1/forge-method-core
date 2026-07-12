@@ -150,6 +150,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manifest/runtime bytes, and reject fork, reorder, drift, or missing history.
   A frozen real P5d.2 upgraded WAL proves predecessor pins and record digests
   survive future repository evolution.
+- **P5d.4a independent review and first new-policy admission.** A closed Review
+  Index binds raw and canonical identities for the complete P5d.3 evidence
+  graph, candidate and promoted bundles, predecessor/expanded registries,
+  evaluator source, and frozen WAL. The pure evaluator recomputes the 35
+  scenarios and derives only `ready_for_independent_authorization` with
+  `non_authoritative` authority.
+- A fixed reviewer registry and domain-separated Ed25519 payload require
+  distinct semantic-reviewer and release-authorizer principals, credentials,
+  public keys, and signatures. Revoked/out-of-window credentials, wrong
+  audience/domain/key, duplicate identity, blocking findings, and artifact or
+  promotion transplant fail closed. Private keys are absent from the repository.
+- The kernel consumes a non-cloneable/non-deserializable verified capability to
+  admit only the exact append-only third release. Its final bundle contains 20
+  policies, preserves all P5d.2 history, excludes all three quarantines, and
+  requires the explicit foundation-to-core-assurance CAS-bound upgrade with
+  `invalidate_all` receipt semantics. Kernel and real CLI E2E tests prove
+  replacement-agent resume, prepared-authority invalidation, receipt-window
+  reset, idempotency, and no direct genesis skip.
 - Existing P5c ledgers remain byte-compatible and resolve to an implicit legacy
   release even when a newer binary is installed. A typed `release_upgraded`
   event remains source-enveloped, binds exact source/target release and policy

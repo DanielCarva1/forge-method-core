@@ -17,7 +17,7 @@ use forge_core_contracts::{
     WorkflowContentAddressedReference, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
     WorkflowEvidenceOutcome, WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvent, WorkflowGovernancePolicy,
-    WorkflowGovernanceSignal,
+    WorkflowGovernanceSignal, WorkflowReceiptCarryover,
 };
 use forge_core_decisions::WorkflowClaimResultStatus;
 use forge_core_kernel::{
@@ -781,6 +781,94 @@ fn release_upgrade_invalidates_prepared_completion_authority() {
         .expect("prepared under P5c release");
 
     upgrade_to_foundation(&fixture);
+    assert!(matches!(
+        fixture.adapter.consume_completion(
+            prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift)
+    ));
+}
+
+#[test]
+fn core_assurance_upgrade_invalidates_receipts_and_foundation_prepared_authority() {
+    let fixture = SignedFixture::new("core-assurance-upgrade-invalidation");
+    let document = bundle();
+    let genesis = fixture.adapter.next().expect("genesis guidance");
+    let policy = selected_policy(&document, &genesis);
+    let request = evidence_request(&genesis, policy, &policy.claims[0].id, 0);
+    fixture
+        .adapter
+        .record_authorized_evidence(fixture.evidence(request))
+        .expect("signed evidence under P5c");
+    assert_eq!(
+        fixture.adapter.next().expect("P5c ready").status,
+        WorkflowGovernanceGuidanceStatus::ReadyToComplete
+    );
+
+    upgrade_to_foundation(&fixture);
+    assert_eq!(
+        fixture.adapter.next().expect("foundation carryover").status,
+        WorkflowGovernanceGuidanceStatus::ReadyToComplete,
+        "policy-equivalent foundation preserves the exact receipt window"
+    );
+    let prepared = fixture
+        .adapter
+        .prepare_completion()
+        .expect("prepared under foundation");
+    let foundation = fixture.adapter.release_status().expect("foundation status");
+    let target = foundation
+        .available_successor
+        .clone()
+        .expect("reviewed core-assurance successor");
+    assert_eq!(
+        target.release_id.0,
+        "workflow-governance.release.core-assurance-v0"
+    );
+    let receipt = fixture
+        .adapter
+        .release_upgrade(
+            &target.release_id,
+            &foundation.active.release.release_digest,
+            &foundation.ledger_head_digest,
+            &foundation.snapshot_digest,
+        )
+        .expect("core-assurance upgrade");
+    let WorkflowGovernanceEvent::ReleaseUpgraded(transition) = &receipt
+        .transition_record
+        .as_ref()
+        .expect("core-assurance transition record")
+        .event
+    else {
+        panic!("expected release-upgraded event");
+    };
+    assert_eq!(
+        transition.receipt_carryover,
+        WorkflowReceiptCarryover::InvalidateAll
+    );
+    assert_eq!(receipt.active.release, target);
+
+    let resumed = fixture.adapter.resume().expect("replacement-agent resume");
+    assert_eq!(resumed.release.release, target);
+    assert!(fixture
+        .adapter
+        .release_status()
+        .expect("core-assurance status")
+        .available_successor
+        .is_none());
+    let invalidated = fixture.adapter.next().expect("invalidated guidance");
+    assert_ne!(
+        invalidated.status,
+        WorkflowGovernanceGuidanceStatus::ReadyToComplete
+    );
+    assert!(invalidated
+        .simulation
+        .candidate_claim_results
+        .iter()
+        .all(|result| !matches!(
+            result.status,
+            WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+        )));
     assert!(matches!(
         fixture.adapter.consume_completion(
             prepared,

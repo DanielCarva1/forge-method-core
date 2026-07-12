@@ -39,6 +39,9 @@ jobs:
       - name: Check generated core assurance candidate release
         run: cargo run -p forge-core-decisions --example generate_workflow_core_assurance_candidate -- --check
 
+      - name: Check generated independently reviewed admission
+        run: cargo run -p forge-core-decisions --example generate_workflow_core_assurance_admission -- --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -51,11 +54,11 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchor (137 clean checks)
+      - name: Regression anchor (139 clean checks)
         run: |
           count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
-          echo "Anchor count: $count (expected 137)"
-          test "$count" = "137"
+          echo "Anchor count: $count (expected 139)"
+          test "$count" = "139"
 
   platform:
     name: ${{ matrix.os }} cargo all-targets
