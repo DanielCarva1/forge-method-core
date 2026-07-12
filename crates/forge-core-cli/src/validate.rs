@@ -10,10 +10,12 @@
 
 use crate::cli_error::ExitError;
 use crate::cli_util::command_surface_usage;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use tracing::instrument;
 
@@ -24,13 +26,21 @@ use forge_core_contracts::{
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
-    ToolEffectContractDocument, WorkflowGovernanceBundleDocument,
+    ToolEffectContractDocument, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusClass,
+    WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
+    WorkflowBehavioralDisposition, WorkflowBehavioralReviewSubjectDocument,
+    WorkflowBehavioralScenarioCorpusDocument, WorkflowBehavioralScenarioExecution,
+    WorkflowBehavioralShadowReportDocument, WorkflowBehavioralVerdict,
+    WorkflowGovernanceBundleDocument, WorkflowGovernancePolicyOverlayDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
     WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument,
+    WorkflowReleaseDispositionIntent,
 };
 use forge_core_decisions::{
-    evaluate_workflow_migration, evaluate_workflow_release, evaluate_workflow_release_registry,
-    load_catalog, load_workflow_documents, validate_workflow_governance_bundle,
+    evaluate_workflow_behavior, evaluate_workflow_migration, evaluate_workflow_release,
+    evaluate_workflow_release_registry, load_catalog, load_workflow_documents,
+    validate_workflow_governance_bundle, workflow_runtime_bundle_digest,
+    WorkflowBehavioralBundleInput, WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity,
     WorkflowGovernanceIssue, WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority,
     WorkflowReleaseEvaluationStatus, WorkflowReleaseEvidenceAssurance,
     WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
@@ -303,6 +313,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_governance_contracts(root, &mut summary);
         validate_workflow_release_foundation(root, &mut summary);
         validate_workflow_release_registry(root, &mut summary);
+        validate_workflow_behavioral_evidence(root, &mut summary);
     }
 
     summary.finish();
@@ -642,6 +653,678 @@ fn workflow_release_registry_validation_report(root: &Path) -> ValidationReport 
         ));
     }
     report
+}
+
+const WORKFLOW_BEHAVIOR_SPEC_REF: &str = "contracts/spec/workflow-behavioral-evidence-v0.yaml";
+const WORKFLOW_BEHAVIOR_OVERLAY_REF: &str =
+    "contracts/policies/workflow-core-assurance-overlay-v0.yaml";
+const WORKFLOW_BEHAVIOR_REVIEW_SUBJECT_REF: &str =
+    "contracts/migration/workflow-core-assurance-review-subject-v0.yaml";
+const WORKFLOW_BEHAVIOR_COVERAGE_REF: &str =
+    "contracts/policies/workflow-behavioral-coverage-v0.yaml";
+const WORKFLOW_BEHAVIOR_CORPUS_SET_REF: &str =
+    "contracts/evidence/workflow-core-assurance-corpus-set-v0.yaml";
+const WORKFLOW_BEHAVIOR_REPRESENTATIVE_REF: &str =
+    "contracts/evidence/workflow-core-assurance-representative-v0.yaml";
+const WORKFLOW_BEHAVIOR_ADVERSARIAL_REF: &str =
+    "contracts/evidence/workflow-core-assurance-adversarial-v0.yaml";
+const WORKFLOW_BEHAVIOR_REPORT_REF: &str =
+    "contracts/evidence/workflow-core-assurance-shadow-report-v0.yaml";
+const WORKFLOW_BEHAVIOR_CANDIDATE_BUNDLE_REF: &str =
+    "contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml";
+const WORKFLOW_BEHAVIOR_CANDIDATE_BATCH_REF: &str =
+    "contracts/migration/workflow-governance-batch-core-assurance-v0.yaml";
+const WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF: &str =
+    "contracts/migration/workflow-governance-release-core-assurance-candidate-v0.yaml";
+const WORKFLOW_BEHAVIOR_REPORT_ID: &str = "report.workflow-core-assurance.shadow-v0";
+const WORKFLOW_BEHAVIOR_REPORT_VERSION: &str = "0.1.0";
+
+const WORKFLOW_BEHAVIOR_ABLATED_BUNDLE_REFS: [&str; 5] = [
+    "contracts/workflow-governance/ablated-core-assurance-adversarial-review-v0.yaml",
+    "contracts/workflow-governance/ablated-core-assurance-code-review-v0.yaml",
+    "contracts/workflow-governance/ablated-core-assurance-nfr-evidence-audit-v0.yaml",
+    "contracts/workflow-governance/ablated-core-assurance-risk-register-v0.yaml",
+    "contracts/workflow-governance/ablated-core-assurance-traceability-gate-v0.yaml",
+];
+
+fn validate_workflow_behavioral_evidence(root: &Path, summary: &mut ValidateSummary) {
+    summary.add_report(
+        "workflow_behavioral_evidence_candidate",
+        workflow_behavioral_evidence_validation_report(root),
+    );
+}
+
+#[allow(clippy::too_many_lines)]
+fn workflow_behavioral_evidence_validation_report(root: &Path) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    let Some((spec, _)) =
+        read_behavioral_yaml::<serde_json::Value>(root, WORKFLOW_BEHAVIOR_SPEC_REF, &mut report)
+    else {
+        return report;
+    };
+    let spec_status = spec.get("status").and_then(serde_json::Value::as_str);
+    if spec.get("spec").and_then(serde_json::Value::as_str)
+        != Some("workflow_behavioral_evidence_v0")
+        || !matches!(spec_status, Some("p5d_3_in_progress" | "p5d_3_implemented"))
+    {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_BEHAVIOR_SPEC_REF,
+            "P5d.3 behavioral spec identity/status must remain the closed workflow_behavioral_evidence_v0 lifecycle",
+        );
+    }
+
+    let Some((overlay, overlay_bytes)) = read_behavioral_yaml::<
+        WorkflowGovernancePolicyOverlayDocument,
+    >(root, WORKFLOW_BEHAVIOR_OVERLAY_REF, &mut report) else {
+        return report;
+    };
+    let Some((review_subject, review_subject_bytes)) =
+        read_behavioral_yaml::<WorkflowBehavioralReviewSubjectDocument>(
+            root,
+            WORKFLOW_BEHAVIOR_REVIEW_SUBJECT_REF,
+            &mut report,
+        )
+    else {
+        return report;
+    };
+    push_behavioral_contract_issues(
+        &mut report,
+        WORKFLOW_BEHAVIOR_REVIEW_SUBJECT_REF,
+        review_subject.validate(),
+    );
+    let Some((coverage, coverage_bytes)) = read_behavioral_yaml::<
+        WorkflowBehavioralCoveragePolicyDocument,
+    >(root, WORKFLOW_BEHAVIOR_COVERAGE_REF, &mut report) else {
+        return report;
+    };
+    push_behavioral_contract_issues(
+        &mut report,
+        WORKFLOW_BEHAVIOR_COVERAGE_REF,
+        coverage.validate(),
+    );
+    let Some((corpus_set, corpus_set_bytes)) =
+        read_behavioral_yaml::<WorkflowBehavioralCorpusSetDocument>(
+            root,
+            WORKFLOW_BEHAVIOR_CORPUS_SET_REF,
+            &mut report,
+        )
+    else {
+        return report;
+    };
+    push_behavioral_contract_issues(
+        &mut report,
+        WORKFLOW_BEHAVIOR_CORPUS_SET_REF,
+        corpus_set.validate(),
+    );
+
+    let mut corpus_documents = Vec::new();
+    for repo_ref in [
+        WORKFLOW_BEHAVIOR_REPRESENTATIVE_REF,
+        WORKFLOW_BEHAVIOR_ADVERSARIAL_REF,
+    ] {
+        let Some((document, bytes)) = read_behavioral_yaml::<
+            WorkflowBehavioralScenarioCorpusDocument,
+        >(root, repo_ref, &mut report) else {
+            return report;
+        };
+        push_behavioral_contract_issues(&mut report, repo_ref, document.validate());
+        corpus_documents.push((repo_ref, document, bytes));
+    }
+    if corpus_documents[0]
+        .1
+        .workflow_behavioral_scenario_corpus
+        .partition_class
+        != WorkflowBehavioralCorpusClass::Representative
+        || corpus_documents[1]
+            .1
+            .workflow_behavioral_scenario_corpus
+            .partition_class
+            != WorkflowBehavioralCorpusClass::Adversarial
+    {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_BEHAVIOR_CORPUS_SET_REF,
+            "corpus set must contain representative then adversarial partitions",
+        );
+    }
+
+    let Some((checked_report, checked_report_bytes)) =
+        read_behavioral_yaml::<WorkflowBehavioralShadowReportDocument>(
+            root,
+            WORKFLOW_BEHAVIOR_REPORT_REF,
+            &mut report,
+        )
+    else {
+        return report;
+    };
+    push_behavioral_contract_issues(
+        &mut report,
+        WORKFLOW_BEHAVIOR_REPORT_REF,
+        checked_report.validate(),
+    );
+
+    let mut bundle_sources = Vec::new();
+    for repo_ref in std::iter::once(WORKFLOW_BEHAVIOR_CANDIDATE_BUNDLE_REF)
+        .chain(WORKFLOW_BEHAVIOR_ABLATED_BUNDLE_REFS)
+    {
+        let Some((bundle, bytes)) =
+            read_behavioral_yaml::<WorkflowGovernanceBundleDocument>(root, repo_ref, &mut report)
+        else {
+            return report;
+        };
+        for issue in validate_workflow_governance_bundle(&bundle) {
+            behavioral_error(
+                &mut report,
+                format!("{repo_ref}.{}", issue.path),
+                format!("workflow bundle {:?}: {}", issue.code, issue.message),
+            );
+        }
+        bundle_sources.push((repo_ref, bundle, bytes));
+    }
+
+    let Some((candidate_batch, candidate_batch_bytes)) =
+        read_behavioral_yaml::<WorkflowMigrationBatchDocument>(
+            root,
+            WORKFLOW_BEHAVIOR_CANDIDATE_BATCH_REF,
+            &mut report,
+        )
+    else {
+        return report;
+    };
+    let Some((candidate_manifest, candidate_manifest_bytes)) =
+        read_behavioral_yaml::<WorkflowGovernanceReleaseManifestDocument>(
+            root,
+            WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF,
+            &mut report,
+        )
+    else {
+        return report;
+    };
+
+    validate_behavioral_candidate_composition(
+        &overlay,
+        &review_subject,
+        &bundle_sources[0].1,
+        &candidate_batch,
+        &candidate_manifest,
+        &mut report,
+    );
+
+    let mut source_bytes = HashMap::new();
+    for (repo_ref, bytes) in [
+        (WORKFLOW_BEHAVIOR_OVERLAY_REF, overlay_bytes),
+        (WORKFLOW_BEHAVIOR_REVIEW_SUBJECT_REF, review_subject_bytes),
+        (WORKFLOW_BEHAVIOR_COVERAGE_REF, coverage_bytes.clone()),
+        (WORKFLOW_BEHAVIOR_CORPUS_SET_REF, corpus_set_bytes.clone()),
+        (WORKFLOW_BEHAVIOR_REPORT_REF, checked_report_bytes),
+        (WORKFLOW_BEHAVIOR_CANDIDATE_BATCH_REF, candidate_batch_bytes),
+        (
+            WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF,
+            candidate_manifest_bytes,
+        ),
+    ] {
+        source_bytes.insert(forge_core_contracts::RepoPath(repo_ref.to_owned()), bytes);
+    }
+    for (repo_ref, _, bytes) in &corpus_documents {
+        source_bytes.insert(
+            forge_core_contracts::RepoPath((*repo_ref).to_owned()),
+            bytes.clone(),
+        );
+    }
+    for (repo_ref, _, bytes) in &bundle_sources {
+        source_bytes.insert(
+            forge_core_contracts::RepoPath((*repo_ref).to_owned()),
+            bytes.clone(),
+        );
+    }
+    let mut referenced_paths = BTreeMap::<String, BTreeSet<String>>::new();
+    let baseline_history = &review_subject
+        .workflow_behavioral_review_subject
+        .baseline_history;
+    referenced_paths
+        .entry(baseline_history.embedded_ref.0.clone())
+        .or_default()
+        .insert(baseline_history.expected_digest.clone());
+    for (_, corpus, _) in &corpus_documents {
+        for workflow in &corpus.workflow_behavioral_scenario_corpus.workflow_evidence {
+            for source in &workflow.bindings.raw_sources {
+                referenced_paths
+                    .entry(source.embedded_ref.0.clone())
+                    .or_default()
+                    .insert(source.expected_digest.clone());
+            }
+            for scenario in &workflow.scenarios {
+                if let WorkflowBehavioralScenarioExecution::Resume {
+                    checkpoint_source, ..
+                } = &scenario.execution
+                {
+                    referenced_paths
+                        .entry(checkpoint_source.embedded_ref.0.clone())
+                        .or_default()
+                        .insert(checkpoint_source.expected_digest.clone());
+                }
+            }
+        }
+    }
+    for (path, expected_digests) in referenced_paths {
+        let path = forge_core_contracts::RepoPath(path);
+        if !source_bytes.contains_key(&path) {
+            match fs::read(root.join(&path.0)) {
+                Ok(bytes) => {
+                    source_bytes.insert(path.clone(), bytes);
+                }
+                Err(error) => {
+                    behavioral_error(
+                        &mut report,
+                        &path.0,
+                        format!("behavioral source bytes are missing: {error}"),
+                    );
+                    continue;
+                }
+            }
+        }
+        let found = behavior_sha256(&source_bytes[&path]);
+        if expected_digests.len() != 1 || !expected_digests.contains(&found) {
+            behavioral_error(
+                &mut report,
+                &path.0,
+                format!(
+                    "behavioral raw-source digest drift: expected {expected_digests:?}, found {found}"
+                ),
+            );
+        }
+    }
+
+    let corpus_artifacts = corpus_set.workflow_behavioral_corpus_set.corpora.clone();
+    let corpora = corpus_documents
+        .into_iter()
+        .filter_map(|(repo_ref, document, _)| {
+            corpus_artifacts
+                .iter()
+                .find(|artifact| artifact.embedded_ref.0 == repo_ref)
+                .cloned()
+                .map(|artifact| WorkflowBehavioralCorpusInput { artifact, document })
+        })
+        .collect::<Vec<_>>();
+    if corpora.len() != 2 {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_BEHAVIOR_CORPUS_SET_REF,
+            "corpus set must bind exactly the two checked-in corpus partitions",
+        );
+    }
+
+    let mut bundles_by_digest = BTreeMap::new();
+    for (repo_ref, document, bytes) in bundle_sources {
+        let artifact = WorkflowBehavioralArtifactReference {
+            id: document.workflow_governance_bundle.id.clone(),
+            embedded_ref: forge_core_contracts::RepoPath(repo_ref.to_owned()),
+            expected_digest: behavior_sha256(&bytes),
+        };
+        let canonical = match workflow_runtime_bundle_digest(&document) {
+            Ok(digest) => digest,
+            Err(error) => {
+                behavioral_error(&mut report, repo_ref, error);
+                continue;
+            }
+        };
+        if bundles_by_digest
+            .insert(
+                canonical,
+                WorkflowBehavioralBundleInput { artifact, document },
+            )
+            .is_some()
+        {
+            behavioral_error(&mut report, repo_ref, "duplicate canonical bundle digest");
+        }
+    }
+
+    let coverage_artifact = WorkflowBehavioralArtifactReference {
+        id: coverage.workflow_behavioral_coverage_policy.id.clone(),
+        embedded_ref: forge_core_contracts::RepoPath(WORKFLOW_BEHAVIOR_COVERAGE_REF.to_owned()),
+        expected_digest: behavior_sha256(&coverage_bytes),
+    };
+    let corpus_set_artifact = WorkflowBehavioralArtifactReference {
+        id: corpus_set.workflow_behavioral_corpus_set.id.clone(),
+        embedded_ref: forge_core_contracts::RepoPath(WORKFLOW_BEHAVIOR_CORPUS_SET_REF.to_owned()),
+        expected_digest: behavior_sha256(&corpus_set_bytes),
+    };
+    let identity = WorkflowBehavioralReportIdentity {
+        report_id: forge_core_contracts::StableId(WORKFLOW_BEHAVIOR_REPORT_ID.to_owned()),
+        report_version: WORKFLOW_BEHAVIOR_REPORT_VERSION.to_owned(),
+        corpus_set: corpus_set_artifact,
+        coverage_policy: coverage_artifact,
+    };
+    let derived = evaluate_workflow_behavior(
+        &identity,
+        &coverage,
+        &corpus_set,
+        &review_subject,
+        &corpora,
+        &bundles_by_digest,
+        &source_bytes,
+    );
+    if derived != checked_report {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_BEHAVIOR_REPORT_REF,
+            "checked-in shadow report does not exactly equal deterministic recomputation",
+        );
+    }
+    validate_behavioral_report_baseline(&derived, &mut report);
+    validate_behavioral_candidate_release(root, &candidate_manifest, &candidate_batch, &mut report);
+    validate_candidate_absent_from_admission(root, &review_subject, &mut report);
+    report
+}
+
+fn validate_behavioral_report_baseline(
+    document: &WorkflowBehavioralShadowReportDocument,
+    report: &mut ValidationReport,
+) {
+    let shadow = &document.workflow_behavioral_shadow_report;
+    if shadow.verdict != WorkflowBehavioralVerdict::BehaviorallyConsistentCandidate
+        || shadow.disposition != WorkflowBehavioralDisposition::ReviewCandidate
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_REPORT_REF,
+            "derived behavioral evidence must remain behaviorally_consistent_candidate/review_candidate without gaining authority",
+        );
+    }
+    if shadow.workflow_reports.len() != 5 {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_REPORT_REF,
+            format!(
+                "behavioral report must cover exactly five workflows, found {}",
+                shadow.workflow_reports.len()
+            ),
+        );
+    }
+    for workflow in &shadow.workflow_reports {
+        let complete_kinds = workflow.scenario_kind_counts.len() == 7
+            && workflow
+                .scenario_kind_counts
+                .iter()
+                .all(|count| count.count == 1);
+        if workflow.total_scenarios != 7
+            || workflow.representative_scenarios != 2
+            || workflow.adversarial_scenarios != 5
+            || workflow.coverage_basis_points != 10_000
+            || workflow.mismatch_count != 0
+            || workflow.evaluation_error_count != 0
+            || !complete_kinds
+        {
+            behavioral_error(
+                report,
+                format!(
+                    "{WORKFLOW_BEHAVIOR_REPORT_REF}.{}",
+                    workflow.bindings.workflow_id.0
+                ),
+                "workflow must retain seven kinds, representative=2, adversarial=5, full coverage, zero mismatches, and zero errors",
+            );
+        }
+    }
+}
+
+fn validate_behavioral_candidate_composition(
+    overlay: &WorkflowGovernancePolicyOverlayDocument,
+    review: &WorkflowBehavioralReviewSubjectDocument,
+    candidate_bundle: &WorkflowGovernanceBundleDocument,
+    batch: &WorkflowMigrationBatchDocument,
+    manifest: &WorkflowGovernanceReleaseManifestDocument,
+    report: &mut ValidationReport,
+) {
+    let subject = &review.workflow_behavioral_review_subject;
+    let candidate_ids = subject
+        .candidate_workflows
+        .iter()
+        .map(|candidate| &candidate.workflow_id)
+        .collect::<BTreeSet<_>>();
+    let quarantine_ids = subject
+        .quarantines
+        .iter()
+        .map(|quarantine| &quarantine.workflow_id)
+        .collect::<BTreeSet<_>>();
+    if candidate_ids.len() != 5 || quarantine_ids.len() != 3 {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_REVIEW_SUBJECT_REF,
+            "review subject must contain exactly five candidates and three quarantines",
+        );
+    }
+    let overlay_policies = &overlay.workflow_governance_policy_overlay.policies;
+    if overlay_policies.len() != 5
+        || overlay_policies.iter().any(|policy| {
+            !candidate_ids.contains(&policy.compatibility_workflow_id)
+                || quarantine_ids.contains(&policy.compatibility_workflow_id)
+        })
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_OVERLAY_REF,
+            "overlay must contain only the five reviewed candidate policies",
+        );
+    }
+    let bundle_policies = &candidate_bundle.workflow_governance_bundle.policies;
+    let policy_ids = bundle_policies
+        .iter()
+        .map(|policy| &policy.id)
+        .collect::<BTreeSet<_>>();
+    if bundle_policies.len() != 20
+        || bundle_policies
+            .iter()
+            .any(|policy| quarantine_ids.contains(&policy.compatibility_workflow_id))
+        || bundle_policies.iter().any(|policy| {
+            policy
+                .prerequisites
+                .iter()
+                .any(|prerequisite| !policy_ids.contains(&prerequisite.policy_ref))
+        })
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_CANDIDATE_BUNDLE_REF,
+            "candidate bundle must contain 20 closed policies with no quarantine policy/prerequisite leak",
+        );
+    }
+    let candidate_batch = &batch.workflow_migration_batch;
+    if candidate_batch.workflow_bindings.len() != 5
+        || candidate_batch.policies.len() != 5
+        || candidate_batch
+            .workflow_bindings
+            .iter()
+            .any(|binding| quarantine_ids.contains(&binding.workflow_id))
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_CANDIDATE_BATCH_REF,
+            "candidate batch must bind exactly five reviewed policies and no quarantine",
+        );
+    }
+    let manifest_quarantines = manifest
+        .workflow_governance_release_manifest
+        .workflow_entries
+        .iter()
+        .filter_map(|entry| {
+            matches!(
+                entry.disposition_intent,
+                WorkflowReleaseDispositionIntent::Quarantined { .. }
+            )
+            .then_some(&entry.workflow_id)
+        })
+        .collect::<BTreeSet<_>>();
+    if manifest_quarantines != quarantine_ids {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF,
+            "manifest quarantine set must exactly equal the review subject and cannot satisfy routing/readiness/completion",
+        );
+    }
+}
+
+fn validate_behavioral_candidate_release(
+    root: &Path,
+    manifest: &WorkflowGovernanceReleaseManifestDocument,
+    candidate_batch: &WorkflowMigrationBatchDocument,
+    report: &mut ValidationReport,
+) {
+    let counts = manifest
+        .workflow_governance_release_manifest
+        .workflow_entries
+        .iter()
+        .fold([0_usize; 5], |mut counts, entry| {
+            let index = match entry.disposition_intent {
+                WorkflowReleaseDispositionIntent::MigrationCandidate { .. } => 0,
+                WorkflowReleaseDispositionIntent::CompatibilityOnly { .. } => 1,
+                WorkflowReleaseDispositionIntent::Quarantined { .. } => 2,
+                WorkflowReleaseDispositionIntent::DomainPackCandidate { .. } => 3,
+                WorkflowReleaseDispositionIntent::RetirementCandidate { .. } => 4,
+            };
+            counts[index] += 1;
+            counts
+        });
+    if counts != [20, 69, 3, 18, 0] {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF,
+            format!("candidate disposition counts must be 20/69/3/18/0=110, found {counts:?}"),
+        );
+    }
+    let Some(golden_batch) = read_release_yaml::<WorkflowMigrationBatchDocument>(
+        root,
+        WORKFLOW_RELEASE_FOUNDATION_BATCH_REF,
+        report,
+    ) else {
+        return;
+    };
+    let Some(plan) = read_release_yaml::<WorkflowMigrationPlanDocument>(
+        root,
+        WORKFLOW_MIGRATION_PLAN_REF,
+        report,
+    ) else {
+        return;
+    };
+    let workflows = load_workflow_documents(&root.join("contracts/workflows"));
+    let catalog = load_catalog(&root.join("contracts/workflows"));
+    if !workflows.is_clean() || !catalog.is_clean() {
+        behavioral_error(
+            report,
+            "contracts/workflows",
+            "candidate release requires a clean legacy workflow catalog",
+        );
+        return;
+    }
+    let migration = evaluate_workflow_migration(&plan, &workflows.workflows, &catalog.catalog);
+    let evaluation = evaluate_workflow_release(
+        manifest,
+        &[golden_batch, candidate_batch.clone()],
+        &migration,
+        &workflows.workflows,
+    );
+    for issue in evaluation.issues {
+        behavioral_error(
+            report,
+            issue.path,
+            format!("candidate release {:?}: {}", issue.code, issue.message),
+        );
+    }
+    if evaluation.authority != WorkflowReleaseEvaluationAuthority::CandidateOnly
+        || evaluation.status != WorkflowReleaseEvaluationStatus::StructurallyValid
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_BEHAVIOR_CANDIDATE_MANIFEST_REF,
+            "candidate release must be structurally valid while remaining candidate_only",
+        );
+    }
+}
+
+fn validate_candidate_absent_from_admission(
+    root: &Path,
+    review: &WorkflowBehavioralReviewSubjectDocument,
+    report: &mut ValidationReport,
+) {
+    let Some(registry) = read_release_yaml::<WorkflowGovernanceReleaseRegistryDocument>(
+        root,
+        WORKFLOW_RELEASE_REGISTRY_REF,
+        report,
+    ) else {
+        return;
+    };
+    let subject = &review.workflow_behavioral_review_subject;
+    if registry
+        .workflow_governance_release_registry
+        .releases
+        .iter()
+        .any(|entry| {
+            entry.release.release_id == subject.proposed_release.release_id
+                || entry.runtime_bundle.identity.bundle_id == subject.runtime_bundle.bundle_id
+        })
+    {
+        behavioral_error(
+            report,
+            WORKFLOW_RELEASE_REGISTRY_REF,
+            "P5d.3 candidate must remain absent from the P5d.2 admitted registry",
+        );
+    }
+}
+
+fn read_behavioral_yaml<T: serde::de::DeserializeOwned>(
+    root: &Path,
+    repo_ref: &str,
+    report: &mut ValidationReport,
+) -> Option<(T, Vec<u8>)> {
+    let bytes = match fs::read(root.join(repo_ref)) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                repo_ref,
+                error.to_string(),
+            ));
+            return None;
+        }
+    };
+    match yaml_serde::from_slice(&bytes) {
+        Ok(document) => Some((document, bytes)),
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
+                repo_ref,
+                error.to_string(),
+            ));
+            None
+        }
+    }
+}
+
+fn behavior_sha256(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("sha256:{digest:x}")
+}
+
+fn push_behavioral_contract_issues(
+    report: &mut ValidationReport,
+    repo_ref: &str,
+    issues: Vec<forge_core_contracts::WorkflowBehavioralContractIssue>,
+) {
+    for issue in issues {
+        behavioral_error(report, format!("{repo_ref}.{}", issue.path), issue.message);
+    }
+}
+
+fn behavioral_error(
+    report: &mut ValidationReport,
+    path: impl Into<String>,
+    message: impl Into<String>,
+) {
+    report.push(Diagnostic::error(
+        DiagnosticCode::WorkflowGovernanceInvalid,
+        path,
+        message,
+    ));
 }
 
 fn read_canonical_release_yaml<T>(

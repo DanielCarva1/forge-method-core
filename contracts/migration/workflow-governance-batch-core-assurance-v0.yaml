@@ -1,0 +1,645 @@
+schema_version: '0.1'
+workflow_migration_batch:
+  id: workflow-governance.batch.core-assurance-v0
+  batch_version: 0.2.0
+  authority: candidate_only
+  source_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  previous_batch_digest: sha256:35877b93a73b0101aabd0e80620bfbea877d03449ed7bf70a9c50f643f19e90b
+  evidence:
+    representative_fixtures:
+    - embedded_ref: contracts/evidence/workflow-core-assurance-representative-v0.yaml
+      expected_digest: sha256:b9404cf7f3720acf15159017fef991b323356360267e85f95d4900f1600d9a07
+    adversarial_fixtures:
+    - embedded_ref: contracts/evidence/workflow-core-assurance-adversarial-v0.yaml
+      expected_digest: sha256:c32421f5c0eb32600e65cf209e833a623e67f6875cdd56914b1c928bdbb38065
+    shadow_reports:
+    - embedded_ref: contracts/evidence/workflow-core-assurance-shadow-report-v0.yaml
+      expected_digest: sha256:3817570884380e37b1717777c4ca2cd709436cdd5ac56d9dadbc28dcea0f6e69
+  workflow_bindings:
+  - workflow_id: adversarial-review
+    legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+    policy_ref: policy.workflow.adversarial-review
+  - workflow_id: code-review
+    legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+    policy_ref: policy.workflow.code-review
+  - workflow_id: nfr-evidence-audit
+    legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+    policy_ref: policy.workflow.nfr-evidence-audit
+  - workflow_id: risk-register
+    legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+    policy_ref: policy.workflow.risk-register
+  - workflow_id: traceability-gate
+    legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+    policy_ref: policy.workflow.traceability-gate
+  policies:
+  - id: policy.workflow.adversarial-review
+    compatibility_workflow_id: adversarial-review
+    routing:
+      priority: 30
+      readiness_target: execute
+      activation: on_signal
+      signals:
+      - adversarial_review_requested
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.adversarial-review.scope-bounded
+      description: The challenged artifact, success criteria, assumptions, constraints, and risk boundary are explicit.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.adversarial-review.scope-bounded
+    - id: obligation.workflow.adversarial-review.assumptions-challenged
+      description: An independent review challenges the material assumptions and strongest failure paths.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.adversarial-review.assumptions-challenged
+    - id: obligation.workflow.adversarial-review.findings-dispositioned
+      description: High-impact findings have an evidenced repair, authorized acceptance, deferral, or rejection disposition.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.adversarial-review.findings-dispositioned
+    claims:
+    - id: claim.workflow.adversarial-review.scope-bounded
+      statement: The review scope and attack criteria are concrete enough to falsify material claims.
+      evaluator_ref: evaluator.workflow.adversarial-review.scope-inspection
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.adversarial-review.assumptions-challenged
+      statement: A principal independent from the author challenged material assumptions, misuse cases, and failure paths.
+      evaluator_ref: evaluator.workflow.adversarial-review.independent-review
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.adversarial-review.findings-dispositioned
+      statement: Every high-impact finding has an explicit risk-aware disposition and owner.
+      evaluator_ref: evaluator.workflow.adversarial-review.disposition-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.adversarial-review.scope-inspection
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.adversarial-review.independent-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.adversarial-review.disposition-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.adversarial-review.independent-reviewer
+      kind: evaluator
+      probe_kind: static_registry
+      description: A reviewer independent from the artifact author can challenge material assumptions.
+      affected_claim_refs:
+      - claim.workflow.adversarial-review.assumptions-challenged
+      - claim.workflow.adversarial-review.findings-dispositioned
+      resolution_options:
+      - Acquire an independent reviewer with the required scope.
+      - Defer commitment until independent review is available.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.adversarial-review.high-impact-risk
+      activation: claim_unresolved
+      claim_ref: claim.workflow.adversarial-review.findings-dispositioned
+      question: Which governed disposition should apply to the unresolved high-impact finding?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.adversarial.repair
+        description: Repair the affected artifact and repeat the review.
+        consequences:
+        - Reduces known risk before commitment.
+      - id: alternative.adversarial.more-evidence
+        description: Produce stronger evidence before choosing a disposition.
+        consequences:
+        - Defers commitment while uncertainty is reduced.
+      - id: alternative.adversarial.authorized-acceptance
+        description: Seek explicit acceptance from the required authority.
+        consequences:
+        - Preserves residual risk with accountable ownership.
+      - id: alternative.adversarial.reject-or-defer
+        description: Reject or defer the affected promise.
+        consequences:
+        - Prevents an unsupported commitment.
+      recommended_alternative_ref: alternative.adversarial.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.adversarial-review
+      steps:
+      - Bound the artifact, success criteria, assumptions, constraints, risk tolerance, and owner.
+      - Attack high-impact failure paths and preserve findings with evidence and dispositions.
+  - id: policy.workflow.code-review
+    compatibility_workflow_id: code-review
+    routing:
+      priority: 195
+      readiness_target: release
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    - 6-evolve
+    prerequisites:
+    - policy_ref: policy.workflow.build-story
+      requirement: when_applicable
+    - policy_ref: policy.workflow.test-strategy
+      requirement: when_applicable
+    obligations:
+    - id: obligation.workflow.code-review.changed-surface-bounded
+      description: The changed surface and expected behavior are bounded against current requirements and risks.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.code-review.changed-surface-bounded
+    - id: obligation.workflow.code-review.findings-evidenced
+      description: Independent review findings are severity-ranked, actionable, evidenced, and durable.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.code-review.findings-evidenced
+    - id: obligation.workflow.code-review.blockers-dispositioned
+      description: Blocking findings are repaired and reverified or explicitly authorized for the release scope.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.code-review.blockers-dispositioned
+    claims:
+    - id: claim.workflow.code-review.changed-surface-bounded
+      statement: The exact diff, affected behavior, acceptance criteria, and risk boundary are inspectable.
+      evaluator_ref: evaluator.workflow.code-review.diff-inspection
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.code-review.findings-evidenced
+      statement: An independent reviewer inspected the changed behavior and persisted actionable findings.
+      evaluator_ref: evaluator.workflow.code-review.independent-review
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.code-review.blockers-dispositioned
+      statement: No blocking finding remains unresolved for the proposed release.
+      evaluator_ref: evaluator.workflow.code-review.blocker-recheck
+      waiver:
+        kind: authorized
+        max_target: release
+        authority_scope: authority.release.code-review-waiver
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.code-review.diff-inspection
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.code-review.independent-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.code-review.blocker-recheck
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: reject_any_disproof
+    capability_requirements:
+    - id: capability.workflow.code-review.repository-diff-inspection
+      kind: tool
+      probe_kind: local_command
+      description: The exact repository diff and linked validation surface can be inspected.
+      affected_claim_refs:
+      - claim.workflow.code-review.changed-surface-bounded
+      - claim.workflow.code-review.findings-evidenced
+      resolution_options:
+      - Acquire read access to the exact diff, requirements, and validation evidence.
+      - Defer review until the changed surface is reproducible.
+      blocks_before: release
+    decision_rules:
+    - id: decision.workflow.code-review.expected-behavior
+      activation: observed_need
+      claim_ref: null
+      question: Which materially different expected behavior should govern this code review?
+      reason: product_direction
+      alternatives:
+      - id: alternative.code-review.preserve-accepted
+        description: Preserve the currently accepted requirement and review the implementation against it.
+        consequences:
+        - Keeps the accepted product promise and may require implementation repair.
+      - id: alternative.code-review.revise-accepted
+        description: Revise the expected behavior through the governed requirements path before reviewing code.
+        consequences:
+        - Changes the accepted product boundary and requires downstream trace updates.
+      - id: alternative.code-review.defer
+        description: Defer review and release until the ambiguity is resolved.
+        consequences:
+        - Prevents an arbitrary review verdict.
+      recommended_alternative_ref: alternative.code-review.preserve-accepted
+      blocking: true
+      blocks_before: release
+    advisory_playbook:
+      id: playbook.workflow.code-review
+      steps:
+      - Inspect the exact changed surface against expected behavior, risks, and evidence.
+      - Persist actionable findings and recheck blockers instead of treating review prose as completion.
+  - id: policy.workflow.nfr-evidence-audit
+    compatibility_workflow_id: nfr-evidence-audit
+    routing:
+      priority: 206
+      readiness_target: release
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 5-ready-operate
+    prerequisites:
+    - policy_ref: policy.workflow.product-requirements
+      requirement: always
+    - policy_ref: policy.workflow.build-story
+      requirement: always
+    obligations:
+    - id: obligation.workflow.nfr-evidence-audit.universe-bounded
+      description: The security, performance, reliability, accessibility, maintainability, and compliance claims in scope are bounded.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.nfr-evidence-audit.universe-bounded
+    - id: obligation.workflow.nfr-evidence-audit.status-evidenced
+      description: Every in-scope NFR has a current evidence status from a qualified evaluator.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.nfr-evidence-audit.status-evidenced
+    - id: obligation.workflow.nfr-evidence-audit.impact-governed
+      description: NFR gaps, waivers, and release impacts are explicit, accountable, and current.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.nfr-evidence-audit.impact-governed
+    claims:
+    - id: claim.workflow.nfr-evidence-audit.universe-bounded
+      statement: The applicable NFR universe and acceptance thresholds are explicit and finite.
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.universe-review
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.nfr-evidence-audit.status-evidenced
+      statement: A qualified independent review confirms that each applicable NFR status is linked to current evidence suitable for that declared domain and threshold.
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.evidence-review
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.nfr-evidence-audit.impact-governed
+      statement: All material NFR gaps and waivers have an explicit release consequence and authority.
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.impact-review
+      waiver:
+        kind: authorized
+        max_target: release
+        authority_scope: authority.release.nfr-waiver
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.nfr-evidence-audit.universe-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.nfr-evidence-audit.evidence-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.nfr-evidence-audit.impact-review
+      provider: external_authority
+      accepted_evidence_kinds:
+      - external_authority
+      minimum_strength: authoritative_acceptance
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: reject_any_disproof
+    capability_requirements:
+    - id: capability.workflow.nfr-evidence-audit.qualified-evaluation
+      kind: evaluator
+      probe_kind: external_verification
+      description: Qualified evaluators are available for every material NFR domain in scope.
+      affected_claim_refs:
+      - claim.workflow.nfr-evidence-audit.universe-bounded
+      - claim.workflow.nfr-evidence-audit.status-evidenced
+      - claim.workflow.nfr-evidence-audit.impact-governed
+      resolution_options:
+      - Acquire qualified evaluation for the unsupported NFR domain.
+      - Remove the unsupported promise from release scope.
+      blocks_before: release
+    decision_rules:
+    - id: decision.workflow.nfr-evidence-audit.release-impact
+      activation: claim_unresolved
+      claim_ref: claim.workflow.nfr-evidence-audit.impact-governed
+      question: How should the unresolved NFR gap constrain this release?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.nfr.repair
+        description: Repair the NFR gap and regenerate qualified evidence.
+        consequences:
+        - Delays release while restoring the promised property.
+      - id: alternative.nfr.reduce-scope
+        description: Remove or narrow the unsupported NFR promise.
+        consequences:
+        - Changes release scope and user expectations.
+      - id: alternative.nfr.accept-authorized
+        description: Seek explicit release-scoped acceptance from the required authority.
+        consequences:
+        - Retains an accountable residual NFR risk.
+      recommended_alternative_ref: alternative.nfr.repair
+      blocking: true
+      blocks_before: release
+    advisory_playbook:
+      id: playbook.workflow.nfr-evidence-audit
+      steps:
+      - Bound applicable NFR claims and thresholds before evaluating evidence.
+      - Use qualified evaluators and make gaps, waivers, and release impacts explicit.
+  - id: policy.workflow.risk-register
+    compatibility_workflow_id: risk-register
+    routing:
+      priority: 155
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 3-plan
+    - 5-ready-operate
+    prerequisites:
+    - policy_ref: policy.workflow.product-requirements
+      requirement: always
+    - policy_ref: policy.workflow.architecture
+      requirement: when_applicable
+    obligations:
+    - id: obligation.workflow.risk-register.surface-current
+      description: The current material technical, product, delivery, security, and operational risk surface is bounded.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.risk-register.surface-current
+    - id: obligation.workflow.risk-register.high-risk-disposition
+      description: Each high risk has a current mitigation, rejection, deferral, or explicit acceptance disposition.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.risk-register.high-risk-disposition
+    - id: obligation.workflow.risk-register.acceptance-governed
+      description: Risk acceptances are scope-bound, authorized, owned, and have a revisit trigger.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.risk-register.acceptance-governed
+    claims:
+    - id: claim.workflow.risk-register.surface-current
+      statement: The risk universe is current, categorized, and linked to affected governed outcomes.
+      evaluator_ref: evaluator.workflow.risk-register.surface-inspection
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.risk-register.high-risk-disposition
+      statement: All high risks have evidence-backed dispositions and accountable owners.
+      evaluator_ref: evaluator.workflow.risk-register.disposition-review
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.risk-register.acceptance-governed
+      statement: Every residual-risk acceptance is authorized for its exact scope and can be revisited.
+      evaluator_ref: evaluator.workflow.risk-register.acceptance-review
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.risk-register.surface-inspection
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.risk-register.disposition-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.risk-register.acceptance-review
+      provider: external_authority
+      accepted_evidence_kinds:
+      - external_authority
+      minimum_strength: authoritative_acceptance
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: reject_any_disproof
+    capability_requirements:
+    - id: capability.workflow.risk-register.qualified-evaluation
+      kind: knowledge
+      probe_kind: external_verification
+      description: Qualified evaluation is available for the material risk domains in scope.
+      affected_claim_refs:
+      - claim.workflow.risk-register.surface-current
+      - claim.workflow.risk-register.high-risk-disposition
+      resolution_options:
+      - Acquire qualified risk evaluation for the unsupported domain.
+      - Narrow the governed scope until the risk can be evaluated.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.risk-register.unresolved-high-risk
+      activation: claim_unresolved
+      claim_ref: claim.workflow.risk-register.high-risk-disposition
+      question: How should the unresolved high risk constrain the project?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.risk.mitigate
+        description: Mitigate the risk and verify the mitigation.
+        consequences:
+        - Adds work but reduces exposure.
+      - id: alternative.risk.accept-authorized
+        description: Seek explicit acceptance from the required authority.
+        consequences:
+        - Retains exposure with accountable ownership.
+      - id: alternative.risk.defer-scope
+        description: Defer or remove the exposed scope.
+        consequences:
+        - Reduces delivery scope and risk.
+      recommended_alternative_ref: alternative.risk.mitigate
+      blocking: true
+      blocks_before: release
+    advisory_playbook:
+      id: playbook.workflow.risk-register
+      steps:
+      - Bound current risks, impacts, evidence, owners, mitigations, and release consequences.
+      - Keep acceptance explicit, authority-bound, and revisitable instead of hiding it in prose.
+  - id: policy.workflow.traceability-gate
+    compatibility_workflow_id: traceability-gate
+    routing:
+      priority: 205
+      readiness_target: release
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - 4-build-verify
+    - 5-ready-operate
+    prerequisites:
+    - policy_ref: policy.workflow.product-requirements
+      requirement: always
+    - policy_ref: policy.workflow.test-strategy
+      requirement: always
+    - policy_ref: policy.workflow.build-story
+      requirement: always
+    obligations:
+    - id: obligation.workflow.traceability-gate.universe-bounded
+      description: The stable requirement and risk universe for the release is explicitly bounded.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.traceability-gate.universe-bounded
+    - id: obligation.workflow.traceability-gate.high-risk-covered
+      description: Every high-risk item maps to current evidence of appropriate strength.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.traceability-gate.high-risk-covered
+    - id: obligation.workflow.traceability-gate.gaps-dispositioned
+      description: Coverage gaps have explicit repair, evidence, deferral, or authorized release dispositions.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.traceability-gate.gaps-dispositioned
+    claims:
+    - id: claim.workflow.traceability-gate.universe-bounded
+      statement: Stable identifiers enumerate the requirements and risks governed by this release.
+      evaluator_ref: evaluator.workflow.traceability-gate.universe-check
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.traceability-gate.high-risk-covered
+      statement: Current checks and evidence cover every high-risk governed item.
+      evaluator_ref: evaluator.workflow.traceability-gate.coverage-check
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.traceability-gate.gaps-dispositioned
+      statement: No material coverage gap lacks an accountable release disposition.
+      evaluator_ref: evaluator.workflow.traceability-gate.gap-review
+      waiver:
+        kind: authorized
+        max_target: release
+        authority_scope: authority.release.traceability-waiver
+        max_age_seconds: 86400
+    evaluators:
+    - id: evaluator.workflow.traceability-gate.universe-check
+      provider: deterministic_tool
+      accepted_evidence_kinds:
+      - deterministic_check
+      minimum_strength: deterministic_verification
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.traceability-gate.coverage-check
+      provider: deterministic_tool
+      accepted_evidence_kinds:
+      - deterministic_check
+      minimum_strength: deterministic_verification
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.traceability-gate.gap-review
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: reject_any_disproof
+    capability_requirements:
+    - id: capability.workflow.traceability-gate.evaluator
+      kind: tool
+      probe_kind: local_command
+      description: A deterministic evaluator can map stable requirement and risk ids to current evidence.
+      affected_claim_refs:
+      - claim.workflow.traceability-gate.universe-bounded
+      - claim.workflow.traceability-gate.high-risk-covered
+      resolution_options:
+      - Acquire a deterministic traceability evaluator for the project artifacts.
+      - Produce a bounded machine-readable mapping before release review.
+      blocks_before: release
+    decision_rules:
+    - id: decision.workflow.traceability-gate.release-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.traceability-gate.gaps-dispositioned
+      question: How should the material coverage gap constrain this release?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.traceability.repair
+        description: Repair the requirement, implementation, or check and regenerate evidence.
+        consequences:
+        - Delays release while restoring coverage.
+      - id: alternative.traceability.produce-evidence
+        description: Produce the missing evidence before release.
+        consequences:
+        - Keeps scope while strengthening proof.
+      - id: alternative.traceability.accept-authorized
+        description: Seek an exact release-scoped authorization.
+        consequences:
+        - Retains an explicit residual coverage risk.
+      recommended_alternative_ref: alternative.traceability.repair
+      blocking: true
+      blocks_before: release
+    advisory_playbook:
+      id: playbook.workflow.traceability-gate
+      steps:
+      - Map stable requirement and risk ids to current checks and evidence.
+      - Expose weak or missing coverage and preserve an accountable disposition for each gap.

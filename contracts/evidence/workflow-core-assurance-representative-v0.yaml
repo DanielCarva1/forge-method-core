@@ -1,0 +1,1653 @@
+schema_version: '0.1'
+workflow_behavioral_scenario_corpus:
+  id: corpus.workflow-core-assurance.representative-v0
+  corpus_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  partition_class: representative
+  coverage_policy:
+    id: coverage.workflow-core-assurance-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+    expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+  workflow_evidence:
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: adversarial-review
+      legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+      policy_ref: policy.workflow.adversarial-review
+      policy_digest: sha256:2be0bfaae8227d59ea40a0c53cab7b9eb9c52881b74f92a393b5bd950c7f72d4
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/adversarial-review.yaml
+        expected_digest: sha256:524c669e022019e4a3fdcbf1b7d0c3601389e5e811a4ec300b096368150928bd
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.adversarial-review.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:2381b41856bc3d40a9aacfd7211dc4c2293e62e66623dfa8653eb76276b4839a
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.adversarial-review.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.adversarial-review
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.adversarial-review.independent-reviewer
+              decision_need_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              resolved_decision_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.adversarial-review.positive.claim.workflow.adversarial-review.scope-bounded.0
+                claim_ref: claim.workflow.adversarial-review.scope-bounded
+                evaluator_ref: evaluator.workflow.adversarial-review.scope-inspection
+                principal: principal.adversarial-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.positive.claim.workflow.adversarial-review.assumptions-challenged.0
+                claim_ref: claim.workflow.adversarial-review.assumptions-challenged
+                evaluator_ref: evaluator.workflow.adversarial-review.independent-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.positive.claim.workflow.adversarial-review.findings-dispositioned.0
+                claim_ref: claim.workflow.adversarial-review.findings-dispositioned
+                evaluator_ref: evaluator.workflow.adversarial-review.disposition-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.scope-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.adversarial-review.assumptions-challenged
+            - claim.workflow.adversarial-review.findings-dispositioned
+            - claim.workflow.adversarial-review.scope-bounded
+            rank: 1
+    - scenario_id: scenario.workflow.adversarial-review.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:533da4c6e7ff2c4078f34b3194e1dfaaad5a340f9c569e30b2cfed43099ee526
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+          ledger_head_digest: sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.foundation-v0
+          active_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+          runtime_bundle_id: bundle.workflow-governance.release-foundation-v0
+          runtime_bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+          state_version: 1
+          current_phase: 1-discovery
+          observed_at_unix: 1783861379
+        checkpoint_source:
+          id: checkpoint.workflow-core-assurance.adversarial-review.v0
+          embedded_ref: contracts/evidence/workflow-core-assurance-adversarial-review-resume-checkpoint-v0.yaml
+          expected_digest: sha256:f6762fc5795c23bc6c9435d9c4e4005e24c2e7ddaf3fb6d24bfaee298ff85e00
+        checkpoint_digest: sha256:1e787fe9c25d7f4fb3ef189f75ca78b86b639ed240caf1596abeed9b945a8455
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.adversarial-review.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.adversarial-review
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.adversarial-review.independent-reviewer
+              decision_need_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              resolved_decision_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.scope-bounded.0
+                claim_ref: claim.workflow.adversarial-review.scope-bounded
+                evaluator_ref: evaluator.workflow.adversarial-review.scope-inspection
+                principal: principal.adversarial-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.assumptions-challenged.0
+                claim_ref: claim.workflow.adversarial-review.assumptions-challenged
+                evaluator_ref: evaluator.workflow.adversarial-review.independent-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.findings-dispositioned.0
+                claim_ref: claim.workflow.adversarial-review.findings-dispositioned
+                evaluator_ref: evaluator.workflow.adversarial-review.disposition-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.scope-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.adversarial-review.assumptions-challenged
+            - claim.workflow.adversarial-review.findings-dispositioned
+            - claim.workflow.adversarial-review.scope-bounded
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.adversarial-review.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.adversarial-review
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.adversarial-review.independent-reviewer
+              decision_need_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              resolved_decision_refs:
+              - decision.workflow.adversarial-review.high-impact-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.scope-bounded.0
+                claim_ref: claim.workflow.adversarial-review.scope-bounded
+                evaluator_ref: evaluator.workflow.adversarial-review.scope-inspection
+                principal: principal.adversarial-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.assumptions-challenged.0
+                claim_ref: claim.workflow.adversarial-review.assumptions-challenged
+                evaluator_ref: evaluator.workflow.adversarial-review.independent-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.findings-dispositioned.0
+                claim_ref: claim.workflow.adversarial-review.findings-dispositioned
+                evaluator_ref: evaluator.workflow.adversarial-review.disposition-review
+                principal: principal.adversarial-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+            status: verified
+          - claim_id: claim.workflow.adversarial-review.scope-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.adversarial-review.assumptions-challenged
+            - claim.workflow.adversarial-review.findings-dispositioned
+            - claim.workflow.adversarial-review.scope-bounded
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: code-review
+      legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+      policy_ref: policy.workflow.code-review
+      policy_digest: sha256:6d4ed9315161925d436f22abc6e782f5b73f121f3a1ca5fce9aa3f63aa046359
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/code-review.yaml
+        expected_digest: sha256:46b53b2d6d09783b449f607ce5c433667b1a9ff2901f56a201d28e0d98b972f0
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.code-review.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:61e74237ada71e4c9635535b6de82754e1d554f541b3d88cc6f4f9e577fa0087
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.code-review.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.code-review
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.build-story
+              - policy.workflow.test-strategy
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.code-review.repository-diff-inspection
+              decision_need_refs:
+              - decision.workflow.code-review.expected-behavior
+              resolved_decision_refs:
+              - decision.workflow.code-review.expected-behavior
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.code-review.positive.claim.workflow.code-review.changed-surface-bounded.0
+                claim_ref: claim.workflow.code-review.changed-surface-bounded
+                evaluator_ref: evaluator.workflow.code-review.diff-inspection
+                principal: principal.code-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.positive.claim.workflow.code-review.findings-evidenced.0
+                claim_ref: claim.workflow.code-review.findings-evidenced
+                evaluator_ref: evaluator.workflow.code-review.independent-review
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.positive.claim.workflow.code-review.blockers-dispositioned.0
+                claim_ref: claim.workflow.code-review.blockers-dispositioned
+                evaluator_ref: evaluator.workflow.code-review.blocker-recheck
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.findings-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.code-review.blockers-dispositioned
+            status: verified
+          - claim_id: claim.workflow.code-review.changed-surface-bounded
+            status: verified
+          - claim_id: claim.workflow.code-review.findings-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.code-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.code-review.blockers-dispositioned
+            - claim.workflow.code-review.changed-surface-bounded
+            - claim.workflow.code-review.findings-evidenced
+            rank: 1
+    - scenario_id: scenario.workflow.code-review.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:f8bfc4c1c1f7d772316ba5ca9e445e050de12c6248b76f77dd8bd9493a23bbfc
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+          ledger_head_digest: sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.foundation-v0
+          active_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+          runtime_bundle_id: bundle.workflow-governance.release-foundation-v0
+          runtime_bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+          state_version: 1
+          current_phase: 1-discovery
+          observed_at_unix: 1783861379
+        checkpoint_source:
+          id: checkpoint.workflow-core-assurance.code-review.v0
+          embedded_ref: contracts/evidence/workflow-core-assurance-code-review-resume-checkpoint-v0.yaml
+          expected_digest: sha256:1ea9382c66b423e3174548ddeccefdada5f841f5e678343f6202c82bec61c215
+        checkpoint_digest: sha256:4fde30e8ea11e321d8975d640b217c26871863c6b861d6c491809f11830c1d54
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.code-review.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.code-review
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.build-story
+              - policy.workflow.test-strategy
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.code-review.repository-diff-inspection
+              decision_need_refs:
+              - decision.workflow.code-review.expected-behavior
+              resolved_decision_refs:
+              - decision.workflow.code-review.expected-behavior
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.changed-surface-bounded.0
+                claim_ref: claim.workflow.code-review.changed-surface-bounded
+                evaluator_ref: evaluator.workflow.code-review.diff-inspection
+                principal: principal.code-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.findings-evidenced.0
+                claim_ref: claim.workflow.code-review.findings-evidenced
+                evaluator_ref: evaluator.workflow.code-review.independent-review
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.blockers-dispositioned.0
+                claim_ref: claim.workflow.code-review.blockers-dispositioned
+                evaluator_ref: evaluator.workflow.code-review.blocker-recheck
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.findings-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.code-review.blockers-dispositioned
+            status: verified
+          - claim_id: claim.workflow.code-review.changed-surface-bounded
+            status: verified
+          - claim_id: claim.workflow.code-review.findings-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.code-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.code-review.blockers-dispositioned
+            - claim.workflow.code-review.changed-surface-bounded
+            - claim.workflow.code-review.findings-evidenced
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.code-review.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.code-review
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.build-story
+              - policy.workflow.test-strategy
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.code-review.repository-diff-inspection
+              decision_need_refs:
+              - decision.workflow.code-review.expected-behavior
+              resolved_decision_refs:
+              - decision.workflow.code-review.expected-behavior
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.changed-surface-bounded.0
+                claim_ref: claim.workflow.code-review.changed-surface-bounded
+                evaluator_ref: evaluator.workflow.code-review.diff-inspection
+                principal: principal.code-review.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.findings-evidenced.0
+                claim_ref: claim.workflow.code-review.findings-evidenced
+                evaluator_ref: evaluator.workflow.code-review.independent-review
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.blockers-dispositioned.0
+                claim_ref: claim.workflow.code-review.blockers-dispositioned
+                evaluator_ref: evaluator.workflow.code-review.blocker-recheck
+                principal: principal.code-review.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.code-review.findings-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.code-review.blockers-dispositioned
+            status: verified
+          - claim_id: claim.workflow.code-review.changed-surface-bounded
+            status: verified
+          - claim_id: claim.workflow.code-review.findings-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.code-review
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.code-review.blockers-dispositioned
+            - claim.workflow.code-review.changed-surface-bounded
+            - claim.workflow.code-review.findings-evidenced
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: nfr-evidence-audit
+      legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+      policy_ref: policy.workflow.nfr-evidence-audit
+      policy_digest: sha256:fdd0b2f9dacac04f6527aa4887a00b0f6154f344433c69275c0fa7d7471fa6bb
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/nfr-evidence-audit.yaml
+        expected_digest: sha256:f6e9db0df17828f45d7b0738d31e416825a15e7f42912597b29c6a517b228c21
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.nfr-evidence-audit.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:e6ef32fe031496e98dba857125e4b649c7e280f11f65fc5a7276b9d7667fa48e
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.nfr-evidence-audit.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.nfr-evidence-audit
+              current_phase: 5-ready-operate
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.nfr-evidence-audit.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              resolved_decision_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.nfr-evidence-audit.positive.claim.workflow.nfr-evidence-audit.universe-bounded.0
+                claim_ref: claim.workflow.nfr-evidence-audit.universe-bounded
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.universe-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.positive.claim.workflow.nfr-evidence-audit.status-evidenced.0
+                claim_ref: claim.workflow.nfr-evidence-audit.status-evidenced
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.evidence-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.positive.claim.workflow.nfr-evidence-audit.impact-governed.0
+                claim_ref: claim.workflow.nfr-evidence-audit.impact-governed
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.impact-review
+                principal: principal.nfr-evidence-audit.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.nfr-evidence-audit.impact-governed
+            - claim.workflow.nfr-evidence-audit.status-evidenced
+            - claim.workflow.nfr-evidence-audit.universe-bounded
+            rank: 1
+    - scenario_id: scenario.workflow.nfr-evidence-audit.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:a593c17a4f498ee6ec28918f1d90a99b96ae4cad2bea0645a2f65d49de533ef8
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+          ledger_head_digest: sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.foundation-v0
+          active_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+          runtime_bundle_id: bundle.workflow-governance.release-foundation-v0
+          runtime_bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+          state_version: 1
+          current_phase: 1-discovery
+          observed_at_unix: 1783861379
+        checkpoint_source:
+          id: checkpoint.workflow-core-assurance.nfr-evidence-audit.v0
+          embedded_ref: contracts/evidence/workflow-core-assurance-nfr-evidence-audit-resume-checkpoint-v0.yaml
+          expected_digest: sha256:1acff5a1581dde66be6bee70ce1819797ff15faf025a9f784df422330ff54e36
+        checkpoint_digest: sha256:13ea7b50c57275ad13b40d96b5d08a3286be5aafd50d8ae31400f50456c9a4d4
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.nfr-evidence-audit.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.nfr-evidence-audit
+              current_phase: 5-ready-operate
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.nfr-evidence-audit.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              resolved_decision_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.universe-bounded.0
+                claim_ref: claim.workflow.nfr-evidence-audit.universe-bounded
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.universe-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.status-evidenced.0
+                claim_ref: claim.workflow.nfr-evidence-audit.status-evidenced
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.evidence-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.impact-governed.0
+                claim_ref: claim.workflow.nfr-evidence-audit.impact-governed
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.impact-review
+                principal: principal.nfr-evidence-audit.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.nfr-evidence-audit.impact-governed
+            - claim.workflow.nfr-evidence-audit.status-evidenced
+            - claim.workflow.nfr-evidence-audit.universe-bounded
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.nfr-evidence-audit.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.nfr-evidence-audit
+              current_phase: 5-ready-operate
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.nfr-evidence-audit.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              resolved_decision_refs:
+              - decision.workflow.nfr-evidence-audit.release-impact
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.universe-bounded.0
+                claim_ref: claim.workflow.nfr-evidence-audit.universe-bounded
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.universe-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.status-evidenced.0
+                claim_ref: claim.workflow.nfr-evidence-audit.status-evidenced
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.evidence-review
+                principal: principal.nfr-evidence-audit.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.impact-governed.0
+                claim_ref: claim.workflow.nfr-evidence-audit.impact-governed
+                evaluator_ref: evaluator.workflow.nfr-evidence-audit.impact-review
+                principal: principal.nfr-evidence-audit.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+            status: verified
+          - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.nfr-evidence-audit.impact-governed
+            - claim.workflow.nfr-evidence-audit.status-evidenced
+            - claim.workflow.nfr-evidence-audit.universe-bounded
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: risk-register
+      legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+      policy_ref: policy.workflow.risk-register
+      policy_digest: sha256:06be2290e1424225998f511efe9f1e1038c6fdc2137685b6365b861e482834b7
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/risk-register.yaml
+        expected_digest: sha256:25dca3fcd969c6b372b0aee172220898b55e0f6fcb0b829f5c0e60c021e7facb
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.risk-register.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:7635ff8df9f2005f695c8d7cf519198e7a8d1f8a24b1b8fdf69b8a2992eb9889
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.risk-register.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.risk-register
+              current_phase: 3-plan
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.architecture
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.risk-register.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              resolved_decision_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.risk-register.positive.claim.workflow.risk-register.surface-current.0
+                claim_ref: claim.workflow.risk-register.surface-current
+                evaluator_ref: evaluator.workflow.risk-register.surface-inspection
+                principal: principal.risk-register.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.positive.claim.workflow.risk-register.high-risk-disposition.0
+                claim_ref: claim.workflow.risk-register.high-risk-disposition
+                evaluator_ref: evaluator.workflow.risk-register.disposition-review
+                principal: principal.risk-register.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.positive.claim.workflow.risk-register.acceptance-governed.0
+                claim_ref: claim.workflow.risk-register.acceptance-governed
+                evaluator_ref: evaluator.workflow.risk-register.acceptance-review
+                principal: principal.risk-register.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.risk-register.acceptance-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.surface-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.risk-register.acceptance-governed
+            status: verified
+          - claim_id: claim.workflow.risk-register.high-risk-disposition
+            status: verified
+          - claim_id: claim.workflow.risk-register.surface-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.risk-register
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.risk-register.acceptance-governed
+            - claim.workflow.risk-register.high-risk-disposition
+            - claim.workflow.risk-register.surface-current
+            rank: 1
+    - scenario_id: scenario.workflow.risk-register.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:083608277c788bdb194c207aeca309d7ca7558ea6a6ec6876c57943d95b71318
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+          ledger_head_digest: sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.foundation-v0
+          active_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+          runtime_bundle_id: bundle.workflow-governance.release-foundation-v0
+          runtime_bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+          state_version: 1
+          current_phase: 1-discovery
+          observed_at_unix: 1783861379
+        checkpoint_source:
+          id: checkpoint.workflow-core-assurance.risk-register.v0
+          embedded_ref: contracts/evidence/workflow-core-assurance-risk-register-resume-checkpoint-v0.yaml
+          expected_digest: sha256:8f06886a0aa62e584cab9c25964e31844144b6d8361c4c83254adb61bd09ea8b
+        checkpoint_digest: sha256:9b6d1b75a892f2ba14892f30c40f65abaac156f781f170116c435cc9429718e3
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.risk-register.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.risk-register
+              current_phase: 3-plan
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.architecture
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.risk-register.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              resolved_decision_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.surface-current.0
+                claim_ref: claim.workflow.risk-register.surface-current
+                evaluator_ref: evaluator.workflow.risk-register.surface-inspection
+                principal: principal.risk-register.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.high-risk-disposition.0
+                claim_ref: claim.workflow.risk-register.high-risk-disposition
+                evaluator_ref: evaluator.workflow.risk-register.disposition-review
+                principal: principal.risk-register.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.acceptance-governed.0
+                claim_ref: claim.workflow.risk-register.acceptance-governed
+                evaluator_ref: evaluator.workflow.risk-register.acceptance-review
+                principal: principal.risk-register.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.risk-register.acceptance-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.surface-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.risk-register.acceptance-governed
+            status: verified
+          - claim_id: claim.workflow.risk-register.high-risk-disposition
+            status: verified
+          - claim_id: claim.workflow.risk-register.surface-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.risk-register
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.risk-register.acceptance-governed
+            - claim.workflow.risk-register.high-risk-disposition
+            - claim.workflow.risk-register.surface-current
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.risk-register.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.risk-register
+              current_phase: 3-plan
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.architecture
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.risk-register.qualified-evaluation
+              decision_need_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              resolved_decision_refs:
+              - decision.workflow.risk-register.unresolved-high-risk
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.surface-current.0
+                claim_ref: claim.workflow.risk-register.surface-current
+                evaluator_ref: evaluator.workflow.risk-register.surface-inspection
+                principal: principal.risk-register.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.high-risk-disposition.0
+                claim_ref: claim.workflow.risk-register.high-risk-disposition
+                evaluator_ref: evaluator.workflow.risk-register.disposition-review
+                principal: principal.risk-register.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.acceptance-governed.0
+                claim_ref: claim.workflow.risk-register.acceptance-governed
+                evaluator_ref: evaluator.workflow.risk-register.acceptance-review
+                principal: principal.risk-register.0
+                kind: external_authority
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.risk-register.acceptance-governed
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+            status: satisfied
+          - obligation_id: obligation.workflow.risk-register.surface-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.risk-register.acceptance-governed
+            status: verified
+          - claim_id: claim.workflow.risk-register.high-risk-disposition
+            status: verified
+          - claim_id: claim.workflow.risk-register.surface-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.risk-register
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.risk-register.acceptance-governed
+            - claim.workflow.risk-register.high-risk-disposition
+            - claim.workflow.risk-register.surface-current
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: traceability-gate
+      legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+      policy_ref: policy.workflow.traceability-gate
+      policy_digest: sha256:221caa0e03e91b1ac40bbd7452eab2c0f61e3a79d460c58983d48085c6315e46
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/traceability-gate.yaml
+        expected_digest: sha256:88989b0882915d835e5a9d4cbe49a7d877be81fcd843d64df5de56a542ed77e8
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.traceability-gate.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:8a96a56c34e11fea320b4c5cab5a91fb7089b4469b14dcb3eb231206017fd93e
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.traceability-gate.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.traceability-gate
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.test-strategy
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.traceability-gate.evaluator
+              decision_need_refs:
+              - decision.workflow.traceability-gate.release-gap
+              resolved_decision_refs:
+              - decision.workflow.traceability-gate.release-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.traceability-gate.positive.claim.workflow.traceability-gate.universe-bounded.0
+                claim_ref: claim.workflow.traceability-gate.universe-bounded
+                evaluator_ref: evaluator.workflow.traceability-gate.universe-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.positive.claim.workflow.traceability-gate.high-risk-covered.0
+                claim_ref: claim.workflow.traceability-gate.high-risk-covered
+                evaluator_ref: evaluator.workflow.traceability-gate.coverage-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.positive.claim.workflow.traceability-gate.gaps-dispositioned.0
+                claim_ref: claim.workflow.traceability-gate.gaps-dispositioned
+                evaluator_ref: evaluator.workflow.traceability-gate.gap-review
+                principal: principal.traceability-gate.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.high-risk-covered
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.traceability-gate.gaps-dispositioned
+            - claim.workflow.traceability-gate.high-risk-covered
+            - claim.workflow.traceability-gate.universe-bounded
+            rank: 1
+    - scenario_id: scenario.workflow.traceability-gate.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:cf1851ab9d70faaf603a6b96c86219898ac6d35f555c0cc91f7bc0bdcbcdf817
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:f629f77e8718d258f6ac0bfad911d88824af0f74188a2a1060fa87bad78ed761
+          ledger_head_digest: sha256:0d0d4fd5379d7e76532302f16aef98dce1c0db4b3cfd70fd34c2ccde73a51d45
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.foundation-v0
+          active_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+          runtime_bundle_id: bundle.workflow-governance.release-foundation-v0
+          runtime_bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+          state_version: 1
+          current_phase: 1-discovery
+          observed_at_unix: 1783861379
+        checkpoint_source:
+          id: checkpoint.workflow-core-assurance.traceability-gate.v0
+          embedded_ref: contracts/evidence/workflow-core-assurance-traceability-gate-resume-checkpoint-v0.yaml
+          expected_digest: sha256:df4dd988a3a2cd23abd006d02d5da71865f43d9e9513fc8f347520cc45e80158
+        checkpoint_digest: sha256:4a52a823787aafbda4efd0d79fc5fe0851b21192709048d4808562423a8a279d
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.traceability-gate.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.traceability-gate
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.test-strategy
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.traceability-gate.evaluator
+              decision_need_refs:
+              - decision.workflow.traceability-gate.release-gap
+              resolved_decision_refs:
+              - decision.workflow.traceability-gate.release-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.universe-bounded.0
+                claim_ref: claim.workflow.traceability-gate.universe-bounded
+                evaluator_ref: evaluator.workflow.traceability-gate.universe-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.high-risk-covered.0
+                claim_ref: claim.workflow.traceability-gate.high-risk-covered
+                evaluator_ref: evaluator.workflow.traceability-gate.coverage-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.gaps-dispositioned.0
+                claim_ref: claim.workflow.traceability-gate.gaps-dispositioned
+                evaluator_ref: evaluator.workflow.traceability-gate.gap-review
+                principal: principal.traceability-gate.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.high-risk-covered
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.traceability-gate.gaps-dispositioned
+            - claim.workflow.traceability-gate.high-risk-covered
+            - claim.workflow.traceability-gate.universe-bounded
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.core-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+            expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.traceability-gate.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+              policy_id: policy.workflow.traceability-gate
+              current_phase: 4-build-verify
+              target: release
+              completed_policy_refs:
+              - policy.workflow.product-requirements
+              - policy.workflow.test-strategy
+              - policy.workflow.build-story
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.traceability-gate.evaluator
+              decision_need_refs:
+              - decision.workflow.traceability-gate.release-gap
+              resolved_decision_refs:
+              - decision.workflow.traceability-gate.release-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.universe-bounded.0
+                claim_ref: claim.workflow.traceability-gate.universe-bounded
+                evaluator_ref: evaluator.workflow.traceability-gate.universe-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.high-risk-covered.0
+                claim_ref: claim.workflow.traceability-gate.high-risk-covered
+                evaluator_ref: evaluator.workflow.traceability-gate.coverage-check
+                principal: principal.traceability-gate.0
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.traceability-gate.resume.claim.workflow.traceability-gate.gaps-dispositioned.0
+                claim_ref: claim.workflow.traceability-gate.gaps-dispositioned
+                evaluator_ref: evaluator.workflow.traceability-gate.gap-review
+                principal: principal.traceability-gate.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.high-risk-covered
+            status: verified
+          - claim_id: claim.workflow.traceability-gate.universe-bounded
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.traceability-gate.gaps-dispositioned
+            - claim.workflow.traceability-gate.high-risk-covered
+            - claim.workflow.traceability-gate.universe-bounded
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions

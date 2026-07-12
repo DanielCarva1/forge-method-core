@@ -134,6 +134,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loader can admit the exact legacy P5c bundle and its adjacent foundation
   successor. The successor has a new bundle identity but the same 15 policy
   objects, so none of the other 95 catalog workflows gains runtime authority.
+- **P5d.3 reviewed core-assurance candidate and behavioral shadow corpus.** A
+  typed non-authoritative overlay composes five non-golden policies with the
+  frozen fifteen-policy predecessor, while three ambiguous/unsafe workflows
+  remain explicit quarantines. Exact raw-byte and canonical semantic digests
+  bind an acyclic review subject, coverage policy, two corpus partitions, five
+  ablated bundles, and a derived 35-scenario shadow report.
+- Behavioral evaluation now recomputes governed outcomes rather than trusting
+  authored pass counts: every candidate has positive, negative, ambiguity,
+  false-completion, stale-evidence, replacement-agent resume, and isolated
+  ablation evidence. The result is candidate-only with zero mismatches/errors;
+  it cannot admit a release or satisfy runtime governance.
+- Release-registry evolution checks now preserve the exact historical prefix,
+  compare arbitrary-length SemVer without panic, authenticate appended
+  manifest/runtime bytes, and reject fork, reorder, drift, or missing history.
+  A frozen real P5d.2 upgraded WAL proves predecessor pins and record digests
+  survive future repository evolution.
 - Existing P5c ledgers remain byte-compatible and resolve to an implicit legacy
   release even when a newer binary is installed. A typed `release_upgraded`
   event remains source-enveloped, binds exact source/target release and policy

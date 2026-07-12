@@ -4,16 +4,17 @@
 //! scorecard. It deliberately cannot admit executable or retirement authority:
 //! a valid raw batch remains a non-authoritative migration candidate.
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use forge_core_contracts::{
-    StableId, WorkflowCompatibilityField, WorkflowCompatibilityLifecycle, WorkflowGovernanceBundle,
-    WorkflowGovernanceBundleDocument, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
-    WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
-    WorkflowMigrationBatchDocument, WorkflowMigrationDisposition,
-    WorkflowMigrationEvidenceReference, WorkflowReceiptCarryover, WorkflowReleaseDispositionIntent,
-    WorkflowReleaseRegistrySource, WorkflowRuntimeBundleIdentity,
+    RepoPath, StableId, WorkflowCompatibilityField, WorkflowCompatibilityLifecycle,
+    WorkflowGovernanceBundle, WorkflowGovernanceBundleDocument, WorkflowGovernancePolicy,
+    WorkflowGovernanceReleaseIdentity, WorkflowGovernanceReleaseManifestDocument,
+    WorkflowGovernanceReleaseRegistryDocument, WorkflowMigrationBatchDocument,
+    WorkflowMigrationDisposition, WorkflowMigrationEvidenceReference, WorkflowReceiptCarryover,
+    WorkflowReleaseDispositionIntent, WorkflowReleaseRegistrySource, WorkflowRuntimeBundleIdentity,
     WORKFLOW_GOVERNANCE_RELEASE_MANIFEST_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
     WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION, WORKFLOW_MIGRATION_PLAN_SCHEMA_VERSION,
@@ -1582,6 +1583,71 @@ fn is_semver(value: &str) -> bool {
     components.len() == 3 && components.iter().all(|part| valid_numeric_identifier(part))
 }
 
+fn semver_precedence_cmp(left: &str, right: &str) -> Option<Ordering> {
+    if !is_semver(left) || !is_semver(right) {
+        return None;
+    }
+    let (left_core, left_pre) = parse_semver_precedence(left);
+    let (right_core, right_pre) = parse_semver_precedence(right);
+    for (left, right) in left_core.into_iter().zip(right_core) {
+        let ordering = compare_numeric_identifier(left, right);
+        if ordering != Ordering::Equal {
+            return Some(ordering);
+        }
+    }
+    match (left_pre, right_pre) {
+        (None, None) => Some(Ordering::Equal),
+        (None, Some(_)) => Some(Ordering::Greater),
+        (Some(_), None) => Some(Ordering::Less),
+        (Some(left), Some(right)) => Some(compare_prerelease(left, right)),
+    }
+}
+
+fn parse_semver_precedence(value: &str) -> ([&str; 3], Option<&str>) {
+    let without_build = value.split_once('+').map_or(value, |(core, _)| core);
+    let (core, prerelease) = without_build
+        .split_once('-')
+        .map_or((without_build, None), |(core, pre)| (core, Some(pre)));
+    let mut components = core.split('.');
+    (
+        [
+            components.next().unwrap_or_default(),
+            components.next().unwrap_or_default(),
+            components.next().unwrap_or_default(),
+        ],
+        prerelease,
+    )
+}
+
+fn compare_numeric_identifier(left: &str, right: &str) -> Ordering {
+    left.len().cmp(&right.len()).then_with(|| left.cmp(right))
+}
+
+fn compare_prerelease(left: &str, right: &str) -> Ordering {
+    let mut left = left.split('.');
+    let mut right = right.split('.');
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(left), Some(right)) => {
+                let left_numeric = left.bytes().all(|byte| byte.is_ascii_digit());
+                let right_numeric = right.bytes().all(|byte| byte.is_ascii_digit());
+                let ordering = match (left_numeric, right_numeric) {
+                    (true, true) => compare_numeric_identifier(left, right),
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    (false, false) => left.cmp(right),
+                };
+                if ordering != Ordering::Equal {
+                    return ordering;
+                }
+            }
+        }
+    }
+}
+
 fn valid_identifiers(value: &str, forbid_numeric_leading_zero: bool) -> bool {
     value.split('.').all(|part| {
         !part.is_empty()
@@ -1598,7 +1664,6 @@ fn valid_numeric_identifier(value: &str) -> bool {
     !value.is_empty()
         && value.bytes().all(|byte| byte.is_ascii_digit())
         && (value == "0" || !value.starts_with('0'))
-        && value.parse::<u64>().is_ok()
 }
 
 fn require_id(issues: &mut Vec<WorkflowReleaseIssue>, path: &str, id: &StableId) {
@@ -1666,6 +1731,14 @@ pub enum WorkflowReleaseRegistryIssueCode {
     ReleaseManifestIdentityMismatch,
     PolicySetDrift,
     CandidateSetElevation,
+    RegistryIdentityChanged,
+    RegistryVersionNotIncreasing,
+    HistoricalReleaseRemoved,
+    HistoricalEntryChanged,
+    NoReleaseAppended,
+    NonLinearReleaseChain,
+    ReceiptCarryoverInvalid,
+    DuplicateSuppliedArtifact,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1692,6 +1765,34 @@ pub struct WorkflowReleaseRegistryEvaluation {
     pub successor_policy_count: usize,
     pub issues: Vec<WorkflowReleaseRegistryIssue>,
     pub evaluation_digest: String,
+}
+
+/// Non-authoritative proof that one registry revision is an append-only,
+/// linearly reachable evolution of another. This deliberately does not admit
+/// any appended release into the trusted runtime registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleaseRegistryEvolutionEvaluation {
+    pub schema_version: String,
+    pub status: WorkflowReleaseRegistryEvaluationStatus,
+    pub authority: WorkflowReleaseRegistryEvaluationAuthority,
+    pub registry_id: StableId,
+    pub previous_registry_digest: String,
+    pub current_registry_digest: String,
+    pub previous_release_count: usize,
+    pub current_release_count: usize,
+    pub appended_release_count: usize,
+    pub issues: Vec<WorkflowReleaseRegistryIssue>,
+    pub evaluation_digest: String,
+}
+
+/// Exact repository artifact bytes supplied to the non-authoritative registry
+/// evolution audit. The path and raw digest are checked before typed parsing;
+/// a parsed document alone is insufficient evidence of byte provenance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowReleaseRegistryEvolutionArtifact {
+    pub embedded_ref: RepoPath,
+    pub bytes: Vec<u8>,
 }
 
 struct ResolvedRegistryEntry<'a> {
@@ -1773,6 +1874,528 @@ pub fn evaluate_workflow_release_registry(
         successor_policy_count,
         issues,
         evaluation_digest,
+    }
+}
+
+/// Prove that `current_document` only appends releases to
+/// `previous_document` and that every appended release is reachable through
+/// one exact predecessor edge. Runtime-bundle bytes are supplied explicitly
+/// so carryover cannot be authorized from authored digest strings alone.
+///
+/// A structurally valid result remains non-authoritative: callers must not use
+/// it to admit the appended tail into a trusted runtime registry.
+#[must_use]
+pub fn evaluate_workflow_release_registry_evolution(
+    previous_document: &WorkflowGovernanceReleaseRegistryDocument,
+    current_document: &WorkflowGovernanceReleaseRegistryDocument,
+    supplied_bundles: &[WorkflowGovernanceBundleDocument],
+    supplied_artifacts: &[WorkflowReleaseRegistryEvolutionArtifact],
+) -> WorkflowReleaseRegistryEvolutionEvaluation {
+    let previous = &previous_document.workflow_governance_release_registry;
+    let current = &current_document.workflow_governance_release_registry;
+    let mut issues = Vec::new();
+
+    validate_evolution_registry_shape(previous_document, "previous", &mut issues);
+    validate_evolution_registry_shape(current_document, "current", &mut issues);
+
+    if previous.registry_id != current.registry_id {
+        registry_issue(
+            &mut issues,
+            WorkflowReleaseRegistryIssueCode::RegistryIdentityChanged,
+            "current.registry_id",
+            "registry evolution must preserve registry_id",
+        );
+    }
+    if previous.lineage_id != current.lineage_id {
+        registry_issue(
+            &mut issues,
+            WorkflowReleaseRegistryIssueCode::RegistryIdentityChanged,
+            "current.lineage_id",
+            "registry evolution must preserve lineage_id",
+        );
+    }
+    if semver_precedence_cmp(&current.registry_version, &previous.registry_version)
+        != Some(Ordering::Greater)
+    {
+        registry_issue(
+            &mut issues,
+            WorkflowReleaseRegistryIssueCode::RegistryVersionNotIncreasing,
+            "current.registry_version",
+            "registry_version must increase by semantic-version precedence",
+        );
+    }
+
+    if current.releases.len() < previous.releases.len() {
+        registry_issue(
+            &mut issues,
+            WorkflowReleaseRegistryIssueCode::HistoricalReleaseRemoved,
+            "current.releases",
+            "registry evolution cannot remove a historical release",
+        );
+    } else {
+        for (index, historical) in previous.releases.iter().enumerate() {
+            if current.releases.get(index) != Some(historical) {
+                registry_issue(
+                    &mut issues,
+                    WorkflowReleaseRegistryIssueCode::HistoricalEntryChanged,
+                    format!("current.releases[{index}]"),
+                    "historical entries must remain an exact ordered prefix",
+                );
+            }
+        }
+        if current.releases.len() == previous.releases.len() {
+            registry_issue(
+                &mut issues,
+                WorkflowReleaseRegistryIssueCode::NoReleaseAppended,
+                "current.releases",
+                "a registry evolution must append at least one release",
+            );
+        }
+    }
+
+    let supplied = index_supplied_bundles(supplied_bundles, &mut issues);
+    let artifacts = index_evolution_artifacts(supplied_artifacts, &mut issues);
+    validate_evolution_chain_and_bundles(
+        current,
+        previous.releases.len(),
+        &supplied,
+        &artifacts,
+        &mut issues,
+    );
+
+    issues.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.code.cmp(&right.code))
+            .then(left.message.cmp(&right.message))
+    });
+    issues.dedup();
+    let status = if issues.is_empty() {
+        WorkflowReleaseRegistryEvaluationStatus::StructurallyValid
+    } else {
+        WorkflowReleaseRegistryEvaluationStatus::Blocked
+    };
+    let previous_registry_digest =
+        workflow_release_registry_digest(previous_document).unwrap_or_default();
+    let current_registry_digest =
+        workflow_release_registry_digest(current_document).unwrap_or_default();
+    let appended_release_count = current
+        .releases
+        .len()
+        .saturating_sub(previous.releases.len());
+    let evaluation_digest = canonical_digest(&(
+        status,
+        &previous_registry_digest,
+        &current_registry_digest,
+        previous.releases.len(),
+        current.releases.len(),
+        appended_release_count,
+        &issues,
+    ))
+    .unwrap_or_default();
+
+    WorkflowReleaseRegistryEvolutionEvaluation {
+        schema_version: WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION.to_owned(),
+        status,
+        authority: WorkflowReleaseRegistryEvaluationAuthority::NonAuthoritative,
+        registry_id: current.registry_id.clone(),
+        previous_registry_digest,
+        current_registry_digest,
+        previous_release_count: previous.releases.len(),
+        current_release_count: current.releases.len(),
+        appended_release_count,
+        issues,
+        evaluation_digest,
+    }
+}
+
+fn validate_evolution_registry_shape(
+    document: &WorkflowGovernanceReleaseRegistryDocument,
+    prefix: &str,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let registry = &document.workflow_governance_release_registry;
+    if document.schema_version != WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::UnsupportedSchemaVersion,
+            format!("{prefix}.schema_version"),
+            "unsupported workflow release registry schema version",
+        );
+    }
+    registry_require_text(
+        issues,
+        &format!("{prefix}.registry_id"),
+        &registry.registry_id.0,
+    );
+    registry_require_text(
+        issues,
+        &format!("{prefix}.lineage_id"),
+        &registry.lineage_id.0,
+    );
+    registry_require_text(
+        issues,
+        &format!("{prefix}.default_successor_release_id"),
+        &registry.default_successor_release_id.0,
+    );
+    registry_validate_semver(
+        issues,
+        &format!("{prefix}.registry_version"),
+        &registry.registry_version,
+    );
+
+    let mut identities = RegistryIdentitySets::default();
+    for (index, entry) in registry.releases.iter().enumerate() {
+        validate_registry_entry_identity(registry, entry, index, &mut identities, issues);
+        registry_require_text(
+            issues,
+            &format!("{prefix}.releases[{index}].runtime_bundle.identity.bundle_id"),
+            &entry.runtime_bundle.identity.bundle_id.0,
+        );
+        registry_require_text(
+            issues,
+            &format!("{prefix}.releases[{index}].runtime_bundle.embedded_ref"),
+            &entry.runtime_bundle.embedded_ref.0,
+        );
+        if let WorkflowReleaseRegistrySource::EmbeddedManifest {
+            embedded_ref,
+            expected_digest,
+        } = &entry.source
+        {
+            registry_require_text(
+                issues,
+                &format!("{prefix}.releases[{index}].source.embedded_ref"),
+                &embedded_ref.0,
+            );
+            registry_validate_digest(
+                issues,
+                &format!("{prefix}.releases[{index}].source.expected_digest"),
+                expected_digest,
+            );
+        }
+    }
+}
+
+fn validate_evolution_chain_and_bundles(
+    registry: &forge_core_contracts::WorkflowGovernanceReleaseRegistry,
+    historical_count: usize,
+    supplied: &BTreeMap<&str, &WorkflowGovernanceBundleDocument>,
+    artifacts: &BTreeMap<&str, &[u8]>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    if registry.releases.is_empty() {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::NonLinearReleaseChain,
+            "current.releases",
+            "registry must retain one genesis release",
+        );
+        return;
+    }
+
+    for (index, entry) in registry.releases.iter().enumerate() {
+        let base = format!("current.releases[{index}]");
+        let is_genesis = matches!(
+            entry.source,
+            WorkflowReleaseRegistrySource::ImplicitP5cGenesis
+        );
+        if index == 0 {
+            if !is_genesis || entry.predecessor.is_some() {
+                registry_issue(
+                    issues,
+                    WorkflowReleaseRegistryIssueCode::NonLinearReleaseChain,
+                    &base,
+                    "the first entry must be the sole genesis and have no predecessor",
+                );
+            }
+            if entry.receipt_carryover != WorkflowReceiptCarryover::NotApplicable {
+                registry_issue(
+                    issues,
+                    WorkflowReleaseRegistryIssueCode::ReceiptCarryoverInvalid,
+                    format!("{base}.receipt_carryover"),
+                    "genesis must use not_applicable receipt carryover",
+                );
+            }
+        } else {
+            if is_genesis {
+                registry_issue(
+                    issues,
+                    WorkflowReleaseRegistryIssueCode::NonLinearReleaseChain,
+                    format!("{base}.source"),
+                    "implicit genesis can only occur at releases[0]",
+                );
+            }
+            let predecessor = &registry.releases[index - 1].release;
+            let expected = forge_core_contracts::WorkflowReleasePredecessorReference {
+                release_id: predecessor.release_id.clone(),
+                release_digest: predecessor.release_digest.clone(),
+            };
+            if entry.predecessor.as_ref() != Some(&expected) {
+                registry_issue(
+                    issues,
+                    WorkflowReleaseRegistryIssueCode::NonLinearReleaseChain,
+                    format!("{base}.predecessor"),
+                    "each release must bind the immediately preceding ordered release",
+                );
+            }
+            if entry.receipt_carryover == WorkflowReceiptCarryover::NotApplicable {
+                registry_issue(
+                    issues,
+                    WorkflowReleaseRegistryIssueCode::ReceiptCarryoverInvalid,
+                    format!("{base}.receipt_carryover"),
+                    "not_applicable receipt carryover is reserved for genesis",
+                );
+            }
+            if index >= historical_count {
+                validate_appended_receipt_carryover(
+                    &registry.releases[index - 1],
+                    entry,
+                    index,
+                    issues,
+                );
+            }
+        }
+        validate_evolution_bundle(entry, index, supplied, issues);
+        if index >= historical_count {
+            validate_appended_evolution_artifacts(entry, index, supplied, artifacts, issues);
+        }
+    }
+
+    if registry
+        .releases
+        .last()
+        .is_some_and(|entry| entry.release.release_id != registry.default_successor_release_id)
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::NonLinearReleaseChain,
+            "current.default_successor_release_id",
+            "default successor must identify the reachable release-chain tail",
+        );
+    }
+}
+
+fn validate_appended_receipt_carryover(
+    predecessor: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    appended: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let policy_unchanged = predecessor.runtime_bundle.identity.policy_set_digest
+        == appended.runtime_bundle.identity.policy_set_digest;
+    match appended.receipt_carryover {
+        WorkflowReceiptCarryover::PreservePolicyEquivalent if !policy_unchanged => {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::ReceiptCarryoverInvalid,
+                format!("current.releases[{index}].receipt_carryover"),
+                "preserve_policy_equivalent requires the predecessor policy-set digest",
+            );
+        }
+        WorkflowReceiptCarryover::InvalidateAll
+        | WorkflowReceiptCarryover::PreservePolicyEquivalent
+        | WorkflowReceiptCarryover::NotApplicable => {}
+    }
+    if !policy_unchanged && appended.receipt_carryover != WorkflowReceiptCarryover::InvalidateAll {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::ReceiptCarryoverInvalid,
+            format!("current.releases[{index}].receipt_carryover"),
+            "a runtime policy-set change must invalidate all prior receipts",
+        );
+    }
+}
+
+fn validate_evolution_bundle(
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    supplied: &BTreeMap<&str, &WorkflowGovernanceBundleDocument>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let identity = &entry.runtime_bundle.identity;
+    let Some(bundle) = supplied.get(identity.bundle_id.0.as_str()).copied() else {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::SuppliedBundleMissing,
+            format!("current.releases[{index}].runtime_bundle.identity.bundle_id"),
+            "registry runtime bundle was not supplied for evolution audit",
+        );
+        return;
+    };
+    if bundle.workflow_governance_bundle.id != identity.bundle_id
+        || workflow_runtime_bundle_digest(bundle).as_deref() != Ok(identity.bundle_digest.as_str())
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::RuntimeBundleIdentityMismatch,
+            format!("current.releases[{index}].runtime_bundle.identity"),
+            "supplied runtime bundle does not match its canonical identity",
+        );
+    }
+    if workflow_policy_set_digest(&bundle.workflow_governance_bundle.policies).as_deref()
+        != Ok(identity.policy_set_digest.as_str())
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::PolicySetDrift,
+            format!("current.releases[{index}].runtime_bundle.identity.policy_set_digest"),
+            "supplied runtime policy set does not match its canonical digest",
+        );
+    }
+}
+
+fn index_evolution_artifacts<'a>(
+    artifacts: &'a [WorkflowReleaseRegistryEvolutionArtifact],
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> BTreeMap<&'a str, &'a [u8]> {
+    let mut supplied = BTreeMap::new();
+    for (index, artifact) in artifacts.iter().enumerate() {
+        let path = artifact.embedded_ref.0.as_str();
+        registry_require_text(
+            issues,
+            &format!("supplied_artifacts[{index}].embedded_ref"),
+            path,
+        );
+        if supplied.insert(path, artifact.bytes.as_slice()).is_some() {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::DuplicateSuppliedArtifact,
+                format!("supplied_artifacts[{index}].embedded_ref"),
+                format!("duplicate supplied artifact path {path}"),
+            );
+        }
+    }
+    supplied
+}
+
+fn validate_appended_evolution_artifacts(
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    supplied_bundles: &BTreeMap<&str, &WorkflowGovernanceBundleDocument>,
+    artifacts: &BTreeMap<&str, &[u8]>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let bundle_path = entry.runtime_bundle.embedded_ref.0.as_str();
+    if let Some(bundle) = resolve_supplied_evolution_artifact::<WorkflowGovernanceBundleDocument>(
+        bundle_path,
+        &entry.runtime_bundle.expected_digest,
+        &format!("current.releases[{index}].runtime_bundle"),
+        artifacts,
+        issues,
+    ) {
+        validate_evolution_bundle_document(entry, index, &bundle, issues);
+        if supplied_bundles
+            .get(entry.runtime_bundle.identity.bundle_id.0.as_str())
+            .is_none_or(|supplied| **supplied != bundle)
+        {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::SuppliedBundleMismatch,
+                format!("current.releases[{index}].runtime_bundle"),
+                "supplied typed bundle differs from the exact content-addressed bytes",
+            );
+        }
+    }
+
+    let WorkflowReleaseRegistrySource::EmbeddedManifest {
+        embedded_ref,
+        expected_digest,
+    } = &entry.source
+    else {
+        return;
+    };
+    if let Some(manifest) =
+        resolve_supplied_evolution_artifact::<WorkflowGovernanceReleaseManifestDocument>(
+            &embedded_ref.0,
+            expected_digest,
+            &format!("current.releases[{index}].source"),
+            artifacts,
+            issues,
+        )
+    {
+        let subject = &manifest.workflow_governance_release_manifest;
+        let canonical_release_digest =
+            workflow_release_manifest_digest(&manifest).unwrap_or_default();
+        if subject.lineage_id != entry.release.lineage_id
+            || subject.release_id != entry.release.release_id
+            || subject.release_version != entry.release.release_version
+            || canonical_release_digest != entry.release.release_digest
+        {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::ReleaseManifestIdentityMismatch,
+                format!("current.releases[{index}].release"),
+                "appended release identity must exactly bind the supplied manifest bytes",
+            );
+        }
+    }
+}
+
+fn resolve_supplied_evolution_artifact<T: serde::de::DeserializeOwned>(
+    path: &str,
+    expected_digest: &str,
+    issue_path: &str,
+    artifacts: &BTreeMap<&str, &[u8]>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> Option<T> {
+    let Some(bytes) = artifacts.get(path).copied() else {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::EmbeddedReferenceMissing,
+            format!("{issue_path}.embedded_ref"),
+            format!("exact bytes for appended artifact {path} were not supplied"),
+        );
+        return None;
+    };
+    let found_digest = sha256_bytes(bytes);
+    if found_digest != expected_digest {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::EmbeddedDigestMismatch,
+            format!("{issue_path}.expected_digest"),
+            format!("artifact digest expected {expected_digest}, found {found_digest}"),
+        );
+    }
+    match yaml_serde::from_slice(bytes) {
+        Ok(document) => Some(document),
+        Err(error) => {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::EmbeddedDocumentInvalid,
+                format!("{issue_path}.embedded_ref"),
+                format!("supplied artifact is invalid: {error}"),
+            );
+            None
+        }
+    }
+}
+
+fn validate_evolution_bundle_document(
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    bundle: &WorkflowGovernanceBundleDocument,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let identity = &entry.runtime_bundle.identity;
+    if bundle.workflow_governance_bundle.id != identity.bundle_id
+        || workflow_runtime_bundle_digest(bundle).as_deref() != Ok(identity.bundle_digest.as_str())
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::RuntimeBundleIdentityMismatch,
+            format!("current.releases[{index}].runtime_bundle.identity"),
+            "content-addressed runtime bundle does not match its canonical identity",
+        );
+    }
+    if workflow_policy_set_digest(&bundle.workflow_governance_bundle.policies).as_deref()
+        != Ok(identity.policy_set_digest.as_str())
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::PolicySetDrift,
+            format!("current.releases[{index}].runtime_bundle.identity.policy_set_digest"),
+            "content-addressed runtime policy set does not match its canonical digest",
+        );
     }
 }
 

@@ -1,0 +1,51 @@
+bundle:
+  id: bundle.workflow-governance.core-assurance-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+  expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.code-review.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+    policy_id: policy.workflow.code-review
+    current_phase: 4-build-verify
+    target: release
+    completed_policy_refs:
+    - policy.workflow.build-story
+    - policy.workflow.test-strategy
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.code-review.repository-diff-inspection
+    decision_need_refs:
+    - decision.workflow.code-review.expected-behavior
+    resolved_decision_refs:
+    - decision.workflow.code-review.expected-behavior
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.changed-surface-bounded.0
+      claim_ref: claim.workflow.code-review.changed-surface-bounded
+      evaluator_ref: evaluator.workflow.code-review.diff-inspection
+      principal: principal.code-review.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.findings-evidenced.0
+      claim_ref: claim.workflow.code-review.findings-evidenced
+      evaluator_ref: evaluator.workflow.code-review.independent-review
+      principal: principal.code-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.code-review.resume.claim.workflow.code-review.blockers-dispositioned.0
+      claim_ref: claim.workflow.code-review.blockers-dispositioned
+      evaluator_ref: evaluator.workflow.code-review.blocker-recheck
+      principal: principal.code-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

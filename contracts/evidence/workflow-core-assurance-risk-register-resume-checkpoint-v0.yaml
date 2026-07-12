@@ -1,0 +1,51 @@
+bundle:
+  id: bundle.workflow-governance.core-assurance-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+  expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.risk-register.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+    policy_id: policy.workflow.risk-register
+    current_phase: 3-plan
+    target: execute
+    completed_policy_refs:
+    - policy.workflow.product-requirements
+    - policy.workflow.architecture
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.risk-register.qualified-evaluation
+    decision_need_refs:
+    - decision.workflow.risk-register.unresolved-high-risk
+    resolved_decision_refs:
+    - decision.workflow.risk-register.unresolved-high-risk
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.surface-current.0
+      claim_ref: claim.workflow.risk-register.surface-current
+      evaluator_ref: evaluator.workflow.risk-register.surface-inspection
+      principal: principal.risk-register.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.high-risk-disposition.0
+      claim_ref: claim.workflow.risk-register.high-risk-disposition
+      evaluator_ref: evaluator.workflow.risk-register.disposition-review
+      principal: principal.risk-register.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.risk-register.resume.claim.workflow.risk-register.acceptance-governed.0
+      claim_ref: claim.workflow.risk-register.acceptance-governed
+      evaluator_ref: evaluator.workflow.risk-register.acceptance-review
+      principal: principal.risk-register.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

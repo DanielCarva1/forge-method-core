@@ -50,6 +50,8 @@ delivery_strategy:
       scope: "P5c admitted golden-path runtime, trusted Project Snapshot Adapter, ledger TCB, and replacement-agent continuity"
     - commit: "3d5fd97"
       scope: "P5d.1 versioned candidate release/batch foundation, structural scorecard, and rollout audit"
+    - commit: "8e6ea14"
+      scope: "P5d.2 opaque release admission, durable project pinning, and crash-recoverable upgrade"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -360,24 +362,27 @@ phases:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
     active_checkpoint:
-      id: "P5d.2-opaque-release-admission-and-project-pinning"
+      id: "P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"
       status: "completed"
       scope:
-        - "admit only the exact P5c policy-equivalent successor through an opaque embedded registry loader"
-        - "pin projects durably and move the pin only through a crash-recoverable CAS-bound ledger transition"
+        - "compile five core-assurance candidates from typed overlays without admitting new runtime behavior"
+        - "quarantine three unresolved workflows and prove governed outcomes through a 35-scenario shadow corpus"
     next_slice:
-      id: "P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"
+      id: "P5d.4-remaining-catalog-reviewed-rollout"
       status: "pending"
       scope:
-        - "compile the first non-golden typed overlay batch"
-        - "prove behavioral outcomes and quarantine unresolved semantics before admission"
+        - "independently authorize the reviewed candidate before controlled runtime admission"
+        - "roll out the remaining core catalog in bounded reviewed batches"
     following_slices:
+      - "P5d.5 signed retirement, deletion proof, and final scorecard"
       - "P6 domain-pack ecosystem"
     checkpoint_evidence:
       - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
       - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
       - "golden-path, real-binary consumer, validator, workspace test, clippy, formatting, and generated-surface gates pass"
       - "P5d.2 legacy-ledger compatibility, opaque admission, atomic transition, crash recovery, CAS/idempotency, override rejection, and replacement-agent gates pass"
+      - "P5d.3 compiles five candidates, keeps three workflows quarantined, and evaluates 35 positive, negative, ambiguity, false-completion, stale-evidence, resume, and ablation scenarios with zero mismatches or errors"
+      - "P5d.3 preserves the exact P5d.2 admitted registry and proves historical replay against a frozen upgraded-WAL fixture before any third release can be admitted"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -544,17 +549,24 @@ phases:
               - "failed upgrade preserves the prior release and replacement-agent recovery selects the same release"
               - "caller paths and local contract overrides cannot enter runtime admission"
           - id: "P5d.3-first-reviewed-batch-quarantine-and-shadow-corpus"
-            status: "pending"
+            status: "completed"
             size: "large"
             depends_on: ["P5d.2-opaque-release-admission-and-project-pinning"]
             outcome: >-
               The first non-golden batch is compiled from typed overlays,
               unresolved semantics are quarantined, and behavioral comparison
               measures governed outcomes rather than catalog projection bytes.
+            delivers:
+              - "five typed core-assurance review candidates and three explicit non-authoritative quarantines"
+              - "closed behavioral coverage, scenario corpus, governed projection, and derived shadow-report contracts"
+              - "positive, negative, ambiguity, false-completion, stale-evidence, resume, and ablation evidence for every candidate"
+              - "append-only registry evolution checks plus frozen P5d.2 upgraded-WAL compatibility evidence before any third admission"
+              - "candidate-only release composition that cannot appear as an admitted successor until independent P5d.4 authorization"
             exit:
               - "free-form legacy prose never becomes runtime authority"
               - "every migrated workflow has positive, negative, ambiguity, false-completion, stale, resume, and ablation evidence"
               - "quarantine remains visible and cannot satisfy routing, prerequisites, readiness, or completion"
+              - "self-authored shadow parity cannot mint admission, executable state, retirement, or receipt carryover"
           - id: "P5d.4-remaining-catalog-reviewed-rollout"
             status: "pending"
             size: "large"
@@ -722,12 +734,14 @@ first_executable_slice:
     - "P5d.1 canonical generated 110-entry foundation, real embedded 15-policy batch, content-integrity-only evidence refs, deterministic structural scorecard, CLI audit, and aggregate repo validator"
     - "P5d.2 closed embedded release registry, canonical/raw digest separation, opaque exact-P5c admission, and distinct lineage/release/runtime/policy-set/provenance identities"
     - "P5d.2 backward-compatible active-release ledger replay, CAS-bound idempotent upgrade, digest-bound crash recovery, receipt carryover boundary, agent CLI/skill, adversarial E2E, 130-check validation, and full workspace gates"
+    - "P5d.3 typed overlay and candidate release for five core-assurance workflows, with three explicit quarantines and no new admitted runtime behavior"
+    - "P5d.3 35-scenario governed-outcome corpus, content-addressed resume checkpoints, load-bearing ablations, append-only registry evolution, frozen P5d.2 WAL compatibility, and full workspace gates"
   next_action: >-
-    P5d.2 is complete without admitting new policy behavior. Next execute
-    P5d.3 first reviewed non-golden batch: compile typed overlays, define typed
-    behavioral scenario/result bindings, compare governed outcomes, and keep
-    ambiguous, insufficient, or unsafe semantics visibly quarantined before
-    any runtime admission.
+    P5d.3 is complete without admitting new policy behavior. Next execute
+    P5d.4: independently authorize the reviewed candidate, admit it through a
+    controlled release transition only if that authorization passes, and roll
+    out the remaining core dispositions in bounded reviewed batches while
+    preserving visible quarantine and the P6 domain boundary.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

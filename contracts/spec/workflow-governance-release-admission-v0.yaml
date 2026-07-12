@@ -48,8 +48,9 @@ release_identity:
     A later registry version must retain the stable registry id and every
     historical release/runtime identity needed by an existing transition.
     Historical whole-registry digests remain event provenance rather than a
-    requirement that the expanded registry have identical bytes. Before P5d.3
-    adds a third release, a frozen upgraded-WAL fixture must prove this rule.
+    requirement that the expanded registry have identical bytes. P5d.3 proves
+    this rule with a frozen upgraded-WAL fixture and append-only evolution
+    audit while deliberately admitting no third release.
 
 project_pin:
   legacy_p5c: >-
@@ -139,7 +140,7 @@ non_goals:
   - "no protection claim against clean whole-ledger rollback"
   - "no caller-selected rollback transition"
   - "no Domain Pack runtime"
-  - "no claim that the two-entry P5d.2 foundation evaluator already validates an expanded multi-release P5d.3 registry"
+  - "no claim that the two-entry P5d.2 foundation evaluator already validates a future expanded runtime registry"
 
 references:
   - "contracts/spec/workflow-governance-release-v0.yaml"

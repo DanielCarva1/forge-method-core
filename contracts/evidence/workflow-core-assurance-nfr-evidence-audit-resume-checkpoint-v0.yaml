@@ -1,0 +1,51 @@
+bundle:
+  id: bundle.workflow-governance.core-assurance-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+  expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.nfr-evidence-audit.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+    policy_id: policy.workflow.nfr-evidence-audit
+    current_phase: 5-ready-operate
+    target: release
+    completed_policy_refs:
+    - policy.workflow.product-requirements
+    - policy.workflow.build-story
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.nfr-evidence-audit.qualified-evaluation
+    decision_need_refs:
+    - decision.workflow.nfr-evidence-audit.release-impact
+    resolved_decision_refs:
+    - decision.workflow.nfr-evidence-audit.release-impact
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.universe-bounded.0
+      claim_ref: claim.workflow.nfr-evidence-audit.universe-bounded
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.universe-review
+      principal: principal.nfr-evidence-audit.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.status-evidenced.0
+      claim_ref: claim.workflow.nfr-evidence-audit.status-evidenced
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.evidence-review
+      principal: principal.nfr-evidence-audit.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.nfr-evidence-audit.resume.claim.workflow.nfr-evidence-audit.impact-governed.0
+      claim_ref: claim.workflow.nfr-evidence-audit.impact-governed
+      evaluator_ref: evaluator.workflow.nfr-evidence-audit.impact-review
+      principal: principal.nfr-evidence-audit.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

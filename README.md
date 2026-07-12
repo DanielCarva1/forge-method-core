@@ -609,6 +609,37 @@ file and fails closed on ambiguous/corrupt protocol state. This does not add an
 external anti-rollback anchor or claim signature-based release supply-chain
 trust.
 
+### Audit the first reviewed candidate batch (P5d.3)
+
+P5d.3 compiles five non-golden workflows (`adversarial-review`,
+`risk-register`, `code-review`, `traceability-gate`, and
+`nfr-evidence-audit`) from a typed policy overlay. It also keeps
+`edge-case-review`, `track-decision`, and `release-readiness` in explicit
+quarantine. Neither group is added to the opaque release registry, so
+`workflow release-status` exposes no new successor and existing projects keep
+their P5d.2 pin.
+
+Recompute the candidate evidence and composition from exact repository bytes:
+
+```bash
+cargo run -p forge-core-decisions --example generate_workflow_core_assurance_evidence -- --check
+cargo run -p forge-core-decisions --example generate_workflow_core_assurance_candidate -- --check
+forge-core guide rollout-audit \
+  --manifest-file contracts/migration/workflow-governance-release-core-assurance-candidate-v0.yaml \
+  --batch-file contracts/migration/workflow-governance-batch-golden-path-v0.yaml \
+  --batch-file contracts/migration/workflow-governance-batch-core-assurance-v0.yaml \
+  --json
+```
+
+The derived shadow corpus contains exactly 35 scenarios: positive, negative,
+ambiguity, false-completion, stale-evidence, resume, and ablation for each of
+the five workflows. The checked-in report has zero mismatches/evaluation
+errors and can produce only `behaviorally_consistent_candidate` with
+`review_candidate` and `non_authoritative_shadow_evidence`. This proves exact
+deterministic consistency, not independent semantic approval. P5d.4 must bind
+an independent review to the final subject, corpus, report, batch, and manifest
+before the kernel can admit a new policy set.
+
 ### Simulate workflow governance (P5b)
 
 P5b adds a pure Workflow Governance Kernel Module with two deliberately
@@ -1267,6 +1298,12 @@ gates.
   moves them to the adjacent foundation release. Status/init/next/resume expose
   the same durable pin, local overrides are ignored, and no new catalog policy
   is admitted.
+- P5d.3 first reviewed candidate batch: five typed core-assurance overlays,
+  three explicit quarantines, an acyclic content-addressed review subject, and
+  35 recomputable governed-outcome scenarios now derive a candidate-only
+  shadow report. Append-only registry evolution and frozen upgraded-WAL tests
+  protect predecessor history, while the live admission registry remains byte
+  unchanged.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1323,14 +1360,13 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.3-P5d.5 reviewed rollout and legacy retirement** -- P5d.1 provides the
-  candidate-only foundation and P5d.2 provides opaque per-project admission,
-  pinning, and atomic upgrade without adding new policies. Next, Forge must add
-  typed behavioral evidence and reviewed non-golden batches, quarantine
-  unresolved semantics, and verify
-  signed retirement authorizations. All 95 workflows outside the golden path
-  remain compatibility, domain-pack, or migration evidence today; none is
-  retirement-ready. Retirement requires measured behavioral compatibility,
+- **P5d.4-P5d.5 reviewed rollout and legacy retirement** -- P5d.3 now provides
+  typed behavioral evidence for five non-golden review candidates and three
+  explicit quarantines, but deliberately admits none of them. Next, Forge must
+  independently authorize reviewed bounded batches, cover the remaining 90
+  compatibility/quarantine/domain dispositions, and verify signed retirement
+  authorizations. No non-golden workflow is runtime executable or
+  retirement-ready yet. Retirement requires measured behavioral compatibility,
   deletion/ablation evidence, consumer migration diagnostics, and human review
   rather than catalog-count parity.
 - **State derivation layer** — `forge_core_store::derive_state` is now the

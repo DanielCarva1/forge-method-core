@@ -87,6 +87,16 @@ Active implementation plan:
   workflow ledger. A P5c ledger maps to its exact implicit genesis release;
   later releases require a hash-chained `release_upgraded` transition. Merely
   installing a newer Forge binary cannot move the pin.
+- **Workflow Behavioral Review Subject**: an acyclic, content-addressed P5d.3
+  candidate identity over exact overlays, composed policy set, legacy digests,
+  quarantines, proposed release lineage, evaluator, and governed projection.
+  It excludes evidence and final batch/manifest digests so its corpus can bind
+  it without a hash cycle.
+- **Workflow Behavioral Shadow Evidence**: a non-authoritative recomputation of
+  normalized governed outcomes across positive, negative, ambiguity,
+  false-completion, stale, resume, and ablation scenarios. A consistent report
+  is only a review candidate; co-authored policy and fixtures cannot admit a
+  release or prove independent semantic truth.
 - **Workflow Retirement Authorization**: a closed signed proposal binding the
   exact legacy workflow, replacement policy, release, compatibility window,
   shadow evidence, deletion evidence, reviewer registry, audience, and time.
@@ -162,8 +172,10 @@ Active implementation plan:
   rollout-audit` exposes only `candidate_only` results. P5d.2 adds a separate
   opaque runtime loader for the fixed embedded registry, exact P5c-compatible
   release pinning, and adjacent CAS-bound upgrades; the audit result itself
-  still cannot activate anything. New-policy admission and trusted retirement
-  remain later P5d slices.
+  still cannot activate anything. P5d.3 adds a five-policy typed overlay,
+  three quarantines, exact raw/canonical digest separation, and 35 recomputed
+  behavioral scenarios while keeping the registry unchanged. New-policy
+  admission and trusted retirement remain later P5d slices.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -189,8 +201,9 @@ candidate-only scorecard; it does not activate a new release or retire legacy
 authority. P5d.2 now admits only a policy-equivalent foundation successor,
 preserves unchanged P5c ledgers, derives the active release from durable
 history, and moves it only through a crash-recoverable adjacent transition.
-Later P5d slices own new-policy admission, reviewed rollout, behavioral
-comparison, quarantine, and signed deletion-backed retirement. The workflow
+P5d.3 now owns candidate-only behavioral comparison and quarantine for the
+first reviewed batch. Later P5d slices own independent new-policy admission,
+remaining-catalog rollout, and signed deletion-backed retirement. The workflow
 path targets the local agent-facing CLI; allowlist metadata does not constitute
 an end-to-end MCP workflow Adapter.
 

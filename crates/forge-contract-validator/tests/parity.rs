@@ -250,6 +250,16 @@ fn assert_both_reject(root: &Path, expected_text: &str) {
 
 fn copy_validation_tree(source: &Path, target: &Path) {
     copy_dir(&source.join("contracts"), &target.join("contracts"));
+    copy_validation_source(
+        source,
+        target,
+        "crates/forge-core-decisions/src/workflow_behavior.rs",
+    );
+    copy_validation_source(
+        source,
+        target,
+        "crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson",
+    );
     copy_dir(
         &source
             .join("docs")
@@ -277,6 +287,13 @@ fn copy_validation_tree(source: &Path, target: &Path) {
             .expect("create .forge-method dir");
         fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
     }
+}
+
+fn copy_validation_source(source: &Path, target: &Path, relative: &str) {
+    let destination = target.join(relative);
+    fs::create_dir_all(destination.parent().expect("validation source parent"))
+        .expect("create validation source parent");
+    fs::copy(source.join(relative), destination).expect("copy validation source");
 }
 
 fn temp_repo_root(prefix: &str) -> PathBuf {

@@ -20,6 +20,25 @@ use serde::{Deserialize, Serialize};
 pub const WORKFLOW_GOVERNANCE_SCHEMA_VERSION: &str = "0.1";
 pub const WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION: &str = "0.1";
 
+/// Non-authoritative typed policy contribution. It is deliberately not a
+/// runtime bundle: references into the declared base are resolved only by the
+/// deterministic repository compiler, and trusted admission accepts only the
+/// fully composed, validated bundle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernancePolicyOverlayDocument {
+    pub schema_version: String,
+    pub workflow_governance_policy_overlay: WorkflowGovernancePolicyOverlay,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernancePolicyOverlay {
+    pub id: StableId,
+    pub base_bundle_id: StableId,
+    pub policies: Vec<WorkflowGovernancePolicy>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowGovernanceBundleDocument {
@@ -82,6 +101,7 @@ pub enum WorkflowPolicyActivation {
 pub enum WorkflowGovernanceSignal {
     ContextRecoveryRequired,
     CourseCorrectionRequired,
+    AdversarialReviewRequested,
     ReadinessRequested,
     BuildCompleted,
 }

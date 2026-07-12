@@ -1,0 +1,49 @@
+bundle:
+  id: bundle.workflow-governance.core-assurance-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+  expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.adversarial-review.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+    policy_id: policy.workflow.adversarial-review
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.adversarial-review.independent-reviewer
+    decision_need_refs:
+    - decision.workflow.adversarial-review.high-impact-risk
+    resolved_decision_refs:
+    - decision.workflow.adversarial-review.high-impact-risk
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.scope-bounded.0
+      claim_ref: claim.workflow.adversarial-review.scope-bounded
+      evaluator_ref: evaluator.workflow.adversarial-review.scope-inspection
+      principal: principal.adversarial-review.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.assumptions-challenged.0
+      claim_ref: claim.workflow.adversarial-review.assumptions-challenged
+      evaluator_ref: evaluator.workflow.adversarial-review.independent-review
+      principal: principal.adversarial-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.adversarial-review.resume.claim.workflow.adversarial-review.findings-dispositioned.0
+      claim_ref: claim.workflow.adversarial-review.findings-dispositioned
+      evaluator_ref: evaluator.workflow.adversarial-review.disposition-review
+      principal: principal.adversarial-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

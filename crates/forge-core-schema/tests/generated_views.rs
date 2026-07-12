@@ -28,6 +28,12 @@ fn generated_schemas_cover_v0_contract_surface() {
         "contract_family_inventory",
         "field_evidence_registry",
         "workflow_migration_plan",
+        "workflow_governance_policy_overlay",
+        "workflow_behavioral_review_subject",
+        "workflow_behavioral_coverage_policy",
+        "workflow_behavioral_scenario_corpus",
+        "workflow_behavioral_corpus_set",
+        "workflow_behavioral_shadow_report",
         "workflow_governance_release_manifest",
         "workflow_migration_batch",
         "workflow_retirement_authorization",
@@ -128,4 +134,105 @@ fn workflow_release_views_keep_candidate_and_trusted_authority_boundaries_explic
     assert!(retirement
         .authority_note
         .contains("deserialization is not authority"));
+}
+
+#[test]
+fn p5d3_schema_selectors_use_exact_document_roots_and_non_authority_notes() {
+    let schemas = generated_contract_schemas();
+    let views = compact_agent_views();
+    let expected = [
+        (
+            "workflow_governance_policy_overlay",
+            "WorkflowGovernancePolicyOverlayDocument",
+            "workflow_governance_policy_overlay",
+            "id",
+        ),
+        (
+            "workflow_behavioral_review_subject",
+            "WorkflowBehavioralReviewSubjectDocument",
+            "workflow_behavioral_review_subject",
+            "proposed_release",
+        ),
+        (
+            "workflow_behavioral_coverage_policy",
+            "WorkflowBehavioralCoveragePolicyDocument",
+            "workflow_behavioral_coverage_policy",
+            "required_scenario_kinds",
+        ),
+        (
+            "workflow_behavioral_scenario_corpus",
+            "WorkflowBehavioralScenarioCorpusDocument",
+            "workflow_behavioral_scenario_corpus",
+            "workflow_evidence",
+        ),
+        (
+            "workflow_behavioral_corpus_set",
+            "WorkflowBehavioralCorpusSetDocument",
+            "workflow_behavioral_corpus_set",
+            "corpora",
+        ),
+        (
+            "workflow_behavioral_shadow_report",
+            "WorkflowBehavioralShadowReportDocument",
+            "workflow_behavioral_shadow_report",
+            "verdict",
+        ),
+    ];
+
+    for (family, document_type, root, contract_field) in expected {
+        let schema = schemas
+            .iter()
+            .find(|artifact| artifact.family_id == family)
+            .unwrap_or_else(|| panic!("missing schema selector {family}"));
+        assert_eq!(schema.document_type, document_type);
+        assert_eq!(schema.root_key, Some(root));
+        assert_eq!(schema.schema["x-forge-family-id"], family);
+        assert!(schema.schema["x-forge-authority-note"]
+            .as_str()
+            .is_some_and(|note| {
+                note.contains("non-authoritative") || note.contains("candidate")
+            }));
+
+        let view = views
+            .iter()
+            .find(|view| view.family_id == family)
+            .expect("compact P5d.3 view");
+        assert_eq!(view.document_type, document_type);
+        assert_eq!(view.root_key, Some(root));
+        assert!(view
+            .top_level_required_fields
+            .contains(&"schema_version".to_owned()));
+        assert!(view.top_level_required_fields.contains(&root.to_owned()));
+        assert!(view
+            .contract_required_fields
+            .contains(&contract_field.to_owned()));
+        assert!(view.authority_note.contains("non-authoritative"));
+        assert!(view.authority_note.contains("cannot") || view.authority_note.contains("not "));
+    }
+}
+
+#[test]
+fn p5d3_behavioral_schemas_expose_closed_authority_and_verdict_enums() {
+    let views = compact_agent_views();
+    let report = views
+        .iter()
+        .find(|view| view.family_id == "workflow_behavioral_shadow_report")
+        .expect("shadow report view");
+    assert!(report
+        .enum_definitions
+        .contains(&"WorkflowBehavioralEvidenceAuthority".to_owned()));
+    assert!(report
+        .enum_definitions
+        .contains(&"WorkflowBehavioralVerdict".to_owned()));
+    assert!(report
+        .enum_definitions
+        .contains(&"WorkflowBehavioralDisposition".to_owned()));
+
+    let review = views
+        .iter()
+        .find(|view| view.family_id == "workflow_behavioral_review_subject")
+        .expect("review subject view");
+    assert!(review
+        .enum_definitions
+        .contains(&"WorkflowBehavioralReviewSubjectAuthority".to_owned()));
 }

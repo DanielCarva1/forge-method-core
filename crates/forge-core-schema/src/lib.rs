@@ -5,8 +5,11 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
-    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
-    WorkflowGovernanceLedgerDocument, WorkflowGovernanceReceiptDocument,
+    WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
+    WorkflowBehavioralReviewSubjectDocument, WorkflowBehavioralScenarioCorpusDocument,
+    WorkflowBehavioralShadowReportDocument, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceLedgerDocument,
+    WorkflowGovernancePolicyOverlayDocument, WorkflowGovernanceReceiptDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
     WorkflowMigrationPlanDocument, WorkflowRetirementAuthorizationDocument,
 };
@@ -146,6 +149,42 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "WorkflowMigrationPlanDocument",
             Some("workflow_migration_plan"),
             "read-only migration classification policy; does not authorize execution or retirement",
+        ),
+        schema_artifact::<WorkflowGovernancePolicyOverlayDocument>(
+            "workflow_governance_policy_overlay",
+            "WorkflowGovernancePolicyOverlayDocument",
+            Some("workflow_governance_policy_overlay"),
+            "non-authoritative candidate policy contribution; only deterministic composition and later trusted admission may make a policy executable",
+        ),
+        schema_artifact::<WorkflowBehavioralReviewSubjectDocument>(
+            "workflow_behavioral_review_subject",
+            "WorkflowBehavioralReviewSubjectDocument",
+            Some("workflow_behavioral_review_subject"),
+            "acyclic candidate-only review subject; it excludes evidence and cannot admit a release",
+        ),
+        schema_artifact::<WorkflowBehavioralCoveragePolicyDocument>(
+            "workflow_behavioral_coverage_policy",
+            "WorkflowBehavioralCoveragePolicyDocument",
+            Some("workflow_behavioral_coverage_policy"),
+            "non-authoritative shadow-coverage requirements; authored thresholds and passing labels cannot create admission",
+        ),
+        schema_artifact::<WorkflowBehavioralScenarioCorpusDocument>(
+            "workflow_behavioral_scenario_corpus",
+            "WorkflowBehavioralScenarioCorpusDocument",
+            Some("workflow_behavioral_scenario_corpus"),
+            "non-authoritative typed behavioral scenarios; expected projections require deterministic recomputation and independent review",
+        ),
+        schema_artifact::<WorkflowBehavioralCorpusSetDocument>(
+            "workflow_behavioral_corpus_set",
+            "WorkflowBehavioralCorpusSetDocument",
+            Some("workflow_behavioral_corpus_set"),
+            "content-addressed non-authoritative corpus inventory; aggregation is not evidence validity or release admission",
+        ),
+        schema_artifact::<WorkflowBehavioralShadowReportDocument>(
+            "workflow_behavioral_shadow_report",
+            "WorkflowBehavioralShadowReportDocument",
+            Some("workflow_behavioral_shadow_report"),
+            "non-authoritative consistency candidate only; a shadow pass cannot grant executable, completion, retirement, or release authority",
         ),
         schema_artifact::<WorkflowGovernanceReleaseManifestDocument>(
             "workflow_governance_release_manifest",
@@ -288,6 +327,13 @@ fn enum_definitions(schema: &Value) -> Vec<String> {
 fn collect_enum_definitions(value: &Value, names: &mut Vec<String>) {
     match value {
         Value::Object(map) => {
+            if let Some(definitions) = map.get("$defs").and_then(Value::as_object) {
+                for (name, definition) in definitions {
+                    if contains_enum(definition) {
+                        names.push(name.clone());
+                    }
+                }
+            }
             if map.get("enum").and_then(Value::as_array).is_some() {
                 if let Some(title) = map.get("title").and_then(Value::as_str) {
                     names.push(title.to_owned());
@@ -303,6 +349,16 @@ fn collect_enum_definitions(value: &Value, names: &mut Vec<String>) {
             }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+fn contains_enum(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            map.get("enum").and_then(Value::as_array).is_some() || map.values().any(contains_enum)
+        }
+        Value::Array(items) => items.iter().any(contains_enum),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => false,
     }
 }
 
@@ -327,6 +383,24 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"
+        }
+        "workflow_governance_policy_overlay" => {
+            "non-authoritative candidate-only overlay; cannot become executable without deterministic composition and trusted admission"
+        }
+        "workflow_behavioral_review_subject" => {
+            "acyclic non-authoritative candidate-only review subject; excludes evidence and cannot admit a release"
+        }
+        "workflow_behavioral_coverage_policy" => {
+            "non-authoritative coverage floor; authored thresholds or pass labels cannot create authority"
+        }
+        "workflow_behavioral_scenario_corpus" => {
+            "typed shadow scenarios are non-authoritative and cannot replace deterministic recomputation"
+        }
+        "workflow_behavioral_corpus_set" => {
+            "non-authoritative content-addressed corpus aggregation is not evidence validity or admission"
+        }
+        "workflow_behavioral_shadow_report" => {
+            "non-authoritative shadow consistency is candidate-only; it cannot grant executable or release authority"
         }
         "workflow_governance_release_manifest" => {
             "manifest entries are rollout intent only; executable and retired states require trusted derived admission"

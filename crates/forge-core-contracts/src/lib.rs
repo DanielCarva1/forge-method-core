@@ -33,6 +33,7 @@ pub mod telemetry;
 pub mod tool_effect;
 pub mod verification_goal;
 pub mod workflow;
+pub mod workflow_behavior;
 pub mod workflow_governance;
 pub mod workflow_migration;
 pub mod workflow_release;
@@ -103,6 +104,7 @@ pub use research::{
 };
 pub use typed_failure::TypedFailure;
 pub use workflow::{Workflow, WorkflowDocument};
+pub use workflow_behavior::*;
 pub use workflow_governance::{
     AdvisoryWorkflowPlaybook, ApplicabilityAssessedEvent, CapabilityProbedEvent,
     ContinuityRecordedEvent, DecisionNeedRaisedEvent, DecisionResolvedEvent,
@@ -118,6 +120,7 @@ pub use workflow_governance::{
     WorkflowGovernanceBundle, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedger,
     WorkflowGovernanceLedgerDocument, WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy,
+    WorkflowGovernancePolicyOverlay, WorkflowGovernancePolicyOverlayDocument,
     WorkflowGovernanceReceiptDocument, WorkflowGovernanceSignal, WorkflowObligationPolicy,
     WorkflowPolicyActivation, WorkflowPolicyRouting, WorkflowPrerequisite,
     WorkflowPrerequisiteRequirement, WorkflowReleaseAdmissionProof,

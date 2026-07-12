@@ -37,6 +37,7 @@ pub mod guide_validation;
 pub mod isolation;
 pub mod obligation_engine;
 pub mod phase_transition;
+pub mod workflow_behavior;
 pub mod workflow_governance;
 pub mod workflow_migration;
 pub mod workflow_release;
@@ -100,6 +101,11 @@ pub use coordination_eval::{
     coordination_fixture_gaps, score_coordination, validate_coordination_contract,
     CoordinationOutcome, CoordinationScore, CoordinationValidationError, CoordinationVerdict,
 };
+pub use workflow_behavior::{
+    derive_workflow_governed_outcome, evaluate_workflow_behavior,
+    workflow_behavior_execution_input_digest, WorkflowBehavioralBundleInput,
+    WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity,
+};
 pub use workflow_governance::{
     project_legacy_workflow_compatibility, simulate_workflow_governance,
     validate_workflow_governance_bundle, LegacyWorkflowGovernanceProjection,
@@ -117,15 +123,17 @@ pub use workflow_migration::{
 };
 pub use workflow_release::{
     evaluate_workflow_release, evaluate_workflow_release_registry,
-    workflow_implicit_p5c_release_digest, workflow_migration_batch_digest,
-    workflow_policy_set_digest, workflow_release_legacy_digest, workflow_release_manifest_digest,
-    workflow_release_policy_digest, workflow_release_registry_digest,
-    workflow_runtime_bundle_digest, WorkflowReleaseAssessment, WorkflowReleaseDerivedState,
-    WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
-    WorkflowReleaseEvidenceAssurance, WorkflowReleaseGap, WorkflowReleaseGapCode,
-    WorkflowReleaseIssue, WorkflowReleaseIssueCode, WorkflowReleaseRegistryEvaluation,
-    WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
-    WorkflowReleaseRegistryIssue, WorkflowReleaseRegistryIssueCode, WorkflowReleaseScorecardCounts,
+    evaluate_workflow_release_registry_evolution, workflow_implicit_p5c_release_digest,
+    workflow_migration_batch_digest, workflow_policy_set_digest, workflow_release_legacy_digest,
+    workflow_release_manifest_digest, workflow_release_policy_digest,
+    workflow_release_registry_digest, workflow_runtime_bundle_digest, WorkflowReleaseAssessment,
+    WorkflowReleaseDerivedState, WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority,
+    WorkflowReleaseEvaluationStatus, WorkflowReleaseEvidenceAssurance, WorkflowReleaseGap,
+    WorkflowReleaseGapCode, WorkflowReleaseIssue, WorkflowReleaseIssueCode,
+    WorkflowReleaseRegistryEvaluation, WorkflowReleaseRegistryEvaluationAuthority,
+    WorkflowReleaseRegistryEvaluationStatus, WorkflowReleaseRegistryEvolutionArtifact,
+    WorkflowReleaseRegistryEvolutionEvaluation, WorkflowReleaseRegistryIssue,
+    WorkflowReleaseRegistryIssueCode, WorkflowReleaseScorecardCounts,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

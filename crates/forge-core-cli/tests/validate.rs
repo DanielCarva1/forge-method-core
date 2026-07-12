@@ -156,6 +156,18 @@ fn merged_validation_root(label: &str) -> PathBuf {
     let root = repo_root();
     let temp = temp_repo_root(label);
     copy_dir_recursive(&root.join("contracts"), &temp.join("contracts"));
+    let evaluator_source = root.join("crates/forge-core-decisions/src/workflow_behavior.rs");
+    let evaluator_target = temp.join("crates/forge-core-decisions/src/workflow_behavior.rs");
+    fs::create_dir_all(evaluator_target.parent().expect("evaluator parent"))
+        .expect("create evaluator source directory");
+    fs::copy(evaluator_source, evaluator_target).expect("copy behavioral evaluator source");
+    let baseline_source =
+        root.join("crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson");
+    let baseline_target =
+        temp.join("crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson");
+    fs::create_dir_all(baseline_target.parent().expect("baseline history parent"))
+        .expect("create baseline history directory");
+    fs::copy(baseline_source, baseline_target).expect("copy P5d.2 baseline history");
     copy_dir_recursive(
         &root
             .join("docs")
@@ -1509,6 +1521,13 @@ fn validate_library_passes_current_repo() {
         .expect("aggregate release registry check");
     assert_eq!(registry_check.status, ValidationStatus::Passed);
     assert_eq!(registry_check.diagnostics, 0);
+    let behavioral_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_behavioral_evidence_candidate")
+        .expect("aggregate behavioral evidence check");
+    assert_eq!(behavioral_check.status, ValidationStatus::Passed);
+    assert_eq!(behavioral_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
@@ -1543,6 +1562,24 @@ fn assert_release_registry_check_failed(summary: &forge_core_cli::ValidateSummar
             .iter()
             .any(|diagnostic| diagnostic.path.contains(path)),
         "expected registry diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+fn assert_behavioral_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_behavioral_evidence_candidate")
+        .expect("aggregate behavioral evidence check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected behavioral diagnostic containing {path:?}, found {:?}",
         summary.diagnostics
     );
 }
@@ -1629,6 +1666,121 @@ fn workflow_release_registry_validation_fails_for_missing_or_tampered_canonical_
     let summary = run_validate(&missing_bundle);
     assert_eq!(summary.status, ValidationStatus::Failed);
     assert_release_registry_check_failed(&summary, RUNTIME_BUNDLE_REF);
+}
+
+#[test]
+fn behavioral_validation_rejects_tamper_missing_class_drift_and_fake_report() {
+    const OVERLAY_REF: &str = "contracts/policies/workflow-core-assurance-overlay-v0.yaml";
+    const REPRESENTATIVE_REF: &str =
+        "contracts/evidence/workflow-core-assurance-representative-v0.yaml";
+    const REPORT_REF: &str = "contracts/evidence/workflow-core-assurance-shadow-report-v0.yaml";
+
+    let tampered = merged_validation_root("behavioral-overlay-tamper");
+    let overlay_path = tampered.join(OVERLAY_REF);
+    let mut overlay = fs::read(&overlay_path).expect("read overlay");
+    overlay.extend_from_slice(b"\n# byte-level tamper\n");
+    fs::write(&overlay_path, overlay).expect("tamper overlay bytes");
+    let summary = run_validate(&tampered);
+    assert_behavioral_check_failed(&summary, OVERLAY_REF);
+
+    let missing = merged_validation_root("behavioral-corpus-missing");
+    fs::remove_file(missing.join(REPRESENTATIVE_REF)).expect("remove representative corpus");
+    let summary = run_validate(&missing);
+    assert_behavioral_check_failed(&summary, REPRESENTATIVE_REF);
+
+    let class_drift = merged_validation_root("behavioral-corpus-class-drift");
+    let corpus_path = class_drift.join(REPRESENTATIVE_REF);
+    let mut corpus: Value =
+        yaml_serde::from_slice(&fs::read(&corpus_path).expect("read representative corpus"))
+            .expect("parse representative corpus");
+    corpus["workflow_behavioral_scenario_corpus"]["partition_class"] = json!("adversarial");
+    fs::write(
+        &corpus_path,
+        yaml_serde::to_string(&corpus).expect("serialize corpus class mutant"),
+    )
+    .expect("write corpus class mutant");
+    let summary = run_validate(&class_drift);
+    assert_behavioral_check_failed(&summary, REPRESENTATIVE_REF);
+
+    let fake_report = merged_validation_root("behavioral-fake-report");
+    let report_path = fake_report.join(REPORT_REF);
+    let mut authored: Value =
+        yaml_serde::from_slice(&fs::read(&report_path).expect("read shadow report"))
+            .expect("parse shadow report");
+    authored["workflow_behavioral_shadow_report"]["verdict"] = json!("mismatch_detected");
+    authored["workflow_behavioral_shadow_report"]["disposition"] = json!("quarantine_required");
+    fs::write(
+        &report_path,
+        yaml_serde::to_string(&authored).expect("serialize fake report"),
+    )
+    .expect("write fake report");
+    let summary = run_validate(&fake_report);
+    assert_behavioral_check_failed(&summary, REPORT_REF);
+}
+
+#[test]
+fn behavioral_validation_rejects_quarantine_policy_leak_and_candidate_admission() {
+    const CANDIDATE_BUNDLE_REF: &str =
+        "contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml";
+    const REGISTRY_REF: &str = "contracts/migration/workflow-governance-release-registry-v0.yaml";
+
+    let quarantine_leak = merged_validation_root("behavioral-quarantine-policy-leak");
+    let bundle_path = quarantine_leak.join(CANDIDATE_BUNDLE_REF);
+    let mut bundle: Value =
+        yaml_serde::from_slice(&fs::read(&bundle_path).expect("read candidate bundle"))
+            .expect("parse candidate bundle");
+    bundle["workflow_governance_bundle"]["policies"][0]["compatibility_workflow_id"] =
+        json!("edge-case-review");
+    fs::write(
+        &bundle_path,
+        yaml_serde::to_string(&bundle).expect("serialize quarantine leak"),
+    )
+    .expect("write quarantine leak");
+    let summary = run_validate(&quarantine_leak);
+    assert_behavioral_check_failed(&summary, CANDIDATE_BUNDLE_REF);
+
+    let candidate_admission = merged_validation_root("behavioral-candidate-admission");
+    let registry_path = candidate_admission.join(REGISTRY_REF);
+    let mut registry: Value =
+        yaml_serde::from_slice(&fs::read(&registry_path).expect("read release registry"))
+            .expect("parse release registry");
+    registry["workflow_governance_release_registry"]["releases"][1]["release"]["release_id"] =
+        json!("workflow-governance.release.core-assurance-v0");
+    registry["workflow_governance_release_registry"]["releases"][1]["runtime_bundle"]["identity"]
+        ["bundle_id"] = json!("bundle.workflow-governance.core-assurance-candidate-v0");
+    fs::write(
+        &registry_path,
+        yaml_serde::to_string(&registry).expect("serialize candidate admission mutant"),
+    )
+    .expect("write candidate admission mutant");
+    let summary = run_validate(&candidate_admission);
+    assert_behavioral_check_failed(&summary, REGISTRY_REF);
+}
+
+#[test]
+fn behavioral_validation_rejects_checkpoint_substitution_and_baseline_history_drift() {
+    const ADVERSARIAL_CHECKPOINT_REF: &str =
+        "contracts/evidence/workflow-core-assurance-adversarial-review-resume-checkpoint-v0.yaml";
+    const CODE_REVIEW_CHECKPOINT_REF: &str =
+        "contracts/evidence/workflow-core-assurance-code-review-resume-checkpoint-v0.yaml";
+    const BASELINE_HISTORY_REF: &str =
+        "crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson";
+
+    let substituted = merged_validation_root("behavioral-checkpoint-substitution");
+    let replacement = fs::read(substituted.join(CODE_REVIEW_CHECKPOINT_REF))
+        .expect("read replacement checkpoint");
+    fs::write(substituted.join(ADVERSARIAL_CHECKPOINT_REF), replacement)
+        .expect("substitute typed checkpoint");
+    let summary = run_validate(&substituted);
+    assert_behavioral_check_failed(&summary, ADVERSARIAL_CHECKPOINT_REF);
+
+    let drifted = merged_validation_root("behavioral-baseline-history-drift");
+    let history_path = drifted.join(BASELINE_HISTORY_REF);
+    let mut history = fs::read(&history_path).expect("read baseline history");
+    history.extend_from_slice(b"{\"tampered\":true}\n");
+    fs::write(&history_path, history).expect("tamper baseline history");
+    let summary = run_validate(&drifted);
+    assert_behavioral_check_failed(&summary, BASELINE_HISTORY_REF);
 }
 
 #[test]

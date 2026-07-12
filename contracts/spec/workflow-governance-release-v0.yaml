@@ -74,8 +74,10 @@ derived_scorecard:
   evidence_assurance: >-
     P5d.1 verifies only that referenced evidence artifacts are repository-owned,
     embedded, and content-addressed by exact SHA-256. It does not infer that an
-    arbitrary artifact is behaviorally sufficient. Typed scenario/result and
-    workflow/policy bindings are required by P5d.3 before runtime admission.
+    arbitrary artifact is behaviorally sufficient. P5d.3 supplies typed
+    workflow/policy and scenario/result bindings for its first reviewed batch,
+    but those candidate-only artifacts remain non-authoritative. Independent
+    P5d.4 authorization is still required before runtime admission.
 
 runtime_boundary:
   p5d_1: >-

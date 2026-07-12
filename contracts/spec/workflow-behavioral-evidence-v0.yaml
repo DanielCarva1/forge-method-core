@@ -1,0 +1,237 @@
+schema_version: "0.1"
+spec: "workflow_behavioral_evidence_v0"
+status: "p5d_3_implemented"
+purpose: >-
+  Compile the first non-golden workflow batch from reviewed typed overlays,
+  keep unresolved legacy semantics in an explicit non-authoritative quarantine,
+  and derive reproducible shadow evidence over governed outcomes. This slice
+  produces review candidates only; it cannot admit a release, change a project
+  pin, satisfy a runtime obligation, or retire legacy material.
+
+authority_boundary:
+  behavioral_evidence: >-
+    A deterministic comparison artifact whose only authority value is
+    non_authoritative_shadow_evidence. It can justify review or quarantine but
+    cannot mint an admitted release.
+  candidate_release: >-
+    Content-addressed composition proposed for independent review. Presence in
+    repository artifacts or an expanded audit registry is not runtime admission.
+  quarantine: >-
+    A visible disposition explaining why a legacy workflow was not compiled.
+    It contributes no policy, prerequisite, route, readiness, completion,
+    executable denominator, or successor release.
+  independent_review: >-
+    Expected policy and scenarios may be co-authored with their candidate, so a
+    passing shadow report proves deterministic consistency rather than semantic
+    truth. P5d.4 must consume separately verified authorization bound to the
+    exact candidate and evidence identities before extending opaque admission.
+
+first_reviewed_batch:
+  id: "workflow-governance.batch.core-assurance-v0"
+  migration_candidates:
+    - "adversarial-review"
+    - "risk-register"
+    - "code-review"
+    - "traceability-gate"
+    - "nfr-evidence-audit"
+  quarantined:
+    edge-case-review:
+      reason: "ambiguous_legacy_authority"
+      risk: "high"
+      owner: "owner.workflow-governance"
+      review_target: "0.3.0"
+      blocked_by:
+        - "gap.workflow-review-mode.taxonomy"
+        - "decision.workflow-review-precedence"
+    track-decision:
+      reason: "ambiguous_legacy_authority"
+      risk: "critical"
+      owner: "owner.workflow-governance"
+      review_target: "0.3.0"
+      blocked_by:
+        - "gap.route-authority-model"
+        - "gap.module-pack-lifecycle"
+        - "gap.enterprise-artifact-adapter"
+    release-readiness:
+      reason: "unsafe_automatic_conversion"
+      risk: "critical"
+      owner: "owner.workflow-governance"
+      review_target: "0.3.0"
+      blocked_by:
+        - "gap.release-readiness-overlap"
+        - "gap.enterprise-artifact-adapter"
+        - "gap.release-authorization-separation"
+  candidate_manifest_totals:
+    migration_candidate: 20
+    compatibility_only: 69
+    quarantined: 3
+    domain_pack_candidate: 18
+    total: 110
+
+typed_overlay_rules:
+  - "only closed identifiers, applicability, prerequisites, obligations, claims, evaluator requirements, capabilities, and decision rules become candidate policy"
+  - "legacy steps, prompts, templates, narration, examples, role-play, and command strings remain advisory source material"
+  - "a compiler never invents an evaluator, proof, waiver, completion, or authority from legacy prose"
+  - "a quarantined workflow has no placeholder or no-op policy"
+  - "a policy cannot depend on a quarantined workflow"
+
+frozen_predecessor_debt: >-
+  Some admitted P5c evaluator declarations list additional provider/kind
+  combinations that the trusted authority matrix cannot authorize, although
+  their usable exact tuple remains available. P5d.3 must not rewrite that
+  pinned predecessor policy set. Every new overlay evaluator must use only
+  exact authority-matrix tuples; later reviewed release admission must make
+  predecessor cleanup an explicit compatibility decision rather than a
+  silent mutation.
+
+coverage_policy:
+  exact_scenario_kinds:
+    - "positive"
+    - "negative"
+    - "ambiguity"
+    - "false_completion"
+    - "stale_evidence"
+    - "resume"
+    - "ablation"
+  hard_minimums:
+    scenarios_per_kind_per_workflow: 1
+    scenarios_per_workflow: 7
+    governed_coverage_basis_points: 10000
+    mismatches: 0
+    evaluation_errors: 0
+    representative_partition_nonempty: true
+    adversarial_partition_nonempty: true
+    resume_equivalence_required: true
+    ablation_semantic_delta_required: true
+  non_weakenable: >-
+    Raw policy files may strengthen coverage but cannot lower these minima,
+    omit a scenario kind, exclude a governed dimension, turn errors into
+    success, or make a no-op ablation acceptable.
+
+identity_binding:
+  - "workflow id and exact legacy source digest"
+  - "candidate policy id and canonical policy digest"
+  - "candidate runtime-bundle id, version, and digest"
+  - "proposed candidate batch id and version"
+  - "proposed candidate release id, version, and predecessor"
+  - "acyclic review-subject id and digest covering exact overlays, composed policy set, legacy digests, quarantine map, proposed release identity, evaluator, and projection version"
+  - "coverage-policy id, version, and canonical digest"
+  - "evaluator id, version, implementation/source digest, and governed projection version"
+  - "every embedded raw source reference and exact sha256 byte digest"
+  - "the complete scenario corpus digest; the derived report binds the corpus rather than its own digest"
+
+cycle_exclusion: >-
+  Evidence referenced by a batch cannot embed the final batch or manifest
+  digest. The review subject excludes evidence references, aggregate reports,
+  final batch digest, and final manifest digest. After composition, a separate
+  candidate review index outside the batch evidence graph may bind the final
+  manifest, batches, corpus, report digest, and review-subject digests; P5d.4
+  review authorization must bind that complete index.
+
+digest_domains: >-
+  Every artifact-reference expected_digest is the exact SHA-256 of embedded
+  bytes. Canonical JCS semantic identities are carried in distinct fields for
+  the review subject, candidate bundle, policy set, individual policy, and
+  coverage policy. One digest must never be reused as if raw YAML bytes and a
+  canonical typed value were the same domain.
+
+scenario_execution:
+  single: "one initial state and one derived governed outcome"
+  resume: >-
+    A content-addressed typed checkpoint is reconstructed by a replacement
+    agent against the exact frozen P5d.2 upgraded history. Ledger head,
+    snapshot, admitted foundation release/runtime bundle, state, phase, and
+    clock are derived from that history rather than invented in the corpus;
+    independently reconstructed candidate-shadow inputs must produce equal
+    governed outcome projections. This does not pretend the candidate itself
+    is admitted.
+  ablation: >-
+    Control lacks proof for one load-bearing claim while all other semantics
+    are satisfied. The ablated bundle removes exactly that declared obligation,
+    claim, evaluator, and closed dependents; the same evaluation must move from
+    incomplete to complete and change the declared governed safety dimensions.
+    An inventory-only, no-op, unrelated, or still-incomplete delta is
+    insufficient evidence.
+
+governed_outcome_projection:
+  included:
+    - "evaluation status and workflow eligibility"
+    - "progression and completion admissibility"
+    - "sorted obligation and claim identifiers with governed states"
+    - "decision-request and capability-gap references"
+    - "typed issue codes and stable field paths"
+    - "semantic next-action ids, kinds, claims, and rank"
+  excluded:
+    - "free-form descriptions, rationale, scripts, prompts, and playbook prose"
+    - "serialization order or display-only formatting"
+    - "model confidence, self-reported pass labels, and authored aggregate counts"
+
+derived_results:
+  verdicts:
+    - "behaviorally_consistent_candidate"
+    - "insufficient_evidence"
+    - "mismatch_detected"
+    - "invalid_bindings"
+  dispositions:
+    - "review_candidate"
+    - "quarantine_required"
+  authority: "non_authoritative_shadow_evidence"
+  derivation: >-
+    The evaluator recomputes bindings, executions, normalized governed
+    projections, per-kind coverage, resume equivalence, ablation deltas, and
+    aggregate verdicts. Checked-in reports must equal recomputation byte for
+    byte and cannot improve through authored summaries.
+
+registry_evolution:
+  p5d_2_registry: >-
+    Remains the exact embedded runtime-admission registry. P5d.3 does not append
+    its candidate to the kernel admission set or expose it as an available
+    successor.
+  append_only_audit: >-
+    Any proposed expanded registry must retain registry and lineage identity,
+    strictly increase version, preserve the complete historical entry prefix,
+    append a linear reachable tail, and reject forks, cycles, skips, reorder,
+    missing predecessors, or altered history.
+  carryover: >-
+    not_applicable is valid only for genesis; preserve_policy_equivalent is
+    valid only for an identical canonical policy-set digest, even when a new
+    release uses a different content-addressed bundle envelope; any policy-set
+    change requires invalidate_all.
+  frozen_history_fixture: >-
+    Before any third runtime release is admitted, a frozen P5d.2 upgraded WAL
+    must prove exact record bytes and digests, authentic historical registry
+    provenance, foundation-v0 active selection, foundation runtime behavior,
+    and closed failure for missing or mutated history.
+
+agent_experience:
+  - "audit output names the five review candidates and three quarantines without presenting either as executable"
+  - "each quarantine exposes its closed reason, risk, blockers, owner, and review target"
+  - "shadow output explains missing scenario classes and governed mismatches with stable codes and paths"
+  - "release status and upgrade remain unchanged; the candidate is not an available successor"
+  - "a replacement agent can recompute the corpus and report from repository artifacts without chat history"
+
+adversarial_evidence:
+  - "missing, duplicated, mislabeled, or digest-drifted scenarios fail closed"
+  - "all seven scenario kinds are required for every candidate workflow"
+  - "fake checked-in pass counts, confidence, rationale, or report bytes cannot improve verdict"
+  - "resume drift and no-op ablation cannot produce review_candidate"
+  - "changing excluded prose does not change governed outcome equivalence"
+  - "quarantined workflow bindings, policies, prerequisites, routes, readiness, completion, or executable counts reject"
+  - "candidate artifacts do not change the P5d.2 admitted registry, ledger, next action, readiness, or completion"
+  - "historical registry reorder, mutation, removal, fork, and provenance forgery reject"
+
+non_goals:
+  - "no third opaque admitted release and no project upgrade to the candidate"
+  - "no claim that shadow consistency is independent semantic approval"
+  - "no retirement, deletion safety, or compatibility-window authority"
+  - "no Domain Pack or extension-authoring runtime"
+  - "no conversion of all remaining catalog workflows in this slice"
+  - "no cryptographic supply-chain signature or external monotonic WAL anchor"
+
+references:
+  - "contracts/spec/workflow-governance-release-admission-v0.yaml"
+  - "contracts/spec/workflow-governance-release-v0.yaml"
+  - "contracts/spec/workflow-governance-golden-path-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/migration/workflow-governance-release-registry-v0.yaml"
+  - "contracts/migration/workflow-governance-release-foundation-v0.yaml"

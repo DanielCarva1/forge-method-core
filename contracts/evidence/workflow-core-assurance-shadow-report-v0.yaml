@@ -1,0 +1,3877 @@
+schema_version: '0.1'
+workflow_behavioral_shadow_report:
+  id: report.workflow-core-assurance.shadow-v0
+  report_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  corpus:
+    id: corpus-set.workflow-core-assurance-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-corpus-set-v0.yaml
+    expected_digest: sha256:1101f74a4408a71070f699d21271ad9ac6a22d3282470cd55a62c266bbe95306
+  coverage_policy:
+    id: coverage.workflow-core-assurance-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+    expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+  workflow_reports:
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: adversarial-review
+      legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+      policy_ref: policy.workflow.adversarial-review
+      policy_digest: sha256:2be0bfaae8227d59ea40a0c53cab7b9eb9c52881b74f92a393b5bd950c7f72d4
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/adversarial-review.yaml
+        expected_digest: sha256:524c669e022019e4a3fdcbf1b7d0c3601389e5e811a4ec300b096368150928bd
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    total_scenarios: 7
+    scenario_kind_counts:
+    - scenario_kind: positive
+      count: 1
+    - scenario_kind: negative
+      count: 1
+    - scenario_kind: ambiguity
+      count: 1
+    - scenario_kind: false_completion
+      count: 1
+    - scenario_kind: stale_evidence
+      count: 1
+    - scenario_kind: resume
+      count: 1
+    - scenario_kind: ablation
+      count: 1
+    representative_scenarios: 2
+    adversarial_scenarios: 5
+    coverage_basis_points: 10000
+    mismatch_count: 0
+    evaluation_error_count: 0
+    scenario_results:
+    - scenario_id: scenario.workflow.adversarial-review.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution:
+        kind: ablation
+        control:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          differing_dimensions: []
+        ablated:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 1
+          differing_dimensions: []
+        semantic_delta: true
+        differing_dimensions:
+        - status
+        - completion
+        - obligations
+        - claims
+        - issues
+        - next_actions
+    - scenario_id: scenario.workflow.adversarial-review.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.adversarial-review.high-impact-risk
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.assumptions-challenged.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.findings-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.scope-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.adversarial-review.high-impact-risk
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 3
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 4
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.adversarial-review.high-impact-risk
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.assumptions-challenged.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.findings-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.ambiguity.claim.workflow.adversarial-review.scope-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.adversarial-review.high-impact-risk
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 3
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 4
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.adversarial-review.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.adversarial-review.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: blocked
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: disproven
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.adversarial-review.assumptions-challenged
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.correct.claim.workflow.adversarial-review.findings-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.correct.claim.workflow.adversarial-review.scope-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: blocked
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: disproven
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.adversarial-review.assumptions-challenged
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.correct.claim.workflow.adversarial-review.findings-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.correct.claim.workflow.adversarial-review.scope-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.adversarial-review.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.adversarial-review.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution:
+        kind: resume
+        checkpoint:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          differing_dimensions: []
+        resumed:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: verified
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.adversarial-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              - claim.workflow.adversarial-review.findings-dispositioned
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 1
+          differing_dimensions: []
+        equivalent: true
+    - scenario_id: scenario.workflow.adversarial-review.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.assumptions-challenged.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.findings-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.scope-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.adversarial-review.assumptions-challenged
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.findings-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.adversarial-review.scope-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.adversarial-review.assumptions-challenged
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.findings-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.adversarial-review.scope-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.assumptions-challenged.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.findings-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.adversarial-review.stale-evidence.claim.workflow.adversarial-review.scope-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.adversarial-review.assumptions-challenged
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.assumptions-challenged
+              rank: 1
+            - id: action.evaluate.claim.workflow.adversarial-review.findings-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.findings-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.adversarial-review.scope-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.adversarial-review.scope-bounded
+              rank: 3
+          differing_dimensions: []
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: code-review
+      legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+      policy_ref: policy.workflow.code-review
+      policy_digest: sha256:6d4ed9315161925d436f22abc6e782f5b73f121f3a1ca5fce9aa3f63aa046359
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/code-review.yaml
+        expected_digest: sha256:46b53b2d6d09783b449f607ce5c433667b1a9ff2901f56a201d28e0d98b972f0
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    total_scenarios: 7
+    scenario_kind_counts:
+    - scenario_kind: positive
+      count: 1
+    - scenario_kind: negative
+      count: 1
+    - scenario_kind: ambiguity
+      count: 1
+    - scenario_kind: false_completion
+      count: 1
+    - scenario_kind: stale_evidence
+      count: 1
+    - scenario_kind: resume
+      count: 1
+    - scenario_kind: ablation
+      count: 1
+    representative_scenarios: 2
+    adversarial_scenarios: 5
+    coverage_basis_points: 10000
+    mismatch_count: 0
+    evaluation_error_count: 0
+    scenario_results:
+    - scenario_id: scenario.workflow.code-review.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution:
+        kind: ablation
+        control:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.code-review.repository-diff-inspection
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.code-review.repository-diff-inspection
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.code-review.repository-diff-inspection
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.code-review.repository-diff-inspection
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+          differing_dimensions: []
+        ablated:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          differing_dimensions: []
+        semantic_delta: true
+        differing_dimensions:
+        - status
+        - progression
+        - completion
+        - obligations
+        - claims
+        - capabilities
+        - issues
+        - next_actions
+    - scenario_id: scenario.workflow.code-review.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs:
+            - decision.workflow.code-review.expected-behavior
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.blockers-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.changed-surface-bounded.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.findings-evidenced.0
+            next_actions:
+            - id: action.ask.decision.workflow.code-review.expected-behavior
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 3
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 4
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs:
+            - decision.workflow.code-review.expected-behavior
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.blockers-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.changed-surface-bounded.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.ambiguity.claim.workflow.code-review.findings-evidenced.0
+            next_actions:
+            - id: action.ask.decision.workflow.code-review.expected-behavior
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 3
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 4
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.code-review.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.code-review.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: blocked
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: disproven
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.code-review.blockers-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.correct.claim.workflow.code-review.changed-surface-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.correct.claim.workflow.code-review.findings-evidenced
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: blocked
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: disproven
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.code-review.blockers-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.correct.claim.workflow.code-review.changed-surface-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.correct.claim.workflow.code-review.findings-evidenced
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.code-review.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.code-review.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution:
+        kind: resume
+        checkpoint:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          differing_dimensions: []
+        resumed:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: satisfied
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: verified
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: verified
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.code-review
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              - claim.workflow.code-review.changed-surface-bounded
+              - claim.workflow.code-review.findings-evidenced
+              rank: 1
+          differing_dimensions: []
+        equivalent: true
+    - scenario_id: scenario.workflow.code-review.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.blockers-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.changed-surface-bounded.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.findings-evidenced.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.code-review.blockers-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.code-review.changed-surface-bounded
+              status: pending
+            - obligation_id: obligation.workflow.code-review.findings-evidenced
+              status: pending
+            claims:
+            - claim_id: claim.workflow.code-review.blockers-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.code-review.changed-surface-bounded
+              status: unknown
+            - claim_id: claim.workflow.code-review.findings-evidenced
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.blockers-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.changed-surface-bounded.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.code-review.stale-evidence.claim.workflow.code-review.findings-evidenced.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.code-review.blockers-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.blockers-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.code-review.changed-surface-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.changed-surface-bounded
+              rank: 2
+            - id: action.evaluate.claim.workflow.code-review.findings-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.code-review.findings-evidenced
+              rank: 3
+          differing_dimensions: []
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: nfr-evidence-audit
+      legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+      policy_ref: policy.workflow.nfr-evidence-audit
+      policy_digest: sha256:fdd0b2f9dacac04f6527aa4887a00b0f6154f344433c69275c0fa7d7471fa6bb
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/nfr-evidence-audit.yaml
+        expected_digest: sha256:f6e9db0df17828f45d7b0738d31e416825a15e7f42912597b29c6a517b228c21
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    total_scenarios: 7
+    scenario_kind_counts:
+    - scenario_kind: positive
+      count: 1
+    - scenario_kind: negative
+      count: 1
+    - scenario_kind: ambiguity
+      count: 1
+    - scenario_kind: false_completion
+      count: 1
+    - scenario_kind: stale_evidence
+      count: 1
+    - scenario_kind: resume
+      count: 1
+    - scenario_kind: ablation
+      count: 1
+    representative_scenarios: 2
+    adversarial_scenarios: 5
+    coverage_basis_points: 10000
+    mismatch_count: 0
+    evaluation_error_count: 0
+    scenario_results:
+    - scenario_id: scenario.workflow.nfr-evidence-audit.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution:
+        kind: ablation
+        control:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.nfr-evidence-audit.qualified-evaluation
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.nfr-evidence-audit.qualified-evaluation
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 2
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.nfr-evidence-audit.qualified-evaluation
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.nfr-evidence-audit.qualified-evaluation
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 2
+          differing_dimensions: []
+        ablated:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 1
+          differing_dimensions: []
+        semantic_delta: true
+        differing_dimensions:
+        - status
+        - progression
+        - completion
+        - obligations
+        - claims
+        - capabilities
+        - issues
+        - next_actions
+    - scenario_id: scenario.workflow.nfr-evidence-audit.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.nfr-evidence-audit.release-impact
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.impact-governed.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.status-evidenced.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.universe-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.nfr-evidence-audit.release-impact
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 3
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 4
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.nfr-evidence-audit.release-impact
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.impact-governed.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.status-evidenced.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.ambiguity.claim.workflow.nfr-evidence-audit.universe-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.nfr-evidence-audit.release-impact
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 3
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 4
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.nfr-evidence-audit.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.nfr-evidence-audit.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: blocked
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: blocked
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: disproven
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: disproven
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.correct.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.correct.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: blocked
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: blocked
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: disproven
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: disproven
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.correct.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.correct.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.nfr-evidence-audit.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.nfr-evidence-audit.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution:
+        kind: resume
+        checkpoint:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          differing_dimensions: []
+        resumed:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: satisfied
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: verified
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.nfr-evidence-audit
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 1
+          differing_dimensions: []
+        equivalent: true
+    - scenario_id: scenario.workflow.nfr-evidence-audit.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.impact-governed.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.status-evidenced.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.universe-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.nfr-evidence-audit.impact-governed
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.status-evidenced
+              status: pending
+            - obligation_id: obligation.workflow.nfr-evidence-audit.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.nfr-evidence-audit.impact-governed
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.status-evidenced
+              status: unknown
+            - claim_id: claim.workflow.nfr-evidence-audit.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.impact-governed.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.status-evidenced.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.nfr-evidence-audit.stale-evidence.claim.workflow.nfr-evidence-audit.universe-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.impact-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.impact-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.status-evidenced
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.status-evidenced
+              rank: 2
+            - id: action.evaluate.claim.workflow.nfr-evidence-audit.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.nfr-evidence-audit.universe-bounded
+              rank: 3
+          differing_dimensions: []
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: risk-register
+      legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+      policy_ref: policy.workflow.risk-register
+      policy_digest: sha256:06be2290e1424225998f511efe9f1e1038c6fdc2137685b6365b861e482834b7
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/risk-register.yaml
+        expected_digest: sha256:25dca3fcd969c6b372b0aee172220898b55e0f6fcb0b829f5c0e60c021e7facb
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    total_scenarios: 7
+    scenario_kind_counts:
+    - scenario_kind: positive
+      count: 1
+    - scenario_kind: negative
+      count: 1
+    - scenario_kind: ambiguity
+      count: 1
+    - scenario_kind: false_completion
+      count: 1
+    - scenario_kind: stale_evidence
+      count: 1
+    - scenario_kind: resume
+      count: 1
+    - scenario_kind: ablation
+      count: 1
+    representative_scenarios: 2
+    adversarial_scenarios: 5
+    coverage_basis_points: 10000
+    mismatch_count: 0
+    evaluation_error_count: 0
+    scenario_results:
+    - scenario_id: scenario.workflow.risk-register.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution:
+        kind: ablation
+        control:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.risk-register.qualified-evaluation
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.risk-register.qualified-evaluation
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 2
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.risk-register.qualified-evaluation
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.risk-register.qualified-evaluation
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 2
+          differing_dimensions: []
+        ablated:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 1
+          differing_dimensions: []
+        semantic_delta: true
+        differing_dimensions:
+        - status
+        - progression
+        - completion
+        - obligations
+        - claims
+        - capabilities
+        - issues
+        - next_actions
+    - scenario_id: scenario.workflow.risk-register.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs:
+            - decision.workflow.risk-register.unresolved-high-risk
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.acceptance-governed.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.high-risk-disposition.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.surface-current.0
+            next_actions:
+            - id: action.ask.decision.workflow.risk-register.unresolved-high-risk
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 3
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 4
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs:
+            - decision.workflow.risk-register.unresolved-high-risk
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.acceptance-governed.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.high-risk-disposition.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.ambiguity.claim.workflow.risk-register.surface-current.0
+            next_actions:
+            - id: action.ask.decision.workflow.risk-register.unresolved-high-risk
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 3
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 4
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.risk-register.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.risk-register.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: blocked
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: blocked
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: disproven
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: disproven
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.risk-register.acceptance-governed
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.correct.claim.workflow.risk-register.high-risk-disposition
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.correct.claim.workflow.risk-register.surface-current
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: blocked
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: blocked
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: disproven
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: disproven
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.risk-register.acceptance-governed
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.correct.claim.workflow.risk-register.high-risk-disposition
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.correct.claim.workflow.risk-register.surface-current
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.risk-register.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.risk-register.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution:
+        kind: resume
+        checkpoint:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          differing_dimensions: []
+        resumed:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: satisfied
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: verified
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: verified
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.risk-register
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              - claim.workflow.risk-register.high-risk-disposition
+              - claim.workflow.risk-register.surface-current
+              rank: 1
+          differing_dimensions: []
+        equivalent: true
+    - scenario_id: scenario.workflow.risk-register.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.acceptance-governed.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.high-risk-disposition.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.surface-current.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.risk-register.acceptance-governed
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.high-risk-disposition
+              status: pending
+            - obligation_id: obligation.workflow.risk-register.surface-current
+              status: pending
+            claims:
+            - claim_id: claim.workflow.risk-register.acceptance-governed
+              status: unknown
+            - claim_id: claim.workflow.risk-register.high-risk-disposition
+              status: unknown
+            - claim_id: claim.workflow.risk-register.surface-current
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.acceptance-governed.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.high-risk-disposition.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.risk-register.stale-evidence.claim.workflow.risk-register.surface-current.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.risk-register.acceptance-governed
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.acceptance-governed
+              rank: 1
+            - id: action.evaluate.claim.workflow.risk-register.high-risk-disposition
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.high-risk-disposition
+              rank: 2
+            - id: action.evaluate.claim.workflow.risk-register.surface-current
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.risk-register.surface-current
+              rank: 3
+          differing_dimensions: []
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.core-assurance-v0
+        embedded_ref: contracts/migration/workflow-core-assurance-review-subject-v0.yaml
+        expected_digest: sha256:6f82c1429aff06be6f8f8bf07cd9cf16d832a3993a6fdc3c9b7e4d63a8e36f75
+      review_subject_digest: sha256:3e0bbe018c31cea0089da362823b01bf5c2166dda774acda2131929b741a6ad6
+      workflow_id: traceability-gate
+      legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+      policy_ref: policy.workflow.traceability-gate
+      policy_digest: sha256:221caa0e03e91b1ac40bbd7452eab2c0f61e3a79d460c58983d48085c6315e46
+      candidate_bundle_id: bundle.workflow-governance.core-assurance-candidate-v0
+      candidate_bundle_digest: sha256:60f3879610fa511da066cddb307b162d09094ec655ce4636127c93506306edf2
+      candidate_bundle_source_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      candidate_policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      migration_batch_id: workflow-governance.batch.core-assurance-v0
+      migration_batch_version: 0.2.0
+      governance_release_id: workflow-governance.release.core-assurance-v0
+      governance_release_version: 0.2.0
+      predecessor_release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+      coverage_policy_id: coverage.workflow-core-assurance-v0
+      coverage_policy_digest: sha256:8798ddace3906de91b63930670335459d7420fcfa58d5e502a07c4850216615c
+      coverage_policy_source_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/traceability-gate.yaml
+        expected_digest: sha256:88989b0882915d835e5a9d4cbe49a7d877be81fcd843d64df5de56a542ed77e8
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-core-assurance-overlay-v0.yaml
+        expected_digest: sha256:2a1d1f521d510112721eb332c050ba315cdaa24da6b9f35b2c4f28a4f601e95e
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-core-assurance-candidate-v0.yaml
+        expected_digest: sha256:c18a08258c547bbd564c702008ba1dfb0e334f3dc0658c70b9c7d41ab04670ed
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-v0.yaml
+        expected_digest: sha256:40a089b4eba13793801d93e33e4cb0217e3d0b9bbb5717b5200c87e779c3d4b8
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    total_scenarios: 7
+    scenario_kind_counts:
+    - scenario_kind: positive
+      count: 1
+    - scenario_kind: negative
+      count: 1
+    - scenario_kind: ambiguity
+      count: 1
+    - scenario_kind: false_completion
+      count: 1
+    - scenario_kind: stale_evidence
+      count: 1
+    - scenario_kind: resume
+      count: 1
+    - scenario_kind: ablation
+      count: 1
+    representative_scenarios: 2
+    adversarial_scenarios: 5
+    coverage_basis_points: 10000
+    mismatch_count: 0
+    evaluation_error_count: 0
+    scenario_results:
+    - scenario_id: scenario.workflow.traceability-gate.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution:
+        kind: ablation
+        control:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.traceability-gate.evaluator
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.traceability-gate.evaluator
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 2
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs:
+            - capability.workflow.traceability-gate.evaluator
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.acquire.capability.workflow.traceability-gate.evaluator
+              kind: acquire_capability
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 2
+          differing_dimensions: []
+        ablated:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 1
+          differing_dimensions: []
+        semantic_delta: true
+        differing_dimensions:
+        - status
+        - progression
+        - completion
+        - obligations
+        - claims
+        - capabilities
+        - issues
+        - next_actions
+    - scenario_id: scenario.workflow.traceability-gate.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.traceability-gate.release-gap
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.gaps-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.high-risk-covered.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.universe-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.traceability-gate.release-gap
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 3
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 4
+          actual:
+            status: blocked
+            eligibility: eligible
+            progression: blocked
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs:
+            - decision.workflow.traceability-gate.release-gap
+            capability_refs: []
+            issues:
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.gaps-dispositioned.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.high-risk-covered.0
+            - code: inconclusive_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.ambiguity.claim.workflow.traceability-gate.universe-bounded.0
+            next_actions:
+            - id: action.ask.decision.workflow.traceability-gate.release-gap
+              kind: ask_human
+              addresses_claim_refs: []
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 3
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 4
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.traceability-gate.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: invented_completion_claim
+              path: workflow_governance_evaluation.completion_assertion
+            next_actions:
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.traceability-gate.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: blocked
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: disproven
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.correct.claim.workflow.traceability-gate.high-risk-covered
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.correct.claim.workflow.traceability-gate.universe-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: blocked
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: blocked
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: blocked
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: disproven
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: disproven
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: disproven
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.correct.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.correct.claim.workflow.traceability-gate.high-risk-covered
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.correct.claim.workflow.traceability-gate.universe-bounded
+              kind: challenge
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.traceability-gate.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          differing_dimensions: []
+    - scenario_id: scenario.workflow.traceability-gate.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution:
+        kind: resume
+        checkpoint:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          differing_dimensions: []
+        resumed:
+          expected:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          actual:
+            status: complete
+            eligibility: eligible
+            progression: allowed
+            completion: complete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: satisfied
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: satisfied
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: verified
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: verified
+            decision_refs: []
+            capability_refs: []
+            issues: []
+            next_actions:
+            - id: action.request-trusted-evaluation.policy.workflow.traceability-gate
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              - claim.workflow.traceability-gate.high-risk-covered
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 1
+          differing_dimensions: []
+        equivalent: true
+    - scenario_id: scenario.workflow.traceability-gate.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution:
+        kind: single
+        comparison:
+          expected:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.gaps-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.high-risk-covered.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.universe-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          actual:
+            status: active
+            eligibility: eligible
+            progression: allowed
+            completion: incomplete
+            obligations:
+            - obligation_id: obligation.workflow.traceability-gate.gaps-dispositioned
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.high-risk-covered
+              status: pending
+            - obligation_id: obligation.workflow.traceability-gate.universe-bounded
+              status: pending
+            claims:
+            - claim_id: claim.workflow.traceability-gate.gaps-dispositioned
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.high-risk-covered
+              status: unknown
+            - claim_id: claim.workflow.traceability-gate.universe-bounded
+              status: unknown
+            decision_refs: []
+            capability_refs: []
+            issues:
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.gaps-dispositioned.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.high-risk-covered.0
+            - code: stale_evidence
+              path: workflow_governance_evaluation.evidence.evidence.traceability-gate.stale-evidence.claim.workflow.traceability-gate.universe-bounded.0
+            next_actions:
+            - id: action.evaluate.claim.workflow.traceability-gate.gaps-dispositioned
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.gaps-dispositioned
+              rank: 1
+            - id: action.evaluate.claim.workflow.traceability-gate.high-risk-covered
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.high-risk-covered
+              rank: 2
+            - id: action.evaluate.claim.workflow.traceability-gate.universe-bounded
+              kind: evaluate
+              addresses_claim_refs:
+              - claim.workflow.traceability-gate.universe-bounded
+              rank: 3
+          differing_dimensions: []
+  verdict: behaviorally_consistent_candidate
+  disposition: review_candidate
