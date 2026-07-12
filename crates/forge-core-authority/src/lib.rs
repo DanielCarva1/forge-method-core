@@ -15,6 +15,7 @@ pub mod execution_handoff;
 pub mod principal_registry;
 pub mod workflow_authority;
 pub mod workflow_release_review;
+pub mod workflow_release_review_v2;
 
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
@@ -52,4 +53,14 @@ pub use workflow_release_review::{
     VerifiedWorkflowReleaseAdmissionAuthorizationAudit, VerifiedWorkflowReleaseReviewerAudit,
     WorkflowReleaseAdmissionAuditAuthority, WorkflowReleaseAdmissionAuthorityError,
     WORKFLOW_RELEASE_ADMISSION_SIGNATURE_DOMAIN,
+};
+pub use workflow_release_review_v2::{
+    verify_workflow_release_admission_authorization_v2,
+    workflow_release_admission_payload_digest_v2, workflow_release_admission_signing_bytes_v2,
+    workflow_release_reviewer_key_fingerprint_v2,
+    VerifiedWorkflowReleaseAdmissionAuthorizationAuditV2,
+    VerifiedWorkflowReleaseAdmissionAuthorizationV2, VerifiedWorkflowReleaseReviewerAuditV2,
+    WorkflowReleaseAdmissionAuditAuthorityV2, WorkflowReleaseAdmissionAuthorityErrorV2,
+    WorkflowReleaseAdmissionExpectedContextV2, WORKFLOW_RELEASE_ADMISSION_PAYLOAD_DOMAIN_V2,
+    WORKFLOW_RELEASE_ADMISSION_SIGNATURE_DOMAIN_V2,
 };

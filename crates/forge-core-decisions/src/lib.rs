@@ -42,6 +42,7 @@ pub mod workflow_governance;
 pub mod workflow_migration;
 pub mod workflow_release;
 pub mod workflow_release_admission;
+pub mod workflow_release_admission_v2;
 
 pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
@@ -141,6 +142,12 @@ pub use workflow_release_admission::{
     WorkflowReleaseAdmissionEvaluation, WorkflowReleaseAdmissionEvaluationAuthority,
     WorkflowReleaseAdmissionEvaluationStatus, WorkflowReleaseAdmissionIssue,
     WorkflowReleaseAdmissionIssueCode,
+};
+pub use workflow_release_admission_v2::{
+    evaluate_workflow_release_admission_candidate_v2, WorkflowReleaseAdmissionCandidateV2Input,
+    WorkflowReleaseAdmissionV2Evaluation, WorkflowReleaseAdmissionV2EvaluationAuthority,
+    WorkflowReleaseAdmissionV2EvaluationStatus, WorkflowReleaseAdmissionV2Issue,
+    WorkflowReleaseAdmissionV2IssueCode,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

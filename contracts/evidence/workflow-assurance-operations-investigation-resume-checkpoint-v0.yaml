@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.investigation.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.investigation
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.investigation.required-proof
+    decision_need_refs:
+    - decision.workflow.investigation.material-gap
+    resolved_decision_refs:
+    - decision.workflow.investigation.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.investigation.resume.claim.workflow.investigation.symptom-bounded.0
+      claim_ref: claim.workflow.investigation.symptom-bounded
+      evaluator_ref: evaluator.workflow.investigation.symptom-bounded
+      principal: principal.investigation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.investigation.resume.claim.workflow.investigation.hypotheses-probed.0
+      claim_ref: claim.workflow.investigation.hypotheses-probed
+      evaluator_ref: evaluator.workflow.investigation.hypotheses-probed
+      principal: principal.investigation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.investigation.resume.claim.workflow.investigation.conclusion-calibrated.0
+      claim_ref: claim.workflow.investigation.conclusion-calibrated
+      evaluator_ref: evaluator.workflow.investigation.conclusion-calibrated
+      principal: principal.investigation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.investigation.resume.claim.workflow.investigation.next-action-safe.0
+      claim_ref: claim.workflow.investigation.next-action-safe
+      evaluator_ref: evaluator.workflow.investigation.next-action-safe
+      principal: principal.investigation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

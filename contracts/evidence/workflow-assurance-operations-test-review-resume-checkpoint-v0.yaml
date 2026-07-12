@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.test-review.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.test-review
+    current_phase: 4-build
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.test-review.required-proof
+    decision_need_refs:
+    - decision.workflow.test-review.material-gap
+    resolved_decision_refs:
+    - decision.workflow.test-review.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.test-review.resume.claim.workflow.test-review.changed-surface-bounded.0
+      claim_ref: claim.workflow.test-review.changed-surface-bounded
+      evaluator_ref: evaluator.workflow.test-review.changed-surface-bounded
+      principal: principal.test-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-review.resume.claim.workflow.test-review.acceptance-risk-compared.0
+      claim_ref: claim.workflow.test-review.acceptance-risk-compared
+      evaluator_ref: evaluator.workflow.test-review.acceptance-risk-compared
+      principal: principal.test-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-review.resume.claim.workflow.test-review.gaps-evidenced.0
+      claim_ref: claim.workflow.test-review.gaps-evidenced
+      evaluator_ref: evaluator.workflow.test-review.gaps-evidenced
+      principal: principal.test-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-review.resume.claim.workflow.test-review.blockers-dispositioned.0
+      claim_ref: claim.workflow.test-review.blockers-dispositioned
+      evaluator_ref: evaluator.workflow.test-review.blockers-dispositioned
+      principal: principal.test-review.0
+      kind: independent_review
+      strength: independent_confirmation
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

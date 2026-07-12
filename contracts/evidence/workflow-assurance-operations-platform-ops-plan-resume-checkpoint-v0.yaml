@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.platform-ops-plan.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.platform-ops-plan
+    current_phase: 3-plan
+    target: release
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.platform-ops-plan.required-proof
+    decision_need_refs:
+    - decision.workflow.platform-ops-plan.material-gap
+    resolved_decision_refs:
+    - decision.workflow.platform-ops-plan.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.platform-ops-plan.resume.claim.workflow.platform-ops-plan.surfaces-bounded.0
+      claim_ref: claim.workflow.platform-ops-plan.surfaces-bounded
+      evaluator_ref: evaluator.workflow.platform-ops-plan.surfaces-bounded
+      principal: principal.platform-ops-plan.0
+      kind: representative_execution
+      strength: representative_execution
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.platform-ops-plan.resume.claim.workflow.platform-ops-plan.statuses-explicit.0
+      claim_ref: claim.workflow.platform-ops-plan.statuses-explicit
+      evaluator_ref: evaluator.workflow.platform-ops-plan.statuses-explicit
+      principal: principal.platform-ops-plan.0
+      kind: representative_execution
+      strength: representative_execution
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.platform-ops-plan.resume.claim.workflow.platform-ops-plan.assumptions-probed.0
+      claim_ref: claim.workflow.platform-ops-plan.assumptions-probed
+      evaluator_ref: evaluator.workflow.platform-ops-plan.assumptions-probed
+      principal: principal.platform-ops-plan.0
+      kind: representative_execution
+      strength: representative_execution
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.platform-ops-plan.resume.claim.workflow.platform-ops-plan.specialist-route-owned.0
+      claim_ref: claim.workflow.platform-ops-plan.specialist-route-owned
+      evaluator_ref: evaluator.workflow.platform-ops-plan.specialist-route-owned
+      principal: principal.platform-ops-plan.0
+      kind: representative_execution
+      strength: representative_execution
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

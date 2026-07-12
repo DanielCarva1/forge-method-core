@@ -1,0 +1,131 @@
+schema_version: '0.1'
+workflow_behavioral_review_subject:
+  id: workflow-review-subject.assurance-operations-v0
+  authority: candidate_only
+  overlay:
+    id: overlay.workflow-governance.assurance-operations-v0
+    embedded_ref: contracts/policies/workflow-assurance-operations-overlay-v0.yaml
+    expected_digest: sha256:24a73e738ca96b2d7f11660d0394284b2eb781b2ded45263f5fd8a72be05f58e
+  baseline_history:
+    id: history.workflow-governance.p5d2-foundation-compatibility-v0
+    embedded_ref: contracts/evidence/workflow-core-assurance-frozen-history-v0.ndjson
+    expected_digest: sha256:b7eb20fb272666f5071d7703e29d92d60fbd19512a304754748079df9afc525f
+  baseline_release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.core-assurance-v0
+    release_version: 0.2.0
+    release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+  baseline_runtime_bundle:
+    bundle_id: bundle.workflow-governance.core-assurance-v0
+    bundle_digest: sha256:2cc9477475a3d4a74470671a6a04e7ee0148bd0628426e35438338260704b531
+    policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+  runtime_bundle:
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    bundle_digest: sha256:4ae611c4c0070e9af9ca8314804b5330694f6ef34abacfe11668c55e3789e67b
+    policy_set_digest: sha256:767665717a845274b7cb11ba706b4e8deb5a5f42af6743406dd1705146d5a8e7
+  proposed_batch:
+    batch_id: workflow-governance.batch.assurance-operations-v0
+    batch_version: 0.3.0
+    previous_batch_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
+  proposed_release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.assurance-operations-v0
+    release_version: 0.3.0
+    previous_release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+  evaluator:
+    evaluator_id: evaluator.workflow-behavioral-shadow
+    evaluator_version: 0.1.0
+    governed_projection_version: 0.1.0
+    evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+  candidate_workflows:
+  - workflow_id: atdd-plan
+    legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d
+    policy_ref: policy.workflow.atdd-plan
+    policy_digest: sha256:6bdc2f0035a467d5e4cdf7e3b8e149e5fd41e61ab98c03a91cd853474ee9aacd
+  - workflow_id: ci-quality-pipeline
+    legacy_workflow_digest: sha256:f02762a62672abdca2ae0e64329b01074476befe40cb64bd23ea29df3352b227
+    policy_ref: policy.workflow.ci-quality-pipeline
+    policy_digest: sha256:8ba71e68e5a5a1f7a47d2bb920ff7245ed6ee0b4a71425c5a20f5bf8f3a537f6
+  - workflow_id: compliance-checklist
+    legacy_workflow_digest: sha256:3d7f6a4bd100685f4c5cc870fa43872bd57196ae81046d35ddfb5a58d19e6ca2
+    policy_ref: policy.workflow.compliance-checklist
+    policy_digest: sha256:720167b9061d80bd611ac1a9ec0c198bd33e58616f9d3156b0539730a6271e58
+  - workflow_id: devops-deployment-plan
+    legacy_workflow_digest: sha256:9d0a9479ea6726d52b3c2de46a3d7b8915de652979830e9b43d4718faa1486ef
+    policy_ref: policy.workflow.devops-deployment-plan
+    policy_digest: sha256:6d6a9d89a5c297492defdc6d40e8964809415508939143b182b61bef571b8bf8
+  - workflow_id: eval-design
+    legacy_workflow_digest: sha256:13c70a006b665b90db201e539879cf83196d055b09f26b0c124eb2e1968e67f8
+    policy_ref: policy.workflow.eval-design
+    policy_digest: sha256:7d31ef70f158a132367f2b29119a565b46a4275a2995cbd88be0f7b1dec6af59
+  - workflow_id: investigation
+    legacy_workflow_digest: sha256:7c3caeb3a18805581e5c93156b952474aa81ee531d3bf4165074951c9e2868ff
+    policy_ref: policy.workflow.investigation
+    policy_digest: sha256:6fe4e4892a795f9b8b28e712ca340a0f757bd33b84ab3148ba4ab707f62f8be2
+  - workflow_id: observability-plan
+    legacy_workflow_digest: sha256:30e040344378beae53c84d0384939f8787b8e63f0cccb3db453f1e37629d2b1b
+    policy_ref: policy.workflow.observability-plan
+    policy_digest: sha256:6eec3e0cbd949eeee0dcf978c25577aecdc0db83d3e316406d8197c3db90da9f
+  - workflow_id: platform-ops-plan
+    legacy_workflow_digest: sha256:f392cac8a9b6b0d9973c5ded5e2ab23f265d1fd75932c7cd3b11ca5056bea52a
+    policy_ref: policy.workflow.platform-ops-plan
+    policy_digest: sha256:98b9f755727f4f8376c0ceb78c65537c1c9b460a8ad42aeaf35a7098128dc79c
+  - workflow_id: privacy-data-plan
+    legacy_workflow_digest: sha256:f4d311e1366608007a1b64531ac081c453d2f49479ad8c0cfc2fcfb2ff818df4
+    policy_ref: policy.workflow.privacy-data-plan
+    policy_digest: sha256:ed0552c529ebf8ee144040ddca00b6e00e83cc6d909fe9a04619fae84fb2a877
+  - workflow_id: security-plan
+    legacy_workflow_digest: sha256:5a78f1af75a27df9673a4bca3f953b395fb7a41e72d742f8bdf7002245467f4e
+    policy_ref: policy.workflow.security-plan
+    policy_digest: sha256:9a653dc45bd18b20bc789d810c656449241d3d83c91bba6ac727f7416b7c0fc4
+  - workflow_id: test-automation
+    legacy_workflow_digest: sha256:f807c26e59729905a118d9bac0124f331f6530372814733b802e2769f3ca2914
+    policy_ref: policy.workflow.test-automation
+    policy_digest: sha256:9ba2cb1b60d4c093920bad7a9fd2208d360994d48a1af27dfb1e977375a2539d
+  - workflow_id: test-framework
+    legacy_workflow_digest: sha256:d4fed3976edf84ae8e72b3c00a4f385046aaa1137f1b043d8a20c2e1bfb7d619
+    policy_ref: policy.workflow.test-framework
+    policy_digest: sha256:6942046ebe3140aba32064d832a7507ff6da357f2eb90a038847c6c00d7ab83c
+  - workflow_id: test-review
+    legacy_workflow_digest: sha256:0a601bc00a7600646f54ffc5dc9f94dcd4db6d8b450a2787d7ec60fe9c108b27
+    policy_ref: policy.workflow.test-review
+    policy_digest: sha256:5ee9fd798cc571f6ce11bdaf39b3dc14b20e77aa7847a10fda71b35d8f36ef9d
+  quarantines:
+  - workflow_id: edge-case-review
+    quarantine:
+      reason_code: ambiguous_legacy_authority
+      risk_tier: high
+      explanation: The legacy workflow overlaps adversarial-review without a closed review-mode taxonomy or precedence rule.
+      blocking_refs:
+      - gap.workflow-review-mode.taxonomy
+      - decision.workflow-review-precedence
+      affected_consumer_refs:
+      - consumer.workflow-review-routing
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.4.0
+  - workflow_id: release-readiness
+    quarantine:
+      reason_code: unsafe_automatic_conversion
+      risk_tier: critical
+      explanation: The legacy workflow overlaps readiness-check and ready-release while mixing route, artifact, and release-authorization authority.
+      blocking_refs:
+      - gap.release-readiness-overlap
+      - gap.enterprise-artifact-adapter
+      - gap.release-authorization-separation
+      affected_consumer_refs:
+      - consumer.release-governance
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.4.0
+  - workflow_id: track-decision
+    quarantine:
+      reason_code: ambiguous_legacy_authority
+      risk_tier: critical
+      explanation: The legacy workflow mixes route, module-pack, and enterprise artifact authority that core governance cannot safely infer.
+      blocking_refs:
+      - gap.route-authority-model
+      - gap.module-pack-lifecycle
+      - gap.enterprise-artifact-adapter
+      affected_consumer_refs:
+      - consumer.workflow-routing
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.4.0

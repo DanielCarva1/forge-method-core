@@ -184,8 +184,15 @@ fn upgrade_foundation_to_core_assurance(project: &LegacyProject) {
         &project.run(&["release-status", "--json"]),
         "workflow.release_status",
     );
-    assert_eq!(core_status["data"]["available_successor"], Value::Null);
-    assert_eq!(core_status["data"]["upgrade_argv"], Value::Null);
+    assert_eq!(
+        required_string(&core_status, "/data/available_successor/release_id"),
+        "workflow-governance.release.assurance-operations-v0"
+    );
+    assert_eq!(
+        required_string(&core_status, "/data/available_successor/release_version"),
+        "0.3.0"
+    );
+    assert!(core_status["data"]["upgrade_argv"].is_array());
     let core_resumed = assert_ok(&project.run(&["resume", "--json"]), "workflow.resume");
     assert_eq!(
         required_string(&core_resumed, "/data/release/release/release_id"),

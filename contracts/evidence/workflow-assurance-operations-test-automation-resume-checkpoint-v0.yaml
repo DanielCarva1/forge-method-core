@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.test-automation.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.test-automation
+    current_phase: 4-build
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.test-automation.required-proof
+    decision_need_refs:
+    - decision.workflow.test-automation.material-gap
+    resolved_decision_refs:
+    - decision.workflow.test-automation.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.test-automation.resume.claim.workflow.test-automation.targets-risk-justified.0
+      claim_ref: claim.workflow.test-automation.targets-risk-justified
+      evaluator_ref: evaluator.workflow.test-automation.targets-risk-justified
+      principal: principal.test-automation.0
+      kind: deterministic_check
+      strength: deterministic_verification
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-automation.resume.claim.workflow.test-automation.checks-independent-observable.0
+      claim_ref: claim.workflow.test-automation.checks-independent-observable
+      evaluator_ref: evaluator.workflow.test-automation.checks-independent-observable
+      principal: principal.test-automation.0
+      kind: deterministic_check
+      strength: deterministic_verification
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-automation.resume.claim.workflow.test-automation.run-result-evidenced.0
+      claim_ref: claim.workflow.test-automation.run-result-evidenced
+      evaluator_ref: evaluator.workflow.test-automation.run-result-evidenced
+      principal: principal.test-automation.0
+      kind: deterministic_check
+      strength: deterministic_verification
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.test-automation.resume.claim.workflow.test-automation.remainders-governed.0
+      claim_ref: claim.workflow.test-automation.remainders-governed
+      evaluator_ref: evaluator.workflow.test-automation.remainders-governed
+      principal: principal.test-automation.0
+      kind: deterministic_check
+      strength: deterministic_verification
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

@@ -97,6 +97,11 @@ Active implementation plan:
   false-completion, stale, resume, and ablation scenarios. A consistent report
   is only a review candidate; co-authored policy and fixtures cannot admit a
   release or prove independent semantic truth.
+- **Sequential Workflow Release Admission V2**: a release-specific schema-0.2
+  review, evaluation, and signed authorization for one adjacent append only.
+  The kernel starts from the frozen P5d.4a V1 result and folds each compiled V2
+  descriptor in order. Authorization for one release cannot admit another, and
+  a blocked tail cannot expose a partially advanced registry.
 - **Workflow Retirement Authorization**: a closed signed proposal binding the
   exact legacy workflow, replacement policy, release, compatibility window,
   shadow evidence, deletion evidence, reviewer registry, audience, and time.
@@ -178,7 +183,13 @@ Active implementation plan:
   complete graph into distinct semantic-reviewer and release-authorizer
   signatures, then lets only a fixed kernel loader consume the opaque verified
   capability. The append-only third release contains 20 policies and uses
-  `invalidate_all`; remaining rollout and trusted retirement stay in P5d.4b/P5d.5.
+  `invalidate_all`. P5d.4b.1 freezes that V1 path and adds a generic V2 contract
+  for exactly one release-specific review and authorization at a time. The
+  loader folds the 13-policy assurance-operations release sequentially into a
+  four-release, 33-policy registry only after 91 scenarios and independent
+  authorization pass. Full-catalog disposition is 33 migration, 56
+  compatibility-only, three quarantined, and 18 domain-pack candidates.
+  P5d.4b remains in progress; trusted retirement stays in P5d.5.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -207,8 +218,12 @@ history, and moves it only through a crash-recoverable adjacent transition.
 P5d.3 owns candidate-only behavioral comparison and quarantine for the first
 reviewed batch. P5d.4a now admits those five policies only after independent
 cryptographic review, exact evaluator recomputation, and an explicit adjacent
-project upgrade. P5d.4b and P5d.5 own remaining-catalog rollout and signed
-deletion-backed retirement. The workflow
+project upgrade. P5d.4b.1 now admits the assurance-operations batch through a
+sequential V2 authority chain without rewriting frozen V1 history. P5d.4b.2
+next owns the nine continuity/lifecycle workflows `checkpoint-preview`,
+`collaboration-handoff`, `research-closeout`, `retrospective`, `sprint-status`,
+`project-context`, `spec-distillation`, `evolve-project`, and
+`product-area-map`. P5d.5 later owns signed deletion-backed retirement. The workflow
 path targets the local agent-facing CLI; allowlist metadata does not constitute
 an end-to-end MCP workflow Adapter.
 

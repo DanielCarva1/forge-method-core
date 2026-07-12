@@ -1,0 +1,33 @@
+schema_version: '0.1'
+workflow_behavioral_coverage_policy:
+  id: coverage.workflow-assurance-operations-v0
+  policy_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  required_scenario_kinds:
+  - positive
+  - negative
+  - ambiguity
+  - false_completion
+  - stale_evidence
+  - resume
+  - ablation
+  minimum_scenarios_per_kind: 1
+  minimum_scenarios_per_workflow: 7
+  required_coverage_basis_points: 10000
+  require_zero_mismatches: true
+  require_zero_evaluation_errors: true
+  required_dimensions:
+  - status
+  - eligibility
+  - progression
+  - completion
+  - obligations
+  - claims
+  - decisions
+  - capabilities
+  - issues
+  - next_actions
+  require_resume_equivalence: true
+  require_ablation_semantic_delta: true
+  require_representative_scenarios: true
+  require_adversarial_scenarios: true

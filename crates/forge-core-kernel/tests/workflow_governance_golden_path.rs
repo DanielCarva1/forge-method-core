@@ -83,6 +83,7 @@ fn readiness_name(target: ReadinessTarget) -> String {
 }
 
 struct SignedFixture {
+    project_id: StableId,
     root: PathBuf,
     operator_registry_path: PathBuf,
     adapter: WorkflowGovernanceProjectAdapter,
@@ -156,12 +157,9 @@ impl SignedFixture {
         };
         let registry_yaml = yaml_serde::to_string(&document).expect("registry YAML");
         let registry = AuthorizedPrincipalRegistry::from_document(document).expect("registry");
-        let adapter = WorkflowGovernanceProjectAdapter::new(
-            StableId(format!("project.signed-golden-path.{sequence}")),
-            &root,
-            &state,
-        )
-        .expect("adapter");
+        let project_id = StableId(format!("project.signed-golden-path.{sequence}"));
+        let adapter = WorkflowGovernanceProjectAdapter::new(project_id.clone(), &root, &state)
+            .expect("adapter");
         let operator_registry_path = adapter.trusted_principal_registry_path();
         fs::create_dir_all(
             operator_registry_path
@@ -172,6 +170,7 @@ impl SignedFixture {
         fs::write(&operator_registry_path, registry_yaml).expect("fixed registry");
         adapter.initialize().expect("initialize");
         Self {
+            project_id,
             root,
             operator_registry_path,
             adapter,
@@ -850,12 +849,17 @@ fn core_assurance_upgrade_invalidates_receipts_and_foundation_prepared_authority
 
     let resumed = fixture.adapter.resume().expect("replacement-agent resume");
     assert_eq!(resumed.release.release, target);
-    assert!(fixture
+    let assurance_successor = fixture
         .adapter
         .release_status()
         .expect("core-assurance status")
         .available_successor
-        .is_none());
+        .expect("assurance-operations successor");
+    assert_eq!(
+        assurance_successor.release_id.0,
+        "workflow-governance.release.assurance-operations-v0"
+    );
+    assert_eq!(assurance_successor.release_version, "0.3.0");
     let invalidated = fixture.adapter.next().expect("invalidated guidance");
     assert_ne!(
         invalidated.status,
@@ -871,6 +875,139 @@ fn core_assurance_upgrade_invalidates_receipts_and_foundation_prepared_authority
         )));
     assert!(matches!(
         fixture.adapter.consume_completion(
+            prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift)
+    ));
+}
+
+#[test]
+// This single end-to-end narrative intentionally keeps CAS rejection, receipt
+// invalidation, prepared-authority drift, and replacement-agent recovery on
+// the same persisted project so no assertion silently uses a fresh fixture.
+#[allow(clippy::too_many_lines)]
+fn assurance_operations_upgrade_is_adjacent_cas_bound_and_resumable() {
+    let fixture = SignedFixture::new("assurance-operations-upgrade");
+    let assurance_operations =
+        StableId("workflow-governance.release.assurance-operations-v0".to_owned());
+    let initial = fixture.adapter.release_status().expect("initial status");
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &assurance_operations,
+            &initial.active.release.release_digest,
+            &initial.ledger_head_digest,
+            &initial.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseNotAdjacent)
+    ));
+
+    upgrade_to_foundation(&fixture);
+    let foundation = fixture.adapter.release_status().expect("foundation status");
+    let core = foundation
+        .available_successor
+        .clone()
+        .expect("core-assurance successor");
+    fixture
+        .adapter
+        .release_upgrade(
+            &core.release_id,
+            &foundation.active.release.release_digest,
+            &foundation.ledger_head_digest,
+            &foundation.snapshot_digest,
+        )
+        .expect("core-assurance upgrade");
+
+    let core_status = fixture.adapter.release_status().expect("core status");
+    let target = core_status
+        .available_successor
+        .clone()
+        .expect("assurance-operations successor");
+    assert_eq!(target.release_id, assurance_operations);
+
+    let guidance = fixture.adapter.next().expect("core guidance");
+    let document = bundle();
+    let policy = selected_policy(&document, &guidance);
+    let request = evidence_request(&guidance, policy, &policy.claims[0].id, 0);
+    fixture
+        .adapter
+        .record_authorized_evidence(fixture.evidence(request))
+        .expect("fresh core-assurance evidence");
+    let prepared = fixture
+        .adapter
+        .prepare_completion()
+        .expect("prepared under core-assurance");
+    let upgrade_status = fixture
+        .adapter
+        .release_status()
+        .expect("fresh core status after evidence");
+
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("core WAL");
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &target.release_id,
+            &upgrade_status.active.release.release_digest,
+            "sha256:stale-ledger-head",
+            &upgrade_status.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch)
+    ));
+    assert_eq!(fs::read(&wal).expect("unchanged CAS WAL"), before);
+
+    let receipt = fixture
+        .adapter
+        .release_upgrade(
+            &target.release_id,
+            &upgrade_status.active.release.release_digest,
+            &upgrade_status.ledger_head_digest,
+            &upgrade_status.snapshot_digest,
+        )
+        .expect("assurance-operations upgrade");
+    let WorkflowGovernanceEvent::ReleaseUpgraded(transition) = &receipt
+        .transition_record
+        .as_ref()
+        .expect("assurance-operations transition")
+        .event
+    else {
+        panic!("expected release-upgraded event");
+    };
+    assert_eq!(
+        transition.receipt_carryover,
+        WorkflowReceiptCarryover::InvalidateAll
+    );
+    assert_eq!(receipt.active.release, target);
+
+    let replacement = WorkflowGovernanceProjectAdapter::new(
+        fixture.project_id.clone(),
+        &fixture.root,
+        fixture.root.join(".forge-method"),
+    )
+    .expect("replacement adapter");
+    let resumed = replacement.resume().expect("replacement-agent resume");
+    assert_eq!(resumed.release.release, target);
+    assert!(replacement
+        .release_status()
+        .expect("assurance-operations status")
+        .available_successor
+        .is_none());
+    let invalidated = replacement.next().expect("invalidated successor guidance");
+    assert_ne!(
+        invalidated.status,
+        WorkflowGovernanceGuidanceStatus::ReadyToComplete
+    );
+    assert!(invalidated
+        .simulation
+        .candidate_claim_results
+        .iter()
+        .all(|result| !matches!(
+            result.status,
+            WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+        )));
+    assert!(matches!(
+        replacement.consume_completion(
             prepared,
             PrincipalId("principal.workflow.replacement-agent".to_owned()),
         ),
@@ -1061,7 +1198,10 @@ fn unavailable_expired_and_misbound_capabilities_keep_the_gap_visible_across_han
         serde_json::to_value(&gap).expect("original guidance JSON")
     );
 
-    let expiring = capability_request(&gap, policy, true, Some(now() + 2));
+    // Leave enough headroom for a loaded Windows runner to recompute the
+    // expanded reviewed registry before the first assertion. The previous
+    // two-second window became timing-dependent after the fourth release.
+    let expiring = capability_request(&gap, policy, true, Some(now() + 10));
     fixture
         .adapter
         .record_authorized_capability(fixture.capability(expiring))
@@ -1074,7 +1214,7 @@ fn unavailable_expired_and_misbound_capabilities_keep_the_gap_visible_across_han
         .candidate_capability_gaps
         .iter()
         .any(|candidate| candidate.id == capability_id));
-    thread::sleep(Duration::from_secs(3));
+    thread::sleep(Duration::from_secs(11));
     assert!(fixture
         .adapter
         .next()

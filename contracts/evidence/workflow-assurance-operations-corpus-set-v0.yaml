@@ -1,0 +1,12 @@
+schema_version: '0.1'
+workflow_behavioral_corpus_set:
+  id: corpus-set.workflow-assurance-operations-v0
+  corpus_set_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  corpora:
+  - id: corpus.workflow-assurance-operations.representative-v0
+    embedded_ref: contracts/evidence/workflow-assurance-operations-representative-v0.yaml
+    expected_digest: sha256:b0168555c186016575f9fb500aa3baeeb02d1896caa4afd180fc635af485a9c5
+  - id: corpus.workflow-assurance-operations.adversarial-v0
+    embedded_ref: contracts/evidence/workflow-assurance-operations-adversarial-v0.yaml
+    expected_digest: sha256:224fc2cb69115fb4de8bda5d428f498b589e04b170cb880b7f7da42529e282c5

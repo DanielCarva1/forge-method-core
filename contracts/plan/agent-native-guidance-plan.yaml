@@ -365,17 +365,18 @@ phases:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
     active_checkpoint:
-      id: "P5d.4a-independent-review-and-first-new-policy-admission"
+      id: "P5d.4b.1-assurance-operations-reviewed-admission"
       status: "completed"
       scope:
-        - "bind the complete reviewed candidate graph into an independently signed authorization quorum"
-        - "admit the first five new core policies only through an opaque kernel-owned verified capability"
+        - "preserve the frozen P5d.4a V1 authorization while adding generic per-release V2 review and authority"
+        - "admit the 13-policy assurance-operations batch only as one adjacent sequential release"
     next_slice:
-      id: "P5d.4b-remaining-core-reviewed-batches"
+      id: "P5d.4b.2-continuity-lifecycle-reviewed-admission"
       status: "pending"
       scope:
-        - "roll out the remaining core catalog in bounded reviewed batches"
-        - "keep unsafe, ambiguous, and domain-specific semantics outside executable core authority"
+        - "review checkpoint-preview, collaboration-handoff, research-closeout, retrospective, and sprint-status"
+        - "review project-context, spec-distillation, evolve-project, and product-area-map"
+        - "preserve quarantine, compatibility-only, and P6 domain boundaries"
     following_slices:
       - "P5d.5 signed retirement, deletion proof, and final scorecard"
       - "P6 domain-pack ecosystem"
@@ -388,6 +389,8 @@ phases:
       - "P5d.3 preserves the exact P5d.2 admitted registry and proves historical replay against a frozen upgraded-WAL fixture before any third release can be admitted"
       - "P5d.4a binds the complete review graph into two distinct Ed25519 roles and admits only the exact append-only 20-policy successor through an opaque kernel capability"
       - "P5d.4a proves foundation-to-core-assurance CAS upgrade, invalidate_all receipt semantics, prepared-authority invalidation, replacement-agent resume, quarantine exclusion, and 139-check repository validation"
+      - "P5d.4b.1 preserves frozen V1 admission and folds one release-specific V2 authorization at a time with no partial-chain escape"
+      - "P5d.4b.1 admits 13 assurance/quality/operations workflows through 91 scenarios into a four-release, 33-policy runtime; catalog dispositions are 33/56/3/18 and aggregate validation is 156 clean checks"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -590,13 +593,35 @@ phases:
               - "the five new policies are executable only after an explicit foundation-to-core-assurance upgrade"
               - "the three quarantined workflows remain non-authoritative and absent from routing and completion"
           - id: "P5d.4b-remaining-core-reviewed-batches"
-            status: "pending"
+            status: "in_progress"
             size: "large"
             depends_on: ["P5d.4a-independent-review-and-first-new-policy-admission"]
             outcome: >-
               Remaining core candidates roll out in reviewed bounded batches;
               domain-specific or extension-authoring knowledge remains outside
               core authority for P6.
+            checkpoints:
+              - id: "P5d.4b.1-assurance-operations-reviewed-admission"
+                status: "completed"
+                delivers:
+                  - "generic schema-0.2 single-release Review Index, evaluator, release-specific authorization, and sequential kernel admission"
+                  - "13 assurance/quality/operations policies with 91 deterministic behavioral scenarios"
+                  - "append-only four-release registry with 33 executable policies and invalidate_all transition semantics"
+                  - "complete 110-entry disposition counts of 33 migration, 56 compatibility-only, 3 quarantined, and 18 domain-pack candidates"
+                  - "frozen P5d.4a V1 bytes, payload digest, authorization, and historical 139-check anchor remain unchanged"
+                  - "156-check aggregate repository validation"
+              - id: "P5d.4b.2-continuity-lifecycle-reviewed-admission"
+                status: "pending"
+                workflow_ids:
+                  - "checkpoint-preview"
+                  - "collaboration-handoff"
+                  - "research-closeout"
+                  - "retrospective"
+                  - "sprint-status"
+                  - "project-context"
+                  - "spec-distillation"
+                  - "evolve-project"
+                  - "product-area-map"
             exit:
               - "every one of the 110 catalog workflows has one explicit visible disposition"
               - "batch composition and selection remain deterministic at catalog scale"
@@ -760,12 +785,16 @@ first_executable_slice:
     - "P5d.3 35-scenario governed-outcome corpus, content-addressed resume checkpoints, load-bearing ablations, append-only registry evolution, frozen P5d.2 WAL compatibility, and full workspace gates"
     - "P5d.4a closed Review Index, pure admission evaluator, distinct semantic-reviewer/release-authorizer signatures, and opaque verified kernel capability"
     - "P5d.4a append-only three-release registry, explicit 15-to-20-policy foundation upgrade, invalidate_all receipt window, quarantine exclusion, and replacement-agent continuity"
+    - "P5d.4b.1 generic sequential V2 review/admission with frozen P5d.4a V1 compatibility, 13 assurance-operations policies, 91 scenarios, and a four-release 33-policy registry"
+    - "P5d.4b.1 complete catalog accounting at 33 migration / 56 compatibility-only / 3 quarantined / 18 domain-pack candidates, with 139 historical and 156 aggregate clean checks"
   next_action: >-
-    P5d.4a is complete: the first five non-golden policies are independently
-    authorized and admitted only through an explicit adjacent upgrade. Execute
-    P5d.4b next by classifying the remaining core-compatible workflows into
-    bounded reviewed batches, preserving visible quarantine and the P6 domain
-    boundary before any further admission.
+    P5d.4b.1 is complete while P5d.4b remains in progress. Execute P5d.4b.2 by
+    compiling and independently reviewing the nine continuity/lifecycle
+    workflows checkpoint-preview, collaboration-handoff, research-closeout,
+    retrospective, sprint-status, project-context, spec-distillation,
+    evolve-project, and product-area-map through the same one-release V2
+    evidence, authorization, sequential admission, upgrade, and continuity
+    gates; do not start P5d.5 yet.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

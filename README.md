@@ -667,6 +667,37 @@ returns the new pin, while `edge-case-review`, `track-decision`, and
 proves cryptographic role separation, not organizational independence; separate
 key custody remains an explicit release-operation requirement.
 
+### Continue with assurance-operations through sequential V2 admission (P5d.4b.1)
+
+P5d.4b.1 keeps every P5d.4a V1 byte, digest, signature, and authorization
+contract frozen. Later releases use the generic schema-0.2 Review Index and a
+release-specific signed payload. The trusted loader starts with the historical
+V1 admission and then verifies, consumes, and admits each V2 release in order;
+a missing or invalid later authorization fails the complete load instead of
+exposing a partially advanced registry.
+
+The first P5d.4b batch adds thirteen assurance, quality, security, privacy,
+compliance, observability, deployment, platform-operations, investigation, and
+testing policies. Its two corpora prove seven scenario kinds for every workflow
+(91 scenarios total), including resume and load-bearing ablation. The resulting
+registry contains four adjacent releases and 33 executable policies. The full
+110-workflow accounting is 33 migration candidates, 56 compatibility-only,
+three quarantined, and 18 domain-pack candidates.
+
+```bash
+cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_evidence -- --check
+cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_candidate -- --check
+cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_admission -- --check
+forge-core validate --root .
+```
+
+Repository validation retains the frozen 139-check P5d.4a anchor and adds the
+new surfaces for a 156-check aggregate. P5d.4b remains in progress. The next
+checkpoint is P5d.4b.2: `checkpoint-preview`, `collaboration-handoff`,
+`research-closeout`, `retrospective`, `sprint-status`, `project-context`,
+`spec-distillation`, `evolve-project`, and `product-area-map`. P5d.5 retirement
+does not begin until that reviewed continuity/lifecycle release is complete.
+
 ### Simulate workflow governance (P5b)
 
 P5b adds a pure Workflow Governance Kernel Module with two deliberately
@@ -1331,6 +1362,12 @@ gates.
   shadow report. Append-only registry evolution and frozen upgraded-WAL tests
   protect predecessor history, while the live admission registry remains byte
   unchanged.
+- P5d.4a independently authorizes the frozen five-policy candidate and admits
+  the append-only 20-policy third release through an opaque kernel capability.
+- P5d.4b.1 preserves that V1 path while sequential V2 admission adds the
+  13-policy assurance-operations release. The admitted registry now has four
+  releases and 33 policies; 91 scenarios and 156 aggregate validation checks
+  pass with catalog accounting fixed at 33/56/3/18.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1387,10 +1424,11 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.4b-P5d.5 remaining rollout and legacy retirement** -- P5d.4a now
-  independently authorizes and admits the first five non-golden policies while
-  preserving three explicit quarantines. Next, Forge must cover the remaining
-  compatibility/quarantine/domain dispositions in reviewed bounded batches and
+- **P5d.4b.2-P5d.5 remaining rollout and legacy retirement** -- P5d.4b.1 now
+  independently authorizes the assurance-operations batch while preserving
+  three explicit quarantines and frozen V1 history. Next, Forge must admit the
+  nine continuity/lifecycle workflows through the same sequential V2 boundary,
+  then cover remaining compatibility/quarantine/domain dispositions and
   verify signed retirement authorizations. No quarantined or unreviewed workflow is runtime executable or
   retirement-ready yet. Retirement requires measured behavioral compatibility,
   deletion/ablation evidence, consumer migration diagnostics, and human review

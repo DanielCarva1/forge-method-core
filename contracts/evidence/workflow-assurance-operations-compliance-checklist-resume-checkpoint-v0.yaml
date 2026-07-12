@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.compliance-checklist.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.compliance-checklist
+    current_phase: 3-plan
+    target: release
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.compliance-checklist.required-proof
+    decision_need_refs:
+    - decision.workflow.compliance-checklist.material-gap
+    resolved_decision_refs:
+    - decision.workflow.compliance-checklist.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.compliance-checklist.resume.claim.workflow.compliance-checklist.obligation-universe-authorized.0
+      claim_ref: claim.workflow.compliance-checklist.obligation-universe-authorized
+      evaluator_ref: evaluator.workflow.compliance-checklist.obligation-universe-authorized
+      principal: principal.compliance-checklist.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.compliance-checklist.resume.claim.workflow.compliance-checklist.evidence-mapped.0
+      claim_ref: claim.workflow.compliance-checklist.evidence-mapped
+      evaluator_ref: evaluator.workflow.compliance-checklist.evidence-mapped
+      principal: principal.compliance-checklist.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.compliance-checklist.resume.claim.workflow.compliance-checklist.gaps-owned.0
+      claim_ref: claim.workflow.compliance-checklist.gaps-owned
+      evaluator_ref: evaluator.workflow.compliance-checklist.gaps-owned
+      principal: principal.compliance-checklist.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.compliance-checklist.resume.claim.workflow.compliance-checklist.waivers-authorized.0
+      claim_ref: claim.workflow.compliance-checklist.waivers-authorized
+      evaluator_ref: evaluator.workflow.compliance-checklist.waivers-authorized
+      principal: principal.compliance-checklist.0
+      kind: external_authority
+      strength: authoritative_acceptance
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

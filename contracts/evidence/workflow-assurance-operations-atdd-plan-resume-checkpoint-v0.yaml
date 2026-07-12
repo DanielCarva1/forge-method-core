@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.assurance-operations-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
+  expected_digest: sha256:410ae0f33dc5c8dc8040b2dc731826306690322c42f5a5593697087b8fe14f0a
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.atdd-plan.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
+    policy_id: policy.workflow.atdd-plan
+    current_phase: 3-plan
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.atdd-plan.required-proof
+    decision_need_refs:
+    - decision.workflow.atdd-plan.material-gap
+    resolved_decision_refs:
+    - decision.workflow.atdd-plan.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.atdd-plan.resume.claim.workflow.atdd-plan.acceptance-observable.0
+      claim_ref: claim.workflow.atdd-plan.acceptance-observable
+      evaluator_ref: evaluator.workflow.atdd-plan.acceptance-observable
+      principal: principal.atdd-plan.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.atdd-plan.resume.claim.workflow.atdd-plan.risk-examples-covered.0
+      claim_ref: claim.workflow.atdd-plan.risk-examples-covered
+      evaluator_ref: evaluator.workflow.atdd-plan.risk-examples-covered
+      principal: principal.atdd-plan.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.atdd-plan.resume.claim.workflow.atdd-plan.proof-path-assigned.0
+      claim_ref: claim.workflow.atdd-plan.proof-path-assigned
+      evaluator_ref: evaluator.workflow.atdd-plan.proof-path-assigned
+      principal: principal.atdd-plan.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.atdd-plan.resume.claim.workflow.atdd-plan.story-checks-linked.0
+      claim_ref: claim.workflow.atdd-plan.story-checks-linked
+      evaluator_ref: evaluator.workflow.atdd-plan.story-checks-linked
+      principal: principal.atdd-plan.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted
