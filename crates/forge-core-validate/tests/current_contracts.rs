@@ -631,6 +631,7 @@ fn add_contract_definitions(index: &mut ReferenceIndex) {
         "contracts/recovery/health-recovery-contract-v0.yaml",
         "contracts/runtimes/runtime-handoff-contract-v0.yaml",
         "contracts/spec/workflow-governance-release-v0.yaml",
+        "contracts/spec/workflow-governance-release-admission-v0.yaml",
         "contracts/workflow-governance/workflow-governance-contract-v0.yaml",
     ] {
         index.insert(reference, ReferenceKind::ContractDefinition);

@@ -127,6 +127,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   operation-contract, and preview material remain compatibility diagnostics,
   while the shipped `start-forge` skill fails closed on unexpected routing or
   ledger errors instead of asking a human/agent to select workflow or phase.
+- **P5d.2 opaque release admission and project pinning.** A closed embedded
+  registry now separates stable lineage, release identity, runtime-bundle
+  identity, policy-set identity, and registry provenance. Its raw evaluation is
+  explicitly non-authoritative; only a non-cloneable, non-serializable kernel
+  loader can admit the exact legacy P5c bundle and its adjacent foundation
+  successor. The successor has a new bundle identity but the same 15 policy
+  objects, so none of the other 95 catalog workflows gains runtime authority.
+- Existing P5c ledgers remain byte-compatible and resolve to an implicit legacy
+  release even when a newer binary is installed. A typed `release_upgraded`
+  event remains source-enveloped, binds exact source/target release and policy
+  identities, then activates the target only for following records. Direct
+  bundle switches, stale heads, self/reverse/skipped transitions, policy drift,
+  tampered proofs, and generic event injection fail closed.
+- `forge-core workflow release-status` returns the durable active release, pin
+  origin, exact head/snapshot CAS values, admitted adjacent successor, and the
+  structured argv an agent can execute. `workflow release-upgrade` accepts only
+  a target release id plus those CAS digests—never registry, manifest, batch,
+  bundle, or release paths—and is idempotent after a committed transition.
+  `init`, `next`, and `resume` expose the same release audit to replacement
+  agents.
+- Workflow WAL replacement now uses a bounded, digest-bound next/previous/
+  transaction protocol on Windows and reconciles it under the ledger lock
+  before recovery. Fault injection proves interrupted upgrades recover exactly
+  the prior WAL or the committed target and never silently reinitialize an
+  empty ledger; corrupt, ambiguous, symlinked, or non-regular protocol states
+  fail closed. This is logical crash recovery, not an external monotonic
+  rollback anchor, and Windows directory flushing remains best-effort.
+- Receipt carryover is allowed only for an exact policy-set match. Incompatible
+  future releases establish a post-transition receipt window, while prepared
+  completion authority captured before any upgrade fails its late head/bundle
+  recheck. Historical registry provenance remains auditable without requiring a
+  future binary's whole registry digest to stay frozen.
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
 - **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.

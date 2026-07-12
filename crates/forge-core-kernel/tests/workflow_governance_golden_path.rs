@@ -22,7 +22,8 @@ use forge_core_contracts::{
 use forge_core_decisions::WorkflowClaimResultStatus;
 use forge_core_kernel::{
     WorkflowGovernanceAdapterError, WorkflowGovernanceGuidance, WorkflowGovernanceGuidanceStatus,
-    WorkflowGovernanceProjectAdapter,
+    WorkflowGovernanceProjectAdapter, WorkflowGovernanceReleasePinOrigin,
+    WorkflowGovernanceReleaseUpgradeStatus,
 };
 use forge_core_store::sha256_content_hash;
 use forge_core_workflow_governance_tcb::{
@@ -623,6 +624,170 @@ fn complete_discover_intent(fixture: &SignedFixture) {
             PrincipalId("principal.workflow.replacement-agent".to_owned()),
         )
         .expect("complete discover");
+}
+
+fn upgrade_to_foundation(fixture: &SignedFixture) -> String {
+    let status = fixture.adapter.release_status().expect("release status");
+    let target = status
+        .available_successor
+        .expect("foundation successor available");
+    let target_digest = target.release_digest.clone();
+    let receipt = fixture
+        .adapter
+        .release_upgrade(
+            &target.release_id,
+            &status.active.release.release_digest,
+            &status.ledger_head_digest,
+            &status.snapshot_digest,
+        )
+        .expect("foundation upgrade");
+    assert_eq!(
+        receipt.status,
+        WorkflowGovernanceReleaseUpgradeStatus::Upgraded
+    );
+    assert_eq!(receipt.active.release, target);
+    target_digest
+}
+
+#[test]
+fn release_status_ignores_local_override_and_does_not_rewrite_p5c_ledger() {
+    let fixture = SignedFixture::new("release-status-fixed-embedded");
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("P5c WAL");
+    let local = fixture
+        .root
+        .join("contracts/migration/workflow-governance-release-registry-v0.yaml");
+    fs::create_dir_all(local.parent().expect("local parent")).expect("local contracts");
+    fs::write(&local, "authority: caller_override\n").expect("hostile local override");
+
+    let status = fixture.adapter.release_status().expect("embedded status");
+    assert_eq!(
+        status.active.pin_origin,
+        WorkflowGovernanceReleasePinOrigin::ImplicitP5cGenesis
+    );
+    assert_eq!(
+        status.active.release.release_id.0,
+        "workflow-governance.release.p5c-implicit-v0"
+    );
+    assert!(status.available_successor.is_some());
+    assert_eq!(status.upgrade_argv.as_ref().map(Vec::len), Some(13));
+    assert_eq!(fs::read(&wal).expect("unchanged WAL"), before);
+}
+
+#[test]
+fn release_upgrade_is_cas_bound_resumable_and_idempotent() {
+    let fixture = SignedFixture::new("release-upgrade-success");
+    let initial = fixture.adapter.release_status().expect("initial status");
+    let target = initial
+        .available_successor
+        .clone()
+        .expect("foundation successor");
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("initial WAL");
+
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &target.release_id,
+            &initial.active.release.release_digest,
+            "sha256:stale-head",
+            &initial.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch)
+    ));
+    assert_eq!(fs::read(&wal).expect("CAS WAL"), before);
+
+    let target_digest = upgrade_to_foundation(&fixture);
+    let after_upgrade = fs::read(&wal).expect("upgraded WAL");
+    assert_ne!(after_upgrade, before);
+    let resumed = fixture.adapter.resume().expect("replacement-agent resume");
+    assert_eq!(resumed.release.release.release_digest, target_digest);
+    assert_eq!(
+        resumed.release.pin_origin,
+        WorkflowGovernanceReleasePinOrigin::LedgerTransition
+    );
+
+    let replay = fixture
+        .adapter
+        .release_upgrade(
+            &target.release_id,
+            "sha256:intentionally-stale-release",
+            "sha256:intentionally-stale-head",
+            "sha256:intentionally-stale-snapshot",
+        )
+        .expect("idempotent replay");
+    assert_eq!(
+        replay.status,
+        WorkflowGovernanceReleaseUpgradeStatus::AlreadyPinned
+    );
+    assert!(replay.transition_record.is_none());
+    assert_eq!(fs::read(&wal).expect("replay WAL"), after_upgrade);
+
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &initial.active.release.release_id,
+            &target_digest,
+            &replay.ledger_head_digest,
+            &replay.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseNotAdjacent)
+    ));
+}
+
+#[test]
+fn unknown_and_genesis_self_upgrade_fail_without_mutation() {
+    let fixture = SignedFixture::new("release-upgrade-invalid");
+    let status = fixture.adapter.release_status().expect("status");
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("WAL");
+    let invoke = |target: StableId| {
+        fixture.adapter.release_upgrade(
+            &target,
+            &status.active.release.release_digest,
+            &status.ledger_head_digest,
+            &status.snapshot_digest,
+        )
+    };
+    assert!(matches!(
+        invoke(StableId("workflow-governance.release.unknown".to_owned())),
+        Err(WorkflowGovernanceAdapterError::UnknownRelease(_))
+    ));
+    assert!(matches!(
+        invoke(status.active.release.release_id.clone()),
+        Err(WorkflowGovernanceAdapterError::ReleaseNotAdjacent)
+    ));
+    assert_eq!(fs::read(&wal).expect("unchanged WAL"), before);
+}
+
+#[test]
+fn release_upgrade_invalidates_prepared_completion_authority() {
+    let fixture = SignedFixture::new("release-upgrade-prepared-drift");
+    let guidance = fixture.adapter.next().expect("discover guidance");
+    let document = bundle();
+    let policy = selected_policy(&document, &guidance);
+    let request = evidence_request(&guidance, policy, &policy.claims[0].id, 0);
+    fixture
+        .adapter
+        .record_authorized_evidence(fixture.evidence(request))
+        .expect("signed evidence");
+    let prepared = fixture
+        .adapter
+        .prepare_completion()
+        .expect("prepared under P5c release");
+
+    upgrade_to_foundation(&fixture);
+    assert!(matches!(
+        fixture.adapter.consume_completion(
+            prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift)
+    ));
 }
 
 #[test]

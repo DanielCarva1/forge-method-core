@@ -1502,6 +1502,13 @@ fn validate_library_passes_current_repo() {
     assert_eq!(release_checks.len(), 1, "one aggregate release check");
     assert_eq!(release_checks[0].status, ValidationStatus::Passed);
     assert_eq!(release_checks[0].diagnostics, 0);
+    let registry_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_governance_release_registry")
+        .expect("aggregate release registry check");
+    assert_eq!(registry_check.status, ValidationStatus::Passed);
+    assert_eq!(registry_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
@@ -1518,6 +1525,24 @@ fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSumm
             .iter()
             .any(|diagnostic| diagnostic.path.contains(path)),
         "expected diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+fn assert_release_registry_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_governance_release_registry")
+        .expect("aggregate release registry check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected registry diagnostic containing {path:?}, found {:?}",
         summary.diagnostics
     );
 }
@@ -1568,6 +1593,42 @@ fn workflow_release_foundation_validation_fails_for_missing_or_tampered_canonica
     let summary = run_validate(&tampered_batch);
     assert_eq!(summary.status, ValidationStatus::Failed);
     assert_release_foundation_check_failed(&summary, BATCH_REF);
+}
+
+#[test]
+fn workflow_release_registry_validation_fails_for_missing_or_tampered_canonical_input() {
+    const SPEC_REF: &str = "contracts/spec/workflow-governance-release-admission-v0.yaml";
+    const REGISTRY_REF: &str = "contracts/migration/workflow-governance-release-registry-v0.yaml";
+    const RUNTIME_BUNDLE_REF: &str =
+        "contracts/workflow-governance/runtime-release-foundation-v0.yaml";
+
+    let missing_spec = merged_validation_root("release-registry-missing-spec");
+    fs::remove_file(missing_spec.join(SPEC_REF)).expect("remove admission spec");
+    let summary = run_validate(&missing_spec);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_registry_check_failed(&summary, SPEC_REF);
+
+    let tampered_registry = merged_validation_root("release-registry-tampered-registry");
+    let registry_path = tampered_registry.join(REGISTRY_REF);
+    let mut registry: Value =
+        yaml_serde::from_str(&fs::read_to_string(&registry_path).expect("read registry"))
+            .expect("parse registry");
+    registry["workflow_governance_release_registry"]["registry_version"] =
+        json!("9.9.9-test-tamper");
+    fs::write(
+        &registry_path,
+        yaml_serde::to_string(&registry).expect("serialize tampered registry"),
+    )
+    .expect("write tampered registry");
+    let summary = run_validate(&tampered_registry);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_registry_check_failed(&summary, REGISTRY_REF);
+
+    let missing_bundle = merged_validation_root("release-registry-missing-runtime-bundle");
+    fs::remove_file(missing_bundle.join(RUNTIME_BUNDLE_REF)).expect("remove runtime bundle");
+    let summary = run_validate(&missing_bundle);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_release_registry_check_failed(&summary, RUNTIME_BUNDLE_REF);
 }
 
 #[test]

@@ -73,6 +73,20 @@ Active implementation plan:
   and content-integrity-checked embedded evidence refs. P5d.1 does not prove
   behavioral sufficiency; its states are structural candidate/compatibility/
   quarantine/domain/retirement-pending only, not runtime authority.
+- **Workflow Governance Release Registry**: a closed embedded list of exact
+  release, runtime-bundle, predecessor, policy-set, and provenance bindings.
+  Raw parsing and pure validation remain `non_authoritative`; project-local or
+  caller-selected registry, manifest, batch, and bundle paths never enter the
+  live admission lane.
+- **Admitted Workflow Governance Release**: a non-cloneable,
+  non-serializable kernel value minted only from the fixed embedded registry.
+  Release identity, runtime-bundle identity, policy-set identity, and registry
+  provenance are distinct. In P5d.2 only the exact P5c 15-policy set can cross
+  this boundary.
+- **Workflow Release Pin**: the active admitted release reconstructed from the
+  workflow ledger. A P5c ledger maps to its exact implicit genesis release;
+  later releases require a hash-chained `release_upgraded` transition. Merely
+  installing a newer Forge binary cannot move the pin.
 - **Workflow Retirement Authorization**: a closed signed proposal binding the
   exact legacy workflow, replacement policy, release, compatibility window,
   shadow evidence, deletion evidence, reviewer registry, audience, and time.
@@ -145,18 +159,23 @@ Active implementation plan:
 - The **Workflow Governance Release Module** validates closed P5d release and
   batch candidates against the complete P5a inventory, canonical digests,
   embedded evidence, and the globally composed policy graph. `guide
-  rollout-audit` exposes only `candidate_only` results. Runtime release
-  admission, project pinning/upgrades, and trusted retirement remain later P5d
-  slices.
+  rollout-audit` exposes only `candidate_only` results. P5d.2 adds a separate
+  opaque runtime loader for the fixed embedded registry, exact P5c-compatible
+  release pinning, and adjacent CAS-bound upgrades; the audit result itself
+  still cannot activate anything. New-policy admission and trusted retirement
+  remain later P5d slices.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
   trusted Project Snapshot whose phase/state, prerequisite completion,
   applicability, signals, capabilities, human decisions, evaluator results,
-  waivers, revocations, and freshness come from the admitted P5c bundle and
-  durable receipt ledger. `workflow next|resume` exposes its guidance to a host
-  agent; completion is consumed only after a lock-scoped late recheck. Advisory
-  playbooks and legacy simulation/shadow projections sit outside authority.
+  waivers, revocations, and freshness come from the ledger-pinned admitted
+  release and durable receipts. `workflow init|next|resume|release-status`
+  exposes its guidance and pin to a host agent; `release-upgrade` accepts only
+  an admitted target id plus exact release/head/snapshot CAS digests. Completion
+  is consumed only after a lock-scoped late recheck, and authority prepared
+  before an upgrade fails on the new head/bundle. Advisory playbooks and legacy
+  simulation/shadow projections sit outside authority.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,
@@ -167,10 +186,13 @@ including its signed observation boundary, adversarial golden-path proof, and
 full workspace gates. P5d.1 now establishes versioned release/batch contracts,
 explicit catalog disposition, content-addressed evidence validation, and a
 candidate-only scorecard; it does not activate a new release or retire legacy
-authority. Later P5d slices own opaque release admission, project pinning,
-reviewed rollout, behavioral comparison, quarantine, and signed deletion-backed
-retirement. The P5c workflow path targets the local agent-facing CLI; allowlist
-metadata does not constitute an end-to-end MCP workflow Adapter.
+authority. P5d.2 now admits only a policy-equivalent foundation successor,
+preserves unchanged P5c ledgers, derives the active release from durable
+history, and moves it only through a crash-recoverable adjacent transition.
+Later P5d slices own new-policy admission, reviewed rollout, behavioral
+comparison, quarantine, and signed deletion-backed retirement. The workflow
+path targets the local agent-facing CLI; allowlist metadata does not constitute
+an end-to-end MCP workflow Adapter.
 
 The workflow ledger's internal hash chain detects record tampering,
 malformed/torn tails, sequence gaps, and head mismatch within the history it
@@ -178,6 +200,11 @@ receives, but it has no external monotonic anchor. It cannot distinguish clean
 truncation to a previously valid prefix from legitimate history. A malicious
 same-user rollback of the entire internally consistent ledger is therefore an
 explicit residual threat, and hostile-user isolation is not claimed.
+Interrupted local WAL replacement is a different failure class: P5d.2 uses
+digest-bound next/previous/transaction artifacts and reconciles them under the
+ledger lock to the exact prior or committed WAL. Ambiguous or corrupt protocol
+state fails closed. This logical crash recovery does not provide the missing
+external rollback anchor, and Windows directory flushing remains best-effort.
 The shipped CLI confines raw workflow-ledger mutation to
 `forge-core-workflow-governance-tcb`, a direct dependency only of
 `forge-core-kernel`. `forge-core-store`, CLI, and MCP expose no semantic append

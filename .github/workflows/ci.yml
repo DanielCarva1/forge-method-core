@@ -30,6 +30,9 @@ jobs:
       - name: Check generated workflow release foundation
         run: cargo run -p forge-core-decisions --example generate_workflow_release_foundation -- --check
 
+      - name: Check generated workflow release registry
+        run: cargo run -p forge-core-decisions --example generate_workflow_release_registry -- --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -42,11 +45,11 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchor (128 clean checks)
+      - name: Regression anchor (130 clean checks)
         run: |
           count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
-          echo "Anchor count: $count (expected 128)"
-          test "$count" = "128"
+          echo "Anchor count: $count (expected 130)"
+          test "$count" = "130"
 
   platform:
     name: ${{ matrix.os }} cargo all-targets

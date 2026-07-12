@@ -11,6 +11,9 @@ use crate::assurance::{
     ReadinessTarget,
 };
 use crate::common::{PrincipalId, StableId};
+use crate::workflow_release::{
+    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -306,6 +309,7 @@ pub struct WorkflowGovernanceLedgerRecord {
 )]
 pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
+    ReleaseUpgraded(ReleaseUpgradedEvent),
     PhaseAdvanced(PhaseAdvancedEvent),
     ApplicabilityAssessed(ApplicabilityAssessedEvent),
     SignalChanged(SignalChangedEvent),
@@ -317,6 +321,40 @@ pub enum WorkflowGovernanceEvent {
     PolicyCompleted(PolicyCompletedEvent),
     ReceiptRevoked(ReceiptRevokedEvent),
     ContinuityRecorded(ContinuityRecordedEvent),
+}
+
+/// Auditable result proposed for one atomic release upgrade. Raw event DTOs
+/// grant no upgrade or admission authority; trusted kernel code must construct
+/// and append the event under the project lock after verifying every binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseUpgradedEvent {
+    pub from_release: WorkflowGovernanceReleaseIdentity,
+    pub to_release: WorkflowGovernanceReleaseIdentity,
+    pub from_runtime_bundle: WorkflowRuntimeBundleIdentity,
+    pub to_runtime_bundle: WorkflowRuntimeBundleIdentity,
+    pub registry_provenance: WorkflowReleaseRegistryProvenance,
+    pub admission_proof: WorkflowReleaseAdmissionProof,
+    pub receipt_carryover: WorkflowReceiptCarryover,
+    pub prior_ledger_head_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleaseRegistryProvenance {
+    pub registry_id: StableId,
+    pub registry_version: String,
+    pub registry_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleaseAdmissionProof {
+    pub proof_id: StableId,
+    pub proof_digest: String,
+    pub snapshot_digest: String,
+    pub from_policy_set_digest: String,
+    pub to_policy_set_digest: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -25,14 +25,15 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
     ToolEffectContractDocument, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
-    WorkflowMigrationPlanDocument,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
+    WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument,
 };
 use forge_core_decisions::{
-    evaluate_workflow_migration, evaluate_workflow_release, load_catalog, load_workflow_documents,
-    validate_workflow_governance_bundle, WorkflowGovernanceIssue, WorkflowReleaseEvaluation,
-    WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
-    WorkflowReleaseEvidenceAssurance,
+    evaluate_workflow_migration, evaluate_workflow_release, evaluate_workflow_release_registry,
+    load_catalog, load_workflow_documents, validate_workflow_governance_bundle,
+    WorkflowGovernanceIssue, WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority,
+    WorkflowReleaseEvaluationStatus, WorkflowReleaseEvidenceAssurance,
+    WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
 };
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
@@ -301,6 +302,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_runtime_contracts(root, &index, &mut summary);
         validate_workflow_governance_contracts(root, &mut summary);
         validate_workflow_release_foundation(root, &mut summary);
+        validate_workflow_release_registry(root, &mut summary);
     }
 
     summary.finish();
@@ -529,6 +531,117 @@ fn validate_workflow_release_foundation_baseline(
             ),
         ));
     }
+}
+
+const WORKFLOW_RELEASE_ADMISSION_SPEC_REF: &str =
+    "contracts/spec/workflow-governance-release-admission-v0.yaml";
+const WORKFLOW_RELEASE_REGISTRY_REF: &str =
+    "contracts/migration/workflow-governance-release-registry-v0.yaml";
+const WORKFLOW_RELEASE_GENESIS_BUNDLE_REF: &str =
+    "contracts/workflow-governance/golden-path-v0.yaml";
+const WORKFLOW_RELEASE_FOUNDATION_BUNDLE_REF: &str =
+    "contracts/workflow-governance/runtime-release-foundation-v0.yaml";
+
+/// Validate the complete repository-owned P5d.2 registry projection. A clean
+/// report proves only structural integrity and exact P5c policy equivalence;
+/// runtime admission remains an opaque kernel operation.
+fn validate_workflow_release_registry(root: &Path, summary: &mut ValidateSummary) {
+    let report = workflow_release_registry_validation_report(root);
+    summary.add_report("workflow_governance_release_registry", report);
+}
+
+fn workflow_release_registry_validation_report(root: &Path) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    if read_canonical_release_yaml::<serde_json::Value>(
+        root,
+        WORKFLOW_RELEASE_ADMISSION_SPEC_REF,
+        &mut report,
+    )
+    .is_none()
+    {
+        return report;
+    }
+    let Some(registry) = read_canonical_release_yaml::<WorkflowGovernanceReleaseRegistryDocument>(
+        root,
+        WORKFLOW_RELEASE_REGISTRY_REF,
+        &mut report,
+    ) else {
+        return report;
+    };
+
+    let expected_refs = [
+        WORKFLOW_RELEASE_GENESIS_BUNDLE_REF,
+        WORKFLOW_RELEASE_FOUNDATION_BUNDLE_REF,
+    ];
+    let actual_refs = registry
+        .workflow_governance_release_registry
+        .releases
+        .iter()
+        .map(|entry| entry.runtime_bundle.embedded_ref.0.as_str())
+        .collect::<Vec<_>>();
+    if actual_refs != expected_refs {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_REGISTRY_REF,
+            format!(
+                "P5d.2 foundation registry must bind the exact ordered runtime bundles {expected_refs:?}, found {actual_refs:?}"
+            ),
+        ));
+        return report;
+    }
+
+    let mut bundles = Vec::with_capacity(expected_refs.len());
+    for repo_ref in expected_refs {
+        if let Some(bundle) = read_canonical_release_yaml::<WorkflowGovernanceBundleDocument>(
+            root,
+            repo_ref,
+            &mut report,
+        ) {
+            bundles.push(bundle);
+        }
+    }
+    if bundles.len() != expected_refs.len() {
+        return report;
+    }
+
+    let evaluation = evaluate_workflow_release_registry(&registry, &bundles);
+    for issue in &evaluation.issues {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            issue.path.clone(),
+            format!(
+                "workflow release registry {:?}: {}",
+                issue.code, issue.message
+            ),
+        ));
+    }
+    if evaluation.status != WorkflowReleaseRegistryEvaluationStatus::StructurallyValid
+        && evaluation.issues.is_empty()
+    {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_REGISTRY_REF,
+            "P5d.2 release registry is not structurally_valid",
+        ));
+    }
+    if evaluation.authority != WorkflowReleaseRegistryEvaluationAuthority::NonAuthoritative {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_REGISTRY_REF,
+            "raw P5d.2 registry evaluation must remain non_authoritative",
+        ));
+    }
+    if evaluation.successor_policy_count != 15 {
+        report.push(Diagnostic::error(
+            DiagnosticCode::WorkflowGovernanceInvalid,
+            WORKFLOW_RELEASE_REGISTRY_REF,
+            format!(
+                "P5d.2 may grandfather exactly 15 P5c policy objects, found {}",
+                evaluation.successor_policy_count
+            ),
+        ));
+    }
+    report
 }
 
 fn read_canonical_release_yaml<T>(

@@ -27,8 +27,11 @@ mod policy;
 
 pub use adapter::*;
 pub use policy::{
-    load_admitted_workflow_governance_bundle, AdmittedWorkflowGovernanceBundle,
-    AdmittedWorkflowGovernanceBundleError, ADMITTED_GOLDEN_PATH_BUNDLE_REF,
+    load_admitted_workflow_governance_bundle, load_admitted_workflow_governance_release_registry,
+    AdmittedWorkflowGovernanceBundle, AdmittedWorkflowGovernanceBundleError,
+    AdmittedWorkflowGovernanceRelease, AdmittedWorkflowGovernanceReleaseError,
+    AdmittedWorkflowGovernanceReleaseRegistry, ADMITTED_GOLDEN_PATH_BUNDLE_REF,
+    ADMITTED_WORKFLOW_RELEASE_REGISTRY_REF,
 };
 
 /// Snapshot admitted by trusted kernel-owned adapters.

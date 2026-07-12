@@ -1,0 +1,150 @@
+schema_version: "0.1"
+spec: "workflow_governance_release_admission_v0"
+status: "p5d_2_implemented"
+purpose: >-
+  Pin every project to one repository-admitted workflow-governance release and
+  move that pin only through an atomic, hash-chained kernel transition. A newer
+  Forge binary, caller-selected path, or project-local contract cannot silently
+  change runtime authority.
+
+compatibility_problem:
+  p5c_ledger_identity: >-
+    Every P5c ledger record is bound to the admitted golden-path bundle id and
+    digest. Rewriting those records or interpreting the current binary default
+    as the project release would either invalidate history or silently change
+    authority.
+  p5d_1_candidate_boundary: >-
+    The P5d.1 manifest and batch prove structural composition and embedded
+    content integrity only. They do not admit the remaining 95 catalog
+    workflows. P5d.2 may grandfather only the exact 15 already-admitted P5c
+    policy objects into a versioned successor release.
+
+authority_model:
+  raw_registry: "closed, validated, and non-authoritative after deserialization"
+  admitted_release: >-
+    opaque kernel type with no public constructor, Clone, Serialize, or
+    Deserialize implementation
+  runtime_sources:
+    - "one fixed embedded release registry"
+    - "fixed embedded manifest, batch, and runtime-bundle references"
+    - "strictly recovered project workflow-governance ledger"
+  forbidden_sources:
+    - "caller-selected registry, manifest, batch, or bundle paths"
+    - "project-local files that mimic repository contracts"
+    - "the newest release or binary default when a project is already pinned"
+    - "a structurally valid candidate-only batch by itself"
+
+release_identity:
+  stable_lineage: "workflow-governance core lineage id"
+  release_digest: "canonical content digest of the exact release descriptor"
+  runtime_bundle_digest: "canonical digest of the exact executable policy bundle"
+  policy_set_digest: >-
+    canonical digest of the ordered policy objects, excluding only the bundle
+    envelope id; P5d.2 successors must equal the P5c admitted policy set
+  registry_digest: >-
+    audit provenance for the installed embedded registry, not stable release
+    identity and not a cryptographic supply-chain signature
+  evolution_invariant: >-
+    A later registry version must retain the stable registry id and every
+    historical release/runtime identity needed by an existing transition.
+    Historical whole-registry digests remain event provenance rather than a
+    requirement that the expanded registry have identical bytes. Before P5d.3
+    adds a third release, a frozen upgraded-WAL fixture must prove this rule.
+
+project_pin:
+  legacy_p5c: >-
+    An unchanged P5c ledger without a release transition maps only to the exact
+    embedded legacy release whose runtime bundle id and digest match the ledger
+    genesis identity.
+  explicit_upgrade: >-
+    A typed release_upgraded event binds the current and target release,
+    runtime bundle, policy-set, predecessor, registry provenance, admission
+    proof, carryover decision, and observed prior ledger head.
+  active_selection: >-
+    Recovery replays the exact transition chain. The transition record remains
+    under the source bundle identity; only following records use the target
+    runtime bundle identity. Direct identity switches are invalid.
+  replacement_agent: >-
+    init, status, next, resume, prepared authority, and completion recheck all
+    resolve the same active release from durable history rather than chat state.
+
+upgrade_protocol:
+  selection: "target release id from the embedded registry; no path flags"
+  optimistic_concurrency:
+    - "expected current release digest"
+    - "expected ledger head digest"
+    - "expected project snapshot digest"
+  validation:
+    - "source release equals the strictly recovered active release"
+    - "target is the unique declared adjacent successor in the same lineage"
+    - "target manifest, batch, runtime bundle, and all content digests are exact"
+    - "target policy-set digest equals the admitted P5c policy set in P5d.2"
+    - "unknown, reverse, skipped, self, ambiguous, or drifted transitions fail closed"
+  commit: >-
+    The kernel retains the workflow-ledger lock and head CAS while preparing
+    and durably replacing the complete WAL with exactly one transition event.
+  idempotency: >-
+    Repeating an already-committed target returns already_pinned and does not
+    append another record.
+
+crash_recovery:
+  requirement: >-
+    Replacement must use a deterministic confined transaction marker plus
+    content-addressed next and previous images. Recovery reconciles them under
+    the same lock before interpreting a missing target as an empty ledger.
+  outcomes:
+    - "not committed: restore the exact prior valid WAL and prior release"
+    - "committed: retain the exact new valid WAL and target release"
+    - "ambiguous, multiple, symlinked, torn, or corrupt protocol state: fail closed"
+  claim_limit: >-
+    This is tested logical crash recovery. The ledger still has no external
+    monotonic anchor, so clean rollback of the complete internally consistent
+    WAL by a same-user attacker remains detectable only after a later external
+    anchoring slice.
+
+receipt_carryover:
+  equal_runtime_bundle: >-
+    Existing receipts may carry only when source and target runtime policy-set
+    digests are exact and the registry declares retain-on-equality.
+  changed_runtime_bundle: >-
+    Evidence, completion, applicability, decisions, and other derived receipts
+    before the transition are excluded until fresh post-upgrade evidence exists.
+
+agent_experience:
+  status_command: >-
+    Returns active release, pin origin, exact ledger/snapshot CAS values, the
+    single available admitted successor, and executable argv for an upgrade.
+  upgrade_command: >-
+    Accepts root, target release id, and exact CAS digests only; it never asks
+    the human to find or edit governance files.
+  next_and_resume: >-
+    Always include the active release audit so a replacement agent can explain
+    why the project did or did not move to a newer release.
+
+adversarial_evidence:
+  - "old P5c ledger bytes and record digests remain valid without rewrite"
+  - "changing the installed default does not change an existing project"
+  - "local override files and caller path flags cannot enter admission"
+  - "unknown id, same id with drift, wrong predecessor, downgrade, and skip reject"
+  - "stale release, head, or snapshot CAS rejects without changing WAL bytes"
+  - "faults at every replacement phase recover exactly source or committed target"
+  - "replacement-agent resume selects the same release after success or recovery"
+  - "prepared authority captured before upgrade cannot commit afterward"
+  - "raw registry, manifest, batch, audit projection, and event cannot mint the opaque release type"
+
+non_goals:
+  - "no admission of new policies beyond the exact P5c 15-policy set"
+  - "no retirement or deletion authority"
+  - "no release signing or supply-chain trust claim"
+  - "no protection claim against clean whole-ledger rollback"
+  - "no caller-selected rollback transition"
+  - "no Domain Pack runtime"
+  - "no claim that the two-entry P5d.2 foundation evaluator already validates an expanded multi-release P5d.3 registry"
+
+references:
+  - "contracts/spec/workflow-governance-release-v0.yaml"
+  - "contracts/spec/workflow-governance-golden-path-v0.yaml"
+  - "contracts/spec/workflow-governance-kernel-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/migration/workflow-governance-release-foundation-v0.yaml"
+  - "contracts/workflow-governance/golden-path-v0.yaml"

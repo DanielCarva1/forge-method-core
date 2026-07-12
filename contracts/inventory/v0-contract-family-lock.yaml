@@ -289,6 +289,17 @@ contract_family_inventory:
       evidence_refs:
         - "llm_as_code_2606_15874"
         - "code_as_agent_harness_2605_18747"
+    - id: "workflow_governance_release_registry"
+      family_kind: "workflow_governance_release_registry"
+      schema_ref: "contracts/spec/workflow-governance-release-admission-v0.yaml"
+      instance_globs:
+        - "contracts/migration/workflow-governance-release-registry-v0.yaml"
+      validator_function: "evaluate_workflow_release_registry"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
     - id: "workflow_migration_batch"
       family_kind: "workflow_migration_batch"
       schema_ref: "contracts/spec/workflow-governance-release-v0.yaml"

@@ -1,0 +1,45 @@
+schema_version: '0.1'
+workflow_governance_release_registry:
+  registry_id: workflow-governance.registry.foundation-v0
+  registry_version: 0.1.0
+  lineage_id: workflow-governance.core
+  default_successor_release_id: workflow-governance.release.foundation-v0
+  releases:
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.p5c-implicit-v0
+      release_version: 0.0.0+p5c
+      release_digest: sha256:6431e9415e23232a72273330d55dc793a24e308d605b7aca743498e660b45045
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.golden-path-v0
+        bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+        policy_set_digest: sha256:399a204c1f47fd69e6e5596e320b6d13feb7872714a66c34adfc703569defb7d
+      embedded_ref: contracts/workflow-governance/golden-path-v0.yaml
+      expected_digest: sha256:5e0420ec70f7a25fa762d4f0f3d2dd025664876cae50bf91dc9fc9bd69900d45
+    predecessor: null
+    source:
+      kind: implicit_p5c_genesis
+    receipt_carryover: not_applicable
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.foundation-v0
+      release_version: 0.1.0
+      release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.release-foundation-v0
+        bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+        policy_set_digest: sha256:399a204c1f47fd69e6e5596e320b6d13feb7872714a66c34adfc703569defb7d
+      embedded_ref: contracts/workflow-governance/runtime-release-foundation-v0.yaml
+      expected_digest: sha256:81f9061c83a841996dc222e569d5d766dd5ec882caf239f3d88163c440a48ded
+    predecessor:
+      release_id: workflow-governance.release.p5c-implicit-v0
+      release_digest: sha256:6431e9415e23232a72273330d55dc793a24e308d605b7aca743498e660b45045
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-foundation-v0.yaml
+      expected_digest: sha256:f645ce8d2d3311f9d66edabea718b0e2674797e3c6c5cc4eb91ddce6023d2560
+    receipt_carryover: preserve_policy_equivalent
+    authority: candidate_only

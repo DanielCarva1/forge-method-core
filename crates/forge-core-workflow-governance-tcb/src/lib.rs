@@ -3,14 +3,21 @@
 //! This store deliberately has no torn-tail repair. A malformed, truncated,
 //! oversized, or internally inconsistent ledger fails closed and requires an
 //! operator-mediated recovery from a known-good durable copy.
+//!
+//! Replacement recovery protects against interrupted local writes. It is not
+//! an external rollback anchor: an actor able to replace the WAL and remove all
+//! protocol artifacts can still present an older, internally valid ledger.
 
 use forge_core_contracts::{
-    StableId, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernanceReceiptDocument, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+    ReleaseUpgradedEvent, StableId, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity,
+    WorkflowRuntimeBundleIdentity, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_store::{acquire_effect_store_lock, EffectStoreLock, EffectStoreLockError};
 use serde_json_canonicalizer::to_vec as to_canonical_json;
 use sha2::{Digest, Sha256};
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt;
@@ -40,20 +47,66 @@ pub struct WorkflowGovernanceLedgerProjection {
 }
 
 impl WorkflowGovernanceLedgerProjection {
+    /// Identity fixed by the first, `project_imported` record.
     #[must_use]
-    pub fn identity(&self) -> Option<WorkflowGovernanceLedgerIdentity> {
+    pub fn genesis_identity(&self) -> Option<WorkflowGovernanceLedgerIdentity> {
         self.records
             .first()
-            .map(|record| WorkflowGovernanceLedgerIdentity {
-                project_id: record.project_id.clone(),
-                bundle_id: record.bundle_id.clone(),
-                bundle_digest: record.bundle_digest.clone(),
-            })
+            .map(WorkflowGovernanceLedgerIdentity::from_record)
+    }
+
+    /// Backward-compatible alias for [`Self::genesis_identity`].
+    #[must_use]
+    pub fn identity(&self) -> Option<WorkflowGovernanceLedgerIdentity> {
+        self.genesis_identity()
+    }
+
+    /// Runtime identity active after applying every release transition.
+    ///
+    /// A transition record retains the source identity in its envelope; its
+    /// target becomes active only for the following record.
+    #[must_use]
+    pub fn active_identity(&self) -> Option<WorkflowGovernanceLedgerIdentity> {
+        let mut active = self.genesis_identity()?;
+        for record in &self.records {
+            if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
+                active.bundle_id = event.to_runtime_bundle.bundle_id.clone();
+                active
+                    .bundle_digest
+                    .clone_from(&event.to_runtime_bundle.bundle_digest);
+            }
+        }
+        Some(active)
+    }
+
+    /// Last fully described runtime identity admitted by a transition.
+    ///
+    /// Legacy genesis records predate `policy_set_digest`, so this is `None`
+    /// until the first release transition supplies that additional binding.
+    #[must_use]
+    pub fn active_runtime_bundle_identity(&self) -> Option<WorkflowRuntimeBundleIdentity> {
+        self.records.iter().rev().find_map(|record| {
+            if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
+                Some(event.to_runtime_bundle.clone())
+            } else {
+                None
+            }
+        })
     }
 
     #[must_use]
     pub fn current_state_version(&self) -> Option<u64> {
         self.records.last().map(|record| record.state_version)
+    }
+}
+
+impl WorkflowGovernanceLedgerIdentity {
+    fn from_record(record: &WorkflowGovernanceLedgerRecord) -> Self {
+        Self {
+            project_id: record.project_id.clone(),
+            bundle_id: record.bundle_id.clone(),
+            bundle_digest: record.bundle_digest.clone(),
+        }
     }
 }
 
@@ -97,6 +150,9 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         state_version: u64,
         event: WorkflowGovernanceEvent,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        if matches!(event, WorkflowGovernanceEvent::ReleaseUpgraded(_)) {
+            return Err(WorkflowGovernanceLedgerError::ReleaseUpgradeRequiresDedicatedAuthority);
+        }
         if matches!(event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
         }
@@ -133,19 +189,79 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         Ok(record)
     }
 
+    fn push_release_transition_tcb(
+        &mut self,
+        target_identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: ReleaseUpgradedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        if self.projection.records.len() != self.original_record_count {
+            return Err(WorkflowGovernanceLedgerError::DuplicateReleaseTransition);
+        }
+        let previous_state_version = self
+            .projection
+            .current_state_version()
+            .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
+        let expected_state_version = previous_state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: previous_state_version,
+            },
+        )?;
+        if state_version != expected_state_version {
+            return Err(
+                WorkflowGovernanceLedgerError::ReleaseTransitionStateVersionMismatch {
+                    expected: expected_state_version,
+                    found: state_version,
+                },
+            );
+        }
+        let active_release = active_release_identity(&self.projection);
+        let active_runtime = self.projection.active_runtime_bundle_identity();
+        validate_release_transition(
+            &event,
+            &self.identity,
+            target_identity,
+            active_release.as_ref(),
+            active_runtime.as_ref(),
+            self.projection.head_digest.as_deref(),
+        )?;
+
+        let (record, line) = build_record_line(
+            &self.projection,
+            &self.identity,
+            state_version,
+            WorkflowGovernanceEvent::ReleaseUpgraded(event),
+        )?;
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        self.projection.next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
     /// Return the recovered ledger plus every record prepared so far.
     #[must_use]
     pub fn projection(&self) -> &WorkflowGovernanceLedgerProjection {
         &self.projection
     }
 
-    /// Persist every prepared record in one atomic WAL replacement.
+    /// Persist every prepared record in one crash-recoverable WAL replacement.
     ///
     /// # Errors
     ///
-    /// Rejects an empty batch and forwards safe-path or atomic replacement
-    /// failures. The replacement helper restores the original WAL when its
-    /// final rename fails.
+    /// Rejects an empty batch and forwards safe-path or replacement failures.
+    /// On platforms without replace-by-rename semantics, recovery deterministically
+    /// resolves the fixed transaction protocol to the old or committed WAL.
     pub fn commit(
         self,
     ) -> Result<Vec<WorkflowGovernanceLedgerRecord>, WorkflowGovernanceLedgerError> {
@@ -220,6 +336,37 @@ impl LockedWorkflowGovernanceLedger {
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
         let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, identity)?;
         let record = batch.push_event(state_version, event)?;
+        batch.commit()?;
+        Ok(record)
+    }
+
+    /// Append exactly one structurally validated release transition.
+    ///
+    /// Registry admission and predecessor authorization remain kernel-owned;
+    /// this TCB boundary validates only ledger/source/target bindings and the
+    /// transition DTO's structural integrity under the retained OS lock.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed on stale heads, source/target mismatches, malformed
+    /// transitions, non-contiguous state versions, or durable commit failure.
+    #[doc(hidden)]
+    pub fn transition_release_unchecked_tcb(
+        &mut self,
+        expected_head_digest: &str,
+        source_identity: &WorkflowGovernanceLedgerIdentity,
+        target_identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: ReleaseUpgradedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        validate_identity(target_identity)?;
+        if source_identity.project_id != target_identity.project_id {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "source and target project identities differ",
+            });
+        }
+        let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, source_identity)?;
+        let record = batch.push_release_transition_tcb(target_identity, state_version, event)?;
         batch.commit()?;
         Ok(record)
     }
@@ -341,6 +488,15 @@ pub enum WorkflowGovernanceLedgerError {
         previous: u64,
         found: u64,
     },
+    ReleaseUpgradeRequiresDedicatedAuthority,
+    ReleaseTransitionStateVersionMismatch {
+        expected: u64,
+        found: u64,
+    },
+    ReleaseTransitionInvalid {
+        reason: &'static str,
+    },
+    DuplicateReleaseTransition,
     FirstEventNotProjectImported,
     ProjectImportedAfterInitialization,
     AlreadyInitialized,
@@ -425,6 +581,21 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
             Self::StateVersionRegression { previous, found } => write!(
                 formatter,
                 "ledger state version regressed from {previous} to {found}"
+            ),
+            Self::ReleaseUpgradeRequiresDedicatedAuthority => write!(
+                formatter,
+                "release_upgraded requires the dedicated TCB transition API"
+            ),
+            Self::ReleaseTransitionStateVersionMismatch { expected, found } => write!(
+                formatter,
+                "release transition state version mismatch: expected {expected}, found {found}"
+            ),
+            Self::ReleaseTransitionInvalid { reason } => {
+                write!(formatter, "release transition is structurally invalid: {reason}")
+            }
+            Self::DuplicateReleaseTransition => write!(
+                formatter,
+                "a release transition batch must contain exactly one transition"
             ),
             Self::FirstEventNotProjectImported => write!(formatter, "first ledger event must be project_imported"),
             Self::ProjectImportedAfterInitialization => write!(formatter, "project_imported may only be the first ledger event"),
@@ -528,6 +699,32 @@ pub fn append_workflow_governance_event_tcb(
     )
 }
 
+/// Transition the active release with expected-head CAS in one lock scope.
+///
+/// The kernel remains responsible for registry admission and predecessor
+/// authorization before calling this structural TCB boundary.
+///
+/// # Errors
+///
+/// Forwards lock, recovery, CAS, structural validation, and commit failures.
+#[doc(hidden)]
+pub fn transition_workflow_governance_release_tcb(
+    state_root: impl AsRef<Path>,
+    expected_head_digest: &str,
+    source_identity: &WorkflowGovernanceLedgerIdentity,
+    target_identity: &WorkflowGovernanceLedgerIdentity,
+    state_version: u64,
+    event: ReleaseUpgradedEvent,
+) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+    lock_workflow_governance_ledger_tcb(state_root)?.transition_release_unchecked_tcb(
+        expected_head_digest,
+        source_identity,
+        target_identity,
+        state_version,
+        event,
+    )
+}
+
 /// Compute the canonical JCS digest of a record with `record_digest` blanked.
 ///
 /// # Errors
@@ -553,6 +750,7 @@ fn recover_under_lock(
     state_root: &Path,
 ) -> Result<WorkflowGovernanceLedgerProjection, WorkflowGovernanceLedgerError> {
     let wal_path = workflow_governance_wal_path(state_root)?;
+    reconcile_wal_replacement(&wal_path).map_err(|source| io_error(&wal_path, source))?;
     if !wal_path.exists() {
         return Ok(empty_projection());
     }
@@ -570,7 +768,7 @@ fn recover_under_lock(
     let mut line_bytes = Vec::new();
     let mut ids = HashSet::new();
     let mut expected_previous: Option<String> = None;
-    let mut identity: Option<WorkflowGovernanceLedgerIdentity> = None;
+    let mut identity_state = RecoveredIdentityState::default();
     let mut previous_state_version: Option<u64> = None;
 
     loop {
@@ -641,7 +839,12 @@ fn recover_under_lock(
                 record_id: record.record_id,
             });
         }
-        validate_recovered_semantics(&record, line_number, &mut identity, previous_state_version)?;
+        validate_recovered_semantics(
+            &record,
+            line_number,
+            &mut identity_state,
+            previous_state_version,
+        )?;
         previous_state_version = Some(record.state_version);
         expected_previous = Some(record.record_digest.clone());
         records.push(record);
@@ -664,39 +867,46 @@ fn recover_under_lock(
     })
 }
 
+#[derive(Debug, Default)]
+struct RecoveredIdentityState {
+    genesis: Option<WorkflowGovernanceLedgerIdentity>,
+    active: Option<WorkflowGovernanceLedgerIdentity>,
+    active_release: Option<WorkflowGovernanceReleaseIdentity>,
+    active_runtime: Option<WorkflowRuntimeBundleIdentity>,
+}
+
 fn validate_recovered_semantics(
     record: &WorkflowGovernanceLedgerRecord,
     line: usize,
-    identity: &mut Option<WorkflowGovernanceLedgerIdentity>,
+    identity: &mut RecoveredIdentityState,
     previous_state_version: Option<u64>,
 ) -> Result<(), WorkflowGovernanceLedgerError> {
     if line == 1 {
         if !matches!(record.event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::FirstEventNotProjectImported);
         }
-        *identity = Some(WorkflowGovernanceLedgerIdentity {
-            project_id: record.project_id.clone(),
-            bundle_id: record.bundle_id.clone(),
-            bundle_digest: record.bundle_digest.clone(),
-        });
+        let genesis = WorkflowGovernanceLedgerIdentity::from_record(record);
+        identity.genesis = Some(genesis.clone());
+        identity.active = Some(genesis);
     } else if matches!(record.event, WorkflowGovernanceEvent::ProjectImported(_)) {
         return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
     }
-    if let Some(expected) = identity.as_ref() {
-        if record.project_id != expected.project_id {
+    if let Some(genesis) = identity.genesis.as_ref() {
+        if record.project_id != genesis.project_id {
             return Err(WorkflowGovernanceLedgerError::ProjectMismatch {
                 line: Some(line),
-                expected: expected.project_id.clone(),
+                expected: genesis.project_id.clone(),
                 found: record.project_id.clone(),
             });
         }
-        if record.bundle_id != expected.bundle_id || record.bundle_digest != expected.bundle_digest
-        {
+    }
+    if let Some(active) = identity.active.as_ref() {
+        if record.bundle_id != active.bundle_id || record.bundle_digest != active.bundle_digest {
             return Err(WorkflowGovernanceLedgerError::BundleMismatch {
                 line: Some(line),
-                expected_id: expected.bundle_id.clone(),
+                expected_id: active.bundle_id.clone(),
                 found_id: record.bundle_id.clone(),
-                expected_digest: expected.bundle_digest.clone(),
+                expected_digest: active.bundle_digest.clone(),
                 found_digest: record.bundle_digest.clone(),
             });
         }
@@ -706,6 +916,45 @@ fn validate_recovered_semantics(
             previous: previous_state_version.unwrap_or_default(),
             found: record.state_version,
         });
+    }
+    if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
+        let previous = previous_state_version.ok_or(
+            WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "release transition cannot be the genesis record",
+            },
+        )?;
+        let expected = previous
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceLedgerError::StateVersionOverflow { current: previous })?;
+        if record.state_version != expected {
+            return Err(
+                WorkflowGovernanceLedgerError::ReleaseTransitionStateVersionMismatch {
+                    expected,
+                    found: record.state_version,
+                },
+            );
+        }
+        let source = identity.active.as_ref().ok_or(
+            WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "release transition has no active source identity",
+            },
+        )?;
+        let target = WorkflowGovernanceLedgerIdentity {
+            project_id: source.project_id.clone(),
+            bundle_id: event.to_runtime_bundle.bundle_id.clone(),
+            bundle_digest: event.to_runtime_bundle.bundle_digest.clone(),
+        };
+        validate_release_transition(
+            event,
+            source,
+            &target,
+            identity.active_release.as_ref(),
+            identity.active_runtime.as_ref(),
+            record.previous_record_digest.as_deref(),
+        )?;
+        identity.active = Some(target);
+        identity.active_release = Some(event.to_release.clone());
+        identity.active_runtime = Some(event.to_runtime_bundle.clone());
     }
     Ok(())
 }
@@ -832,7 +1081,7 @@ fn validate_append_identity(
     identity: &WorkflowGovernanceLedgerIdentity,
 ) -> Result<(), WorkflowGovernanceLedgerError> {
     let expected = projection
-        .identity()
+        .active_identity()
         .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
     if expected.project_id != identity.project_id {
         return Err(WorkflowGovernanceLedgerError::ProjectMismatch {
@@ -852,6 +1101,214 @@ fn validate_append_identity(
         });
     }
     Ok(())
+}
+
+fn active_release_identity(
+    projection: &WorkflowGovernanceLedgerProjection,
+) -> Option<WorkflowGovernanceReleaseIdentity> {
+    projection.records.iter().rev().find_map(|record| {
+        if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
+            Some(event.to_release.clone())
+        } else {
+            None
+        }
+    })
+}
+
+fn validate_release_transition(
+    event: &ReleaseUpgradedEvent,
+    source: &WorkflowGovernanceLedgerIdentity,
+    target: &WorkflowGovernanceLedgerIdentity,
+    active_release: Option<&WorkflowGovernanceReleaseIdentity>,
+    active_runtime: Option<&WorkflowRuntimeBundleIdentity>,
+    previous_head_digest: Option<&str>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    validate_release_transition_identities(event, source, target, active_release, active_runtime)?;
+    validate_release_transition_fields(event)?;
+    let previous_head_digest =
+        previous_head_digest.ok_or(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "release transition has no previous ledger head",
+        })?;
+    if event.prior_ledger_head_digest != previous_head_digest {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "prior ledger head does not match the transition record envelope",
+        });
+    }
+    if event.admission_proof.from_policy_set_digest != event.from_runtime_bundle.policy_set_digest
+        || event.admission_proof.to_policy_set_digest != event.to_runtime_bundle.policy_set_digest
+    {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "admission proof policy-set bindings do not match the runtime bundles",
+        });
+    }
+    Ok(())
+}
+
+fn validate_release_transition_identities(
+    event: &ReleaseUpgradedEvent,
+    source: &WorkflowGovernanceLedgerIdentity,
+    target: &WorkflowGovernanceLedgerIdentity,
+    active_release: Option<&WorkflowGovernanceReleaseIdentity>,
+    active_runtime: Option<&WorkflowRuntimeBundleIdentity>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    if source.project_id != target.project_id {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "source and target project identities differ",
+        });
+    }
+    if event.from_runtime_bundle.bundle_id != source.bundle_id
+        || event.from_runtime_bundle.bundle_digest != source.bundle_digest
+    {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "from_runtime_bundle does not match the active source identity",
+        });
+    }
+    if active_runtime.is_some_and(|active| active != &event.from_runtime_bundle) {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "from_runtime_bundle does not match the current policy-set identity",
+        });
+    }
+    if event.to_runtime_bundle.bundle_id != target.bundle_id
+        || event.to_runtime_bundle.bundle_digest != target.bundle_digest
+    {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "to_runtime_bundle does not match the exact target identity",
+        });
+    }
+    if source.bundle_id == target.bundle_id && source.bundle_digest == target.bundle_digest {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "release transition target is identical to its source",
+        });
+    }
+    if event.from_release == event.to_release {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "release transition cannot upgrade a release to itself",
+        });
+    }
+    if event.from_release.lineage_id != event.to_release.lineage_id {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "release transition changes release lineage",
+        });
+    }
+    if active_release.is_some_and(|active| active != &event.from_release) {
+        return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+            reason: "from_release does not match the current release identity",
+        });
+    }
+    Ok(())
+}
+
+fn validate_release_transition_fields(
+    event: &ReleaseUpgradedEvent,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    for (value, reason) in [
+        (
+            &event.from_release.lineage_id.0,
+            "from release lineage id is blank",
+        ),
+        (&event.from_release.release_id.0, "from release id is blank"),
+        (
+            &event.from_release.release_version,
+            "from release version is blank",
+        ),
+        (
+            &event.to_release.lineage_id.0,
+            "to release lineage id is blank",
+        ),
+        (&event.to_release.release_id.0, "to release id is blank"),
+        (
+            &event.to_release.release_version,
+            "to release version is blank",
+        ),
+        (
+            &event.from_runtime_bundle.bundle_id.0,
+            "from runtime bundle id is blank",
+        ),
+        (
+            &event.to_runtime_bundle.bundle_id.0,
+            "to runtime bundle id is blank",
+        ),
+        (
+            &event.registry_provenance.registry_id.0,
+            "registry provenance id is blank",
+        ),
+        (
+            &event.registry_provenance.registry_version,
+            "registry provenance version is blank",
+        ),
+        (
+            &event.admission_proof.proof_id.0,
+            "admission proof id is blank",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid { reason });
+        }
+    }
+    for (value, reason) in [
+        (
+            &event.from_release.release_digest,
+            "from release digest is invalid",
+        ),
+        (
+            &event.to_release.release_digest,
+            "to release digest is invalid",
+        ),
+        (
+            &event.from_runtime_bundle.bundle_digest,
+            "from runtime bundle digest is invalid",
+        ),
+        (
+            &event.from_runtime_bundle.policy_set_digest,
+            "from policy-set digest is invalid",
+        ),
+        (
+            &event.to_runtime_bundle.bundle_digest,
+            "to runtime bundle digest is invalid",
+        ),
+        (
+            &event.to_runtime_bundle.policy_set_digest,
+            "to policy-set digest is invalid",
+        ),
+        (
+            &event.registry_provenance.registry_digest,
+            "registry provenance digest is invalid",
+        ),
+        (
+            &event.admission_proof.proof_digest,
+            "admission proof digest is invalid",
+        ),
+        (
+            &event.admission_proof.snapshot_digest,
+            "admission snapshot digest is invalid",
+        ),
+        (
+            &event.admission_proof.from_policy_set_digest,
+            "admission source policy-set digest is invalid",
+        ),
+        (
+            &event.admission_proof.to_policy_set_digest,
+            "admission target policy-set digest is invalid",
+        ),
+        (
+            &event.prior_ledger_head_digest,
+            "prior ledger head digest is invalid",
+        ),
+    ] {
+        if !is_sha256_digest(value) {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid { reason });
+        }
+    }
+    Ok(())
+}
+
+fn is_sha256_digest(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
 }
 
 fn validate_identity(
@@ -1070,18 +1527,68 @@ fn ensure_resolved_parent_within_root(root: &Path, target: &Path) -> io::Result<
     }
 }
 
+const REPLACEMENT_PROTOCOL_VERSION: &str = "forge-wal-replacement-v1";
+const REPLACEMENT_NEXT_SUFFIX: &str = "forge-next";
+const REPLACEMENT_PREVIOUS_SUFFIX: &str = "forge-previous";
+const REPLACEMENT_TRANSACTION_SUFFIX: &str = "forge-transaction";
+const REPLACEMENT_MARKER_MAX_BYTES: u64 = 512;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReplacementMarker {
+    previous_digest: Option<String>,
+    next_digest: String,
+}
+
+#[derive(Debug, Clone)]
+struct ReplacementPaths {
+    next: PathBuf,
+    previous: PathBuf,
+    transaction: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReplacementCrashPoint {
+    NextSynced,
+    TransactionSynced,
+    PreviousInstalled,
+    TargetInstalled,
+}
+
+#[cfg(test)]
+thread_local! {
+    static REPLACEMENT_CRASH_POINT: Cell<Option<ReplacementCrashPoint>> = const { Cell::new(None) };
+}
+
+fn maybe_inject_replacement_crash(point: ReplacementCrashPoint) {
+    #[cfg(test)]
+    REPLACEMENT_CRASH_POINT.with(|configured| {
+        assert!(
+            configured.get() != Some(point),
+            "injected WAL replacement crash at {point:?}"
+        );
+    });
+    #[cfg(not(test))]
+    let _ = point;
+}
+
 fn atomic_replace_file(target: &Path, content: &[u8]) -> io::Result<()> {
     let parent = target
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))?;
     fs::create_dir_all(parent)?;
-    if target.exists() && !fs::symlink_metadata(target)?.file_type().is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "workflow-governance WAL target is not a regular file",
-        ));
-    }
+    reconcile_wal_replacement(target)?;
 
+    #[cfg(unix)]
+    return atomic_replace_file_unix(target, content);
+    #[cfg(not(unix))]
+    replace_file_with_recovery_protocol(target, content)
+}
+
+#[cfg(unix)]
+fn atomic_replace_file_unix(target: &Path, content: &[u8]) -> io::Result<()> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))?;
     let nonce = transaction_nonce();
     let file_name = target
         .file_name()
@@ -1101,52 +1608,354 @@ fn atomic_replace_file(target: &Path, content: &[u8]) -> io::Result<()> {
         return Err(error);
     }
 
-    #[cfg(unix)]
-    {
-        if let Err(error) = fs::rename(&temp, target) {
-            let _ = fs::remove_file(&temp);
-            return Err(error);
-        }
-        sync_parent_dir(parent)?;
-        return Ok(());
-    }
-
-    #[cfg(not(unix))]
-    let backup = parent.join(format!(".{file_name}.{nonce}.forge-bak"));
-    #[cfg(not(unix))]
-    let had_target = target.exists();
-    #[cfg(not(unix))]
-    if had_target {
-        if let Err(error) = fs::rename(target, &backup) {
-            let _ = fs::remove_file(&temp);
-            return Err(error);
-        }
-        if let Err(error) = sync_parent_dir(parent) {
-            let _ = fs::rename(&backup, target);
-            let _ = fs::remove_file(&temp);
-            return Err(error);
-        }
-    }
-
-    #[cfg(not(unix))]
     if let Err(error) = fs::rename(&temp, target) {
         let _ = fs::remove_file(&temp);
-        if had_target {
-            let _ = fs::rename(&backup, target);
-        }
-        let _ = sync_parent_dir(parent);
         return Err(error);
     }
-    #[cfg(not(unix))]
-    sync_parent_dir(parent)?;
+    sync_parent_dir(parent)
+}
 
-    #[cfg(not(unix))]
-    if had_target {
-        fs::remove_file(&backup)?;
+fn replace_file_with_recovery_protocol(target: &Path, content: &[u8]) -> io::Result<()> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))?;
+    let paths = replacement_paths(target)?;
+    let previous_digest = file_digest_if_regular(target)?;
+    let marker = ReplacementMarker {
+        previous_digest,
+        next_digest: sha256_digest(content),
+    };
+
+    // Each fixed artifact is synced before the subsequent namespace change.
+    // `sync_parent_dir` is best-effort on Windows, where std cannot open a
+    // directory with the flags required by `FlushFileBuffers`.
+    write_new_synced_file(&paths.next, content)?;
+    sync_parent_dir(parent)?;
+    maybe_inject_replacement_crash(ReplacementCrashPoint::NextSynced);
+
+    if let Err(error) = write_new_synced_file(&paths.transaction, &encode_marker(&marker)) {
+        let _ = fs::remove_file(&paths.transaction);
+        let _ = fs::remove_file(&paths.next);
+        return Err(error);
+    }
+    sync_parent_dir(parent)?;
+    maybe_inject_replacement_crash(ReplacementCrashPoint::TransactionSynced);
+
+    if marker.previous_digest.is_some() {
+        if let Err(error) = fs::rename(target, &paths.previous) {
+            let _ = fs::remove_file(&paths.transaction);
+            let _ = fs::remove_file(&paths.next);
+            return Err(error);
+        }
+        sync_parent_dir(parent)?;
+        maybe_inject_replacement_crash(ReplacementCrashPoint::PreviousInstalled);
+    }
+
+    fs::rename(&paths.next, target)?;
+    sync_parent_dir(parent)?;
+    maybe_inject_replacement_crash(ReplacementCrashPoint::TargetInstalled);
+
+    if marker.previous_digest.is_some() {
+        fs::remove_file(&paths.previous)?;
         sync_parent_dir(parent)?;
     }
-    #[cfg(not(unix))]
+    fs::remove_file(&paths.transaction)?;
+    sync_parent_dir(parent)
+}
+
+fn reconcile_wal_replacement(target: &Path) -> io::Result<()> {
+    let paths = replacement_paths(target)?;
+    let marker_bytes = read_regular_file_bounded(
+        &paths.transaction,
+        REPLACEMENT_MARKER_MAX_BYTES,
+        "replacement transaction marker",
+    )?;
+
+    let Some(marker_bytes) = marker_bytes else {
+        return reconcile_without_marker(
+            target,
+            &paths,
+            regular_file_exists(target, "workflow-governance WAL target")?,
+            regular_file_exists(&paths.next, "replacement next WAL")?,
+            regular_file_exists(&paths.previous, "replacement previous WAL")?,
+        );
+    };
+    let marker = parse_marker(&marker_bytes)?;
+    let target_digest = file_digest_if_regular(target)?;
+    let next_digest = file_digest_if_regular(&paths.next)?;
+    let previous_digest = file_digest_if_regular(&paths.previous)?;
+    reconcile_with_marker(
+        target,
+        &paths,
+        &marker,
+        target_digest.as_deref(),
+        next_digest.as_deref(),
+        previous_digest.as_deref(),
+    )
+}
+
+fn reconcile_without_marker(
+    target: &Path,
+    paths: &ReplacementPaths,
+    target_exists: bool,
+    next_exists: bool,
+    previous_exists: bool,
+) -> io::Result<()> {
+    if previous_exists {
+        return protocol_error("previous WAL exists without a transaction marker");
+    }
+    if next_exists {
+        if !target_exists {
+            return protocol_error("next WAL exists without a marker or durable target");
+        }
+        fs::remove_file(&paths.next)?;
+        sync_target_parent(target)?;
+    }
     Ok(())
+}
+
+fn reconcile_with_marker(
+    target: &Path,
+    paths: &ReplacementPaths,
+    marker: &ReplacementMarker,
+    target_digest: Option<&str>,
+    next_digest: Option<&str>,
+    previous_digest: Option<&str>,
+) -> io::Result<()> {
+    ensure_optional_digest_matches("next WAL", next_digest, &marker.next_digest)?;
+    if let Some(expected_previous) = marker.previous_digest.as_deref() {
+        ensure_optional_digest_matches("previous WAL", previous_digest, expected_previous)?;
+    } else if previous_digest.is_some() {
+        return protocol_error("unexpected previous WAL for an initially empty transaction");
+    }
+
+    match target_digest {
+        Some(found) if found == marker.next_digest.as_str() => {
+            if next_digest.is_some() {
+                return protocol_error("committed target coexists with a next WAL");
+            }
+            finish_committed_cleanup(target, paths, marker, previous_digest.is_some())
+        }
+        Some(found) if marker.previous_digest.as_deref() == Some(found) => {
+            if previous_digest.is_some() {
+                return protocol_error("old target coexists with a previous WAL");
+            }
+            finish_aborted_cleanup(target, paths, next_digest.is_some())
+        }
+        Some(_) => protocol_error("target digest is not bound by the transaction marker"),
+        None => recover_missing_target(
+            target,
+            paths,
+            marker,
+            next_digest.is_some(),
+            previous_digest.is_some(),
+        ),
+    }
+}
+
+fn recover_missing_target(
+    target: &Path,
+    paths: &ReplacementPaths,
+    marker: &ReplacementMarker,
+    next_exists: bool,
+    previous_exists: bool,
+) -> io::Result<()> {
+    if marker.previous_digest.is_some() {
+        if !previous_exists {
+            return protocol_error("target and marker-bound previous WAL are both missing");
+        }
+        fs::rename(&paths.previous, target)?;
+        sync_target_parent(target)?;
+        return finish_aborted_cleanup(target, paths, next_exists);
+    }
+    if previous_exists || !next_exists {
+        return protocol_error("initial replacement transaction is incomplete or inconsistent");
+    }
+    fs::rename(&paths.next, target)?;
+    sync_target_parent(target)?;
+    finish_committed_cleanup(target, paths, marker, false)
+}
+
+fn finish_committed_cleanup(
+    target: &Path,
+    paths: &ReplacementPaths,
+    marker: &ReplacementMarker,
+    has_previous: bool,
+) -> io::Result<()> {
+    if has_previous {
+        fs::remove_file(&paths.previous)?;
+        sync_target_parent(target)?;
+    } else if marker.previous_digest.is_none() {
+        // No previous WAL is expected for initialization.
+    }
+    fs::remove_file(&paths.transaction)?;
+    sync_target_parent(target)
+}
+
+fn finish_aborted_cleanup(
+    target: &Path,
+    paths: &ReplacementPaths,
+    has_next: bool,
+) -> io::Result<()> {
+    if has_next {
+        fs::remove_file(&paths.next)?;
+        sync_target_parent(target)?;
+    }
+    fs::remove_file(&paths.transaction)?;
+    sync_target_parent(target)
+}
+
+fn ensure_optional_digest_matches(
+    label: &str,
+    found: Option<&str>,
+    expected: &str,
+) -> io::Result<()> {
+    if found.is_some_and(|digest| digest != expected) {
+        protocol_error(&format!(
+            "{label} digest does not match the transaction marker"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn replacement_paths(target: &Path) -> io::Result<ReplacementPaths> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))?;
+    let file_name = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no file name"))?;
+    Ok(ReplacementPaths {
+        next: parent.join(format!(".{file_name}.{REPLACEMENT_NEXT_SUFFIX}")),
+        previous: parent.join(format!(".{file_name}.{REPLACEMENT_PREVIOUS_SUFFIX}")),
+        transaction: parent.join(format!(".{file_name}.{REPLACEMENT_TRANSACTION_SUFFIX}")),
+    })
+}
+
+fn encode_marker(marker: &ReplacementMarker) -> Vec<u8> {
+    let previous = marker.previous_digest.as_deref().unwrap_or("absent");
+    format!(
+        "{REPLACEMENT_PROTOCOL_VERSION}\nprevious={previous}\nnext={}\n",
+        marker.next_digest
+    )
+    .into_bytes()
+}
+
+fn parse_marker(bytes: &[u8]) -> io::Result<ReplacementMarker> {
+    let text = std::str::from_utf8(bytes)
+        .map_err(|_| protocol_io_error("replacement marker is not UTF-8"))?;
+    if !text.ends_with('\n') {
+        return protocol_error("replacement marker has a torn tail");
+    }
+    let lines = text.lines().collect::<Vec<_>>();
+    if lines.len() != 3 || lines[0] != REPLACEMENT_PROTOCOL_VERSION {
+        return protocol_error("replacement marker has an unsupported shape or version");
+    }
+    let previous = lines[1]
+        .strip_prefix("previous=")
+        .ok_or_else(|| protocol_io_error("replacement marker has no previous digest"))?;
+    let next = lines[2]
+        .strip_prefix("next=")
+        .ok_or_else(|| protocol_io_error("replacement marker has no next digest"))?;
+    let previous_digest = if previous == "absent" {
+        None
+    } else {
+        validate_sha256_digest(previous)?;
+        Some(previous.to_owned())
+    };
+    validate_sha256_digest(next)?;
+    Ok(ReplacementMarker {
+        previous_digest,
+        next_digest: next.to_owned(),
+    })
+}
+
+fn validate_sha256_digest(value: &str) -> io::Result<()> {
+    let Some(hex) = value.strip_prefix("sha256:") else {
+        return protocol_error("replacement marker digest has no sha256 prefix");
+    };
+    if hex.len() != 64
+        || !hex
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return protocol_error("replacement marker digest is not lowercase sha256 hex");
+    }
+    Ok(())
+}
+
+fn file_digest_if_regular(path: &Path) -> io::Result<Option<String>> {
+    read_regular_file_bounded(
+        path,
+        WORKFLOW_GOVERNANCE_LEDGER_MAX_BYTES,
+        "replacement protocol file",
+    )
+    .map(|content| content.map(|bytes| sha256_digest(&bytes)))
+}
+
+fn regular_file_exists(path: &Path, label: &str) -> io::Result<bool> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    if !metadata.file_type().is_file() {
+        return protocol_error(&format!("{label} is not a confined regular file"));
+    }
+    Ok(true)
+}
+
+fn read_regular_file_bounded(
+    path: &Path,
+    maximum: u64,
+    label: &str,
+) -> io::Result<Option<Vec<u8>>> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    if !metadata.file_type().is_file() {
+        return protocol_error(&format!("{label} is not a confined regular file"));
+    }
+    if metadata.len() > maximum {
+        return protocol_error(&format!("{label} exceeds its maximum size"));
+    }
+    fs::read(path).map(Some)
+}
+
+fn write_new_synced_file(path: &Path, content: &[u8]) -> io::Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    if let Err(error) = file.write_all(content).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn sha256_digest(content: &[u8]) -> String {
+    format_sha256(Sha256::digest(content))
+}
+
+fn sync_target_parent(target: &Path) -> io::Result<()> {
+    target
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))
+        .and_then(sync_parent_dir)
+}
+
+fn protocol_error<T>(message: &str) -> io::Result<T> {
+    Err(protocol_io_error(message))
+}
+
+fn protocol_io_error(message: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("workflow-governance replacement protocol: {message}"),
+    )
 }
 
 #[cfg(unix)]
@@ -1166,6 +1975,7 @@ fn sync_parent_dir(parent: &Path) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn transaction_nonce() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1189,5 +1999,213 @@ fn io_error(path: &Path, source: std::io::Error) -> WorkflowGovernanceLedgerErro
     WorkflowGovernanceLedgerError::Io {
         path: path.to_path_buf(),
         source: source.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod replacement_protocol_tests {
+    use super::*;
+    use forge_core_contracts::{
+        PhaseAdvancedEvent, ProjectImportedEvent, WorkflowReceiptCarryover,
+        WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryProvenance,
+    };
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    fn test_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "forge-wal-replacement-{name}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("create root");
+        root
+    }
+
+    fn test_identity() -> WorkflowGovernanceLedgerIdentity {
+        WorkflowGovernanceLedgerIdentity {
+            project_id: StableId("project-protocol-test".to_owned()),
+            bundle_id: StableId("bundle-protocol-test".to_owned()),
+            bundle_digest: sha256_digest(b"bundle-protocol-test"),
+        }
+    }
+
+    fn test_release_identity(version: &str) -> WorkflowGovernanceReleaseIdentity {
+        WorkflowGovernanceReleaseIdentity {
+            lineage_id: StableId("release-lineage".to_owned()),
+            release_id: StableId(format!("release-{version}")),
+            release_version: version.to_owned(),
+            release_digest: sha256_digest(format!("release-{version}").as_bytes()),
+        }
+    }
+
+    fn test_release_event(
+        head: &str,
+        source: &WorkflowGovernanceLedgerIdentity,
+        target: &WorkflowGovernanceLedgerIdentity,
+    ) -> ReleaseUpgradedEvent {
+        let from_policy = sha256_digest(b"policy-v1");
+        let to_policy = sha256_digest(b"policy-v2");
+        ReleaseUpgradedEvent {
+            from_release: test_release_identity("1.0.0"),
+            to_release: test_release_identity("2.0.0"),
+            from_runtime_bundle: WorkflowRuntimeBundleIdentity {
+                bundle_id: source.bundle_id.clone(),
+                bundle_digest: source.bundle_digest.clone(),
+                policy_set_digest: from_policy.clone(),
+            },
+            to_runtime_bundle: WorkflowRuntimeBundleIdentity {
+                bundle_id: target.bundle_id.clone(),
+                bundle_digest: target.bundle_digest.clone(),
+                policy_set_digest: to_policy.clone(),
+            },
+            registry_provenance: WorkflowReleaseRegistryProvenance {
+                registry_id: StableId("registry".to_owned()),
+                registry_version: "1.0.0".to_owned(),
+                registry_digest: sha256_digest(b"registry"),
+            },
+            admission_proof: WorkflowReleaseAdmissionProof {
+                proof_id: StableId("proof".to_owned()),
+                proof_digest: sha256_digest(b"proof"),
+                snapshot_digest: sha256_digest(b"snapshot"),
+                from_policy_set_digest: from_policy,
+                to_policy_set_digest: to_policy,
+            },
+            receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+            prior_ledger_head_digest: head.to_owned(),
+        }
+    }
+
+    fn valid_wal_versions(root: &Path) -> (PathBuf, Vec<u8>, Vec<u8>) {
+        let target = root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        fs::create_dir_all(target.parent().expect("WAL parent")).expect("create WAL parent");
+        let (first, first_line) = build_record_line(
+            &empty_projection(),
+            &test_identity(),
+            0,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                source_ref: "project/state.yaml".to_owned(),
+                source_digest: "sha256:source".to_owned(),
+                snapshot_digest: "sha256:snapshot-0".to_owned(),
+                initial_phase: StableId("discover".to_owned()),
+            }),
+        )
+        .expect("build initial record");
+        fs::write(&target, &first_line).expect("write old WAL");
+        let projection = recover_under_lock(root).expect("recover old WAL");
+        assert_eq!(projection.head_digest, Some(first.record_digest));
+        let (_, second_line) = build_record_line(
+            &projection,
+            &test_identity(),
+            1,
+            WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+                from_phase: Some(StableId("discover".to_owned())),
+                to_phase: StableId("define".to_owned()),
+                snapshot_digest: "sha256:snapshot-1".to_owned(),
+            }),
+        )
+        .expect("build second record");
+        let old = first_line;
+        let mut new = old.clone();
+        new.extend_from_slice(&second_line);
+        (target, old, new)
+    }
+
+    fn set_crash_point(point: Option<ReplacementCrashPoint>) {
+        REPLACEMENT_CRASH_POINT.with(|configured| configured.set(point));
+    }
+
+    #[test]
+    fn every_replacement_phase_recovers_old_or_committed_new_valid_wal() {
+        for (point, committed) in [
+            (ReplacementCrashPoint::NextSynced, false),
+            (ReplacementCrashPoint::TransactionSynced, false),
+            (ReplacementCrashPoint::PreviousInstalled, false),
+            (ReplacementCrashPoint::TargetInstalled, true),
+        ] {
+            let root = test_root(&format!("phase-{point:?}"));
+            let (target, old, new) = valid_wal_versions(&root);
+            set_crash_point(Some(point));
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                replace_file_with_recovery_protocol(&target, &new)
+            }));
+            set_crash_point(None);
+            assert!(result.is_err(), "fault injection must interrupt {point:?}");
+
+            reconcile_wal_replacement(&target).expect("deterministic reconciliation");
+            assert_eq!(
+                fs::read(&target).expect("recovered target"),
+                if committed {
+                    new.as_slice()
+                } else {
+                    old.as_slice()
+                },
+                "phase {point:?} must recover exactly old or committed new bytes"
+            );
+            let projection = recover_under_lock(&root).expect("recovered WAL remains valid");
+            assert_eq!(projection.records.len(), if committed { 2 } else { 1 });
+            let paths = replacement_paths(&target).expect("protocol paths");
+            for artifact in [paths.next, paths.previous, paths.transaction] {
+                assert!(
+                    fs::symlink_metadata(artifact).is_err(),
+                    "successful recovery must remove protocol artifacts"
+                );
+            }
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+    }
+
+    #[test]
+    fn interrupted_initial_write_cannot_be_recovered_as_silently_empty() {
+        let root = test_root("initial-next-only");
+        let (source_target, _, valid_content) = valid_wal_versions(&root);
+        fs::remove_file(&source_target).expect("return fixture to empty state");
+        set_crash_point(Some(ReplacementCrashPoint::NextSynced));
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            replace_file_with_recovery_protocol(&source_target, &valid_content)
+        }));
+        set_crash_point(None);
+        assert!(
+            result.is_err(),
+            "fault injection must interrupt initial write"
+        );
+        assert!(
+            recover_under_lock(&root).is_err(),
+            "ambiguous next-only initialization must fail closed, not return an empty ledger"
+        );
+        assert!(!source_target.exists());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn batch_cannot_prepare_a_second_release_transition() {
+        let root = test_root("duplicate-release-transition");
+        let (target_path, old, _) = valid_wal_versions(&root);
+        let source = test_identity();
+        let projection = recover_under_lock(&root).expect("recover source");
+        let head = projection.head_digest.expect("source head");
+        let target = WorkflowGovernanceLedgerIdentity {
+            project_id: source.project_id.clone(),
+            bundle_id: StableId("bundle-protocol-next".to_owned()),
+            bundle_digest: sha256_digest(b"bundle-protocol-next"),
+        };
+        let event = test_release_event(&head, &source, &target);
+        let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock ledger");
+        let mut batch = ledger
+            .begin_unchecked_tcb_batch(&head, &source)
+            .expect("begin batch");
+        batch
+            .push_release_transition_tcb(&target, 1, event.clone())
+            .expect("prepare first transition");
+        assert!(matches!(
+            batch.push_release_transition_tcb(&target, 1, event),
+            Err(WorkflowGovernanceLedgerError::DuplicateReleaseTransition)
+        ));
+        drop(batch);
+        drop(ledger);
+        assert_eq!(fs::read(target_path).expect("source WAL"), old);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }

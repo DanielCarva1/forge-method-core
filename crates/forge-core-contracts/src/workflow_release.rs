@@ -14,6 +14,107 @@ use serde::{Deserialize, Serialize};
 pub const WORKFLOW_GOVERNANCE_RELEASE_MANIFEST_SCHEMA_VERSION: &str = "0.1";
 pub const WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION: &str = "0.1";
 pub const WORKFLOW_RETIREMENT_AUTHORIZATION_SCHEMA_VERSION: &str = "0.1";
+pub const WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION: &str = "0.1";
+
+/// Repository-owned release discovery. This is raw, non-authoritative input:
+/// only the trusted runtime loader may turn one validated entry into a project
+/// pin or an upgrade.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernanceReleaseRegistryDocument {
+    pub schema_version: String,
+    pub workflow_governance_release_registry: WorkflowGovernanceReleaseRegistry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernanceReleaseRegistry {
+    pub registry_id: StableId,
+    pub registry_version: String,
+    pub lineage_id: StableId,
+    pub default_successor_release_id: StableId,
+    pub releases: Vec<WorkflowGovernanceReleaseRegistryEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernanceReleaseRegistryEntry {
+    pub release: WorkflowGovernanceReleaseIdentity,
+    pub runtime_bundle: WorkflowRuntimeBundleReference,
+    #[serde(default)]
+    pub predecessor: Option<WorkflowReleasePredecessorReference>,
+    pub source: WorkflowReleaseRegistrySource,
+    pub receipt_carryover: WorkflowReceiptCarryover,
+    pub authority: WorkflowReleaseRegistryAuthority,
+}
+
+/// Stable release identity. The digest identifies the release subject, not the
+/// registry document that happened to publish it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGovernanceReleaseIdentity {
+    pub lineage_id: StableId,
+    pub release_id: StableId,
+    pub release_version: String,
+    /// Canonical JCS digest of the release descriptor subject. Raw embedded
+    /// byte integrity is bound separately by the source reference.
+    pub release_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRuntimeBundleIdentity {
+    pub bundle_id: StableId,
+    pub bundle_digest: String,
+    /// Canonical digest of the ordered policy objects only. This remains
+    /// stable when an equivalent release changes the enclosing bundle id.
+    pub policy_set_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRuntimeBundleReference {
+    pub identity: WorkflowRuntimeBundleIdentity,
+    pub embedded_ref: RepoPath,
+    pub expected_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleasePredecessorReference {
+    pub release_id: StableId,
+    pub release_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowReleaseRegistrySource {
+    /// Compatibility mapping for ledgers created before explicit releases.
+    ImplicitP5cGenesis,
+    EmbeddedManifest {
+        embedded_ref: RepoPath,
+        /// SHA-256 of the exact embedded YAML bytes, not the canonical release
+        /// identity digest.
+        expected_digest: String,
+    },
+}
+
+/// A registry document can describe candidates but cannot admit them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReleaseRegistryAuthority {
+    CandidateOnly,
+}
+
+/// Receipt handling requested by an upgrade. The trusted upgrader must still
+/// prove that the selected policy set permits the requested strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReceiptCarryover {
+    NotApplicable,
+    InvalidateAll,
+    PreservePolicyEquivalent,
+}
 
 /// Repository-owned intent for one versioned, composed core-governance release.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

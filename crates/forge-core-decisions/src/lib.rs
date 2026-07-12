@@ -116,11 +116,16 @@ pub use workflow_migration::{
     WorkflowMigrationTargetLinks, WorkflowShadowParity, WorkflowShadowParitySummary,
 };
 pub use workflow_release::{
-    evaluate_workflow_release, workflow_migration_batch_digest, workflow_release_legacy_digest,
-    workflow_release_policy_digest, WorkflowReleaseAssessment, WorkflowReleaseDerivedState,
+    evaluate_workflow_release, evaluate_workflow_release_registry,
+    workflow_implicit_p5c_release_digest, workflow_migration_batch_digest,
+    workflow_policy_set_digest, workflow_release_legacy_digest, workflow_release_manifest_digest,
+    workflow_release_policy_digest, workflow_release_registry_digest,
+    workflow_runtime_bundle_digest, WorkflowReleaseAssessment, WorkflowReleaseDerivedState,
     WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
     WorkflowReleaseEvidenceAssurance, WorkflowReleaseGap, WorkflowReleaseGapCode,
-    WorkflowReleaseIssue, WorkflowReleaseIssueCode, WorkflowReleaseScorecardCounts,
+    WorkflowReleaseIssue, WorkflowReleaseIssueCode, WorkflowReleaseRegistryEvaluation,
+    WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
+    WorkflowReleaseRegistryIssue, WorkflowReleaseRegistryIssueCode, WorkflowReleaseScorecardCounts,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

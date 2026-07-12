@@ -9,12 +9,14 @@ use std::fmt::Write as _;
 
 use forge_core_contracts::{
     StableId, WorkflowCompatibilityField, WorkflowCompatibilityLifecycle, WorkflowGovernanceBundle,
-    WorkflowGovernanceBundleDocument, WorkflowGovernancePolicy,
-    WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
-    WorkflowMigrationDisposition, WorkflowMigrationEvidenceReference,
-    WorkflowReleaseDispositionIntent, WORKFLOW_GOVERNANCE_RELEASE_MANIFEST_SCHEMA_VERSION,
-    WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION,
-    WORKFLOW_MIGRATION_PLAN_SCHEMA_VERSION,
+    WorkflowGovernanceBundleDocument, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
+    WorkflowMigrationBatchDocument, WorkflowMigrationDisposition,
+    WorkflowMigrationEvidenceReference, WorkflowReceiptCarryover, WorkflowReleaseDispositionIntent,
+    WorkflowReleaseRegistrySource, WorkflowRuntimeBundleIdentity,
+    WORKFLOW_GOVERNANCE_RELEASE_MANIFEST_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    WORKFLOW_MIGRATION_BATCH_SCHEMA_VERSION, WORKFLOW_MIGRATION_PLAN_SCHEMA_VERSION,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -179,6 +181,78 @@ pub fn workflow_migration_batch_digest(
 /// Returns an encoding error if JCS canonicalization fails.
 pub fn workflow_release_policy_digest(policy: &WorkflowGovernancePolicy) -> Result<String, String> {
     canonical_digest(policy)
+}
+
+/// Canonical digest of one release manifest document.
+///
+/// # Errors
+///
+/// Returns an encoding error if JCS canonicalization fails.
+pub fn workflow_release_manifest_digest(
+    manifest: &WorkflowGovernanceReleaseManifestDocument,
+) -> Result<String, String> {
+    canonical_digest(manifest)
+}
+
+/// Canonical digest of one runtime governance bundle document.
+///
+/// # Errors
+///
+/// Returns an encoding error if JCS canonicalization fails.
+pub fn workflow_runtime_bundle_digest(
+    bundle: &WorkflowGovernanceBundleDocument,
+) -> Result<String, String> {
+    canonical_digest(bundle)
+}
+
+/// Canonical digest of the ordered policy set, independent of enclosing
+/// runtime bundle identity.
+///
+/// # Errors
+///
+/// Returns an encoding error if JCS canonicalization fails.
+pub fn workflow_policy_set_digest(policies: &[WorkflowGovernancePolicy]) -> Result<String, String> {
+    canonical_digest(&policies)
+}
+
+/// Canonical digest for the implicit P5c genesis release subject. The release
+/// digest is deliberately distinct from its runtime bundle digest.
+///
+/// # Errors
+///
+/// Returns an encoding error if JCS canonicalization fails.
+pub fn workflow_implicit_p5c_release_digest(
+    lineage_id: &StableId,
+    release_id: &StableId,
+    release_version: &str,
+    runtime_bundle: &WorkflowRuntimeBundleIdentity,
+) -> Result<String, String> {
+    #[derive(Serialize)]
+    struct Subject<'a> {
+        kind: &'static str,
+        lineage_id: &'a StableId,
+        release_id: &'a StableId,
+        release_version: &'a str,
+        runtime_bundle: &'a WorkflowRuntimeBundleIdentity,
+    }
+    canonical_digest(&Subject {
+        kind: "implicit_p5c_genesis",
+        lineage_id,
+        release_id,
+        release_version,
+        runtime_bundle,
+    })
+}
+
+/// Canonical digest of registry provenance, separate from every release digest.
+///
+/// # Errors
+///
+/// Returns an encoding error if JCS canonicalization fails.
+pub fn workflow_release_registry_digest(
+    registry: &WorkflowGovernanceReleaseRegistryDocument,
+) -> Result<String, String> {
+    canonical_digest(registry)
 }
 
 /// Evaluate a complete P5d.1 release without IO or mutation.
@@ -1549,6 +1623,654 @@ fn issue(
     message: impl Into<String>,
 ) {
     issues.push(WorkflowReleaseIssue {
+        code,
+        path: path.into(),
+        message: message.into(),
+    });
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReleaseRegistryEvaluationStatus {
+    StructurallyValid,
+    Blocked,
+}
+
+/// Raw registry evaluation is intentionally never runtime admission authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReleaseRegistryEvaluationAuthority {
+    NonAuthoritative,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReleaseRegistryIssueCode {
+    UnsupportedSchemaVersion,
+    InvalidIdentifier,
+    InvalidSemver,
+    InvalidDigest,
+    WrongReleaseCount,
+    DuplicateReleaseIdentity,
+    DuplicateRuntimeBundleIdentity,
+    LineageMismatch,
+    DefaultSuccessorMismatch,
+    GenesisMappingMismatch,
+    PredecessorMismatch,
+    EmbeddedReferenceMissing,
+    EmbeddedDocumentInvalid,
+    EmbeddedDigestMismatch,
+    SuppliedBundleMissing,
+    SuppliedBundleMismatch,
+    RuntimeBundleIdentityMismatch,
+    ReleaseManifestIdentityMismatch,
+    PolicySetDrift,
+    CandidateSetElevation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleaseRegistryIssue {
+    pub code: WorkflowReleaseRegistryIssueCode,
+    pub path: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReleaseRegistryEvaluation {
+    pub schema_version: String,
+    pub status: WorkflowReleaseRegistryEvaluationStatus,
+    pub authority: WorkflowReleaseRegistryEvaluationAuthority,
+    pub registry_id: StableId,
+    pub registry_digest: String,
+    pub lineage_id: StableId,
+    pub genesis_release: Option<WorkflowGovernanceReleaseIdentity>,
+    pub genesis_runtime_bundle: Option<WorkflowRuntimeBundleIdentity>,
+    pub default_successor_release: Option<WorkflowGovernanceReleaseIdentity>,
+    pub default_successor_runtime_bundle: Option<WorkflowRuntimeBundleIdentity>,
+    pub successor_policy_count: usize,
+    pub issues: Vec<WorkflowReleaseRegistryIssue>,
+    pub evaluation_digest: String,
+}
+
+struct ResolvedRegistryEntry<'a> {
+    entry: &'a forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    bundle: Option<WorkflowGovernanceBundleDocument>,
+    manifest: Option<WorkflowGovernanceReleaseManifestDocument>,
+}
+
+#[derive(Default)]
+struct RegistryIdentitySets {
+    release_ids: BTreeSet<String>,
+    release_digests: BTreeSet<String>,
+    bundle_ids: BTreeSet<String>,
+    bundle_digests: BTreeSet<String>,
+}
+
+/// Validate the closed P5d.2 foundation registry and caller-supplied bundle
+/// projections against repository-owned embedded bytes. A successful result is
+/// still non-authoritative and cannot pin or upgrade a project.
+#[must_use]
+pub fn evaluate_workflow_release_registry(
+    registry_document: &WorkflowGovernanceReleaseRegistryDocument,
+    supplied_bundles: &[WorkflowGovernanceBundleDocument],
+) -> WorkflowReleaseRegistryEvaluation {
+    let registry = &registry_document.workflow_governance_release_registry;
+    let mut issues = Vec::new();
+    validate_registry_header(registry_document, &mut issues);
+
+    let supplied = index_supplied_bundles(supplied_bundles, &mut issues);
+    let mut identities = RegistryIdentitySets::default();
+    let mut resolved = Vec::new();
+    for (index, entry) in registry.releases.iter().enumerate() {
+        validate_registry_entry_identity(registry, entry, index, &mut identities, &mut issues);
+        resolved.push(resolve_registry_entry(entry, index, &supplied, &mut issues));
+    }
+
+    let (genesis, successor) = validate_registry_chain(registry, &resolved, &mut issues);
+    let successor_policy_count =
+        validate_registry_policy_equivalence(genesis.as_ref(), successor.as_ref(), &mut issues);
+    let status = if issues.is_empty() {
+        WorkflowReleaseRegistryEvaluationStatus::StructurallyValid
+    } else {
+        WorkflowReleaseRegistryEvaluationStatus::Blocked
+    };
+    issues.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.code.cmp(&right.code))
+            .then(left.message.cmp(&right.message))
+    });
+    let registry_digest = workflow_release_registry_digest(registry_document).unwrap_or_default();
+    let genesis_release = genesis.map(|value| value.entry.release.clone());
+    let genesis_runtime_bundle = genesis.map(|value| value.entry.runtime_bundle.identity.clone());
+    let default_successor_release = successor.map(|value| value.entry.release.clone());
+    let default_successor_runtime_bundle =
+        successor.map(|value| value.entry.runtime_bundle.identity.clone());
+    let evaluation_digest = canonical_digest(&(
+        status,
+        &registry_digest,
+        &genesis_release,
+        &genesis_runtime_bundle,
+        &default_successor_release,
+        &default_successor_runtime_bundle,
+        successor_policy_count,
+        &issues,
+    ))
+    .unwrap_or_default();
+    WorkflowReleaseRegistryEvaluation {
+        schema_version: WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION.to_owned(),
+        status,
+        authority: WorkflowReleaseRegistryEvaluationAuthority::NonAuthoritative,
+        registry_id: registry.registry_id.clone(),
+        registry_digest,
+        lineage_id: registry.lineage_id.clone(),
+        genesis_release,
+        genesis_runtime_bundle,
+        default_successor_release,
+        default_successor_runtime_bundle,
+        successor_policy_count,
+        issues,
+        evaluation_digest,
+    }
+}
+
+fn validate_registry_header(
+    document: &WorkflowGovernanceReleaseRegistryDocument,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let registry = &document.workflow_governance_release_registry;
+    if document.schema_version != WORKFLOW_GOVERNANCE_RELEASE_REGISTRY_SCHEMA_VERSION {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::UnsupportedSchemaVersion,
+            "schema_version",
+            "unsupported workflow release registry schema version",
+        );
+    }
+    registry_require_text(issues, "registry_id", &registry.registry_id.0);
+    registry_require_text(issues, "lineage_id", &registry.lineage_id.0);
+    registry_require_text(
+        issues,
+        "default_successor_release_id",
+        &registry.default_successor_release_id.0,
+    );
+    registry_validate_semver(issues, "registry_version", &registry.registry_version);
+    if registry.releases.len() != 2 {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::WrongReleaseCount,
+            "releases",
+            "foundation registry must contain exactly the implicit P5c genesis and one successor",
+        );
+    }
+}
+
+fn index_supplied_bundles<'a>(
+    bundles: &'a [WorkflowGovernanceBundleDocument],
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> BTreeMap<&'a str, &'a WorkflowGovernanceBundleDocument> {
+    let mut supplied = BTreeMap::new();
+    for (index, bundle) in bundles.iter().enumerate() {
+        let id = bundle.workflow_governance_bundle.id.0.as_str();
+        if supplied.insert(id, bundle).is_some() {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::DuplicateRuntimeBundleIdentity,
+                format!("supplied_bundles[{index}].workflow_governance_bundle.id"),
+                format!("duplicate supplied runtime bundle id {id}"),
+            );
+        }
+    }
+    supplied
+}
+
+fn validate_registry_entry_identity(
+    registry: &forge_core_contracts::WorkflowGovernanceReleaseRegistry,
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    identities: &mut RegistryIdentitySets,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let base = format!("releases[{index}]");
+    registry_require_text(
+        issues,
+        &format!("{base}.release.release_id"),
+        &entry.release.release_id.0,
+    );
+    registry_validate_semver(
+        issues,
+        &format!("{base}.release.release_version"),
+        &entry.release.release_version,
+    );
+    registry_validate_digest(
+        issues,
+        &format!("{base}.release.release_digest"),
+        &entry.release.release_digest,
+    );
+    registry_validate_digest(
+        issues,
+        &format!("{base}.runtime_bundle.identity.bundle_digest"),
+        &entry.runtime_bundle.identity.bundle_digest,
+    );
+    registry_validate_digest(
+        issues,
+        &format!("{base}.runtime_bundle.identity.policy_set_digest"),
+        &entry.runtime_bundle.identity.policy_set_digest,
+    );
+    registry_validate_digest(
+        issues,
+        &format!("{base}.runtime_bundle.expected_digest"),
+        &entry.runtime_bundle.expected_digest,
+    );
+    if entry.release.lineage_id != registry.lineage_id {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::LineageMismatch,
+            format!("{base}.release.lineage_id"),
+            "release lineage must equal registry lineage",
+        );
+    }
+    unique_registry_value(
+        &mut identities.release_ids,
+        &entry.release.release_id.0,
+        issues,
+        WorkflowReleaseRegistryIssueCode::DuplicateReleaseIdentity,
+        format!("{base}.release.release_id"),
+    );
+    unique_registry_value(
+        &mut identities.release_digests,
+        &entry.release.release_digest,
+        issues,
+        WorkflowReleaseRegistryIssueCode::DuplicateReleaseIdentity,
+        format!("{base}.release.release_digest"),
+    );
+    unique_registry_value(
+        &mut identities.bundle_ids,
+        &entry.runtime_bundle.identity.bundle_id.0,
+        issues,
+        WorkflowReleaseRegistryIssueCode::DuplicateRuntimeBundleIdentity,
+        format!("{base}.runtime_bundle.identity.bundle_id"),
+    );
+    unique_registry_value(
+        &mut identities.bundle_digests,
+        &entry.runtime_bundle.identity.bundle_digest,
+        issues,
+        WorkflowReleaseRegistryIssueCode::DuplicateRuntimeBundleIdentity,
+        format!("{base}.runtime_bundle.identity.bundle_digest"),
+    );
+}
+
+fn unique_registry_value(
+    seen: &mut BTreeSet<String>,
+    value: &str,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+    code: WorkflowReleaseRegistryIssueCode,
+    path: String,
+) {
+    if !seen.insert(value.to_owned()) {
+        registry_issue(issues, code, path, format!("duplicate identity {value}"));
+    }
+}
+
+fn resolve_registry_entry<'a>(
+    entry: &'a forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    supplied: &BTreeMap<&str, &WorkflowGovernanceBundleDocument>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> ResolvedRegistryEntry<'a> {
+    let bundle = resolve_registry_bundle(entry, index, supplied, issues);
+    let manifest = match &entry.source {
+        WorkflowReleaseRegistrySource::ImplicitP5cGenesis => None,
+        WorkflowReleaseRegistrySource::EmbeddedManifest {
+            embedded_ref,
+            expected_digest,
+        } => resolve_registry_manifest(entry, index, &embedded_ref.0, expected_digest, issues),
+    };
+    ResolvedRegistryEntry {
+        entry,
+        bundle,
+        manifest,
+    }
+}
+
+fn resolve_registry_bundle(
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    supplied: &BTreeMap<&str, &WorkflowGovernanceBundleDocument>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> Option<WorkflowGovernanceBundleDocument> {
+    let path = entry.runtime_bundle.embedded_ref.0.as_str();
+    let embedded = resolve_embedded_registry_yaml::<WorkflowGovernanceBundleDocument>(
+        path,
+        &entry.runtime_bundle.expected_digest,
+        &format!("releases[{index}].runtime_bundle"),
+        issues,
+    )?;
+    if embedded.workflow_governance_bundle.id != entry.runtime_bundle.identity.bundle_id {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::RuntimeBundleIdentityMismatch,
+            format!("releases[{index}].runtime_bundle.identity.bundle_id"),
+            "embedded runtime bundle id does not match registry identity",
+        );
+    }
+    let found_bundle_digest = workflow_runtime_bundle_digest(&embedded).unwrap_or_default();
+    if found_bundle_digest != entry.runtime_bundle.identity.bundle_digest {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::RuntimeBundleIdentityMismatch,
+            format!("releases[{index}].runtime_bundle.identity.bundle_digest"),
+            "canonical runtime bundle digest does not match registry identity",
+        );
+    }
+    let found_policy_set_digest =
+        workflow_policy_set_digest(&embedded.workflow_governance_bundle.policies)
+            .unwrap_or_default();
+    if found_policy_set_digest != entry.runtime_bundle.identity.policy_set_digest {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::PolicySetDrift,
+            format!("releases[{index}].runtime_bundle.identity.policy_set_digest"),
+            "embedded runtime policy-set digest does not match registry identity",
+        );
+    }
+    match supplied.get(entry.runtime_bundle.identity.bundle_id.0.as_str()) {
+        Some(candidate) if **candidate == embedded => {}
+        Some(_) => registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::SuppliedBundleMismatch,
+            format!(
+                "supplied_bundles.{}",
+                entry.runtime_bundle.identity.bundle_id.0
+            ),
+            "supplied runtime bundle differs from repository-owned embedded bytes",
+        ),
+        None => registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::SuppliedBundleMissing,
+            format!(
+                "supplied_bundles.{}",
+                entry.runtime_bundle.identity.bundle_id.0
+            ),
+            "registry runtime bundle was not supplied for audit",
+        ),
+    }
+    Some(embedded)
+}
+
+fn resolve_registry_manifest(
+    entry: &forge_core_contracts::WorkflowGovernanceReleaseRegistryEntry,
+    index: usize,
+    path: &str,
+    expected_digest: &str,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> Option<WorkflowGovernanceReleaseManifestDocument> {
+    let manifest = resolve_embedded_registry_yaml::<WorkflowGovernanceReleaseManifestDocument>(
+        path,
+        expected_digest,
+        &format!("releases[{index}].source"),
+        issues,
+    )?;
+    let identity = &entry.release;
+    let subject = &manifest.workflow_governance_release_manifest;
+    let canonical_release_digest = workflow_release_manifest_digest(&manifest).unwrap_or_default();
+    if subject.lineage_id != identity.lineage_id
+        || subject.release_id != identity.release_id
+        || subject.release_version != identity.release_version
+        || identity.release_digest != canonical_release_digest
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::ReleaseManifestIdentityMismatch,
+            format!("releases[{index}].release"),
+            "release identity must exactly bind its embedded release manifest",
+        );
+    }
+    Some(manifest)
+}
+
+fn resolve_embedded_registry_yaml<T: serde::de::DeserializeOwned>(
+    path: &str,
+    expected_digest: &str,
+    issue_path: &str,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> Option<T> {
+    let Some(text) = crate::embedded_text(path) else {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::EmbeddedReferenceMissing,
+            format!("{issue_path}.embedded_ref"),
+            format!("repository-owned embedded document {path} is missing"),
+        );
+        return None;
+    };
+    let found = sha256_bytes(text.as_bytes());
+    if found != expected_digest {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::EmbeddedDigestMismatch,
+            format!("{issue_path}.expected_digest"),
+            format!("embedded digest expected {expected_digest}, found {found}"),
+        );
+    }
+    match yaml_serde::from_str(text) {
+        Ok(document) => Some(document),
+        Err(error) => {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::EmbeddedDocumentInvalid,
+                format!("{issue_path}.embedded_ref"),
+                format!("embedded document is invalid: {error}"),
+            );
+            None
+        }
+    }
+}
+
+fn validate_registry_chain<'a>(
+    registry: &forge_core_contracts::WorkflowGovernanceReleaseRegistry,
+    entries: &'a [ResolvedRegistryEntry<'a>],
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> (
+    Option<&'a ResolvedRegistryEntry<'a>>,
+    Option<&'a ResolvedRegistryEntry<'a>>,
+) {
+    let genesis_entries = entries
+        .iter()
+        .filter(|entry| {
+            matches!(
+                entry.entry.source,
+                WorkflowReleaseRegistrySource::ImplicitP5cGenesis
+            )
+        })
+        .collect::<Vec<_>>();
+    if genesis_entries.len() != 1 {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::GenesisMappingMismatch,
+            "releases",
+            "registry must contain exactly one implicit P5c genesis mapping",
+        );
+    }
+    let genesis = genesis_entries.first().copied();
+    if let Some(genesis) = genesis {
+        validate_genesis_mapping(genesis, issues);
+    }
+    let successor = entries
+        .iter()
+        .find(|entry| entry.entry.release.release_id == registry.default_successor_release_id);
+    if successor.is_none_or(|value| {
+        matches!(
+            value.entry.source,
+            WorkflowReleaseRegistrySource::ImplicitP5cGenesis
+        )
+    }) {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::DefaultSuccessorMismatch,
+            "default_successor_release_id",
+            "default successor must identify the single non-genesis release",
+        );
+    }
+    if let (Some(genesis), Some(successor)) = (genesis, successor) {
+        let expected = forge_core_contracts::WorkflowReleasePredecessorReference {
+            release_id: genesis.entry.release.release_id.clone(),
+            release_digest: genesis.entry.release.release_digest.clone(),
+        };
+        if successor.entry.predecessor.as_ref() != Some(&expected) {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::PredecessorMismatch,
+                "default_successor.predecessor",
+                "successor predecessor must bind the exact genesis release id and digest",
+            );
+        }
+        if successor.entry.receipt_carryover != WorkflowReceiptCarryover::PreservePolicyEquivalent {
+            registry_issue(
+                issues,
+                WorkflowReleaseRegistryIssueCode::PolicySetDrift,
+                "default_successor.receipt_carryover",
+                "foundation successor must request policy-equivalent receipt carryover",
+            );
+        }
+    }
+    (genesis, successor)
+}
+
+fn validate_genesis_mapping(
+    genesis: &ResolvedRegistryEntry<'_>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) {
+    let entry = genesis.entry;
+    if entry.predecessor.is_some()
+        || entry.receipt_carryover != WorkflowReceiptCarryover::NotApplicable
+        || entry.runtime_bundle.embedded_ref.0
+            != "contracts/workflow-governance/golden-path-v0.yaml"
+    {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::GenesisMappingMismatch,
+            "implicit_p5c_genesis",
+            "implicit P5c genesis must map the legacy bundle, have no predecessor, and use not_applicable carryover",
+        );
+    }
+    let expected = workflow_implicit_p5c_release_digest(
+        &entry.release.lineage_id,
+        &entry.release.release_id,
+        &entry.release.release_version,
+        &entry.runtime_bundle.identity,
+    );
+    if expected.as_deref() != Ok(entry.release.release_digest.as_str()) {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::GenesisMappingMismatch,
+            "implicit_p5c_genesis.release.release_digest",
+            "implicit P5c genesis release digest does not match its canonical mapping subject",
+        );
+    }
+}
+
+fn validate_registry_policy_equivalence(
+    genesis: Option<&&ResolvedRegistryEntry<'_>>,
+    successor: Option<&&ResolvedRegistryEntry<'_>>,
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+) -> usize {
+    let (Some(genesis), Some(successor)) = (genesis, successor) else {
+        return 0;
+    };
+    let (Some(genesis_bundle), Some(successor_bundle), Some(manifest)) = (
+        genesis.bundle.as_ref(),
+        successor.bundle.as_ref(),
+        successor.manifest.as_ref(),
+    ) else {
+        return 0;
+    };
+    let genesis_policies = &genesis_bundle.workflow_governance_bundle.policies;
+    let successor_policies = &successor_bundle.workflow_governance_bundle.policies;
+    if genesis_policies.len() != 15 || successor_policies != genesis_policies {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::PolicySetDrift,
+            "default_successor.runtime_bundle.policies",
+            "foundation successor must contain the exact fifteen P5c policy objects in canonical order",
+        );
+    }
+    let candidate_ids = manifest
+        .workflow_governance_release_manifest
+        .workflow_entries
+        .iter()
+        .filter_map(|entry| match entry.disposition_intent {
+            WorkflowReleaseDispositionIntent::MigrationCandidate { .. } => {
+                Some(entry.workflow_id.0.as_str())
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let policy_workflow_ids = successor_policies
+        .iter()
+        .map(|policy| policy.compatibility_workflow_id.0.as_str())
+        .collect::<BTreeSet<_>>();
+    if candidate_ids.len() != 15 || policy_workflow_ids != candidate_ids {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::CandidateSetElevation,
+            "default_successor.runtime_bundle.policies",
+            "runtime bundle must admit exactly the fifteen manifest migration candidates and none of the other 95 workflows",
+        );
+    }
+    successor_policies.len()
+}
+
+fn registry_validate_semver(
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+    path: &str,
+    value: &str,
+) {
+    if !is_semver(value) {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::InvalidSemver,
+            path,
+            "value must be a valid semantic version",
+        );
+    }
+}
+
+fn registry_validate_digest(
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+    path: &str,
+    value: &str,
+) {
+    if !is_sha256_digest(value) {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::InvalidDigest,
+            path,
+            "value must be a lowercase sha256 digest",
+        );
+    }
+}
+
+fn registry_require_text(issues: &mut Vec<WorkflowReleaseRegistryIssue>, path: &str, value: &str) {
+    if value.trim().is_empty() {
+        registry_issue(
+            issues,
+            WorkflowReleaseRegistryIssueCode::InvalidIdentifier,
+            path,
+            "value must be non-blank",
+        );
+    }
+}
+
+fn registry_issue(
+    issues: &mut Vec<WorkflowReleaseRegistryIssue>,
+    code: WorkflowReleaseRegistryIssueCode,
+    path: impl Into<String>,
+    message: impl Into<String>,
+) {
+    issues.push(WorkflowReleaseRegistryIssue {
         code,
         path: path.into(),
         message: message.into(),

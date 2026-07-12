@@ -47,10 +47,14 @@ Once bootstrapped, the agent follows the governed loop:
    the project bootstrap state.
 2. **`forge-core workflow init --root <repo> --json`** — idempotently creates
    the governed workflow ledger. In later chats use **`workflow resume`**.
-3. **`forge-core workflow next --root <repo> --json`** — derives the current
+3. **`forge-core workflow release-status --root <repo> --json`** — confirms
+   the durable project release. If it returns `upgrade_argv`, the agent may
+   execute that exact CAS-bound adjacent upgrade; installing a new binary alone
+   never changes the pin.
+4. **`forge-core workflow next --root <repo> --json`** — derives the current
    policy, obligations, evidence/capability gaps, decisions, and ranked next
    actions without caller-selected workflow or phase.
-4. The host agent performs the returned action, records only authorized
+5. The host agent performs the returned action, records only authorized
    observations, and asks `workflow next` again. When an action needs a trusted
    repository mutation, `execute-operation` independently applies its existing
    Claim Coverage and Phase gates before any WAL append.
@@ -76,7 +80,8 @@ For zero-config onboarding, wire the **`start-forge` skill**
 …). It gives the agent one bootstrap invocation: run `forge-core start`, create
 or repair the Project Link and sidecar when needed, and inspect the returned
 state. Once the project is ready, the agent-native workflow continuation is
-`workflow init` or `workflow resume`, followed by `workflow next`. Re-run the
+`workflow init` or `workflow resume`, `workflow release-status` (and its exact
+returned upgrade argv when present), followed by `workflow next`. Re-run the
 skill when opening a new chat; do not ask the human to operate the commands.
 
 Forge ships the skill as a canonical file but **does not assume an install path**:
@@ -560,9 +565,49 @@ Even a successful result has `authority: candidate_only`,
 `evidence_assurance: content_integrity_only`, and states such as
 `migration_candidate_structurally_valid`, `compatibility_only`, `quarantined`,
 or `domain_pack_candidate`; it never means behaviorally sufficient,
-`executable`, or `retired`. P5d.2 still must add opaque runtime release
-admission and per-project release pinning before any new batch can govern live
-work; P5d.3 adds typed behavioral evidence semantics.
+`executable`, or `retired`. P5d.2 therefore does not trust this audit as
+runtime authority; it separately admits only the exact already-proven P5c
+policy set. P5d.3 adds typed behavioral evidence semantics before a genuinely
+new policy batch can govern live work.
+
+### Inspect and upgrade the project release (P5d.2)
+
+The active release is a durable project property, not the newest artifact in
+the installed binary:
+
+```bash
+forge-core workflow release-status --root <repo> --json
+```
+
+An unchanged P5c ledger returns `pin_origin: implicit_p5c_genesis` plus an
+`upgrade_argv` for the sole embedded adjacent successor. The argv contains the
+exact current release, ledger head, and project snapshot digests. The agent
+executes it verbatim; humans do not select or edit governance files:
+
+```bash
+forge-core workflow release-upgrade \
+  --root <repo> \
+  --target-release-id workflow-governance.release.foundation-v0 \
+  --expected-current-release-digest sha256:<64-lowercase-hex> \
+  --expected-head-digest sha256:<64-lowercase-hex> \
+  --expected-snapshot-digest sha256:<64-lowercase-hex> \
+  --json
+```
+
+Registry, manifest, batch, bundle, and release path overrides are forbidden.
+The kernel admits the fixed embedded registry through an opaque type, verifies
+the target is the exact adjacent predecessor-bound successor, and appends one
+hash-chained transition under the ledger lock. Stale CAS values do not modify
+the WAL; replay after success returns `already_pinned` without appending.
+`workflow next|resume` then reports the same target release to any replacement
+agent.
+
+P5d.2's foundation runtime bundle has a new identity but exactly the same 15
+policy objects as P5c. The other 95 catalog workflows remain non-executable.
+Interrupted Windows WAL replacement reconciles to the exact old or committed
+file and fails closed on ambiguous/corrupt protocol state. This does not add an
+external anti-rollback anchor or claim signature-based release supply-chain
+trust.
 
 ### Simulate workflow governance (P5b)
 
@@ -1215,6 +1260,13 @@ gates.
   content/digest verification, aggregate repository validation, and
   `guide rollout-audit`. Its scorecard is structural and `candidate_only` with
   `content_integrity_only`; it does not activate a release or retire anything.
+- P5d.2 opaque release admission and project pinning: a fixed embedded
+  candidate registry is elevated only through a non-serializable kernel loader
+  after exact P5c policy-set equivalence; unchanged P5c ledgers map to an
+  implicit genesis release, and one CAS-bound, crash-recoverable ledger event
+  moves them to the adjacent foundation release. Status/init/next/resume expose
+  the same durable pin, local overrides are ignored, and no new catalog policy
+  is admitted.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1271,10 +1323,11 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.2-P5d.5 runtime rollout and legacy retirement** -- P5d.1 is complete as
-  a candidate-only release foundation. Next, Forge must pin an opaque admitted
-  release per project, upgrade it atomically, add typed behavioral evidence and
-  reviewed non-golden batches, quarantine unresolved semantics, and verify
+- **P5d.3-P5d.5 reviewed rollout and legacy retirement** -- P5d.1 provides the
+  candidate-only foundation and P5d.2 provides opaque per-project admission,
+  pinning, and atomic upgrade without adding new policies. Next, Forge must add
+  typed behavioral evidence and reviewed non-golden batches, quarantine
+  unresolved semantics, and verify
   signed retirement authorizations. All 95 workflows outside the golden path
   remain compatibility, domain-pack, or migration evidence today; none is
   retirement-ready. Retirement requires measured behavioral compatibility,

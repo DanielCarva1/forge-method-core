@@ -1,15 +1,18 @@
 use forge_core_contracts::{
-    PhaseAdvancedEvent, ProjectImportedEvent, StableId, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
+    PhaseAdvancedEvent, ProjectImportedEvent, ReleaseUpgradedEvent, StableId,
+    WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
+    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
+    WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     append_workflow_governance_event_tcb, initialize_workflow_governance_ledger_tcb,
     lock_workflow_governance_ledger_tcb, recover_workflow_governance_ledger,
-    workflow_governance_record_digest, WorkflowGovernanceLedgerError,
-    WorkflowGovernanceLedgerIdentity, WORKFLOW_GOVERNANCE_LEDGER_MAX_BYTES,
-    WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH,
+    transition_workflow_governance_release_tcb, workflow_governance_record_digest,
+    WorkflowGovernanceLedgerError, WorkflowGovernanceLedgerIdentity,
+    WORKFLOW_GOVERNANCE_LEDGER_MAX_BYTES, WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH,
 };
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier};
@@ -23,7 +26,68 @@ fn identity() -> WorkflowGovernanceLedgerIdentity {
     WorkflowGovernanceLedgerIdentity {
         project_id: id("project-alpha"),
         bundle_id: id("bundle-core"),
-        bundle_digest: "sha256:bundle".to_owned(),
+        bundle_digest: named_digest("bundle-core"),
+    }
+}
+
+fn target_identity() -> WorkflowGovernanceLedgerIdentity {
+    WorkflowGovernanceLedgerIdentity {
+        project_id: id("project-alpha"),
+        bundle_id: id("bundle-next"),
+        bundle_digest: named_digest("bundle-next"),
+    }
+}
+
+fn named_digest(value: &str) -> String {
+    bytes_digest(value.as_bytes())
+}
+
+fn release_identity(version: &str) -> WorkflowGovernanceReleaseIdentity {
+    WorkflowGovernanceReleaseIdentity {
+        lineage_id: id("forge-core-governance"),
+        release_id: id(&format!("release-{version}")),
+        release_version: version.to_owned(),
+        release_digest: named_digest(&format!("release-{version}")),
+    }
+}
+
+fn runtime_identity(
+    identity: &WorkflowGovernanceLedgerIdentity,
+    policy_set: &str,
+) -> WorkflowRuntimeBundleIdentity {
+    WorkflowRuntimeBundleIdentity {
+        bundle_id: identity.bundle_id.clone(),
+        bundle_digest: identity.bundle_digest.clone(),
+        policy_set_digest: named_digest(policy_set),
+    }
+}
+
+fn release_upgraded(
+    prior_head: &str,
+    source: &WorkflowGovernanceLedgerIdentity,
+    target: &WorkflowGovernanceLedgerIdentity,
+) -> ReleaseUpgradedEvent {
+    let from_runtime_bundle = runtime_identity(source, "policy-set-v1");
+    let to_runtime_bundle = runtime_identity(target, "policy-set-v2");
+    ReleaseUpgradedEvent {
+        from_release: release_identity("1.0.0"),
+        to_release: release_identity("2.0.0"),
+        from_runtime_bundle: from_runtime_bundle.clone(),
+        to_runtime_bundle: to_runtime_bundle.clone(),
+        registry_provenance: WorkflowReleaseRegistryProvenance {
+            registry_id: id("release-registry"),
+            registry_version: "1.0.0".to_owned(),
+            registry_digest: named_digest("release-registry"),
+        },
+        admission_proof: WorkflowReleaseAdmissionProof {
+            proof_id: id("release-admission-proof"),
+            proof_digest: named_digest("release-admission-proof"),
+            snapshot_digest: named_digest("release-snapshot"),
+            from_policy_set_digest: from_runtime_bundle.policy_set_digest,
+            to_policy_set_digest: to_runtime_bundle.policy_set_digest,
+        },
+        receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+        prior_ledger_head_digest: prior_head.to_owned(),
     }
 }
 
@@ -61,6 +125,45 @@ fn wal_path(root: &Path) -> PathBuf {
     root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)
 }
 
+fn replacement_paths(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
+    let parent = wal_path(root).parent().expect("WAL parent").to_path_buf();
+    (
+        parent.join(".workflow-governance.ndjson.forge-next"),
+        parent.join(".workflow-governance.ndjson.forge-previous"),
+        parent.join(".workflow-governance.ndjson.forge-transaction"),
+    )
+}
+
+fn bytes_digest(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+
+    let digest = Sha256::digest(bytes);
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(hex, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    format!("sha256:{hex}")
+}
+
+fn marker_bytes(previous: Option<&[u8]>, next: &[u8]) -> Vec<u8> {
+    let previous = previous.map_or_else(|| "absent".to_owned(), bytes_digest);
+    format!(
+        "forge-wal-replacement-v1\nprevious={previous}\nnext={}\n",
+        bytes_digest(next)
+    )
+    .into_bytes()
+}
+
+fn assert_protocol_artifacts_absent(root: &Path) {
+    let (next, previous, transaction) = replacement_paths(root);
+    for path in [next, previous, transaction] {
+        assert!(
+            fs::symlink_metadata(path).is_err(),
+            "reconciled protocol artifact must be absent"
+        );
+    }
+}
+
 fn read_documents(root: &Path) -> Vec<WorkflowGovernanceReceiptDocument> {
     fs::read_to_string(wal_path(root))
         .expect("read ledger")
@@ -87,6 +190,10 @@ fn published_all_events_fixture_has_a_valid_canonical_hash_chain() {
         yaml_serde::from_str(raw).expect("published ledger fixture");
     let mut expected_previous: Option<String> = None;
     for record in &document.workflow_governance_ledger.records {
+        assert!(
+            !matches!(record.event, WorkflowGovernanceEvent::ReleaseUpgraded(_)),
+            "the published P5c fixture must remain byte/hash compatible"
+        );
         assert_eq!(record.previous_record_digest, expected_previous);
         assert_eq!(
             workflow_governance_record_digest(record).expect("canonical record digest"),
@@ -180,6 +287,301 @@ fn batch_commits_two_events_together_and_exposes_prepared_projection() {
     assert_eq!(projection.records.len(), 3);
     assert_eq!(&projection.records[1..], committed.as_slice());
     drop(ledger);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn release_transition_keeps_source_envelope_then_activates_target_for_next_append() {
+    let root = temp_root("release-transition-success");
+    let source = identity();
+    let target = target_identity();
+    let first = initialize_workflow_governance_ledger_tcb(&root, &source, 0, imported())
+        .expect("initialize");
+    let transition = transition_workflow_governance_release_tcb(
+        &root,
+        &first.record_digest,
+        &source,
+        &target,
+        1,
+        release_upgraded(&first.record_digest, &source, &target),
+    )
+    .expect("transition release");
+    assert_eq!(transition.bundle_id, source.bundle_id);
+    assert_eq!(transition.bundle_digest, source.bundle_digest);
+
+    let after_transition = recover_workflow_governance_ledger(&root).expect("recover transition");
+    assert_eq!(after_transition.genesis_identity(), Some(source.clone()));
+    assert_eq!(after_transition.identity(), Some(source.clone()));
+    assert_eq!(after_transition.active_identity(), Some(target.clone()));
+    assert_eq!(
+        after_transition.active_runtime_bundle_identity(),
+        Some(runtime_identity(&target, "policy-set-v2"))
+    );
+    assert!(matches!(
+        append_workflow_governance_event_tcb(
+            &root,
+            &transition.record_digest,
+            &source,
+            2,
+            advanced(2)
+        ),
+        Err(WorkflowGovernanceLedgerError::BundleMismatch { .. })
+    ));
+    let next = append_workflow_governance_event_tcb(
+        &root,
+        &transition.record_digest,
+        &target,
+        2,
+        advanced(2),
+    )
+    .expect("append under target identity");
+    let projection = recover_workflow_governance_ledger(&root).expect("recover target append");
+    assert_eq!(projection.records, vec![first, transition, next]);
+    assert_eq!(projection.active_identity(), Some(target));
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn generic_append_and_batch_reject_caller_injected_release_event() {
+    let root = temp_root("release-transition-generic-reject");
+    let source = identity();
+    let target = target_identity();
+    let first = initialize_workflow_governance_ledger_tcb(&root, &source, 0, imported())
+        .expect("initialize");
+    let original = fs::read(wal_path(&root)).expect("read source WAL");
+    let event = release_upgraded(&first.record_digest, &source, &target);
+    assert!(matches!(
+        append_workflow_governance_event_tcb(
+            &root,
+            &first.record_digest,
+            &source,
+            1,
+            WorkflowGovernanceEvent::ReleaseUpgraded(event.clone())
+        ),
+        Err(WorkflowGovernanceLedgerError::ReleaseUpgradeRequiresDedicatedAuthority)
+    ));
+
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock ledger");
+    let mut batch = ledger
+        .begin_unchecked_tcb_batch(&first.record_digest, &source)
+        .expect("begin batch");
+    for _ in 0..2 {
+        assert!(matches!(
+            batch.push_event(1, WorkflowGovernanceEvent::ReleaseUpgraded(event.clone())),
+            Err(WorkflowGovernanceLedgerError::ReleaseUpgradeRequiresDedicatedAuthority)
+        ));
+    }
+    drop(batch);
+    drop(ledger);
+    assert_eq!(fs::read(wal_path(&root)).expect("unchanged WAL"), original);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn release_transition_rejects_stale_self_reverse_and_non_contiguous_inputs_without_commit() {
+    let source = identity();
+    let target = target_identity();
+    for scenario in ["stale", "self", "reverse", "state"] {
+        let root = temp_root(&format!("release-{scenario}"));
+        let first = initialize_workflow_governance_ledger_tcb(&root, &source, 0, imported())
+            .expect("initialize");
+        let original = fs::read(wal_path(&root)).expect("read source WAL");
+        let mut event = release_upgraded(&first.record_digest, &source, &target);
+        let (head, requested_target, state_version) = match scenario {
+            "stale" => (named_digest("stale-head"), target.clone(), 1),
+            "self" => {
+                event.to_release = event.from_release.clone();
+                event.to_runtime_bundle = event.from_runtime_bundle.clone();
+                event.admission_proof.to_policy_set_digest =
+                    event.from_runtime_bundle.policy_set_digest.clone();
+                (first.record_digest.clone(), source.clone(), 1)
+            }
+            "reverse" => {
+                std::mem::swap(&mut event.from_runtime_bundle, &mut event.to_runtime_bundle);
+                (first.record_digest.clone(), target.clone(), 1)
+            }
+            "state" => (first.record_digest.clone(), target.clone(), 2),
+            _ => unreachable!(),
+        };
+        let error = transition_workflow_governance_release_tcb(
+            &root,
+            &head,
+            &source,
+            &requested_target,
+            state_version,
+            event,
+        )
+        .expect_err("transition must reject malformed input");
+        assert!(matches!(
+            (scenario, error),
+            ("stale", WorkflowGovernanceLedgerError::HeadMismatch { .. })
+                | (
+                    "self" | "reverse",
+                    WorkflowGovernanceLedgerError::ReleaseTransitionInvalid { .. }
+                )
+                | (
+                    "state",
+                    WorkflowGovernanceLedgerError::ReleaseTransitionStateVersionMismatch { .. }
+                )
+        ));
+        assert_eq!(
+            fs::read(wal_path(&root)).expect("source WAL preserved"),
+            original,
+            "failure before commit must preserve the source WAL"
+        );
+        assert_eq!(
+            recover_workflow_governance_ledger(&root)
+                .expect("recover source")
+                .active_identity(),
+            Some(source.clone())
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+}
+
+#[test]
+fn recovery_rejects_rehashed_release_event_with_tampered_head_or_binding() {
+    for scenario in ["head", "from", "policy"] {
+        let root = temp_root(&format!("release-tamper-{scenario}"));
+        let source = identity();
+        let target = target_identity();
+        let first = initialize_workflow_governance_ledger_tcb(&root, &source, 0, imported())
+            .expect("initialize");
+        transition_workflow_governance_release_tcb(
+            &root,
+            &first.record_digest,
+            &source,
+            &target,
+            1,
+            release_upgraded(&first.record_digest, &source, &target),
+        )
+        .expect("transition");
+        let mut documents = read_documents(&root);
+        let WorkflowGovernanceEvent::ReleaseUpgraded(event) =
+            &mut documents[1].workflow_governance_receipt.event
+        else {
+            panic!("second record must be release_upgraded")
+        };
+        match scenario {
+            "head" => event.prior_ledger_head_digest = named_digest("wrong-head"),
+            "from" => event.from_runtime_bundle.bundle_id = id("reversed-source"),
+            "policy" => event.admission_proof.from_policy_set_digest = named_digest("wrong-policy"),
+            _ => unreachable!(),
+        }
+        documents[1].workflow_governance_receipt.record_digest =
+            workflow_governance_record_digest(&documents[1].workflow_governance_receipt)
+                .expect("rehash tampered transition");
+        write_documents(&root, &documents);
+        assert!(matches!(
+            recover_workflow_governance_ledger(&root),
+            Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid { .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+}
+
+#[test]
+fn recovery_restores_marker_bound_previous_wal_when_target_is_missing() {
+    let root = temp_root("replacement-restore-previous");
+    let first = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let target = wal_path(&root);
+    let old = fs::read(&target).expect("read old WAL");
+    let candidate = b"candidate bytes are discarded during rollback\n";
+    let (next, previous, transaction) = replacement_paths(&root);
+    fs::rename(&target, &previous).expect("simulate installed previous WAL");
+    fs::write(&next, candidate).expect("simulate synced next WAL");
+    fs::write(&transaction, marker_bytes(Some(&old), candidate)).expect("write marker");
+
+    let projection = recover_workflow_governance_ledger(&root).expect("restore old WAL");
+    assert_eq!(projection.records, vec![first]);
+    assert_eq!(fs::read(&target).expect("restored WAL"), old);
+    assert_protocol_artifacts_absent(&root);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn recovery_accepts_marker_bound_committed_wal_and_cleans_residue() {
+    let root = temp_root("replacement-clean-committed");
+    let first = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let target = wal_path(&root);
+    let old = fs::read(&target).expect("read old WAL");
+    let second = append_workflow_governance_event_tcb(
+        &root,
+        &first.record_digest,
+        &identity(),
+        1,
+        advanced(1),
+    )
+    .expect("append");
+    let committed = fs::read(&target).expect("read committed WAL");
+    let (_, previous, transaction) = replacement_paths(&root);
+    fs::write(&previous, &old).expect("simulate previous cleanup residue");
+    fs::write(&transaction, marker_bytes(Some(&old), &committed)).expect("write marker");
+
+    let projection = recover_workflow_governance_ledger(&root).expect("accept committed WAL");
+    assert_eq!(projection.records, vec![first, second]);
+    assert_eq!(fs::read(&target).expect("committed WAL"), committed);
+    assert_protocol_artifacts_absent(&root);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn recovery_fails_closed_on_corrupt_ambiguous_or_non_regular_protocol_state() {
+    for scenario in [
+        "previous-without-marker",
+        "corrupt-marker",
+        "multiple",
+        "directory",
+    ] {
+        let root = temp_root(scenario);
+        initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+            .expect("initialize");
+        let target = wal_path(&root);
+        let old = fs::read(&target).expect("read old WAL");
+        let (next, previous, transaction) = replacement_paths(&root);
+        match scenario {
+            "previous-without-marker" => fs::write(&previous, &old).expect("write previous"),
+            "corrupt-marker" => fs::write(&transaction, b"torn marker").expect("write marker"),
+            "multiple" => {
+                fs::write(&next, b"candidate\n").expect("write next");
+                fs::write(&previous, &old).expect("write previous");
+                fs::write(&transaction, marker_bytes(Some(&old), b"candidate\n"))
+                    .expect("write marker");
+            }
+            "directory" => fs::create_dir(&next).expect("create non-regular next path"),
+            _ => unreachable!(),
+        }
+
+        let error = recover_workflow_governance_ledger(&root).expect_err("must fail closed");
+        assert!(
+            matches!(error, WorkflowGovernanceLedgerError::Io { .. }),
+            "unexpected error for {scenario}: {error:?}"
+        );
+        assert_eq!(
+            fs::read(&target).expect("old WAL remains"),
+            old,
+            "failed reconciliation must not rewrite the authoritative target"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn recovery_rejects_symlinked_protocol_artifact() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_root("replacement-symlink");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let (next, _, _) = replacement_paths(&root);
+    symlink(wal_path(&root), next).expect("create protocol symlink");
+    assert!(matches!(
+        recover_workflow_governance_ledger(&root),
+        Err(WorkflowGovernanceLedgerError::Io { .. })
+    ));
     fs::remove_dir_all(root).expect("cleanup");
 }
 

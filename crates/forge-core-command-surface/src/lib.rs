@@ -286,6 +286,8 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow init [--root <path>] [--json|--no-json]",
         "       forge-core workflow next [--root <path>] [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
+        "       forge-core workflow release-status [--root <path>] [--json|--no-json]",
+        "       forge-core workflow release-upgrade [--root <path>] --target-release-id <id> --expected-current-release-digest <sha256> --expected-head-digest <sha256> --expected-snapshot-digest <sha256> [--json|--no-json]",
         "       forge-core workflow shadow [--root <path>] [--json|--no-json]",
         "       forge-core workflow applicability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
         "       forge-core workflow capability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
@@ -955,6 +957,30 @@ mod tests {
         assert_eq!(
             COMMAND_CLAIM.concrete_subcommand_hint(),
             "acquire | heartbeat | release | handoff | status | reconcile | check-write"
+        );
+    }
+
+    #[test]
+    fn workflow_surface_projects_release_pin_commands() {
+        assert_eq!(
+            COMMAND_WORKFLOW
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec![
+                "init",
+                "next",
+                "resume",
+                "release-status",
+                "release-upgrade",
+                "shadow",
+                "applicability-authorize",
+                "capability-authorize",
+                "complete",
+                "decision-resolve",
+                "evidence-authorize",
+                "signal-authorize",
+                "waiver-authorize"
+            ]
         );
     }
 

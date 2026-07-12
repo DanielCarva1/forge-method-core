@@ -89,6 +89,7 @@ pub enum FamilyKind {
     MigrationManifest,
     WorkflowGovernancePolicy,
     WorkflowGovernanceRelease,
+    WorkflowGovernanceReleaseRegistry,
     WorkflowMigrationBatch,
     WorkflowRetirementAuthorization,
 }

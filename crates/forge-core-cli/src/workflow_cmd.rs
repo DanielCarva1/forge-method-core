@@ -13,7 +13,7 @@ use forge_core_authority::{
 };
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::{CliEnvelope, ExitReason, PrincipalId, StableId};
-use forge_core_kernel::WorkflowGovernanceProjectAdapter;
+use forge_core_kernel::{WorkflowGovernanceAdapterError, WorkflowGovernanceProjectAdapter};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -62,6 +62,14 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         return Ok(());
     }
     let command = format!("workflow.{}", parsed.subcommand.replace('-', "_"));
+    if let Err(message) = validate_release_args(&parsed) {
+        return emit_failure(
+            &command,
+            ExitReason::InvalidDecisionShape,
+            message,
+            parsed.want_json,
+        );
+    }
     let adapter = match resolve_adapter(&parsed.root) {
         Ok(adapter) => adapter,
         Err(message) => {
@@ -78,6 +86,10 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         "resume" => adapter
             .resume()
             .map(|value| serde_json::to_value(value).expect("serializable guidance")),
+        "release-status" => adapter
+            .release_status()
+            .map(|value| serde_json::to_value(value).expect("serializable release status")),
+        "release-upgrade" => release_upgrade(&adapter, &parsed),
         "shadow" => adapter
             .shadow()
             .map(|value| serde_json::to_value(value).expect("serializable shadow report")),
@@ -104,11 +116,33 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
         Err(error) => emit_failure(
             &command,
-            classify_error(&error.to_string()),
+            classify_error(&error),
             error.to_string(),
             parsed.want_json,
         ),
     }
+}
+
+fn release_upgrade(
+    adapter: &WorkflowGovernanceProjectAdapter,
+    args: &WorkflowCliArgs,
+) -> Result<Value, WorkflowGovernanceAdapterError> {
+    let target_release_id =
+        StableId(required(args, "target-release-id").map_err(invalid_observation)?);
+    let expected_current_release_digest =
+        required(args, "expected-current-release-digest").map_err(invalid_observation)?;
+    let expected_head_digest =
+        required(args, "expected-head-digest").map_err(invalid_observation)?;
+    let expected_snapshot_digest =
+        required(args, "expected-snapshot-digest").map_err(invalid_observation)?;
+    adapter
+        .release_upgrade(
+            &target_release_id,
+            &expected_current_release_digest,
+            &expected_head_digest,
+            &expected_snapshot_digest,
+        )
+        .map(|value| serde_json::to_value(value).expect("serializable release upgrade receipt"))
 }
 
 fn complete(
@@ -317,13 +351,23 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
         match flag {
             "--json" => want_json = true,
             "--no-json" => want_json = false,
-            "--policy" | "--phase" | "--bundle" | "--bundle-file" | "--target" => {
+            "--policy" | "--phase" | "--bundle" | "--bundle-file" | "--bundle-path"
+            | "--registry" | "--registry-file" | "--registry-path" | "--manifest"
+            | "--manifest-file" | "--manifest-path" | "--batch" | "--batch-file"
+            | "--batch-path" | "--release" | "--release-file" | "--release-path" | "--target" => {
                 return Err(format!(
-                    "{flag} is forbidden: the trusted Adapter derives workflow, phase, admitted bundle, and readiness target"
+                    "{flag} is forbidden: the trusted Adapter derives workflow, phase, admitted release registry, bundle, and readiness target"
                 ));
             }
-            "--root" | "--principal" | "--if-snapshot" | "--request-file"
-            | "--attestation-file" => {
+            "--root"
+            | "--principal"
+            | "--if-snapshot"
+            | "--request-file"
+            | "--attestation-file"
+            | "--target-release-id"
+            | "--expected-current-release-digest"
+            | "--expected-head-digest"
+            | "--expected-snapshot-digest" => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -384,17 +428,73 @@ fn invalid_observation(message: String) -> forge_core_kernel::WorkflowGovernance
     forge_core_kernel::WorkflowGovernanceAdapterError::InvalidObservation(message)
 }
 
-fn classify_error(message: &str) -> ExitReason {
-    if message.contains("ledger")
-        || message.contains("drift")
-        || message.contains("identity")
-        || message.contains("head")
-    {
-        ExitReason::Conflict
-    } else if message.contains("not initialized") || message.contains("unavailable") {
-        ExitReason::EnvConfig
-    } else {
-        ExitReason::RejectedByGate
+fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
+    match args.subcommand.as_str() {
+        "release-status" if !args.flags.is_empty() => {
+            Err("workflow release-status accepts only --root and the JSON output switch".to_owned())
+        }
+        "release-upgrade" => {
+            let expected = [
+                "target-release-id",
+                "expected-current-release-digest",
+                "expected-head-digest",
+                "expected-snapshot-digest",
+            ];
+            if let Some(flag) = args
+                .flags
+                .keys()
+                .find(|flag| !expected.contains(&flag.as_str()))
+            {
+                return Err(format!(
+                    "--{flag} is not valid for workflow release-upgrade"
+                ));
+            }
+            let target = required(args, "target-release-id")?;
+            if target.trim().is_empty() {
+                return Err("--target-release-id must not be blank".to_owned());
+            }
+            for name in &expected[1..] {
+                let digest = required(args, name)?;
+                if !is_lowercase_sha256(&digest) {
+                    return Err(format!(
+                        "--{name} must be a canonical lowercase sha256:<64-hex> digest"
+                    ));
+                }
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn is_lowercase_sha256(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
+fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
+    match error {
+        WorkflowGovernanceAdapterError::Ledger(_)
+        | WorkflowGovernanceAdapterError::LedgerIdentityMismatch
+        | WorkflowGovernanceAdapterError::ReleaseCasMismatch
+        | WorkflowGovernanceAdapterError::ReleaseChainInvalid
+        | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate
+        | WorkflowGovernanceAdapterError::CompletionDrift => ExitReason::Conflict,
+        WorkflowGovernanceAdapterError::InvalidProjectId
+        | WorkflowGovernanceAdapterError::Path { .. }
+        | WorkflowGovernanceAdapterError::InvalidStateRoot { .. }
+        | WorkflowGovernanceAdapterError::ProjectBinding { .. }
+        | WorkflowGovernanceAdapterError::TrustedRegistry { .. }
+        | WorkflowGovernanceAdapterError::SnapshotCapacity { .. }
+        | WorkflowGovernanceAdapterError::SnapshotPathEscape { .. }
+        | WorkflowGovernanceAdapterError::LedgerUninitialized
+        | WorkflowGovernanceAdapterError::Clock
+        | WorkflowGovernanceAdapterError::ClockOverflow => ExitReason::EnvConfig,
+        _ => ExitReason::RejectedByGate,
     }
 }
 
@@ -424,7 +524,16 @@ mod tests {
 
     #[test]
     fn parser_forbids_caller_selected_authority() {
-        for flag in ["--policy", "--phase", "--bundle-file", "--target"] {
+        for flag in [
+            "--policy",
+            "--phase",
+            "--bundle-file",
+            "--registry-path",
+            "--manifest-file",
+            "--batch-path",
+            "--release-file",
+            "--target",
+        ] {
             let args = argv(&["workflow", "next", flag, "attacker"]);
             let error = parse_args(&args).expect_err("forbidden authority flag");
             assert!(error.contains("forbidden"), "{error}");
@@ -446,5 +555,64 @@ mod tests {
     fn trusted_clock_override_is_not_accepted() {
         let args = argv(&["workflow", "next", "--now-unix", "9999999999"]);
         assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn release_upgrade_requires_lowercase_sha256_cas_inputs() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let args = argv(&[
+            "workflow",
+            "release-upgrade",
+            "--target-release-id",
+            "release.next",
+            "--expected-current-release-digest",
+            &digest,
+            "--expected-head-digest",
+            &digest,
+            "--expected-snapshot-digest",
+            &digest,
+        ]);
+        let parsed = parse_args(&args).expect("valid release arguments");
+        validate_release_args(&parsed).expect("valid release arguments");
+
+        let uppercase = digest.to_uppercase();
+        let invalid = argv(&[
+            "workflow",
+            "release-upgrade",
+            "--target-release-id",
+            "release.next",
+            "--expected-current-release-digest",
+            &uppercase,
+            "--expected-head-digest",
+            &digest,
+            "--expected-snapshot-digest",
+            &digest,
+        ]);
+        let parsed = parse_args(&invalid).expect("shape is validated after parsing");
+        assert!(validate_release_args(&parsed).is_err());
+    }
+
+    #[test]
+    fn release_failures_have_typed_exit_reasons() {
+        for error in [
+            WorkflowGovernanceAdapterError::ReleaseCasMismatch,
+            WorkflowGovernanceAdapterError::LedgerIdentityMismatch,
+            WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate,
+        ] {
+            assert_eq!(classify_error(&error), ExitReason::Conflict);
+        }
+        for error in [
+            WorkflowGovernanceAdapterError::UnknownRelease("unknown".to_owned()),
+            WorkflowGovernanceAdapterError::ReleaseNotAdjacent,
+            WorkflowGovernanceAdapterError::ReleasePolicyDrift,
+        ] {
+            assert_eq!(classify_error(&error), ExitReason::RejectedByGate);
+        }
+        assert_eq!(
+            classify_error(&WorkflowGovernanceAdapterError::InvalidStateRoot {
+                path: PathBuf::from("missing"),
+            }),
+            ExitReason::EnvConfig
+        );
     }
 }
