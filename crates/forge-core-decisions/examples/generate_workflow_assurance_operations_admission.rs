@@ -50,9 +50,9 @@ const INDEPENDENT_REVIEW: &str =
     "contracts/evidence/workflow-assurance-operations-independent-review-v0.yaml";
 const REVIEW_SIGNED_AT_UNIX: u64 = 1_783_951_200;
 const SEMANTIC_SIGNATURE: &str =
-    "44284f3e4d8c61e713083dcb040a82e89e6d102a42cadc269dfadfc9353fbb5f695798e1743dd4c6c501ed4f8ce1a2175a6604a447912409660ceee877291c0a";
+    "5ceaedb8da041609cadb3a3a44e070fa6a55087bba16f5d8f1b9677a57855a6d033cd35a35a9b9fbe904e0bb80950f7b715435745511308cfef2241e0538b508";
 const AUTHORIZER_SIGNATURE: &str =
-    "84c08c686ee8d8ac8b0cd213dceec99322d7bc6bbc2e44cc4620b9ab6cd29d277264a2ac42013190cfe0151c1ce64d7e103b3e6af4e75555aec1b244d8aba70f";
+    "370a436638bdda7cbd9b92c71283bf2c22b1849ce010899ba65ad469c31250abd6b1a779a8a169f2ec9a76f20b9b7765106a0794d9cddfc2507d8a7a8aae750f";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -238,10 +238,10 @@ fn reviewer_registry() -> WorkflowReleaseReviewerRegistryDocument {
                         "principal.release-review.semantic-assurance-operations-v0".to_owned(),
                     ),
                     public_key_fingerprint:
-                        "sha256:677a4384f3c515c244194adea1ae1ebf485915f7b4a283f649d1a54f98a5a7d6"
+                        "sha256:4bb6db66f1dcf3c3489e0d4a20240565b1a5698c38a0b086a363eb560a2ea98c"
                             .to_owned(),
                     public_key_hex:
-                        "74ca126a13b747764c64b77f61b1c6de27f2015e3993f2684170401a1e31c13f"
+                        "a67886dd3e90364874750e995508f6d73b6f0e672ada37eeebca979f007737e1"
                             .to_owned(),
                     algorithm: WorkflowReleaseAdmissionSignatureAlgorithm::Ed25519,
                     roles: vec![WorkflowReleaseReviewerRole::SemanticReviewer],
@@ -258,10 +258,10 @@ fn reviewer_registry() -> WorkflowReleaseReviewerRegistryDocument {
                         "principal.release-review.authorizer-assurance-operations-v0".to_owned(),
                     ),
                     public_key_fingerprint:
-                        "sha256:f16fb8f537fdb9c2855ec95b8145642025d3a7edba9777cabb4ce5496eee1abf"
+                        "sha256:229f1f3d5b72320eb55c05e01177da22ddc7c7943cee4d483a661a09f9ff5250"
                             .to_owned(),
                     public_key_hex:
-                        "5df43fb00568bcc3de84398cd4ed5db6d2a449d6d08d5ca54105c53c817fd368"
+                        "a1dd6a040b530179a0b15d59a1c4971fced185ef04ca4d34cba707215b6aaecf"
                             .to_owned(),
                     algorithm: WorkflowReleaseAdmissionSignatureAlgorithm::Ed25519,
                     roles: vec![WorkflowReleaseReviewerRole::ReleaseAuthorizer],

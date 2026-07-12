@@ -4,8 +4,8 @@ workflow_release_admission_evaluation:
   status: ready_for_independent_authorization
   authority: non_authoritative
   review_index_id: workflow-release-review.assurance-operations-v0
-  review_index_digest: sha256:70b952b8ee896d4a52e9b6ec22b18598a584c37a2b618d1e99974947aef4ffbb
-  candidate_release_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+  review_index_digest: sha256:6db4cc2b9fa0e5dfe217bc7cbfccb63f9918da760c02321d24cdd19dc3014fcb
+  candidate_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
   candidate_policy_count: 33
   predecessor_policy_count: 20
   reviewed_workflow_count: 13
@@ -13,4 +13,4 @@ workflow_release_admission_evaluation:
   behavioral_mismatch_count: 0
   behavioral_evaluation_error_count: 0
   issues: []
-  evaluation_digest: sha256:7fb1cb6143ff443b88345a23628fc164716089bf3c8a7eef10ac84317556f2b9
+  evaluation_digest: sha256:88ba2c246845a888f0d01dc3cc5eaa9bbcfddf4974c43832f2e80c9a2bd1746f

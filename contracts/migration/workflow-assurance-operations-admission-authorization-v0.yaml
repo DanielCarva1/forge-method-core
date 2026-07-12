@@ -5,13 +5,13 @@ workflow_release_admission_authorization:
     authorization_id: workflow-release-admission.assurance-operations-v0
     review_index_id: workflow-release-review.assurance-operations-v0
     review_index_version: 0.2.0
-    review_index_raw_digest: sha256:5fdf5e58952b95d3d475488a7e6e42e4ab5f7e7b7dae72264b07ce54734c698f
-    review_index_canonical_digest: sha256:70b952b8ee896d4a52e9b6ec22b18598a584c37a2b618d1e99974947aef4ffbb
-    evaluation_digest: sha256:7fb1cb6143ff443b88345a23628fc164716089bf3c8a7eef10ac84317556f2b9
+    review_index_raw_digest: sha256:d4ee8e9d8249810839ab5761769e00ec03162d04bd4e745eee58198f9edd8e90
+    review_index_canonical_digest: sha256:6db4cc2b9fa0e5dfe217bc7cbfccb63f9918da760c02321d24cdd19dc3014fcb
+    evaluation_digest: sha256:88ba2c246845a888f0d01dc3cc5eaa9bbcfddf4974c43832f2e80c9a2bd1746f
     reviewer_registry_id: workflow-release-reviewers.assurance-operations-v0
     reviewer_registry_version: 0.2.0
-    reviewer_registry_raw_digest: sha256:4a39601694d908e59338818d63e2a95f4fec8c52b2167cfcb028e3ba68c57ad2
-    reviewer_registry_canonical_digest: sha256:c0ec024786632584edc3020e8ce30911382efdd2b1955e28f1694bfd3b983ccf
+    reviewer_registry_raw_digest: sha256:4431b3c8a02420dac5037e5f4d02048f077e688426944fcae4d8c618c8a981f8
+    reviewer_registry_canonical_digest: sha256:a4df6a5741fbad126224c48d1b84d58dbe2ecaf3155f038be5ee6854bedf8e8a
     promotion:
       predecessor:
         release_id: workflow-governance.release.core-assurance-v0
@@ -20,7 +20,7 @@ workflow_release_admission_authorization:
         lineage_id: workflow-governance.core
         release_id: workflow-governance.release.assurance-operations-v0
         release_version: 0.3.0
-        release_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+        release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
       candidate_runtime_bundle:
         bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
         bundle_digest: sha256:4ae611c4c0070e9af9ca8314804b5330694f6ef34abacfe11668c55e3789e67b
@@ -32,13 +32,13 @@ workflow_release_admission_authorization:
     release_manifest:
       artifact_id: release-manifest.assurance-operations-v0
       embedded_ref: contracts/migration/workflow-governance-release-assurance-operations-candidate-v0.yaml
-      raw_digest: sha256:487bb722877636ee3d491c13205fbedc34f8ddcddb55d1a96908c30c99db25e1
-      canonical_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+      raw_digest: sha256:8f8517b8ba490af56b3a6e29380a080ded9edf814a839123b44496ce249a6fc6
+      canonical_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
     review_subject:
       artifact_id: review-subject.assurance-operations-v0
       embedded_ref: contracts/migration/workflow-assurance-operations-review-subject-v0.yaml
-      raw_digest: sha256:f167913cd47dc9c6eb9da04788dad6c4b4919312a677bfc35d086df87fc65ee7
-      canonical_digest: sha256:d269647af7586f13714aa091631e2f21f273bbb55f551adcb7b211f338a9ef75
+      raw_digest: sha256:45d1af99919467671e22abc5838dca7bc8c47e505b143832e31204ef5fd69a49
+      canonical_digest: sha256:4483ca670d10ec9034b6d7f851fe7edb88637b854a529f5b0cf2e0d47d3b3456
     full_catalog:
       artifact_id: full-catalog.foundation-v0
       embedded_ref: contracts/policies/workflow-migration-foundation-v0.yaml
@@ -52,8 +52,8 @@ workflow_release_admission_authorization:
     proposed_registry:
       artifact_id: workflow-governance.registry.assurance-operations-v0
       embedded_ref: contracts/migration/workflow-governance-release-registry-assurance-operations-v0.yaml
-      raw_digest: sha256:c5b3b25b220e6925a0c3f30dc21e4862101131c5d8e0a1efa7777c8aaf293620
-      canonical_digest: sha256:c6eb9e1533106c1456b83b7a4f4c2416b3086519201dd843f3398d6e3bae6d5d
+      raw_digest: sha256:e063a0fe9dc077414ec150d3c8bbfca99b749dc8435a37a76d5f37f5f3f63f71
+      canonical_digest: sha256:0581fbf7a75f0fa88aa19a2047979ece0bc41230d378e3358978d95f11e0e002
     invalidate_all_receipts: true
     workflow_decisions:
     - workflow_id: atdd-plan
@@ -172,13 +172,13 @@ workflow_release_admission_authorization:
     credential_id: reviewer.workflow-release.semantic-assurance-operations-v0
     role: semantic_reviewer
     algorithm: ed25519
-    payload_digest: sha256:153e073727f9735452c00754254e9dd6cf69a570d2b0d2922cf856ddc27b9bc2
-    signature: 44284f3e4d8c61e713083dcb040a82e89e6d102a42cadc269dfadfc9353fbb5f695798e1743dd4c6c501ed4f8ce1a2175a6604a447912409660ceee877291c0a
+    payload_digest: sha256:395d605915aa116f88baafbcca16dc06e64e4a4ef51c5f97634c7047b0bc43d5
+    signature: 5ceaedb8da041609cadb3a3a44e070fa6a55087bba16f5d8f1b9677a57855a6d033cd35a35a9b9fbe904e0bb80950f7b715435745511308cfef2241e0538b508
     signed_at_unix: 1783951200
   - principal_id: principal.release-review.authorizer-assurance-operations-v0
     credential_id: reviewer.workflow-release.authorizer-assurance-operations-v0
     role: release_authorizer
     algorithm: ed25519
-    payload_digest: sha256:153e073727f9735452c00754254e9dd6cf69a570d2b0d2922cf856ddc27b9bc2
-    signature: 84c08c686ee8d8ac8b0cd213dceec99322d7bc6bbc2e44cc4620b9ab6cd29d277264a2ac42013190cfe0151c1ce64d7e103b3e6af4e75555aec1b244d8aba70f
+    payload_digest: sha256:395d605915aa116f88baafbcca16dc06e64e4a4ef51c5f97634c7047b0bc43d5
+    signature: 370a436638bdda7cbd9b92c71283bf2c22b1849ce010899ba65ad469c31250abd6b1a779a8a169f2ec9a76f20b9b7765106a0794d9cddfc2507d8a7a8aae750f
     signed_at_unix: 1783951200

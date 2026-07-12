@@ -6,7 +6,7 @@ workflow_behavioral_corpus_set:
   corpora:
   - id: corpus.workflow-assurance-operations.representative-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-representative-v0.yaml
-    expected_digest: sha256:b0168555c186016575f9fb500aa3baeeb02d1896caa4afd180fc635af485a9c5
+    expected_digest: sha256:ddf6fd2b0e59cc0fadc65606c039a63f393fb1c7af488a1b0225e0f4257180dc
   - id: corpus.workflow-assurance-operations.adversarial-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-adversarial-v0.yaml
-    expected_digest: sha256:224fc2cb69115fb4de8bda5d428f498b589e04b170cb880b7f7da42529e282c5
+    expected_digest: sha256:d379cd3a4fd73b080c840bd83df11d478b8e8dbe4dd0ba378755b1454873ee62

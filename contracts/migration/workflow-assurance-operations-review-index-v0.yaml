@@ -11,7 +11,7 @@ workflow_release_review_index:
       lineage_id: workflow-governance.core
       release_id: workflow-governance.release.assurance-operations-v0
       release_version: 0.3.0
-      release_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+      release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
     candidate_runtime_bundle:
       bundle_id: bundle.workflow-governance.assurance-operations-candidate-v0
       bundle_digest: sha256:4ae611c4c0070e9af9ca8314804b5330694f6ef34abacfe11668c55e3789e67b
@@ -23,8 +23,8 @@ workflow_release_review_index:
   release_manifest:
     artifact_id: release-manifest.assurance-operations-v0
     embedded_ref: contracts/migration/workflow-governance-release-assurance-operations-candidate-v0.yaml
-    raw_digest: sha256:487bb722877636ee3d491c13205fbedc34f8ddcddb55d1a96908c30c99db25e1
-    canonical_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+    raw_digest: sha256:8f8517b8ba490af56b3a6e29380a080ded9edf814a839123b44496ce249a6fc6
+    canonical_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
   migration_batches:
   - artifact_id: migration-batch.golden-path-v0
     embedded_ref: contracts/migration/workflow-governance-batch-golden-path-v0.yaml
@@ -36,13 +36,13 @@ workflow_release_review_index:
     canonical_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
   - artifact_id: migration-batch.assurance-operations-v0
     embedded_ref: contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
-    raw_digest: sha256:96a3e0e09838662b9a8ff548c7370fdf9e1892d36461486b8655301b071b86a8
-    canonical_digest: sha256:d7f41201e9d81e1c74ffdbc067d0db37acdef0433397d04b9c0ef14041340800
+    raw_digest: sha256:d8d9586ae45530d6e0bfba40e4708d1e10a280218a750b1bf3249097a5cafe5f
+    canonical_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
   review_subject:
     artifact_id: review-subject.assurance-operations-v0
     embedded_ref: contracts/migration/workflow-assurance-operations-review-subject-v0.yaml
-    raw_digest: sha256:f167913cd47dc9c6eb9da04788dad6c4b4919312a677bfc35d086df87fc65ee7
-    canonical_digest: sha256:d269647af7586f13714aa091631e2f21f273bbb55f551adcb7b211f338a9ef75
+    raw_digest: sha256:45d1af99919467671e22abc5838dca7bc8c47e505b143832e31204ef5fd69a49
+    canonical_digest: sha256:4483ca670d10ec9034b6d7f851fe7edb88637b854a529f5b0cf2e0d47d3b3456
   coverage_policy:
     artifact_id: coverage-policy.assurance-operations-v0
     embedded_ref: contracts/policies/workflow-behavioral-coverage-assurance-operations-v0.yaml
@@ -56,23 +56,23 @@ workflow_release_review_index:
   corpus_set:
     artifact_id: corpus-set.assurance-operations-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-corpus-set-v0.yaml
-    raw_digest: sha256:b0e669115eafe21259bcb759882b3b10222b36790a4040955cfc179d8d77f02d
-    canonical_digest: sha256:8d3688a2f868aa3544d4c30c5966658089d6fe54d719d7840ba4b45b3a830a29
+    raw_digest: sha256:c3ffaa56139c0778a386c1f7797a7fc457f351524428503e86fc240161ab5b99
+    canonical_digest: sha256:7dc1144504ea7aa5b45540f8175c2ba7de4fe3fbedbf51ae9ea76610a165d270
   representative_corpus:
     artifact_id: corpus.workflow-assurance-operations.representative-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-representative-v0.yaml
-    raw_digest: sha256:b0168555c186016575f9fb500aa3baeeb02d1896caa4afd180fc635af485a9c5
-    canonical_digest: sha256:c08b64a070fd8f2dc628ec336ba44abbaacc6fdde10f6cfd8149a08b89fdb2a9
+    raw_digest: sha256:ddf6fd2b0e59cc0fadc65606c039a63f393fb1c7af488a1b0225e0f4257180dc
+    canonical_digest: sha256:6e83ad85fad09947bad98d3c8ebd5a75b8f1ee168b04707d209c431b4c81022f
   adversarial_corpus:
     artifact_id: corpus.workflow-assurance-operations.adversarial-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-adversarial-v0.yaml
-    raw_digest: sha256:224fc2cb69115fb4de8bda5d428f498b589e04b170cb880b7f7da42529e282c5
-    canonical_digest: sha256:24399010f7d4fd028ecc4255f0d1a5a2ddcecb3a12a2d19f294b73ca178bd984
+    raw_digest: sha256:d379cd3a4fd73b080c840bd83df11d478b8e8dbe4dd0ba378755b1454873ee62
+    canonical_digest: sha256:9585e975a150a111f2ecf163703a9888b28b71077116bd2655d7ae797c9b8b3f
   shadow_report:
     artifact_id: shadow-report.assurance-operations-v0
     embedded_ref: contracts/evidence/workflow-assurance-operations-shadow-report-v0.yaml
-    raw_digest: sha256:8d4795947941ba5033107ca337aa63d1ee86be14a5f71c42928cd0c1f61721c0
-    canonical_digest: sha256:18136d219131fba6698b63452fd57a4441d97857041276167b10b25f0e8ba502
+    raw_digest: sha256:42c3dbb9977dfd8f3d6aca7c7829ab627d272ce9bfeb6236a8d3797a8093a222
+    canonical_digest: sha256:2b2330b6a094285e8baab75a48bff1fb73a1d3bd859362d2c2c5691eab07c15e
   candidate_runtime_bundle:
     artifact_id: runtime-bundle.assurance-operations-candidate-v0
     embedded_ref: contracts/workflow-governance/runtime-assurance-operations-candidate-v0.yaml
@@ -91,8 +91,8 @@ workflow_release_review_index:
   proposed_registry:
     artifact_id: workflow-governance.registry.assurance-operations-v0
     embedded_ref: contracts/migration/workflow-governance-release-registry-assurance-operations-v0.yaml
-    raw_digest: sha256:c5b3b25b220e6925a0c3f30dc21e4862101131c5d8e0a1efa7777c8aaf293620
-    canonical_digest: sha256:c6eb9e1533106c1456b83b7a4f4c2416b3086519201dd843f3398d6e3bae6d5d
+    raw_digest: sha256:e063a0fe9dc077414ec150d3c8bbfca99b749dc8435a37a76d5f37f5f3f63f71
+    canonical_digest: sha256:0581fbf7a75f0fa88aa19a2047979ece0bc41230d378e3358978d95f11e0e002
   evaluator_source:
     artifact_id: evaluator.workflow-behavior-v0
     embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs

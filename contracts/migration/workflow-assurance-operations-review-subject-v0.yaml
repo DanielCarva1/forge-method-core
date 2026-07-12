@@ -5,7 +5,7 @@ workflow_behavioral_review_subject:
   overlay:
     id: overlay.workflow-governance.assurance-operations-v0
     embedded_ref: contracts/policies/workflow-assurance-operations-overlay-v0.yaml
-    expected_digest: sha256:24a73e738ca96b2d7f11660d0394284b2eb781b2ded45263f5fd8a72be05f58e
+    expected_digest: sha256:edd4fe89b36da453f3a26db94098ea065146f53edf5838ef9e3b0a542b5ad51b
   baseline_history:
     id: history.workflow-governance.p5d2-foundation-compatibility-v0
     embedded_ref: contracts/evidence/workflow-core-assurance-frozen-history-v0.ndjson

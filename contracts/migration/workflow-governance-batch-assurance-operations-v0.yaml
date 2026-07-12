@@ -8,13 +8,13 @@ workflow_migration_batch:
   evidence:
     representative_fixtures:
     - embedded_ref: contracts/evidence/workflow-assurance-operations-representative-v0.yaml
-      expected_digest: sha256:b0168555c186016575f9fb500aa3baeeb02d1896caa4afd180fc635af485a9c5
+      expected_digest: sha256:ddf6fd2b0e59cc0fadc65606c039a63f393fb1c7af488a1b0225e0f4257180dc
     adversarial_fixtures:
     - embedded_ref: contracts/evidence/workflow-assurance-operations-adversarial-v0.yaml
-      expected_digest: sha256:224fc2cb69115fb4de8bda5d428f498b589e04b170cb880b7f7da42529e282c5
+      expected_digest: sha256:d379cd3a4fd73b080c840bd83df11d478b8e8dbe4dd0ba378755b1454873ee62
     shadow_reports:
     - embedded_ref: contracts/evidence/workflow-assurance-operations-shadow-report-v0.yaml
-      expected_digest: sha256:8d4795947941ba5033107ca337aa63d1ee86be14a5f71c42928cd0c1f61721c0
+      expected_digest: sha256:42c3dbb9977dfd8f3d6aca7c7829ab627d272ce9bfeb6236a8d3797a8093a222
   workflow_bindings:
   - workflow_id: atdd-plan
     legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d

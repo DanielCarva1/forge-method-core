@@ -6,8 +6,8 @@ workflow_release_reviewer_registry:
   credentials:
   - credential_id: reviewer.workflow-release.semantic-assurance-operations-v0
     principal_id: principal.release-review.semantic-assurance-operations-v0
-    public_key_fingerprint: sha256:677a4384f3c515c244194adea1ae1ebf485915f7b4a283f649d1a54f98a5a7d6
-    public_key_hex: 74ca126a13b747764c64b77f61b1c6de27f2015e3993f2684170401a1e31c13f
+    public_key_fingerprint: sha256:4bb6db66f1dcf3c3489e0d4a20240565b1a5698c38a0b086a363eb560a2ea98c
+    public_key_hex: a67886dd3e90364874750e995508f6d73b6f0e672ada37eeebca979f007737e1
     algorithm: ed25519
     roles:
     - semantic_reviewer
@@ -17,8 +17,8 @@ workflow_release_reviewer_registry:
     independence_domain: semantic-review
   - credential_id: reviewer.workflow-release.authorizer-assurance-operations-v0
     principal_id: principal.release-review.authorizer-assurance-operations-v0
-    public_key_fingerprint: sha256:f16fb8f537fdb9c2855ec95b8145642025d3a7edba9777cabb4ce5496eee1abf
-    public_key_hex: 5df43fb00568bcc3de84398cd4ed5db6d2a449d6d08d5ca54105c53c817fd368
+    public_key_fingerprint: sha256:229f1f3d5b72320eb55c05e01177da22ddc7c7943cee4d483a661a09f9ff5250
+    public_key_hex: a1dd6a040b530179a0b15d59a1c4971fced185ef04ca4d34cba707215b6aaecf
     algorithm: ed25519
     roles:
     - release_authorizer

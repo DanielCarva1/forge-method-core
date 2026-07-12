@@ -19,7 +19,7 @@ workflow_governance_release_manifest:
   - batch_id: workflow-governance.batch.assurance-operations-v0
     batch_version: 0.3.0
     embedded_ref: contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
-    expected_digest: sha256:d7f41201e9d81e1c74ffdbc067d0db37acdef0433397d04b9c0ef14041340800
+    expected_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
     deterministic_order: 2
   workflow_entries:
   - workflow_id: adversarial-review

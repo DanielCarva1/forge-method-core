@@ -68,7 +68,7 @@ workflow_governance_release_registry:
       lineage_id: workflow-governance.core
       release_id: workflow-governance.release.assurance-operations-v0
       release_version: 0.3.0
-      release_digest: sha256:efa348007b5af0b771559ac3baa947aa7255bafa16b04ab186b801a51ebc6373
+      release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
     runtime_bundle:
       identity:
         bundle_id: bundle.workflow-governance.assurance-operations-v0
@@ -82,6 +82,6 @@ workflow_governance_release_registry:
     source:
       kind: embedded_manifest
       embedded_ref: contracts/migration/workflow-governance-release-assurance-operations-candidate-v0.yaml
-      expected_digest: sha256:487bb722877636ee3d491c13205fbedc34f8ddcddb55d1a96908c30c99db25e1
+      expected_digest: sha256:8f8517b8ba490af56b3a6e29380a080ded9edf814a839123b44496ce249a6fc6
     receipt_carryover: invalidate_all
     authority: candidate_only

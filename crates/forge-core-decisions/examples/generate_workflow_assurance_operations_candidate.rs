@@ -146,6 +146,7 @@ fn parse_mode() -> Result<Mode, Box<dyn Error>> {
 #[allow(clippy::too_many_lines)]
 fn generate(root: &Path, mode: Mode) -> Result<Vec<GeneratedArtifact>, Box<dyn Error>> {
     validate_registry_sentinel(root)?;
+    validate_lf_content_addressed_source(root, OVERLAY_PATH)?;
     let workflows = load_clean_workflows(root)?;
     let migration_audit = load_migration_audit(root, &workflows)?;
     let base_bundle: WorkflowGovernanceBundleDocument = read_yaml(&root.join(BASE_BUNDLE_PATH))?;
@@ -321,6 +322,19 @@ fn generate(root: &Path, mode: Mode) -> Result<Vec<GeneratedArtifact>, Box<dyn E
             bytes: runtime_bundle_bytes,
         },
     ])
+}
+
+fn validate_lf_content_addressed_source(
+    root: &Path,
+    relative_path: &str,
+) -> Result<(), Box<dyn Error>> {
+    let bytes = std::fs::read(root.join(relative_path))?;
+    if bytes.windows(2).any(|window| window == b"\r\n") {
+        return Err(error(format!(
+            "content-addressed source {relative_path} contains CRLF; normalize it to repository LF bytes before generating signed artifacts"
+        )));
+    }
+    Ok(())
 }
 
 fn load_clean_workflows(root: &Path) -> Result<Vec<LoadedWorkflowDocument>, Box<dyn Error>> {
