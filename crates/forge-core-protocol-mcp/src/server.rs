@@ -927,10 +927,15 @@ mod tests {
         } else {
             format!("#!/bin/sh\necho '{envelope}'\nexit 2")
         };
-        std::fs::write(&path, body).unwrap();
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        // Publish the executable only after its writer has closed.  Writing
+        // directly to the final path can race an exec of an older inode on
+        // Linux (notably on CI) and make `Command::spawn` fail with ETXTBSY.
+        let staging_path = dir.join("forge-core.staging");
+        std::fs::write(&staging_path, body).unwrap();
+        let mut perms = std::fs::metadata(&staging_path).unwrap().permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(&path, perms).unwrap();
+        std::fs::set_permissions(&staging_path, perms).unwrap();
+        std::fs::rename(staging_path, &path).unwrap();
         path
     }
 
