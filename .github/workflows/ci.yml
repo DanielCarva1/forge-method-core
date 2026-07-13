@@ -78,7 +78,7 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchors (139 historical, 156 Batch A, 169 pre-retirement, 173 aggregate)
+      - name: Regression anchors (139 historical, 156 Batch A, 169 pre-retirement, 174 aggregate)
         run: |
           cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json
           python - <<'PY'
@@ -108,7 +108,7 @@ jobs:
               and not check["name"].startswith("domain_pack_")
           ]
           assert len(pre_retirement) == 169, len(pre_retirement)
-          assert len(checks) == 173, len(checks)
+          assert len(checks) == 174, len(checks)
           assert all(check["diagnostics"] == 0 for check in checks), checks
           print(
               f"Historical anchor: {len(historical)}; "

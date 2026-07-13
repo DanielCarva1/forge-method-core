@@ -627,11 +627,13 @@ fn integrated_install_preflight(
         .requirements
         .required_domains
         .truncate(1);
-    composition_request
-        .domain_pack_composition_request
-        .requirements
-        .required_domains[0]
-        .pack_version_requirement = ">=1,<3".to_owned();
+    ">=1,<3".clone_into(
+        &mut composition_request
+            .domain_pack_composition_request
+            .requirements
+            .required_domains[0]
+            .pack_version_requirement,
+    );
     composition_request
         .domain_pack_composition_request
         .requirements
@@ -1002,9 +1004,12 @@ fn integrated_upgrade_preflight(
     for selected in &mut resolution.domain_pack_resolution_projection.selected {
         selected.source_assurance = DomainPackSourceAssurance::SupplyChainVerified;
         selected.semantic_assurance = DomainPackSemanticAssurance::Reviewed;
-        selected.reviewed_entry_digest = target.resolved.reviewed_entry_digest.clone();
-        selected.promotion_authorization_digest =
-            target.resolved.promotion_authorization_digest.clone();
+        selected
+            .reviewed_entry_digest
+            .clone_from(&target.resolved.reviewed_entry_digest);
+        selected
+            .promotion_authorization_digest
+            .clone_from(&target.resolved.promotion_authorization_digest);
     }
     resolution
         .domain_pack_resolution_projection
@@ -1019,11 +1024,12 @@ fn integrated_upgrade_preflight(
     body.observed_state = expected.clone();
     body.resolution = resolution;
     let payload = &mut body.proposed_lock.domain_pack_exact_lock.payload;
-    payload.roots = inputs
-        .resolution_request
-        .domain_pack_resolution_request
-        .roots
-        .clone();
+    payload.roots.clone_from(
+        &inputs
+            .resolution_request
+            .domain_pack_resolution_request
+            .roots,
+    );
     payload.resolution_digest.clone_from(
         &body
             .resolution
@@ -1325,6 +1331,9 @@ impl RawArtifactFixture {
 /// every derived content/manifest/package/registry/review binding is recomputed so the
 /// upgrade exercises real admission rather than editing a version label in an
 /// already trusted lock.
+// This fixture intentionally keeps the complete content-addressed derivation in one
+// linear narrative so changes cannot accidentally omit one of the linked bindings.
+#[allow(clippy::too_many_lines)]
 fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArtifactFixture) {
     let mut fixture = base.clone();
     let mut raw = RawArtifactFixture::new(base);
@@ -1332,7 +1341,7 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
         std::str::from_utf8(&raw.content).expect("base content is UTF-8 YAML"),
     )
     .expect("typed base content");
-    content.domain_pack_content.pack.version = version.to_owned();
+    version.clone_into(&mut content.domain_pack_content.pack.version);
     raw.content = yaml_serde::to_string(&content)
         .expect("serialize versioned content")
         .into_bytes();
@@ -1342,9 +1351,17 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
         std::str::from_utf8(&raw.manifest).expect("base manifest is UTF-8 YAML"),
     )
     .expect("typed base manifest");
-    manifest.domain_pack_manifest.identity.version = version.to_owned();
-    manifest.domain_pack_manifest.content.raw_sha256 = content_raw_sha256.clone();
-    manifest.domain_pack_manifest.content.canonical_sha256 = content_canonical_sha256.clone();
+    version.clone_into(&mut manifest.domain_pack_manifest.identity.version);
+    manifest
+        .domain_pack_manifest
+        .content
+        .raw_sha256
+        .clone_from(&content_raw_sha256);
+    manifest
+        .domain_pack_manifest
+        .content
+        .canonical_sha256
+        .clone_from(&content_canonical_sha256);
     raw.manifest = yaml_serde::to_string(&manifest)
         .expect("serialize versioned manifest")
         .into_bytes();
@@ -1369,22 +1386,40 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
     fixture.policy.domain_pack_trust_policy.rules[0].package_digest = Some(package_digest.clone());
     fixture.policy.domain_pack_trust_policy.rules[0].content_digest =
         Some(content_canonical_sha256.clone());
-    fixture.resolved.identity.version = version.to_owned();
-    fixture.resolved.package.package_digest = package_digest.clone();
+    version.clone_into(&mut fixture.resolved.identity.version);
+    fixture
+        .resolved
+        .package
+        .package_digest
+        .clone_from(&package_digest);
     fixture.resolved.package.manifest = manifest_binding.clone();
-    fixture.resolved.package.content.raw_sha256 = content_raw_sha256.clone();
-    fixture.resolved.package.content.canonical_sha256 = content_canonical_sha256.clone();
+    fixture
+        .resolved
+        .package
+        .content
+        .raw_sha256
+        .clone_from(&content_raw_sha256);
+    fixture
+        .resolved
+        .package
+        .content
+        .canonical_sha256
+        .clone_from(&content_canonical_sha256);
     raw.content_binding.raw_sha256 = content_raw_sha256;
-    raw.content_binding.canonical_sha256 = content_canonical_sha256.clone();
+    raw.content_binding
+        .canonical_sha256
+        .clone_from(&content_canonical_sha256);
 
     let registry = &mut fixture.snapshot.domain_pack_supply_chain_registry;
     let registry_id = registry.registry_id.clone();
     let audience = registry.audience.clone();
     let record = &mut registry.packages[0];
-    record.identity.version = version.to_owned();
-    record.package_digest = package_digest.clone();
-    record.manifest_digest = manifest_binding.canonical_sha256.clone();
-    record.content_digest = content_canonical_sha256.clone();
+    version.clone_into(&mut record.identity.version);
+    record.package_digest.clone_from(&package_digest);
+    record
+        .manifest_digest
+        .clone_from(&manifest_binding.canonical_sha256);
+    record.content_digest.clone_from(&content_canonical_sha256);
     record.publisher_signature_hex = "00".repeat(64);
     record.record_digest = digest('0');
     record.record_digest =
@@ -1395,7 +1430,7 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
     record.publisher_signature_hex = hex(&publisher_key.sign(&publisher_bytes).to_bytes());
     let record_digest = record.record_digest.clone();
 
-    registry.registry_version = version.to_owned();
+    version.clone_into(&mut registry.registry_version);
     registry.snapshot_digest = digest('0');
     registry.signatures.clear();
     let snapshot_digest =
@@ -1429,10 +1464,14 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
         .reviewed_registry
         .domain_pack_reviewed_registry
         .entries[0];
-    reviewed.pack.version = version.to_owned();
-    reviewed.package_digest = package_digest.clone();
-    reviewed.supply_chain_record_digest = record_digest.clone();
-    reviewed.manifest_digest = manifest_binding.canonical_sha256.clone();
+    version.clone_into(&mut reviewed.pack.version);
+    reviewed.package_digest.clone_from(&package_digest);
+    reviewed
+        .supply_chain_record_digest
+        .clone_from(&record_digest);
+    reviewed
+        .manifest_digest
+        .clone_from(&manifest_binding.canonical_sha256);
     reviewed.content_digest = content_canonical_sha256;
     reviewed.promotion_decision_digest = learning_digest("promotion-decision-v2");
     reviewed.authorization_digest = learning_digest("promotion-authorization-v2");

@@ -271,28 +271,8 @@ fn evaluation(
     }
 }
 
-#[test]
-fn discovery_requires_all_independent_claims_before_asking_the_human() {
-    let bundle = composed_bundle();
-    let mut discovery = evaluation(
-        &bundle,
-        "policy.discovery",
-        ReadinessTarget::Explore,
-        vec![],
-        vec![],
-        WorkflowCompletionAssertion::NotAsserted,
-    );
-    discovery.workflow_governance_evaluation.current_phase = StableId("1-discovery".to_owned());
-
-    let research_needed =
-        simulate_workflow_governance(&bundle, &discovery).expect("valid discovery simulation");
-    assert!(research_needed.candidate_decision_requests.is_empty());
-    assert!(research_needed
-        .candidate_next_actions
-        .iter()
-        .all(|action| action.kind != NextActionKind::AskHuman));
-
-    discovery.workflow_governance_evaluation.evidence = vec![
+fn discovery_foundation_evidence() -> Vec<WorkflowEvidenceObservation> {
+    vec![
         evidence(
             "discovery.player.1",
             "claim.discovery.player-context",
@@ -325,20 +305,11 @@ fn discovery_requires_all_independent_claims_before_asking_the_human() {
             WorkflowEvidenceKind::ExternalAuthority,
             WorkflowEvidenceStrength::AuthoritativeAcceptance,
         ),
-    ];
-    let partial =
-        simulate_workflow_governance(&bundle, &discovery).expect("valid partial discovery");
-    assert!(partial.candidate_decision_requests.is_empty());
-    assert!(partial.candidate_claim_results.iter().any(|claim| {
-        claim.claim_id.ends_with("claim.discovery.material-risks")
-            && claim.status != WorkflowClaimResultStatus::Verified
-    }));
-    assert!(partial
-        .candidate_next_actions
-        .iter()
-        .all(|action| action.kind != NextActionKind::AskHuman));
+    ]
+}
 
-    discovery.workflow_governance_evaluation.evidence.extend([
+fn discovery_risk_evidence() -> [WorkflowEvidenceObservation; 2] {
+    [
         evidence(
             "discovery.risk.1",
             "claim.discovery.material-risks",
@@ -355,7 +326,47 @@ fn discovery_requires_all_independent_claims_before_asking_the_human() {
             WorkflowEvidenceKind::IndependentReview,
             WorkflowEvidenceStrength::IndependentConfirmation,
         ),
-    ]);
+    ]
+}
+
+#[test]
+fn discovery_requires_all_independent_claims_before_asking_the_human() {
+    let bundle = composed_bundle();
+    let mut discovery = evaluation(
+        &bundle,
+        "policy.discovery",
+        ReadinessTarget::Explore,
+        vec![],
+        vec![],
+        WorkflowCompletionAssertion::NotAsserted,
+    );
+    discovery.workflow_governance_evaluation.current_phase = StableId("1-discovery".to_owned());
+
+    let research_needed =
+        simulate_workflow_governance(&bundle, &discovery).expect("valid discovery simulation");
+    assert!(research_needed.candidate_decision_requests.is_empty());
+    assert!(research_needed
+        .candidate_next_actions
+        .iter()
+        .all(|action| action.kind != NextActionKind::AskHuman));
+
+    discovery.workflow_governance_evaluation.evidence = discovery_foundation_evidence();
+    let partial =
+        simulate_workflow_governance(&bundle, &discovery).expect("valid partial discovery");
+    assert!(partial.candidate_decision_requests.is_empty());
+    assert!(partial.candidate_claim_results.iter().any(|claim| {
+        claim.claim_id.ends_with("claim.discovery.material-risks")
+            && claim.status != WorkflowClaimResultStatus::Verified
+    }));
+    assert!(partial
+        .candidate_next_actions
+        .iter()
+        .all(|action| action.kind != NextActionKind::AskHuman));
+
+    discovery
+        .workflow_governance_evaluation
+        .evidence
+        .extend(discovery_risk_evidence());
     let direction_needed =
         simulate_workflow_governance(&bundle, &discovery).expect("all discovery evidence");
     assert!(direction_needed

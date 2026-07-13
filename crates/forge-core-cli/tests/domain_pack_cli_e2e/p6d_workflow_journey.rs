@@ -172,9 +172,15 @@ fn write_signed_reference_supply(
         let record = &mut snapshot.packages[0];
         record.identity = manifest.identity.clone();
         record.package_digest.clone_from(&package_digest);
-        record.manifest_digest = candidate.manifest_binding.canonical_sha256.clone();
-        record.content_digest = manifest.content.canonical_sha256.clone();
-        record.license_digest = manifest.provenance.license_text.canonical_sha256.clone();
+        record
+            .manifest_digest
+            .clone_from(&candidate.manifest_binding.canonical_sha256);
+        record
+            .content_digest
+            .clone_from(&manifest.content.canonical_sha256);
+        record
+            .license_digest
+            .clone_from(&manifest.provenance.license_text.canonical_sha256);
         record.fixture_digests = candidate
             .content
             .domain_pack_content
@@ -267,9 +273,8 @@ fn write_reference_promotion_graph(
         .domain_pack_local_learning_candidate
         .target
         .proposed_namespace = manifest.identity.namespace.clone();
-    local.domain_pack_local_learning_candidate.assertion =
-        "the reviewed game-development pack prevents fluent false progress through representative evidence gates"
-            .to_owned();
+    "the reviewed game-development pack prevents fluent false progress through representative evidence gates"
+        .clone_into(&mut local.domain_pack_local_learning_candidate.assertion);
     local.domain_pack_local_learning_candidate.candidate_digest =
         candidate_self_digest(&local).expect("reference learning candidate digest");
     let candidate_digest = local
@@ -284,10 +289,13 @@ fn write_reference_promotion_graph(
         name: manifest.identity.name.clone(),
         version: manifest.identity.version.clone(),
     };
-    body.package_digest = supply.package_digest.clone();
-    body.manifest_digest = candidate_input.manifest_binding.canonical_sha256.clone();
-    body.content_digest = manifest.content.canonical_sha256.clone();
-    body.license_digest = manifest.provenance.license_text.canonical_sha256.clone();
+    body.package_digest.clone_from(&supply.package_digest);
+    body.manifest_digest
+        .clone_from(&candidate_input.manifest_binding.canonical_sha256);
+    body.content_digest
+        .clone_from(&manifest.content.canonical_sha256);
+    body.license_digest
+        .clone_from(&manifest.provenance.license_text.canonical_sha256);
     body.candidate_digests = vec![candidate_digest];
     body.fixture_bindings = candidate_input
         .content
@@ -334,11 +342,19 @@ fn write_reference_promotion_graph(
         name: manifest.identity.name.clone(),
         version: manifest.identity.version.clone(),
     };
-    entry.package_digest = supply.package_digest.clone();
-    entry.supply_chain_record_digest = supply.registry_record_digest.clone();
-    entry.manifest_digest = candidate_input.manifest_binding.canonical_sha256.clone();
-    entry.content_digest = manifest.content.canonical_sha256.clone();
-    entry.license_digest = manifest.provenance.license_text.canonical_sha256.clone();
+    entry.package_digest.clone_from(&supply.package_digest);
+    entry
+        .supply_chain_record_digest
+        .clone_from(&supply.registry_record_digest);
+    entry
+        .manifest_digest
+        .clone_from(&candidate_input.manifest_binding.canonical_sha256);
+    entry
+        .content_digest
+        .clone_from(&manifest.content.canonical_sha256);
+    entry
+        .license_digest
+        .clone_from(&manifest.provenance.license_text.canonical_sha256);
     entry.fixture_digests = candidate_input
         .content
         .domain_pack_content
@@ -347,10 +363,14 @@ fn write_reference_promotion_graph(
         .map(|fixture| fixture.artifact.canonical_sha256.clone())
         .collect();
     entry.independent_review_digests.clone_from(&review_digests);
-    entry.compatibility.forge_core_requirement =
-        manifest.compatibility.forge_core_requirement.clone();
-    entry.compatibility.pack_schema_requirement =
-        manifest.compatibility.pack_schema_requirement.clone();
+    entry
+        .compatibility
+        .forge_core_requirement
+        .clone_from(&manifest.compatibility.forge_core_requirement);
+    entry
+        .compatibility
+        .pack_schema_requirement
+        .clone_from(&manifest.compatibility.pack_schema_requirement);
     entry.promotion_decision_digest.clear();
     entry.authorization_digest.clear();
     entry.entry_digest.clear();
@@ -363,11 +383,12 @@ fn write_reference_promotion_graph(
     decision_body
         .independent_review_digests
         .clone_from(&review_digests);
-    decision_body.registry_predecessor_digest = current
-        .domain_pack_reviewed_registry
-        .registry_digest
-        .clone();
-    decision_body.proposed_registry_digest = proposed_binding_digest.clone();
+    decision_body
+        .registry_predecessor_digest
+        .clone_from(&current.domain_pack_reviewed_registry.registry_digest);
+    decision_body
+        .proposed_registry_digest
+        .clone_from(&proposed_binding_digest);
     let decision_digest =
         domain_pack_promotion_decision_digest(&decision).expect("reference decision digest");
     decision
@@ -389,14 +410,18 @@ fn write_reference_promotion_graph(
         .payload
         .independent_review_digests
         .clone_from(&review_digests);
-    authorization_body.payload.reviewer_registry_digest = reviewer_registry
-        .domain_pack_reviewer_registry
-        .registry_digest
-        .clone();
-    authorization_body.payload.current_reviewed_registry_digest = current
-        .domain_pack_reviewed_registry
-        .registry_digest
-        .clone();
+    authorization_body
+        .payload
+        .reviewer_registry_digest
+        .clone_from(
+            &reviewer_registry
+                .domain_pack_reviewer_registry
+                .registry_digest,
+        );
+    authorization_body
+        .payload
+        .current_reviewed_registry_digest
+        .clone_from(&current.domain_pack_reviewed_registry.registry_digest);
     authorization_body.payload.proposed_reviewed_registry_digest = proposed_binding_digest;
     let payload_digest = domain_pack_promotion_payload_digest(&authorization_body.payload)
         .expect("reference authorization payload digest");
@@ -983,18 +1008,21 @@ fn write_reference_remove_lifecycle(
     payload.roots.clear();
     payload.capability_registry_digest = canonical_digest(&capability_registry);
     payload.sandbox_policy_digest = canonical_digest(&sandbox_policy);
-    payload.resolution_digest = resolution
-        .domain_pack_resolution_projection
-        .resolution_digest
-        .clone();
-    payload.composition_digest = composition
-        .domain_pack_composition_projection
-        .composition_digest
-        .clone();
+    payload.resolution_digest.clone_from(
+        &resolution
+            .domain_pack_resolution_projection
+            .resolution_digest,
+    );
+    payload.composition_digest.clone_from(
+        &composition
+            .domain_pack_composition_projection
+            .composition_digest,
+    );
     payload.packages.clear();
     payload.verified_capability_bindings.clear();
-    payload.unresolved_composition_gaps =
-        composition.domain_pack_composition_projection.gaps.clone();
+    payload
+        .unresolved_composition_gaps
+        .clone_from(&composition.domain_pack_composition_projection.gaps);
     payload.unresolved_capability_gaps.clear();
     let proposed_lock = DomainPackExactLockDocument {
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
@@ -1115,7 +1143,7 @@ fn envelope(output: &Output) -> Value {
     })
 }
 
-fn ok(output: Output, command: &str) -> Value {
+fn ok(output: &Output, command: &str) -> Value {
     assert!(
         output.status.success(),
         "{command} failed status={:?}\nstdout={}\nstderr={}",
@@ -1123,7 +1151,7 @@ fn ok(output: Output, command: &str) -> Value {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let value = envelope(&output);
+    let value = envelope(output);
     assert_eq!(value["ok"], true, "{value:#}");
     assert_eq!(value["command"], command);
     value
@@ -1161,6 +1189,8 @@ struct WorkflowAuthority {
 }
 
 impl WorkflowAuthority {
+    // Keep the complete credential/key/grant matrix together so this security fixture is auditable.
+    #[allow(clippy::too_many_lines)]
     fn install(project: &ReferenceProject) -> Self {
         let human = SigningKey::from_bytes(&[91_u8; 32]);
         let human_two = SigningKey::from_bytes(&[94_u8; 32]);
@@ -1417,7 +1447,7 @@ fn authorize_applicability(
         &request,
     );
     let record = ok(
-        project.workflow(
+        &project.workflow(
             "applicability-authorize",
             &command_args(&[
                 "--request-file",
@@ -1498,7 +1528,7 @@ fn authorize_evidence(
         strength,
     );
     let record = ok(
-        project.workflow(
+        &project.workflow(
             "evidence-authorize",
             &command_args(&[
                 "--request-file",
@@ -1652,7 +1682,7 @@ fn authorize_declared_policy_evidence(
                 strength,
             );
             if ordinal == 0 && observation == 0 && evaluator.minimum_passing_observations > 1 {
-                guidance = ok(project.workflow("next", &[]), "workflow.next");
+                guidance = ok(&project.workflow("next", &[]), "workflow.next");
                 assert_eq!(
                     guidance["data"]["selected_policy_ref"], expected_policy,
                     "one observation incorrectly satisfied plural evidence"
@@ -1720,7 +1750,7 @@ fn authorize_policy_capabilities_matching(
             &request,
         );
         let record = ok(
-            project.workflow(
+            &project.workflow(
                 "capability-authorize",
                 &command_args(&[
                     "--request-file",
@@ -1840,7 +1870,7 @@ fn close_boundary_rechecks(
             progressed,
             "boundary rechecks made no CAS progress: {guidance:#}"
         );
-        guidance = ok(project.workflow("next", &[]), "workflow.next");
+        guidance = ok(&project.workflow("next", &[]), "workflow.next");
     }
     panic!("boundary rechecks did not converge within the policy bound")
 }
@@ -1887,7 +1917,7 @@ fn authorize_decision(
         &request,
     );
     let record = ok(
-        project.workflow(
+        &project.workflow(
             "decision-resolve",
             &command_args(&[
                 "--request-file",
@@ -1902,7 +1932,7 @@ fn authorize_decision(
 }
 
 fn assert_fresh_resume(project: &ReferenceProject, guidance: &Value) {
-    let resumed = ok(project.workflow("resume", &[]), "workflow.resume");
+    let resumed = ok(&project.workflow("resume", &[]), "workflow.resume");
     assert_eq!(resumed["data"], guidance["data"]);
 }
 
@@ -1992,7 +2022,7 @@ fn advance_core_until(
     target_policy: &str,
 ) -> Value {
     for _ in 0..core.workflow_governance_bundle.policies.len() {
-        let mut guidance = ok(project.workflow("next", &[]), "workflow.next");
+        let mut guidance = ok(&project.workflow("next", &[]), "workflow.next");
         let selected = required_str(&guidance["data"], "/selected_policy_ref").to_owned();
         if selected == target_policy {
             return guidance;
@@ -2024,13 +2054,13 @@ fn advance_core_until(
             complete_selected(project, &guidance);
             continue;
         }
-        guidance = ok(project.workflow("next", &[]), "workflow.next");
+        guidance = ok(&project.workflow("next", &[]), "workflow.next");
         if !guidance["data"]["simulation"]["candidate_decision_requests"]
             .as_array()
             .is_none_or(Vec::is_empty)
         {
             let _decision_record = authorize_decision(project, authority, &guidance, policy);
-            guidance = ok(project.workflow("next", &[]), "workflow.next");
+            guidance = ok(&project.workflow("next", &[]), "workflow.next");
         }
         complete_ready(project, &guidance);
     }
@@ -2040,7 +2070,7 @@ fn advance_core_until(
 fn complete_selected(project: &ReferenceProject, guidance: &Value) -> Value {
     let snapshot = required_str(&guidance["data"], "/snapshot_digest").to_owned();
     ok(
-        project.workflow(
+        &project.workflow(
             "complete",
             &command_args(&[
                 "--if-snapshot",
@@ -2065,7 +2095,7 @@ fn p6d_reference_pack_real_journey() {
         .artifacts
         .join(format!("{REFERENCE_ROOT}/content/game-development.yaml"));
     let valid = ok(
-        run(&command_args(&[
+        &run(&command_args(&[
             "domain-pack",
             "validate",
             "--manifest-file",
@@ -2116,7 +2146,7 @@ fn p6d_reference_pack_real_journey() {
     let (reviewers, reviewed, _) = write_signed_learning_roots(&project.operator);
     let graph = write_reference_promotion_graph(&project, &reviewers, &reviewed, &request, &supply);
     ok(
-        run(&command_args(&[
+        &run(&command_args(&[
             "domain-pack",
             "learning",
             "trust-provision",
@@ -2137,7 +2167,7 @@ fn p6d_reference_pack_real_journey() {
         "domain-pack learning trust-provision",
     );
     ok(
-        run(&command_args(&[
+        &run(&command_args(&[
             "domain-pack",
             "learning",
             "capture",
@@ -2151,7 +2181,7 @@ fn p6d_reference_pack_real_journey() {
     );
     for subcommand in ["evaluate", "conflict-check"] {
         ok(
-            run(&command_args(&[
+            &run(&command_args(&[
                 "domain-pack",
                 "learning",
                 subcommand,
@@ -2169,7 +2199,7 @@ fn p6d_reference_pack_real_journey() {
         );
     }
     let promoted = ok(
-        run(&command_args(&[
+        &run(&command_args(&[
             "domain-pack",
             "learning",
             "promote",
@@ -2204,7 +2234,7 @@ fn p6d_reference_pack_real_journey() {
     assert_eq!(promoted["data"]["generation"], 1);
 
     ok(
-        run(&command_args(&[
+        &run(&command_args(&[
             "domain-pack",
             "trust-provision",
             "--operator-root",
@@ -2258,7 +2288,7 @@ fn p6d_reference_pack_real_journey() {
     ] {
         let mut args = vec!["domain-pack".to_owned(), subcommand.to_owned()];
         args.extend(lifecycle_tail.clone());
-        let result = ok(run(&args), command);
+        let result = ok(&run(&args), command);
         if subcommand == "apply" {
             assert_eq!(
                 result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 0,
@@ -2273,7 +2303,7 @@ fn p6d_reference_pack_real_journey() {
     let install_receipt = install_receipt.expect("install apply receipt");
 
     let authority = WorkflowAuthority::install(&project);
-    let initialized = ok(project.workflow("init", &[]), "workflow.init");
+    let initialized = ok(&project.workflow("init", &[]), "workflow.init");
     assert_eq!(
         initialized["data"]["effective"]["domain_pack_generation"]["generation"],
         0
@@ -2282,7 +2312,7 @@ fn p6d_reference_pack_real_journey() {
 
     // Core ordering remains sealed. Progress its three discovery policies
     // honestly before the appended reference discovery policy can run.
-    let discover = ok(project.workflow("next", &[]), "workflow.next");
+    let discover = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(
         discover["data"]["selected_policy_ref"],
         "policy.workflow.discover-intent"
@@ -2301,7 +2331,7 @@ fn p6d_reference_pack_real_journey() {
     );
     complete_selected(&project, &discover);
 
-    let domain_scan = ok(project.workflow("next", &[]), "workflow.next");
+    let domain_scan = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(
         domain_scan["data"]["selected_policy_ref"],
         "policy.workflow.domain-scan"
@@ -2327,7 +2357,7 @@ fn p6d_reference_pack_real_journey() {
     );
     complete_selected(&project, &domain_scan);
 
-    let feasibility = ok(project.workflow("next", &[]), "workflow.next");
+    let feasibility = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(
         feasibility["data"]["selected_policy_ref"],
         "policy.workflow.technical-feasibility-scan"
@@ -2353,7 +2383,7 @@ fn p6d_reference_pack_real_journey() {
     );
     complete_selected(&project, &feasibility);
 
-    let reference = ok(project.workflow("next", &[]), "workflow.next");
+    let reference = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(
         reference["data"]["selected_policy_ref"],
         "reference.game-development.policy.discovery"
@@ -2377,7 +2407,7 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.policy.discovery",
         reference,
     );
-    let decision = ok(project.workflow("next", &[]), "workflow.next");
+    let decision = ok(&project.workflow("next", &[]), "workflow.next");
     let requests = decision["data"]["simulation"]["candidate_decision_requests"]
         .as_array()
         .expect("reference decision requests");
@@ -2395,7 +2425,7 @@ fn p6d_reference_pack_real_journey() {
         .is_some_and(|actions| actions.iter().any(|action| action["kind"] == "ask_human")));
     assert_fresh_resume(&project, &decision);
     let _decision_record = authorize_decision(&project, &authority, &decision, discovery_policy);
-    let discovery_ready = ok(project.workflow("next", &[]), "workflow.next");
+    let discovery_ready = ok(&project.workflow("next", &[]), "workflow.next");
     assert_fresh_resume(&project, &discovery_ready);
     complete_ready(&project, &discovery_ready);
 
@@ -2455,7 +2485,7 @@ fn p6d_reference_pack_real_journey() {
         &playable_claim.id.0,
         playable,
     );
-    let playable_ready = ok(project.workflow("next", &[]), "workflow.next");
+    let playable_ready = ok(&project.workflow("next", &[]), "workflow.next");
     let playable_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, playable_ready);
     assert_fresh_resume(&project, &playable_ready);
@@ -2488,7 +2518,7 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.claim.first-use-playtest.independent-review",
         first_use,
     );
-    let first_use_partial = ok(project.workflow("next", &[]), "workflow.next");
+    let first_use_partial = ok(&project.workflow("next", &[]), "workflow.next");
     assert_ne!(first_use_partial["data"]["status"], "ready_to_complete");
     reject_incomplete_completion(&project, &first_use_partial);
     assert_fresh_resume(&project, &first_use_partial);
@@ -2499,7 +2529,7 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.claim.first-use-playtest.representative-session",
         first_use_partial,
     );
-    let first_use_ready = ok(project.workflow("next", &[]), "workflow.next");
+    let first_use_ready = ok(&project.workflow("next", &[]), "workflow.next");
     let first_use_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, first_use_ready);
     assert_fresh_resume(&project, &first_use_ready);
@@ -2525,7 +2555,7 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.claim.packaging.clean-package-identity",
         packaging,
     );
-    let packaging_partial = ok(project.workflow("next", &[]), "workflow.next");
+    let packaging_partial = ok(&project.workflow("next", &[]), "workflow.next");
     assert_ne!(packaging_partial["data"]["status"], "ready_to_complete");
     reject_incomplete_completion(&project, &packaging_partial);
     assert_fresh_resume(&project, &packaging_partial);
@@ -2543,14 +2573,14 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.claim.packaging.release-audit",
         packaging,
     );
-    let packaging_ready = ok(project.workflow("next", &[]), "workflow.next");
+    let packaging_ready = ok(&project.workflow("next", &[]), "workflow.next");
     let packaging_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, packaging_ready);
     assert_fresh_resume(&project, &packaging_ready);
     complete_ready(&project, &packaging_ready);
 
     let release_status = ok(
-        project.workflow("release-status", &[]),
+        &project.workflow("release-status", &[]),
         "workflow.release_status",
     );
     assert_eq!(release_status["data"]["domain_pack_rebase_required"], true);
@@ -2623,7 +2653,7 @@ fn p6d_reference_pack_real_journey() {
     ] {
         let mut args = vec!["domain-pack".to_owned(), subcommand.to_owned()];
         args.extend(removal_tail.clone());
-        let result = ok(run(&args), command);
+        let result = ok(&run(&args), command);
         if subcommand == "apply" {
             assert_eq!(
                 result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 1,
@@ -2631,7 +2661,7 @@ fn p6d_reference_pack_real_journey() {
             );
         }
     }
-    let degraded_next = ok(project.workflow("next", &[]), "workflow.next");
+    let degraded_next = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(degraded_next["data"]["status"], "blocked");
     assert_eq!(degraded_next["data"]["domain_pack_degraded"], true);
     let gaps = degraded_next["data"]["domain_pack_gaps"]

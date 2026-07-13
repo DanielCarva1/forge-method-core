@@ -186,6 +186,12 @@ struct DomainPackReceiptContextSubject<'a> {
 /// P5 `WorkflowRuntimeBundleIdentity` continues to identify the enclosing
 /// document. Comparing both prevents conflating the two digest domains without
 /// changing the P6a wire contract.
+///
+/// # Errors
+///
+/// Returns an error when the admitted core identity cannot be reproduced, the
+/// active generation does not join that core exactly, or canonical encoding
+/// of the effective identity fails.
 pub fn admit_effective_workflow_governance_bundle<'a>(
     core: &AdmittedWorkflowGovernanceRelease,
     domain_context: WorkflowDomainPackContextView<'a>,
@@ -271,6 +277,11 @@ pub fn admit_effective_workflow_governance_bundle<'a>(
 /// the first Domain Pack transition. This returns audit identity only, never an
 /// executable bundle capability, so it does not replace the lifecycle-guarded
 /// admission required for evaluation.
+///
+/// # Errors
+///
+/// Returns an error when the admitted core identity cannot be reproduced or
+/// canonical encoding of the receipt context fails.
 pub fn derive_core_only_workflow_effective_identity(
     core: &AdmittedWorkflowGovernanceRelease,
 ) -> Result<WorkflowEffectiveBundleIdentity, EffectiveWorkflowGovernanceBundleError> {
@@ -319,6 +330,7 @@ fn validate_domain_core_join(
 
 /// Build the sole TCB-acceptable epoch event from two kernel-admitted
 /// effective identities. Carryover is derived, never caller selected.
+#[must_use]
 pub fn domain_pack_generation_transition_event(
     from: &WorkflowEffectiveBundleIdentity,
     to: &AdmittedEffectiveWorkflowGovernanceBundle<'_>,
@@ -336,6 +348,11 @@ pub fn domain_pack_generation_transition_event(
 /// generation is active. Every target requires an explicit coordinated Domain
 /// Pack rebase transaction before the core release transition; this helper
 /// never advertises a partial cross-store upgrade as safe.
+///
+/// # Errors
+///
+/// Reserved for fail-closed validation failures introduced while evaluating
+/// the admitted effective authority. The current decision paths are infallible.
 pub fn evaluate_domain_pack_release_rebase(
     current: &AdmittedEffectiveWorkflowGovernanceBundle<'_>,
     _target_core: &AdmittedWorkflowGovernanceRelease,

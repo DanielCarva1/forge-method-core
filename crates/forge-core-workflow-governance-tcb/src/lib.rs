@@ -633,6 +633,9 @@ pub enum WorkflowGovernanceLedgerError {
 }
 
 impl fmt::Display for WorkflowGovernanceLedgerError {
+    // Keeping every wire-visible diagnostic in one exhaustive match makes
+    // omissions compiler-visible when the error enum evolves.
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::StateRootUnavailable { path, source } => {
@@ -1084,6 +1087,15 @@ fn validate_recovered_semantics(
             found: record.state_version,
         });
     }
+    validate_recovered_transition_semantics(record, identity, previous_state_version)?;
+    Ok(())
+}
+
+fn validate_recovered_transition_semantics(
+    record: &WorkflowGovernanceLedgerRecord,
+    identity: &mut RecoveredIdentityState,
+    previous_state_version: Option<u64>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
     if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
         if identity.active_effective.is_some() {
             return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {

@@ -23,8 +23,8 @@ domain_pack_manifest:
       canonical_sha256: sha256:4233dd9051646608cc5a48b68a9e441f58cc2020d1a27c3eec9b20167f521e99
   content:
     content_ref: docs/fixtures/domain-pack-reference-v0/content/game-development.yaml
-    raw_sha256: sha256:ede89f565b885e5520273f81cd0af0006325728553fecb38caca8fe6d5e488b5
-    canonical_sha256: sha256:e2efc862c26c9350715e9ca42b35d53b216bf6725dcdd47d500acba2a5a3a927
+    raw_sha256: sha256:611be12f5771535b44a6977b97291d5ec786060bbbe240e02c9e039d353827fa
+    canonical_sha256: sha256:74e871cd21d84550ae4d2ac17a340910b50c556309e7c4bc6c876f381410e7af
   dependencies: []
   conflicts: []
   replacement_slots: []

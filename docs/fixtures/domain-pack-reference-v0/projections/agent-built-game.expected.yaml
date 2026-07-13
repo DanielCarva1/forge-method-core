@@ -10,8 +10,8 @@ domain_pack_composition_projection:
       name: game-development
       namespace: reference.game-development
       version: 1.0.0
-    content_digest: sha256:e2efc862c26c9350715e9ca42b35d53b216bf6725dcdd47d500acba2a5a3a927
-    manifest_digest: sha256:66b679531ed544b7dd20d9c1693c3eee6c738b20b4d084ed8557507c6182ff92
+    content_digest: sha256:74e871cd21d84550ae4d2ac17a340910b50c556309e7c4bc6c876f381410e7af
+    manifest_digest: sha256:c449acbb22dedd4fa1fc9030cd0337b8161c05462a63d16f6bf53af7ecde6e29
     deterministic_order: 0
   contribution_index:
   - pack:
@@ -348,7 +348,7 @@ domain_pack_composition_projection:
       version: 1.0.0
     kind: fixture
     contribution_ref: reference.game-development.fixture.ablation-no-first-use
-    contribution_digest: sha256:29b09b20c2c31ece43d183de2e3a479d259deb4b842be506d8086e94345e55c2
+    contribution_digest: sha256:470e95cc1dee30dd3657dd71abfa48a5e6f5b0163cf86bd702b085da5a1d1bb9
     replaces_ref: null
   - pack:
       publisher: forge.reference
@@ -356,7 +356,7 @@ domain_pack_composition_projection:
       version: 1.0.0
     kind: fixture
     contribution_ref: reference.game-development.fixture.adversarial-false-progress
-    contribution_digest: sha256:57810cd702e7a2eb3021d1ce8b419f9406c37138861d5446698e9539e29d4a2b
+    contribution_digest: sha256:fc0332e93387d531c48fe505add6e65167cdb4620225e3bf4c049efb8e4da357
     replaces_ref: null
   - pack:
       publisher: forge.reference
@@ -364,7 +364,7 @@ domain_pack_composition_projection:
       version: 1.0.0
     kind: fixture
     contribution_ref: reference.game-development.fixture.representative-first-use
-    contribution_digest: sha256:81781ab822a8a96809e22701540193fbbf28f1bba626af3bf6f78eb6f627f4d7
+    contribution_digest: sha256:193f46bd9fe0f8846d902fa129b50d78a828642a2638460e6e73087271263589
     replaces_ref: null
   - pack:
       publisher: forge.reference
@@ -1659,4 +1659,4 @@ domain_pack_composition_projection:
         - Record licenses, known limitations, version identity, rollback path, and current representative evidence before release.
   gaps: []
   issues: []
-  composition_digest: sha256:cf82e5a3eb9adcc8276e066244bf6152fb8e0647a23cacfdd89061a22907a514
+  composition_digest: sha256:1f808838ade8fd863c55fe5d6e6e9b6ce22214ad929c4553b8d4fb3c588478f1
