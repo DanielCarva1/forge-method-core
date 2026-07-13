@@ -24,7 +24,7 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Pullable compatibility checkpoint: the Rust workspace package version is
-`0.6.0`. Guide `describe`/`status` retirement diagnostics use payload schema
+`0.7.0`. Guide `describe`/`status` retirement diagnostics use payload schema
 `0.2`, and consumers of that extended surface must be at least `0.5.0`.
 Workflow governance release identity remains the frozen `0.4.0` five-release
 chain; package SemVer and governed release identity are separate axes.
@@ -225,16 +225,35 @@ chain; package SemVer and governed release identity are separate axes.
   is consumed only after a lock-scoped late recheck, and authority prepared
   before an upgrade fails on the new head/bundle. Advisory playbooks and legacy
   simulation/shadow projections sit outside authority.
-- The **Domain Pack Composition Module** validates five closed schema-0.1
+- The **Domain Pack Module** validates five closed schema-0.1
   document families, exact raw and canonical manifest/content identities, SemVer
   compatibility, dependency/conflict graphs, namespace ownership, bilateral
   whole-policy replacements, typed cross-references, and bounded resource use. It then
   topologically composes core plus multiple packs with deterministic priority
-  remapping and an auditable projection digest. `domain-pack validate|compose`
-  is a read-only agent surface; P6b still owns lifecycle resolution, trust,
-  install/upgrade/rollback/remove, and activation. The kernel registry remains
-  the exact five-release 42-policy P5 authority and excludes all 18 deferred
-  domain candidates.
+  remapping and an auditable projection digest. P6b adds fourteen closed
+  schema-0.2 lifecycle families, a bounded resolver whose raw output remains
+  explicitly untrusted, operator-selected registry/publisher signature
+  verification, a monotonic no-fork registry anchor, exact locks, default-deny
+  built-in capability binding, compatibility reports, and a separate TCB. The
+  TCB consumes opaque anchored supply-chain and project-snapshot proofs, freshly
+  recomputes resolution/raw composition/trust/compatibility/operation intent,
+  persists every exact staged raw object, and activates only a cross-linked
+  record-addressed immutable generation through one crash-safe CAS pointer.
+  Historical rollback uses a reachable receipt and byte-identical lock without
+  reusing its transactional generation. Initial registry trust requires an
+  explicit operator provisioning ceremony that pins the exact trust-policy
+  digest; lifecycle preflight/apply never silently perform trust on first use.
+  Static links, junctions, traversal,
+  special files, and non-concurrent tamper fail closed. A malicious process
+  running as the same OS principal can still race-replace a node after
+  validation or mutate the project after the final snapshot check; that hostile
+  model requires separate OS-principal permissions and remote CAS for immutable
+  artifacts. `domain-pack
+  validate|compose|resolve|trust-provision|status|recover|preflight|apply` is the agent surface;
+  only `apply` activates, while status/recovery may finish an interrupted
+  pointer transaction. The universal kernel registry remains the exact
+  five-release 42-policy P5 authority and excludes all 18 deferred domain
+  candidates.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

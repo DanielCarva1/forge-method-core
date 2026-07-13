@@ -1,0 +1,16 @@
+schema_version: '0.2'
+domain_pack_supply_chain_registry:
+  registry_id: registry.domain-pack.fixture
+  registry_version: 1.0.0
+  audience: forge.fixture
+  authority: candidate_only
+  generation: 0
+  previous_snapshot_digest: null
+  issued_at_unix: 0
+  expires_at_unix: 1
+  publisher_credentials: []
+  namespace_grants: []
+  packages: []
+  revocations: []
+  snapshot_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  signatures: []

@@ -1,0 +1,4 @@
+schema_version: '0.2'
+domain_pack_lifecycle_ledger:
+  project_id: project.domain-pack.fixture
+  records: []

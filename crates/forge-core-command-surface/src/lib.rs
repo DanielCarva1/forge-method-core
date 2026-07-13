@@ -342,18 +342,25 @@ pub const COMMAND_ASSURANCE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::DefaultReadOnly,
 };
 
-/// Read-only P6 Domain Pack contract and deterministic composition surface.
-/// The result is always a candidate projection: this command cannot install,
-/// activate, trust, execute, or grant mutation authority to a pack.
+/// P6 Domain Pack inspection, deterministic projection, and governed lifecycle
+/// surface. `trust-provision` mutates the external operator trust anchor only,
+/// `apply` activates project state, and `status`/`recover` may complete an
+/// interrupted crash-safe pointer replacement before returning a projection.
 pub const COMMAND_DOMAIN_PACK: CommandSpec = CommandSpec {
     name: "domain-pack",
     usage_lines: &[
         "       forge-core domain-pack validate --manifest-file <path> --content-file <path> [--artifact-root <path>] [--forge-core-version <semver>] [--json|--no-json]",
         "       forge-core domain-pack compose --request-file <path> [--artifact-root <path>] [--json|--no-json]",
+        "       forge-core domain-pack resolve --request-file <path> --registry-file <path> [--json|--no-json]",
+        "       forge-core domain-pack trust-provision --operator-root <path> --trust-policy-file <path> --registry-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] --operator-acknowledge-trust-on-first-use I_UNDERSTAND_TRUST_ON_FIRST_USE [--json|--no-json]",
+        "       forge-core domain-pack status [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack recover [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack preflight --preflight-file <path> --trust-policy-file <path> --registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack apply --preflight-file <path> --trust-policy-file <path> --registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
     ],
-    authority: CommandAuthority::ReadOnly,
+    authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
-    mcp_visibility: McpVisibility::DefaultReadOnly,
+    mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
 pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
@@ -968,7 +975,16 @@ mod tests {
             COMMAND_DOMAIN_PACK
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
-            vec!["validate", "compose"]
+            vec![
+                "validate",
+                "compose",
+                "resolve",
+                "trust-provision",
+                "status",
+                "recover",
+                "preflight",
+                "apply"
+            ]
         );
         assert_eq!(
             COMMAND_PREFLIGHT

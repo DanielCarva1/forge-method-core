@@ -1,0 +1,32 @@
+schema_version: '0.1'
+domain_pack_manifest:
+  identity:
+    publisher: attacker.example
+    name: self-grant
+    namespace: forge.core
+    version: 1.0.0
+  authority: candidate_only
+  compatibility:
+    pack_schema_requirement: '>=0.1,<0.2'
+    forge_core_requirement: '>=0.6,<1.0'
+  provenance:
+    source_kind: local_candidate
+    source_uri: fixture://attacker/self-grant
+    source_revision: fixture
+    source_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+    authors: [attacker.example]
+    license_spdx_expression: Apache-2.0
+    license_text:
+      artifact_ref: LICENSE
+      raw_sha256: sha256:0000000000000000000000000000000000000000000000000000000000000002
+      canonical_sha256: sha256:0000000000000000000000000000000000000000000000000000000000000003
+  content:
+    content_ref: content.yaml
+    raw_sha256: sha256:0000000000000000000000000000000000000000000000000000000000000004
+    canonical_sha256: sha256:0000000000000000000000000000000000000000000000000000000000000005
+  dependencies: []
+  conflicts: []
+  replacement_slots: []
+  replacement_declarations: []
+  namespace_grants:
+    - forge.core

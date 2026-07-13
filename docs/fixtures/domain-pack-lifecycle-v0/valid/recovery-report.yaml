@@ -1,0 +1,8 @@
+schema_version: '0.2'
+domain_pack_recovery_report:
+  authority: candidate_only
+  status: clean
+  active_state: null
+  lifecycle_head_digest: null
+  repaired_artifact_refs: []
+  issues: []

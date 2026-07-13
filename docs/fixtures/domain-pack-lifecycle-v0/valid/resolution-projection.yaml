@@ -1,0 +1,13 @@
+schema_version: '0.2'
+domain_pack_resolution_projection:
+  request_id: resolution.domain-pack.fixture
+  authority: candidate_only
+  status: blocked
+  selected: []
+  dependency_edges: []
+  rejected: []
+  issues:
+    - code: missing_root
+      path: roots
+      message: A fixture with no selected root remains blocked.
+  resolution_digest: sha256:0000000000000000000000000000000000000000000000000000000000000023

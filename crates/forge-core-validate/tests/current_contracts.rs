@@ -630,6 +630,8 @@ fn add_contract_definitions(index: &mut ReferenceIndex) {
         "contracts/requests/request-contract-v0.yaml",
         "contracts/recovery/health-recovery-contract-v0.yaml",
         "contracts/runtimes/runtime-handoff-contract-v0.yaml",
+        "contracts/spec/domain-pack-lifecycle-v0.yaml",
+        "contracts/spec/domain-pack-v0.yaml",
         "contracts/spec/workflow-governance-release-v0.yaml",
         "contracts/spec/workflow-governance-release-admission-v0.yaml",
         "contracts/spec/workflow-governance-retirement-v0.yaml",

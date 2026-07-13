@@ -47,6 +47,24 @@ pub struct DomainPackCandidateMaterial<'a> {
     pub license_raw: &'a [u8],
 }
 
+#[derive(Serialize)]
+struct DomainPackCompositionDigestSubject<'a> {
+    schema_version: &'a str,
+    request_id: &'a StableId,
+    authority: DomainPackCandidateAuthority,
+    core_bundle_digest: &'a str,
+    core_policy_set_digest: &'a str,
+    forge_core_version: &'a str,
+    requirements: &'a DomainPackProjectRequirements,
+    ordered_packs: &'a [DomainPackComposedIdentity],
+    contribution_index: &'a [DomainPackContributionIndexEntry],
+    provided_domain_refs: &'a [StableId],
+    declared_capability_refs: &'a [StableId],
+    composed_bundle: &'a WorkflowGovernanceBundle,
+    gaps: &'a [DomainPackCompositionGap],
+    issues: &'a [DomainPackCompositionIssue],
+}
+
 /// Validate one candidate with exact raw byte evidence. Diagnostics are
 /// stable-sorted and capped. An empty result means structurally composable,
 /// never installed, reviewed, trusted, or active.
@@ -191,7 +209,7 @@ pub fn compose_domain_packs(
         insert_candidate_deterministically(&mut candidate_by_key, key.clone(), candidate);
         match material_by_key.get(&key) {
             Some(material) => {
-                validate_candidate(candidate, material, &input.forge_core_version, &mut issues)
+                validate_candidate(candidate, material, &input.forge_core_version, &mut issues);
             }
             None => issue(
                 &mut issues,
@@ -326,21 +344,17 @@ pub fn compose_domain_packs(
         .max()
         .unwrap_or(0);
     for mut policy in pack_policies {
-        match next_priority.checked_add(1) {
-            Some(priority) => {
-                next_priority = priority;
-                policy.routing.priority = priority;
-                composed_policies.push(policy);
-            }
-            None => {
-                resource_issue(
-                    &mut issues,
-                    "composition.policies.routing.priority",
-                    "effective routing priority exceeds u16",
-                );
-                break;
-            }
-        }
+        let Some(priority) = next_priority.checked_add(1) else {
+            resource_issue(
+                &mut issues,
+                "composition.policies.routing.priority",
+                "effective routing priority exceeds u16",
+            );
+            break;
+        };
+        next_priority = priority;
+        policy.routing.priority = priority;
+        composed_policies.push(policy);
     }
     composed_policies.sort_by(|a, b| {
         a.routing
@@ -397,24 +411,7 @@ pub fn compose_domain_packs(
             .map(|d| d.id.clone())
     }));
 
-    #[derive(Serialize)]
-    struct DigestSubject<'a> {
-        schema_version: &'a str,
-        request_id: &'a StableId,
-        authority: DomainPackCandidateAuthority,
-        core_bundle_digest: &'a str,
-        core_policy_set_digest: &'a str,
-        forge_core_version: &'a str,
-        requirements: &'a DomainPackProjectRequirements,
-        ordered_packs: &'a [DomainPackComposedIdentity],
-        contribution_index: &'a [DomainPackContributionIndexEntry],
-        provided_domain_refs: &'a [StableId],
-        declared_capability_refs: &'a [StableId],
-        composed_bundle: &'a WorkflowGovernanceBundle,
-        gaps: &'a [DomainPackCompositionGap],
-        issues: &'a [DomainPackCompositionIssue],
-    }
-    let composition_digest = canonical_digest(&DigestSubject {
+    let composition_digest = canonical_digest(&DomainPackCompositionDigestSubject {
         schema_version: DOMAIN_PACK_SCHEMA_VERSION,
         request_id: &input.request_id,
         authority: DomainPackCandidateAuthority::CandidateOnly,
@@ -1067,6 +1064,10 @@ fn validate_replacements(
     }
 }
 
+// These arguments are one cohesive accumulator boundary for a single bounded
+// traversal; wrapping the borrowed collections would obscure the macro-driven
+// indexing rules without reducing state or coupling.
+#[allow(clippy::too_many_arguments)]
 fn index_content(
     candidate: &DomainPackCandidateInput,
     pack_ref: &DomainPackVersionReference,

@@ -10,6 +10,7 @@ members = [
   "crates/forge-core-eventlog",
   "crates/forge-core-store",
   "crates/forge-core-workflow-governance-tcb",
+  "crates/forge-core-domain-pack-tcb",
   "crates/forge-core-memory",
   "crates/forge-core-validate",
   "crates/forge-core-kernel",
@@ -25,7 +26,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"

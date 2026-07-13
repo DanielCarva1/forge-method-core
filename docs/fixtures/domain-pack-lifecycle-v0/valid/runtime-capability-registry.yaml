@@ -1,0 +1,7 @@
+schema_version: '0.2'
+domain_pack_runtime_capability_registry:
+  registry_id: registry.domain-pack-capability.fixture
+  registry_version: 1.0.0
+  project_id: project.domain-pack.fixture
+  authority: candidate_only
+  bindings: []

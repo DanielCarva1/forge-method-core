@@ -17,6 +17,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P6b governed Domain Pack resolution, trust, and lifecycle (`0.7.0`).**
+  Closed schema-0.2 contracts and a bounded deterministic resolver preserve
+  compatible locks, reject dependency confusion/equivocation/revocation, and
+  keep pure read-only projections explicitly untrusted. Operator-selected
+  Ed25519 registry and publisher verification plus an operator-protected
+  monotonic no-fork anchor produces an opaque admission snapshot; only the
+  Domain Pack TCB can promote its exact records. Fresh
+  recomputation binds raw package sidecars, composition, runtime capability
+  demands, default-deny sandbox policy, compatibility, and a bounded project
+  snapshot before an opaque commit capability can activate a generation.
+  Intent-exact install, upgrade, rollback, and removal persist every staged raw
+  artifact in a content-addressed object store and publish complete
+  record-addressed immutable generations, a hash-linked ledger, reachable
+  receipts, retained OS locking, CAS, and crash-safe active-pointer replacement.
+  Historical rollback selects an exact reachable receipt and byte-identical
+  lock without colliding with its earlier generation. Removal may persist explicit domain/capability
+  gaps as degraded state; external providers remain denied. The mixed CLI
+  exposes `resolve|status|recover|preflight|apply`, with mutation excluded from
+  the default MCP projection. Fourteen registered contract families, signed
+  and adversarial corpora, and a new aggregate validator check cover the slice.
+  First trust requires an explicit operator provisioning ceremony that pins
+  the exact trust-policy digest; lifecycle preflight/apply never silently
+  perform TOFU. Static filesystem escapes and
+  non-concurrent tamper fail closed. Same-OS-principal race replacement after
+  validation and project mutation after the final snapshot remain outside the
+  cooperative local P6b threat boundary; hostile deployments require OS
+  principal isolation and remote CAS for immutable artifacts.
 - **P6a governed Domain Pack contracts and deterministic composition (`0.6.0`).**
   Five closed schema-0.1 families model candidate manifests, typed content,
   persistent project requirements, exact composition requests, and auditable

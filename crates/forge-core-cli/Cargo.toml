@@ -23,6 +23,7 @@ forge-core-crypto = { path = "../forge-core-crypto" }
 forge-core-eval = { path = "../forge-core-eval" }
 forge-core-eval-harness = { path = "../forge-core-eval-harness" }
 forge-core-decisions = { path = "../forge-core-decisions" }
+forge-core-domain-pack-tcb = { path = "../forge-core-domain-pack-tcb" }
 forge-core-graph = { path = "../forge-core-graph" }
 forge-core-governance = { path = "../forge-core-governance" }
 forge-core-memory = { path = "../forge-core-memory" }

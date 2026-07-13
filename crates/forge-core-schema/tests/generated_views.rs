@@ -57,6 +57,76 @@ fn generated_schemas_cover_v0_contract_surface() {
 }
 
 #[test]
+fn p6b_schema_registry_covers_every_closed_lifecycle_family() {
+    let schemas = generated_contract_schemas();
+    let views = compact_agent_views();
+    for (family, root) in [
+        ("domain_pack_trust_policy", "domain_pack_trust_policy"),
+        (
+            "domain_pack_supply_chain_registry",
+            "domain_pack_supply_chain_registry",
+        ),
+        (
+            "domain_pack_runtime_capability_registry",
+            "domain_pack_runtime_capability_registry",
+        ),
+        (
+            "domain_pack_capability_sandbox_policy",
+            "domain_pack_capability_sandbox_policy",
+        ),
+        (
+            "domain_pack_resolution_request",
+            "domain_pack_resolution_request",
+        ),
+        (
+            "domain_pack_resolution_projection",
+            "domain_pack_resolution_projection",
+        ),
+        ("domain_pack_exact_lock", "domain_pack_exact_lock"),
+        (
+            "domain_pack_compatibility_report",
+            "domain_pack_compatibility_report",
+        ),
+        (
+            "domain_pack_lifecycle_request",
+            "domain_pack_lifecycle_request",
+        ),
+        (
+            "domain_pack_lifecycle_preflight",
+            "domain_pack_lifecycle_preflight",
+        ),
+        ("domain_pack_active_pointer", "domain_pack_active_pointer"),
+        (
+            "domain_pack_lifecycle_ledger",
+            "domain_pack_lifecycle_ledger",
+        ),
+        (
+            "domain_pack_lifecycle_receipt",
+            "domain_pack_lifecycle_receipt",
+        ),
+        ("domain_pack_recovery_report", "domain_pack_recovery_report"),
+    ] {
+        let schema = schemas
+            .iter()
+            .find(|schema| schema.family_id == family)
+            .unwrap_or_else(|| panic!("missing P6b schema {family}"));
+        assert_eq!(schema.root_key, Some(root));
+        assert_eq!(schema.schema["x-forge-family-id"], family);
+        let view = views
+            .iter()
+            .find(|view| view.family_id == family)
+            .unwrap_or_else(|| panic!("missing P6b compact view {family}"));
+        assert_eq!(view.root_key, Some(root));
+        assert!(
+            view.authority_note.contains("candidate")
+                || view.authority_note.contains("trusted")
+                || view.authority_note.contains("cannot")
+                || view.authority_note.contains("required")
+        );
+    }
+}
+
+#[test]
 fn p5d5_retirement_views_preserve_candidate_only_two_axis_boundary() {
     let views = compact_agent_views();
     for (family, root) in [

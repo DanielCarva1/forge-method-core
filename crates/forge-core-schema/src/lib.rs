@@ -1,9 +1,16 @@
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
-    DecisionCloseContractDocument, DomainPackCompositionProjectionDocument,
-    DomainPackCompositionRequestDocument, DomainPackContentDocument, DomainPackManifestDocument,
-    DomainPackProjectRequirementsDocument, FieldEvidenceRegistry, GateContractDocument,
+    DecisionCloseContractDocument, DomainPackActivePointerDocument,
+    DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
+    DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
+    DomainPackContentDocument, DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
+    DomainPackLifecyclePreflightDocument, DomainPackLifecycleReceiptDocument,
+    DomainPackLifecycleRequestDocument, DomainPackManifestDocument,
+    DomainPackProjectRequirementsDocument, DomainPackRecoveryReportDocument,
+    DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
+    DomainPackRuntimeCapabilityRegistryDocument, DomainPackSupplyChainRegistryDocument,
+    DomainPackTrustPolicyDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
@@ -180,6 +187,90 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "DomainPackCompositionProjectionDocument",
             Some("domain_pack_composition_projection"),
             "derived candidate-only projection; composable status and digest do not admit runtime authority",
+        ),
+        schema_artifact::<DomainPackTrustPolicyDocument>(
+            "domain_pack_trust_policy",
+            "DomainPackTrustPolicyDocument",
+            Some("domain_pack_trust_policy"),
+            "candidate policy input only; authored trust rules and keys require protected-path loading and cryptographic verification",
+        ),
+        schema_artifact::<DomainPackSupplyChainRegistryDocument>(
+            "domain_pack_supply_chain_registry",
+            "DomainPackSupplyChainRegistryDocument",
+            Some("domain_pack_supply_chain_registry"),
+            "candidate registry snapshot; records, grants, revocations, and signatures create no authority until trusted verification",
+        ),
+        schema_artifact::<DomainPackRuntimeCapabilityRegistryDocument>(
+            "domain_pack_runtime_capability_registry",
+            "DomainPackRuntimeCapabilityRegistryDocument",
+            Some("domain_pack_runtime_capability_registry"),
+            "operator-owned capability evidence only; declarations do not prove availability or execution permission",
+        ),
+        schema_artifact::<DomainPackCapabilitySandboxPolicyDocument>(
+            "domain_pack_capability_sandbox_policy",
+            "DomainPackCapabilitySandboxPolicyDocument",
+            Some("domain_pack_capability_sandbox_policy"),
+            "default-deny sandbox input; only exact verified core built-ins may be considered for activation",
+        ),
+        schema_artifact::<DomainPackResolutionRequestDocument>(
+            "domain_pack_resolution_request",
+            "DomainPackResolutionRequestDocument",
+            Some("domain_pack_resolution_request"),
+            "candidate-only deterministic resolution input; it cannot install, activate, or mint namespace ownership",
+        ),
+        schema_artifact::<DomainPackResolutionProjectionDocument>(
+            "domain_pack_resolution_projection",
+            "DomainPackResolutionProjectionDocument",
+            Some("domain_pack_resolution_projection"),
+            "derived candidate selection only; resolved status is not lifecycle admission or runtime authority",
+        ),
+        schema_artifact::<DomainPackExactLockDocument>(
+            "domain_pack_exact_lock",
+            "DomainPackExactLockDocument",
+            Some("domain_pack_exact_lock"),
+            "content-addressed lifecycle proposal; only a trusted crash-safe commit may make a generation active",
+        ),
+        schema_artifact::<DomainPackCompatibilityReportDocument>(
+            "domain_pack_compatibility_report",
+            "DomainPackCompatibilityReportDocument",
+            Some("domain_pack_compatibility_report"),
+            "candidate compatibility evidence; authored status cannot waive requirements, trust, sandbox, or core invariants",
+        ),
+        schema_artifact::<DomainPackLifecycleRequestDocument>(
+            "domain_pack_lifecycle_request",
+            "DomainPackLifecycleRequestDocument",
+            Some("domain_pack_lifecycle_request"),
+            "lifecycle intent only; expected-state CAS, retained lock, preflight, and trusted kernel commit remain mandatory",
+        ),
+        schema_artifact::<DomainPackLifecyclePreflightDocument>(
+            "domain_pack_lifecycle_preflight",
+            "DomainPackLifecyclePreflightDocument",
+            Some("domain_pack_lifecycle_preflight"),
+            "fresh candidate preflight evidence; a clean label cannot perform or authorize mutation",
+        ),
+        schema_artifact::<DomainPackActivePointerDocument>(
+            "domain_pack_active_pointer",
+            "DomainPackActivePointerDocument",
+            Some("domain_pack_active_pointer"),
+            "content-addressed active-generation pointer trusted only after strict store recovery and ledger verification",
+        ),
+        schema_artifact::<DomainPackLifecycleLedgerDocument>(
+            "domain_pack_lifecycle_ledger",
+            "DomainPackLifecycleLedgerDocument",
+            Some("domain_pack_lifecycle_ledger"),
+            "hash-chained lifecycle history; serialization alone cannot prove an operation committed",
+        ),
+        schema_artifact::<DomainPackLifecycleReceiptDocument>(
+            "domain_pack_lifecycle_receipt",
+            "DomainPackLifecycleReceiptDocument",
+            Some("domain_pack_lifecycle_receipt"),
+            "commit receipt evidence requiring exact pointer, lock, preflight, and ledger-chain verification",
+        ),
+        schema_artifact::<DomainPackRecoveryReportDocument>(
+            "domain_pack_recovery_report",
+            "DomainPackRecoveryReportDocument",
+            Some("domain_pack_recovery_report"),
+            "candidate recovery assessment only; ambiguous state must fail closed at the trusted store boundary",
         ),
         schema_artifact::<WorkflowMigrationPlanDocument>(
             "workflow_migration_plan",
@@ -459,6 +550,9 @@ fn contains_enum(value: &Value) -> bool {
     }
 }
 
+// The exhaustive authority map intentionally stays beside schema generation so
+// every published family has one auditable, non-authority statement.
+#[allow(clippy::too_many_lines)]
 fn authority_note(family_id: &str) -> &'static str {
     match family_id {
         "field_evidence_registry" => {
@@ -492,6 +586,48 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "domain_pack_composition_projection" => {
             "derived candidate-only result; composable status requires later trusted lifecycle admission"
+        }
+        "domain_pack_trust_policy" => {
+            "authored trust policy is candidate input; protected loading and cryptographic verification remain mandatory"
+        }
+        "domain_pack_supply_chain_registry" => {
+            "registry declarations cannot self-grant namespace ownership or supply-chain assurance"
+        }
+        "domain_pack_runtime_capability_registry" => {
+            "exact package, subject, provider, implementation, status, and evidence checks are required for operator-owned bindings"
+        }
+        "domain_pack_capability_sandbox_policy" => {
+            "default deny remains authority; declarations cannot authorize external execution"
+        }
+        "domain_pack_resolution_request" => {
+            "resolution input is candidate-only and cannot install or activate a pack"
+        }
+        "domain_pack_resolution_projection" => {
+            "resolved selection remains candidate evidence pending trust, composition, capability, compatibility, and lifecycle admission"
+        }
+        "domain_pack_exact_lock" => {
+            "exact lock is content-addressed intent; only trusted crash-safe commit can activate its generation"
+        }
+        "domain_pack_compatibility_report" => {
+            "compatibility is derived candidate evidence and cannot waive persistent requirements or core invariants"
+        }
+        "domain_pack_lifecycle_request" => {
+            "lifecycle intent requires expected-state CAS and cannot mutate state by deserialization"
+        }
+        "domain_pack_lifecycle_preflight" => {
+            "clean preflight is short-lived candidate evidence, not commit authority"
+        }
+        "domain_pack_active_pointer" => {
+            "active pointer is trusted only after strict recovery, digest, lock, and ledger verification"
+        }
+        "domain_pack_lifecycle_ledger" => {
+            "hash-chain verification and strict store recovery are required before ledger records are authoritative"
+        }
+        "domain_pack_lifecycle_receipt" => {
+            "receipt serialization alone cannot prove a lifecycle transaction committed"
+        }
+        "domain_pack_recovery_report" => {
+            "recovery assessment is candidate-only; ambiguous state must remain blocked"
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"

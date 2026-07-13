@@ -407,7 +407,7 @@ fn persistent_requirement_ids_and_semantic_limits_fail_closed() {
         && issue.path == "requirements.requirement_set_id"));
     assert!(issues.iter().any(|issue| issue.code
         == DomainPackCompositionIssueCode::InvalidIdentity
-        && issue.path.ends_with(".id")));
+        && issue.path.rsplit('.').next() == Some("id")));
     assert!(issues.iter().any(|issue| issue.code
         == DomainPackCompositionIssueCode::InvalidIdentity
         && issue.path.ends_with(".domain_id")));
@@ -526,6 +526,9 @@ fn configure_policy_replacement(
 }
 
 #[test]
+// This single scenario intentionally keeps the valid bilateral replacement and
+// all hostile variants together so their shared fixture cannot drift.
+#[allow(clippy::too_many_lines)]
 fn bilateral_policy_replacement_substitutes_while_hostile_variants_fail_closed() {
     let mut request = read_request("neutral-two-pack.yaml");
     let mut owned = owned_materials(&request);

@@ -1,0 +1,29 @@
+schema_version: '0.2'
+domain_pack_resolution_request:
+  request_id: resolution.domain-pack.fixture
+  authority: candidate_only
+  project_id: project.domain-pack.fixture
+  forge_core_version: 0.6.0
+  core:
+    bundle_id: bundle.domain-pack.fixture
+    bundle_digest: sha256:0000000000000000000000000000000000000000000000000000000000000020
+    policy_set_digest: sha256:0000000000000000000000000000000000000000000000000000000000000021
+    bundle:
+      id: bundle.domain-pack.fixture
+      policies: []
+  requirements:
+    schema_version: '0.1'
+    domain_pack_project_requirements:
+      project_id: project.domain-pack.fixture
+      requirement_set_id: requirements.domain-pack.fixture
+      required_domains: []
+  roots: []
+  current_lock: null
+  policy:
+    selection: minimal_change_then_highest_compatible
+    prerelease: explicit_only
+    duplicate_version: reject_divergent_content
+    dependency_source: exact_publisher_only
+    unrelated_updates: preserve_locked
+  registry_snapshot_digest: sha256:0000000000000000000000000000000000000000000000000000000000000022
+  candidates: []

@@ -26,8 +26,14 @@ use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
-    DecisionCloseContractDocument, DomainPackCompositionProjectionDocument,
-    DomainPackCompositionRequestDocument, FieldEvidenceRegistry, GateContractDocument,
+    DecisionCloseContractDocument, DomainPackActivePointerDocument,
+    DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
+    DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
+    DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
+    DomainPackLifecycleReceiptDocument, DomainPackRecoveryReportDocument,
+    DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
+    DomainPackRuntimeCapabilityRegistryDocument, DomainPackSupplyChainRegistryDocument,
+    DomainPackTrustPolicyDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
     ToolEffectContractDocument, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusClass,
@@ -72,6 +78,12 @@ use forge_core_validate::{
     validate_yaml_known_repo_references, validate_yaml_source_id_references, Diagnostic,
     DiagnosticCode, DiagnosticSeverity, ReferenceIndex, ReferenceKind, ValidationReport,
 };
+
+struct DomainPackOwnedMaterial {
+    manifest: Vec<u8>,
+    content: Vec<u8>,
+    license: Vec<u8>,
+}
 
 /// Outcome of a single named validation check (passed/failed + counts).
 #[derive(Debug, Clone, Serialize)]
@@ -343,6 +355,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_release_v2_admission(root, &mut summary);
         validate_workflow_retirement_checkpoint(root, &mut summary);
         validate_domain_pack_foundation(root, &mut summary);
+        validate_domain_pack_lifecycle_foundation(root, &mut summary);
     }
 
     summary.finish();
@@ -379,11 +392,6 @@ fn validate_domain_pack_foundation(root: &Path, summary: &mut ValidateSummary) {
         ) else {
             continue;
         };
-        struct OwnedMaterial {
-            manifest: Vec<u8>,
-            content: Vec<u8>,
-            license: Vec<u8>,
-        }
         let mut owned = Vec::new();
         for candidate in &request.domain_pack_composition_request.candidates {
             let manifest = &candidate.manifest.domain_pack_manifest;
@@ -408,7 +416,7 @@ fn validate_domain_pack_foundation(root: &Path, summary: &mut ValidateSummary) {
                 }
             }
             if bytes.len() == 3 {
-                owned.push(OwnedMaterial {
+                owned.push(DomainPackOwnedMaterial {
                     manifest: bytes.remove(0),
                     content: bytes.remove(0),
                     license: bytes.remove(0),
@@ -445,6 +453,147 @@ fn validate_domain_pack_foundation(root: &Path, summary: &mut ValidateSummary) {
         }
     }
     summary.add_report("domain_pack_foundation", report);
+}
+
+/// Validate the repository-owned P6b schema/corpus as one bounded aggregate.
+/// Valid fixtures remain candidate/evidence documents, while explicit
+/// authority-escalation fixtures must continue to fail closed.
+fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut ValidateSummary) {
+    type FixtureShapePredicate = fn(&str) -> bool;
+    const SPEC_REF: &str = "contracts/spec/domain-pack-lifecycle-v0.yaml";
+    const VALID: &[(&str, FixtureShapePredicate)] = &[
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/trust-policy.yaml",
+            parses_p6b::<DomainPackTrustPolicyDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/supply-chain-registry.yaml",
+            parses_p6b::<DomainPackSupplyChainRegistryDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/runtime-capability-registry.yaml",
+            parses_p6b::<DomainPackRuntimeCapabilityRegistryDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/capability-sandbox-policy.yaml",
+            parses_p6b::<DomainPackCapabilitySandboxPolicyDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/resolution-request.yaml",
+            parses_p6b::<DomainPackResolutionRequestDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/resolution-projection.yaml",
+            parses_p6b::<DomainPackResolutionProjectionDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml",
+            parses_p6b::<DomainPackExactLockDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/compatibility-report.yaml",
+            parses_p6b::<DomainPackCompatibilityReportDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/active-pointer.yaml",
+            parses_p6b::<DomainPackActivePointerDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/lifecycle-ledger.yaml",
+            parses_p6b::<DomainPackLifecycleLedgerDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/lifecycle-receipt.yaml",
+            parses_p6b::<DomainPackLifecycleReceiptDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/valid/recovery-report.yaml",
+            parses_p6b::<DomainPackRecoveryReportDocument>,
+        ),
+    ];
+    const INVALID: &[(&str, FixtureShapePredicate)] = &[
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/adversarial/manifest-self-grant.invalid.yaml",
+            rejects_p6b::<forge_core_contracts::DomainPackManifestDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/adversarial/trust-policy-active-authority.invalid.yaml",
+            rejects_p6b::<DomainPackTrustPolicyDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/adversarial/sandbox-external-allow.invalid.yaml",
+            rejects_p6b::<DomainPackCapabilitySandboxPolicyDocument>,
+        ),
+        (
+            "docs/fixtures/domain-pack-lifecycle-v0/adversarial/recovery-authoritative.invalid.yaml",
+            rejects_p6b::<DomainPackRecoveryReportDocument>,
+        ),
+    ];
+
+    let mut report = ValidationReport::new();
+    match fs::read_to_string(root.join(SPEC_REF)) {
+        Ok(text) => {
+            let actual = yaml_serde::from_str::<serde_json::Value>(&text);
+            let compiled = yaml_serde::from_str::<serde_json::Value>(include_str!(
+                "../../../contracts/spec/domain-pack-lifecycle-v0.yaml"
+            ));
+            if actual.ok() != compiled.ok() {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    SPEC_REF,
+                    "P6b lifecycle spec differs from the compiled repository contract",
+                ));
+            }
+        }
+        Err(error) => report.push(Diagnostic::error(
+            DiagnosticCode::ReadFileFailed,
+            SPEC_REF,
+            error.to_string(),
+        )),
+    }
+    for (reference, parser) in VALID {
+        match fs::read_to_string(root.join(reference)) {
+            Ok(text) if parser(&text) => {}
+            Ok(_) => report.push(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
+                *reference,
+                "P6b valid fixture must be a closed schema 0.2 document",
+            )),
+            Err(error) => report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                *reference,
+                error.to_string(),
+            )),
+        }
+    }
+    for (reference, rejection) in INVALID {
+        match fs::read_to_string(root.join(reference)) {
+            Ok(text) if rejection(&text) => {}
+            Ok(_) => report.push(Diagnostic::error(
+                DiagnosticCode::WorkflowGovernanceInvalid,
+                *reference,
+                "P6b adversarial fixture no longer fails closed",
+            )),
+            Err(error) => report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                *reference,
+                error.to_string(),
+            )),
+        }
+    }
+    summary.add_report("domain_pack_lifecycle_foundation", report);
+}
+
+fn parses_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {
+    let schema_is_v02 = yaml_serde::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|value| value.get("schema_version").cloned())
+        .is_some_and(|value| value == "0.2");
+    schema_is_v02 && yaml_serde::from_str::<T>(text).is_ok()
+}
+
+fn rejects_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {
+    yaml_serde::from_str::<T>(text).is_err()
 }
 
 fn read_domain_pack_yaml<T: serde::de::DeserializeOwned>(

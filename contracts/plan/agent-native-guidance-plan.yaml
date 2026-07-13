@@ -56,17 +56,19 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.6.0"
+    version: "0.7.0"
     publication_state: "source_pullable"
-    minimum_consumer_version: "0.5.0"
+    minimum_consumer_version: "0.6.0"
     guide_payload_schema: "0.2"
     domain_pack_schema: "0.1"
+    domain_pack_lifecycle_schema: "0.2"
     workflow_release_identity: "0.4.0"
     boundary: >-
-      Package SemVer identifies the pullable P6a contract/composition
-      checkpoint. It does not rewrite the frozen five-release
-      workflow-governance history or activate a pack, and no tag is claimed
-      before the release matrix succeeds.
+      Package SemVer identifies the pullable P6b governed lifecycle checkpoint.
+      It does not rewrite the frozen five-release workflow-governance history;
+      lifecycle authority remains opaque, monotonic, project-bound, and
+      operator-rooted. No tag is claimed before the cumulative P6 release
+      matrix succeeds.
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -377,20 +379,20 @@ phases:
         - "extend Forge through governed domain knowledge without growing implicit core authority"
         - "preserve deterministic composition, explicit gaps, and candidate-only boundaries"
     active_checkpoint:
-      id: "P6a-domain-pack-contract-and-composition"
+      id: "P6b-pack-lifecycle-resolution-and-trust"
       status: "completed"
       scope:
-        - "define closed content-addressed domain-pack contracts and deterministic composition"
-        - "keep pack knowledge outside implicit core, install, activation, or mutation authority"
-        - "ship package 0.6.0 while preserving the frozen five-release 42-policy workflow registry"
+        - "govern deterministic resolution, exact locks, trust, capability confinement, and lifecycle mutation"
+        - "persist exact raw objects and complete immutable generations behind one crash-safe pointer"
+        - "ship package 0.7.0 while preserving the frozen five-release 42-policy workflow registry"
     next_slice:
-      id: "P6b-pack-lifecycle-resolution-and-trust"
+      id: "P6c-learning-promotion-and-reviewed-registry"
       status: "pending"
       scope:
-        - "add deterministic resolution, lock state, staged lifecycle transactions, and trust policy"
-        - "prove rollback, poisoning resistance, capability confinement, and actionable gaps"
+        - "capture local learning without granting authority"
+        - "add evidence-backed promotion, independent review, conflicts, deprecation, revocation, and supersession"
     following_slices:
-      - "P6c learning promotion and reviewed registry"
+      - "P6d reference pack and novel-domain proof"
     checkpoint_evidence:
       - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
       - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
@@ -716,6 +718,7 @@ phases:
         publication: "one pullable pack-contract/composition checkpoint after full workspace gates"
       - id: "P6b-pack-lifecycle-resolution-and-trust"
         size: "large"
+        status: "completed"
         depends_on: ["P6a-domain-pack-contract-and-composition"]
         outcome: >-
           Agents can inspect, install, validate, activate, upgrade, roll back,
@@ -732,9 +735,19 @@ phases:
           - "untrusted pack knowledge cannot authorize mutation or suppress universal assurance obligations"
           - "upgrade and rollback preserve reproducible lock state and explain every semantic change"
           - "agents receive actionable capability gaps instead of attempting unavailable evaluators or Adapters"
-        publication: "one pullable governed lifecycle checkpoint after full workspace gates"
+        implementation_evidence:
+          - "fourteen closed schema-0.2 contract families with inventory/schema registration and valid/adversarial corpus"
+          - "bounded deterministic minimal-change resolver whose pure output remains explicitly_untrusted"
+          - "operator-selected Ed25519 registry/publisher verification with namespace, revocation, equivocation, audience, role, freshness, and monotonic no-fork anchor enforcement"
+          - "default-deny trust/capability/sandbox evaluation; exact core built-ins only and all external providers denied"
+          - "opaque TCB authorization freshly recomputes verified resolution, raw-sidecar composition, explicit capability demands, project snapshot, trust, and compatibility"
+          - "content-addressed exact raw object store, record-addressed complete generations, hash-linked ledger, reachable receipts, retained OS lock, CAS, and crash-safe active-pointer recovery"
+          - "governed intent-exact install/upgrade/remove/rollback with byte-identical historical rollback and degraded removal preserving explicit domain/capability gaps"
+          - "agent CLI resolve/status/recover/preflight/apply plus aggregate repository validation"
+        publication: "one pullable governed lifecycle checkpoint after focused gates; cumulative full-workspace gate remains deferred to P6 completion"
       - id: "P6c-learning-promotion-and-reviewed-registry"
         size: "medium_to_large"
+        status: "pending"
         depends_on: ["P6b-pack-lifecycle-resolution-and-trust"]
         outcome: >-
           Useful local learning can become reusable domain knowledge only through
@@ -753,6 +766,7 @@ phases:
         publication: "one pullable learning-promotion checkpoint after full workspace gates"
       - id: "P6d-reference-pack-and-novel-domain-proof"
         size: "large"
+        status: "pending"
         depends_on: ["P6c-learning-promotion-and-reviewed-registry"]
         outcome: >-
           A real reference pack proves that Forge can guide an initially ignorant
@@ -829,12 +843,13 @@ first_executable_slice:
     - "P5d.4b complete catalog accounting at 42 migration / 47 compatibility-only / 3 quarantined / 18 domain-pack candidates, with 139 historical, 156 Batch A, and 169 aggregate clean checks"
     - "P5d.5 frozen 110-workflow evidence archive, 68-workflow operational catalog, signed all-42 retirement checkpoint, typed tombstones, five-surface deletion proof, and 170 aggregate clean checks"
     - "P6a five closed Domain Pack families, exact manifest/content sidecars, deterministic bounded composition, bilateral whole-policy replacement, read-only confined CLI, neutral removal corpus, unchanged 42-policy core authority, and 171 aggregate clean checks"
+    - "P6b fourteen closed lifecycle families, signed supply-chain verification, deterministic exact resolution, default-deny capability confinement, fresh project-bound opaque activation, crash-safe immutable generations, governed lifecycle CLI, adversarial corpus, and 172 aggregate clean checks"
   next_action: >-
-    P5 and P6a are complete. Execute P6b next by adding deterministic pack
-    resolution, exact lock state, staged install/upgrade/remove transactions,
-    rollback, and explicit trust policy. Keep all pack output candidate-only
-    until the lifecycle boundary proves supply-chain integrity, capability
-    confinement, project compatibility, and atomic recovery.
+    P5, P6a, and P6b are complete. Execute P6c next by adding evidence-backed
+    local learning capture, promotion stages, semantic review, versioning,
+    conflict analysis, and a reviewed registry. Keep learned or proposed
+    knowledge non-authoritative until durable evidence and independent review
+    satisfy the exact promotion boundary.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

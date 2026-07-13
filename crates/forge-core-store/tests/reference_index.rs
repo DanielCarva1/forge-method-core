@@ -375,6 +375,8 @@ fn store_known_paths_satisfy_current_generic_known_refs() {
     let known_paths = collect_known_repo_paths(&root);
     assert!(known_paths.contains("contracts"));
     assert!(known_paths.contains("docs/fixtures/operation-contract-v0"));
+    assert!(known_paths.contains("docs/fixtures/domain-pack-lifecycle-v0"));
+    assert!(known_paths.contains("docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml"));
     assert!(known_paths.contains("contracts/workflows/discover-intent.yaml"));
     assert!(!root
         .join("contracts/workflows/discover-intent.yaml")
@@ -382,6 +384,27 @@ fn store_known_paths_satisfy_current_generic_known_refs() {
 
     let report = validate_yaml_known_repo_references(&collection.documents, &known_paths);
     assert_report_ok("known repo refs", report);
+}
+
+#[test]
+fn p6b_spec_is_a_contract_definition_and_corpus_is_known() {
+    let root = repo_root();
+    let index = build_reference_index(&root).expect("build P6b-aware reference index");
+    assert_eq!(
+        index.kind_of("contracts/spec/domain-pack-lifecycle-v0.yaml"),
+        Some(forge_core_validate::ReferenceKind::ContractDefinition)
+    );
+    let known = collect_known_repo_paths(&root);
+    for reference in [
+        "docs/fixtures/domain-pack-lifecycle-v0/valid/resolution-request.yaml",
+        "docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml",
+        "docs/fixtures/domain-pack-lifecycle-v0/adversarial/sandbox-external-allow.invalid.yaml",
+    ] {
+        assert!(
+            known.contains(reference),
+            "missing known P6b path {reference}"
+        );
+    }
 }
 
 #[test]

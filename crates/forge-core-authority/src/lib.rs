@@ -11,6 +11,7 @@
 //! authorization.
 
 pub mod attestation;
+pub mod domain_pack_supply_chain;
 pub mod execution_handoff;
 pub mod principal_registry;
 pub mod workflow_authority;
@@ -21,6 +22,17 @@ pub mod workflow_retirement;
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
     AttestationVerifier, CanonicalIntent,
+};
+pub use domain_pack_supply_chain::{
+    domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,
+    domain_pack_registry_signing_bytes, domain_pack_registry_snapshot_digest,
+    verify_domain_pack_supply_chain_snapshot, AnchoredDomainPackSupplyChainSnapshot,
+    DomainPackRegistryAnchor, DomainPackRegistryAnchorAdvance, DomainPackRegistryAnchorReplayAudit,
+    DomainPackRegistryAnchorVersion, DomainPackSupplyChainAuditAuthority,
+    DomainPackSupplyChainError, VerifiedDomainPackRegistrySignerAudit,
+    VerifiedDomainPackSupplyChainEntry, VerifiedDomainPackSupplyChainEntryAudit,
+    VerifiedDomainPackSupplyChainSnapshot, VerifiedDomainPackSupplyChainSnapshotAudit,
+    DOMAIN_PACK_PUBLISHER_SIGNATURE_DOMAIN, DOMAIN_PACK_REGISTRY_SIGNATURE_DOMAIN,
 };
 pub use execution_handoff::{
     ExecutionError, ExecutionExecutor, ExecutionPayloadBinding, ExecutionRequest, ExecutionResult,

@@ -1,0 +1,21 @@
+schema_version: '0.2'
+domain_pack_compatibility_report:
+  report_id: report.domain-pack-compatibility.fixture
+  authority: candidate_only
+  operation:
+    kind: install
+    root:
+      publisher: forge.fixture
+      name: foundation
+  from_lock_digest: null
+  to_lock_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+  from_composition_digest: null
+  to_composition_digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+  changes: []
+  requirement_impacts: []
+  capability_impacts: []
+  receipt_policy: invalidate_all
+  universal_core_unchanged: true
+  status: compatible
+  issues: []
+  report_digest: sha256:0000000000000000000000000000000000000000000000000000000000000003

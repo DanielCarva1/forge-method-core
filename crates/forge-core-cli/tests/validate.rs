@@ -194,6 +194,16 @@ fn merged_validation_root(label: &str) -> PathBuf {
         &root.join("docs").join("fixtures").join("domain-pack-v0"),
         &temp.join("docs").join("fixtures").join("domain-pack-v0"),
     );
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
+    );
     // The ledger lives in the core repo's sibling sidecar via the Project Link;
     // fall back to a repo-local copy for repos that still ship it themselves.
     let ledger_source = [
@@ -1598,6 +1608,62 @@ fn validate_library_passes_current_repo() {
         .expect("P6a aggregate Domain Pack check");
     assert_eq!(domain_pack_check.status, ValidationStatus::Passed);
     assert_eq!(domain_pack_check.diagnostics, 0);
+    let lifecycle_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_lifecycle_foundation")
+        .expect("P6b aggregate Domain Pack lifecycle check");
+    assert_eq!(lifecycle_check.status, ValidationStatus::Passed);
+    assert_eq!(lifecycle_check.diagnostics, 0);
+}
+
+fn assert_domain_pack_lifecycle_check_failed(
+    summary: &forge_core_cli::ValidateSummary,
+    path: &str,
+) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_lifecycle_foundation")
+        .expect("aggregate P6b lifecycle check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected P6b diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+#[test]
+fn domain_pack_lifecycle_aggregate_rejects_missing_and_authority_shortcut_drift() {
+    const LOCK_REF: &str = "docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml";
+    const ADVERSARIAL_REF: &str =
+        "docs/fixtures/domain-pack-lifecycle-v0/adversarial/trust-policy-active-authority.invalid.yaml";
+
+    let clean = merged_validation_root("p6b-lifecycle-clean");
+    let clean_summary = run_validate(&clean);
+    let clean_check = clean_summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_lifecycle_foundation")
+        .expect("clean P6b lifecycle aggregate");
+    assert_eq!(clean_check.status, ValidationStatus::Passed);
+
+    let missing = merged_validation_root("p6b-lifecycle-missing-lock");
+    fs::remove_file(missing.join(LOCK_REF)).expect("remove exact lock fixture");
+    assert_domain_pack_lifecycle_check_failed(&run_validate(&missing), LOCK_REF);
+
+    let shortcut = merged_validation_root("p6b-lifecycle-authority-shortcut");
+    fs::copy(
+        shortcut.join("docs/fixtures/domain-pack-lifecycle-v0/valid/trust-policy.yaml"),
+        shortcut.join(ADVERSARIAL_REF),
+    )
+    .expect("replace adversarial policy with an accepted document");
+    assert_domain_pack_lifecycle_check_failed(&run_validate(&shortcut), ADVERSARIAL_REF);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {

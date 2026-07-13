@@ -73,7 +73,7 @@ cannot select the executable policy, advance phase, authorize completion, or
 write the workflow ledger. New agent integrations should use `workflow
 init|next|resume` instead.
 
-### Governed domain knowledge (P6a Domain Packs)
+### Governed domain knowledge (P6 Domain Packs)
 
 When core does not know a product domain, it must expose the gap rather than
 let a confident agent fabricate readiness. Domain Packs are closed,
@@ -95,12 +95,40 @@ forge-core domain-pack compose \
   --artifact-root <root> --json
 ```
 
-Both commands are read-only. Output is always `candidate_only`; even a
-`composable` result cannot install, trust, activate, execute, or grant mutation
-authority. Project domain requirements live independently of packs, so removing
-one produces explicit `missing_domain` / `missing_capability` gaps. P6b will add
-the governed lifecycle and supply-chain trust boundary; the real reference game
-pack remains P6d rather than special-case Rust core logic.
+`validate`, `compose`, and `resolve` are read-only. Pure resolution remains
+`candidate_only` and `explicitly_untrusted`; a registry-shaped YAML file cannot
+claim cryptographic assurance. P6b adds `status`, `recover`, `preflight`, and `apply`. The mutating path
+requires an operator-selected signed registry plus monotonic no-fork anchor
+outside the project/state/artifact roots, publisher signatures, an exact lock,
+every raw artifact sidecar, a fresh bounded project snapshot, default-deny
+capability/sandbox policy, and compatibility recomputation under retained
+locks. Only the opaque anchored TCB capability can activate one complete
+record-addressed immutable generation after its exact raw objects are durable.
+Operation intent is enforced: install adds its previously absent root, upgrade binds old
+and target state, remove deletes an active coordinate, and rollback selects a
+reachable receipt and byte-identical historical lock. Project domain requirements
+live independently of packs, so removal may activate a deliberately degraded
+lock that preserves explicit `missing_domain` / `missing_capability` gaps. See
+`forge-core domain-pack --help` for the machine-oriented argument surface. The
+reviewed real reference pack remains P6d rather than special-case Rust core
+logic.
+
+The first trust anchor requires an explicit operator provisioning ceremony;
+`preflight` and `apply` never silently trust a registry on first use. The
+ceremony places the crash-safe anchor beside the operator-selected registry;
+it pins the exact trust-policy digest, and later invocations accept only its
+direct signed successor under that same policy or a freshly reverified
+exact-head replay. Keep that directory under operator control and
+outside project, artifact, and `.forge-method` roots.
+
+P6b's local filesystem boundary is cooperative between processes running as the
+same OS principal. Static symlink, junction, reparse-point, traversal, and
+special-file escapes fail closed, as does non-concurrent digest or protocol
+state tampering. P6b does not claim isolation from a malicious process with the
+same OS principal that race-replaces a validated filesystem node or mutates the
+project after its final snapshot check. Use separate OS principals and
+permissions, and a remote CAS where immutable artifacts cross a hostile trust
+boundary, for hostile environments.
 
 ### One bootstrap command per chat (the `start-forge` skill)
 

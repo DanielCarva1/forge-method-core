@@ -13,6 +13,9 @@ pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
 pub mod domain_pack;
+pub mod domain_pack_lifecycle;
+pub mod domain_pack_policy;
+pub mod domain_pack_resolution;
 pub mod eval_run;
 pub mod evidence;
 pub mod execution_principal;
@@ -65,6 +68,9 @@ pub use decision::{
     DecisionStatus,
 };
 pub use domain_pack::*;
+pub use domain_pack_lifecycle::*;
+pub use domain_pack_policy::*;
+pub use domain_pack_resolution::*;
 pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
 pub use execution_principal::ExecutionPrincipal;

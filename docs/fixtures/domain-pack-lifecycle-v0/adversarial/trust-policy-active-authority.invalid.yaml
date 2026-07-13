@@ -1,0 +1,11 @@
+schema_version: '0.2'
+domain_pack_trust_policy:
+  policy_id: policy.domain-pack.attacker
+  policy_version: 1.0.0
+  audience: forge.fixture
+  authority: active
+  registry_keys: []
+  required_registry_signature_threshold: 0
+  minimum_activation_assurance: supply_chain_verified
+  rules: []
+  default_disposition: activate_declarative_knowledge_and_bound_built_ins

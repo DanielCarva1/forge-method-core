@@ -784,7 +784,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "forge-contract-validator"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-cli",
  "yaml_serde",
@@ -792,7 +792,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-authority"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ed25519-dalek",
  "forge-core-command-surface",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "asn1-rs",
  "assert_cmd",
@@ -819,6 +819,7 @@ dependencies = [
  "forge-core-contracts",
  "forge-core-crypto",
  "forge-core-decisions",
+ "forge-core-domain-pack-tcb",
  "forge-core-eval",
  "forge-core-eval-harness",
  "forge-core-governance",
@@ -854,11 +855,11 @@ dependencies = [
 
 [[package]]
 name = "forge-core-command-surface"
-version = "0.6.0"
+version = "0.7.0"
 
 [[package]]
 name = "forge-core-contracts"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "schemars",
  "serde",
@@ -868,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-crypto"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "asn1-rs",
  "base64",
@@ -899,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-decisions"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-authority",
  "forge-core-contracts",
@@ -914,8 +915,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-domain-pack-tcb"
+version = "0.7.0"
+dependencies = [
+ "ed25519-dalek",
+ "forge-core-authority",
+ "forge-core-contracts",
+ "forge-core-decisions",
+ "forge-core-store",
+ "getrandom 0.3.4",
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
+ "yaml_serde",
+]
+
+[[package]]
 name = "forge-core-eval"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-validate",
@@ -925,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-eval-harness"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eval",
@@ -937,7 +955,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-eventlog"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-store",
  "serde",
@@ -946,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-governance"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
@@ -960,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-graph"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-validate",
@@ -970,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-kernel"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ed25519-dalek",
  "forge-core-authority",
@@ -991,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-memory"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
@@ -1006,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-protocol-mcp"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ed25519-dalek",
  "forge-core-authority",
@@ -1030,7 +1048,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-research"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
@@ -1047,7 +1065,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-schema"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "schemars",
@@ -1057,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-store"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "crc32c",
  "criterion",
@@ -1077,7 +1095,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-trace"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1085,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-validate"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "criterion",
  "forge-core-contracts",
@@ -1099,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-workflow-governance-tcb"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",

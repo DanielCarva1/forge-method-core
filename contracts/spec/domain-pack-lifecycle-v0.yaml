@@ -1,0 +1,236 @@
+schema_version: "0.2"
+domain_pack_lifecycle_spec:
+  id: "spec.domain-pack-lifecycle-v0"
+  status: "implementation"
+  purpose: >-
+    Resolve, trust-assess, activate, upgrade, remove, and roll back Domain Packs
+    without allowing package-authored metadata to mint authority or exposing a
+    partially activated project domain model.
+  authority_boundary:
+    serialized_documents: "evidence_and_requests_only"
+    activation_authority: "opaque_kernel_preflight_consumed_by_domain_pack_tcb"
+    universal_core: "sealed_and_unchanged"
+    semantic_review: "deferred_to_p6c"
+    external_execution: "denied_in_p6b"
+    rollback_protection: >-
+      Local crash recovery, hash-chain continuity, and an operator-protected
+      monotonic registry anchor are enforced. An old still-valid registry
+      snapshot, same-generation fork, or skipped generation cannot mint the
+      opaque activation capability.
+  schema_families:
+    version: "0.2"
+    roots:
+      - "domain_pack_supply_chain_registry"
+      - "domain_pack_trust_policy"
+      - "domain_pack_runtime_capability_registry"
+      - "domain_pack_capability_sandbox_policy"
+      - "domain_pack_resolution_request"
+      - "domain_pack_resolution_projection"
+      - "domain_pack_exact_lock"
+      - "domain_pack_compatibility_report"
+      - "domain_pack_lifecycle_request"
+      - "domain_pack_lifecycle_preflight"
+      - "domain_pack_active_pointer"
+      - "domain_pack_lifecycle_ledger"
+      - "domain_pack_lifecycle_receipt"
+      - "domain_pack_recovery_report"
+    rules:
+      - "all roots and nested records deny unknown fields"
+      - "all serialized authority fields are evidence labels, never opaque capabilities"
+      - "P6a manifest/content/composition documents remain frozen at schema 0.1"
+  supply_chain:
+    trust_root: >-
+      The operator selects a protected trust-policy path outside the consumer
+      project, artifact root, and Forge state root. The registry plus its
+      monotonic anchor share that protected root. Registry and publisher
+      signatures are verified against exact domain-separated canonical subjects.
+    initial_anchor: >-
+      Creating the first registry anchor requires an explicit operator
+      provisioning ceremony. Lifecycle preflight and apply fail closed when the
+      anchor is absent and never silently perform trust on first use. The
+      ceremony pins the exact trust-policy digest; later registry snapshots
+      verified under a different policy fail closed.
+    monotonic_anchor: >-
+      Registry id, audience, generation, and snapshot digest are restored only
+      from operator-protected state. A retained OS lock serializes verify,
+      compare-and-advance/replay, crash-safe head persistence, and lifecycle
+      authorization. Exact-head replay requires fresh crypto verification.
+    assurance_levels:
+      - "local_explicit"
+      - "supply_chain_verified"
+      - "explicitly_untrusted"
+    forbidden_claims:
+      - "trusted_content"
+      - "semantically_safe"
+      - "reviewed_knowledge"
+    namespace_ownership: >-
+      Namespace grants come only from the verified registry snapshot. A
+      manifest namespace is a proposal and cannot grant itself ownership.
+    equivocation: >-
+      Two records with the same publisher, name, and version but different
+      package, manifest, content, license, or registry-record digests block the
+      entire coordinate; last-write-wins is forbidden.
+    revocation: >-
+      Revoked exact package identities cannot enter new resolution, upgrade,
+      activation, or rollback. Removal of a revoked active pack remains allowed.
+  resolution:
+    algorithm:
+      - "bound and validate the complete candidate universe before search"
+      - "discard candidates absent from the supply-chain admission universe"
+      - "group by exact publisher and name, then strict semantic version"
+      - "reject divergent duplicate versions before selecting anything"
+      - "preserve a compatible current lock unless the coordinate is explicitly targeted"
+      - "otherwise try stable versions in descending semantic-version order"
+      - "select the lexicographically smallest unresolved coordinate"
+      - "resolve only exact-publisher dependencies and enforce exact required digests"
+      - "use bounded deterministic backtracking and reject resource exhaustion"
+      - "topologically order the selected graph with lexical tie breaking"
+      - "keep pure resolver output explicitly_untrusted until opaque supply-chain promotion"
+      - "recompute P6a composition from the exact selection and require no issues"
+    policy:
+      selection: "minimal_change_then_highest_compatible"
+      prerelease: "explicit_only"
+      duplicate_version: "reject_divergent_content"
+      dependency_source: "exact_publisher_only"
+      unrelated_updates: "preserve_locked"
+    limits:
+      candidates: 512
+      versions_per_coordinate: 64
+      roots: 64
+      dependencies_per_pack: 64
+      search_states: 10000
+      diagnostics: 1024
+  capabilities:
+    declaration_is_availability: false
+    binding_source: "operator_owned_runtime_capability_registry"
+    binding_scope:
+      - "exact package digest"
+      - "exact contribution reference"
+      - "exact declared capability reference and kind"
+      - "exact core-owned provider and implementation digest"
+      - "availability status plus evidence binding"
+    sandbox:
+      default: "deny"
+      allowed: "exact_bound_core_builtin_only"
+      local_process: "deny"
+      mcp: "deny"
+      runtime_handshake: "deny"
+      external_connector: "deny"
+      credential_delegation: "deny"
+    missing_behavior: >-
+      Missing, disabled, unavailable, or revoked bindings produce actionable
+      capability gaps. Forge must never attempt the evaluator or Adapter.
+  exact_lock:
+    content: >-
+      Project, sealed core, persistent requirements, roots, supply-chain/trust/
+      capability/sandbox policy digests, exact ordered packages, resolution and
+      composition digests, verified built-in bindings, and unresolved gaps.
+    excludes:
+      - "wall-clock timestamps"
+      - "transaction identifiers"
+      - "generation numbers"
+      - "previous lock or ledger heads"
+    rationale: >-
+      A rollback selects the byte-identical prior semantic lock but records a
+      new forward lifecycle generation and receipt.
+  compatibility:
+    status:
+      compatible: "safe to activate"
+      degraded: "removal may activate while preserving explicit requirement gaps"
+      blocked: "install, upgrade, or rollback cannot activate"
+    compares:
+      - "pack versions and content identities"
+      - "policies, obligations, claims, playbooks, hazards, lifecycle models"
+      - "evaluators, fixtures, capabilities, adapters, and domains"
+      - "dependencies, replacements, trust, sandbox, and requirement impacts"
+    universal_core_unchanged: "required"
+  lifecycle:
+    operations:
+      - "install"
+      - "upgrade"
+      - "remove"
+      - "rollback"
+    expected_state: >-
+      Every request binds the project snapshot plus either uninitialized state
+      or the exact generation, active lock digest, and lifecycle ledger head.
+    preflight: >-
+      Under the retained lifecycle lock, the kernel rechecks registry, trust,
+      resolution, raw package sidecars, composition, runtime capability
+      bindings, sandbox decisions, project snapshot, compatibility, and CAS.
+      Supply-chain verification time comes from the host clock and must remain
+      fresh through commit; caller-selected historical time cannot revive an
+      expired credential or snapshot.
+    rollback: >-
+      Rollback is a new forward transaction. It revalidates the selected prior
+      reachable receipt and byte-identical lock against current revocation,
+      core, requirements, trust, and sandbox.
+    operation_intent: >-
+      Install must add one previously absent exact install root; upgrade binds active
+      version, target requirement, and optional content digest; remove must
+      delete an active coordinate from roots and lock; rollback must select one
+      reachable committed receipt and its exact historical lock.
+    removal: >-
+      Removal remains possible even when it creates missing-domain or capability
+      gaps. Requirements remain durable and readiness becomes explicitly blocked.
+  persistence:
+    root: "<resolved-state-root>/domain-packs"
+    layout:
+      active_pointer: "active.lock.yaml"
+      immutable_blobs: "objects/<raw-sha256>"
+      immutable_generations: "generations/<generation>-<record-digest>/"
+      immutable_ledger_records: "ledger/<record-digest>.yaml"
+      receipts: "receipts/<receipt-digest>.yaml"
+      staging: "staging/<record-digest>/"
+      lock: "../locks/domain-packs.lifecycle.lock"
+    invariant: >-
+      Complete immutable generation plus one crash-recoverable active pointer.
+      Readers acquire the lifecycle lock and reconcile before reading.
+    commit_order:
+      - "recover and verify current active pointer and ledger"
+      - "compare expected state under the retained OS lock"
+      - "materialize and fsync all immutable blobs and the complete generation"
+      - "materialize and fsync the hash-linked immutable lifecycle record"
+      - "flip only the active pointer through digest-bound crash replacement"
+      - "publish the completion receipt only after the pointer is authoritative"
+      - "repair a post-flip receipt crash only from the reachable immutable generation"
+    recovery: >-
+      Digest-bound next, previous, and transaction artifacts recover to exactly
+      the prior or target pointer. Ambiguous, missing, special-file, oversized,
+      or corrupt protocol state blocks instead of guessing.
+  local_threat_boundary:
+    protected: >-
+      Static symlink, junction, reparse-point, traversal, and special-file
+      escapes fail closed. Non-concurrent immutable-object, generation, lock,
+      ledger, receipt, pointer, and project-snapshot tamper is detected and
+      blocks activation.
+    cooperative_principal: >-
+      P6b assumes processes sharing one OS principal do not maliciously mutate
+      validated paths concurrently. A same-principal process that race-replaces
+      a filesystem node after validation or mutates the project after the final
+      snapshot check is outside this local threat boundary.
+    hostile_deployment: >-
+      Use separate OS principals and permissions, and a remote CAS where
+      immutable artifacts cross a hostile trust boundary. P6b does not claim
+      same-principal hostile filesystem isolation.
+  adversarial_acceptance:
+    - "registry or publisher signature tamper"
+    - "expired, revoked, wrong-audience, or wrong-role credential"
+    - "namespace self-grant and namespace capture"
+    - "same coordinate/version with divergent content"
+    - "lookalike publisher dependency confusion"
+    - "undeclared dependency and incompatible semantic version"
+    - "pack-authored executable provider, endpoint, path, environment, or credential"
+    - "declaration-only capability presented as available"
+    - "untrusted pack attempting core shadow or authority escalation"
+    - "stale expected generation, lock digest, ledger head, or project snapshot"
+    - "concurrent lifecycle writers from the same head"
+    - "crash before and after every active-pointer replacement stage"
+    - "non-concurrent tamper of immutable object, generation, lock, ledger, receipt, pointer, or project snapshot"
+    - "rollback to a now-revoked package"
+    - "remove preserving explicit domain and capability gaps"
+    - "static junction, symlink, reparse-point, traversal, special-file, and oversized input"
+  p6c_boundary: >-
+    P6b proves source identity, integrity, namespace grant, deterministic
+    resolution, capability confinement, and crash-safe lifecycle. Evidence-
+    backed semantic promotion, reviewed knowledge, deprecation, supersession,
+    and learning quality remain P6c.

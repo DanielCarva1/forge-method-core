@@ -1,0 +1,11 @@
+schema_version: '0.2'
+domain_pack_trust_policy:
+  policy_id: policy.domain-pack.fixture
+  policy_version: 1.0.0
+  audience: forge.fixture
+  authority: candidate_only
+  registry_keys: []
+  required_registry_signature_threshold: 0
+  minimum_activation_assurance: local_explicit
+  rules: []
+  default_disposition: inspect_only

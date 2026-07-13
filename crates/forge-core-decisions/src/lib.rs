@@ -31,6 +31,9 @@ pub mod claim_engine;
 pub mod conflict_detection;
 pub mod coordination_eval;
 pub mod domain_pack;
+pub mod domain_pack_compatibility;
+pub mod domain_pack_resolution;
+pub mod domain_pack_trust;
 pub mod embedded_contracts;
 pub mod eval;
 pub mod execution_admission;
@@ -110,6 +113,20 @@ pub use domain_pack::{
     MAX_DOMAIN_PACK_CANDIDATES, MAX_DOMAIN_PACK_CONTRIBUTIONS,
     MAX_DOMAIN_PACK_DEPENDENCIES_PER_PACK, MAX_DOMAIN_PACK_DEPENDENCY_DEPTH,
     MAX_DOMAIN_PACK_DIAGNOSTICS, MAX_DOMAIN_PACK_RAW_DOCUMENT_BYTES,
+};
+pub use domain_pack_compatibility::{
+    evaluate_domain_pack_compatibility, DomainPackCompatibilityInput,
+};
+pub use domain_pack_resolution::{
+    domain_pack_resolution_projection_digest, resolve_domain_packs,
+    MAX_DOMAIN_PACK_RESOLUTION_CANDIDATES, MAX_DOMAIN_PACK_RESOLUTION_DEPENDENCIES_PER_PACK,
+    MAX_DOMAIN_PACK_RESOLUTION_DIAGNOSTICS, MAX_DOMAIN_PACK_RESOLUTION_ROOTS,
+    MAX_DOMAIN_PACK_RESOLUTION_SEARCH_STATES, MAX_DOMAIN_PACK_RESOLUTION_VERSIONS_PER_COORDINATE,
+};
+pub use domain_pack_trust::{
+    evaluate_domain_pack_trust, DomainPackCapabilityDemand, DomainPackTrustEvaluation,
+    DomainPackTrustEvaluationInput, DomainPackTrustEvaluationStatus, DomainPackTrustIssue,
+    DomainPackTrustIssueCode, DomainPackTrustSelectedPackage,
 };
 pub use workflow_behavior::{
     derive_workflow_governed_outcome, evaluate_workflow_behavior,
