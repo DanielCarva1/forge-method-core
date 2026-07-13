@@ -13,11 +13,14 @@ preserving the distinction between advice, evidence, and admitted authority.
 5. Check the durable release and perform only an exact returned upgrade.
 6. Call `workflow next` without caller-selected phase, policy, bundle, or
    readiness target.
-7. Perform the highest-ranked feasible action.
-8. Collect evidence from the tool/runtime/human named by the evaluator; never
+7. If Forge returns a missing-intent packet, ask for only the human's product
+   outcome and value constraints, then send the externally signed closed input
+   through `workflow intent record`; never ask the human to design the method.
+8. Perform the highest-ranked feasible action.
+9. Collect evidence from the tool/runtime/human named by the evaluator; never
    self-upgrade artifact presence into representative proof.
-9. Record observations through an authorized surface and call `workflow next`.
-10. Stop and explain typed gaps when authority or capability is unavailable.
+10. Record observations through an authorized surface and call `workflow next`.
+11. Stop and explain typed gaps when authority or capability is unavailable.
 
 The canonical bootstrap procedure is
 [`skill/start-forge/SKILL.md`](../skill/start-forge/SKILL.md). The generated
@@ -59,6 +62,12 @@ workflow, consent to an operator-owned trust ceremony, or information the agent
 cannot obtain. Translate the decision into natural chat. Never ask the human to
 select a workflow or edit internal YAML.
 
+The agent owns method discovery. It drafts representative journeys, falsifiers,
+environment expectations, scenarios, and failure modes, then obtains the
+required independent review. The human supplies desired outcomes, constraints,
+preferences, unacceptable outcomes, uncertainties, and irreducible value
+choices; ignorance of a development method must not become human homework.
+
 ## Evidence discipline
 
 - A file is not automatically working behavior.
@@ -66,6 +75,15 @@ select a workflow or edit internal YAML.
 - A mocked execution is not a representative session.
 - A second agent is independent only when principal and evidence are distinct.
 - External/runtime capability must be verified by corresponding authority.
+- A representative-slice manifest is a proposal until an independent Reviewer
+  origin admits its exact bytes through the evaluator-observation lane.
+- Runtime evidence must come from a separately configured origin domain and
+  match the latest definition, exact runtime subject, current intent/snapshot/
+  effective epoch, and every declared scenario.
+- Partial execution is only `supported`; current failure is `disproven`; a
+  later accepted definition supersedes prior definitions.
+- Use the existing evidence/action-packet lane. Do not invent a second slice
+  store, mutation event, or caller-authored epistemic state.
 
 If authority is not provisioned, the correct result is a blocked gap. Never
 hand-author a registry, signature, receipt, or ledger record to advance.
@@ -74,7 +92,8 @@ hand-author a registry, signature, receipt, or ledger record to advance.
 
 A replacement begins from `start` and `workflow resume`. It must not require
 prior chat context. If durable state cannot reconstruct release, effective
-Domain Pack generation, obligations, blockers, and next action, fail closed.
+Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
+governed evidence bindings, blockers, and next action, fail closed.
 
 ## Compatibility surfaces
 

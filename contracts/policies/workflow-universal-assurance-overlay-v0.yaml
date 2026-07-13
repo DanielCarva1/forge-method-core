@@ -1,0 +1,313 @@
+schema_version: '0.1'
+workflow_governance_policy_overlay:
+  id: overlay.workflow-governance.universal-assurance-v0
+  base_bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+  policies:
+  - id: policy.workflow.universal-assurance
+    compatibility_workflow_id: guidance-engine
+    routing:
+      priority: 105
+      readiness_target: execute
+      activation: required
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites:
+    - policy_ref: policy.workflow.discover-intent
+      requirement: always
+    obligations:
+    - id: obligation.workflow.universal-assurance.intended-outcome
+      description: Accepted human intent distinguishes observable success, constraints, and unacceptable outcomes.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.intended-outcome
+    - id: obligation.workflow.universal-assurance.critical-journeys
+      description: Material user and operational journeys are explicit, prioritized, and falsifiable.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.critical-journeys
+    - id: obligation.workflow.universal-assurance.system-integrity
+      description: Material boundaries, invariants, integrations, and integrity failure paths are independently challenged.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.system-integrity
+    - id: obligation.workflow.universal-assurance.quality-attributes
+      description: Material quality attributes are measurable and bind a deterministic evidence method.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.quality-attributes
+    - id: obligation.workflow.universal-assurance.operability
+      description: Operation, observability, recovery, and support expectations are challenged in a representative environment.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.operability
+    - id: obligation.workflow.universal-assurance.lifecycle-coverage
+      description: Material create, change, migrate, rollback, recover, and retire paths have explicit coverage expectations.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.lifecycle-coverage
+    - id: obligation.workflow.universal-assurance.risk-and-failure
+      description: Material failure modes, abuse cases, uncertainty, and irreversible risks are independently challenged.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.risk-and-failure
+    - id: obligation.workflow.universal-assurance.evidence-representativeness
+      description: Current representative evidence binds the intent, subject, environment, and material failure boundary.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.evidence-representativeness
+    - id: obligation.workflow.universal-assurance.representative-slice-defined
+      description: An independently reviewed representative-slice definition binds the current intent, critical journey, falsifier, environment expectation, scenarios, and material failure modes.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.universal-assurance.representative-slice-defined
+    - id: obligation.workflow.universal-assurance.representative-slice-executed
+      description: The defined representative slice executes in a representative runtime with current governed evidence.
+      criticality: critical
+      required_before: release
+      claim_refs:
+      - claim.workflow.universal-assurance.representative-slice-executed
+    claims:
+    - id: claim.workflow.universal-assurance.intended-outcome
+      statement: Accepted human intent distinguishes observable success, constraints, and unacceptable outcomes.
+      evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+      assurance_lenses:
+      - intended_outcome
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.critical-journeys
+      statement: Material user and operational journeys are explicit, prioritized, and falsifiable.
+      evaluator_ref: evaluator.workflow.universal-assurance.critical-journeys
+      assurance_lenses:
+      - critical_journeys
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.system-integrity
+      statement: Material boundaries, invariants, integrations, and integrity failure paths are independently challenged.
+      evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+      assurance_lenses:
+      - system_integrity
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.quality-attributes
+      statement: Material quality attributes are measurable and bind a deterministic evidence method.
+      evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+      assurance_lenses:
+      - quality_attributes
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.operability
+      statement: Operation, observability, recovery, and support expectations are challenged in a representative environment.
+      evaluator_ref: evaluator.workflow.universal-assurance.operability
+      assurance_lenses:
+      - operability
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.lifecycle-coverage
+      statement: Material create, change, migrate, rollback, recover, and retire paths have explicit coverage expectations.
+      evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+      assurance_lenses:
+      - lifecycle_coverage
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.risk-and-failure
+      statement: Material failure modes, abuse cases, uncertainty, and irreversible risks are independently challenged.
+      evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+      assurance_lenses:
+      - risk_and_failure
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.evidence-representativeness
+      statement: Current representative evidence binds the intent, subject, environment, and material failure boundary.
+      evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+      assurance_lenses:
+      - evidence_representativeness
+      assurance_role: lens_evidence
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.representative-slice-defined
+      statement: An independent reviewer confirms that the representative-slice definition binds the current intent, critical journey, falsifier, environment expectation, scenarios, and material failure modes.
+      evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+      assurance_role: representative_slice_definition
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.universal-assurance.representative-slice-executed
+      statement: Current representative execution challenges the defined slice on its material user or operational surface.
+      evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+      assurance_lenses:
+      - critical_journeys
+      - evidence_representativeness
+      assurance_role: representative_slice_execution
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.universal-assurance.intended-outcome
+      provider: authorized_human
+      accepted_evidence_kinds:
+      - human_acceptance
+      minimum_strength: authoritative_acceptance
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.critical-journeys
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.system-integrity
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.quality-attributes
+      provider: deterministic_tool
+      accepted_evidence_kinds:
+      - deterministic_check
+      minimum_strength: deterministic_verification
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.operability
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - representative_execution
+      minimum_strength: representative_execution
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.lifecycle-coverage
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.risk-and-failure
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.evidence-representativeness
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - representative_execution
+      minimum_strength: representative_execution
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.representative-slice-defined
+      provider: independent_reviewer
+      accepted_evidence_kinds:
+      - independent_review
+      minimum_strength: independent_confirmation
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 604800
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.universal-assurance.representative-slice-executed
+      provider: representative_runtime
+      accepted_evidence_kinds:
+      - representative_execution
+      minimum_strength: representative_execution
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 0
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.universal-assurance.independent-review
+      kind: evaluator
+      probe_kind: static_registry
+      description: Independent review can challenge system, risk, and representative-slice definition claims.
+      affected_claim_refs:
+      - claim.workflow.universal-assurance.system-integrity
+      - claim.workflow.universal-assurance.risk-and-failure
+      - claim.workflow.universal-assurance.representative-slice-defined
+      resolution_options:
+      - Acquire an independent reviewer with the required scope.
+      - Narrow or defer the affected commitment.
+      blocks_before: execute
+    - id: capability.workflow.universal-assurance.representative-runtime
+      kind: environment
+      probe_kind: local_command
+      description: A representative environment can execute the defined slice and preserve governed evidence.
+      affected_claim_refs:
+      - claim.workflow.universal-assurance.operability
+      - claim.workflow.universal-assurance.evidence-representativeness
+      - claim.workflow.universal-assurance.representative-slice-executed
+      resolution_options:
+      - Acquire or configure a representative runtime and evidence adapter.
+      - Narrow or defer the affected release boundary.
+      blocks_before: release
+    decision_rules:
+    - id: decision.workflow.universal-assurance.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+      question: How should an unresolved material Assurance Case gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.universal-assurance.research
+        description: Acquire bounded knowledge or evidence before choosing.
+        consequences:
+        - Defers commitment while reducing uncertainty without verifying the claim.
+      - id: alternative.universal-assurance.reduce-scope
+        description: Remove or defer the unsupported scope.
+        consequences:
+        - Preserves the governance boundary with a smaller outcome.
+      - id: alternative.universal-assurance.seek-authority
+        description: Seek the required human or independent authority without weakening evidence requirements.
+        consequences:
+        - Preserves accountable ownership of the unresolved risk.
+      recommended_alternative_ref: alternative.universal-assurance.research
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.universal-assurance
+      steps:
+      - Reconstruct accepted intent and make every universal lens explicit; omission remains unknown.
+      - Define and independently review the smallest slice that can falsify the intended outcome on a material journey.
+      - Execute that slice in a representative runtime and preserve current governed evidence and disproof.
+      - Use research only to support bounded understanding; never treat it as exclusive verification authority.

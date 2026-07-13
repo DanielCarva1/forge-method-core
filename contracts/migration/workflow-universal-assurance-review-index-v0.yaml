@@ -1,0 +1,172 @@
+schema_version: '0.2'
+workflow_release_review_index:
+  id: workflow-release-review.universal-assurance-v0
+  index_version: 0.4.0
+  authority: candidate_only
+  promotion:
+    predecessor:
+      release_id: workflow-governance.release.agent-native-continuity-v0
+      release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+    candidate_release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.universal-assurance-v0
+      release_version: 0.5.0
+      release_digest: sha256:bc4eb95d647ee207f9ecf0ddbfdeafc68f53a39f65468825aaa94c3e4b933249
+    candidate_runtime_bundle:
+      bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+      bundle_digest: sha256:42a388f2200b8c48c01b04d899169b2d1d96794a0f0d2262eee757bd722c1aec
+      policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+    promoted_runtime_bundle:
+      bundle_id: bundle.workflow-governance.universal-assurance-v0
+      bundle_digest: sha256:07efb749648cca338f9d8c6710326bd19c27866dc29d19a53a341cb2c61abad6
+      policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+  release_manifest:
+    artifact_id: release-manifest.universal-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-release-universal-assurance-candidate-v0.yaml
+    raw_digest: sha256:f08f97b1bebac0f525a948a6e32b529643b1a1d41477c11bd3dc7b4825b32207
+    canonical_digest: sha256:bc4eb95d647ee207f9ecf0ddbfdeafc68f53a39f65468825aaa94c3e4b933249
+  migration_batches:
+  - artifact_id: migration-batch.golden-path-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-golden-path-v0.yaml
+    raw_digest: sha256:3d5fb1c4ffe7d9c3bdc8f23de0a4ff046f9bef2850751d4570a5b983b8edbc80
+    canonical_digest: sha256:35877b93a73b0101aabd0e80620bfbea877d03449ed7bf70a9c50f643f19e90b
+  - artifact_id: migration-batch.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-core-assurance-v0.yaml
+    raw_digest: sha256:4e92f44a7b6eb84616f798a1fcfc0445d043ba4bcf7a7c9e4554a2f6a5fbfb9c
+    canonical_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
+  - artifact_id: migration-batch.assurance-operations-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
+    raw_digest: sha256:d8d9586ae45530d6e0bfba40e4708d1e10a280218a750b1bf3249097a5cafe5f
+    canonical_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
+  - artifact_id: migration-batch.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-agent-native-continuity-v0.yaml
+    raw_digest: sha256:a2a88d6c756557ea9f39db2f469244f96bd711fc439764e9bf1ccc68f9ba23e3
+    canonical_digest: sha256:a4c5a4a89d8eea293fb34658ada95ea80ea1fb511e8af6f4a8027308c5ef1132
+  - artifact_id: migration-batch.universal-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-universal-assurance-v0.yaml
+    raw_digest: sha256:8407b14a6b472c5d59c9a28b7b8e9f775689e635520f566819d902b5784dde6a
+    canonical_digest: sha256:eb38b421e5aa54cb76efbd2742037fede06964c51f3825e91730596f965ad476
+  review_subject:
+    artifact_id: review-subject.universal-assurance-v0
+    embedded_ref: contracts/migration/workflow-universal-assurance-review-subject-v0.yaml
+    raw_digest: sha256:c2888f1d97a6e8b1ac0dc14e94cb1837f23f14b45e48dfbb6bf9c400136619b8
+    canonical_digest: sha256:b5f72964f7bb97754375053d601a5bee986df4f3688d59610ea9eb45968d81ce
+  coverage_policy:
+    artifact_id: coverage-policy.universal-assurance-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-universal-assurance-v0.yaml
+    raw_digest: sha256:5a676624948eaf72c640879b6dd6aedb7c4d6780e68e9e625c68a656c443cbec
+    canonical_digest: sha256:cc75a10269f75e8627900f9b756411fc7c4e8715d405a4ca8c80fe80e8054747
+  full_catalog:
+    artifact_id: full-catalog.foundation-v0
+    embedded_ref: contracts/policies/workflow-migration-foundation-v0.yaml
+    raw_digest: sha256:be43183b1463e66ea15aff997e234af94f85764c5c1e61096f434c40217b3d27
+    canonical_digest: sha256:b54da5e05e1db344e319abd5e59713dcf794215b4f61434f724a9b70b53006c1
+  corpus_set:
+    artifact_id: corpus-set.universal-assurance-v0
+    embedded_ref: contracts/evidence/workflow-universal-assurance-corpus-set-v0.yaml
+    raw_digest: sha256:7b090e116d04ba4a23bd1307333363b0970626df7a1f54f500f5ac07836b1dd2
+    canonical_digest: sha256:fb74e6a1e331c95d56ee90354b5fdad1779bb2031a7a84f5eeaad7507853d913
+  representative_corpus:
+    artifact_id: corpus.workflow-universal-assurance.representative-v0
+    embedded_ref: contracts/evidence/workflow-universal-assurance-representative-v0.yaml
+    raw_digest: sha256:0e120a1824d25011e0dce321754826107ebc2c80d31b4c211cb8af4a4afc8c1a
+    canonical_digest: sha256:3f6bd69918c5dee4bae381da9c55a94836a2a44092657d36c8e875d3ccf67d67
+  adversarial_corpus:
+    artifact_id: corpus.workflow-universal-assurance.adversarial-v0
+    embedded_ref: contracts/evidence/workflow-universal-assurance-adversarial-v0.yaml
+    raw_digest: sha256:eee1c6fa1fc9c4d9576cca358e7b9eb7b75f2e104951b083746aeaec470fed9b
+    canonical_digest: sha256:80025a2c1facbc64a61bee9ee3fd1441d452d03903272372585cc5ac4587c0d0
+  shadow_report:
+    artifact_id: shadow-report.universal-assurance-v0
+    embedded_ref: contracts/evidence/workflow-universal-assurance-shadow-report-v0.yaml
+    raw_digest: sha256:10aa76cddf4da1aeb39407b583ddbb006a648c6673aab1ab77f190ff10bccaf0
+    canonical_digest: sha256:3a9ab482a02e3d05bc003a1892c35a97882cc4dbfb5ce9734cb1544a1b0d6ec4
+  candidate_runtime_bundle:
+    artifact_id: runtime-bundle.universal-assurance-candidate-v0
+    embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+    raw_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+    canonical_digest: sha256:42a388f2200b8c48c01b04d899169b2d1d96794a0f0d2262eee757bd722c1aec
+  promoted_runtime_bundle:
+    artifact_id: bundle.workflow-governance.universal-assurance-v0
+    embedded_ref: contracts/workflow-governance/runtime-universal-assurance-v0.yaml
+    raw_digest: sha256:21220c21890804c3af41372d049ce7b3befc1f5f91fdd297f1b978b402c2707b
+    canonical_digest: sha256:07efb749648cca338f9d8c6710326bd19c27866dc29d19a53a341cb2c61abad6
+  predecessor_registry:
+    artifact_id: registry.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+    raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+    canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+  proposed_registry:
+    artifact_id: workflow-governance.registry.universal-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-universal-assurance-v0.yaml
+    raw_digest: sha256:77fb1be512448c904e41645762c90cd03c630af788ebcb30558bf58ab3c4b60e
+    canonical_digest: sha256:2f2601383d1f87a45757e85485aca47beb39dc6d62cf21fbab46feb9929afff9
+  evaluator_source:
+    artifact_id: evaluator.workflow-behavior-v0
+    embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+    raw_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    canonical_digest: sha256:ccc03d7af23ab1d19310f0d530e2b505c1ce584be8fc48f9495c9fa1e0147adb
+  frozen_history:
+    artifact_id: history.workflow-governance.agent-native-continuity-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-frozen-history-v0.ndjson
+    raw_digest: sha256:3d756ab118b53b276552eee1e57313dfe2afeb5671ff658fa06e28f1be9dd86a
+    canonical_digest: sha256:8cc9fa86a47fec4bc231e29c7945428e3315ed92882650ec6187c0759740b9e3
+  workflow_decisions:
+  - workflow_id: guidance-engine
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  quarantine_decisions:
+  - workflow_id: edge-case-review
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: release-readiness
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: track-decision
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  dimension_decisions:
+  - dimension: status
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: eligibility
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: progression
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: completion
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: obligations
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: claims
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: decisions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: capabilities
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: issues
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: next_actions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []

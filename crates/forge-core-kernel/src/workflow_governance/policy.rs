@@ -20,13 +20,16 @@ use forge_core_contracts::workflow_release_review_v2::{
     WorkflowReleaseReviewArtifactBindingV2, WorkflowReleaseReviewIndexV2Document,
 };
 use forge_core_contracts::{
-    RepoPath, StableId, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusSetDocument,
-    WorkflowBehavioralCoveragePolicyDocument, WorkflowBehavioralReviewSubjectDocument,
-    WorkflowBehavioralScenarioCorpusDocument, WorkflowBehavioralScenarioExecution,
-    WorkflowBehavioralShadowReportDocument, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceReleaseIdentity, WorkflowGovernanceReleaseManifestDocument,
-    WorkflowGovernanceReleaseRegistryDocument, WorkflowGovernanceReleaseRegistryEntry,
-    WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument, WorkflowReceiptCarryover,
+    ObligationCriticality, ReadinessTarget, RepoPath, StableId, UniversalAssuranceLens,
+    WorkflowAssuranceClaimRole, WorkflowBehavioralArtifactReference,
+    WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
+    WorkflowBehavioralReviewSubjectDocument, WorkflowBehavioralScenarioCorpusDocument,
+    WorkflowBehavioralScenarioExecution, WorkflowBehavioralShadowReportDocument,
+    WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceStrength,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceReleaseIdentity,
+    WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
+    WorkflowGovernanceReleaseRegistryEntry, WorkflowMigrationBatchDocument,
+    WorkflowMigrationPlanDocument, WorkflowReceiptCarryover,
     WorkflowReleaseAdmissionAuthorizationDocument, WorkflowReleaseAdmissionProof,
     WorkflowReleaseRegistryAuthority, WorkflowReleaseRegistryProvenance,
     WorkflowReleaseRegistrySource, WorkflowReleaseReviewIndexDocument,
@@ -100,6 +103,18 @@ const EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2: &[EmbeddedWorkflowReleaseAdmissio
         evaluator_source: include_bytes!("../../../forge-core-decisions/src/workflow_behavior.rs"),
         frozen_history: include_bytes!(
             "../../../../contracts/evidence/workflow-assurance-operations-frozen-history-v0.ndjson"
+        ),
+    },
+    EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
+        review_index_ref:
+            "contracts/migration/workflow-universal-assurance-review-index-v0.yaml",
+        reviewer_registry_ref:
+            "contracts/policies/workflow-release-reviewer-registry-universal-assurance-v0.yaml",
+        authorization_ref:
+            "contracts/migration/workflow-universal-assurance-admission-authorization-v0.yaml",
+        evaluator_source: include_bytes!("../../../forge-core-decisions/src/workflow_behavior.rs"),
+        frozen_history: include_bytes!(
+            "../../../../contracts/evidence/workflow-agent-native-continuity-frozen-history-v0.ndjson"
         ),
     },
 ];
@@ -705,11 +720,293 @@ fn admit_reviewed_registry_v2(
     if !appended.is_adjacent_successor_of(accumulated.latest_release()) {
         return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
     }
+    if appended.release.release_id.0 == "workflow-governance.release.universal-assurance-v0" {
+        validate_universal_assurance_successor(&appended.bundle)?;
+    }
     accumulated.registry_id = proposed.registry_id;
     accumulated.registry_version = proposed.registry_version;
     accumulated.registry_digest = authorization.proposed_registry_digest;
     accumulated.releases.push(appended);
     Ok(accumulated)
+}
+
+/// Release-specific semantic admission for P7b.2. Historical bundles load
+/// with default-empty assurance metadata, but only this adjacent successor is
+/// required to prove the complete universal lens and representative-slice
+/// mapping before it can become runtime authority.
+fn validate_universal_assurance_successor(
+    bundle: &WorkflowGovernanceBundleDocument,
+) -> Result<(), AdmittedWorkflowGovernanceReleaseError> {
+    let policies = &bundle.workflow_governance_bundle.policies;
+    let policy = policies
+        .iter()
+        .find(|policy| policy.id.0 == "policy.workflow.universal-assurance")
+        .ok_or(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)?;
+    if policy.compatibility_workflow_id.0 != "guidance-engine"
+        || policy.claims.len() != 10
+        || policy.evaluators.len() != 10
+        || policy.obligations.len() != 10
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+
+    // This successor is a signed authority boundary, so admission checks a
+    // closed semantic table rather than merely counting lens coverage. A
+    // generator change cannot silently substitute a weaker provider, evidence
+    // kind, strength, boundary, or reviewer separation requirement.
+    let expected_claims = [
+        (
+            "intended-outcome",
+            vec![UniversalAssuranceLens::IntendedOutcome],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::AuthorizedHuman,
+            WorkflowEvidenceKind::HumanAcceptance,
+            WorkflowEvidenceStrength::AuthoritativeAcceptance,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "critical-journeys",
+            vec![UniversalAssuranceLens::CriticalJourneys],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::RepositoryInspector,
+            WorkflowEvidenceKind::ArtifactInspection,
+            WorkflowEvidenceStrength::InspectedArtifact,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "system-integrity",
+            vec![UniversalAssuranceLens::SystemIntegrity],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::IndependentReviewer,
+            WorkflowEvidenceKind::IndependentReview,
+            WorkflowEvidenceStrength::IndependentConfirmation,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "quality-attributes",
+            vec![UniversalAssuranceLens::QualityAttributes],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::DeterministicTool,
+            WorkflowEvidenceKind::DeterministicCheck,
+            WorkflowEvidenceStrength::DeterministicVerification,
+            ReadinessTarget::Execute,
+            1,
+            0,
+        ),
+        (
+            "operability",
+            vec![UniversalAssuranceLens::Operability],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::RepresentativeRuntime,
+            WorkflowEvidenceKind::RepresentativeExecution,
+            WorkflowEvidenceStrength::RepresentativeExecution,
+            ReadinessTarget::Execute,
+            1,
+            0,
+        ),
+        (
+            "lifecycle-coverage",
+            vec![UniversalAssuranceLens::LifecycleCoverage],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::RepositoryInspector,
+            WorkflowEvidenceKind::ArtifactInspection,
+            WorkflowEvidenceStrength::InspectedArtifact,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "risk-and-failure",
+            vec![UniversalAssuranceLens::RiskAndFailure],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::IndependentReviewer,
+            WorkflowEvidenceKind::IndependentReview,
+            WorkflowEvidenceStrength::IndependentConfirmation,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "evidence-representativeness",
+            vec![UniversalAssuranceLens::EvidenceRepresentativeness],
+            WorkflowAssuranceClaimRole::LensEvidence,
+            WorkflowEvaluatorProvider::RepresentativeRuntime,
+            WorkflowEvidenceKind::RepresentativeExecution,
+            WorkflowEvidenceStrength::RepresentativeExecution,
+            ReadinessTarget::Execute,
+            1,
+            0,
+        ),
+        (
+            "representative-slice-defined",
+            Vec::new(),
+            WorkflowAssuranceClaimRole::RepresentativeSliceDefinition,
+            WorkflowEvaluatorProvider::IndependentReviewer,
+            WorkflowEvidenceKind::IndependentReview,
+            WorkflowEvidenceStrength::IndependentConfirmation,
+            ReadinessTarget::Execute,
+            1,
+            1,
+        ),
+        (
+            "representative-slice-executed",
+            vec![
+                UniversalAssuranceLens::CriticalJourneys,
+                UniversalAssuranceLens::EvidenceRepresentativeness,
+            ],
+            WorkflowAssuranceClaimRole::RepresentativeSliceExecution,
+            WorkflowEvaluatorProvider::RepresentativeRuntime,
+            WorkflowEvidenceKind::RepresentativeExecution,
+            WorkflowEvidenceStrength::RepresentativeExecution,
+            ReadinessTarget::Release,
+            1,
+            0,
+        ),
+    ];
+    for (suffix, lenses, role, provider, kind, strength, boundary, observations, principals) in
+        expected_claims
+    {
+        let claim_id = format!("claim.workflow.universal-assurance.{suffix}");
+        let evaluator_id = format!("evaluator.workflow.universal-assurance.{suffix}");
+        let claim = policy
+            .claims
+            .iter()
+            .find(|claim| claim.id.0 == claim_id)
+            .ok_or(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)?;
+        let evaluator = policy
+            .evaluators
+            .iter()
+            .find(|evaluator| evaluator.id.0 == evaluator_id)
+            .ok_or(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)?;
+        let obligations = policy
+            .obligations
+            .iter()
+            .filter(|obligation| obligation.claim_refs.as_slice() == [claim.id.clone()])
+            .collect::<Vec<_>>();
+        if claim.evaluator_ref != evaluator.id
+            || claim.assurance_lenses != lenses
+            || claim.assurance_role != Some(role)
+            || evaluator.provider != provider
+            || evaluator.accepted_evidence_kinds.as_slice() != [kind]
+            || evaluator.minimum_strength != strength
+            || evaluator.minimum_passing_observations != observations
+            || evaluator.minimum_distinct_principals != principals
+            || obligations.len() != 1
+            || obligations[0].criticality != ObligationCriticality::Critical
+            || obligations[0].required_before != boundary
+        {
+            return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+        }
+    }
+
+    let non_advisory_claims = policy
+        .obligations
+        .iter()
+        .filter(|obligation| obligation.criticality != ObligationCriticality::Advisory)
+        .flat_map(|obligation| &obligation.claim_refs)
+        .collect::<BTreeSet<_>>();
+    let mut mapped_lenses = BTreeSet::new();
+    let mut canonical_lens_claims = BTreeMap::<UniversalAssuranceLens, usize>::new();
+    let mut definition_claims = Vec::new();
+    let mut execution_claims = Vec::new();
+
+    for claim in &policy.claims {
+        // Duplicate lenses across distinct claims are allowed for the
+        // definition/execution roles, but duplicate values inside one claim
+        // and ungoverned mappings are not.
+        let unique = claim
+            .assurance_lenses
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if unique.len() != claim.assurance_lenses.len() || !non_advisory_claims.contains(&claim.id)
+        {
+            return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+        }
+        mapped_lenses.extend(claim.assurance_lenses.iter().copied());
+        let evaluator = policy
+            .evaluators
+            .iter()
+            .find(|evaluator| evaluator.id == claim.evaluator_ref)
+            .ok_or(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)?;
+        match claim.assurance_role {
+            Some(WorkflowAssuranceClaimRole::LensEvidence) => {
+                if unique.len() != 1
+                    || evaluator.provider == WorkflowEvaluatorProvider::ResearchSource
+                {
+                    return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+                }
+                *canonical_lens_claims
+                    .entry(claim.assurance_lenses[0])
+                    .or_default() += 1;
+            }
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                if !unique.is_empty() {
+                    return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+                }
+                definition_claims.push((claim, evaluator));
+            }
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                if unique.is_empty() {
+                    return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+                }
+                execution_claims.push((claim, evaluator));
+            }
+            None => return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch),
+        }
+    }
+
+    let exact_lenses = UniversalAssuranceLens::ALL
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    if mapped_lenses != exact_lenses
+        || canonical_lens_claims.len() != UniversalAssuranceLens::ALL.len()
+        || canonical_lens_claims.values().any(|count| *count != 1)
+        || definition_claims.len() != 1
+        || execution_claims.len() != 1
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    let (definition, definition_evaluator) = definition_claims[0];
+    if !definition.assurance_lenses.is_empty()
+        || definition_evaluator.provider != WorkflowEvaluatorProvider::IndependentReviewer
+        || definition_evaluator.accepted_evidence_kinds.as_slice()
+            != [WorkflowEvidenceKind::IndependentReview]
+        || definition_evaluator.minimum_strength
+            != WorkflowEvidenceStrength::IndependentConfirmation
+        || definition_evaluator.minimum_passing_observations != 1
+        || definition_evaluator.minimum_distinct_principals != 1
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    let (execution, execution_evaluator) = execution_claims[0];
+    let execution_lenses = execution
+        .assurance_lenses
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let exact_execution_lenses = [
+        UniversalAssuranceLens::CriticalJourneys,
+        UniversalAssuranceLens::EvidenceRepresentativeness,
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    if execution_lenses != exact_execution_lenses
+        || execution_evaluator.provider != WorkflowEvaluatorProvider::RepresentativeRuntime
+        || execution_evaluator.accepted_evidence_kinds.as_slice()
+            != [WorkflowEvidenceKind::RepresentativeExecution]
+        || execution_evaluator.minimum_strength != WorkflowEvidenceStrength::RepresentativeExecution
+        || execution_evaluator.minimum_passing_observations != 1
+    {
+        return Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch);
+    }
+    Ok(())
 }
 
 fn validate_v2_append_shape(
@@ -1461,7 +1758,7 @@ mod tests {
     }
 
     #[test]
-    fn both_signed_v2_releases_form_the_exact_five_release_chain() {
+    fn all_signed_v2_releases_form_the_exact_six_release_chain() {
         let operational = forge_core_decisions::load_embedded_catalog();
         let frozen = forge_core_decisions::catalog::load_embedded_frozen_legacy_catalog();
         assert!(operational.is_clean() && frozen.is_clean());
@@ -1469,21 +1766,21 @@ mod tests {
         assert_eq!(frozen.catalog.len(), 110);
 
         let registry = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("reviewed V1 plus two signed V2 releases");
+            .expect("reviewed V1 plus three signed V2 releases");
         let assurance = registry
             .release_by_id(&StableId(
                 "workflow-governance.release.assurance-operations-v0".to_owned(),
             ))
             .expect("assurance-operations fourth release");
         let latest = registry.latest_release();
-        assert_eq!(registry.release_count(), 5);
+        assert_eq!(registry.release_count(), 6);
         assert_eq!(
             latest.release().release_id.0,
-            "workflow-governance.release.agent-native-continuity-v0"
+            "workflow-governance.release.universal-assurance-v0"
         );
-        assert_eq!(latest.release().release_version, "0.4.0");
+        assert_eq!(latest.release().release_version, "0.5.0");
         assert_eq!(assurance.policy_count(), 33);
-        assert_eq!(latest.policy_count(), 42);
+        assert_eq!(latest.policy_count(), 43);
         assert_eq!(
             latest.receipt_carryover(),
             WorkflowReceiptCarryover::InvalidateAll
@@ -1495,7 +1792,51 @@ mod tests {
                 ))
                 .expect("core-assurance predecessor")
         ));
-        assert!(latest.is_adjacent_successor_of(assurance));
+        let continuity = registry
+            .release_by_id(&StableId(
+                "workflow-governance.release.agent-native-continuity-v0".to_owned(),
+            ))
+            .expect("agent-native-continuity predecessor");
+        assert!(continuity.is_adjacent_successor_of(assurance));
+        assert!(latest.is_adjacent_successor_of(continuity));
+        validate_universal_assurance_successor(latest.document())
+            .expect("latest release has complete universal assurance semantics");
+        let mut incomplete = latest.document().clone();
+        let policy = incomplete
+            .workflow_governance_bundle
+            .policies
+            .iter_mut()
+            .find(|policy| policy.id.0 == "policy.workflow.universal-assurance")
+            .expect("universal assurance policy");
+        policy.claims[0].assurance_lenses.clear();
+        assert!(matches!(
+            validate_universal_assurance_successor(&incomplete),
+            Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)
+        ));
+        let mut weakened_provider = latest.document().clone();
+        let policy = weakened_provider
+            .workflow_governance_bundle
+            .policies
+            .iter_mut()
+            .find(|policy| policy.id.0 == "policy.workflow.universal-assurance")
+            .expect("universal assurance policy");
+        policy.evaluators[0].provider = WorkflowEvaluatorProvider::ResearchSource;
+        assert!(matches!(
+            validate_universal_assurance_successor(&weakened_provider),
+            Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)
+        ));
+        let mut shifted_boundary = latest.document().clone();
+        let policy = shifted_boundary
+            .workflow_governance_bundle
+            .policies
+            .iter_mut()
+            .find(|policy| policy.id.0 == "policy.workflow.universal-assurance")
+            .expect("universal assurance policy");
+        policy.obligations[0].required_before = ReadinessTarget::Release;
+        assert!(matches!(
+            validate_universal_assurance_successor(&shifted_boundary),
+            Err(AdmittedWorkflowGovernanceReleaseError::RegistryShapeMismatch)
+        ));
         for quarantined in ["edge-case-review", "track-decision", "release-readiness"] {
             assert!(!latest.contains_workflow_policy(quarantined));
         }

@@ -1,0 +1,83 @@
+schema_version: '0.1'
+workflow_behavioral_review_subject:
+  id: workflow-review-subject.universal-assurance-v0
+  authority: candidate_only
+  overlay:
+    id: overlay.workflow-governance.universal-assurance-v0
+    embedded_ref: contracts/policies/workflow-universal-assurance-overlay-v0.yaml
+    expected_digest: sha256:5ea45e3b0780459ddf99859a5262ec7f7cf9ecb32e5bdb580963140ac769d0c6
+  baseline_history:
+    id: history.workflow-governance.agent-native-continuity-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-frozen-history-v0.ndjson
+    expected_digest: sha256:3d756ab118b53b276552eee1e57313dfe2afeb5671ff658fa06e28f1be9dd86a
+  baseline_release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  baseline_runtime_bundle:
+    bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+    bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+    policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+  runtime_bundle:
+    bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+    bundle_digest: sha256:42a388f2200b8c48c01b04d899169b2d1d96794a0f0d2262eee757bd722c1aec
+    policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+  proposed_batch:
+    batch_id: workflow-governance.batch.universal-assurance-v0
+    batch_version: 0.5.0
+    previous_batch_digest: sha256:a4c5a4a89d8eea293fb34658ada95ea80ea1fb511e8af6f4a8027308c5ef1132
+  proposed_release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.universal-assurance-v0
+    release_version: 0.5.0
+    previous_release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  evaluator:
+    evaluator_id: evaluator.workflow-behavioral-shadow
+    evaluator_version: 0.1.0
+    governed_projection_version: 0.1.0
+    evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+  candidate_workflows:
+  - workflow_id: guidance-engine
+    legacy_workflow_digest: sha256:268727602dc6135226082fb2dbea83ff3557270b63fc2f52e976ea10649e36bb
+    policy_ref: policy.workflow.universal-assurance
+    policy_digest: sha256:7053b9a21afaa63a394ee0fc39ae53ffcdba0453b7d1b4cde24801325047ab91
+  quarantines:
+  - workflow_id: edge-case-review
+    quarantine:
+      reason_code: ambiguous_legacy_authority
+      risk_tier: high
+      explanation: The legacy workflow overlaps adversarial-review without a closed review-mode taxonomy or precedence rule.
+      blocking_refs:
+      - gap.workflow-review-mode.taxonomy
+      - decision.workflow-review-precedence
+      affected_consumer_refs:
+      - consumer.workflow-review-routing
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.5.0
+  - workflow_id: release-readiness
+    quarantine:
+      reason_code: unsafe_automatic_conversion
+      risk_tier: critical
+      explanation: The legacy workflow overlaps readiness-check and ready-release while mixing route, artifact, and release-authorization authority.
+      blocking_refs:
+      - gap.release-readiness-overlap
+      - gap.enterprise-artifact-adapter
+      - gap.release-authorization-separation
+      affected_consumer_refs:
+      - consumer.release-governance
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.5.0
+  - workflow_id: track-decision
+    quarantine:
+      reason_code: ambiguous_legacy_authority
+      risk_tier: critical
+      explanation: The legacy workflow mixes route, module-pack, and enterprise artifact authority that core governance cannot safely infer.
+      blocking_refs:
+      - gap.route-authority-model
+      - gap.module-pack-lifecycle
+      - gap.enterprise-artifact-adapter
+      affected_consumer_refs:
+      - consumer.workflow-routing
+      review_owner: owner.workflow-governance-review
+      review_due_release_version: 0.5.0

@@ -83,9 +83,14 @@ spec:
       - scenario references
       - material failure modes
     rules:
+      - the primary agent may draft the typed content-addressed definition, but the draft has no authority by itself
+      - an independent ReviewerOriginBroker must admit the current definition through the existing evaluator-observation lane
+      - the novice human is not asked to design scenarios, falsifiers, environments, or failure modes
+      - a RuntimeOriginBroker in a different configured separation domain must supply representative execution receipts
       - intent amendment invalidates the previous definition
       - artifact existence or component completion never substitutes for representative execution
       - runtime evidence must bind the current scenario, subject, snapshot, and effective epoch
+      - no second evidence store or representative-slice mutation event is introduced
 
   deterministic_projection:
     inputs:

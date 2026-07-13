@@ -4,14 +4,23 @@
 //! caller-authored claim status, readiness verdict, or evaluator. An accepted
 //! human intent opens a new assurance epoch with every universal lens unknown.
 
-use forge_core_contracts::workflow_governance::WorkflowBrokerOriginProfile;
 use forge_core_contracts::{
-    AssuranceClaimStatus, DurableAssuranceEpochBinding, DurableAssuranceLensProjection,
-    DurableAssuranceProjection, DurableAssuranceReadinessState, HumanIntentRevisionAcceptedEvent,
-    UniversalAssuranceLens, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowHumanIntentRevision, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+    DurableAssuranceCapabilityBinding, DurableAssuranceClaimBinding,
+    DurableAssuranceDecisionBinding, DurableAssuranceEpistemicState, DurableAssuranceEpochBinding,
+    DurableAssuranceEvidenceBinding, DurableAssuranceLensProjection, DurableAssuranceNextAction,
+    DurableAssuranceProjection, DurableAssuranceReadinessState, DurableAssuranceWaiverBinding,
+    HumanIntentRevisionAcceptedEvent, NextActionKind, ObligationCriticality, PrincipalId,
+    ReadinessTarget, StableId, UniversalAssuranceLens, WorkflowAssuranceClaimRole,
+    WorkflowBrokerOriginProfile, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
+    WorkflowEvidenceOutcome, WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowHumanIntentRevision, WorkflowRepresentativeSliceDefinitionDocument,
+    MAX_DURABLE_ASSURANCE_NEXT_ACTIONS, MAX_REPRESENTATIVE_SLICE_ITEMS,
+    MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
+    MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
     MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
     MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+    WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -57,6 +66,7 @@ pub enum AssuranceProjectionIssue {
     ProjectIdentityChanged,
     CounterOverflow,
     ProjectionEncodingFailed,
+    RepresentativeSliceInvalid { field: String },
 }
 
 /// Validate and canonically digest one kernel-assigned human intent revision.
@@ -217,9 +227,14 @@ pub fn project_durable_assurance(
         .into_iter()
         .map(|lens| DurableAssuranceLensProjection {
             lens,
-            claim_status: AssuranceClaimStatus::Unknown,
-            evidence_refs: Vec::new(),
-            evaluator_ref: None,
+            claim_status: DurableAssuranceEpistemicState::Unknown,
+            required_before: ReadinessTarget::Release,
+            due: true,
+            claims: Vec::new(),
+            evidence: Vec::new(),
+            capabilities: Vec::new(),
+            decisions: Vec::new(),
+            waivers: Vec::new(),
         })
         .collect::<Vec<_>>();
     let mut projection = DurableAssuranceProjection {
@@ -230,6 +245,7 @@ pub fn project_durable_assurance(
             intent_revision: event.intent.revision,
             intent_digest: event.intent_digest.clone(),
             accepted_record_digest: record.record_digest.clone(),
+            accepted_sequence: record.sequence,
             accepted_state_version: record.state_version,
             snapshot_digest: event.snapshot_digest.clone(),
             ledger_head_before_acceptance: event.ledger_head_digest.clone(),
@@ -238,6 +254,7 @@ pub fn project_durable_assurance(
         lenses,
         readiness: DurableAssuranceReadinessState::Unknown,
         blocker_lenses: UniversalAssuranceLens::ALL.to_vec(),
+        next_actions: Vec::new(),
         projection_digest: String::new(),
     };
     projection.projection_digest = canonical_digest(&DurableAssuranceProjectionDigestSubject {
@@ -246,6 +263,7 @@ pub fn project_durable_assurance(
         lenses: &projection.lenses,
         readiness: projection.readiness,
         blocker_lenses: &projection.blocker_lenses,
+        next_actions: &projection.next_actions,
     })?;
     Ok(Some(projection))
 }
@@ -257,6 +275,868 @@ struct DurableAssuranceProjectionDigestSubject<'a> {
     lenses: &'a [DurableAssuranceLensProjection],
     readiness: DurableAssuranceReadinessState,
     blocker_lenses: &'a [UniversalAssuranceLens],
+    next_actions: &'a [DurableAssuranceNextAction],
+}
+
+/// Evidence fact already authenticated and freshness-checked by the kernel.
+/// It contains no caller-selected claim status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceEvidenceFact {
+    pub assurance_epoch: u64,
+    pub sequence: u64,
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub evaluator_ref: StableId,
+    pub evidence_ref: String,
+    pub evidence_record_digest: String,
+    pub origin_record_digest: String,
+    pub provider: WorkflowEvaluatorProvider,
+    pub kind: WorkflowEvidenceKind,
+    pub strength: WorkflowEvidenceStrength,
+    pub outcome: WorkflowEvidenceOutcome,
+    pub subject_kind: WorkflowEvidenceSubjectKind,
+    pub subject_ref: String,
+    pub subject_digest: String,
+    pub scenario_digest: String,
+    pub origin_principal: PrincipalId,
+    pub separation_domain: StableId,
+    pub broker_profile: WorkflowBrokerOriginProfile,
+    pub representative_slice: Option<WorkflowRepresentativeSliceDefinitionDocument>,
+    /// Exact content digest of the independently reviewed definition. For the
+    /// definition receipt this equals `subject_digest`; for runtime receipts it
+    /// is derived by the kernel from the accepted definition, never from caller
+    /// input. Ordinary lens evidence carries `None`.
+    pub representative_slice_definition_digest: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceCapabilityFact {
+    pub assurance_epoch: u64,
+    pub sequence: u64,
+    pub policy_ref: StableId,
+    pub capability_ref: StableId,
+    pub available: bool,
+    pub receipt_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceDecisionFact {
+    pub assurance_epoch: u64,
+    pub sequence: u64,
+    pub policy_ref: StableId,
+    pub decision_ref: StableId,
+    pub resolved: bool,
+    pub receipt_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceWaiverFact {
+    pub assurance_epoch: u64,
+    pub sequence: u64,
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub receipt_digest: String,
+    pub expires_at_unix: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceActionPacketFact {
+    pub policy_ref: StableId,
+    pub subject_ref: StableId,
+    pub packet_digest: String,
+}
+
+/// Complete fact set supplied only after the kernel has verified ledger,
+/// registry, companion, revocation, subject, snapshot, and time bindings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GovernedAssuranceFacts {
+    pub target: ReadinessTarget,
+    pub evidence: Vec<GovernedAssuranceEvidenceFact>,
+    pub capabilities: Vec<GovernedAssuranceCapabilityFact>,
+    pub decisions: Vec<GovernedAssuranceDecisionFact>,
+    pub waivers: Vec<GovernedAssuranceWaiverFact>,
+    pub action_packets: Vec<GovernedAssuranceActionPacketFact>,
+}
+
+/// Derive governed lens state from admitted policy plus verified receipt facts.
+///
+/// The function accepts no claim status or readiness verdict. Facts from an
+/// older intent epoch or from before the current intent receipt are ignored.
+pub fn project_governed_durable_assurance(
+    mut projection: DurableAssuranceProjection,
+    bundle: &WorkflowGovernanceBundleDocument,
+    facts: &GovernedAssuranceFacts,
+) -> Result<DurableAssuranceProjection, AssuranceProjectionError> {
+    let current_evidence = facts
+        .evidence
+        .iter()
+        .filter(|fact| fact_is_current(fact.assurance_epoch, fact.sequence, &projection))
+        .collect::<Vec<_>>();
+    // The latest reviewer observation owns definition authority regardless of
+    // outcome. A newer failure or malformed replacement invalidates an older
+    // passing definition instead of silently falling back to stale authority.
+    let latest_definition_observation = current_evidence
+        .iter()
+        .copied()
+        .filter_map(|fact| {
+            let (_policy, claim, evaluator) = find_claim(bundle, fact)?;
+            if claim.assurance_role
+                != Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition)
+                || evaluator.provider != WorkflowEvaluatorProvider::IndependentReviewer
+                || fact.provider != evaluator.provider
+                || fact.kind != WorkflowEvidenceKind::IndependentReview
+                || fact.broker_profile != WorkflowBrokerOriginProfile::Reviewer
+                || fact.strength < evaluator.minimum_strength
+                || !evaluator.accepted_evidence_kinds.contains(&fact.kind)
+                || !origin_matches_provider(fact, evaluator.provider)
+            {
+                return None;
+            }
+            Some(fact)
+        })
+        .max_by_key(|fact| fact.sequence);
+    let definition = latest_definition_observation.and_then(|fact| {
+        if fact.outcome != WorkflowEvidenceOutcome::Pass
+            || fact.subject_kind != WorkflowEvidenceSubjectKind::Artifact
+            || fact.representative_slice_definition_digest.as_deref()
+                != Some(fact.subject_digest.as_str())
+        {
+            return None;
+        }
+        let manifest = fact.representative_slice.as_ref()?;
+        validate_representative_slice_definition(manifest, &projection.binding.intent_digest)
+            .is_ok()
+            .then_some((fact, manifest))
+    });
+
+    let mut lenses = Vec::with_capacity(UniversalAssuranceLens::ALL.len());
+    for lens in UniversalAssuranceLens::ALL {
+        let mut claim_bindings = Vec::new();
+        let mut evidence_bindings = Vec::new();
+        let mut capability_bindings = Vec::new();
+        let mut decision_bindings = Vec::new();
+        let mut waiver_bindings = Vec::new();
+
+        for policy in &bundle.workflow_governance_bundle.policies {
+            for claim in policy
+                .claims
+                .iter()
+                .filter(|claim| claim_contributes_to_lens(claim, lens))
+            {
+                let Some(evaluator) = policy
+                    .evaluators
+                    .iter()
+                    .find(|candidate| candidate.id == claim.evaluator_ref)
+                else {
+                    continue;
+                };
+                let required_before =
+                    claim_required_before(policy, &claim.id).unwrap_or(ReadinessTarget::Release);
+                let observations = current_evidence
+                    .iter()
+                    .copied()
+                    .filter(|fact| {
+                        fact.policy_ref == policy.id
+                            && fact.claim_ref == claim.id
+                            && fact.evaluator_ref == evaluator.id
+                            && fact.provider == evaluator.provider
+                            && evaluator.accepted_evidence_kinds.contains(&fact.kind)
+                            && origin_matches_provider(fact, evaluator.provider)
+                    })
+                    .collect::<Vec<_>>();
+                let waivers = facts
+                    .waivers
+                    .iter()
+                    .filter(|fact| {
+                        fact_is_current(fact.assurance_epoch, fact.sequence, &projection)
+                            && fact.policy_ref == policy.id
+                            && fact.claim_ref == claim.id
+                    })
+                    .collect::<Vec<_>>();
+                let state = claim_epistemic_state(
+                    claim.assurance_role,
+                    evaluator,
+                    &observations,
+                    &waivers,
+                    definition,
+                );
+                claim_bindings.push(DurableAssuranceClaimBinding {
+                    policy_ref: policy.id.clone(),
+                    claim_ref: claim.id.clone(),
+                    evaluator_ref: evaluator.id.clone(),
+                    evaluator_provider: evaluator.provider,
+                    required_before,
+                    state,
+                });
+                evidence_bindings.extend(observations.into_iter().map(evidence_binding));
+                waiver_bindings.extend(waivers.into_iter().map(|fact| {
+                    DurableAssuranceWaiverBinding {
+                        policy_ref: fact.policy_ref.clone(),
+                        claim_ref: fact.claim_ref.clone(),
+                        receipt_digest: fact.receipt_digest.clone(),
+                        expires_at_unix: fact.expires_at_unix,
+                    }
+                }));
+
+                for requirement in policy
+                    .capability_requirements
+                    .iter()
+                    .filter(|requirement| requirement.affected_claim_refs.contains(&claim.id))
+                {
+                    let latest = facts
+                        .capabilities
+                        .iter()
+                        .filter(|fact| {
+                            fact_is_current(fact.assurance_epoch, fact.sequence, &projection)
+                                && fact.policy_ref == policy.id
+                                && fact.capability_ref == requirement.id
+                        })
+                        .max_by_key(|fact| fact.sequence);
+                    capability_bindings.push(DurableAssuranceCapabilityBinding {
+                        policy_ref: policy.id.clone(),
+                        capability_ref: requirement.id.clone(),
+                        available: latest.is_some_and(|fact| fact.available),
+                        receipt_digest: latest.map(|fact| fact.receipt_digest.clone()),
+                    });
+                }
+                for rule in policy
+                    .decision_rules
+                    .iter()
+                    .filter(|rule| rule.claim_ref.as_ref() == Some(&claim.id))
+                {
+                    let latest = facts
+                        .decisions
+                        .iter()
+                        .filter(|fact| {
+                            fact_is_current(fact.assurance_epoch, fact.sequence, &projection)
+                                && fact.policy_ref == policy.id
+                                && fact.decision_ref == rule.id
+                        })
+                        .max_by_key(|fact| fact.sequence);
+                    decision_bindings.push(DurableAssuranceDecisionBinding {
+                        policy_ref: policy.id.clone(),
+                        decision_ref: rule.id.clone(),
+                        resolved: latest.is_some_and(|fact| fact.resolved),
+                        receipt_digest: latest.map(|fact| fact.receipt_digest.clone()),
+                    });
+                }
+            }
+        }
+
+        claim_bindings.sort_by(|left, right| {
+            left.policy_ref
+                .cmp(&right.policy_ref)
+                .then_with(|| left.claim_ref.cmp(&right.claim_ref))
+        });
+        evidence_bindings.sort_by(|left, right| {
+            left.policy_ref
+                .cmp(&right.policy_ref)
+                .then_with(|| left.claim_ref.cmp(&right.claim_ref))
+                .then_with(|| {
+                    left.evidence_record_digest
+                        .cmp(&right.evidence_record_digest)
+                })
+        });
+        capability_bindings.sort_by(|left, right| {
+            left.policy_ref
+                .cmp(&right.policy_ref)
+                .then_with(|| left.capability_ref.cmp(&right.capability_ref))
+        });
+        capability_bindings.dedup();
+        decision_bindings.sort_by(|left, right| {
+            left.policy_ref
+                .cmp(&right.policy_ref)
+                .then_with(|| left.decision_ref.cmp(&right.decision_ref))
+        });
+        decision_bindings.dedup();
+        waiver_bindings.sort_by(|left, right| left.receipt_digest.cmp(&right.receipt_digest));
+        waiver_bindings.dedup();
+
+        let required_before = claim_bindings
+            .iter()
+            .map(|binding| binding.required_before)
+            .min_by_key(|target| target.rank())
+            .unwrap_or(ReadinessTarget::Release);
+        let due = claim_bindings
+            .iter()
+            .any(|binding| facts.target.rank() >= binding.required_before.rank());
+        // Claims for a later boundary remain visible in the projection, but
+        // cannot block an earlier target. The definition prerequisite is
+        // derived onto the two execution lenses without mapping/satisfying a
+        // policy lens by itself.
+        let claim_status = aggregate_lens_state_for_target(&claim_bindings, facts.target);
+        lenses.push(DurableAssuranceLensProjection {
+            lens,
+            claim_status,
+            required_before,
+            due,
+            claims: claim_bindings,
+            evidence: evidence_bindings,
+            capabilities: capability_bindings,
+            decisions: decision_bindings,
+            waivers: waiver_bindings,
+        });
+    }
+
+    let blocker_lenses = lenses
+        .iter()
+        .filter(|lens| {
+            lens.due
+                && !matches!(
+                    lens.claim_status,
+                    DurableAssuranceEpistemicState::Verified
+                        | DurableAssuranceEpistemicState::Waived
+                )
+        })
+        .map(|lens| lens.lens)
+        .collect::<Vec<_>>();
+    let next_actions = bounded_next_actions(&lenses, facts);
+    projection.lenses = lenses;
+    projection.blocker_lenses = blocker_lenses;
+    projection.readiness = if projection.blocker_lenses.is_empty() {
+        DurableAssuranceReadinessState::Ready
+    } else {
+        DurableAssuranceReadinessState::Blocked
+    };
+    projection.next_actions = next_actions;
+    projection.projection_digest = canonical_digest(&DurableAssuranceProjectionDigestSubject {
+        binding: &projection.binding,
+        intent: &projection.intent,
+        lenses: &projection.lenses,
+        readiness: projection.readiness,
+        blocker_lenses: &projection.blocker_lenses,
+        next_actions: &projection.next_actions,
+    })?;
+    Ok(projection)
+}
+
+fn fact_is_current(epoch: u64, sequence: u64, projection: &DurableAssuranceProjection) -> bool {
+    epoch == projection.binding.assurance_epoch && sequence > projection.binding.accepted_sequence
+}
+
+fn find_claim<'a>(
+    bundle: &'a WorkflowGovernanceBundleDocument,
+    fact: &GovernedAssuranceEvidenceFact,
+) -> Option<(
+    &'a forge_core_contracts::WorkflowGovernancePolicy,
+    &'a forge_core_contracts::WorkflowClaimPolicy,
+    &'a forge_core_contracts::WorkflowEvaluatorBinding,
+)> {
+    let policy = bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .find(|policy| policy.id == fact.policy_ref)?;
+    let claim = policy
+        .claims
+        .iter()
+        .find(|claim| claim.id == fact.claim_ref && claim.evaluator_ref == fact.evaluator_ref)?;
+    let evaluator = policy
+        .evaluators
+        .iter()
+        .find(|evaluator| evaluator.id == fact.evaluator_ref)?;
+    Some((policy, claim, evaluator))
+}
+
+fn claim_required_before(
+    policy: &forge_core_contracts::WorkflowGovernancePolicy,
+    claim_ref: &StableId,
+) -> Option<ReadinessTarget> {
+    policy
+        .obligations
+        .iter()
+        .filter(|obligation| {
+            obligation.criticality != ObligationCriticality::Advisory
+                && obligation.claim_refs.contains(claim_ref)
+        })
+        .map(|obligation| obligation.required_before)
+        .min_by_key(|target| target.rank())
+}
+
+fn claim_contributes_to_lens(
+    claim: &forge_core_contracts::WorkflowClaimPolicy,
+    lens: UniversalAssuranceLens,
+) -> bool {
+    claim.assurance_lenses.contains(&lens)
+        || (claim.assurance_role == Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition)
+            && matches!(
+                lens,
+                UniversalAssuranceLens::CriticalJourneys
+                    | UniversalAssuranceLens::EvidenceRepresentativeness
+            ))
+}
+
+fn origin_matches_provider(
+    fact: &GovernedAssuranceEvidenceFact,
+    provider: WorkflowEvaluatorProvider,
+) -> bool {
+    !fact.origin_record_digest.trim().is_empty()
+        && !fact.origin_principal.0.trim().is_empty()
+        && !fact.separation_domain.0.trim().is_empty()
+        && match provider {
+            WorkflowEvaluatorProvider::AuthorizedHuman => {
+                fact.broker_profile == WorkflowBrokerOriginProfile::Human
+            }
+            WorkflowEvaluatorProvider::IndependentReviewer => {
+                fact.broker_profile == WorkflowBrokerOriginProfile::Reviewer
+            }
+            WorkflowEvaluatorProvider::RepositoryInspector
+            | WorkflowEvaluatorProvider::DeterministicTool
+            | WorkflowEvaluatorProvider::RepresentativeRuntime
+            | WorkflowEvaluatorProvider::ExternalAuthority
+            | WorkflowEvaluatorProvider::ResearchSource => {
+                fact.broker_profile == WorkflowBrokerOriginProfile::Runtime
+            }
+        }
+}
+
+fn claim_epistemic_state(
+    role: Option<WorkflowAssuranceClaimRole>,
+    evaluator: &forge_core_contracts::WorkflowEvaluatorBinding,
+    observations: &[&GovernedAssuranceEvidenceFact],
+    waivers: &[&GovernedAssuranceWaiverFact],
+    definition: Option<(
+        &GovernedAssuranceEvidenceFact,
+        &WorkflowRepresentativeSliceDefinitionDocument,
+    )>,
+) -> DurableAssuranceEpistemicState {
+    if observations
+        .iter()
+        .any(|fact| fact.outcome == WorkflowEvidenceOutcome::Fail)
+    {
+        return DurableAssuranceEpistemicState::Disproven;
+    }
+    if !waivers.is_empty() {
+        return DurableAssuranceEpistemicState::Waived;
+    }
+    let passing = observations
+        .iter()
+        .copied()
+        .filter(|fact| fact.outcome == WorkflowEvidenceOutcome::Pass)
+        .collect::<Vec<_>>();
+    let qualifying = passing
+        .iter()
+        .copied()
+        .filter(|fact| {
+            fact.provider != WorkflowEvaluatorProvider::ResearchSource
+                && fact.kind != WorkflowEvidenceKind::Research
+                && fact.strength >= evaluator.minimum_strength
+                && representative_evidence_matches(role, fact, definition)
+        })
+        .collect::<Vec<_>>();
+    let principals = qualifying
+        .iter()
+        .map(|fact| fact.origin_principal.0.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let separation_domains = qualifying
+        .iter()
+        .map(|fact| fact.separation_domain.0.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let reviewer_separation = evaluator.provider != WorkflowEvaluatorProvider::IndependentReviewer
+        || separation_domains.len() >= evaluator.minimum_distinct_principals.max(1);
+    let representative_complete = role
+        != Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution)
+        || representative_execution_complete(&qualifying, definition);
+    if qualifying.len() >= evaluator.minimum_passing_observations
+        && principals.len() >= evaluator.minimum_distinct_principals
+        && reviewer_separation
+        && representative_complete
+    {
+        DurableAssuranceEpistemicState::Verified
+    } else if passing.is_empty() {
+        DurableAssuranceEpistemicState::Unknown
+    } else {
+        DurableAssuranceEpistemicState::Supported
+    }
+}
+
+fn representative_evidence_matches(
+    role: Option<WorkflowAssuranceClaimRole>,
+    fact: &GovernedAssuranceEvidenceFact,
+    definition: Option<(
+        &GovernedAssuranceEvidenceFact,
+        &WorkflowRepresentativeSliceDefinitionDocument,
+    )>,
+) -> bool {
+    if role == Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) {
+        return definition.is_some_and(|(definition_fact, _)| {
+            definition_fact.evidence_record_digest == fact.evidence_record_digest
+        });
+    }
+    if role != Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) {
+        return true;
+    }
+    fact.provider == WorkflowEvaluatorProvider::RepresentativeRuntime
+        && fact.kind == WorkflowEvidenceKind::RepresentativeExecution
+        && fact.subject_kind == WorkflowEvidenceSubjectKind::Runtime
+        && definition.is_some_and(|(definition_fact, manifest)| {
+            fact.sequence > definition_fact.sequence
+                && fact.representative_slice_definition_digest.as_deref()
+                    == Some(definition_fact.subject_digest.as_str())
+                && fact.separation_domain != definition_fact.separation_domain
+                && manifest
+                    .representative_slice
+                    .representative_environment
+                    .runtime_subject_ref
+                    == fact.subject_ref
+                && manifest
+                    .representative_slice
+                    .representative_environment
+                    .runtime_subject_digest
+                    == fact.subject_digest
+                && manifest
+                    .representative_slice
+                    .scenarios
+                    .iter()
+                    .any(|scenario| scenario.declared_scenario_digest == fact.scenario_digest)
+        })
+}
+
+fn representative_execution_complete(
+    qualifying: &[&GovernedAssuranceEvidenceFact],
+    definition: Option<(
+        &GovernedAssuranceEvidenceFact,
+        &WorkflowRepresentativeSliceDefinitionDocument,
+    )>,
+) -> bool {
+    definition.is_some_and(|(definition_fact, manifest)| {
+        manifest
+            .representative_slice
+            .scenarios
+            .iter()
+            .all(|scenario| {
+                qualifying.iter().any(|fact| {
+                    fact.sequence > definition_fact.sequence
+                        && fact.representative_slice_definition_digest.as_deref()
+                            == Some(definition_fact.subject_digest.as_str())
+                        && fact.scenario_digest == scenario.declared_scenario_digest
+                        && fact.separation_domain != definition_fact.separation_domain
+                        && fact.subject_kind == WorkflowEvidenceSubjectKind::Runtime
+                        && fact.subject_ref
+                            == manifest
+                                .representative_slice
+                                .representative_environment
+                                .runtime_subject_ref
+                        && fact.subject_digest
+                            == manifest
+                                .representative_slice
+                                .representative_environment
+                                .runtime_subject_digest
+                })
+            })
+    })
+}
+
+fn aggregate_lens_state(claims: &[DurableAssuranceClaimBinding]) -> DurableAssuranceEpistemicState {
+    if claims.is_empty() {
+        return DurableAssuranceEpistemicState::Unknown;
+    }
+    if claims
+        .iter()
+        .any(|claim| claim.state == DurableAssuranceEpistemicState::Disproven)
+    {
+        return DurableAssuranceEpistemicState::Disproven;
+    }
+    if claims
+        .iter()
+        .all(|claim| claim.state == DurableAssuranceEpistemicState::Verified)
+    {
+        return DurableAssuranceEpistemicState::Verified;
+    }
+    if claims.iter().all(|claim| {
+        matches!(
+            claim.state,
+            DurableAssuranceEpistemicState::Verified | DurableAssuranceEpistemicState::Waived
+        )
+    }) && claims
+        .iter()
+        .any(|claim| claim.state == DurableAssuranceEpistemicState::Waived)
+    {
+        return DurableAssuranceEpistemicState::Waived;
+    }
+    if claims.iter().any(|claim| {
+        matches!(
+            claim.state,
+            DurableAssuranceEpistemicState::Supported | DurableAssuranceEpistemicState::Verified
+        )
+    }) {
+        DurableAssuranceEpistemicState::Supported
+    } else {
+        DurableAssuranceEpistemicState::Unknown
+    }
+}
+
+fn aggregate_lens_state_for_target(
+    claims: &[DurableAssuranceClaimBinding],
+    target: ReadinessTarget,
+) -> DurableAssuranceEpistemicState {
+    let due = claims
+        .iter()
+        .filter(|claim| target.rank() >= claim.required_before.rank())
+        .cloned()
+        .collect::<Vec<_>>();
+    aggregate_lens_state(&due)
+}
+
+fn evidence_binding(fact: &GovernedAssuranceEvidenceFact) -> DurableAssuranceEvidenceBinding {
+    DurableAssuranceEvidenceBinding {
+        policy_ref: fact.policy_ref.clone(),
+        claim_ref: fact.claim_ref.clone(),
+        evaluator_ref: fact.evaluator_ref.clone(),
+        evidence_ref: fact.evidence_ref.clone(),
+        evidence_record_digest: fact.evidence_record_digest.clone(),
+        origin_record_digest: fact.origin_record_digest.clone(),
+        provider: fact.provider,
+        kind: fact.kind,
+        strength: fact.strength,
+        outcome: fact.outcome,
+        subject_kind: fact.subject_kind,
+        subject_ref: fact.subject_ref.clone(),
+        subject_digest: fact.subject_digest.clone(),
+        scenario_digest: fact.scenario_digest.clone(),
+        origin_principal: fact.origin_principal.clone(),
+        separation_domain: fact.separation_domain.clone(),
+        broker_profile: fact.broker_profile,
+    }
+}
+
+fn bounded_next_actions(
+    lenses: &[DurableAssuranceLensProjection],
+    facts: &GovernedAssuranceFacts,
+) -> Vec<DurableAssuranceNextAction> {
+    let mut actions = lenses
+        .iter()
+        .filter(|lens| {
+            lens.due
+                && !matches!(
+                    lens.claim_status,
+                    DurableAssuranceEpistemicState::Verified
+                        | DurableAssuranceEpistemicState::Waived
+                )
+        })
+        .filter_map(|lens| {
+            let default_claim = lens.claims.iter().find(|claim| {
+                facts.target.rank() >= claim.required_before.rank()
+                    && !matches!(
+                        claim.state,
+                        DurableAssuranceEpistemicState::Verified
+                            | DurableAssuranceEpistemicState::Waived
+                    )
+            })?;
+            let disproven_claim = lens.claims.iter().find(|claim| {
+                facts.target.rank() >= claim.required_before.rank()
+                    && claim.state == DurableAssuranceEpistemicState::Disproven
+            });
+            let research_claim = lens.claims.iter().find(|claim| {
+                facts.target.rank() >= claim.required_before.rank()
+                    && claim.evaluator_provider == WorkflowEvaluatorProvider::ResearchSource
+                    && !matches!(
+                        claim.state,
+                        DurableAssuranceEpistemicState::Verified
+                            | DurableAssuranceEpistemicState::Waived
+                    )
+            });
+            let missing_capability = lens.capabilities.iter().find(|item| !item.available);
+            let unresolved_decision = lens.decisions.iter().find(|item| !item.resolved);
+            let kind = if lens.claim_status == DurableAssuranceEpistemicState::Disproven {
+                NextActionKind::Challenge
+            } else if missing_capability.is_some() {
+                NextActionKind::AcquireCapability
+            } else if unresolved_decision.is_some() {
+                NextActionKind::AskHuman
+            } else if research_claim.is_some() {
+                NextActionKind::Research
+            } else {
+                NextActionKind::Evaluate
+            };
+            let claim = disproven_claim.or(research_claim).unwrap_or(default_claim);
+            let subject_ref = missing_capability
+                .map(|item| item.capability_ref.clone())
+                .or_else(|| unresolved_decision.map(|item| item.decision_ref.clone()))
+                .unwrap_or_else(|| claim.claim_ref.clone());
+            let policy_ref = missing_capability
+                .map(|item| item.policy_ref.clone())
+                .or_else(|| unresolved_decision.map(|item| item.policy_ref.clone()))
+                .unwrap_or_else(|| claim.policy_ref.clone());
+            let packet = facts.action_packets.iter().find(|packet| {
+                packet.policy_ref == policy_ref && packet.subject_ref == subject_ref
+            });
+            Some(DurableAssuranceNextAction {
+                lens: lens.lens,
+                kind,
+                policy_ref,
+                subject_ref: Some(subject_ref),
+                action_packet_digest: packet.map(|packet| packet.packet_digest.clone()),
+                rank: 0,
+            })
+        })
+        .collect::<Vec<_>>();
+    actions.sort_by(|left, right| {
+        durable_action_priority(left.kind)
+            .cmp(&durable_action_priority(right.kind))
+            .then_with(|| left.lens.cmp(&right.lens))
+            .then_with(|| left.policy_ref.cmp(&right.policy_ref))
+    });
+    actions.truncate(MAX_DURABLE_ASSURANCE_NEXT_ACTIONS);
+    for (index, action) in actions.iter_mut().enumerate() {
+        action.rank = u32::try_from(index + 1).unwrap_or(u32::MAX);
+    }
+    actions
+}
+
+const fn durable_action_priority(kind: NextActionKind) -> u8 {
+    match kind {
+        NextActionKind::Challenge => 0,
+        NextActionKind::AcquireCapability => 1,
+        NextActionKind::AskHuman => 2,
+        NextActionKind::Research => 3,
+        NextActionKind::Evaluate => 4,
+        NextActionKind::Experiment
+        | NextActionKind::Implement
+        | NextActionKind::DeclareGap
+        | NextActionKind::Proceed => 5,
+    }
+}
+
+/// Validate bounded representative-slice content and its current intent bind.
+pub fn validate_representative_slice_definition(
+    document: &WorkflowRepresentativeSliceDefinitionDocument,
+    current_intent_digest: &str,
+) -> Result<(), AssuranceProjectionError> {
+    let mut issues = Vec::new();
+    if document.schema_version != WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "schema_version".to_owned(),
+        });
+    }
+    let slice = &document.representative_slice;
+    if slice.intent_digest != current_intent_digest || !is_sha256_digest(&slice.intent_digest) {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "intent_digest".to_owned(),
+        });
+    }
+    for (field, value) in [
+        ("critical_journey", slice.critical_journey.as_str()),
+        ("falsifier", slice.falsifier.as_str()),
+        (
+            "representative_environment.expectation",
+            slice.representative_environment.expectation.as_str(),
+        ),
+    ] {
+        if value.trim().is_empty() || value.len() > MAX_REPRESENTATIVE_SLICE_TEXT_BYTES {
+            issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+                field: field.to_owned(),
+            });
+        }
+    }
+    if slice
+        .representative_environment
+        .runtime_subject_ref
+        .trim()
+        .is_empty()
+        || !is_sha256_digest(&slice.representative_environment.runtime_subject_digest)
+    {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "representative_environment".to_owned(),
+        });
+    }
+    if slice.scenarios.is_empty()
+        || slice.scenarios.len() > MAX_REPRESENTATIVE_SLICE_ITEMS
+        || slice.material_failure_modes.is_empty()
+        || slice.material_failure_modes.len() > MAX_REPRESENTATIVE_SLICE_ITEMS
+    {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "bounded_items".to_owned(),
+        });
+    }
+    let failure_ids = slice
+        .material_failure_modes
+        .iter()
+        .map(|failure| failure.id.0.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    if failure_ids.len() != slice.material_failure_modes.len()
+        || slice.material_failure_modes.iter().any(|failure| {
+            failure.id.0.trim().is_empty()
+                || failure.description.trim().is_empty()
+                || failure.description.len() > MAX_REPRESENTATIVE_SLICE_ITEM_BYTES
+        })
+    {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "material_failure_modes".to_owned(),
+        });
+    }
+    let mut covered = std::collections::BTreeSet::new();
+    let mut scenario_refs = std::collections::BTreeSet::new();
+    for scenario in &slice.scenarios {
+        let path_valid = !scenario.scenario_ref.trim().is_empty()
+            && scenario.scenario_ref.len() <= MAX_REPRESENTATIVE_SLICE_ITEM_BYTES
+            && !scenario.scenario_ref.contains('\\')
+            && !scenario.scenario_ref.starts_with('/')
+            && !scenario.scenario_ref.contains(':')
+            && !scenario
+                .scenario_ref
+                .split('/')
+                .any(|segment| segment == ".." || segment.is_empty());
+        let distinct_failure_refs = scenario
+            .failure_mode_refs
+            .iter()
+            .map(|reference| reference.0.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        if !path_valid
+            || !scenario_refs.insert(scenario.scenario_ref.as_str())
+            || !is_sha256_digest(&scenario.declared_scenario_digest)
+            || scenario.failure_mode_refs.is_empty()
+            || scenario.failure_mode_refs.len() > MAX_REPRESENTATIVE_SLICE_ITEMS
+            || distinct_failure_refs.len() != scenario.failure_mode_refs.len()
+            || scenario
+                .failure_mode_refs
+                .iter()
+                .any(|reference| !failure_ids.contains(reference.0.as_str()))
+        {
+            issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+                field: "scenarios".to_owned(),
+            });
+        }
+        covered.extend(
+            scenario
+                .failure_mode_refs
+                .iter()
+                .map(|reference| reference.0.as_str()),
+        );
+    }
+    if covered != failure_ids {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "failure_mode_coverage".to_owned(),
+        });
+    }
+    let total_bytes = slice.critical_journey.len()
+        + slice.falsifier.len()
+        + slice.representative_environment.runtime_subject_ref.len()
+        + slice
+            .representative_environment
+            .runtime_subject_digest
+            .len()
+        + slice.representative_environment.expectation.len()
+        + slice
+            .scenarios
+            .iter()
+            .map(|scenario| scenario.scenario_ref.len() + scenario.declared_scenario_digest.len())
+            .sum::<usize>()
+        + slice
+            .material_failure_modes
+            .iter()
+            .map(|failure| failure.id.0.len() + failure.description.len())
+            .sum::<usize>();
+    if total_bytes > MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES {
+        issues.push(AssuranceProjectionIssue::RepresentativeSliceInvalid {
+            field: "total_bytes".to_owned(),
+        });
+    }
+    if issues.is_empty() {
+        Ok(())
+    } else {
+        Err(AssuranceProjectionError { issues })
+    }
 }
 
 fn validate_intent(intent: &WorkflowHumanIntentRevision) -> Vec<AssuranceProjectionIssue> {
@@ -483,9 +1363,9 @@ mod tests {
             UniversalAssuranceLens::ALL
         );
         assert!(projection.lenses.iter().all(|entry| {
-            entry.claim_status == AssuranceClaimStatus::Unknown
-                && entry.evidence_refs.is_empty()
-                && entry.evaluator_ref.is_none()
+            entry.claim_status == DurableAssuranceEpistemicState::Unknown
+                && entry.evidence.is_empty()
+                && entry.claims.is_empty()
         }));
         assert_eq!(
             projection.readiness,
@@ -526,7 +1406,7 @@ mod tests {
         assert!(projection
             .lenses
             .iter()
-            .all(|lens| lens.claim_status == AssuranceClaimStatus::Unknown));
+            .all(|lens| lens.claim_status == DurableAssuranceEpistemicState::Unknown));
     }
 
     #[test]
@@ -606,5 +1486,291 @@ mod tests {
         assert!(clock_mismatch_error
             .issues
             .contains(&AssuranceProjectionIssue::OriginBindingMismatch));
+    }
+
+    fn evidence_fact(
+        provider: WorkflowEvaluatorProvider,
+        kind: WorkflowEvidenceKind,
+        outcome: WorkflowEvidenceOutcome,
+    ) -> GovernedAssuranceEvidenceFact {
+        GovernedAssuranceEvidenceFact {
+            assurance_epoch: 1,
+            sequence: 3,
+            policy_ref: StableId("policy.assurance".to_owned()),
+            claim_ref: StableId("claim.assurance".to_owned()),
+            evaluator_ref: StableId("evaluator.assurance".to_owned()),
+            evidence_ref: "evidence.assurance".to_owned(),
+            evidence_record_digest: hash('1'),
+            origin_record_digest: hash('2'),
+            provider,
+            kind,
+            strength: WorkflowEvidenceStrength::IndependentConfirmation,
+            outcome,
+            subject_kind: WorkflowEvidenceSubjectKind::ExternalSystem,
+            subject_ref: "external:source".to_owned(),
+            subject_digest: hash('3'),
+            scenario_digest: hash('4'),
+            origin_principal: PrincipalId("principal.researcher".to_owned()),
+            separation_domain: StableId("domain.research".to_owned()),
+            broker_profile: WorkflowBrokerOriginProfile::Runtime,
+            representative_slice: None,
+            representative_slice_definition_digest: None,
+        }
+    }
+
+    fn evaluator(
+        provider: WorkflowEvaluatorProvider,
+    ) -> forge_core_contracts::WorkflowEvaluatorBinding {
+        forge_core_contracts::WorkflowEvaluatorBinding {
+            id: StableId("evaluator.assurance".to_owned()),
+            provider,
+            accepted_evidence_kinds: vec![WorkflowEvidenceKind::Research],
+            minimum_strength: WorkflowEvidenceStrength::IndependentConfirmation,
+            minimum_passing_observations: 1,
+            minimum_distinct_principals: 1,
+            max_age_seconds: 300,
+            freshness: forge_core_contracts::WorkflowFreshnessRequirement::CurrentOnly,
+            disproof_policy: forge_core_contracts::WorkflowDisproofPolicy::RejectAnyDisproof,
+        }
+    }
+
+    #[test]
+    fn governed_research_can_support_but_never_verify() {
+        let evaluator = evaluator(WorkflowEvaluatorProvider::ResearchSource);
+        let fact = evidence_fact(
+            WorkflowEvaluatorProvider::ResearchSource,
+            WorkflowEvidenceKind::Research,
+            WorkflowEvidenceOutcome::Pass,
+        );
+
+        assert_eq!(
+            claim_epistemic_state(
+                Some(WorkflowAssuranceClaimRole::LensEvidence),
+                &evaluator,
+                &[&fact],
+                &[],
+                None,
+            ),
+            DurableAssuranceEpistemicState::Supported
+        );
+    }
+
+    #[test]
+    fn governed_disproof_dominates_an_existing_waiver() {
+        let evaluator = evaluator(WorkflowEvaluatorProvider::ResearchSource);
+        let fact = evidence_fact(
+            WorkflowEvaluatorProvider::ResearchSource,
+            WorkflowEvidenceKind::Research,
+            WorkflowEvidenceOutcome::Fail,
+        );
+        let waiver = GovernedAssuranceWaiverFact {
+            assurance_epoch: 1,
+            sequence: 4,
+            policy_ref: StableId("policy.assurance".to_owned()),
+            claim_ref: StableId("claim.assurance".to_owned()),
+            receipt_digest: hash('5'),
+            expires_at_unix: 500,
+        };
+
+        assert_eq!(
+            claim_epistemic_state(
+                Some(WorkflowAssuranceClaimRole::LensEvidence),
+                &evaluator,
+                &[&fact],
+                &[&waiver],
+                None,
+            ),
+            DurableAssuranceEpistemicState::Disproven
+        );
+    }
+
+    #[test]
+    fn later_boundary_claims_remain_visible_without_blocking_execute() {
+        let binding = |claim: &str,
+                       required_before: ReadinessTarget,
+                       state: DurableAssuranceEpistemicState| {
+            DurableAssuranceClaimBinding {
+                policy_ref: StableId("policy.assurance".to_owned()),
+                claim_ref: StableId(claim.to_owned()),
+                evaluator_ref: StableId(format!("evaluator.{claim}")),
+                evaluator_provider: WorkflowEvaluatorProvider::RepresentativeRuntime,
+                required_before,
+                state,
+            }
+        };
+        let claims = vec![
+            binding(
+                "claim.execute",
+                ReadinessTarget::Execute,
+                DurableAssuranceEpistemicState::Verified,
+            ),
+            binding(
+                "claim.release",
+                ReadinessTarget::Release,
+                DurableAssuranceEpistemicState::Unknown,
+            ),
+        ];
+
+        assert_eq!(
+            aggregate_lens_state_for_target(&claims, ReadinessTarget::Execute),
+            DurableAssuranceEpistemicState::Verified
+        );
+        assert_eq!(
+            aggregate_lens_state_for_target(&claims, ReadinessTarget::Release),
+            DurableAssuranceEpistemicState::Supported
+        );
+    }
+
+    #[test]
+    fn representative_slice_is_typed_bounded_and_intent_bound() {
+        let manifest = WorkflowRepresentativeSliceDefinitionDocument {
+            schema_version: WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION.to_owned(),
+            representative_slice: forge_core_contracts::WorkflowRepresentativeSliceDefinition {
+                intent_digest: hash('a'),
+                critical_journey: "First use succeeds end to end".to_owned(),
+                falsifier: "The first-use result is unusable".to_owned(),
+                representative_environment:
+                    forge_core_contracts::WorkflowRepresentativeEnvironment {
+                        runtime_subject_ref: "runtime.reference".to_owned(),
+                        runtime_subject_digest: hash('b'),
+                        expectation: "Reference runtime with production-equivalent effects"
+                            .to_owned(),
+                    },
+                scenarios: vec![
+                    forge_core_contracts::WorkflowRepresentativeScenarioReference {
+                        scenario_ref: "assurance/first-use.yaml".to_owned(),
+                        declared_scenario_digest: hash('c'),
+                        failure_mode_refs: vec![StableId("failure.first-use".to_owned())],
+                    },
+                ],
+                material_failure_modes: vec![
+                    forge_core_contracts::WorkflowRepresentativeFailureMode {
+                        id: StableId("failure.first-use".to_owned()),
+                        description: "The integrated result cannot complete first use".to_owned(),
+                    },
+                ],
+            },
+        };
+
+        validate_representative_slice_definition(&manifest, &hash('a')).expect("valid manifest");
+        assert!(validate_representative_slice_definition(&manifest, &hash('f')).is_err());
+    }
+
+    #[test]
+    fn representative_execution_requires_every_scenario_and_separate_runtime_domain() {
+        let first_digest = hash('c');
+        let second_digest = hash('d');
+        let manifest = WorkflowRepresentativeSliceDefinitionDocument {
+            schema_version: WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION.to_owned(),
+            representative_slice: forge_core_contracts::WorkflowRepresentativeSliceDefinition {
+                intent_digest: hash('a'),
+                critical_journey: "First use succeeds end to end".to_owned(),
+                falsifier: "Either scenario fails".to_owned(),
+                representative_environment:
+                    forge_core_contracts::WorkflowRepresentativeEnvironment {
+                        runtime_subject_ref: "runtime.reference".to_owned(),
+                        runtime_subject_digest: hash('b'),
+                        expectation: "Production-equivalent runtime".to_owned(),
+                    },
+                scenarios: vec![
+                    forge_core_contracts::WorkflowRepresentativeScenarioReference {
+                        scenario_ref: "assurance/first.yaml".to_owned(),
+                        declared_scenario_digest: first_digest.clone(),
+                        failure_mode_refs: vec![StableId("failure.first".to_owned())],
+                    },
+                    forge_core_contracts::WorkflowRepresentativeScenarioReference {
+                        scenario_ref: "assurance/second.yaml".to_owned(),
+                        declared_scenario_digest: second_digest.clone(),
+                        failure_mode_refs: vec![StableId("failure.second".to_owned())],
+                    },
+                ],
+                material_failure_modes: vec![
+                    forge_core_contracts::WorkflowRepresentativeFailureMode {
+                        id: StableId("failure.first".to_owned()),
+                        description: "First scenario fails".to_owned(),
+                    },
+                    forge_core_contracts::WorkflowRepresentativeFailureMode {
+                        id: StableId("failure.second".to_owned()),
+                        description: "Second scenario fails".to_owned(),
+                    },
+                ],
+            },
+        };
+        let mut definition_fact = evidence_fact(
+            WorkflowEvaluatorProvider::IndependentReviewer,
+            WorkflowEvidenceKind::IndependentReview,
+            WorkflowEvidenceOutcome::Pass,
+        );
+        definition_fact.broker_profile = WorkflowBrokerOriginProfile::Reviewer;
+        definition_fact.separation_domain = StableId("domain.reviewer".to_owned());
+        definition_fact.subject_kind = WorkflowEvidenceSubjectKind::Artifact;
+        definition_fact.representative_slice = Some(manifest.clone());
+        definition_fact.representative_slice_definition_digest =
+            Some(definition_fact.subject_digest.clone());
+        let runtime_evaluator = forge_core_contracts::WorkflowEvaluatorBinding {
+            id: StableId("evaluator.assurance".to_owned()),
+            provider: WorkflowEvaluatorProvider::RepresentativeRuntime,
+            accepted_evidence_kinds: vec![WorkflowEvidenceKind::RepresentativeExecution],
+            minimum_strength: WorkflowEvidenceStrength::RepresentativeExecution,
+            minimum_passing_observations: 1,
+            minimum_distinct_principals: 0,
+            max_age_seconds: 300,
+            freshness: forge_core_contracts::WorkflowFreshnessRequirement::CurrentOnly,
+            disproof_policy: forge_core_contracts::WorkflowDisproofPolicy::RejectAnyDisproof,
+        };
+        let runtime_fact = |digest: String, domain: &str| {
+            let mut fact = evidence_fact(
+                WorkflowEvaluatorProvider::RepresentativeRuntime,
+                WorkflowEvidenceKind::RepresentativeExecution,
+                WorkflowEvidenceOutcome::Pass,
+            );
+            fact.strength = WorkflowEvidenceStrength::RepresentativeExecution;
+            fact.subject_kind = WorkflowEvidenceSubjectKind::Runtime;
+            fact.subject_ref = "runtime.reference".to_owned();
+            fact.subject_digest = hash('b');
+            fact.scenario_digest = digest;
+            fact.separation_domain = StableId(domain.to_owned());
+            fact.sequence = definition_fact.sequence + 1;
+            fact.representative_slice_definition_digest =
+                Some(definition_fact.subject_digest.clone());
+            fact
+        };
+        let first = runtime_fact(first_digest, "domain.runtime");
+        let second_same_domain = runtime_fact(second_digest.clone(), "domain.reviewer");
+        let second = runtime_fact(second_digest, "domain.runtime");
+        let definition = Some((&definition_fact, &manifest));
+
+        let mut before_definition = first.clone();
+        before_definition.sequence = definition_fact.sequence;
+        let mut wrong_definition = first.clone();
+        wrong_definition.representative_slice_definition_digest = Some(hash('e'));
+
+        for observations in [
+            vec![&first],
+            vec![&first, &second_same_domain],
+            vec![&before_definition, &second],
+            vec![&wrong_definition, &second],
+        ] {
+            assert_eq!(
+                claim_epistemic_state(
+                    Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution),
+                    &runtime_evaluator,
+                    &observations,
+                    &[],
+                    definition,
+                ),
+                DurableAssuranceEpistemicState::Supported
+            );
+        }
+        assert_eq!(
+            claim_epistemic_state(
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution),
+                &runtime_evaluator,
+                &[&first, &second],
+                &[],
+                definition,
+            ),
+            DurableAssuranceEpistemicState::Verified
+        );
     }
 }

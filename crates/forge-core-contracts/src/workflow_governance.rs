@@ -158,7 +158,19 @@ pub struct WorkflowClaimPolicy {
     /// the stronger completeness invariant for lens-aware successors.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assurance_lenses: Vec<UniversalAssuranceLens>,
+    /// Closed semantic role used only by lens-aware releases. Historical
+    /// claims omit it and retain byte-identical serialization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assurance_role: Option<WorkflowAssuranceClaimRole>,
     pub waiver: WorkflowClaimWaiverPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowAssuranceClaimRole {
+    LensEvidence,
+    RepresentativeSliceDefinition,
+    RepresentativeSliceExecution,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

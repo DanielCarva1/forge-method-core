@@ -18,7 +18,7 @@ The host agent must have the `forge-core` executable and canonical
 ### Prebuilt release
 
 At this documentation checkpoint, the latest tagged prebuilt is `v0.4.0` and
-does not contain the source-only P5/P6 and P7a `0.11.0` feature level. Download
+does not contain the source-only P5/P6/P7a/P7b `0.12.0` feature level. Download
 the archive for the host platform from GitHub Releases and place both
 `forge-core` and its `forge` wrapper on `PATH`. Verify the checksum and Sigstore
 bundle as described in the [root README](../README.md#install).
@@ -71,6 +71,8 @@ start
   -> workflow release-status
   -> exact returned upgrade_argv, if present
   -> workflow next
+  -> if requested, discuss intent in chat and let the agent record the
+     externally broker-signed closed intent
   -> perform/verify/record the governed action
   -> workflow next
 ```
@@ -88,6 +90,15 @@ prove every product capability, domain method, credential, or piece of evidence
 exists. `workflow next` may correctly return obligations, evidence/capability
 gaps, a gated human decision, a Domain Pack requirement, or a rebase/upgrade
 requirement. These are useful outcomes, not installation failures.
+
+After intent is accepted, `workflow next` always exposes all eight universal
+quality lenses and their current `unknown`, `supported`, `verified`,
+`disproven`, or `waived` state. The agent is responsible for proposing the
+method and a representative slice, including scenarios, falsifiers,
+environment, and failure modes. The human is not expected to know or author
+those development details. Independent review must accept the exact slice
+definition before a separately originated runtime execution can verify it;
+files, plans, research, or partial scenario runs do not silently become proof.
 
 ## Updating
 

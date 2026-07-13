@@ -1,0 +1,129 @@
+schema_version: '0.1'
+workflow_governance_release_registry:
+  registry_id: workflow-governance.registry.foundation-v0
+  registry_version: 0.5.0
+  lineage_id: workflow-governance.core
+  default_successor_release_id: workflow-governance.release.universal-assurance-v0
+  releases:
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.p5c-implicit-v0
+      release_version: 0.0.0+p5c
+      release_digest: sha256:6431e9415e23232a72273330d55dc793a24e308d605b7aca743498e660b45045
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.golden-path-v0
+        bundle_digest: sha256:af2a5a012fd3843d5d3686dc4e45bb295e91f60f1615a3040b22b1b0ec5423bb
+        policy_set_digest: sha256:399a204c1f47fd69e6e5596e320b6d13feb7872714a66c34adfc703569defb7d
+      embedded_ref: contracts/workflow-governance/golden-path-v0.yaml
+      expected_digest: sha256:5e0420ec70f7a25fa762d4f0f3d2dd025664876cae50bf91dc9fc9bd69900d45
+    predecessor: null
+    source:
+      kind: implicit_p5c_genesis
+    receipt_carryover: not_applicable
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.foundation-v0
+      release_version: 0.1.0
+      release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.release-foundation-v0
+        bundle_digest: sha256:eda2b95c15d2f391709ca2ca0910528e1d3809ca3d93e4f3e373a336ce6160be
+        policy_set_digest: sha256:399a204c1f47fd69e6e5596e320b6d13feb7872714a66c34adfc703569defb7d
+      embedded_ref: contracts/workflow-governance/runtime-release-foundation-v0.yaml
+      expected_digest: sha256:81f9061c83a841996dc222e569d5d766dd5ec882caf239f3d88163c440a48ded
+    predecessor:
+      release_id: workflow-governance.release.p5c-implicit-v0
+      release_digest: sha256:6431e9415e23232a72273330d55dc793a24e308d605b7aca743498e660b45045
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-foundation-v0.yaml
+      expected_digest: sha256:f645ce8d2d3311f9d66edabea718b0e2674797e3c6c5cc4eb91ddce6023d2560
+    receipt_carryover: preserve_policy_equivalent
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.core-assurance-v0
+      release_version: 0.2.0
+      release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.core-assurance-v0
+        bundle_digest: sha256:2cc9477475a3d4a74470671a6a04e7ee0148bd0628426e35438338260704b531
+        policy_set_digest: sha256:622ab7829238b26e4a78477afe8a11d28556b00598239505ad85aa29891e9541
+      embedded_ref: contracts/workflow-governance/runtime-core-assurance-v0.yaml
+      expected_digest: sha256:1c7d697f7e34af3e56b6d0bed76707cb10550c95f2e72fd9f751ffba7c35e3d6
+    predecessor:
+      release_id: workflow-governance.release.foundation-v0
+      release_digest: sha256:876ff8c1365b912d04a653c38db1362f4b5702e251d58732936b883985483f3e
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-core-assurance-candidate-v0.yaml
+      expected_digest: sha256:372dc98a3b77eb5a6fe224fa7681199f73e3d88fee190539ecc6ac3abfde751c
+    receipt_carryover: invalidate_all
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.assurance-operations-v0
+      release_version: 0.3.0
+      release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.assurance-operations-v0
+        bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+        policy_set_digest: sha256:767665717a845274b7cb11ba706b4e8deb5a5f42af6743406dd1705146d5a8e7
+      embedded_ref: contracts/workflow-governance/runtime-assurance-operations-v0.yaml
+      expected_digest: sha256:cfdb92d3a604bc6136d969ac43c6ddbcf63f0f7455a87363609cbae42dbc5d71
+    predecessor:
+      release_id: workflow-governance.release.core-assurance-v0
+      release_digest: sha256:4f15117c579719fbd0289f66d1100848b3a70857bea8cd88628828a829ae6e83
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-assurance-operations-candidate-v0.yaml
+      expected_digest: sha256:8f8517b8ba490af56b3a6e29380a080ded9edf814a839123b44496ce249a6fc6
+    receipt_carryover: invalidate_all
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.agent-native-continuity-v0
+      release_version: 0.4.0
+      release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+        bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+        policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml
+      expected_digest: sha256:5faa16919223e609d0d9aee74e7dce4a9b350ab4596cec8b81b18e1606b9a4c6
+    predecessor:
+      release_id: workflow-governance.release.assurance-operations-v0
+      release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml
+      expected_digest: sha256:aee405fd7aeeb18ee5fe9786a732235fc71b6752f21866692262fbcce1e71a67
+    receipt_carryover: invalidate_all
+    authority: candidate_only
+  - release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.universal-assurance-v0
+      release_version: 0.5.0
+      release_digest: sha256:bc4eb95d647ee207f9ecf0ddbfdeafc68f53a39f65468825aaa94c3e4b933249
+    runtime_bundle:
+      identity:
+        bundle_id: bundle.workflow-governance.universal-assurance-v0
+        bundle_digest: sha256:07efb749648cca338f9d8c6710326bd19c27866dc29d19a53a341cb2c61abad6
+        policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+      embedded_ref: contracts/workflow-governance/runtime-universal-assurance-v0.yaml
+      expected_digest: sha256:21220c21890804c3af41372d049ce7b3befc1f5f91fdd297f1b978b402c2707b
+    predecessor:
+      release_id: workflow-governance.release.agent-native-continuity-v0
+      release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+    source:
+      kind: embedded_manifest
+      embedded_ref: contracts/migration/workflow-governance-release-universal-assurance-candidate-v0.yaml
+      expected_digest: sha256:f08f97b1bebac0f525a948a6e32b529643b1a1d41477c11bd3dc7b4825b32207
+    receipt_carryover: invalidate_all
+    authority: candidate_only

@@ -1,4 +1,8 @@
 use crate::common::{PrincipalId, StableId};
+use crate::workflow_governance::{
+    WorkflowBrokerOriginProfile, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
+    WorkflowEvidenceOutcome, WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +13,12 @@ pub const MAX_WORKFLOW_INTENT_LIST_ITEMS: usize = 64;
 pub const MAX_WORKFLOW_INTENT_ITEM_BYTES: usize = 2 * 1024;
 pub const MAX_WORKFLOW_INTENT_TOTAL_BYTES: usize = 64 * 1024;
 pub const MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES: usize = 1024;
+pub const MAX_REPRESENTATIVE_SLICE_TEXT_BYTES: usize = 4 * 1024;
+pub const MAX_REPRESENTATIVE_SLICE_ITEMS: usize = 32;
+pub const MAX_REPRESENTATIVE_SLICE_ITEM_BYTES: usize = 2 * 1024;
+pub const MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES: usize = 32 * 1024;
+pub const MAX_DURABLE_ASSURANCE_NEXT_ACTIONS: usize = 8;
+pub const WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION: &str = "0.1";
 
 /// A versioned, agent-facing Assurance Case **proposal**.
 ///
@@ -127,9 +137,109 @@ pub struct DurableAssuranceEpochBinding {
     pub intent_revision: u64,
     pub intent_digest: String,
     pub accepted_record_digest: String,
+    pub accepted_sequence: u64,
     pub accepted_state_version: u64,
     pub snapshot_digest: String,
     pub ledger_head_before_acceptance: String,
+}
+
+/// Exact epistemic state of a durable universal-lens projection.
+///
+/// Unlike the proposal-only [`AssuranceClaimStatus`], this closed set has no
+/// caller-selectable hypothesis state. It is derived only from admitted policy
+/// and current governed receipt facts.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DurableAssuranceEpistemicState {
+    Unknown,
+    Supported,
+    Verified,
+    Disproven,
+    Waived,
+}
+
+/// Audit binding from one policy claim into a universal assurance lens.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceClaimBinding {
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub evaluator_ref: StableId,
+    pub evaluator_provider: WorkflowEvaluatorProvider,
+    pub required_before: ReadinessTarget,
+    pub state: DurableAssuranceEpistemicState,
+}
+
+/// Accepted evidence receipt retained in the durable projection for audit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceEvidenceBinding {
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub evaluator_ref: StableId,
+    pub evidence_ref: String,
+    pub evidence_record_digest: String,
+    pub origin_record_digest: String,
+    pub provider: WorkflowEvaluatorProvider,
+    pub kind: WorkflowEvidenceKind,
+    pub strength: WorkflowEvidenceStrength,
+    pub outcome: WorkflowEvidenceOutcome,
+    pub subject_kind: WorkflowEvidenceSubjectKind,
+    pub subject_ref: String,
+    pub subject_digest: String,
+    pub scenario_digest: String,
+    pub origin_principal: PrincipalId,
+    pub separation_domain: StableId,
+    pub broker_profile: WorkflowBrokerOriginProfile,
+}
+
+/// Capability receipt or explicit absence bound to a mapped claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceCapabilityBinding {
+    pub policy_ref: StableId,
+    pub capability_ref: StableId,
+    pub available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_digest: Option<String>,
+}
+
+/// Governed human-decision state associated with a mapped claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceDecisionBinding {
+    pub policy_ref: StableId,
+    pub decision_ref: StableId,
+    pub resolved: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_digest: Option<String>,
+}
+
+/// Current authorized waiver retained without converting it into evidence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceWaiverBinding {
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub receipt_digest: String,
+    pub expires_at_unix: u64,
+}
+
+/// One bounded deterministic next step. A packet digest is present only when
+/// the current kernel projection already exposes that executable action.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceNextAction {
+    pub lens: UniversalAssuranceLens,
+    pub kind: NextActionKind,
+    pub policy_ref: StableId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_ref: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_packet_digest: Option<String>,
+    pub rank: u32,
 }
 
 /// Durable state for one universal lens.
@@ -141,9 +251,14 @@ pub struct DurableAssuranceEpochBinding {
 #[serde(deny_unknown_fields)]
 pub struct DurableAssuranceLensProjection {
     pub lens: UniversalAssuranceLens,
-    pub claim_status: AssuranceClaimStatus,
-    pub evidence_refs: Vec<String>,
-    pub evaluator_ref: Option<StableId>,
+    pub claim_status: DurableAssuranceEpistemicState,
+    pub required_before: ReadinessTarget,
+    pub due: bool,
+    pub claims: Vec<DurableAssuranceClaimBinding>,
+    pub evidence: Vec<DurableAssuranceEvidenceBinding>,
+    pub capabilities: Vec<DurableAssuranceCapabilityBinding>,
+    pub decisions: Vec<DurableAssuranceDecisionBinding>,
+    pub waivers: Vec<DurableAssuranceWaiverBinding>,
 }
 
 /// Conservative readiness knowledge for a durable Assurance epoch.
@@ -164,7 +279,52 @@ pub struct DurableAssuranceProjection {
     pub lenses: Vec<DurableAssuranceLensProjection>,
     pub readiness: DurableAssuranceReadinessState,
     pub blocker_lenses: Vec<UniversalAssuranceLens>,
+    pub next_actions: Vec<DurableAssuranceNextAction>,
     pub projection_digest: String,
+}
+
+/// Versioned agent-authored representative-slice manifest. The manifest remains an
+/// ordinary project artifact until an admitted evidence receipt binds its
+/// exact bytes; deserializing it grants no workflow authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRepresentativeSliceDefinitionDocument {
+    pub schema_version: String,
+    pub representative_slice: WorkflowRepresentativeSliceDefinition,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRepresentativeSliceDefinition {
+    pub intent_digest: String,
+    pub critical_journey: String,
+    pub falsifier: String,
+    pub representative_environment: WorkflowRepresentativeEnvironment,
+    pub scenarios: Vec<WorkflowRepresentativeScenarioReference>,
+    pub material_failure_modes: Vec<WorkflowRepresentativeFailureMode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRepresentativeEnvironment {
+    pub runtime_subject_ref: String,
+    pub runtime_subject_digest: String,
+    pub expectation: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRepresentativeScenarioReference {
+    pub scenario_ref: String,
+    pub declared_scenario_digest: String,
+    pub failure_mode_refs: Vec<StableId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowRepresentativeFailureMode {
+    pub id: StableId,
+    pub description: String,
 }
 
 /// A derived project-state observation used to evaluate the Assurance Case.

@@ -1,0 +1,1216 @@
+schema_version: '0.1'
+workflow_behavioral_scenario_corpus:
+  id: corpus.workflow-universal-assurance.adversarial-v0
+  corpus_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  partition_class: adversarial
+  coverage_policy:
+    id: coverage.workflow-universal-assurance-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-universal-assurance-v0.yaml
+    expected_digest: sha256:5a676624948eaf72c640879b6dd6aedb7c4d6780e68e9e625c68a656c443cbec
+  workflow_evidence:
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.universal-assurance-v0
+        embedded_ref: contracts/migration/workflow-universal-assurance-review-subject-v0.yaml
+        expected_digest: sha256:c2888f1d97a6e8b1ac0dc14e94cb1837f23f14b45e48dfbb6bf9c400136619b8
+      review_subject_digest: sha256:b5f72964f7bb97754375053d601a5bee986df4f3688d59610ea9eb45968d81ce
+      workflow_id: guidance-engine
+      legacy_workflow_digest: sha256:268727602dc6135226082fb2dbea83ff3557270b63fc2f52e976ea10649e36bb
+      policy_ref: policy.workflow.universal-assurance
+      policy_digest: sha256:7053b9a21afaa63a394ee0fc39ae53ffcdba0453b7d1b4cde24801325047ab91
+      candidate_bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+      candidate_bundle_digest: sha256:42a388f2200b8c48c01b04d899169b2d1d96794a0f0d2262eee757bd722c1aec
+      candidate_bundle_source_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+      candidate_policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+      migration_batch_id: workflow-governance.batch.universal-assurance-v0
+      migration_batch_version: 0.5.0
+      governance_release_id: workflow-governance.release.universal-assurance-v0
+      governance_release_version: 0.5.0
+      predecessor_release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+      coverage_policy_id: coverage.workflow-universal-assurance-v0
+      coverage_policy_digest: sha256:cc75a10269f75e8627900f9b756411fc7c4e8715d405a4ca8c80fe80e8054747
+      coverage_policy_source_digest: sha256:5a676624948eaf72c640879b6dd6aedb7c4d6780e68e9e625c68a656c443cbec
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/guidance-engine.yaml
+        expected_digest: sha256:99adcb0fd6b418ed7b5efafff461db76b64881176df6f29f99982396ca9fa715
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-universal-assurance-overlay-v0.yaml
+        expected_digest: sha256:5ea45e3b0780459ddf99859a5262ec7f7cf9ecb32e5bdb580963140ac769d0c6
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+        expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-universal-assurance-v0.yaml
+        expected_digest: sha256:5a676624948eaf72c640879b6dd6aedb7c4d6780e68e9e625c68a656c443cbec
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.guidance-engine.negative.v0
+      scenario_kind: negative
+      corpus_class: adversarial
+      execution_input_digest: sha256:ef9474d4f12420d2cc4d9774796ed354e32ee80f9da337a58b848eb18fa59f8c
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+            expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.negative
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs:
+              - decision.workflow.universal-assurance.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.intended-outcome.0
+                claim_ref: claim.workflow.universal-assurance.intended-outcome
+                evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+                principal: principal.guidance-engine.0
+                kind: human_acceptance
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.critical-journeys.0
+                claim_ref: claim.workflow.universal-assurance.critical-journeys
+                evaluator_ref: evaluator.workflow.universal-assurance.critical-journeys
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.system-integrity.0
+                claim_ref: claim.workflow.universal-assurance.system-integrity
+                evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.quality-attributes.0
+                claim_ref: claim.workflow.universal-assurance.quality-attributes
+                evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+                principal: null
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.operability.0
+                claim_ref: claim.workflow.universal-assurance.operability
+                evaluator_ref: evaluator.workflow.universal-assurance.operability
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.lifecycle-coverage.0
+                claim_ref: claim.workflow.universal-assurance.lifecycle-coverage
+                evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.risk-and-failure.0
+                claim_ref: claim.workflow.universal-assurance.risk-and-failure
+                evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.evidence-representativeness.0
+                claim_ref: claim.workflow.universal-assurance.evidence-representativeness
+                evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.representative-slice-defined.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: fail
+              - evidence_ref: evidence.guidance-engine.negative.claim.workflow.universal-assurance.representative-slice-executed.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-executed
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: fail
+              completion_assertion: not_asserted
+        expected:
+          status: active
+          eligibility: eligible
+          progression: allowed
+          completion: incomplete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.critical-journeys
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: blocked
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: blocked
+          claims:
+          - claim_id: claim.workflow.universal-assurance.critical-journeys
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: disproven
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: disproven
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.correct.claim.workflow.universal-assurance.critical-journeys
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.critical-journeys
+            rank: 1
+          - id: action.correct.claim.workflow.universal-assurance.evidence-representativeness
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.evidence-representativeness
+            rank: 2
+          - id: action.correct.claim.workflow.universal-assurance.intended-outcome
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.intended-outcome
+            rank: 3
+          - id: action.correct.claim.workflow.universal-assurance.lifecycle-coverage
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.lifecycle-coverage
+            rank: 4
+          - id: action.correct.claim.workflow.universal-assurance.operability
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.operability
+            rank: 5
+          - id: action.correct.claim.workflow.universal-assurance.quality-attributes
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.quality-attributes
+            rank: 6
+          - id: action.correct.claim.workflow.universal-assurance.representative-slice-defined
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-defined
+            rank: 7
+          - id: action.correct.claim.workflow.universal-assurance.representative-slice-executed
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-executed
+            rank: 8
+          - id: action.correct.claim.workflow.universal-assurance.risk-and-failure
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.risk-and-failure
+            rank: 9
+          - id: action.correct.claim.workflow.universal-assurance.system-integrity
+            kind: challenge
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.system-integrity
+            rank: 10
+    - scenario_id: scenario.workflow.guidance-engine.ambiguity.v0
+      scenario_kind: ambiguity
+      corpus_class: adversarial
+      execution_input_digest: sha256:9e5984c942ccafe9ee2d7276851d09f92874cbeb400c86158b513cf024c4a42c
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+            expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.ambiguity
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: release
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs: []
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.intended-outcome.0
+                claim_ref: claim.workflow.universal-assurance.intended-outcome
+                evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+                principal: principal.guidance-engine.0
+                kind: human_acceptance
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.critical-journeys.0
+                claim_ref: claim.workflow.universal-assurance.critical-journeys
+                evaluator_ref: evaluator.workflow.universal-assurance.critical-journeys
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.system-integrity.0
+                claim_ref: claim.workflow.universal-assurance.system-integrity
+                evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.quality-attributes.0
+                claim_ref: claim.workflow.universal-assurance.quality-attributes
+                evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+                principal: null
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.operability.0
+                claim_ref: claim.workflow.universal-assurance.operability
+                evaluator_ref: evaluator.workflow.universal-assurance.operability
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.lifecycle-coverage.0
+                claim_ref: claim.workflow.universal-assurance.lifecycle-coverage
+                evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.risk-and-failure.0
+                claim_ref: claim.workflow.universal-assurance.risk-and-failure
+                evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.evidence-representativeness.0
+                claim_ref: claim.workflow.universal-assurance.evidence-representativeness
+                evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.representative-slice-defined.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: inconclusive
+              - evidence_ref: evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.representative-slice-executed.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-executed
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: inconclusive
+              completion_assertion: not_asserted
+        expected:
+          status: blocked
+          eligibility: eligible
+          progression: blocked
+          completion: incomplete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.critical-journeys
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: pending
+          claims:
+          - claim_id: claim.workflow.universal-assurance.critical-journeys
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: unknown
+          decision_refs:
+          - decision.workflow.universal-assurance.material-gap
+          capability_refs: []
+          issues:
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.critical-journeys.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.evidence-representativeness.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.intended-outcome.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.lifecycle-coverage.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.operability.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.quality-attributes.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.representative-slice-defined.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.representative-slice-executed.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.risk-and-failure.0
+          - code: inconclusive_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.ambiguity.claim.workflow.universal-assurance.system-integrity.0
+          next_actions:
+          - id: action.ask.decision.workflow.universal-assurance.material-gap
+            kind: ask_human
+            addresses_claim_refs: []
+            rank: 1
+          - id: action.evaluate.claim.workflow.universal-assurance.critical-journeys
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.critical-journeys
+            rank: 2
+          - id: action.evaluate.claim.workflow.universal-assurance.evidence-representativeness
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.evidence-representativeness
+            rank: 3
+          - id: action.evaluate.claim.workflow.universal-assurance.intended-outcome
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.intended-outcome
+            rank: 4
+          - id: action.evaluate.claim.workflow.universal-assurance.lifecycle-coverage
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.lifecycle-coverage
+            rank: 5
+          - id: action.evaluate.claim.workflow.universal-assurance.operability
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.operability
+            rank: 6
+          - id: action.evaluate.claim.workflow.universal-assurance.quality-attributes
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.quality-attributes
+            rank: 7
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-defined
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-defined
+            rank: 8
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-executed
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-executed
+            rank: 9
+          - id: action.evaluate.claim.workflow.universal-assurance.risk-and-failure
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.risk-and-failure
+            rank: 10
+          - id: action.evaluate.claim.workflow.universal-assurance.system-integrity
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.system-integrity
+            rank: 11
+    - scenario_id: scenario.workflow.guidance-engine.false-completion.v0
+      scenario_kind: false_completion
+      corpus_class: adversarial
+      execution_input_digest: sha256:c0ae78c6eb1e387826226e7e2a5735506522a66c950f540943eaecdbbeae3b58
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+            expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.false-completion
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs:
+              - decision.workflow.universal-assurance.material-gap
+              waivers: []
+              evidence: []
+              completion_assertion: asserted
+        expected:
+          status: active
+          eligibility: eligible
+          progression: allowed
+          completion: incomplete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.critical-journeys
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: pending
+          claims:
+          - claim_id: claim.workflow.universal-assurance.critical-journeys
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: unknown
+          decision_refs: []
+          capability_refs: []
+          issues:
+          - code: invented_completion_claim
+            path: workflow_governance_evaluation.completion_assertion
+          next_actions:
+          - id: action.evaluate.claim.workflow.universal-assurance.critical-journeys
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.critical-journeys
+            rank: 1
+          - id: action.evaluate.claim.workflow.universal-assurance.evidence-representativeness
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.evidence-representativeness
+            rank: 2
+          - id: action.evaluate.claim.workflow.universal-assurance.intended-outcome
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.intended-outcome
+            rank: 3
+          - id: action.evaluate.claim.workflow.universal-assurance.lifecycle-coverage
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.lifecycle-coverage
+            rank: 4
+          - id: action.evaluate.claim.workflow.universal-assurance.operability
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.operability
+            rank: 5
+          - id: action.evaluate.claim.workflow.universal-assurance.quality-attributes
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.quality-attributes
+            rank: 6
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-defined
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-defined
+            rank: 7
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-executed
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-executed
+            rank: 8
+          - id: action.evaluate.claim.workflow.universal-assurance.risk-and-failure
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.risk-and-failure
+            rank: 9
+          - id: action.evaluate.claim.workflow.universal-assurance.system-integrity
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.system-integrity
+            rank: 10
+    - scenario_id: scenario.workflow.guidance-engine.stale-evidence.v0
+      scenario_kind: stale_evidence
+      corpus_class: adversarial
+      execution_input_digest: sha256:3a45559ba436cca8967fd2a7351a7ff9d73c013e60a5656582850602abd0780e
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+            expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.stale-evidence
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs:
+              - decision.workflow.universal-assurance.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.intended-outcome.0
+                claim_ref: claim.workflow.universal-assurance.intended-outcome
+                evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+                principal: principal.guidance-engine.0
+                kind: human_acceptance
+                strength: authoritative_acceptance
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.critical-journeys.0
+                claim_ref: claim.workflow.universal-assurance.critical-journeys
+                evaluator_ref: evaluator.workflow.universal-assurance.critical-journeys
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.system-integrity.0
+                claim_ref: claim.workflow.universal-assurance.system-integrity
+                evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.quality-attributes.0
+                claim_ref: claim.workflow.universal-assurance.quality-attributes
+                evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+                principal: null
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.operability.0
+                claim_ref: claim.workflow.universal-assurance.operability
+                evaluator_ref: evaluator.workflow.universal-assurance.operability
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.lifecycle-coverage.0
+                claim_ref: claim.workflow.universal-assurance.lifecycle-coverage
+                evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.risk-and-failure.0
+                claim_ref: claim.workflow.universal-assurance.risk-and-failure
+                evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.evidence-representativeness.0
+                claim_ref: claim.workflow.universal-assurance.evidence-representativeness
+                evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.representative-slice-defined.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: stale
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.representative-slice-executed.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-executed
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: stale
+                outcome: pass
+              completion_assertion: not_asserted
+        expected:
+          status: active
+          eligibility: eligible
+          progression: allowed
+          completion: incomplete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.critical-journeys
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: pending
+          claims:
+          - claim_id: claim.workflow.universal-assurance.critical-journeys
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: unknown
+          decision_refs: []
+          capability_refs: []
+          issues:
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.critical-journeys.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.evidence-representativeness.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.intended-outcome.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.lifecycle-coverage.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.operability.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.quality-attributes.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.representative-slice-defined.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.representative-slice-executed.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.risk-and-failure.0
+          - code: stale_evidence
+            path: workflow_governance_evaluation.evidence.evidence.guidance-engine.stale-evidence.claim.workflow.universal-assurance.system-integrity.0
+          next_actions:
+          - id: action.evaluate.claim.workflow.universal-assurance.critical-journeys
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.critical-journeys
+            rank: 1
+          - id: action.evaluate.claim.workflow.universal-assurance.evidence-representativeness
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.evidence-representativeness
+            rank: 2
+          - id: action.evaluate.claim.workflow.universal-assurance.intended-outcome
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.intended-outcome
+            rank: 3
+          - id: action.evaluate.claim.workflow.universal-assurance.lifecycle-coverage
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.lifecycle-coverage
+            rank: 4
+          - id: action.evaluate.claim.workflow.universal-assurance.operability
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.operability
+            rank: 5
+          - id: action.evaluate.claim.workflow.universal-assurance.quality-attributes
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.quality-attributes
+            rank: 6
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-defined
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-defined
+            rank: 7
+          - id: action.evaluate.claim.workflow.universal-assurance.representative-slice-executed
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.representative-slice-executed
+            rank: 8
+          - id: action.evaluate.claim.workflow.universal-assurance.risk-and-failure
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.risk-and-failure
+            rank: 9
+          - id: action.evaluate.claim.workflow.universal-assurance.system-integrity
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.system-integrity
+            rank: 10
+    - scenario_id: scenario.workflow.guidance-engine.ablation.v0
+      scenario_kind: ablation
+      corpus_class: adversarial
+      execution_input_digest: sha256:0828d4eaa9516e9e309b95449269401d6ea962e0a813c0ce903488e1430764c6
+      execution:
+        kind: ablation
+        control_input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-universal-assurance-candidate-v0.yaml
+            expected_digest: sha256:6e6143891cbda5970e4d6beeb243523b32f78e28368b39fb5d9912c8ed735dd5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.ablation
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs:
+              - decision.workflow.universal-assurance.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.intended-outcome.0
+                claim_ref: claim.workflow.universal-assurance.intended-outcome
+                evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+                principal: principal.guidance-engine.0
+                kind: human_acceptance
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.system-integrity.0
+                claim_ref: claim.workflow.universal-assurance.system-integrity
+                evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.quality-attributes.0
+                claim_ref: claim.workflow.universal-assurance.quality-attributes
+                evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+                principal: null
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.operability.0
+                claim_ref: claim.workflow.universal-assurance.operability
+                evaluator_ref: evaluator.workflow.universal-assurance.operability
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.lifecycle-coverage.0
+                claim_ref: claim.workflow.universal-assurance.lifecycle-coverage
+                evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.risk-and-failure.0
+                claim_ref: claim.workflow.universal-assurance.risk-and-failure
+                evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.evidence-representativeness.0
+                claim_ref: claim.workflow.universal-assurance.evidence-representativeness
+                evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.representative-slice-defined.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.representative-slice-executed.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-executed
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        control_expected:
+          status: active
+          eligibility: eligible
+          progression: allowed
+          completion: incomplete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.critical-journeys
+            status: pending
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.universal-assurance.critical-journeys
+            status: unknown
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues:
+          - code: invented_completion_claim
+            path: workflow_governance_evaluation.completion_assertion
+          next_actions:
+          - id: action.evaluate.claim.workflow.universal-assurance.critical-journeys
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.critical-journeys
+            rank: 1
+        ablated_input:
+          bundle:
+            id: bundle.workflow-governance.universal-assurance-candidate-v0
+            embedded_ref: contracts/workflow-governance/ablated-universal-assurance-guidance-engine-v0.yaml
+            expected_digest: sha256:43f99700d671316bcc290dc9acd00266f4f6d5f2841919148d09e78bf1eb7ec1
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.guidance-engine.ablation
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+              policy_id: policy.workflow.universal-assurance
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs:
+              - policy.workflow.discover-intent
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.universal-assurance.independent-review
+              - capability.workflow.universal-assurance.representative-runtime
+              decision_need_refs:
+              - decision.workflow.universal-assurance.material-gap
+              resolved_decision_refs:
+              - decision.workflow.universal-assurance.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.intended-outcome.0
+                claim_ref: claim.workflow.universal-assurance.intended-outcome
+                evaluator_ref: evaluator.workflow.universal-assurance.intended-outcome
+                principal: principal.guidance-engine.0
+                kind: human_acceptance
+                strength: authoritative_acceptance
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.system-integrity.0
+                claim_ref: claim.workflow.universal-assurance.system-integrity
+                evaluator_ref: evaluator.workflow.universal-assurance.system-integrity
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.quality-attributes.0
+                claim_ref: claim.workflow.universal-assurance.quality-attributes
+                evaluator_ref: evaluator.workflow.universal-assurance.quality-attributes
+                principal: null
+                kind: deterministic_check
+                strength: deterministic_verification
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.operability.0
+                claim_ref: claim.workflow.universal-assurance.operability
+                evaluator_ref: evaluator.workflow.universal-assurance.operability
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.lifecycle-coverage.0
+                claim_ref: claim.workflow.universal-assurance.lifecycle-coverage
+                evaluator_ref: evaluator.workflow.universal-assurance.lifecycle-coverage
+                principal: principal.guidance-engine.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.risk-and-failure.0
+                claim_ref: claim.workflow.universal-assurance.risk-and-failure
+                evaluator_ref: evaluator.workflow.universal-assurance.risk-and-failure
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.evidence-representativeness.0
+                claim_ref: claim.workflow.universal-assurance.evidence-representativeness
+                evaluator_ref: evaluator.workflow.universal-assurance.evidence-representativeness
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.representative-slice-defined.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-defined
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-defined
+                principal: principal.guidance-engine.0
+                kind: independent_review
+                strength: independent_confirmation
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.guidance-engine.ablation.claim.workflow.universal-assurance.representative-slice-executed.0
+                claim_ref: claim.workflow.universal-assurance.representative-slice-executed
+                evaluator_ref: evaluator.workflow.universal-assurance.representative-slice-executed
+                principal: null
+                kind: representative_execution
+                strength: representative_execution
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        ablated_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.universal-assurance.evidence-representativeness
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.intended-outcome
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.lifecycle-coverage
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.operability
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.quality-attributes
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-defined
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.representative-slice-executed
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.risk-and-failure
+            status: satisfied
+          - obligation_id: obligation.workflow.universal-assurance.system-integrity
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.universal-assurance.evidence-representativeness
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.intended-outcome
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.lifecycle-coverage
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.operability
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.quality-attributes
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.representative-slice-defined
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.representative-slice-executed
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.risk-and-failure
+            status: verified
+          - claim_id: claim.workflow.universal-assurance.system-integrity
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.universal-assurance
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.universal-assurance.evidence-representativeness
+            - claim.workflow.universal-assurance.intended-outcome
+            - claim.workflow.universal-assurance.lifecycle-coverage
+            - claim.workflow.universal-assurance.operability
+            - claim.workflow.universal-assurance.quality-attributes
+            - claim.workflow.universal-assurance.representative-slice-defined
+            - claim.workflow.universal-assurance.representative-slice-executed
+            - claim.workflow.universal-assurance.risk-and-failure
+            - claim.workflow.universal-assurance.system-integrity
+            rank: 1
+        removed_semantic_refs:
+        - claim.workflow.universal-assurance.critical-journeys
+        - evaluator.workflow.universal-assurance.critical-journeys
+        - obligation.workflow.universal-assurance.critical-journeys
+        required_difference_dimensions:
+        - status
+        - completion
+        - obligations
+        - claims
+        - issues
+        - next_actions

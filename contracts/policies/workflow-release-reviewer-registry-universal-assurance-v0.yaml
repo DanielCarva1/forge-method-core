@@ -1,0 +1,28 @@
+schema_version: '0.1'
+workflow_release_reviewer_registry:
+  registry_id: workflow-release-reviewers.universal-assurance-v0
+  registry_version: 0.4.0
+  authority: candidate_only
+  credentials:
+  - credential_id: reviewer.workflow-release.semantic-universal-assurance-v0
+    principal_id: principal.release-review.semantic-universal-assurance-v0
+    public_key_fingerprint: sha256:affda64900a1aeebb0c0d144516173ad58e16fda13420060d6527a12b79f8e28
+    public_key_hex: 5e0ac0254a31f278074e88de385a96ca7c6d00641ea13fdc5d55cb19f03482da
+    algorithm: ed25519
+    roles:
+    - semantic_reviewer
+    status: active
+    valid_from_unix: 1783778400
+    valid_until_unix: 1815314400
+    independence_domain: semantic-review
+  - credential_id: reviewer.workflow-release.authorizer-universal-assurance-v0
+    principal_id: principal.release-review.authorizer-universal-assurance-v0
+    public_key_fingerprint: sha256:b7bb7aa529ccdb65d1f18120dde18459db8658d2db8cc12d9191f50435f3bce7
+    public_key_hex: 236d2d5acf054218588548c17e384b0ada44b3f8e97282c5523faaa9453a73e8
+    algorithm: ed25519
+    roles:
+    - release_authorizer
+    status: active
+    valid_from_unix: 1783778400
+    valid_until_unix: 1815314400
+    independence_domain: release-authorization

@@ -1,7 +1,8 @@
 use forge_core_contracts::{
-    UniversalAssuranceLens, WorkflowCompletionAssertion, WorkflowDecisionActivation,
-    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
-    WorkflowGovernanceEvent, WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
+    UniversalAssuranceLens, WorkflowAssuranceClaimRole, WorkflowCompletionAssertion,
+    WorkflowDecisionActivation, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
+    WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use std::{collections::BTreeSet, path::PathBuf};
@@ -46,6 +47,7 @@ fn published_bundle_round_trips_as_a_closed_typed_contract() {
         !serialized.contains("assurance_lenses:"),
         "legacy empty lens tags must retain the historical wire shape"
     );
+    assert!(!serialized.contains("assurance_role:"));
     let round_trip: WorkflowGovernanceBundleDocument =
         yaml_serde::from_str(&serialized).expect("round-trip governance bundle");
     assert_eq!(round_trip, document);
@@ -63,9 +65,11 @@ waiver:
     let historical: forge_core_contracts::WorkflowClaimPolicy =
         yaml_serde::from_str(historical).expect("historical claim without lens tags");
     assert!(historical.assurance_lenses.is_empty());
+    assert!(historical.assurance_role.is_none());
     let historical_wire =
         yaml_serde::to_string(&historical).expect("serialize historical claim without lens tags");
     assert!(!historical_wire.contains("assurance_lenses:"));
+    assert!(!historical_wire.contains("assurance_role:"));
     let historical_round_trip: forge_core_contracts::WorkflowClaimPolicy =
         yaml_serde::from_str(&historical_wire).expect("round-trip historical claim wire");
     assert_eq!(historical_round_trip, historical);
@@ -76,6 +80,7 @@ statement: Accepted intent defines observable success.
 evaluator_ref: evaluator.workflow.assurance.intended-outcome
 assurance_lenses:
   - intended_outcome
+assurance_role: lens_evidence
 waiver:
   kind: not_waivable
 ";
@@ -84,6 +89,10 @@ waiver:
     assert_eq!(
         tagged.assurance_lenses,
         vec![UniversalAssuranceLens::IntendedOutcome]
+    );
+    assert_eq!(
+        tagged.assurance_role,
+        Some(WorkflowAssuranceClaimRole::LensEvidence)
     );
     let tagged_wire = yaml_serde::to_string(&tagged).expect("serialize tagged claim");
     assert!(tagged_wire.contains("assurance_lenses:"));

@@ -45,11 +45,21 @@ replaying it as permission.
 
 ## Workflow governance
 
-The universal core is a reviewed versioned 42-policy release. Projects pin a
+The universal core is an append-only reviewed release chain. Its P7b successor
+contains 43 policies, including the generic universal-assurance policy. Projects pin a
 release in their ledger. P6 Domain Packs contribute namespaced data and produce
 a separate effective epoch. Core and effective identities remain distinct; a
 core upgrade with an active pack requires coordinated rebase rather than an
 unsafe cross-store partial transaction.
+
+Human intent, its monotonic assurance epoch, all eight universal-lens states,
+and the representative-slice projection are derived from that same workflow
+ledger. A slice definition is ordinary content-addressed evidence until a
+Reviewer-origin evaluator observation admits its exact bytes. Representative
+execution is another existing evidence observation, from a Runtime origin in a
+different configured separation domain, and must bind the latest definition
+and every scenario. There is deliberately no second evidence store or special
+representative-slice mutation log.
 
 ## Persistence
 

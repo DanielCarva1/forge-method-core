@@ -68,11 +68,16 @@ Once bootstrapped, the agent follows the governed loop:
    projection includes exact state-bound action packets, closed input contracts,
    and typed broker setup gaps. **`workflow action-packets`** exposes the same
    packet set and registry status as a standalone read-only diagnostic.
-5. The host performs the evidence work or asks the irreducible chat question.
+5. If intent is missing or must be amended, the host asks only for the human's
+   outcome, constraints, preferences, unacceptable outcomes, and uncertainties.
+   An external Human broker signs that closed input and the agent calls
+   **`workflow intent record --origin-envelope-file ...`**. Forge derives the
+   intent id, monotonic revision, assurance epoch, and all state bindings.
+6. The host performs the evidence work or asks the irreducible chat question.
    A packet marked `operator_credential_broker` may use **`workflow action
    authorize`** for cooperative local one-call authorization; Forge rejects
    that lane for human, independent-reviewer, and trusted-runtime packets.
-6. For those high-authority packets, the external host signs the inbound
+7. For those high-authority packets, the external host signs the inbound
    origin event and calls **`forge-core workflow action apply`** with `--root
    <repo> --origin-envelope-file ... --json`. Forge derives the request and
    records it without a request/attestation file handoff, then the agent asks
@@ -86,6 +91,35 @@ evidence-backed path, and the runtime refuses violations of authority it has
 actually admitted. Forge reduces hidden gaps and false progress; it does not
 claim that any protocol can guarantee product quality or discover every
 unknown unknown.
+
+### Unified durable assurance (P7b)
+
+The `0.12.0` source checkpoint makes the quality model part of the same durable
+workflow authority used by `next` and `resume`. Every accepted intent opens a
+monotonic assurance epoch and projects exactly eight lenses:
+`intended_outcome`, `critical_journeys`, `system_integrity`,
+`quality_attributes`, `operability`, `lifecycle_coverage`,
+`risk_and_failure`, and `evidence_representativeness`. Each lens is explicitly
+`unknown`, `supported`, `verified`, `disproven`, or `waived`; omission never
+means success, research can support but cannot independently verify, and
+unknown or disproven due lenses block optimistic advancement.
+
+The agent—not the novice human—drafts the typed, content-addressed
+representative-slice definition: current intent, critical journey, falsifier,
+representative environment expectation, scenarios, and material failure modes.
+That draft has no authority until an independent Reviewer-origin broker admits
+its exact bytes through the existing evaluator-observation lane. A separately
+originated Runtime broker must then report execution for the latest accepted
+definition, exact runtime subject, current snapshot/effective epoch, and every
+declared scenario. Partial execution remains `supported`; any current failure
+is `disproven`; only all-scenario success can become `verified`. A newer valid
+reviewed definition supersedes older definitions.
+
+P7b does not create a second evidence database or a special slice-mutation
+event. It reuses the workflow ledger, existing evidence receipts, evaluator
+roles, broker companions, and state-bound action packets. Proposal-only
+`assurance derive|resume` files, chat history, plans, artifact existence, and
+caller-authored statuses remain non-authoritative.
 
 `guide describe`, `guide status`, and `guide decide` remain available as
 read-only compatibility and diagnostic surfaces for existing consumers. They
@@ -402,8 +436,8 @@ loop and the fast+quality lane:
 ## Install
 
 Choose by required feature level, not convenience alone. The source workspace
-currently declares `0.11.0` and contains P5/P6 plus the P7a workflow-authority
-bridge. The latest published prebuilt
+currently declares `0.12.0` and contains P5/P6 plus the P7a authority bridge
+and P7b unified durable assurance. The latest published prebuilt
 release can lag source; at this documentation checkpoint it is `v0.4.0`. Verify
 the selected tag/commit and `forge-core --version`. Use the source path when you
 need a checkpoint that has not been tagged.

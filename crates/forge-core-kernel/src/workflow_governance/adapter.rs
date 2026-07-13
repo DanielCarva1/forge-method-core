@@ -42,11 +42,12 @@ use forge_core_contracts::workflow_governance::{
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ContinuityRecordedEvent,
     DecisionAlternative, DecisionResolvedEvent, DomainPackCompositionGap,
-    DurableAssuranceProjection, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent,
-    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget,
-    ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
-    WaiverAuthorizedEvent, WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation,
-    WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowContentAddressedReference,
+    DurableAssuranceEpistemicState, DurableAssuranceProjection, EvaluatorObservedEvent, Phase,
+    PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent,
+    ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent, SignalChangedEvent, StableId,
+    UniversalAssuranceLens, WaiverAuthorizedEvent, WorkflowAssuranceClaimRole,
+    WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
+    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
@@ -54,16 +55,22 @@ use forge_core_contracts::{
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
     WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
     WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
-    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity,
+    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
+    WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
+    MAX_REPRESENTATIVE_SLICE_ITEMS, MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
+    MAX_REPRESENTATIVE_SLICE_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
     MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
     MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
     MAX_WORKFLOW_INTENT_TOTAL_BYTES, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
-    WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     find_entry, load_embedded_frozen_legacy_catalog, project_durable_assurance,
-    project_legacy_workflow_compatibility, simulate_workflow_governance,
-    workflow_human_intent_digest, AssuranceProjectionError, LegacyWorkflowGovernanceProjection,
+    project_governed_durable_assurance, project_legacy_workflow_compatibility,
+    simulate_workflow_governance, validate_representative_slice_definition,
+    workflow_human_intent_digest, AssuranceProjectionError, GovernedAssuranceActionPacketFact,
+    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
+    GovernedAssuranceFacts, GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
     WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
     WorkflowGovernanceStatus,
 };
@@ -164,6 +171,26 @@ pub enum WorkflowSignalInputTransition {
     Deactivate,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "role", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowRepresentativeSliceActionBinding {
+    Definition {
+        schema_version: String,
+        current_intent_digest: String,
+        text_max_bytes: usize,
+        list_max_items: usize,
+        item_max_bytes: usize,
+        total_max_bytes: usize,
+    },
+    Execution {
+        definition_digest: String,
+        definition_receipt_digest: String,
+        runtime_subject_ref: String,
+        runtime_subject_digest: String,
+        allowed_scenario_digests: Vec<String>,
+    },
+}
+
 /// Closed semantic input contract for a generated action packet.
 ///
 /// This is a choice/shape description, never an authorization response. It
@@ -208,6 +235,8 @@ pub enum WorkflowAuthorizationInputContract {
         allowed_outcomes: Vec<WorkflowEvidenceOutcome>,
         subject_kinds: Vec<WorkflowEvidenceSubjectKind>,
         scenario_reference_required: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        representative_slice: Option<WorkflowRepresentativeSliceActionBinding>,
     },
     Signal {
         signal: WorkflowGovernanceSignal,
@@ -335,6 +364,46 @@ pub struct WorkflowDurableAssuranceBlocker {
 pub enum WorkflowDurableAssuranceBlockerCode {
     MissingAcceptedHumanIntent,
     UniversalLensUnknown,
+    UniversalLensSupported,
+    UniversalLensDisproven,
+}
+
+fn durable_assurance_blockers(
+    projection: &DurableAssuranceProjection,
+) -> Vec<WorkflowDurableAssuranceBlocker> {
+    projection
+        .blocker_lenses
+        .iter()
+        .copied()
+        .map(|lens| {
+            let state = projection
+                .lenses
+                .iter()
+                .find(|item| item.lens == lens)
+                .map_or(DurableAssuranceEpistemicState::Unknown, |item| {
+                    item.claim_status
+                });
+            let (code, label) = match state {
+                DurableAssuranceEpistemicState::Disproven => (
+                    WorkflowDurableAssuranceBlockerCode::UniversalLensDisproven,
+                    "is disproven",
+                ),
+                DurableAssuranceEpistemicState::Supported => (
+                    WorkflowDurableAssuranceBlockerCode::UniversalLensSupported,
+                    "is supported but not verified",
+                ),
+                _ => (
+                    WorkflowDurableAssuranceBlockerCode::UniversalLensUnknown,
+                    "remains unknown",
+                ),
+            };
+            WorkflowDurableAssuranceBlocker {
+                code,
+                lens: Some(lens),
+                summary: format!("Universal assurance lens {} {label}.", lens.id()),
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -2717,7 +2786,36 @@ impl WorkflowGovernanceProjectAdapter {
             ADAPTER_SOURCE_ID.to_owned(),
         )?;
         let verified = evaluate_verified_workflow_governance(trusted)?;
-        let durable_assurance_projection = project_durable_assurance(&projection.records)?;
+        let base_assurance_projection = project_durable_assurance(&projection.records)?;
+        let mut assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
+            derive_governed_assurance_facts(
+                effective.document(),
+                effective.identity(),
+                projection,
+                base,
+                &self.binding.project_root,
+                &snapshot_digest,
+                selected.routing.readiness_target,
+                now,
+                trusted_registry_digest.as_deref(),
+                trusted_broker_registry.digest.as_deref(),
+            )?
+        } else {
+            GovernedAssuranceFacts {
+                target: selected.routing.readiness_target,
+                evidence: Vec::new(),
+                capabilities: Vec::new(),
+                decisions: Vec::new(),
+                waivers: Vec::new(),
+                action_packets: Vec::new(),
+            }
+        };
+        let durable_assurance_projection = base_assurance_projection
+            .clone()
+            .map(|base| {
+                project_governed_durable_assurance(base, effective.document(), &assurance_facts)
+            })
+            .transpose()?;
         let applicability = derived.applicability.get(&selected.id).copied();
         let policy_guidance_status =
             if effective.is_domain_pack_degraded() || !boundary_rechecks.is_empty() {
@@ -2763,19 +2861,7 @@ impl WorkflowGovernanceProjectAdapter {
         )?;
         let durable_assurance = match durable_assurance_projection {
             Some(projection) => {
-                let blockers = projection
-                    .blocker_lenses
-                    .iter()
-                    .copied()
-                    .map(|lens| WorkflowDurableAssuranceBlocker {
-                        code: WorkflowDurableAssuranceBlockerCode::UniversalLensUnknown,
-                        lens: Some(lens),
-                        summary: format!(
-                            "Universal assurance lens {} remains unknown.",
-                            lens.id()
-                        ),
-                    })
-                    .collect();
+                let blockers = durable_assurance_blockers(&projection);
                 WorkflowDurableAssuranceGuidance {
                     status: WorkflowDurableAssuranceStatus::IntentAccepted,
                     blockers,
@@ -2844,9 +2930,38 @@ impl WorkflowGovernanceProjectAdapter {
             effective.document(),
             &guidance,
             &derived,
-            trusted_registry_digest,
-            trusted_broker_registry.digest,
+            Some(&assurance_facts),
+            trusted_registry_digest.clone(),
+            trusted_broker_registry.digest.clone(),
         )?;
+        assurance_facts.action_packets = action_packets
+            .iter()
+            .map(|packet| GovernedAssuranceActionPacketFact {
+                policy_ref: packet.binding.policy_ref.clone(),
+                subject_ref: packet.binding.subject_ref.clone(),
+                packet_digest: packet.packet_digest.clone(),
+            })
+            .collect();
+        if let Some(base) = base_assurance_projection {
+            let final_projection =
+                project_governed_durable_assurance(base, effective.document(), &assurance_facts)?;
+            let final_case_digest = durable_assurance_case_digest(
+                &self.binding.project_id,
+                &guidance.snapshot_digest,
+                &guidance.ledger_head_digest,
+                guidance.state_version,
+                &effective.identity().effective_runtime_bundle.bundle_digest,
+                Some(&final_projection.projection_digest),
+            )?;
+            guidance.status = if final_projection.blocker_lenses.is_empty() {
+                policy_guidance_status
+            } else {
+                WorkflowGovernanceGuidanceStatus::Blocked
+            };
+            guidance.durable_assurance.blockers = durable_assurance_blockers(&final_projection);
+            guidance.durable_assurance.case_digest = final_case_digest;
+            guidance.durable_assurance.projection = Some(final_projection);
+        }
         guidance.authorization.setup_gaps = authorization_setup_gaps(
             &self.binding.project_root,
             guidance.authorization.registry_setup.broker_registry,
@@ -2922,7 +3037,43 @@ impl WorkflowGovernanceProjectAdapter {
                 derived.completed_policy_refs.contains(&policy.id)
                     || derived.not_applicable_policy_refs.contains(&policy.id)
             });
-        if !phase_advance_allowed_by_assurance(projection, phase_done)? {
+        let boundary_target = effective
+            .document()
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .filter(|policy| {
+                policy
+                    .eligible_phases
+                    .iter()
+                    .any(|tag| Phase::tag_eligible(&tag.0, current_phase_value))
+            })
+            .map(|policy| policy.routing.readiness_target)
+            .max_by_key(|target| target.rank())
+            .unwrap_or(ReadinessTarget::Explore);
+        let base_assurance = project_durable_assurance(&projection.records)?;
+        let governed_assurance = if let Some(base) = base_assurance {
+            let facts = derive_governed_assurance_facts(
+                effective.document(),
+                effective.identity(),
+                projection,
+                &base,
+                &self.binding.project_root,
+                &snapshot,
+                boundary_target,
+                now,
+                trusted_registry_digest.as_deref(),
+                trusted_broker_registry_digest.as_deref(),
+            )?;
+            Some(project_governed_durable_assurance(
+                base,
+                effective.document(),
+                &facts,
+            )?)
+        } else {
+            None
+        };
+        if !phase_advance_allowed_by_assurance(governed_assurance.as_ref(), phase_done) {
             return Ok(None);
         }
         let next = match current_phase_value {
@@ -2951,14 +3102,13 @@ impl WorkflowGovernanceProjectAdapter {
 }
 
 fn phase_advance_allowed_by_assurance(
-    projection: &WorkflowGovernanceLedgerProjection,
+    assurance: Option<&DurableAssuranceProjection>,
     legacy_phase_done: bool,
-) -> Result<bool, WorkflowGovernanceAdapterError> {
+) -> bool {
     if !legacy_phase_done {
-        return Ok(false);
+        return false;
     }
-    Ok(project_durable_assurance(&projection.records)?
-        .is_some_and(|assurance| assurance.blocker_lenses.is_empty()))
+    assurance.is_some_and(|assurance| assurance.blocker_lenses.is_empty())
 }
 
 /// Prepared completion authority; opaque and intentionally non-Clone/non-serde.
@@ -3881,6 +4031,388 @@ fn derive_receipts(
             .map(|(policy, _)| policy.clone()),
     );
     Ok(derived)
+}
+
+fn derive_governed_assurance_facts(
+    bundle: &WorkflowGovernanceBundleDocument,
+    effective_identity: &WorkflowEffectiveBundleIdentity,
+    projection: &WorkflowGovernanceLedgerProjection,
+    assurance: &DurableAssuranceProjection,
+    project_root: &Path,
+    snapshot_digest: &str,
+    target: ReadinessTarget,
+    now: u64,
+    trusted_principal_registry_digest: Option<&str>,
+    trusted_broker_registry_digest: Option<&str>,
+) -> Result<GovernedAssuranceFacts, WorkflowGovernanceAdapterError> {
+    let active_effective_identity = projection.active_effective_bundle_identity();
+    match active_effective_identity.as_ref() {
+        Some(active) if active != effective_identity => {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        None if effective_identity.domain_pack_generation.is_some() => {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        _ => {}
+    }
+    let receipt_records = &projection.records[receipt_window_start(projection)..];
+    let revoked = receipt_records
+        .iter()
+        .filter_map(|record| match &record.event {
+            WorkflowGovernanceEvent::ReceiptRevoked(event) => Some((
+                event.revoked_record_id.clone(),
+                event.revoked_record_digest.clone(),
+            )),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut facts = GovernedAssuranceFacts {
+        target,
+        evidence: Vec::new(),
+        capabilities: Vec::new(),
+        decisions: Vec::new(),
+        waivers: Vec::new(),
+        action_packets: Vec::new(),
+    };
+
+    for (index, record) in receipt_records.iter().enumerate() {
+        if record.sequence <= assurance.binding.accepted_sequence
+            || revoked.contains(&(record.record_id.clone(), record.record_digest.clone()))
+        {
+            continue;
+        }
+        let adjacent_origin_revoked = receipt_records.get(index + 1).is_some_and(|origin| {
+            matches!(
+                &origin.event,
+                WorkflowGovernanceEvent::BrokerOriginApplied(_)
+            ) && revoked.contains(&(origin.record_id.clone(), origin.record_digest.clone()))
+        });
+        match &record.event {
+            WorkflowGovernanceEvent::EvaluatorObserved(event) => {
+                let Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_principal_registry_digest,
+                    trusted_broker_registry_digest,
+                ) else {
+                    continue;
+                };
+                let Some(origin_record) = receipt_records.get(index + 1) else {
+                    continue;
+                };
+                if revoked.contains(&(
+                    origin_record.record_id.clone(),
+                    origin_record.record_digest.clone(),
+                )) || event.observed_at_unix > now
+                    || event.expires_at_unix.is_some_and(|expires| now > expires)
+                    || event.snapshot_digest != snapshot_digest
+                    || record.previous_record_digest.as_deref()
+                        != Some(event.ledger_head_digest.as_str())
+                    || !subject_current(project_root, snapshot_digest, &event.subject)?
+                    || !broker_evidence_profile_allowed(event.provider, origin.issuer_profile)
+                    || event.provenance.principal.as_ref() != Some(&origin.origin_principal_id)
+                    || event.provenance.producer_ref != origin.issuer_id
+                    || event.provenance.method
+                        != format!("verified_workflow_broker:{}", origin.broker_event_digest)
+                    || !broker_common_binding(
+                        origin,
+                        &event.credential_id,
+                        &event.public_key_fingerprint,
+                        event.observed_at_unix,
+                    )
+                {
+                    continue;
+                }
+                let Some((claim, evaluator)) = bundle
+                    .workflow_governance_bundle
+                    .policies
+                    .iter()
+                    .find(|policy| policy.id == event.policy_ref)
+                    .and_then(|policy| {
+                        policy
+                            .claims
+                            .iter()
+                            .find(|claim| {
+                                claim.id == event.claim_ref
+                                    && claim.evaluator_ref == event.evaluator_ref
+                            })
+                            .and_then(|claim| {
+                                policy
+                                    .evaluators
+                                    .iter()
+                                    .find(|evaluator| evaluator.id == event.evaluator_ref)
+                                    .map(|evaluator| (claim, evaluator))
+                            })
+                    })
+                else {
+                    continue;
+                };
+                if evaluator.provider != event.provider
+                    || !evaluator.accepted_evidence_kinds.contains(&event.kind)
+                    || event.strength < evaluator.minimum_strength
+                {
+                    continue;
+                }
+                let representative_slice = if claim.assurance_role
+                    == Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition)
+                    && event.provider == WorkflowEvaluatorProvider::IndependentReviewer
+                    && event.kind == WorkflowEvidenceKind::IndependentReview
+                    && event.outcome == WorkflowEvidenceOutcome::Pass
+                    && origin.issuer_profile == WorkflowBrokerOriginProfile::Reviewer
+                    && event.subject.kind == WorkflowEvidenceSubjectKind::Artifact
+                {
+                    load_representative_slice_definition(
+                        project_root,
+                        event,
+                        &assurance.binding.intent_digest,
+                    )?
+                } else {
+                    None
+                };
+                let representative_slice_definition_digest = match claim.assurance_role {
+                    Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                        representative_slice
+                            .as_ref()
+                            .map(|_| event.subject.subject_digest.clone())
+                    }
+                    Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                        let Some(definition) = latest_representative_definition(bundle, &facts)
+                        else {
+                            continue;
+                        };
+                        let Some(manifest) = definition.representative_slice.as_ref() else {
+                            continue;
+                        };
+                        if record.sequence <= definition.sequence
+                            || event.provider != WorkflowEvaluatorProvider::RepresentativeRuntime
+                            || event.kind != WorkflowEvidenceKind::RepresentativeExecution
+                            || origin.issuer_profile != WorkflowBrokerOriginProfile::Runtime
+                            || event.subject.kind != WorkflowEvidenceSubjectKind::Runtime
+                            || event.subject.subject_ref
+                                != manifest
+                                    .representative_slice
+                                    .representative_environment
+                                    .runtime_subject_ref
+                            || event.subject.subject_digest
+                                != manifest
+                                    .representative_slice
+                                    .representative_environment
+                                    .runtime_subject_digest
+                            || !manifest
+                                .representative_slice
+                                .scenarios
+                                .iter()
+                                .any(|scenario| {
+                                    scenario.declared_scenario_digest
+                                        == event.provenance.scenario_digest
+                                })
+                        {
+                            continue;
+                        }
+                        Some(definition.subject_digest.clone())
+                    }
+                    Some(WorkflowAssuranceClaimRole::LensEvidence) | None => None,
+                };
+                facts.evidence.push(GovernedAssuranceEvidenceFact {
+                    assurance_epoch: assurance.binding.assurance_epoch,
+                    sequence: record.sequence,
+                    policy_ref: event.policy_ref.clone(),
+                    claim_ref: event.claim_ref.clone(),
+                    evaluator_ref: event.evaluator_ref.clone(),
+                    evidence_ref: event.provenance.semantic_identity.0.clone(),
+                    evidence_record_digest: record.record_digest.clone(),
+                    origin_record_digest: origin_record.record_digest.clone(),
+                    provider: event.provider,
+                    kind: event.kind,
+                    strength: event.strength,
+                    outcome: event.outcome,
+                    subject_kind: event.subject.kind,
+                    subject_ref: event.subject.subject_ref.clone(),
+                    subject_digest: event.subject.subject_digest.clone(),
+                    scenario_digest: event.provenance.scenario_digest.clone(),
+                    origin_principal: origin.origin_principal_id.clone(),
+                    separation_domain: origin.separation_domain.clone(),
+                    broker_profile: origin.issuer_profile,
+                    representative_slice,
+                    representative_slice_definition_digest,
+                });
+            }
+            WorkflowGovernanceEvent::CapabilityProbed(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_principal_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        !adjacent_origin_revoked
+                            && origin.issuer_profile == WorkflowBrokerOriginProfile::Runtime
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.observed_at_unix,
+                            )
+                    }
+                    None => false,
+                };
+                if authority_current
+                    && event.observed_at_unix <= now
+                    && event.expires_at_unix.is_none_or(|expires| now <= expires)
+                    && record.previous_record_digest.as_deref()
+                        == Some(event.ledger_head_digest.as_str())
+                    && (event.subject.kind == WorkflowEvidenceSubjectKind::Artifact
+                        || event.snapshot_digest == snapshot_digest)
+                    && subject_current(project_root, snapshot_digest, &event.subject)?
+                {
+                    facts.capabilities.push(GovernedAssuranceCapabilityFact {
+                        assurance_epoch: assurance.binding.assurance_epoch,
+                        sequence: record.sequence,
+                        policy_ref: event.policy_ref.clone(),
+                        capability_ref: event.capability_ref.clone(),
+                        available: event.available,
+                        receipt_digest: record.record_digest.clone(),
+                    });
+                }
+            }
+            WorkflowGovernanceEvent::DecisionResolved(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_principal_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        !adjacent_origin_revoked
+                            && origin.issuer_profile == WorkflowBrokerOriginProfile::Human
+                            && origin.origin_principal_id == event.principal
+                            && origin.broker_event_digest == event.authorization_intent_digest
+                            && origin.signature_fingerprint == event.signature_fingerprint
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.resolved_at_unix,
+                            )
+                    }
+                    None => false,
+                };
+                if authority_current
+                    && event.resolved_at_unix <= now
+                    && event.snapshot_digest == snapshot_digest
+                    && record.previous_record_digest.as_deref()
+                        == Some(event.ledger_head_digest.as_str())
+                {
+                    facts.decisions.push(GovernedAssuranceDecisionFact {
+                        assurance_epoch: assurance.binding.assurance_epoch,
+                        sequence: record.sequence,
+                        policy_ref: event.policy_ref.clone(),
+                        decision_ref: event.decision_ref.clone(),
+                        resolved: true,
+                        receipt_digest: record.record_digest.clone(),
+                    });
+                }
+            }
+            WorkflowGovernanceEvent::WaiverAuthorized(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_principal_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        !adjacent_origin_revoked
+                            && origin.issuer_profile == WorkflowBrokerOriginProfile::Human
+                            && origin.origin_principal_id == event.principal
+                            && origin.broker_event_digest == event.authorization_intent_digest
+                            && origin.signature_fingerprint == event.signature_fingerprint
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.authorized_at_unix,
+                            )
+                    }
+                    None => false,
+                };
+                if authority_current
+                    && event.authorized_at_unix <= now
+                    && now <= event.expires_at_unix
+                    && event.snapshot_digest == snapshot_digest
+                    && record.previous_record_digest.as_deref()
+                        == Some(event.ledger_head_digest.as_str())
+                    && subject_current(project_root, snapshot_digest, &event.subject)?
+                {
+                    facts.waivers.push(GovernedAssuranceWaiverFact {
+                        assurance_epoch: assurance.binding.assurance_epoch,
+                        sequence: record.sequence,
+                        policy_ref: event.policy_ref.clone(),
+                        claim_ref: event.claim_ref.clone(),
+                        receipt_digest: record.record_digest.clone(),
+                        expires_at_unix: event.expires_at_unix,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(facts)
+}
+
+fn load_representative_slice_definition(
+    project_root: &Path,
+    event: &EvaluatorObservedEvent,
+    current_intent_digest: &str,
+) -> Result<Option<WorkflowRepresentativeSliceDefinitionDocument>, WorkflowGovernanceAdapterError> {
+    let Ok((subject_ref, bytes)) =
+        read_confined_file(project_root, Path::new(&event.subject.subject_ref))
+    else {
+        return Ok(None);
+    };
+    if subject_ref != event.subject.subject_ref
+        || sha256_content_hash(&bytes) != event.subject.subject_digest
+        || event.provenance.source_ref != event.subject.subject_ref
+        || event.provenance.source_digest != event.subject.subject_digest
+    {
+        return Ok(None);
+    }
+    let Ok(raw) = std::str::from_utf8(&bytes) else {
+        return Ok(None);
+    };
+    let Ok(document) = yaml_serde::from_str::<WorkflowRepresentativeSliceDefinitionDocument>(raw)
+    else {
+        return Ok(None);
+    };
+    if document.representative_slice.intent_digest != current_intent_digest
+        || validate_representative_slice_definition(&document, current_intent_digest).is_err()
+    {
+        return Ok(None);
+    }
+    for scenario in &document.representative_slice.scenarios {
+        let Ok((_, scenario_bytes)) =
+            read_confined_file(project_root, Path::new(&scenario.scenario_ref))
+        else {
+            return Ok(None);
+        };
+        if sha256_content_hash(&scenario_bytes) != scenario.declared_scenario_digest {
+            return Ok(None);
+        }
+    }
+    Ok(Some(document))
 }
 
 fn receipt_window_start(projection: &WorkflowGovernanceLedgerProjection) -> usize {
@@ -4881,6 +5413,7 @@ fn prepare_authorization_from_packet(
                 allowed_outcomes,
                 subject_kinds,
                 scenario_reference_required: true,
+                representative_slice,
             },
             WorkflowAuthorizationClosedInput::Evidence {
                 outcome,
@@ -4903,7 +5436,64 @@ fn prepare_authorization_from_packet(
                 subject_kind,
                 &subject_ref,
             )?;
-            let (_, scenario_bytes) = read_confined_file(project_root, Path::new(&scenario_ref))?;
+            let (scenario_ref, scenario_bytes) =
+                read_confined_file(project_root, Path::new(&scenario_ref))?;
+            let scenario_digest = sha256_content_hash(&scenario_bytes);
+            match &representative_slice {
+                Some(WorkflowRepresentativeSliceActionBinding::Definition {
+                    schema_version,
+                    current_intent_digest,
+                    ..
+                }) => {
+                    if subject_kind != WorkflowEvidenceSubjectKind::Artifact
+                        || schema_version != WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION
+                        || scenario_ref != subject_ref
+                    {
+                        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+                    }
+                    let (_, manifest_bytes) =
+                        read_confined_file(project_root, Path::new(&subject_ref))?;
+                    if sha256_content_hash(&manifest_bytes) != subject_digest {
+                        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+                    }
+                    let raw = std::str::from_utf8(&manifest_bytes).map_err(|_| {
+                        WorkflowGovernanceAdapterError::AuthorizationBindingMismatch
+                    })?;
+                    let manifest: WorkflowRepresentativeSliceDefinitionDocument =
+                        yaml_serde::from_str(raw).map_err(|_| {
+                            WorkflowGovernanceAdapterError::AuthorizationBindingMismatch
+                        })?;
+                    if validate_representative_slice_definition(&manifest, current_intent_digest)
+                        .is_err()
+                    {
+                        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+                    }
+                    for declared in &manifest.representative_slice.scenarios {
+                        let (_, bytes) =
+                            read_confined_file(project_root, Path::new(&declared.scenario_ref))?;
+                        if sha256_content_hash(&bytes) != declared.declared_scenario_digest {
+                            return Err(
+                                WorkflowGovernanceAdapterError::AuthorizationBindingMismatch,
+                            );
+                        }
+                    }
+                }
+                Some(WorkflowRepresentativeSliceActionBinding::Execution {
+                    runtime_subject_ref,
+                    runtime_subject_digest,
+                    allowed_scenario_digests,
+                    ..
+                }) => {
+                    if subject_kind != WorkflowEvidenceSubjectKind::Runtime
+                        || &subject_ref != runtime_subject_ref
+                        || &subject_digest != runtime_subject_digest
+                        || !allowed_scenario_digests.contains(&scenario_digest)
+                    {
+                        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+                    }
+                }
+                None => {}
+            }
             let request = WorkflowEvidenceAuthorizationRequest {
                 project_id: packet.binding.project_id.clone(),
                 policy_bundle_digest: packet.binding.effective_bundle_digest.clone(),
@@ -4917,7 +5507,7 @@ fn prepare_authorization_from_packet(
                 subject_kind,
                 subject_ref,
                 subject_digest,
-                scenario_digest: sha256_content_hash(&scenario_bytes),
+                scenario_digest,
                 state_version: packet.binding.state_version,
                 current_phase: packet.binding.current_phase.clone(),
                 snapshot_digest: packet.binding.snapshot_digest.clone(),
@@ -5104,10 +5694,41 @@ fn decision_consequences_ack_digest(
     Ok(sha256_content_hash(&canonical))
 }
 
+fn latest_representative_definition<'a>(
+    bundle: &WorkflowGovernanceBundleDocument,
+    facts: &'a GovernedAssuranceFacts,
+) -> Option<&'a GovernedAssuranceEvidenceFact> {
+    facts
+        .evidence
+        .iter()
+        .filter(|fact| {
+            bundle
+                .workflow_governance_bundle
+                .policies
+                .iter()
+                .find(|policy| policy.id == fact.policy_ref)
+                .and_then(|policy| {
+                    policy
+                        .claims
+                        .iter()
+                        .find(|claim| claim.id == fact.claim_ref)
+                })
+                .is_some_and(|claim| {
+                    claim.assurance_role
+                        == Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition)
+                })
+        })
+        .max_by_key(|fact| fact.sequence)
+        .filter(|fact| {
+            fact.outcome == WorkflowEvidenceOutcome::Pass && fact.representative_slice.is_some()
+        })
+}
+
 fn authorization_action_packets(
     bundle: &WorkflowGovernanceBundleDocument,
     guidance: &WorkflowGovernanceGuidance,
     derived: &DerivedReceipts,
+    assurance_facts: Option<&GovernedAssuranceFacts>,
     trusted_principal_registry_digest: Option<String>,
     trusted_broker_registry_digest: Option<String>,
 ) -> Result<Vec<WorkflowAuthorizationActionPacket>, WorkflowGovernanceAdapterError> {
@@ -5241,10 +5862,33 @@ fn authorization_action_packets(
             .iter()
             .find(|candidate| candidate.claim_id == claim.id.0)
             .ok_or_else(|| WorkflowGovernanceAdapterError::UnknownClaim(claim.id.0.clone()))?;
-        if matches!(
-            result.status,
-            WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
-        ) {
+        let governed_role_complete =
+            guidance
+                .durable_assurance
+                .projection
+                .as_ref()
+                .is_some_and(|projection| {
+                    projection.lenses.iter().any(|lens| {
+                        lens.claims.iter().any(|binding| {
+                            binding.policy_ref == selected.id
+                                && binding.claim_ref == claim.id
+                                && matches!(
+                                    binding.state,
+                                    DurableAssuranceEpistemicState::Verified
+                                        | DurableAssuranceEpistemicState::Waived
+                                )
+                        })
+                    })
+                });
+        let claim_complete = if claim.assurance_role.is_some() {
+            governed_role_complete
+        } else {
+            matches!(
+                result.status,
+                WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+            )
+        };
+        if claim_complete {
             continue;
         }
         let evaluator = selected
@@ -5264,6 +5908,67 @@ fn authorization_action_packets(
                 evaluator.id.0, evaluator.provider
             )));
         }
+        let representative_slice = match claim.assurance_role {
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                let intent_digest = guidance
+                    .durable_assurance
+                    .projection
+                    .as_ref()
+                    .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?
+                    .binding
+                    .intent_digest
+                    .clone();
+                Some(WorkflowRepresentativeSliceActionBinding::Definition {
+                    schema_version: WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION.to_owned(),
+                    current_intent_digest: intent_digest,
+                    text_max_bytes: MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
+                    list_max_items: MAX_REPRESENTATIVE_SLICE_ITEMS,
+                    item_max_bytes: MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
+                    total_max_bytes: MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
+                })
+            }
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                let Some(definition) = assurance_facts
+                    .and_then(|facts| latest_representative_definition(bundle, facts))
+                else {
+                    continue;
+                };
+                let manifest = definition
+                    .representative_slice
+                    .as_ref()
+                    .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+                Some(WorkflowRepresentativeSliceActionBinding::Execution {
+                    definition_digest: definition.subject_digest.clone(),
+                    definition_receipt_digest: definition.evidence_record_digest.clone(),
+                    runtime_subject_ref: manifest
+                        .representative_slice
+                        .representative_environment
+                        .runtime_subject_ref
+                        .clone(),
+                    runtime_subject_digest: manifest
+                        .representative_slice
+                        .representative_environment
+                        .runtime_subject_digest
+                        .clone(),
+                    allowed_scenario_digests: manifest
+                        .representative_slice
+                        .scenarios
+                        .iter()
+                        .map(|scenario| scenario.declared_scenario_digest.clone())
+                        .collect(),
+                })
+            }
+            Some(WorkflowAssuranceClaimRole::LensEvidence) | None => None,
+        };
+        let subject_kinds = match claim.assurance_role {
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                vec![WorkflowEvidenceSubjectKind::Artifact]
+            }
+            Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                vec![WorkflowEvidenceSubjectKind::Runtime]
+            }
+            _ => subject_kinds,
+        };
         packets.push(make_authorization_action_packet(
             WorkflowAuthorizationKind::Evidence,
             StableId(format!("packet.workflow.evidence.{}", claim.id.0)),
@@ -5282,6 +5987,7 @@ fn authorization_action_packets(
                 ],
                 subject_kinds,
                 scenario_reference_required: true,
+                representative_slice,
             },
         )?);
 
@@ -6598,9 +7304,9 @@ mod tests {
             forge_core_contracts::UniversalAssuranceLens::ALL.len()
         );
         assert!(accepted.lenses.iter().all(|lens| {
-            lens.claim_status == forge_core_contracts::AssuranceClaimStatus::Unknown
-                && lens.evidence_refs.is_empty()
-                && lens.evaluator_ref.is_none()
+            lens.claim_status == DurableAssuranceEpistemicState::Unknown
+                && lens.evidence.is_empty()
+                && lens.claims.is_empty()
         }));
         assert_eq!(
             first.next.status,
@@ -6787,11 +7493,10 @@ mod tests {
         assert!(assurance
             .lenses
             .iter()
-            .all(|lens| lens.claim_status == forge_core_contracts::AssuranceClaimStatus::Unknown));
+            .all(|lens| lens.claim_status == DurableAssuranceEpistemicState::Unknown));
 
         assert!(
-            !phase_advance_allowed_by_assurance(&projection, true)
-                .expect("assurance boundary evaluation"),
+            !phase_advance_allowed_by_assurance(Some(&assurance), true),
             "legacy phase completion cannot outrank eight unknown Assurance lenses"
         );
         assert_eq!(

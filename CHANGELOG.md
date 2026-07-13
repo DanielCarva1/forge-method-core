@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P7b unified durable Assurance Case (`0.12.0`).** Human intent is now an
+  external-human-broker-origin, append-only authority with kernel-derived
+  revisions and monotonic assurance epochs. `workflow next` and `resume`
+  project all eight universal lenses explicitly as `unknown`, `supported`,
+  `verified`, `disproven`, or `waived`; callers cannot submit those states.
+  The primary agent drafts a typed, content-addressed representative-slice
+  definition, but it remains powerless until admitted through the existing
+  evaluator-observation lane by an independent reviewer origin. Runtime proof
+  must then bind the latest accepted definition, current intent, every declared
+  scenario, exact runtime subject/snapshot/effective epoch, and a separately
+  configured origin domain. Any current failure disproves the affected claim;
+  partial execution is only supported, and a later valid reviewed definition
+  supersedes older definitions. The same workflow ledger, evidence receipts,
+  action packets, and external-broker bridge remain the authority surface: P7b
+  adds no second evidence store or special slice-mutation event. The novice
+  human supplies outcomes, constraints, preferences, unacceptable outcomes,
+  and uncertainties in chat; Forge never asks them to invent the method,
+  scenarios, falsifiers, environment, or failure modes.
 - **P7a.2 workflow action and external-origin authority bridge.** Added
   deterministic action packets bound to the current project, effective bundle,
   policy, subject, phase, state version, snapshot, ledger head, principal

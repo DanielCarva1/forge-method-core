@@ -1,0 +1,136 @@
+schema_version: '0.2'
+workflow_release_admission_authorization:
+  authority: candidate_authorization
+  payload:
+    authorization_id: workflow-release-admission.universal-assurance-v0
+    review_index_id: workflow-release-review.universal-assurance-v0
+    review_index_version: 0.4.0
+    review_index_raw_digest: sha256:b8da0e0970bb3e42ecf35cd5e3760cf4a65b92e6069e44560b19e5fddd3ff888
+    review_index_canonical_digest: sha256:3c9112c034224ecec8b7845bc03deb7108efc521283eaefd60a7b2d317ed9e71
+    evaluation_digest: sha256:6c9409be4ae1cb6ca0dc402f947c989bae0cbd1dae972b7d8cfe4ce1789751f3
+    reviewer_registry_id: workflow-release-reviewers.universal-assurance-v0
+    reviewer_registry_version: 0.4.0
+    reviewer_registry_raw_digest: sha256:db9ff7f0a9120c69540b4cf6e050870f2be80fc27b77362bccb223958842582d
+    reviewer_registry_canonical_digest: sha256:d9de46508556f66c67c7ec5ff81dc170345b7e4da16a7e2ab2323a40871ccb97
+    promotion:
+      predecessor:
+        release_id: workflow-governance.release.agent-native-continuity-v0
+        release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+      candidate_release:
+        lineage_id: workflow-governance.core
+        release_id: workflow-governance.release.universal-assurance-v0
+        release_version: 0.5.0
+        release_digest: sha256:bc4eb95d647ee207f9ecf0ddbfdeafc68f53a39f65468825aaa94c3e4b933249
+      candidate_runtime_bundle:
+        bundle_id: bundle.workflow-governance.universal-assurance-candidate-v0
+        bundle_digest: sha256:42a388f2200b8c48c01b04d899169b2d1d96794a0f0d2262eee757bd722c1aec
+        policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+      promoted_runtime_bundle:
+        bundle_id: bundle.workflow-governance.universal-assurance-v0
+        bundle_digest: sha256:07efb749648cca338f9d8c6710326bd19c27866dc29d19a53a341cb2c61abad6
+        policy_set_digest: sha256:0bd318a1b2424dee0a1afbff971a841d3ade7ce2cf6d1361f65f5221b823734a
+    release_manifest:
+      artifact_id: release-manifest.universal-assurance-v0
+      embedded_ref: contracts/migration/workflow-governance-release-universal-assurance-candidate-v0.yaml
+      raw_digest: sha256:f08f97b1bebac0f525a948a6e32b529643b1a1d41477c11bd3dc7b4825b32207
+      canonical_digest: sha256:bc4eb95d647ee207f9ecf0ddbfdeafc68f53a39f65468825aaa94c3e4b933249
+    review_subject:
+      artifact_id: review-subject.universal-assurance-v0
+      embedded_ref: contracts/migration/workflow-universal-assurance-review-subject-v0.yaml
+      raw_digest: sha256:c2888f1d97a6e8b1ac0dc14e94cb1837f23f14b45e48dfbb6bf9c400136619b8
+      canonical_digest: sha256:b5f72964f7bb97754375053d601a5bee986df4f3688d59610ea9eb45968d81ce
+    full_catalog:
+      artifact_id: full-catalog.foundation-v0
+      embedded_ref: contracts/policies/workflow-migration-foundation-v0.yaml
+      raw_digest: sha256:be43183b1463e66ea15aff997e234af94f85764c5c1e61096f434c40217b3d27
+      canonical_digest: sha256:b54da5e05e1db344e319abd5e59713dcf794215b4f61434f724a9b70b53006c1
+    predecessor_registry:
+      artifact_id: registry.agent-native-continuity-v0
+      embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+      raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+      canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+    proposed_registry:
+      artifact_id: workflow-governance.registry.universal-assurance-v0
+      embedded_ref: contracts/migration/workflow-governance-release-registry-universal-assurance-v0.yaml
+      raw_digest: sha256:77fb1be512448c904e41645762c90cd03c630af788ebcb30558bf58ab3c4b60e
+      canonical_digest: sha256:2f2601383d1f87a45757e85485aca47beb39dc6d62cf21fbab46feb9929afff9
+    invalidate_all_receipts: true
+    workflow_decisions:
+    - workflow_id: guidance-engine
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    quarantine_decisions:
+    - workflow_id: edge-case-review
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: release-readiness
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: track-decision
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    dimension_decisions:
+    - dimension: status
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: eligibility
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: progression
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: completion
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: obligations
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: claims
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: decisions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: capabilities
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: issues
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: next_actions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    audience: forge-core:workflow-release-admission:embedded
+    domain: forge-method:workflow-release-admission:v2
+    nonce: release-admission.universal-assurance-v0
+    issued_at_unix: 1784037600
+    expires_at_unix: 1815314400
+  signatures:
+  - principal_id: principal.release-review.semantic-universal-assurance-v0
+    credential_id: reviewer.workflow-release.semantic-universal-assurance-v0
+    role: semantic_reviewer
+    algorithm: ed25519
+    payload_digest: sha256:7e808641a1ed03aacc5b0be5e019e27de7d49eccc73f8a4c803efeeed9073ec0
+    signature: 6aba6643b25f08af83dc693070e99c78b35e5e809147aea842d553576c318ee392c986e8d463ed839a18e3be4b650f921787e904a25b6e193e0e0587bde9a90e
+    signed_at_unix: 1784037600
+  - principal_id: principal.release-review.authorizer-universal-assurance-v0
+    credential_id: reviewer.workflow-release.authorizer-universal-assurance-v0
+    role: release_authorizer
+    algorithm: ed25519
+    payload_digest: sha256:7e808641a1ed03aacc5b0be5e019e27de7d49eccc73f8a4c803efeeed9073ec0
+    signature: b43ef5c29f7b8e6c653b0351f0b6565db8183823d4e82e194a715bcca804c812ef412c9ea4eca1402675ba2253d92625acb2b640141b66e0c91b15d1199c7303
+    signed_at_unix: 1784037600

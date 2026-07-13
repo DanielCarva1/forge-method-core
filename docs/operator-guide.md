@@ -8,8 +8,9 @@ The normal project user stays in chat and does not operate these commands.
 
 Forge currently has two different distribution facts:
 
-- the source workspace declares package version `0.11.0` and contains the
-  completed P5/P6 implementation plus the P7a authority bridge;
+- the source workspace declares package version `0.12.0` and contains the
+  completed P5/P6 implementation plus the P7a authority bridge and P7b unified
+  durable assurance;
 - the latest published prebuilt GitHub Release may lag the source checkpoint.
   At the time this guide was written, the latest prebuilt tag was `v0.4.0`.
 
@@ -161,6 +162,30 @@ ceremony. A configured broker proves only that a configured external key
 signed an event containing an authenticated-origin claim; physical presence
 and identity assurance remain properties of the host deployment. Windows
 operator files inherit the operator directory's ACL.
+
+### Operate durable intent and representative assurance
+
+Only an external broker enrolled with the `human` profile may originate an
+intent revision. The host asks for a closed semantic answer in chat and calls:
+
+```bash
+forge-core workflow intent record --root <repo> \
+  --origin-envelope-file <human-broker-signed-intent-event.json> --json
+```
+
+The event contains the desired outcome, constraints, preferences,
+unacceptable outcomes, uncertainties, and conversation reference/digest. It
+must not choose an intent id, revision, assurance epoch, phase, policy, target,
+or status; Forge derives those coordinates. An amendment opens the next epoch
+and prevents stale evidence from remaining current.
+
+The host agent, not the human, drafts the typed representative-slice manifest.
+Treat it as untrusted content until an independently enrolled `reviewer` broker
+admits the exact digest through the evidence action packet. Execution evidence
+then requires a `runtime` broker in a different configured separation domain
+and exact bindings to the latest accepted definition, runtime subject, current
+snapshot/effective epoch, and every declared scenario. Keep using `workflow
+action apply`; there is no separate slice database or mutation command.
 
 ## Operate the agent-native loop
 

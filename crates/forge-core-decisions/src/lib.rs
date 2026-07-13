@@ -57,8 +57,11 @@ pub use catalog::{
     CatalogFileError, CatalogLoadReport, LoadedWorkflowDocument, WorkflowDocumentLoadReport,
 };
 pub use durable_assurance::{
-    project_durable_assurance, workflow_human_intent_digest, AssuranceProjectionError,
-    AssuranceProjectionIssue,
+    project_durable_assurance, project_governed_durable_assurance,
+    validate_representative_slice_definition, workflow_human_intent_digest,
+    AssuranceProjectionError, AssuranceProjectionIssue, GovernedAssuranceActionPacketFact,
+    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
+    GovernedAssuranceFacts, GovernedAssuranceWaiverFact,
 };
 pub use embedded_contracts::{
     embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,

@@ -15,10 +15,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use forge_core_contracts::{
     AdvisoryWorkflowPlaybook, CapabilityGap, CatalogEntry, DecisionRequest, NextAction,
     NextActionKind, ObligationCriticality, ObligationStatus, Phase, ReadinessTarget, StableId,
-    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
-    WorkflowDecisionActivation, WorkflowDisproofPolicy, WorkflowEvaluatorBinding,
-    WorkflowEvidenceFreshness, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
+    UniversalAssuranceLens, WorkflowAssuranceClaimRole, WorkflowClaimWaiverObservation,
+    WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowDecisionActivation,
+    WorkflowDisproofPolicy, WorkflowEvaluatorBinding, WorkflowEvaluatorProvider,
+    WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
+    WorkflowEvidenceOutcome, WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy, WorkflowPolicyActivation,
     WorkflowPrerequisiteRequirement, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
@@ -297,7 +298,226 @@ pub fn validate_workflow_governance_bundle(
         }
     }
     validate_dependency_graph(&bundle.policies, &policy_ids, &mut issues);
+    validate_lens_aware_bundle(bundle, &mut issues);
     sorted_issues(issues)
+}
+
+fn validate_lens_aware_bundle(
+    bundle: &forge_core_contracts::WorkflowGovernanceBundle,
+    issues: &mut Vec<WorkflowGovernanceIssue>,
+) {
+    let lens_aware = bundle
+        .policies
+        .iter()
+        .flat_map(|policy| &policy.claims)
+        .any(|claim| !claim.assurance_lenses.is_empty() || claim.assurance_role.is_some());
+    if !lens_aware {
+        return;
+    }
+
+    let mut covered = BTreeSet::new();
+    let mut verification_capable = BTreeSet::new();
+    let mut definition_count = 0_usize;
+    let mut execution_count = 0_usize;
+    for policy in &bundle.policies {
+        for claim in &policy.claims {
+            let path = format!(
+                "workflow_governance_bundle.policies.{}.claims.{}",
+                policy.id.0, claim.id.0
+            );
+            let unique = claim
+                .assurance_lenses
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>();
+            if unique.len() != claim.assurance_lenses.len() {
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::DuplicateReference,
+                    format!("{path}.assurance_lenses"),
+                    "an assurance lens may occur only once on a claim",
+                );
+            }
+            if claim.assurance_lenses.is_empty()
+                && matches!(
+                    claim.assurance_role,
+                    Some(
+                        WorkflowAssuranceClaimRole::LensEvidence
+                            | WorkflowAssuranceClaimRole::RepresentativeSliceExecution
+                    )
+                )
+            {
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::InvalidPolicy,
+                    format!("{path}.assurance_role"),
+                    "lens evidence and representative execution require mapped universal lenses",
+                );
+            }
+            if !claim.assurance_lenses.is_empty() && claim.assurance_role.is_none() {
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::InvalidPolicy,
+                    format!("{path}.assurance_role"),
+                    "a lens-aware claim requires an explicit closed assurance role",
+                );
+            }
+            covered.extend(unique.iter().copied());
+            let referenced_by_required_obligation = policy.obligations.iter().any(|obligation| {
+                obligation.criticality != ObligationCriticality::Advisory
+                    && obligation.claim_refs.contains(&claim.id)
+            });
+            if (!claim.assurance_lenses.is_empty() || claim.assurance_role.is_some())
+                && !referenced_by_required_obligation
+            {
+                issue(
+                    issues,
+                    WorkflowGovernanceIssueCode::InvalidPolicy,
+                    format!("{path}.assurance_lenses"),
+                    "an assurance claim must be referenced by a non-advisory obligation",
+                );
+            }
+            let evaluator = policy
+                .evaluators
+                .iter()
+                .find(|candidate| candidate.id == claim.evaluator_ref);
+            if evaluator.is_some_and(evaluator_can_verify_assurance) {
+                verification_capable.extend(unique.iter().copied());
+            }
+            match claim.assurance_role {
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                    definition_count = definition_count.saturating_add(1);
+                    let valid = claim.assurance_lenses.is_empty()
+                        && evaluator.is_some_and(|evaluator| {
+                            evaluator.provider == WorkflowEvaluatorProvider::IndependentReviewer
+                                && evaluator
+                                    .accepted_evidence_kinds
+                                    .contains(&WorkflowEvidenceKind::IndependentReview)
+                                && evaluator.minimum_strength
+                                    >= forge_core_contracts::WorkflowEvidenceStrength::IndependentConfirmation
+                                && evaluator.minimum_passing_observations == 1
+                                && evaluator.minimum_distinct_principals >= 1
+                        });
+                    if !valid {
+                        issue(
+                            issues,
+                            WorkflowGovernanceIssueCode::InvalidEvaluator,
+                            format!("{path}.assurance_role"),
+                            "representative-slice definition must be unmapped and require exactly one independent-review approval",
+                        );
+                    }
+                }
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                    execution_count = execution_count.saturating_add(1);
+                    let valid = claim
+                        .assurance_lenses
+                        .contains(&UniversalAssuranceLens::CriticalJourneys)
+                        && claim
+                            .assurance_lenses
+                            .contains(&UniversalAssuranceLens::EvidenceRepresentativeness)
+                        && evaluator.is_some_and(|evaluator| {
+                            evaluator.provider == WorkflowEvaluatorProvider::RepresentativeRuntime
+                                && evaluator
+                                    .accepted_evidence_kinds
+                                    .contains(&WorkflowEvidenceKind::RepresentativeExecution)
+                                && evaluator.minimum_strength
+                                    >= forge_core_contracts::WorkflowEvidenceStrength::RepresentativeExecution
+                        });
+                    if !valid {
+                        issue(
+                            issues,
+                            WorkflowGovernanceIssueCode::InvalidEvaluator,
+                            format!("{path}.assurance_role"),
+                            "representative-slice execution requires representative runtime evidence for critical journeys and representativeness",
+                        );
+                    }
+                }
+                Some(WorkflowAssuranceClaimRole::LensEvidence) | None => {}
+            }
+        }
+    }
+
+    let expected = UniversalAssuranceLens::ALL
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    if covered != expected {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidPolicy,
+            "workflow_governance_bundle.policies",
+            "a lens-aware bundle must cover exactly all eight universal assurance lenses",
+        );
+    }
+    for lens in UniversalAssuranceLens::ALL {
+        if !verification_capable.contains(&lens) {
+            issue(
+                issues,
+                WorkflowGovernanceIssueCode::InvalidEvaluator,
+                "workflow_governance_bundle.policies",
+                format!(
+                    "lens {} requires at least one non-research verification-capable claim",
+                    lens.id()
+                ),
+            );
+        }
+    }
+    if definition_count != 1 || execution_count != 1 {
+        issue(
+            issues,
+            WorkflowGovernanceIssueCode::InvalidPolicy,
+            "workflow_governance_bundle.policies",
+            "a lens-aware bundle requires exactly one representative-slice definition and one execution claim",
+        );
+    }
+}
+
+fn evaluator_can_verify_assurance(evaluator: &WorkflowEvaluatorBinding) -> bool {
+    match evaluator.provider {
+        WorkflowEvaluatorProvider::ResearchSource => false,
+        WorkflowEvaluatorProvider::AuthorizedHuman => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::HumanAcceptance)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::AuthoritativeAcceptance
+        }
+        WorkflowEvaluatorProvider::IndependentReviewer => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::IndependentReview)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::IndependentConfirmation
+                && evaluator.minimum_distinct_principals >= 1
+        }
+        WorkflowEvaluatorProvider::RepositoryInspector => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::ArtifactInspection)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::InspectedArtifact
+        }
+        WorkflowEvaluatorProvider::DeterministicTool => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::DeterministicCheck)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::DeterministicVerification
+        }
+        WorkflowEvaluatorProvider::RepresentativeRuntime => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::RepresentativeExecution)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::RepresentativeExecution
+        }
+        WorkflowEvaluatorProvider::ExternalAuthority => {
+            evaluator
+                .accepted_evidence_kinds
+                .contains(&WorkflowEvidenceKind::ExternalAuthority)
+                && evaluator.minimum_strength
+                    >= forge_core_contracts::WorkflowEvidenceStrength::AuthoritativeAcceptance
+        }
+    }
 }
 
 /// Simulate one selected policy from a valid bundle without IO or mutation.
