@@ -2844,13 +2844,17 @@ impl WorkflowGovernanceProjectAdapter {
                 action_packets: Vec::new(),
             }
         };
+        let assurance_is_enforced = durable_assurance_is_enforced(effective.document());
         let durable_assurance_projection = base_assurance_projection
             .clone()
             .map(|base| {
-                project_governed_durable_assurance(base, effective.document(), &assurance_facts)
+                if assurance_is_enforced {
+                    project_governed_durable_assurance(base, effective.document(), &assurance_facts)
+                } else {
+                    Ok(base)
+                }
             })
             .transpose()?;
-        let assurance_is_enforced = durable_assurance_is_enforced(effective.document());
         let applicability = derived.applicability.get(&selected.id).copied();
         let policy_guidance_status =
             if effective.is_domain_pack_degraded() || !boundary_rechecks.is_empty() {
@@ -2979,8 +2983,11 @@ impl WorkflowGovernanceProjectAdapter {
             })
             .collect();
         if let Some(base) = base_assurance_projection {
-            let final_projection =
-                project_governed_durable_assurance(base, effective.document(), &assurance_facts)?;
+            let final_projection = if assurance_is_enforced {
+                project_governed_durable_assurance(base, effective.document(), &assurance_facts)?
+            } else {
+                base
+            };
             let final_case_digest = durable_assurance_case_digest(
                 &self.binding.project_id,
                 &guidance.snapshot_digest,
@@ -3089,31 +3096,36 @@ impl WorkflowGovernanceProjectAdapter {
             .max_by_key(|target| target.rank())
             .unwrap_or(ReadinessTarget::Explore);
         let base_assurance = project_durable_assurance(&projection.records)?;
+        let assurance_is_enforced = durable_assurance_is_enforced(effective.document());
         let governed_assurance = if let Some(base) = base_assurance {
-            let facts = derive_governed_assurance_facts(
-                effective.document(),
-                effective.identity(),
-                projection,
-                &base,
-                &self.binding.project_root,
-                &snapshot,
-                boundary_target,
-                now,
-                trusted_registry_digest.as_deref(),
-                trusted_broker_registry_digest.as_deref(),
-            )?;
-            Some(project_governed_durable_assurance(
-                base,
-                effective.document(),
-                &facts,
-            )?)
+            if assurance_is_enforced {
+                let facts = derive_governed_assurance_facts(
+                    effective.document(),
+                    effective.identity(),
+                    projection,
+                    &base,
+                    &self.binding.project_root,
+                    &snapshot,
+                    boundary_target,
+                    now,
+                    trusted_registry_digest.as_deref(),
+                    trusted_broker_registry_digest.as_deref(),
+                )?;
+                Some(project_governed_durable_assurance(
+                    base,
+                    effective.document(),
+                    &facts,
+                )?)
+            } else {
+                Some(base)
+            }
         } else {
             None
         };
         if !phase_advance_allowed_by_assurance(
             governed_assurance.as_ref(),
             phase_done,
-            durable_assurance_is_enforced(effective.document()),
+            assurance_is_enforced,
         ) {
             return Ok(None);
         }
@@ -4209,7 +4221,7 @@ fn derive_governed_assurance_facts(
                         project_root,
                         event,
                         &assurance.binding.intent_digest,
-                    )?
+                    )
                 } else {
                     None
                 };
@@ -4419,42 +4431,42 @@ fn load_representative_slice_definition(
     project_root: &Path,
     event: &EvaluatorObservedEvent,
     current_intent_digest: &str,
-) -> Result<Option<WorkflowRepresentativeSliceDefinitionDocument>, WorkflowGovernanceAdapterError> {
+) -> Option<WorkflowRepresentativeSliceDefinitionDocument> {
     let Ok((subject_ref, bytes)) =
         read_confined_file(project_root, Path::new(&event.subject.subject_ref))
     else {
-        return Ok(None);
+        return None;
     };
     if subject_ref != event.subject.subject_ref
         || sha256_content_hash(&bytes) != event.subject.subject_digest
         || event.provenance.source_ref != event.subject.subject_ref
         || event.provenance.source_digest != event.subject.subject_digest
     {
-        return Ok(None);
+        return None;
     }
     let Ok(raw) = std::str::from_utf8(&bytes) else {
-        return Ok(None);
+        return None;
     };
     let Ok(document) = yaml_serde::from_str::<WorkflowRepresentativeSliceDefinitionDocument>(raw)
     else {
-        return Ok(None);
+        return None;
     };
     if document.representative_slice.intent_digest != current_intent_digest
         || validate_representative_slice_definition(&document, current_intent_digest).is_err()
     {
-        return Ok(None);
+        return None;
     }
     for scenario in &document.representative_slice.scenarios {
         let Ok((_, scenario_bytes)) =
             read_confined_file(project_root, Path::new(&scenario.scenario_ref))
         else {
-            return Ok(None);
+            return None;
         };
         if sha256_content_hash(&scenario_bytes) != scenario.declared_scenario_digest {
-            return Ok(None);
+            return None;
         }
     }
-    Ok(Some(document))
+    Some(document)
 }
 
 fn receipt_window_start(projection: &WorkflowGovernanceLedgerProjection) -> usize {

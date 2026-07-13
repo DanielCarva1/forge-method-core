@@ -232,6 +232,7 @@ fn packet_for_claim<'a>(packets: &'a Value, claim_ref: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("missing packet for {claim_ref}: {packets:#}"))
 }
 
+#[derive(Clone, Copy)]
 struct EvidenceInput<'a> {
     claim_ref: &'a str,
     broker: &'a Broker<'a>,

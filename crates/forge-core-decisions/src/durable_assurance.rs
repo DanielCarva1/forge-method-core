@@ -362,6 +362,10 @@ pub struct GovernedAssuranceFacts {
 ///
 /// The function accepts no claim status or readiness verdict. Facts from an
 /// older intent epoch or from before the current intent receipt are ignored.
+///
+/// # Errors
+/// Returns [`AssuranceProjectionError`] when admitted assurance metadata,
+/// representative-slice evidence, or the derived projection is inconsistent.
 pub fn project_governed_durable_assurance(
     mut projection: DurableAssuranceProjection,
     bundle: &WorkflowGovernanceBundleDocument,
@@ -999,6 +1003,10 @@ const fn durable_action_priority(kind: NextActionKind) -> u8 {
 }
 
 /// Validate bounded representative-slice content and its current intent bind.
+///
+/// # Errors
+/// Returns [`AssuranceProjectionError`] when the document violates its schema,
+/// size bounds, content-addressed references, or current-intent binding.
 pub fn validate_representative_slice_definition(
     document: &WorkflowRepresentativeSliceDefinitionDocument,
     current_intent_digest: &str,

@@ -292,8 +292,11 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
     for (lens, expected) in lenses.iter().zip(expected_lenses) {
         assert_eq!(lens["lens"], expected);
         assert_eq!(lens["claim_status"], "unknown");
-        assert_eq!(lens["evidence_refs"], serde_json::json!([]));
-        assert!(lens["evaluator_ref"].is_null());
+        assert_eq!(lens["required_before"], "release");
+        assert_eq!(lens["due"], true);
+        for empty_field in ["claims", "evidence", "capabilities", "decisions", "waivers"] {
+            assert_eq!(lens[empty_field], serde_json::json!([]));
+        }
     }
     assert_eq!(
         projection["blocker_lenses"],
