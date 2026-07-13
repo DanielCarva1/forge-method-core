@@ -1,0 +1,3269 @@
+schema_version: '0.1'
+workflow_behavioral_scenario_corpus:
+  id: corpus.workflow-agent-native-continuity.representative-v0
+  corpus_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  partition_class: representative
+  coverage_policy:
+    id: coverage.workflow-agent-native-continuity-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+    expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+  workflow_evidence:
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: checkpoint-preview
+      legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+      policy_ref: policy.workflow.checkpoint-preview
+      policy_digest: sha256:529075de7d8b120fff42ebd117fd724a7c00f2c1d217e18855ae17f6641dc327
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/checkpoint-preview.yaml
+        expected_digest: sha256:8e81b0226dd0e703e5b9c44e67afc96b284dd0215ff7dddb2bf3a5a461d79707
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.checkpoint-preview.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:06a22f422fb1b0d38b2c8960a9b6cc017aaed981c2782ee0d435e981f1128791
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.checkpoint-preview.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.checkpoint-preview
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.checkpoint-preview.durable-proof
+              decision_need_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              resolved_decision_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.checkpoint-preview.positive.claim.workflow.checkpoint-preview.state-bound.0
+                claim_ref: claim.workflow.checkpoint-preview.state-bound
+                evaluator_ref: evaluator.workflow.checkpoint-preview.state-bound
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.positive.claim.workflow.checkpoint-preview.change-summary-evidenced.0
+                claim_ref: claim.workflow.checkpoint-preview.change-summary-evidenced
+                evaluator_ref: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.positive.claim.workflow.checkpoint-preview.safe-resume-explicit.0
+                claim_ref: claim.workflow.checkpoint-preview.safe-resume-explicit
+                evaluator_ref: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.positive.claim.workflow.checkpoint-preview.non-authoritative.0
+                claim_ref: claim.workflow.checkpoint-preview.non-authoritative
+                evaluator_ref: evaluator.workflow.checkpoint-preview.non-authoritative
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.checkpoint-preview.change-summary-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.non-authoritative
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.safe-resume-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.state-bound
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.checkpoint-preview.change-summary-evidenced
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.non-authoritative
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.safe-resume-explicit
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.state-bound
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.checkpoint-preview
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.checkpoint-preview.change-summary-evidenced
+            - claim.workflow.checkpoint-preview.non-authoritative
+            - claim.workflow.checkpoint-preview.safe-resume-explicit
+            - claim.workflow.checkpoint-preview.state-bound
+            rank: 1
+    - scenario_id: scenario.workflow.checkpoint-preview.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:0907198b2b3de89e290b483e9d81ff00dd3fd68f38c6a8ae99a535a9b8da5415
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.checkpoint-preview.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-checkpoint-preview-resume-checkpoint-v0.yaml
+          expected_digest: sha256:f2b0573ce16ae302a5247f9f2f080bcf6a2f7e2e6b333c932c23e9c3f8528180
+        checkpoint_digest: sha256:64a81bbbb1afffbd9e327f177bd00d3e801856ef8527bd68c4bcb9dd04dabd32
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.checkpoint-preview.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.checkpoint-preview
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.checkpoint-preview.durable-proof
+              decision_need_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              resolved_decision_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.state-bound.0
+                claim_ref: claim.workflow.checkpoint-preview.state-bound
+                evaluator_ref: evaluator.workflow.checkpoint-preview.state-bound
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.change-summary-evidenced.0
+                claim_ref: claim.workflow.checkpoint-preview.change-summary-evidenced
+                evaluator_ref: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.safe-resume-explicit.0
+                claim_ref: claim.workflow.checkpoint-preview.safe-resume-explicit
+                evaluator_ref: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.non-authoritative.0
+                claim_ref: claim.workflow.checkpoint-preview.non-authoritative
+                evaluator_ref: evaluator.workflow.checkpoint-preview.non-authoritative
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.checkpoint-preview.change-summary-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.non-authoritative
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.safe-resume-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.state-bound
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.checkpoint-preview.change-summary-evidenced
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.non-authoritative
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.safe-resume-explicit
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.state-bound
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.checkpoint-preview
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.checkpoint-preview.change-summary-evidenced
+            - claim.workflow.checkpoint-preview.non-authoritative
+            - claim.workflow.checkpoint-preview.safe-resume-explicit
+            - claim.workflow.checkpoint-preview.state-bound
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.checkpoint-preview.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.checkpoint-preview
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.checkpoint-preview.durable-proof
+              decision_need_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              resolved_decision_refs:
+              - decision.workflow.checkpoint-preview.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.state-bound.0
+                claim_ref: claim.workflow.checkpoint-preview.state-bound
+                evaluator_ref: evaluator.workflow.checkpoint-preview.state-bound
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.change-summary-evidenced.0
+                claim_ref: claim.workflow.checkpoint-preview.change-summary-evidenced
+                evaluator_ref: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.safe-resume-explicit.0
+                claim_ref: claim.workflow.checkpoint-preview.safe-resume-explicit
+                evaluator_ref: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.non-authoritative.0
+                claim_ref: claim.workflow.checkpoint-preview.non-authoritative
+                evaluator_ref: evaluator.workflow.checkpoint-preview.non-authoritative
+                principal: principal.checkpoint-preview.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.checkpoint-preview.change-summary-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.non-authoritative
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.safe-resume-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.checkpoint-preview.state-bound
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.checkpoint-preview.change-summary-evidenced
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.non-authoritative
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.safe-resume-explicit
+            status: verified
+          - claim_id: claim.workflow.checkpoint-preview.state-bound
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.checkpoint-preview
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.checkpoint-preview.change-summary-evidenced
+            - claim.workflow.checkpoint-preview.non-authoritative
+            - claim.workflow.checkpoint-preview.safe-resume-explicit
+            - claim.workflow.checkpoint-preview.state-bound
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: collaboration-handoff
+      legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+      policy_ref: policy.workflow.collaboration-handoff
+      policy_digest: sha256:354185c9b4f58d3f2d5374d6d2980a07c4ff812ffc7eb7d23a5c4e79011588f0
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/collaboration-handoff.yaml
+        expected_digest: sha256:e244a93dd4de90c52fedd09603309ea4ce314816ff777d57d2f7baf5de8394fe
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.collaboration-handoff.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:a8fb17b53d51b00f76671a4c738c3efc13cd95ec8898700f0369d9f01a18a365
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.collaboration-handoff.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.collaboration-handoff
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.collaboration-handoff.durable-proof
+              decision_need_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              resolved_decision_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.collaboration-handoff.positive.claim.workflow.collaboration-handoff.durable-truth-bounded.0
+                claim_ref: claim.workflow.collaboration-handoff.durable-truth-bounded
+                evaluator_ref: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.positive.claim.workflow.collaboration-handoff.ownership-explicit.0
+                claim_ref: claim.workflow.collaboration-handoff.ownership-explicit
+                evaluator_ref: evaluator.workflow.collaboration-handoff.ownership-explicit
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.positive.claim.workflow.collaboration-handoff.evidence-linked.0
+                claim_ref: claim.workflow.collaboration-handoff.evidence-linked
+                evaluator_ref: evaluator.workflow.collaboration-handoff.evidence-linked
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.positive.claim.workflow.collaboration-handoff.next-action-executable.0
+                claim_ref: claim.workflow.collaboration-handoff.next-action-executable
+                evaluator_ref: evaluator.workflow.collaboration-handoff.next-action-executable
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.collaboration-handoff.durable-truth-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.evidence-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.next-action-executable
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.ownership-explicit
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.collaboration-handoff.durable-truth-bounded
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.evidence-linked
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.next-action-executable
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.ownership-explicit
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.collaboration-handoff
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.collaboration-handoff.durable-truth-bounded
+            - claim.workflow.collaboration-handoff.evidence-linked
+            - claim.workflow.collaboration-handoff.next-action-executable
+            - claim.workflow.collaboration-handoff.ownership-explicit
+            rank: 1
+    - scenario_id: scenario.workflow.collaboration-handoff.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:d864e74ef19316bc7e64c500870b416d4c88f0589b170b47bc7241013d6faecd
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.collaboration-handoff.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-collaboration-handoff-resume-checkpoint-v0.yaml
+          expected_digest: sha256:c93c475ce1fa862743317173954720057b0726e0185afbc44172f1995c0de4ec
+        checkpoint_digest: sha256:587718923b1808f0c97198f0b4b0c91a73044275fcd452b5c7f5e938811108bf
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.collaboration-handoff.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.collaboration-handoff
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.collaboration-handoff.durable-proof
+              decision_need_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              resolved_decision_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.durable-truth-bounded.0
+                claim_ref: claim.workflow.collaboration-handoff.durable-truth-bounded
+                evaluator_ref: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.ownership-explicit.0
+                claim_ref: claim.workflow.collaboration-handoff.ownership-explicit
+                evaluator_ref: evaluator.workflow.collaboration-handoff.ownership-explicit
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.evidence-linked.0
+                claim_ref: claim.workflow.collaboration-handoff.evidence-linked
+                evaluator_ref: evaluator.workflow.collaboration-handoff.evidence-linked
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.next-action-executable.0
+                claim_ref: claim.workflow.collaboration-handoff.next-action-executable
+                evaluator_ref: evaluator.workflow.collaboration-handoff.next-action-executable
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.collaboration-handoff.durable-truth-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.evidence-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.next-action-executable
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.ownership-explicit
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.collaboration-handoff.durable-truth-bounded
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.evidence-linked
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.next-action-executable
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.ownership-explicit
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.collaboration-handoff
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.collaboration-handoff.durable-truth-bounded
+            - claim.workflow.collaboration-handoff.evidence-linked
+            - claim.workflow.collaboration-handoff.next-action-executable
+            - claim.workflow.collaboration-handoff.ownership-explicit
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.collaboration-handoff.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.collaboration-handoff
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.collaboration-handoff.durable-proof
+              decision_need_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              resolved_decision_refs:
+              - decision.workflow.collaboration-handoff.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.durable-truth-bounded.0
+                claim_ref: claim.workflow.collaboration-handoff.durable-truth-bounded
+                evaluator_ref: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.ownership-explicit.0
+                claim_ref: claim.workflow.collaboration-handoff.ownership-explicit
+                evaluator_ref: evaluator.workflow.collaboration-handoff.ownership-explicit
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.evidence-linked.0
+                claim_ref: claim.workflow.collaboration-handoff.evidence-linked
+                evaluator_ref: evaluator.workflow.collaboration-handoff.evidence-linked
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.next-action-executable.0
+                claim_ref: claim.workflow.collaboration-handoff.next-action-executable
+                evaluator_ref: evaluator.workflow.collaboration-handoff.next-action-executable
+                principal: principal.collaboration-handoff.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.collaboration-handoff.durable-truth-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.evidence-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.next-action-executable
+            status: satisfied
+          - obligation_id: obligation.workflow.collaboration-handoff.ownership-explicit
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.collaboration-handoff.durable-truth-bounded
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.evidence-linked
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.next-action-executable
+            status: verified
+          - claim_id: claim.workflow.collaboration-handoff.ownership-explicit
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.collaboration-handoff
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.collaboration-handoff.durable-truth-bounded
+            - claim.workflow.collaboration-handoff.evidence-linked
+            - claim.workflow.collaboration-handoff.next-action-executable
+            - claim.workflow.collaboration-handoff.ownership-explicit
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: evolve-project
+      legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+      policy_ref: policy.workflow.evolve-project
+      policy_digest: sha256:c41ee77ba3ad5ecf20e35701e9efbb68faec26da5487aab229dd5fd35089a8aa
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/evolve-project.yaml
+        expected_digest: sha256:17c69d6a4d8c60274f0d25e1258a896e8ea683a61daa8b44e2227692ad987b74
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.evolve-project.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:bace2310354c4c182ba719413b7e4f58b471901269323448c850efc369415b47
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.evolve-project.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.evolve-project
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.evolve-project.durable-proof
+              decision_need_refs:
+              - decision.workflow.evolve-project.material-gap
+              resolved_decision_refs:
+              - decision.workflow.evolve-project.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.evolve-project.positive.claim.workflow.evolve-project.baseline-protected.0
+                claim_ref: claim.workflow.evolve-project.baseline-protected
+                evaluator_ref: evaluator.workflow.evolve-project.baseline-protected
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.positive.claim.workflow.evolve-project.change-hypothesis.0
+                claim_ref: claim.workflow.evolve-project.change-hypothesis
+                evaluator_ref: evaluator.workflow.evolve-project.change-hypothesis
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.positive.claim.workflow.evolve-project.migration-safe.0
+                claim_ref: claim.workflow.evolve-project.migration-safe
+                evaluator_ref: evaluator.workflow.evolve-project.migration-safe
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.positive.claim.workflow.evolve-project.verification-defined.0
+                claim_ref: claim.workflow.evolve-project.verification-defined
+                evaluator_ref: evaluator.workflow.evolve-project.verification-defined
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.evolve-project.baseline-protected
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.change-hypothesis
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.migration-safe
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.verification-defined
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.evolve-project.baseline-protected
+            status: verified
+          - claim_id: claim.workflow.evolve-project.change-hypothesis
+            status: verified
+          - claim_id: claim.workflow.evolve-project.migration-safe
+            status: verified
+          - claim_id: claim.workflow.evolve-project.verification-defined
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.evolve-project
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.evolve-project.baseline-protected
+            - claim.workflow.evolve-project.change-hypothesis
+            - claim.workflow.evolve-project.migration-safe
+            - claim.workflow.evolve-project.verification-defined
+            rank: 1
+    - scenario_id: scenario.workflow.evolve-project.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:1a6baf5bfd28195380a39b14195a1a0880c851f43b9b8d30aec8322387ba64fe
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.evolve-project.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-evolve-project-resume-checkpoint-v0.yaml
+          expected_digest: sha256:00ca4e24f7da6cf24eb434eda49fa2bb65911970a77e98eceb625557aac29d03
+        checkpoint_digest: sha256:259c42dcadce38d64b690267f964ce3720d32bba59fae86fe42f4a6955ae5ad2
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.evolve-project.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.evolve-project
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.evolve-project.durable-proof
+              decision_need_refs:
+              - decision.workflow.evolve-project.material-gap
+              resolved_decision_refs:
+              - decision.workflow.evolve-project.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.baseline-protected.0
+                claim_ref: claim.workflow.evolve-project.baseline-protected
+                evaluator_ref: evaluator.workflow.evolve-project.baseline-protected
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.change-hypothesis.0
+                claim_ref: claim.workflow.evolve-project.change-hypothesis
+                evaluator_ref: evaluator.workflow.evolve-project.change-hypothesis
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.migration-safe.0
+                claim_ref: claim.workflow.evolve-project.migration-safe
+                evaluator_ref: evaluator.workflow.evolve-project.migration-safe
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.verification-defined.0
+                claim_ref: claim.workflow.evolve-project.verification-defined
+                evaluator_ref: evaluator.workflow.evolve-project.verification-defined
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.evolve-project.baseline-protected
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.change-hypothesis
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.migration-safe
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.verification-defined
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.evolve-project.baseline-protected
+            status: verified
+          - claim_id: claim.workflow.evolve-project.change-hypothesis
+            status: verified
+          - claim_id: claim.workflow.evolve-project.migration-safe
+            status: verified
+          - claim_id: claim.workflow.evolve-project.verification-defined
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.evolve-project
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.evolve-project.baseline-protected
+            - claim.workflow.evolve-project.change-hypothesis
+            - claim.workflow.evolve-project.migration-safe
+            - claim.workflow.evolve-project.verification-defined
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.evolve-project.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.evolve-project
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.evolve-project.durable-proof
+              decision_need_refs:
+              - decision.workflow.evolve-project.material-gap
+              resolved_decision_refs:
+              - decision.workflow.evolve-project.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.baseline-protected.0
+                claim_ref: claim.workflow.evolve-project.baseline-protected
+                evaluator_ref: evaluator.workflow.evolve-project.baseline-protected
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.change-hypothesis.0
+                claim_ref: claim.workflow.evolve-project.change-hypothesis
+                evaluator_ref: evaluator.workflow.evolve-project.change-hypothesis
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.migration-safe.0
+                claim_ref: claim.workflow.evolve-project.migration-safe
+                evaluator_ref: evaluator.workflow.evolve-project.migration-safe
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.evolve-project.resume.claim.workflow.evolve-project.verification-defined.0
+                claim_ref: claim.workflow.evolve-project.verification-defined
+                evaluator_ref: evaluator.workflow.evolve-project.verification-defined
+                principal: principal.evolve-project.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.evolve-project.baseline-protected
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.change-hypothesis
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.migration-safe
+            status: satisfied
+          - obligation_id: obligation.workflow.evolve-project.verification-defined
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.evolve-project.baseline-protected
+            status: verified
+          - claim_id: claim.workflow.evolve-project.change-hypothesis
+            status: verified
+          - claim_id: claim.workflow.evolve-project.migration-safe
+            status: verified
+          - claim_id: claim.workflow.evolve-project.verification-defined
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.evolve-project
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.evolve-project.baseline-protected
+            - claim.workflow.evolve-project.change-hypothesis
+            - claim.workflow.evolve-project.migration-safe
+            - claim.workflow.evolve-project.verification-defined
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: product-area-map
+      legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+      policy_ref: policy.workflow.product-area-map
+      policy_digest: sha256:3634c6eb6548496041d28bac27963332fa31ce5c2278eb1c5f8a34ce628c684f
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/product-area-map.yaml
+        expected_digest: sha256:07c4587698c18ef3a833768bce646118aae327a5d8c577a72d3541ee5403c0f5
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.product-area-map.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:c03907a35a7778e587a2c9fb3a6d4cde5718e934ee42f8675adac4a20ae434da
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.product-area-map.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.product-area-map
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.product-area-map.durable-proof
+              decision_need_refs:
+              - decision.workflow.product-area-map.material-gap
+              resolved_decision_refs:
+              - decision.workflow.product-area-map.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.product-area-map.positive.claim.workflow.product-area-map.boundaries-evidenced.0
+                claim_ref: claim.workflow.product-area-map.boundaries-evidenced
+                evaluator_ref: evaluator.workflow.product-area-map.boundaries-evidenced
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.positive.claim.workflow.product-area-map.ownership-linked.0
+                claim_ref: claim.workflow.product-area-map.ownership-linked
+                evaluator_ref: evaluator.workflow.product-area-map.ownership-linked
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.positive.claim.workflow.product-area-map.dependencies-explicit.0
+                claim_ref: claim.workflow.product-area-map.dependencies-explicit
+                evaluator_ref: evaluator.workflow.product-area-map.dependencies-explicit
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.positive.claim.workflow.product-area-map.unknowns-visible.0
+                claim_ref: claim.workflow.product-area-map.unknowns-visible
+                evaluator_ref: evaluator.workflow.product-area-map.unknowns-visible
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.product-area-map.boundaries-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.dependencies-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.ownership-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.unknowns-visible
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.product-area-map.boundaries-evidenced
+            status: verified
+          - claim_id: claim.workflow.product-area-map.dependencies-explicit
+            status: verified
+          - claim_id: claim.workflow.product-area-map.ownership-linked
+            status: verified
+          - claim_id: claim.workflow.product-area-map.unknowns-visible
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.product-area-map
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.product-area-map.boundaries-evidenced
+            - claim.workflow.product-area-map.dependencies-explicit
+            - claim.workflow.product-area-map.ownership-linked
+            - claim.workflow.product-area-map.unknowns-visible
+            rank: 1
+    - scenario_id: scenario.workflow.product-area-map.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:99b797c7020e1df6e9c86a46adda5942be3fae7fd514f2bb8ef75c981abe45ec
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.product-area-map.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-product-area-map-resume-checkpoint-v0.yaml
+          expected_digest: sha256:9e6f7f8e5cb083c347cdc00bd7b378ec36563402d8a9bdacb6fc918ed2fe7249
+        checkpoint_digest: sha256:efe0469ab1c491cbf8f0bc1482a8a0b3a7aefde1070c05a973dbb63eeeec922a
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.product-area-map.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.product-area-map
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.product-area-map.durable-proof
+              decision_need_refs:
+              - decision.workflow.product-area-map.material-gap
+              resolved_decision_refs:
+              - decision.workflow.product-area-map.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.boundaries-evidenced.0
+                claim_ref: claim.workflow.product-area-map.boundaries-evidenced
+                evaluator_ref: evaluator.workflow.product-area-map.boundaries-evidenced
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.ownership-linked.0
+                claim_ref: claim.workflow.product-area-map.ownership-linked
+                evaluator_ref: evaluator.workflow.product-area-map.ownership-linked
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.dependencies-explicit.0
+                claim_ref: claim.workflow.product-area-map.dependencies-explicit
+                evaluator_ref: evaluator.workflow.product-area-map.dependencies-explicit
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.unknowns-visible.0
+                claim_ref: claim.workflow.product-area-map.unknowns-visible
+                evaluator_ref: evaluator.workflow.product-area-map.unknowns-visible
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.product-area-map.boundaries-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.dependencies-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.ownership-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.unknowns-visible
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.product-area-map.boundaries-evidenced
+            status: verified
+          - claim_id: claim.workflow.product-area-map.dependencies-explicit
+            status: verified
+          - claim_id: claim.workflow.product-area-map.ownership-linked
+            status: verified
+          - claim_id: claim.workflow.product-area-map.unknowns-visible
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.product-area-map
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.product-area-map.boundaries-evidenced
+            - claim.workflow.product-area-map.dependencies-explicit
+            - claim.workflow.product-area-map.ownership-linked
+            - claim.workflow.product-area-map.unknowns-visible
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.product-area-map.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.product-area-map
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.product-area-map.durable-proof
+              decision_need_refs:
+              - decision.workflow.product-area-map.material-gap
+              resolved_decision_refs:
+              - decision.workflow.product-area-map.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.boundaries-evidenced.0
+                claim_ref: claim.workflow.product-area-map.boundaries-evidenced
+                evaluator_ref: evaluator.workflow.product-area-map.boundaries-evidenced
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.ownership-linked.0
+                claim_ref: claim.workflow.product-area-map.ownership-linked
+                evaluator_ref: evaluator.workflow.product-area-map.ownership-linked
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.dependencies-explicit.0
+                claim_ref: claim.workflow.product-area-map.dependencies-explicit
+                evaluator_ref: evaluator.workflow.product-area-map.dependencies-explicit
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.product-area-map.resume.claim.workflow.product-area-map.unknowns-visible.0
+                claim_ref: claim.workflow.product-area-map.unknowns-visible
+                evaluator_ref: evaluator.workflow.product-area-map.unknowns-visible
+                principal: principal.product-area-map.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.product-area-map.boundaries-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.dependencies-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.ownership-linked
+            status: satisfied
+          - obligation_id: obligation.workflow.product-area-map.unknowns-visible
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.product-area-map.boundaries-evidenced
+            status: verified
+          - claim_id: claim.workflow.product-area-map.dependencies-explicit
+            status: verified
+          - claim_id: claim.workflow.product-area-map.ownership-linked
+            status: verified
+          - claim_id: claim.workflow.product-area-map.unknowns-visible
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.product-area-map
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.product-area-map.boundaries-evidenced
+            - claim.workflow.product-area-map.dependencies-explicit
+            - claim.workflow.product-area-map.ownership-linked
+            - claim.workflow.product-area-map.unknowns-visible
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: project-context
+      legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+      policy_ref: policy.workflow.project-context
+      policy_digest: sha256:32de135dec1efc1875c7bf403f70213f4533c455ea1751d29f66dcaf039bc5ed
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/project-context.yaml
+        expected_digest: sha256:34bd12c8bcfd550d61e74191d60a0db4d1ff5b04986234b1b84c54d6521fe8cf
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.project-context.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:4ab176bbf4913dc2cfb3ddb54ac385e40b97bd4a3cd70096cda33f786b27f02c
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.project-context.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.project-context
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.project-context.durable-proof
+              decision_need_refs:
+              - decision.workflow.project-context.material-gap
+              resolved_decision_refs:
+              - decision.workflow.project-context.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.project-context.positive.claim.workflow.project-context.sources-authoritative.0
+                claim_ref: claim.workflow.project-context.sources-authoritative
+                evaluator_ref: evaluator.workflow.project-context.sources-authoritative
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.positive.claim.workflow.project-context.constraints-current.0
+                claim_ref: claim.workflow.project-context.constraints-current
+                evaluator_ref: evaluator.workflow.project-context.constraints-current
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.positive.claim.workflow.project-context.gaps-visible.0
+                claim_ref: claim.workflow.project-context.gaps-visible
+                evaluator_ref: evaluator.workflow.project-context.gaps-visible
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.positive.claim.workflow.project-context.recovery-proven.0
+                claim_ref: claim.workflow.project-context.recovery-proven
+                evaluator_ref: evaluator.workflow.project-context.recovery-proven
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.project-context.constraints-current
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.gaps-visible
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.recovery-proven
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.sources-authoritative
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.project-context.constraints-current
+            status: verified
+          - claim_id: claim.workflow.project-context.gaps-visible
+            status: verified
+          - claim_id: claim.workflow.project-context.recovery-proven
+            status: verified
+          - claim_id: claim.workflow.project-context.sources-authoritative
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.project-context
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.project-context.constraints-current
+            - claim.workflow.project-context.gaps-visible
+            - claim.workflow.project-context.recovery-proven
+            - claim.workflow.project-context.sources-authoritative
+            rank: 1
+    - scenario_id: scenario.workflow.project-context.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:22013e2518315e9e99928655de4e19198a5ffb69eff428e8bee5bade1db460b5
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.project-context.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-project-context-resume-checkpoint-v0.yaml
+          expected_digest: sha256:c8d69664d75a1d5ea73e446479d1d9a72fe855f92d54a6397019351bddc18798
+        checkpoint_digest: sha256:26671078a0f230013e232463ac4e38ff43c5b8c00f94b461c228060cc9e53c56
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.project-context.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.project-context
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.project-context.durable-proof
+              decision_need_refs:
+              - decision.workflow.project-context.material-gap
+              resolved_decision_refs:
+              - decision.workflow.project-context.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.sources-authoritative.0
+                claim_ref: claim.workflow.project-context.sources-authoritative
+                evaluator_ref: evaluator.workflow.project-context.sources-authoritative
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.constraints-current.0
+                claim_ref: claim.workflow.project-context.constraints-current
+                evaluator_ref: evaluator.workflow.project-context.constraints-current
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.gaps-visible.0
+                claim_ref: claim.workflow.project-context.gaps-visible
+                evaluator_ref: evaluator.workflow.project-context.gaps-visible
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.recovery-proven.0
+                claim_ref: claim.workflow.project-context.recovery-proven
+                evaluator_ref: evaluator.workflow.project-context.recovery-proven
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.project-context.constraints-current
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.gaps-visible
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.recovery-proven
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.sources-authoritative
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.project-context.constraints-current
+            status: verified
+          - claim_id: claim.workflow.project-context.gaps-visible
+            status: verified
+          - claim_id: claim.workflow.project-context.recovery-proven
+            status: verified
+          - claim_id: claim.workflow.project-context.sources-authoritative
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.project-context
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.project-context.constraints-current
+            - claim.workflow.project-context.gaps-visible
+            - claim.workflow.project-context.recovery-proven
+            - claim.workflow.project-context.sources-authoritative
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.project-context.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.project-context
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.project-context.durable-proof
+              decision_need_refs:
+              - decision.workflow.project-context.material-gap
+              resolved_decision_refs:
+              - decision.workflow.project-context.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.sources-authoritative.0
+                claim_ref: claim.workflow.project-context.sources-authoritative
+                evaluator_ref: evaluator.workflow.project-context.sources-authoritative
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.constraints-current.0
+                claim_ref: claim.workflow.project-context.constraints-current
+                evaluator_ref: evaluator.workflow.project-context.constraints-current
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.gaps-visible.0
+                claim_ref: claim.workflow.project-context.gaps-visible
+                evaluator_ref: evaluator.workflow.project-context.gaps-visible
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.recovery-proven.0
+                claim_ref: claim.workflow.project-context.recovery-proven
+                evaluator_ref: evaluator.workflow.project-context.recovery-proven
+                principal: principal.project-context.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.project-context.constraints-current
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.gaps-visible
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.recovery-proven
+            status: satisfied
+          - obligation_id: obligation.workflow.project-context.sources-authoritative
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.project-context.constraints-current
+            status: verified
+          - claim_id: claim.workflow.project-context.gaps-visible
+            status: verified
+          - claim_id: claim.workflow.project-context.recovery-proven
+            status: verified
+          - claim_id: claim.workflow.project-context.sources-authoritative
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.project-context
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.project-context.constraints-current
+            - claim.workflow.project-context.gaps-visible
+            - claim.workflow.project-context.recovery-proven
+            - claim.workflow.project-context.sources-authoritative
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: research-closeout
+      legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+      policy_ref: policy.workflow.research-closeout
+      policy_digest: sha256:fe64802d59cfb75486efd7814cf9e0172a1ba68ed23863075b00b5ed011baacc
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/research-closeout.yaml
+        expected_digest: sha256:1ca0c1f3cec397f1f8378a4f7ba5cd763fc2061667e9d0d9137dbe1b0a10e178
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.research-closeout.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:27a55c95aab252b984696f97a9191f6263b15bd1b14e939b3709afd66747cb46
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.research-closeout.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.research-closeout
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.research-closeout.durable-proof
+              decision_need_refs:
+              - decision.workflow.research-closeout.material-gap
+              resolved_decision_refs:
+              - decision.workflow.research-closeout.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.research-closeout.positive.claim.workflow.research-closeout.questions-covered.0
+                claim_ref: claim.workflow.research-closeout.questions-covered
+                evaluator_ref: evaluator.workflow.research-closeout.questions-covered
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.positive.claim.workflow.research-closeout.sources-provenanced.0
+                claim_ref: claim.workflow.research-closeout.sources-provenanced
+                evaluator_ref: evaluator.workflow.research-closeout.sources-provenanced
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.positive.claim.workflow.research-closeout.uncertainty-retained.0
+                claim_ref: claim.workflow.research-closeout.uncertainty-retained
+                evaluator_ref: evaluator.workflow.research-closeout.uncertainty-retained
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.positive.claim.workflow.research-closeout.decision-impact-explicit.0
+                claim_ref: claim.workflow.research-closeout.decision-impact-explicit
+                evaluator_ref: evaluator.workflow.research-closeout.decision-impact-explicit
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.research-closeout.decision-impact-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.questions-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.sources-provenanced
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.uncertainty-retained
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.research-closeout.decision-impact-explicit
+            status: verified
+          - claim_id: claim.workflow.research-closeout.questions-covered
+            status: verified
+          - claim_id: claim.workflow.research-closeout.sources-provenanced
+            status: verified
+          - claim_id: claim.workflow.research-closeout.uncertainty-retained
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.research-closeout
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.research-closeout.decision-impact-explicit
+            - claim.workflow.research-closeout.questions-covered
+            - claim.workflow.research-closeout.sources-provenanced
+            - claim.workflow.research-closeout.uncertainty-retained
+            rank: 1
+    - scenario_id: scenario.workflow.research-closeout.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:76855b8f3acb9d25bd8ae68838d47f37755d080330c8c50f29c5b96e1703ec40
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.research-closeout.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-research-closeout-resume-checkpoint-v0.yaml
+          expected_digest: sha256:98cee10196d20078dbfdc695761b3b253a4270ef6391e8beafa2b3e5ce913c97
+        checkpoint_digest: sha256:364c3dce9d8bdfdc13e8acf59d81e75eed7f53b4ec9be887c2b2146827fab21a
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.research-closeout.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.research-closeout
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.research-closeout.durable-proof
+              decision_need_refs:
+              - decision.workflow.research-closeout.material-gap
+              resolved_decision_refs:
+              - decision.workflow.research-closeout.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.questions-covered.0
+                claim_ref: claim.workflow.research-closeout.questions-covered
+                evaluator_ref: evaluator.workflow.research-closeout.questions-covered
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.sources-provenanced.0
+                claim_ref: claim.workflow.research-closeout.sources-provenanced
+                evaluator_ref: evaluator.workflow.research-closeout.sources-provenanced
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.uncertainty-retained.0
+                claim_ref: claim.workflow.research-closeout.uncertainty-retained
+                evaluator_ref: evaluator.workflow.research-closeout.uncertainty-retained
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.decision-impact-explicit.0
+                claim_ref: claim.workflow.research-closeout.decision-impact-explicit
+                evaluator_ref: evaluator.workflow.research-closeout.decision-impact-explicit
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.research-closeout.decision-impact-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.questions-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.sources-provenanced
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.uncertainty-retained
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.research-closeout.decision-impact-explicit
+            status: verified
+          - claim_id: claim.workflow.research-closeout.questions-covered
+            status: verified
+          - claim_id: claim.workflow.research-closeout.sources-provenanced
+            status: verified
+          - claim_id: claim.workflow.research-closeout.uncertainty-retained
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.research-closeout
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.research-closeout.decision-impact-explicit
+            - claim.workflow.research-closeout.questions-covered
+            - claim.workflow.research-closeout.sources-provenanced
+            - claim.workflow.research-closeout.uncertainty-retained
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.research-closeout.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.research-closeout
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.research-closeout.durable-proof
+              decision_need_refs:
+              - decision.workflow.research-closeout.material-gap
+              resolved_decision_refs:
+              - decision.workflow.research-closeout.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.questions-covered.0
+                claim_ref: claim.workflow.research-closeout.questions-covered
+                evaluator_ref: evaluator.workflow.research-closeout.questions-covered
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.sources-provenanced.0
+                claim_ref: claim.workflow.research-closeout.sources-provenanced
+                evaluator_ref: evaluator.workflow.research-closeout.sources-provenanced
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.uncertainty-retained.0
+                claim_ref: claim.workflow.research-closeout.uncertainty-retained
+                evaluator_ref: evaluator.workflow.research-closeout.uncertainty-retained
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.decision-impact-explicit.0
+                claim_ref: claim.workflow.research-closeout.decision-impact-explicit
+                evaluator_ref: evaluator.workflow.research-closeout.decision-impact-explicit
+                principal: principal.research-closeout.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.research-closeout.decision-impact-explicit
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.questions-covered
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.sources-provenanced
+            status: satisfied
+          - obligation_id: obligation.workflow.research-closeout.uncertainty-retained
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.research-closeout.decision-impact-explicit
+            status: verified
+          - claim_id: claim.workflow.research-closeout.questions-covered
+            status: verified
+          - claim_id: claim.workflow.research-closeout.sources-provenanced
+            status: verified
+          - claim_id: claim.workflow.research-closeout.uncertainty-retained
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.research-closeout
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.research-closeout.decision-impact-explicit
+            - claim.workflow.research-closeout.questions-covered
+            - claim.workflow.research-closeout.sources-provenanced
+            - claim.workflow.research-closeout.uncertainty-retained
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: retrospective
+      legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+      policy_ref: policy.workflow.retrospective
+      policy_digest: sha256:c6277d03de4495e3b61de9dc9ac2fdcdba11514e31a8b5dd6b81f97c3d7fa0cf
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/retrospective.yaml
+        expected_digest: sha256:2906fab9870365d07ef4152c72bd24f7524249714ca5a53ea35d62652ed7b5bf
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.retrospective.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:dd708de7e641fb3098cbd66b18aaa55ba22a11d5f8ced88ead8b7f806e6fcb92
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.retrospective.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.retrospective
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.retrospective.durable-proof
+              decision_need_refs:
+              - decision.workflow.retrospective.material-gap
+              resolved_decision_refs:
+              - decision.workflow.retrospective.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.retrospective.positive.claim.workflow.retrospective.outcomes-evidenced.0
+                claim_ref: claim.workflow.retrospective.outcomes-evidenced
+                evaluator_ref: evaluator.workflow.retrospective.outcomes-evidenced
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.positive.claim.workflow.retrospective.causes-calibrated.0
+                claim_ref: claim.workflow.retrospective.causes-calibrated
+                evaluator_ref: evaluator.workflow.retrospective.causes-calibrated
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.positive.claim.workflow.retrospective.learnings-durable.0
+                claim_ref: claim.workflow.retrospective.learnings-durable
+                evaluator_ref: evaluator.workflow.retrospective.learnings-durable
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.positive.claim.workflow.retrospective.actions-owned.0
+                claim_ref: claim.workflow.retrospective.actions-owned
+                evaluator_ref: evaluator.workflow.retrospective.actions-owned
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.retrospective.actions-owned
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.causes-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.learnings-durable
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.outcomes-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.retrospective.actions-owned
+            status: verified
+          - claim_id: claim.workflow.retrospective.causes-calibrated
+            status: verified
+          - claim_id: claim.workflow.retrospective.learnings-durable
+            status: verified
+          - claim_id: claim.workflow.retrospective.outcomes-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.retrospective
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.retrospective.actions-owned
+            - claim.workflow.retrospective.causes-calibrated
+            - claim.workflow.retrospective.learnings-durable
+            - claim.workflow.retrospective.outcomes-evidenced
+            rank: 1
+    - scenario_id: scenario.workflow.retrospective.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:a768808381bb54b5f2aeffc52eb6d21f5f8c3c5f9b1fe1e2eab11f0837039de5
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.retrospective.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-retrospective-resume-checkpoint-v0.yaml
+          expected_digest: sha256:731d1d11c5dac18b9c8b171ca461be81788ffc4e16f385336128b182d1d98c81
+        checkpoint_digest: sha256:769520d3c069554bd32a845f3d9709f43b2ae6a54ce4eeb9dace3035301652d8
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.retrospective.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.retrospective
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.retrospective.durable-proof
+              decision_need_refs:
+              - decision.workflow.retrospective.material-gap
+              resolved_decision_refs:
+              - decision.workflow.retrospective.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.outcomes-evidenced.0
+                claim_ref: claim.workflow.retrospective.outcomes-evidenced
+                evaluator_ref: evaluator.workflow.retrospective.outcomes-evidenced
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.causes-calibrated.0
+                claim_ref: claim.workflow.retrospective.causes-calibrated
+                evaluator_ref: evaluator.workflow.retrospective.causes-calibrated
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.learnings-durable.0
+                claim_ref: claim.workflow.retrospective.learnings-durable
+                evaluator_ref: evaluator.workflow.retrospective.learnings-durable
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.actions-owned.0
+                claim_ref: claim.workflow.retrospective.actions-owned
+                evaluator_ref: evaluator.workflow.retrospective.actions-owned
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.retrospective.actions-owned
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.causes-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.learnings-durable
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.outcomes-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.retrospective.actions-owned
+            status: verified
+          - claim_id: claim.workflow.retrospective.causes-calibrated
+            status: verified
+          - claim_id: claim.workflow.retrospective.learnings-durable
+            status: verified
+          - claim_id: claim.workflow.retrospective.outcomes-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.retrospective
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.retrospective.actions-owned
+            - claim.workflow.retrospective.causes-calibrated
+            - claim.workflow.retrospective.learnings-durable
+            - claim.workflow.retrospective.outcomes-evidenced
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.retrospective.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.retrospective
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.retrospective.durable-proof
+              decision_need_refs:
+              - decision.workflow.retrospective.material-gap
+              resolved_decision_refs:
+              - decision.workflow.retrospective.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.outcomes-evidenced.0
+                claim_ref: claim.workflow.retrospective.outcomes-evidenced
+                evaluator_ref: evaluator.workflow.retrospective.outcomes-evidenced
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.causes-calibrated.0
+                claim_ref: claim.workflow.retrospective.causes-calibrated
+                evaluator_ref: evaluator.workflow.retrospective.causes-calibrated
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.learnings-durable.0
+                claim_ref: claim.workflow.retrospective.learnings-durable
+                evaluator_ref: evaluator.workflow.retrospective.learnings-durable
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.actions-owned.0
+                claim_ref: claim.workflow.retrospective.actions-owned
+                evaluator_ref: evaluator.workflow.retrospective.actions-owned
+                principal: principal.retrospective.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.retrospective.actions-owned
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.causes-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.learnings-durable
+            status: satisfied
+          - obligation_id: obligation.workflow.retrospective.outcomes-evidenced
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.retrospective.actions-owned
+            status: verified
+          - claim_id: claim.workflow.retrospective.causes-calibrated
+            status: verified
+          - claim_id: claim.workflow.retrospective.learnings-durable
+            status: verified
+          - claim_id: claim.workflow.retrospective.outcomes-evidenced
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.retrospective
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.retrospective.actions-owned
+            - claim.workflow.retrospective.causes-calibrated
+            - claim.workflow.retrospective.learnings-durable
+            - claim.workflow.retrospective.outcomes-evidenced
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: spec-distillation
+      legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+      policy_ref: policy.workflow.spec-distillation
+      policy_digest: sha256:02200069d2a61ce417a5f1fa1bcf578b620605a69e153f75ecd3f5b8331098db
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/spec-distillation.yaml
+        expected_digest: sha256:573e168ca1b4f05d637d1dc70f6dae89e60bb68572197038c524a4a49c60fb64
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.spec-distillation.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:5251b256f43951201073d75c4eea13f5b09010d2cd80950d781d5fea6566dc6b
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.spec-distillation.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.spec-distillation
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.spec-distillation.durable-proof
+              decision_need_refs:
+              - decision.workflow.spec-distillation.material-gap
+              resolved_decision_refs:
+              - decision.workflow.spec-distillation.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.spec-distillation.positive.claim.workflow.spec-distillation.intent-preserved.0
+                claim_ref: claim.workflow.spec-distillation.intent-preserved
+                evaluator_ref: evaluator.workflow.spec-distillation.intent-preserved
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.positive.claim.workflow.spec-distillation.requirements-testable.0
+                claim_ref: claim.workflow.spec-distillation.requirements-testable
+                evaluator_ref: evaluator.workflow.spec-distillation.requirements-testable
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.positive.claim.workflow.spec-distillation.ambiguity-raised.0
+                claim_ref: claim.workflow.spec-distillation.ambiguity-raised
+                evaluator_ref: evaluator.workflow.spec-distillation.ambiguity-raised
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.positive.claim.workflow.spec-distillation.authority-bounded.0
+                claim_ref: claim.workflow.spec-distillation.authority-bounded
+                evaluator_ref: evaluator.workflow.spec-distillation.authority-bounded
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.spec-distillation.ambiguity-raised
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.authority-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.intent-preserved
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.requirements-testable
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.spec-distillation.ambiguity-raised
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.authority-bounded
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.intent-preserved
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.requirements-testable
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.spec-distillation
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.spec-distillation.ambiguity-raised
+            - claim.workflow.spec-distillation.authority-bounded
+            - claim.workflow.spec-distillation.intent-preserved
+            - claim.workflow.spec-distillation.requirements-testable
+            rank: 1
+    - scenario_id: scenario.workflow.spec-distillation.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:cc7d12f89d43f72a33a12d5d8f0cd9686091cc44da5a1065e094953ca7377ced
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.spec-distillation.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-spec-distillation-resume-checkpoint-v0.yaml
+          expected_digest: sha256:765accf1d536730da524133374856e0effec217a39dc602cda284040ce8d1c64
+        checkpoint_digest: sha256:7f774f9dbc4dad1659c73b7a72ec22edc7cec2f917304171ace351336b65b4fa
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.spec-distillation.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.spec-distillation
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.spec-distillation.durable-proof
+              decision_need_refs:
+              - decision.workflow.spec-distillation.material-gap
+              resolved_decision_refs:
+              - decision.workflow.spec-distillation.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.intent-preserved.0
+                claim_ref: claim.workflow.spec-distillation.intent-preserved
+                evaluator_ref: evaluator.workflow.spec-distillation.intent-preserved
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.requirements-testable.0
+                claim_ref: claim.workflow.spec-distillation.requirements-testable
+                evaluator_ref: evaluator.workflow.spec-distillation.requirements-testable
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.ambiguity-raised.0
+                claim_ref: claim.workflow.spec-distillation.ambiguity-raised
+                evaluator_ref: evaluator.workflow.spec-distillation.ambiguity-raised
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.authority-bounded.0
+                claim_ref: claim.workflow.spec-distillation.authority-bounded
+                evaluator_ref: evaluator.workflow.spec-distillation.authority-bounded
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.spec-distillation.ambiguity-raised
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.authority-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.intent-preserved
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.requirements-testable
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.spec-distillation.ambiguity-raised
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.authority-bounded
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.intent-preserved
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.requirements-testable
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.spec-distillation
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.spec-distillation.ambiguity-raised
+            - claim.workflow.spec-distillation.authority-bounded
+            - claim.workflow.spec-distillation.intent-preserved
+            - claim.workflow.spec-distillation.requirements-testable
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.spec-distillation.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.spec-distillation
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.spec-distillation.durable-proof
+              decision_need_refs:
+              - decision.workflow.spec-distillation.material-gap
+              resolved_decision_refs:
+              - decision.workflow.spec-distillation.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.intent-preserved.0
+                claim_ref: claim.workflow.spec-distillation.intent-preserved
+                evaluator_ref: evaluator.workflow.spec-distillation.intent-preserved
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.requirements-testable.0
+                claim_ref: claim.workflow.spec-distillation.requirements-testable
+                evaluator_ref: evaluator.workflow.spec-distillation.requirements-testable
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.ambiguity-raised.0
+                claim_ref: claim.workflow.spec-distillation.ambiguity-raised
+                evaluator_ref: evaluator.workflow.spec-distillation.ambiguity-raised
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.authority-bounded.0
+                claim_ref: claim.workflow.spec-distillation.authority-bounded
+                evaluator_ref: evaluator.workflow.spec-distillation.authority-bounded
+                principal: principal.spec-distillation.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.spec-distillation.ambiguity-raised
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.authority-bounded
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.intent-preserved
+            status: satisfied
+          - obligation_id: obligation.workflow.spec-distillation.requirements-testable
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.spec-distillation.ambiguity-raised
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.authority-bounded
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.intent-preserved
+            status: verified
+          - claim_id: claim.workflow.spec-distillation.requirements-testable
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.spec-distillation
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.spec-distillation.ambiguity-raised
+            - claim.workflow.spec-distillation.authority-bounded
+            - claim.workflow.spec-distillation.intent-preserved
+            - claim.workflow.spec-distillation.requirements-testable
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions
+  - bindings:
+      review_subject:
+        id: workflow-review-subject.agent-native-continuity-v0
+        embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+        expected_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      review_subject_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+      workflow_id: sprint-status
+      legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+      policy_ref: policy.workflow.sprint-status
+      policy_digest: sha256:fa586fd956be64979a4ee120e05c4e2f45eee51f72c35725654d4bc05ea28a12
+      candidate_bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      candidate_bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      candidate_bundle_source_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      candidate_policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      migration_batch_id: workflow-governance.batch.agent-native-continuity-v0
+      migration_batch_version: 0.4.0
+      governance_release_id: workflow-governance.release.agent-native-continuity-v0
+      governance_release_version: 0.4.0
+      predecessor_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      coverage_policy_id: coverage.workflow-agent-native-continuity-v0
+      coverage_policy_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+      coverage_policy_source_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      evaluator:
+        evaluator_id: evaluator.workflow-behavioral-shadow
+        evaluator_version: 0.1.0
+        governed_projection_version: 0.1.0
+        evaluator_source_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+      raw_sources:
+      - kind: legacy_workflow
+        embedded_ref: contracts/workflows/sprint-status.yaml
+        expected_digest: sha256:7802c1fcc5e0a0165a6ecc13c40743ccc3bfdb1ef236f74ae015ccf4e9baab0c
+      - kind: governance_policy
+        embedded_ref: contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml
+        expected_digest: sha256:d5c711caa7b168eef9ac560557cd7cc85dcf383a5ec7c1d65f57441c201cf58c
+      - kind: candidate_bundle
+        embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+        expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+      - kind: coverage_policy
+        embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+        expected_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+      - kind: evaluator
+        embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+        expected_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    scenarios:
+    - scenario_id: scenario.workflow.sprint-status.positive.v0
+      scenario_kind: positive
+      corpus_class: representative
+      execution_input_digest: sha256:1662325b99783da4a0434f56cabe8879ae2b53c17ba75d7a62f27dc191b077e6
+      execution:
+        kind: single
+        input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.sprint-status.positive
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.sprint-status
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.sprint-status.durable-proof
+              decision_need_refs:
+              - decision.workflow.sprint-status.material-gap
+              resolved_decision_refs:
+              - decision.workflow.sprint-status.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.sprint-status.positive.claim.workflow.sprint-status.scope-state-current.0
+                claim_ref: claim.workflow.sprint-status.scope-state-current
+                evaluator_ref: evaluator.workflow.sprint-status.scope-state-current
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.positive.claim.workflow.sprint-status.blockers-evidenced.0
+                claim_ref: claim.workflow.sprint-status.blockers-evidenced
+                evaluator_ref: evaluator.workflow.sprint-status.blockers-evidenced
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.positive.claim.workflow.sprint-status.forecast-calibrated.0
+                claim_ref: claim.workflow.sprint-status.forecast-calibrated
+                evaluator_ref: evaluator.workflow.sprint-status.forecast-calibrated
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.positive.claim.workflow.sprint-status.handoff-actionable.0
+                claim_ref: claim.workflow.sprint-status.handoff-actionable
+                evaluator_ref: evaluator.workflow.sprint-status.handoff-actionable
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.sprint-status.blockers-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.forecast-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.handoff-actionable
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.scope-state-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.sprint-status.blockers-evidenced
+            status: verified
+          - claim_id: claim.workflow.sprint-status.forecast-calibrated
+            status: verified
+          - claim_id: claim.workflow.sprint-status.handoff-actionable
+            status: verified
+          - claim_id: claim.workflow.sprint-status.scope-state-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.sprint-status
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.sprint-status.blockers-evidenced
+            - claim.workflow.sprint-status.forecast-calibrated
+            - claim.workflow.sprint-status.handoff-actionable
+            - claim.workflow.sprint-status.scope-state-current
+            rank: 1
+    - scenario_id: scenario.workflow.sprint-status.resume.v0
+      scenario_kind: resume
+      corpus_class: representative
+      execution_input_digest: sha256:766128681f57f084936eb0c4ee921d3f0e886b9f4ce5a758ef4d86082aa3f3e6
+      execution:
+        kind: resume
+        continuation:
+          ledger_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+          ledger_head_digest: sha256:83606f608792c17f16fc92a9e991cd5ed7ed287397c524a750fe079e78da4d62
+          snapshot_digest: sha256:1658fc9196f73bc9d1ae37d2f9f55fc8cc6f7e73db3351d9045aba168fb69ba3
+          active_release_id: workflow-governance.release.assurance-operations-v0
+          active_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+          runtime_bundle_id: bundle.workflow-governance.assurance-operations-v0
+          runtime_bundle_digest: sha256:40b8f561d070918b6470dbd2b3540a85479e4e83549be338dec7f34b10c81a4d
+          state_version: 3
+          current_phase: 1-discovery
+          observed_at_unix: 1783861381
+        checkpoint_source:
+          id: checkpoint.workflow-agent-native-continuity.sprint-status.v0
+          embedded_ref: contracts/evidence/workflow-agent-native-continuity-sprint-status-resume-checkpoint-v0.yaml
+          expected_digest: sha256:94357ef1ede1b0f20a8beb0cc86aefce7ca33fd040d486553d52fc7dadc0105a
+        checkpoint_digest: sha256:5ee3cf4f54df4ce4f15baabe659d8ebf13294b4dd70b392ea595776edb1afecf
+        checkpoint_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.sprint-status.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.sprint-status
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.sprint-status.durable-proof
+              decision_need_refs:
+              - decision.workflow.sprint-status.material-gap
+              resolved_decision_refs:
+              - decision.workflow.sprint-status.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.scope-state-current.0
+                claim_ref: claim.workflow.sprint-status.scope-state-current
+                evaluator_ref: evaluator.workflow.sprint-status.scope-state-current
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.blockers-evidenced.0
+                claim_ref: claim.workflow.sprint-status.blockers-evidenced
+                evaluator_ref: evaluator.workflow.sprint-status.blockers-evidenced
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.forecast-calibrated.0
+                claim_ref: claim.workflow.sprint-status.forecast-calibrated
+                evaluator_ref: evaluator.workflow.sprint-status.forecast-calibrated
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.handoff-actionable.0
+                claim_ref: claim.workflow.sprint-status.handoff-actionable
+                evaluator_ref: evaluator.workflow.sprint-status.handoff-actionable
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        checkpoint_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.sprint-status.blockers-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.forecast-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.handoff-actionable
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.scope-state-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.sprint-status.blockers-evidenced
+            status: verified
+          - claim_id: claim.workflow.sprint-status.forecast-calibrated
+            status: verified
+          - claim_id: claim.workflow.sprint-status.handoff-actionable
+            status: verified
+          - claim_id: claim.workflow.sprint-status.scope-state-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.sprint-status
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.sprint-status.blockers-evidenced
+            - claim.workflow.sprint-status.forecast-calibrated
+            - claim.workflow.sprint-status.handoff-actionable
+            - claim.workflow.sprint-status.scope-state-current
+            rank: 1
+        resumed_input:
+          bundle:
+            id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+            embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+            expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+          evaluation:
+            schema_version: '0.1'
+            workflow_governance_evaluation:
+              observation_set_id: observations.sprint-status.resume
+              state_version: 7
+              observed_at_unix: 1720000000
+              bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+              policy_id: policy.workflow.sprint-status
+              current_phase: 2-spec
+              target: execute
+              completed_policy_refs: []
+              not_applicable_policy_refs: []
+              available_capability_refs:
+              - capability.workflow.sprint-status.durable-proof
+              decision_need_refs:
+              - decision.workflow.sprint-status.material-gap
+              resolved_decision_refs:
+              - decision.workflow.sprint-status.material-gap
+              waivers: []
+              evidence:
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.scope-state-current.0
+                claim_ref: claim.workflow.sprint-status.scope-state-current
+                evaluator_ref: evaluator.workflow.sprint-status.scope-state-current
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.blockers-evidenced.0
+                claim_ref: claim.workflow.sprint-status.blockers-evidenced
+                evaluator_ref: evaluator.workflow.sprint-status.blockers-evidenced
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.forecast-calibrated.0
+                claim_ref: claim.workflow.sprint-status.forecast-calibrated
+                evaluator_ref: evaluator.workflow.sprint-status.forecast-calibrated
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              - evidence_ref: evidence.sprint-status.resume.claim.workflow.sprint-status.handoff-actionable.0
+                claim_ref: claim.workflow.sprint-status.handoff-actionable
+                evaluator_ref: evaluator.workflow.sprint-status.handoff-actionable
+                principal: principal.sprint-status.0
+                kind: artifact_inspection
+                strength: inspected_artifact
+                freshness: current
+                outcome: pass
+              completion_assertion: asserted
+        resumed_expected:
+          status: complete
+          eligibility: eligible
+          progression: allowed
+          completion: complete
+          obligations:
+          - obligation_id: obligation.workflow.sprint-status.blockers-evidenced
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.forecast-calibrated
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.handoff-actionable
+            status: satisfied
+          - obligation_id: obligation.workflow.sprint-status.scope-state-current
+            status: satisfied
+          claims:
+          - claim_id: claim.workflow.sprint-status.blockers-evidenced
+            status: verified
+          - claim_id: claim.workflow.sprint-status.forecast-calibrated
+            status: verified
+          - claim_id: claim.workflow.sprint-status.handoff-actionable
+            status: verified
+          - claim_id: claim.workflow.sprint-status.scope-state-current
+            status: verified
+          decision_refs: []
+          capability_refs: []
+          issues: []
+          next_actions:
+          - id: action.request-trusted-evaluation.policy.workflow.sprint-status
+            kind: evaluate
+            addresses_claim_refs:
+            - claim.workflow.sprint-status.blockers-evidenced
+            - claim.workflow.sprint-status.forecast-calibrated
+            - claim.workflow.sprint-status.handoff-actionable
+            - claim.workflow.sprint-status.scope-state-current
+            rank: 1
+        equivalence_dimensions:
+        - status
+        - eligibility
+        - progression
+        - completion
+        - obligations
+        - claims
+        - decisions
+        - capabilities
+        - issues
+        - next_actions

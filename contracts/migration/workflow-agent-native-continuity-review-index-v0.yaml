@@ -1,0 +1,200 @@
+schema_version: '0.2'
+workflow_release_review_index:
+  id: workflow-release-review.agent-native-continuity-v0
+  index_version: 0.3.0
+  authority: candidate_only
+  promotion:
+    predecessor:
+      release_id: workflow-governance.release.assurance-operations-v0
+      release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+    candidate_release:
+      lineage_id: workflow-governance.core
+      release_id: workflow-governance.release.agent-native-continuity-v0
+      release_version: 0.4.0
+      release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+    candidate_runtime_bundle:
+      bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+      bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+      policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+    promoted_runtime_bundle:
+      bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+      bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+      policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+  release_manifest:
+    artifact_id: release-manifest.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml
+    raw_digest: sha256:aee405fd7aeeb18ee5fe9786a732235fc71b6752f21866692262fbcce1e71a67
+    canonical_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  migration_batches:
+  - artifact_id: migration-batch.golden-path-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-golden-path-v0.yaml
+    raw_digest: sha256:3d5fb1c4ffe7d9c3bdc8f23de0a4ff046f9bef2850751d4570a5b983b8edbc80
+    canonical_digest: sha256:35877b93a73b0101aabd0e80620bfbea877d03449ed7bf70a9c50f643f19e90b
+  - artifact_id: migration-batch.core-assurance-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-core-assurance-v0.yaml
+    raw_digest: sha256:4e92f44a7b6eb84616f798a1fcfc0445d043ba4bcf7a7c9e4554a2f6a5fbfb9c
+    canonical_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
+  - artifact_id: migration-batch.assurance-operations-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
+    raw_digest: sha256:d8d9586ae45530d6e0bfba40e4708d1e10a280218a750b1bf3249097a5cafe5f
+    canonical_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
+  - artifact_id: migration-batch.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-batch-agent-native-continuity-v0.yaml
+    raw_digest: sha256:a2a88d6c756557ea9f39db2f469244f96bd711fc439764e9bf1ccc68f9ba23e3
+    canonical_digest: sha256:a4c5a4a89d8eea293fb34658ada95ea80ea1fb511e8af6f4a8027308c5ef1132
+  review_subject:
+    artifact_id: review-subject.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+    raw_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+    canonical_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+  coverage_policy:
+    artifact_id: coverage-policy.agent-native-continuity-v0
+    embedded_ref: contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml
+    raw_digest: sha256:85a394dd5e49e0bcc0cedc88158c7bfb0597c4cbf61ddf5373806647cbc22898
+    canonical_digest: sha256:b3950928926397bc2a728d6ad3b2b6151ab64a29905bf5bc4a95e3179faab19b
+  full_catalog:
+    artifact_id: full-catalog.foundation-v0
+    embedded_ref: contracts/policies/workflow-migration-foundation-v0.yaml
+    raw_digest: sha256:be43183b1463e66ea15aff997e234af94f85764c5c1e61096f434c40217b3d27
+    canonical_digest: sha256:b54da5e05e1db344e319abd5e59713dcf794215b4f61434f724a9b70b53006c1
+  corpus_set:
+    artifact_id: corpus-set.agent-native-continuity-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-corpus-set-v0.yaml
+    raw_digest: sha256:99dff193a4030aebc9b3cd056edc55fcea403f8af730a338f698486a8542d8b9
+    canonical_digest: sha256:8f14c0aaebb91a5f73dfb2c946a2944ba2826c602b26704d6abef089c708cb7f
+  representative_corpus:
+    artifact_id: corpus.workflow-agent-native-continuity.representative-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-representative-v0.yaml
+    raw_digest: sha256:9b87d2962b6541f2a5a5c103c5e544acb24f02486f4f98295fd40e0a78e6d9c5
+    canonical_digest: sha256:96bcc28c54b1f225235384f784db8c3c31606b0fe63ae44dc0cbd83611734467
+  adversarial_corpus:
+    artifact_id: corpus.workflow-agent-native-continuity.adversarial-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-adversarial-v0.yaml
+    raw_digest: sha256:f9b3228a79a954eea107799db11e2ded63bcaf04c31e0dade280021511dbbd3d
+    canonical_digest: sha256:988c9be505128447014e601a64156b5ef95a21a3230527be376c517075da0f23
+  shadow_report:
+    artifact_id: shadow-report.agent-native-continuity-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-shadow-report-v0.yaml
+    raw_digest: sha256:2bce88598c60b9b13721f953ef2aaf7fa1a0407d4b29410b44c5cee7b97d50e5
+    canonical_digest: sha256:8df37ccdefc41155acbb82564ca3aa1703cf5da99c6fdec5c81149ba791f9ea0
+  candidate_runtime_bundle:
+    artifact_id: runtime-bundle.agent-native-continuity-candidate-v0
+    embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+    raw_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+    canonical_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+  promoted_runtime_bundle:
+    artifact_id: bundle.workflow-governance.agent-native-continuity-v0
+    embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml
+    raw_digest: sha256:5faa16919223e609d0d9aee74e7dce4a9b350ab4596cec8b81b18e1606b9a4c6
+    canonical_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+  predecessor_registry:
+    artifact_id: registry.assurance-operations-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-assurance-operations-v0.yaml
+    raw_digest: sha256:e063a0fe9dc077414ec150d3c8bbfca99b749dc8435a37a76d5f37f5f3f63f71
+    canonical_digest: sha256:0581fbf7a75f0fa88aa19a2047979ece0bc41230d378e3358978d95f11e0e002
+  proposed_registry:
+    artifact_id: workflow-governance.registry.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+    raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+    canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+  evaluator_source:
+    artifact_id: evaluator.workflow-behavior-v0
+    embedded_ref: crates/forge-core-decisions/src/workflow_behavior.rs
+    raw_digest: sha256:c931ab8cb173c9394cebd99dce111512c1485c3cf665e894c370f8b0e5d00c3c
+    canonical_digest: sha256:ccc03d7af23ab1d19310f0d530e2b505c1ce584be8fc48f9495c9fa1e0147adb
+  frozen_history:
+    artifact_id: history.workflow-governance.assurance-operations-v0
+    embedded_ref: contracts/evidence/workflow-assurance-operations-frozen-history-v0.ndjson
+    raw_digest: sha256:12c76f606103c7c2eafadf6d0a3c38504f62ae84646ab42681df0e942c19f48a
+    canonical_digest: sha256:7509be1408418960f1f1a72b6e2ce7c9f2931d7f0808746411bc5e02d167f559
+  workflow_decisions:
+  - workflow_id: checkpoint-preview
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: collaboration-handoff
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: evolve-project
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: product-area-map
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: project-context
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: research-closeout
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: retrospective
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: spec-distillation
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  - workflow_id: sprint-status
+    decision: approved
+    rationale: independent semantic review passed
+    finding_refs: []
+  quarantine_decisions:
+  - workflow_id: edge-case-review
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: release-readiness
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  - workflow_id: track-decision
+    decision: approved
+    rationale: quarantine remains required
+    finding_refs: []
+  dimension_decisions:
+  - dimension: status
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: eligibility
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: progression
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: completion
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: obligations
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: claims
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: decisions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: capabilities
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: issues
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []
+  - dimension: next_actions
+    decision: approved
+    rationale: governed projection reviewed
+    finding_refs: []

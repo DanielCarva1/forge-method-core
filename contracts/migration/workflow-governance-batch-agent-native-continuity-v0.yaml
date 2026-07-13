@@ -1,0 +1,1297 @@
+schema_version: '0.1'
+workflow_migration_batch:
+  id: workflow-governance.batch.agent-native-continuity-v0
+  batch_version: 0.4.0
+  authority: candidate_only
+  source_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  previous_batch_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
+  evidence:
+    representative_fixtures:
+    - embedded_ref: contracts/evidence/workflow-agent-native-continuity-representative-v0.yaml
+      expected_digest: sha256:9b87d2962b6541f2a5a5c103c5e544acb24f02486f4f98295fd40e0a78e6d9c5
+    adversarial_fixtures:
+    - embedded_ref: contracts/evidence/workflow-agent-native-continuity-adversarial-v0.yaml
+      expected_digest: sha256:f9b3228a79a954eea107799db11e2ded63bcaf04c31e0dade280021511dbbd3d
+    shadow_reports:
+    - embedded_ref: contracts/evidence/workflow-agent-native-continuity-shadow-report-v0.yaml
+      expected_digest: sha256:2bce88598c60b9b13721f953ef2aaf7fa1a0407d4b29410b44c5cee7b97d50e5
+  workflow_bindings:
+  - workflow_id: checkpoint-preview
+    legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+    policy_ref: policy.workflow.checkpoint-preview
+  - workflow_id: collaboration-handoff
+    legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+    policy_ref: policy.workflow.collaboration-handoff
+  - workflow_id: evolve-project
+    legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+    policy_ref: policy.workflow.evolve-project
+  - workflow_id: product-area-map
+    legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+    policy_ref: policy.workflow.product-area-map
+  - workflow_id: project-context
+    legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+    policy_ref: policy.workflow.project-context
+  - workflow_id: research-closeout
+    legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+    policy_ref: policy.workflow.research-closeout
+  - workflow_id: retrospective
+    legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+    policy_ref: policy.workflow.retrospective
+  - workflow_id: spec-distillation
+    legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+    policy_ref: policy.workflow.spec-distillation
+  - workflow_id: sprint-status
+    legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+    policy_ref: policy.workflow.sprint-status
+  policies:
+  - id: policy.workflow.checkpoint-preview
+    compatibility_workflow_id: checkpoint-preview
+    routing:
+      priority: 230
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.checkpoint-preview.state-bound
+      description: The checkpoint binds the exact project state, release, ledger head, and governed work scope.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.checkpoint-preview.state-bound
+    - id: obligation.workflow.checkpoint-preview.change-summary-evidenced
+      description: Material completed, pending, and changed work is summarized with evidence references.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.checkpoint-preview.change-summary-evidenced
+    - id: obligation.workflow.checkpoint-preview.safe-resume-explicit
+      description: The next safe action, owner, blockers, and revalidation conditions are explicit.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.checkpoint-preview.safe-resume-explicit
+    - id: obligation.workflow.checkpoint-preview.non-authoritative
+      description: The preview is a durable projection and cannot grant completion, mutation, or release authority.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.checkpoint-preview.non-authoritative
+    claims:
+    - id: claim.workflow.checkpoint-preview.state-bound
+      statement: The checkpoint binds the exact project state, release, ledger head, and governed work scope.
+      evaluator_ref: evaluator.workflow.checkpoint-preview.state-bound
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.checkpoint-preview.change-summary-evidenced
+      statement: Material completed, pending, and changed work is summarized with evidence references.
+      evaluator_ref: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.checkpoint-preview.safe-resume-explicit
+      statement: The next safe action, owner, blockers, and revalidation conditions are explicit.
+      evaluator_ref: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.checkpoint-preview.non-authoritative
+      statement: The preview is a durable projection and cannot grant completion, mutation, or release authority.
+      evaluator_ref: evaluator.workflow.checkpoint-preview.non-authoritative
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.checkpoint-preview.state-bound
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.checkpoint-preview.non-authoritative
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.checkpoint-preview.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by checkpoint-preview is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.checkpoint-preview.state-bound
+      - claim.workflow.checkpoint-preview.change-summary-evidenced
+      - claim.workflow.checkpoint-preview.safe-resume-explicit
+      - claim.workflow.checkpoint-preview.non-authoritative
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.checkpoint-preview.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.checkpoint-preview.non-authoritative
+      question: How should the unresolved material checkpoint-preview gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.checkpoint-preview.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.checkpoint-preview.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.checkpoint-preview.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.checkpoint-preview.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.checkpoint-preview
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.collaboration-handoff
+    compatibility_workflow_id: collaboration-handoff
+    routing:
+      priority: 231
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.collaboration-handoff.durable-truth-bounded
+      description: The handoff distinguishes durable verified state from proposals, assumptions, and conversational context.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.collaboration-handoff.durable-truth-bounded
+    - id: obligation.workflow.collaboration-handoff.ownership-explicit
+      description: Current ownership, released claims, conflicts, and required successor responsibility are explicit.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.collaboration-handoff.ownership-explicit
+    - id: obligation.workflow.collaboration-handoff.evidence-linked
+      description: Claims about completed work, blockers, and decisions link to durable evidence and provenance.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.collaboration-handoff.evidence-linked
+    - id: obligation.workflow.collaboration-handoff.next-action-executable
+      description: The successor receives one bounded next action with prerequisites and verification criteria.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.collaboration-handoff.next-action-executable
+    claims:
+    - id: claim.workflow.collaboration-handoff.durable-truth-bounded
+      statement: The handoff distinguishes durable verified state from proposals, assumptions, and conversational context.
+      evaluator_ref: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.collaboration-handoff.ownership-explicit
+      statement: Current ownership, released claims, conflicts, and required successor responsibility are explicit.
+      evaluator_ref: evaluator.workflow.collaboration-handoff.ownership-explicit
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.collaboration-handoff.evidence-linked
+      statement: Claims about completed work, blockers, and decisions link to durable evidence and provenance.
+      evaluator_ref: evaluator.workflow.collaboration-handoff.evidence-linked
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.collaboration-handoff.next-action-executable
+      statement: The successor receives one bounded next action with prerequisites and verification criteria.
+      evaluator_ref: evaluator.workflow.collaboration-handoff.next-action-executable
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.collaboration-handoff.ownership-explicit
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.collaboration-handoff.evidence-linked
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.collaboration-handoff.next-action-executable
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.collaboration-handoff.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by collaboration-handoff is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.collaboration-handoff.durable-truth-bounded
+      - claim.workflow.collaboration-handoff.ownership-explicit
+      - claim.workflow.collaboration-handoff.evidence-linked
+      - claim.workflow.collaboration-handoff.next-action-executable
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.collaboration-handoff.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.collaboration-handoff.next-action-executable
+      question: How should the unresolved material collaboration-handoff gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.collaboration-handoff.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.collaboration-handoff.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.collaboration-handoff.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.collaboration-handoff.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.collaboration-handoff
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.evolve-project
+    compatibility_workflow_id: evolve-project
+    routing:
+      priority: 237
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.evolve-project.baseline-protected
+      description: The current proven behavior, compatibility boundary, and rollback baseline are explicit before evolution.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.evolve-project.baseline-protected
+    - id: obligation.workflow.evolve-project.change-hypothesis
+      description: The proposed evolution states the outcome hypothesis, affected surfaces, and evidence that would disprove it.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.evolve-project.change-hypothesis
+    - id: obligation.workflow.evolve-project.migration-safe
+      description: Migration, compatibility, rollback, and durable-state continuity are bounded for the exact change.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.evolve-project.migration-safe
+    - id: obligation.workflow.evolve-project.verification-defined
+      description: Acceptance, regression, observability, and release evidence are defined before claiming readiness.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.evolve-project.verification-defined
+    claims:
+    - id: claim.workflow.evolve-project.baseline-protected
+      statement: The current proven behavior, compatibility boundary, and rollback baseline are explicit before evolution.
+      evaluator_ref: evaluator.workflow.evolve-project.baseline-protected
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.evolve-project.change-hypothesis
+      statement: The proposed evolution states the outcome hypothesis, affected surfaces, and evidence that would disprove it.
+      evaluator_ref: evaluator.workflow.evolve-project.change-hypothesis
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.evolve-project.migration-safe
+      statement: Migration, compatibility, rollback, and durable-state continuity are bounded for the exact change.
+      evaluator_ref: evaluator.workflow.evolve-project.migration-safe
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.evolve-project.verification-defined
+      statement: Acceptance, regression, observability, and release evidence are defined before claiming readiness.
+      evaluator_ref: evaluator.workflow.evolve-project.verification-defined
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.evolve-project.baseline-protected
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.evolve-project.change-hypothesis
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.evolve-project.migration-safe
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.evolve-project.verification-defined
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.evolve-project.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by evolve-project is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.evolve-project.baseline-protected
+      - claim.workflow.evolve-project.change-hypothesis
+      - claim.workflow.evolve-project.migration-safe
+      - claim.workflow.evolve-project.verification-defined
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.evolve-project.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.evolve-project.verification-defined
+      question: How should the unresolved material evolve-project gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.evolve-project.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.evolve-project.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.evolve-project.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.evolve-project.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.evolve-project
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.product-area-map
+    compatibility_workflow_id: product-area-map
+    routing:
+      priority: 238
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.product-area-map.boundaries-evidenced
+      description: Product-area boundaries are derived from repository and runtime evidence rather than guessed taxonomy.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.product-area-map.boundaries-evidenced
+    - id: obligation.workflow.product-area-map.ownership-linked
+      description: Areas link to accountable owners, governed workflows, and durable decision sources where known.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.product-area-map.ownership-linked
+    - id: obligation.workflow.product-area-map.dependencies-explicit
+      description: Cross-area dependencies, contracts, data flows, and release coupling are explicit.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.product-area-map.dependencies-explicit
+    - id: obligation.workflow.product-area-map.unknowns-visible
+      description: Unmapped surfaces, ambiguous ownership, and stale relationships remain visible without fabricated certainty.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.product-area-map.unknowns-visible
+    claims:
+    - id: claim.workflow.product-area-map.boundaries-evidenced
+      statement: Product-area boundaries are derived from repository and runtime evidence rather than guessed taxonomy.
+      evaluator_ref: evaluator.workflow.product-area-map.boundaries-evidenced
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.product-area-map.ownership-linked
+      statement: Areas link to accountable owners, governed workflows, and durable decision sources where known.
+      evaluator_ref: evaluator.workflow.product-area-map.ownership-linked
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.product-area-map.dependencies-explicit
+      statement: Cross-area dependencies, contracts, data flows, and release coupling are explicit.
+      evaluator_ref: evaluator.workflow.product-area-map.dependencies-explicit
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.product-area-map.unknowns-visible
+      statement: Unmapped surfaces, ambiguous ownership, and stale relationships remain visible without fabricated certainty.
+      evaluator_ref: evaluator.workflow.product-area-map.unknowns-visible
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.product-area-map.boundaries-evidenced
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.product-area-map.ownership-linked
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.product-area-map.dependencies-explicit
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.product-area-map.unknowns-visible
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.product-area-map.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by product-area-map is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.product-area-map.boundaries-evidenced
+      - claim.workflow.product-area-map.ownership-linked
+      - claim.workflow.product-area-map.dependencies-explicit
+      - claim.workflow.product-area-map.unknowns-visible
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.product-area-map.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.product-area-map.unknowns-visible
+      question: How should the unresolved material product-area-map gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.product-area-map.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.product-area-map.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.product-area-map.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.product-area-map.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.product-area-map
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.project-context
+    compatibility_workflow_id: project-context
+    routing:
+      priority: 235
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.project-context.sources-authoritative
+      description: Project context is reconstructed from authoritative repository and durable runtime sources before chat memory.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.project-context.sources-authoritative
+    - id: obligation.workflow.project-context.constraints-current
+      description: Active constraints, decisions, release pins, ownership, and compatibility boundaries are current.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.project-context.constraints-current
+    - id: obligation.workflow.project-context.gaps-visible
+      description: Conflicts, stale facts, missing competence, and unresolved context remain visible and blocking when material.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.project-context.gaps-visible
+    - id: obligation.workflow.project-context.recovery-proven
+      description: A replacement agent can reproduce the same bounded context and next action from durable references.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.project-context.recovery-proven
+    claims:
+    - id: claim.workflow.project-context.sources-authoritative
+      statement: Project context is reconstructed from authoritative repository and durable runtime sources before chat memory.
+      evaluator_ref: evaluator.workflow.project-context.sources-authoritative
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.project-context.constraints-current
+      statement: Active constraints, decisions, release pins, ownership, and compatibility boundaries are current.
+      evaluator_ref: evaluator.workflow.project-context.constraints-current
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.project-context.gaps-visible
+      statement: Conflicts, stale facts, missing competence, and unresolved context remain visible and blocking when material.
+      evaluator_ref: evaluator.workflow.project-context.gaps-visible
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.project-context.recovery-proven
+      statement: A replacement agent can reproduce the same bounded context and next action from durable references.
+      evaluator_ref: evaluator.workflow.project-context.recovery-proven
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.project-context.sources-authoritative
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.project-context.constraints-current
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.project-context.gaps-visible
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.project-context.recovery-proven
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.project-context.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by project-context is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.project-context.sources-authoritative
+      - claim.workflow.project-context.constraints-current
+      - claim.workflow.project-context.gaps-visible
+      - claim.workflow.project-context.recovery-proven
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.project-context.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.project-context.recovery-proven
+      question: How should the unresolved material project-context gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.project-context.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.project-context.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.project-context.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.project-context.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.project-context
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.research-closeout
+    compatibility_workflow_id: research-closeout
+    routing:
+      priority: 232
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.research-closeout.questions-covered
+      description: The original research questions and material branches have explicit answered, unresolved, or out-of-scope dispositions.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.research-closeout.questions-covered
+    - id: obligation.workflow.research-closeout.sources-provenanced
+      description: Decision-relevant findings retain source identity, freshness, authority, and contrary evidence.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.research-closeout.sources-provenanced
+    - id: obligation.workflow.research-closeout.uncertainty-retained
+      description: Confidence limits, unknowns, and unsupported extrapolations remain visible in the closeout.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.research-closeout.uncertainty-retained
+    - id: obligation.workflow.research-closeout.decision-impact-explicit
+      description: The closeout states which decisions are supported, blocked, or require additional authority.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.research-closeout.decision-impact-explicit
+    claims:
+    - id: claim.workflow.research-closeout.questions-covered
+      statement: The original research questions and material branches have explicit answered, unresolved, or out-of-scope dispositions.
+      evaluator_ref: evaluator.workflow.research-closeout.questions-covered
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.research-closeout.sources-provenanced
+      statement: Decision-relevant findings retain source identity, freshness, authority, and contrary evidence.
+      evaluator_ref: evaluator.workflow.research-closeout.sources-provenanced
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.research-closeout.uncertainty-retained
+      statement: Confidence limits, unknowns, and unsupported extrapolations remain visible in the closeout.
+      evaluator_ref: evaluator.workflow.research-closeout.uncertainty-retained
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.research-closeout.decision-impact-explicit
+      statement: The closeout states which decisions are supported, blocked, or require additional authority.
+      evaluator_ref: evaluator.workflow.research-closeout.decision-impact-explicit
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.research-closeout.questions-covered
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.research-closeout.sources-provenanced
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.research-closeout.uncertainty-retained
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.research-closeout.decision-impact-explicit
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.research-closeout.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by research-closeout is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.research-closeout.questions-covered
+      - claim.workflow.research-closeout.sources-provenanced
+      - claim.workflow.research-closeout.uncertainty-retained
+      - claim.workflow.research-closeout.decision-impact-explicit
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.research-closeout.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.research-closeout.decision-impact-explicit
+      question: How should the unresolved material research-closeout gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.research-closeout.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.research-closeout.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.research-closeout.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.research-closeout.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.research-closeout
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.retrospective
+    compatibility_workflow_id: retrospective
+    routing:
+      priority: 233
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.retrospective.outcomes-evidenced
+      description: Observed outcomes are compared with intended outcomes using durable project evidence.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.retrospective.outcomes-evidenced
+    - id: obligation.workflow.retrospective.causes-calibrated
+      description: Contributing causes are calibrated against evidence without converting correlation into certainty.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.retrospective.causes-calibrated
+    - id: obligation.workflow.retrospective.learnings-durable
+      description: Reusable learnings are recorded with scope, limitations, and source evidence.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.retrospective.learnings-durable
+    - id: obligation.workflow.retrospective.actions-owned
+      description: Improvement actions have owners, verification criteria, and explicit non-action dispositions.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.retrospective.actions-owned
+    claims:
+    - id: claim.workflow.retrospective.outcomes-evidenced
+      statement: Observed outcomes are compared with intended outcomes using durable project evidence.
+      evaluator_ref: evaluator.workflow.retrospective.outcomes-evidenced
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.retrospective.causes-calibrated
+      statement: Contributing causes are calibrated against evidence without converting correlation into certainty.
+      evaluator_ref: evaluator.workflow.retrospective.causes-calibrated
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.retrospective.learnings-durable
+      statement: Reusable learnings are recorded with scope, limitations, and source evidence.
+      evaluator_ref: evaluator.workflow.retrospective.learnings-durable
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.retrospective.actions-owned
+      statement: Improvement actions have owners, verification criteria, and explicit non-action dispositions.
+      evaluator_ref: evaluator.workflow.retrospective.actions-owned
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.retrospective.outcomes-evidenced
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.retrospective.causes-calibrated
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.retrospective.learnings-durable
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.retrospective.actions-owned
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.retrospective.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by retrospective is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.retrospective.outcomes-evidenced
+      - claim.workflow.retrospective.causes-calibrated
+      - claim.workflow.retrospective.learnings-durable
+      - claim.workflow.retrospective.actions-owned
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.retrospective.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.retrospective.actions-owned
+      question: How should the unresolved material retrospective gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.retrospective.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.retrospective.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.retrospective.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.retrospective.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.retrospective
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.spec-distillation
+    compatibility_workflow_id: spec-distillation
+    routing:
+      priority: 236
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.spec-distillation.intent-preserved
+      description: Distillation preserves user intent, outcomes, exclusions, and decision provenance without inventing requirements.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.spec-distillation.intent-preserved
+    - id: obligation.workflow.spec-distillation.requirements-testable
+      description: Material requirements have observable acceptance conditions and traceable evidence paths.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.spec-distillation.requirements-testable
+    - id: obligation.workflow.spec-distillation.ambiguity-raised
+      description: Ambiguities, conflicts, unknowns, and missing domain competence are surfaced before implementation.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.spec-distillation.ambiguity-raised
+    - id: obligation.workflow.spec-distillation.authority-bounded
+      description: The distilled specification cannot authorize scope, risk acceptance, or completion beyond recorded decisions.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.spec-distillation.authority-bounded
+    claims:
+    - id: claim.workflow.spec-distillation.intent-preserved
+      statement: Distillation preserves user intent, outcomes, exclusions, and decision provenance without inventing requirements.
+      evaluator_ref: evaluator.workflow.spec-distillation.intent-preserved
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.spec-distillation.requirements-testable
+      statement: Material requirements have observable acceptance conditions and traceable evidence paths.
+      evaluator_ref: evaluator.workflow.spec-distillation.requirements-testable
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.spec-distillation.ambiguity-raised
+      statement: Ambiguities, conflicts, unknowns, and missing domain competence are surfaced before implementation.
+      evaluator_ref: evaluator.workflow.spec-distillation.ambiguity-raised
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.spec-distillation.authority-bounded
+      statement: The distilled specification cannot authorize scope, risk acceptance, or completion beyond recorded decisions.
+      evaluator_ref: evaluator.workflow.spec-distillation.authority-bounded
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.spec-distillation.intent-preserved
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.spec-distillation.requirements-testable
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.spec-distillation.ambiguity-raised
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.spec-distillation.authority-bounded
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.spec-distillation.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by spec-distillation is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.spec-distillation.intent-preserved
+      - claim.workflow.spec-distillation.requirements-testable
+      - claim.workflow.spec-distillation.ambiguity-raised
+      - claim.workflow.spec-distillation.authority-bounded
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.spec-distillation.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.spec-distillation.authority-bounded
+      question: How should the unresolved material spec-distillation gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.spec-distillation.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.spec-distillation.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.spec-distillation.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.spec-distillation.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.spec-distillation
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.
+  - id: policy.workflow.sprint-status
+    compatibility_workflow_id: sprint-status
+    routing:
+      priority: 234
+      readiness_target: execute
+      activation: when_applicable
+      signals: []
+    eligible_phases:
+    - anytime
+    prerequisites: []
+    obligations:
+    - id: obligation.workflow.sprint-status.scope-state-current
+      description: Committed, added, removed, completed, and pending scope is current and evidence-backed.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.sprint-status.scope-state-current
+    - id: obligation.workflow.sprint-status.blockers-evidenced
+      description: Blockers, dependencies, and risks identify evidence, owner, impact, and unblock condition.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.sprint-status.blockers-evidenced
+    - id: obligation.workflow.sprint-status.forecast-calibrated
+      description: Forecasts expose assumptions and uncertainty rather than presenting agent estimates as commitments.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.sprint-status.forecast-calibrated
+    - id: obligation.workflow.sprint-status.handoff-actionable
+      description: The status yields bounded next actions and escalation routes for replacement agents and humans.
+      criticality: critical
+      required_before: execute
+      claim_refs:
+      - claim.workflow.sprint-status.handoff-actionable
+    claims:
+    - id: claim.workflow.sprint-status.scope-state-current
+      statement: Committed, added, removed, completed, and pending scope is current and evidence-backed.
+      evaluator_ref: evaluator.workflow.sprint-status.scope-state-current
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.sprint-status.blockers-evidenced
+      statement: Blockers, dependencies, and risks identify evidence, owner, impact, and unblock condition.
+      evaluator_ref: evaluator.workflow.sprint-status.blockers-evidenced
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.sprint-status.forecast-calibrated
+      statement: Forecasts expose assumptions and uncertainty rather than presenting agent estimates as commitments.
+      evaluator_ref: evaluator.workflow.sprint-status.forecast-calibrated
+      waiver:
+        kind: not_waivable
+    - id: claim.workflow.sprint-status.handoff-actionable
+      statement: The status yields bounded next actions and escalation routes for replacement agents and humans.
+      evaluator_ref: evaluator.workflow.sprint-status.handoff-actionable
+      waiver:
+        kind: not_waivable
+    evaluators:
+    - id: evaluator.workflow.sprint-status.scope-state-current
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.sprint-status.blockers-evidenced
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.sprint-status.forecast-calibrated
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    - id: evaluator.workflow.sprint-status.handoff-actionable
+      provider: repository_inspector
+      accepted_evidence_kinds:
+      - artifact_inspection
+      minimum_strength: inspected_artifact
+      minimum_passing_observations: 1
+      minimum_distinct_principals: 1
+      max_age_seconds: 86400
+      freshness: current_only
+      disproof_policy: require_uncontested_support
+    capability_requirements:
+    - id: capability.workflow.sprint-status.durable-proof
+      kind: tool
+      probe_kind: local_command
+      description: The exact durable evidence and verification capability required by sprint-status is available; conversational assertion alone is insufficient.
+      affected_claim_refs:
+      - claim.workflow.sprint-status.scope-state-current
+      - claim.workflow.sprint-status.blockers-evidenced
+      - claim.workflow.sprint-status.forecast-calibrated
+      - claim.workflow.sprint-status.handoff-actionable
+      resolution_options:
+      - Acquire the missing repository, runtime, or qualified review capability and repeat the governed checks.
+      - Narrow or defer the affected scope instead of claiming unsupported readiness.
+      blocks_before: execute
+    decision_rules:
+    - id: decision.workflow.sprint-status.material-gap
+      activation: claim_unresolved
+      claim_ref: claim.workflow.sprint-status.handoff-actionable
+      question: How should the unresolved material sprint-status gap constrain governed progress?
+      reason: irreversible_risk
+      alternatives:
+      - id: alternative.sprint-status.repair
+        description: Repair the durable-truth gap and repeat verification.
+        consequences:
+        - Adds work while reducing unsupported authority.
+      - id: alternative.sprint-status.reduce-scope
+        description: Remove or defer the affected scope.
+        consequences:
+        - Reduces scope without weakening the governance gate.
+      - id: alternative.sprint-status.seek-authority
+        description: Seek an explicit disposition from the required human or external authority.
+        consequences:
+        - Preserves accountability without granting the agent autoauthority.
+      recommended_alternative_ref: alternative.sprint-status.repair
+      blocking: true
+      blocks_before: execute
+    advisory_playbook:
+      id: playbook.workflow.sprint-status
+      steps:
+      - Recover the exact durable scope, sources, state, ownership, and unresolved uncertainty.
+      - Inspect and link the strongest available evidence; retain contrary findings and limitations.
+      - Repair, narrow, defer, or request the required authority before claiming governed readiness.

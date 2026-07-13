@@ -1,0 +1,168 @@
+schema_version: '0.2'
+workflow_release_admission_authorization:
+  authority: candidate_authorization
+  payload:
+    authorization_id: workflow-release-admission.agent-native-continuity-v0
+    review_index_id: workflow-release-review.agent-native-continuity-v0
+    review_index_version: 0.3.0
+    review_index_raw_digest: sha256:d3f6df6f62f8a81dcd2baa29ae225f792f092e212bbe62cff3847f0df7c128c7
+    review_index_canonical_digest: sha256:e06ce69ddc08f06044c593cbad597f7a7e2e0fc74e9d9fb7d6fe78f49fff5efd
+    evaluation_digest: sha256:c6cdcf8cad87fa00e6913fb9bb94653aa261c1d7ffd83ea6102ec7264413e6a9
+    reviewer_registry_id: workflow-release-reviewers.agent-native-continuity-v0
+    reviewer_registry_version: 0.3.0
+    reviewer_registry_raw_digest: sha256:8c6e39c0ce87f1acba98eb7bce4ad1a4ca220d57f040a94d8b8de14a3e994cef
+    reviewer_registry_canonical_digest: sha256:0c9318a6272765bd5bb1bfea5621894387497a6f16e5e1ba293cd40666fc95c0
+    promotion:
+      predecessor:
+        release_id: workflow-governance.release.assurance-operations-v0
+        release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+      candidate_release:
+        lineage_id: workflow-governance.core
+        release_id: workflow-governance.release.agent-native-continuity-v0
+        release_version: 0.4.0
+        release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+      candidate_runtime_bundle:
+        bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+        bundle_digest: sha256:cf14478bbaa6ebe96300bcde0bfe803249d873ee55121e9bca4078362872c10a
+        policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+      promoted_runtime_bundle:
+        bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+        bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+        policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+    release_manifest:
+      artifact_id: release-manifest.agent-native-continuity-v0
+      embedded_ref: contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml
+      raw_digest: sha256:aee405fd7aeeb18ee5fe9786a732235fc71b6752f21866692262fbcce1e71a67
+      canonical_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+    review_subject:
+      artifact_id: review-subject.agent-native-continuity-v0
+      embedded_ref: contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml
+      raw_digest: sha256:3c2d985e5e3aaf48ac0184c5f0f83a5ee3e1ae19fe646061ea8de18ea5ec77e2
+      canonical_digest: sha256:d39b88731dbbcb504e835696fd8d3784bc32e98b5b96969c806ec07b5b2b5b34
+    full_catalog:
+      artifact_id: full-catalog.foundation-v0
+      embedded_ref: contracts/policies/workflow-migration-foundation-v0.yaml
+      raw_digest: sha256:be43183b1463e66ea15aff997e234af94f85764c5c1e61096f434c40217b3d27
+      canonical_digest: sha256:b54da5e05e1db344e319abd5e59713dcf794215b4f61434f724a9b70b53006c1
+    predecessor_registry:
+      artifact_id: registry.assurance-operations-v0
+      embedded_ref: contracts/migration/workflow-governance-release-registry-assurance-operations-v0.yaml
+      raw_digest: sha256:e063a0fe9dc077414ec150d3c8bbfca99b749dc8435a37a76d5f37f5f3f63f71
+      canonical_digest: sha256:0581fbf7a75f0fa88aa19a2047979ece0bc41230d378e3358978d95f11e0e002
+    proposed_registry:
+      artifact_id: workflow-governance.registry.agent-native-continuity-v0
+      embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+      raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+      canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+    invalidate_all_receipts: true
+    workflow_decisions:
+    - workflow_id: checkpoint-preview
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: collaboration-handoff
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: evolve-project
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: product-area-map
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: project-context
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: research-closeout
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: retrospective
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: spec-distillation
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    - workflow_id: sprint-status
+      decision: approved
+      rationale: independent semantic review passed
+      finding_refs: []
+    quarantine_decisions:
+    - workflow_id: edge-case-review
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: release-readiness
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    - workflow_id: track-decision
+      decision: approved
+      rationale: quarantine remains required
+      finding_refs: []
+    dimension_decisions:
+    - dimension: status
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: eligibility
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: progression
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: completion
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: obligations
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: claims
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: decisions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: capabilities
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: issues
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    - dimension: next_actions
+      decision: approved
+      rationale: governed projection reviewed
+      finding_refs: []
+    audience: forge-core:workflow-release-admission:embedded
+    domain: forge-method:workflow-release-admission:v2
+    nonce: release-admission.agent-native-continuity-v0
+    issued_at_unix: 1784037600
+    expires_at_unix: 1815314400
+  signatures:
+  - principal_id: principal.release-review.semantic-agent-native-continuity-v0
+    credential_id: reviewer.workflow-release.semantic-agent-native-continuity-v0
+    role: semantic_reviewer
+    algorithm: ed25519
+    payload_digest: sha256:edbb6dd7c611d07351cf9febf2ceedfefd618f7a209bc221dd6754afc4a9b559
+    signature: 7088b172ee44764ed93faf69e45d468eb34d0959e5cbee175234fb810f8cd06bdf4b0b8db04315a860367ed51326849ff97644e939286bb3ae54872bf39d980d
+    signed_at_unix: 1784037600
+  - principal_id: principal.release-review.authorizer-agent-native-continuity-v0
+    credential_id: reviewer.workflow-release.authorizer-agent-native-continuity-v0
+    role: release_authorizer
+    algorithm: ed25519
+    payload_digest: sha256:edbb6dd7c611d07351cf9febf2ceedfefd618f7a209bc221dd6754afc4a9b559
+    signature: 84f85adec190355b7964959cb3e0262d5c67442179dda4449a798f870524aaf40cda10acc1789f0d3483270aaf314ca6e9b450d18affd581b34d8356e0d41409
+    signed_at_unix: 1784037600

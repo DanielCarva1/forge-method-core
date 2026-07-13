@@ -728,6 +728,18 @@ const ASSURANCE_OPERATIONS_ABLATED_REFS: [&str; 13] = [
     "contracts/workflow-governance/ablated-assurance-operations-test-review-v0.yaml",
 ];
 
+const AGENT_NATIVE_CONTINUITY_ABLATED_REFS: [&str; 9] = [
+    "contracts/workflow-governance/ablated-agent-native-continuity-checkpoint-preview-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-collaboration-handoff-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-evolve-project-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-product-area-map-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-project-context-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-research-closeout-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-retrospective-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-spec-distillation-v0.yaml",
+    "contracts/workflow-governance/ablated-agent-native-continuity-sprint-status-v0.yaml",
+];
+
 struct BehavioralValidationProfile {
     overlay: &'static str,
     review_subject: &'static str,
@@ -794,6 +806,31 @@ const ASSURANCE_OPERATIONS_BEHAVIORAL_PROFILE: BehavioralValidationProfile =
             "contracts/migration/workflow-governance-release-registry-core-assurance-v0.yaml",
     };
 
+const AGENT_NATIVE_CONTINUITY_BEHAVIORAL_PROFILE: BehavioralValidationProfile =
+    BehavioralValidationProfile {
+        overlay: "contracts/policies/workflow-agent-native-continuity-overlay-v0.yaml",
+        review_subject: "contracts/migration/workflow-agent-native-continuity-review-subject-v0.yaml",
+        coverage: "contracts/policies/workflow-behavioral-coverage-agent-native-continuity-v0.yaml",
+        corpus_set: "contracts/evidence/workflow-agent-native-continuity-corpus-set-v0.yaml",
+        representative: "contracts/evidence/workflow-agent-native-continuity-representative-v0.yaml",
+        adversarial: "contracts/evidence/workflow-agent-native-continuity-adversarial-v0.yaml",
+        report: "contracts/evidence/workflow-agent-native-continuity-shadow-report-v0.yaml",
+        candidate_bundle: "contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml",
+        candidate_batch: "contracts/migration/workflow-governance-batch-agent-native-continuity-v0.yaml",
+        candidate_manifest: "contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml",
+        report_id: "report.workflow-agent-native-continuity.shadow-v0",
+        ablated_bundles: &AGENT_NATIVE_CONTINUITY_ABLATED_REFS,
+        workflow_count: 9,
+        bundle_policy_count: 42,
+        disposition_counts: [42, 47, 3, 18, 0],
+        predecessor_batches: &[
+            WORKFLOW_RELEASE_FOUNDATION_BATCH_REF,
+            "contracts/migration/workflow-governance-batch-core-assurance-v0.yaml",
+            ASSURANCE_OPERATIONS_BATCH_REF,
+        ],
+        admitted_registry: WORKFLOW_RELEASE_V2_REGISTRY_REF,
+    };
+
 fn validate_workflow_behavioral_evidence(root: &Path, summary: &mut ValidateSummary) {
     summary.add_report(
         "workflow_behavioral_evidence_candidate",
@@ -804,6 +841,13 @@ fn validate_workflow_behavioral_evidence(root: &Path, summary: &mut ValidateSumm
         workflow_behavioral_evidence_validation_report(
             root,
             &ASSURANCE_OPERATIONS_BEHAVIORAL_PROFILE,
+        ),
+    );
+    summary.add_report(
+        "workflow_behavioral_evidence_agent_native_continuity",
+        workflow_behavioral_evidence_validation_report(
+            root,
+            &AGENT_NATIVE_CONTINUITY_BEHAVIORAL_PROFILE,
         ),
     );
 }
@@ -1246,15 +1290,72 @@ const WORKFLOW_RELEASE_V2_BUNDLE_REF: &str =
 const WORKFLOW_RELEASE_V2_REVIEW_REF: &str =
     "contracts/evidence/workflow-assurance-operations-independent-review-v0.yaml";
 
+struct WorkflowReleaseV2ValidationProfile {
+    review_index: &'static str,
+    reviewer_registry: &'static str,
+    authorization: &'static str,
+    registry: &'static str,
+    bundle: &'static str,
+    independent_review: &'static str,
+    check_name: &'static str,
+    release_count: usize,
+    policy_count: usize,
+    latest_release_id: &'static str,
+    validate_trusted_tail: bool,
+}
+
+const ASSURANCE_OPERATIONS_V2_PROFILE: WorkflowReleaseV2ValidationProfile =
+    WorkflowReleaseV2ValidationProfile {
+        review_index: WORKFLOW_RELEASE_V2_REVIEW_INDEX_REF,
+        reviewer_registry: WORKFLOW_RELEASE_V2_REVIEWER_REGISTRY_REF,
+        authorization: WORKFLOW_RELEASE_V2_AUTHORIZATION_REF,
+        registry: WORKFLOW_RELEASE_V2_REGISTRY_REF,
+        bundle: WORKFLOW_RELEASE_V2_BUNDLE_REF,
+        independent_review: WORKFLOW_RELEASE_V2_REVIEW_REF,
+        check_name: "workflow_release_v2_admission",
+        release_count: 4,
+        policy_count: 33,
+        latest_release_id: "workflow-governance.release.assurance-operations-v0",
+        validate_trusted_tail: false,
+    };
+
+const AGENT_NATIVE_CONTINUITY_V2_PROFILE: WorkflowReleaseV2ValidationProfile =
+    WorkflowReleaseV2ValidationProfile {
+        review_index: "contracts/migration/workflow-agent-native-continuity-review-index-v0.yaml",
+        reviewer_registry: "contracts/policies/workflow-release-reviewer-registry-agent-native-continuity-v0.yaml",
+        authorization: "contracts/migration/workflow-agent-native-continuity-admission-authorization-v0.yaml",
+        registry: "contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml",
+        bundle: "contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml",
+        independent_review: "contracts/evidence/workflow-agent-native-continuity-independent-review-v0.yaml",
+        check_name: "workflow_release_v2_admission_agent_native_continuity",
+        release_count: 5,
+        policy_count: 42,
+        latest_release_id: "workflow-governance.release.agent-native-continuity-v0",
+        validate_trusted_tail: true,
+    };
+
 fn validate_workflow_release_v2_admission(root: &Path, summary: &mut ValidateSummary) {
+    validate_workflow_release_v2_admission_profile(root, summary, &ASSURANCE_OPERATIONS_V2_PROFILE);
+    validate_workflow_release_v2_admission_profile(
+        root,
+        summary,
+        &AGENT_NATIVE_CONTINUITY_V2_PROFILE,
+    );
+}
+
+fn validate_workflow_release_v2_admission_profile(
+    root: &Path,
+    summary: &mut ValidateSummary,
+    profile: &WorkflowReleaseV2ValidationProfile,
+) {
     let mut report = ValidationReport::new();
     for reference in [
-        WORKFLOW_RELEASE_V2_REVIEW_INDEX_REF,
-        WORKFLOW_RELEASE_V2_REVIEWER_REGISTRY_REF,
-        WORKFLOW_RELEASE_V2_AUTHORIZATION_REF,
-        WORKFLOW_RELEASE_V2_REGISTRY_REF,
-        WORKFLOW_RELEASE_V2_BUNDLE_REF,
-        WORKFLOW_RELEASE_V2_REVIEW_REF,
+        profile.review_index,
+        profile.reviewer_registry,
+        profile.authorization,
+        profile.registry,
+        profile.bundle,
+        profile.independent_review,
     ] {
         let disk = match fs::read(root.join(reference)) {
             Ok(bytes) => bytes,
@@ -1283,67 +1384,101 @@ fn validate_workflow_release_v2_admission(root: &Path, summary: &mut ValidateSum
     }
     if let Some(index) = read_canonical_release_yaml::<WorkflowReleaseReviewIndexV2Document>(
         root,
-        WORKFLOW_RELEASE_V2_REVIEW_INDEX_REF,
+        profile.review_index,
         &mut report,
     ) {
         for issue in index.validate() {
             behavioral_error(
                 &mut report,
-                WORKFLOW_RELEASE_V2_REVIEW_INDEX_REF,
+                profile.review_index,
                 format!("{}: {}", issue.path, issue.message),
             );
         }
     }
     if let Some(registry) = read_canonical_release_yaml::<WorkflowReleaseReviewerRegistryDocument>(
         root,
-        WORKFLOW_RELEASE_V2_REVIEWER_REGISTRY_REF,
+        profile.reviewer_registry,
         &mut report,
     ) {
         for issue in registry.validate() {
             behavioral_error(
                 &mut report,
-                WORKFLOW_RELEASE_V2_REVIEWER_REGISTRY_REF,
+                profile.reviewer_registry,
                 format!("{}: {}", issue.path, issue.message),
             );
         }
     }
     if let Some(authorization) = read_canonical_release_yaml::<
         WorkflowReleaseAdmissionAuthorizationV2Document,
-    >(root, WORKFLOW_RELEASE_V2_AUTHORIZATION_REF, &mut report)
+    >(root, profile.authorization, &mut report)
     {
         for issue in authorization.validate() {
             behavioral_error(
                 &mut report,
-                WORKFLOW_RELEASE_V2_AUTHORIZATION_REF,
+                profile.authorization,
                 format!("{}: {}", issue.path, issue.message),
             );
         }
     }
-    match forge_core_kernel::load_admitted_workflow_governance_reviewed_release_registry() {
-        Ok(registry) => {
-            let latest = registry.latest_release();
-            if registry.release_count() != 4
-                || latest.policy_count() != 33
-                || latest.receipt_carryover()
-                    != forge_core_contracts::WorkflowReceiptCarryover::InvalidateAll
-                || ["edge-case-review", "track-decision", "release-readiness"]
-                    .iter()
-                    .any(|workflow| latest.contains_workflow_policy(workflow))
-            {
-                behavioral_error(
-                    &mut report,
-                    WORKFLOW_RELEASE_V2_REGISTRY_REF,
-                    "trusted loader must derive exactly 4 releases, 33 policies, invalidate_all, and zero quarantined policies",
-                );
-            }
-        }
-        Err(error) => behavioral_error(
+    if let (Some(registry), Some(bundle)) = (
+        read_canonical_release_yaml::<WorkflowGovernanceReleaseRegistryDocument>(
+            root,
+            profile.registry,
             &mut report,
-            WORKFLOW_RELEASE_V2_AUTHORIZATION_REF,
-            format!("P5d.4b trusted admission failed: {error:?}"),
         ),
+        read_canonical_release_yaml::<WorkflowGovernanceBundleDocument>(
+            root,
+            profile.bundle,
+            &mut report,
+        ),
+    ) {
+        let latest_id = registry
+            .workflow_governance_release_registry
+            .releases
+            .last()
+            .map(|entry| entry.release.release_id.0.as_str());
+        if registry.workflow_governance_release_registry.releases.len() != profile.release_count
+            || bundle.workflow_governance_bundle.policies.len() != profile.policy_count
+            || latest_id != Some(profile.latest_release_id)
+        {
+            behavioral_error(
+                &mut report,
+                profile.registry,
+                "fixed reviewed registry or promoted bundle does not match its release profile",
+            );
+        }
     }
-    summary.add_report("workflow_release_v2_admission", report);
+    if profile.validate_trusted_tail {
+        match forge_core_kernel::load_admitted_workflow_governance_reviewed_release_registry() {
+            Ok(registry) => {
+                let latest = registry.latest_release();
+                if registry.release_count() != profile.release_count
+                    || latest.policy_count() != profile.policy_count
+                    || latest.release().release_id.0 != profile.latest_release_id
+                    || latest.receipt_carryover()
+                        != forge_core_contracts::WorkflowReceiptCarryover::InvalidateAll
+                    || ["edge-case-review", "track-decision", "release-readiness"]
+                        .iter()
+                        .any(|workflow| latest.contains_workflow_policy(workflow))
+                {
+                    behavioral_error(
+                    &mut report,
+                    profile.registry,
+                    format!(
+                        "trusted loader must derive exactly {} releases, {} policies, latest {}, invalidate_all, and zero quarantined policies",
+                        profile.release_count, profile.policy_count, profile.latest_release_id
+                    ),
+                );
+                }
+            }
+            Err(error) => behavioral_error(
+                &mut report,
+                profile.authorization,
+                format!("P5d.4b trusted admission failed: {error:?}"),
+            ),
+        }
+    }
+    summary.add_report(profile.check_name, report);
 }
 
 fn validate_behavioral_report_baseline(

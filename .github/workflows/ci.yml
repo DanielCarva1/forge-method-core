@@ -51,6 +51,15 @@ jobs:
       - name: Check generated assurance operations reviewed admission
         run: cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_admission -- --check
 
+      - name: Check generated agent-native continuity behavioral evidence
+        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_evidence -- --check
+
+      - name: Check generated agent-native continuity candidate release
+        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_candidate -- --check
+
+      - name: Check generated agent-native continuity reviewed admission
+        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_admission -- --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -63,7 +72,7 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchors (139 historical, 156 aggregate)
+      - name: Regression anchors (139 historical, 156 Batch A, 169 aggregate)
         run: |
           cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json
           python - <<'PY'
@@ -71,17 +80,26 @@ jobs:
           with open("target/validate-summary.json", encoding="utf-8") as stream:
               summary = json.load(stream)
           checks = summary["checks"]
-          historical = [
+          batch_a = [
               check for check in checks
+              if "agent-native-continuity" not in check["name"]
+              and "agent_native_continuity" not in check["name"]
+          ]
+          historical = [
+              check for check in batch_a
               if "assurance-operations" not in check["name"]
               and "assurance_operations" not in check["name"]
               and check["name"] != "workflow_release_v2_admission"
           ]
           assert summary["status"] == "passed", summary["diagnostics"]
           assert len(historical) == 139, len(historical)
-          assert len(checks) == 156, len(checks)
+          assert len(batch_a) == 156, len(batch_a)
+          assert len(checks) == 169, len(checks)
           assert all(check["diagnostics"] == 0 for check in checks), checks
-          print(f"Historical anchor: {len(historical)}; aggregate: {len(checks)}")
+          print(
+              f"Historical anchor: {len(historical)}; "
+              f"Batch A anchor: {len(batch_a)}; aggregate: {len(checks)}"
+          )
           PY
 
   platform:

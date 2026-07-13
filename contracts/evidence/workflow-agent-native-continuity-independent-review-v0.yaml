@@ -1,0 +1,16 @@
+schema_version: '0.2'
+workflow_release_admission_evaluation:
+  algorithm_version: forge.workflow-release-admission.v2/jcs-sha256/1
+  status: ready_for_independent_authorization
+  authority: non_authoritative
+  review_index_id: workflow-release-review.agent-native-continuity-v0
+  review_index_digest: sha256:e06ce69ddc08f06044c593cbad597f7a7e2e0fc74e9d9fb7d6fe78f49fff5efd
+  candidate_release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  candidate_policy_count: 42
+  predecessor_policy_count: 33
+  reviewed_workflow_count: 9
+  quarantine_count: 3
+  behavioral_mismatch_count: 0
+  behavioral_evaluation_error_count: 0
+  issues: []
+  evaluation_digest: sha256:c6cdcf8cad87fa00e6913fb9bb94653aa261c1d7ffd83ea6102ec7264413e6a9

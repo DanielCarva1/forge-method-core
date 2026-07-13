@@ -11,7 +11,7 @@ use forge_core_kernel::{
 };
 
 #[test]
-fn reviewed_loader_admits_exact_append_only_four_release_registry() {
+fn reviewed_loader_admits_exact_append_only_five_release_registry() {
     let historical =
         load_admitted_workflow_governance_release_registry().expect("historical registry");
     let reviewed = load_admitted_workflow_governance_reviewed_release_registry()
@@ -19,12 +19,13 @@ fn reviewed_loader_admits_exact_append_only_four_release_registry() {
 
     assert_eq!(historical.release_count(), 2);
     assert_eq!(historical.latest_release().policy_count(), 15);
-    assert_eq!(reviewed.release_count(), 4);
-    assert_eq!(reviewed.latest_release().policy_count(), 33);
+    assert_eq!(reviewed.release_count(), 5);
+    assert_eq!(reviewed.latest_release().policy_count(), 42);
     assert_eq!(
         reviewed.latest_release().release().release_id.0.as_str(),
-        "workflow-governance.release.assurance-operations-v0"
+        "workflow-governance.release.agent-native-continuity-v0"
     );
+    assert_eq!(reviewed.latest_release().release().release_version, "0.4.0");
     assert_ne!(historical.registry_digest(), reviewed.registry_digest());
     assert_eq!(
         reviewed.latest_release().receipt_carryover(),

@@ -1,0 +1,12 @@
+schema_version: '0.1'
+workflow_behavioral_corpus_set:
+  id: corpus-set.workflow-agent-native-continuity-v0
+  corpus_set_version: 0.1.0
+  authority: non_authoritative_shadow_evidence
+  corpora:
+  - id: corpus.workflow-agent-native-continuity.representative-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-representative-v0.yaml
+    expected_digest: sha256:9b87d2962b6541f2a5a5c103c5e544acb24f02486f4f98295fd40e0a78e6d9c5
+  - id: corpus.workflow-agent-native-continuity.adversarial-v0
+    embedded_ref: contracts/evidence/workflow-agent-native-continuity-adversarial-v0.yaml
+    expected_digest: sha256:f9b3228a79a954eea107799db11e2ded63bcaf04c31e0dade280021511dbbd3d

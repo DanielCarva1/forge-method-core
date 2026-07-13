@@ -1,0 +1,851 @@
+schema_version: '0.1'
+workflow_governance_release_manifest:
+  lineage_id: workflow-governance.core
+  release_id: workflow-governance.release.agent-native-continuity-v0
+  release_version: 0.4.0
+  previous_release_digest: sha256:a2b8ba1e746f1fa2809ac8104c03590a1a7444d1eb22f71e62e2cd1b374b917b
+  legacy_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  batches:
+  - batch_id: workflow-batch.golden-path-v0
+    batch_version: 0.1.0
+    embedded_ref: contracts/migration/workflow-governance-batch-golden-path-v0.yaml
+    expected_digest: sha256:35877b93a73b0101aabd0e80620bfbea877d03449ed7bf70a9c50f643f19e90b
+    deterministic_order: 0
+  - batch_id: workflow-governance.batch.core-assurance-v0
+    batch_version: 0.2.0
+    embedded_ref: contracts/migration/workflow-governance-batch-core-assurance-v0.yaml
+    expected_digest: sha256:b7f6f0047592af7b38d19889bcaf9e5ffd363813dcefc90f556f606ec4887f4b
+    deterministic_order: 1
+  - batch_id: workflow-governance.batch.assurance-operations-v0
+    batch_version: 0.3.0
+    embedded_ref: contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
+    expected_digest: sha256:42a2f49d90952b7b21daeaec12fa356538ec91c42d79834e2adf715aba34cc2d
+    deterministic_order: 2
+  - batch_id: workflow-governance.batch.agent-native-continuity-v0
+    batch_version: 0.4.0
+    embedded_ref: contracts/migration/workflow-governance-batch-agent-native-continuity-v0.yaml
+    expected_digest: sha256:a4c5a4a89d8eea293fb34658ada95ea80ea1fb511e8af6f4a8027308c5ef1132
+    deterministic_order: 3
+  workflow_entries:
+  - workflow_id: adversarial-review
+    legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.core-assurance-v0
+      policy_ref: policy.workflow.adversarial-review
+  - workflow_id: agent-analyze
+    legacy_workflow_digest: sha256:dbffa0c4745ebcbca69f2febf1504f529163ba8bcf576d7decea6751e402f167
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: agent-builder
+    legacy_workflow_digest: sha256:6f749e53aea2bbb081f5a6dd88efc35dd97086a593264d799bcabd89716388d8
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: api-browser-utility
+    legacy_workflow_digest: sha256:a40218f24e91b5e703f03b71109f7ac44d695e67ea6401a17c1d6b98e4df6d09
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: architecture
+    legacy_workflow_digest: sha256:c2605ca63133039807edf10981a117c29ada46a5e34afe72a741891c6698c5dd
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.architecture
+  - workflow_id: atdd-plan
+    legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.atdd-plan
+  - workflow_id: brainstorming
+    legacy_workflow_digest: sha256:f494a8d15b6342df1e5d2470622b1c1a6c45fba47fd3b17b4e783b8f97951d42
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: build-story
+    legacy_workflow_digest: sha256:179d2ba8eb1c20a0866f7cd3e496836effc873d296bf570a3e4fa15e1f9b2fcf
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.build-story
+  - workflow_id: builder-scaffold
+    legacy_workflow_digest: sha256:71f686c76c1ff8b479df2384d70ee28a42d9cd2d95720f223d67faf420e9a3e9
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: checkpoint-preview
+    legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.checkpoint-preview
+  - workflow_id: ci-quality-pipeline
+    legacy_workflow_digest: sha256:f02762a62672abdca2ae0e64329b01074476befe40cb64bd23ea29df3352b227
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.ci-quality-pipeline
+  - workflow_id: code-review
+    legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.core-assurance-v0
+      policy_ref: policy.workflow.code-review
+  - workflow_id: collaboration-handoff
+    legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.collaboration-handoff
+  - workflow_id: compliance-checklist
+    legacy_workflow_digest: sha256:3d7f6a4bd100685f4c5cc870fa43872bd57196ae81046d35ddfb5a58d19e6ca2
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.compliance-checklist
+  - workflow_id: concept-selection
+    legacy_workflow_digest: sha256:06c7e4390f19525bc0e50f1d7015558e7bcda10be73694fbcdc757c2fea32663
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: config-customization
+    legacy_workflow_digest: sha256:7087a929ec3bc6b526bd5e4d6eff5636e6ec5695aa2bfbf29a68141319758fc8
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: context-recovery
+    legacy_workflow_digest: sha256:81bb94ce0a2fbe35463cba8ea3763b39a2d344cb3077c2972ec0232ed06c980a
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.context-recovery
+  - workflow_id: correct-course
+    legacy_workflow_digest: sha256:1c6dfcbdcdf7a1e09d53d10f0fe5655516934f2ca5c413f9faac6d8d18163826
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.correct-course
+  - workflow_id: council-decision
+    legacy_workflow_digest: sha256:ea1d7a645c05fb60c4182c15486dd5d99fad49a2ccfa0f717b330dc9d8439c5c
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: create-epics
+    legacy_workflow_digest: sha256:3cd7ddda5e974b5d71a29e7922d525e1308b12c2788821211de45a3ef91c9c64
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: creative-session
+    legacy_workflow_digest: sha256:6991b8bb674c069f3268e97ec70cee31d437a49735c3d0d47f2b61a78663d097
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: design-thinking
+    legacy_workflow_digest: sha256:9bb22c073593c66b445a4956bfc0563e11690af90fa3aef2eb6af4e856b0d117
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: devops-deployment-plan
+    legacy_workflow_digest: sha256:9d0a9479ea6726d52b3c2de46a3d7b8915de652979830e9b43d4718faa1486ef
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.devops-deployment-plan
+  - workflow_id: discover-intent
+    legacy_workflow_digest: sha256:a95940c7324dcbe42deda32d2b88df985851f04d47f9cfac7bd8d1a26882e3da
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.discover-intent
+  - workflow_id: doc-index
+    legacy_workflow_digest: sha256:9639609f3fa20af7490abecf8bdebbee94b9de9450c94eca2c78548e45f58847
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: doc-shard
+    legacy_workflow_digest: sha256:bc23e3c1afe641eb35f75867dc1dd25664d5d3f0fed47d214e51317a2ea63c93
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: domain-scan
+    legacy_workflow_digest: sha256:3e16c0d56a4ecd6cf83b8fd652c5b87d18def4975a59dfba8c7a7daf2c093fec
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.domain-scan
+  - workflow_id: edge-case-review
+    legacy_workflow_digest: sha256:7019258555310f5c5808ea95448c66e79a149c6939424daa971525ed44bb122a
+    disposition_intent:
+      kind: quarantined
+      quarantine:
+        reason_code: ambiguous_legacy_authority
+        risk_tier: high
+        explanation: The legacy workflow overlaps adversarial-review without a closed review-mode taxonomy or precedence rule.
+        blocking_refs:
+        - gap.workflow-review-mode.taxonomy
+        - decision.workflow-review-precedence
+        affected_consumer_refs:
+        - consumer.workflow-review-routing
+        review_owner: owner.workflow-governance-review
+        review_due_release_version: 0.5.0
+  - workflow_id: editorial-review
+    legacy_workflow_digest: sha256:8b95bf374d979db40a2138dca7230d9b6a2fd3934fd707cceab8b9aede186f72
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: engine-architecture
+    legacy_workflow_digest: sha256:8e47d1f651f6c2f0003de3d71c8fbe1a9bca8c87018bd2e7cf7e34eac246c28f
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: engine-setup
+    legacy_workflow_digest: sha256:86dc74190245ae322968bc872e1034a632eb8204ffd3ffc7877669577434f05c
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: eval-design
+    legacy_workflow_digest: sha256:13c70a006b665b90db201e539879cf83196d055b09f26b0c124eb2e1968e67f8
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.eval-design
+  - workflow_id: evolve-project
+    legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.evolve-project
+  - workflow_id: game-brief
+    legacy_workflow_digest: sha256:a582c8dde8ee4a5f350cc00b093818dc38ca06dfb59f91a0eea83522b4b70a5c
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-context
+    legacy_workflow_digest: sha256:f9712e3979115c9c52e3d6abe77beeec1e66ff5300ab6c58531f6b32ccfe4215
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-e2e-scaffold
+    legacy_workflow_digest: sha256:832b14042621cb198c111f9db7ff3a9130fff775de83449b87db65beec1a8d6d
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-prd
+    legacy_workflow_digest: sha256:e66fb696c1eaf81245e30d6f3521815c435d3b85b52c0845f748222cd4bb4a4d
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-project
+    legacy_workflow_digest: sha256:24f1e5eac9a332166224d07fc3d4a36435153f12aad7ceaea047107ec9d97a72
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-qa-review
+    legacy_workflow_digest: sha256:01b8b583fe1401e2ff8ad278ed71e8c777057766da5f22607f8c9057dfc3d874
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-retrospective
+    legacy_workflow_digest: sha256:7bdfc8ca537e6ca6d3238d2ff7e5fa8e986a79972ad5249e00f9979fcbecf3d9
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-sprint-planning
+    legacy_workflow_digest: sha256:fe515b76414ece72103143df47eb11b8a749ab96f3c6a22221ac0232a08efa46
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-sprint-status
+    legacy_workflow_digest: sha256:eb143c5dcda2d5ad9426e24677fb6013956e01d8a78723285001aa750992fba5
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-story-creation
+    legacy_workflow_digest: sha256:4379bbccdd630f087c960f4d55423e69592d768b4ca4eb2fcf520be11baa58c1
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-test-automation
+    legacy_workflow_digest: sha256:ecb50cc553318995f59e09ba99baac43d14590988aa43ec3653119728fa6caeb
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-test-framework
+    legacy_workflow_digest: sha256:e75d4eb1d2d768aa3ad3b58e98611bb538e3e322552a85e14efa47836af1d77d
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: game-ux-design
+    legacy_workflow_digest: sha256:40df25530b705214396ddac5127fea7b11c4cd6c949a7c36432b54438595df62
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: gdd
+    legacy_workflow_digest: sha256:e7f2a9d032c57e96e2d55b35ffed89cc18747c3f356aa45cbc74d9d21ec9d6ae
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: grill-gate
+    legacy_workflow_digest: sha256:8b973b71f30d1b6a2e5755ff312a14891d73d7f45189e96133d8f1bf39b32dba
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: guidance-engine
+    legacy_workflow_digest: sha256:268727602dc6135226082fb2dbea83ff3557270b63fc2f52e976ea10649e36bb
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: guide-route
+    legacy_workflow_digest: sha256:c1fc3aec7d7217b6161d33731c7ad43f46363f4e654e250fb2217e05cc5d4d16
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: guideline-audit
+    legacy_workflow_digest: sha256:356b4fd4a095c7e86e3252739d1c3638cbfdb7aef91c37636033098e2a4a15e9
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: hook-event-plan
+    legacy_workflow_digest: sha256:3bee420312dfc4c37eb90ee53d4886f5739965898653e43ca0c0a4e000380977
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: innovation-strategy
+    legacy_workflow_digest: sha256:f2ad9c0d2e513ccb2be7f67b7c48d681b8b8bed5a02756ba90c14adb9d441f2c
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: investigation
+    legacy_workflow_digest: sha256:7c3caeb3a18805581e5c93156b952474aa81ee531d3bf4165074951c9e2868ff
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.investigation
+  - workflow_id: isolated-eval-runner
+    legacy_workflow_digest: sha256:2c0984fa5dc6b36aefb0ad6195f476d047515135bf22d1e880c0fe8defa152a5
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: market-scan
+    legacy_workflow_digest: sha256:f19838d8e6a149035d32f529756deb49b53e328205e503fb6fe919f9ef248dd7
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: mechanics-design
+    legacy_workflow_digest: sha256:6030d63778c08db07281116df8f3cb74adcb3fb22a40d2d88778ef0d42f79dc3
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: module-builder
+    legacy_workflow_digest: sha256:952711f00893c819da0bf659418a962ca544c1b2ffe67ec0c426f13cc3b60362
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: module-distribution
+    legacy_workflow_digest: sha256:fe3a23ef0ed56bd0068780decc969cef886733ac38187bc0577f3b444dd45336
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: module-ideation
+    legacy_workflow_digest: sha256:68c4fd281efd0af6d52dd630a2af72c4744d05b9cb3930670d7080376a10b0da
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: module-validate
+    legacy_workflow_digest: sha256:1da25a8f55eebae7a4788be22b8870ff82de5ad703833783561f477536fe83aa
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: narrative-design
+    legacy_workflow_digest: sha256:8369515c209c54e7ed4673b9f472344076d1f9b8dcedac8df62ac7fdaa07eee8
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: nfr-evidence-audit
+    legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.core-assurance-v0
+      policy_ref: policy.workflow.nfr-evidence-audit
+  - workflow_id: observability-plan
+    legacy_workflow_digest: sha256:30e040344378beae53c84d0384939f8787b8e63f0cccb3db453f1e37629d2b1b
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.observability-plan
+  - workflow_id: performance-plan
+    legacy_workflow_digest: sha256:4fbc7706a5e2e04bd287b7c479985a137885f0658465d056b733e93b532739fb
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: plan-sprint
+    legacy_workflow_digest: sha256:2742eb7827341ee61af988d63e13d2b1f69c80710823111a9a121ac7908399a1
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.plan-sprint
+  - workflow_id: platform-ops-plan
+    legacy_workflow_digest: sha256:f392cac8a9b6b0d9973c5ded5e2ab23f265d1fd75932c7cd3b11ca5056bea52a
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.platform-ops-plan
+  - workflow_id: playtest-plan
+    legacy_workflow_digest: sha256:e08126be9fe622764f8c6dbe943ff0d2ca9f057e04c7ebb1167b943840b7f9b5
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: privacy-data-plan
+    legacy_workflow_digest: sha256:f4d311e1366608007a1b64531ac081c453d2f49479ad8c0cfc2fcfb2ff818df4
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.privacy-data-plan
+  - workflow_id: problem-solving
+    legacy_workflow_digest: sha256:d1773bf630c27c0587edf7bc22a344c23f9ebe7a98a0a96c2354ed83e127b191
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: product-area-map
+    legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.product-area-map
+  - workflow_id: product-requirements
+    legacy_workflow_digest: sha256:dc57ec433c1a8991d2e33579f4acc30d074070031651bd23132ced0936f0166a
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.product-requirements
+  - workflow_id: project-context
+    legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.project-context
+  - workflow_id: quick-dev
+    legacy_workflow_digest: sha256:f9d80504e10fbc2d9570906d31572d5c5821e8ee3154ccdb5f96dd8880c2a1a3
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: quick-prototype
+    legacy_workflow_digest: sha256:f0b547f895d043985a568ad24db46ed3a26d2f19e873a9ae8a45ff6424a2f2a4
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: readiness-check
+    legacy_workflow_digest: sha256:1454b541c8799da625ebe7dbab6dc67fe8e1e89f77275350828ac96a270da4d7
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.readiness-check
+  - workflow_id: ready-release
+    legacy_workflow_digest: sha256:a720c6e9e4877b26903603c8abe28633f279fecb51ab0f462ba505a4f10d0ec7
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.ready-release
+  - workflow_id: reality-evidence-gate
+    legacy_workflow_digest: sha256:af52bc3b6283aa45b90e124b1999e35f90f589bcaeaea93ad1c6d6674437e966
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.reality-evidence-gate
+  - workflow_id: release-readiness
+    legacy_workflow_digest: sha256:d163b4d792ce83fa61981d4b049d4b1b322b59657890e1e22ae1724e54fb5570
+    disposition_intent:
+      kind: quarantined
+      quarantine:
+        reason_code: unsafe_automatic_conversion
+        risk_tier: critical
+        explanation: The legacy workflow overlaps readiness-check and ready-release while mixing route, artifact, and release-authorization authority.
+        blocking_refs:
+        - gap.release-readiness-overlap
+        - gap.enterprise-artifact-adapter
+        - gap.release-authorization-separation
+        affected_consumer_refs:
+        - consumer.release-governance
+        review_owner: owner.workflow-governance-review
+        review_due_release_version: 0.5.0
+  - workflow_id: repo-split-plan
+    legacy_workflow_digest: sha256:d301522bdaf2c87fe29bc5282b10149244afde2548f32a99d2853442aa4367df
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: research-closeout
+    legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.research-closeout
+  - workflow_id: retrospective
+    legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.retrospective
+  - workflow_id: risk-register
+    legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.core-assurance-v0
+      policy_ref: policy.workflow.risk-register
+  - workflow_id: runtime-builder
+    legacy_workflow_digest: sha256:3af850e2753cae9e1ae417e1c5c9f38d0158401085fc55c5c9806d29614b87f0
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: security-plan
+    legacy_workflow_digest: sha256:5a78f1af75a27df9673a4bca3f953b395fb7a41e72d742f8bdf7002245467f4e
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.security-plan
+  - workflow_id: session-prep
+    legacy_workflow_digest: sha256:1258fe010b5ded7da9021ff247d0289707ff4184fbede21d7e21222678eef68a
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: skill-convert
+    legacy_workflow_digest: sha256:62d9dcfc98088091d907e9f7fbf12b16372377397cdde1ca3fedbaa5f22137fb
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: spec-distillation
+    legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.spec-distillation
+  - workflow_id: sprint-status
+    legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.agent-native-continuity-v0
+      policy_ref: policy.workflow.sprint-status
+  - workflow_id: start-runtime
+    legacy_workflow_digest: sha256:ee7f96b29c30bdef24777e47e3d9e31ebbf191192929b04cc9aec5c57f611547
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: story-creation
+    legacy_workflow_digest: sha256:1faef3dfecdf64264ae7521edbd360bb04e068f5decac0f11f6a9f962a957faf
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.story-creation
+  - workflow_id: storytelling
+    legacy_workflow_digest: sha256:f863dd25f0616fc51cdf5b949207cfe6fb300db858fbbcc048cb4ae410dcd6a2
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: teach-testing
+    legacy_workflow_digest: sha256:403296e48f16e88ba37b610b2818af6988ed7c5e8a1cf6077633271b52ca815e
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: team-operating-model
+    legacy_workflow_digest: sha256:f7dc8055b8d984da507a223084f21c8dcf5f79c7a0cecf0e694d28e9ab4dbc78
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: technical-feasibility-scan
+    legacy_workflow_digest: sha256:cf392d6597cab2802a58da12a361d83285328816a0c47bdfb1e35da90d242909
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.technical-feasibility-scan
+  - workflow_id: test-automation
+    legacy_workflow_digest: sha256:f807c26e59729905a118d9bac0124f331f6530372814733b802e2769f3ca2914
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.test-automation
+  - workflow_id: test-engagement-model
+    legacy_workflow_digest: sha256:8f47c5905683e68cfecbb6749b5fef8e9f2f725f4adf4bf723e1ea4d592ab462
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: test-framework
+    legacy_workflow_digest: sha256:d4fed3976edf84ae8e72b3c00a4f385046aaa1137f1b043d8a20c2e1bfb7d619
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.test-framework
+  - workflow_id: test-review
+    legacy_workflow_digest: sha256:0a601bc00a7600646f54ffc5dc9f94dcd4db6d8b450a2787d7ec60fe9c108b27
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.assurance-operations-v0
+      policy_ref: policy.workflow.test-review
+  - workflow_id: test-strategy
+    legacy_workflow_digest: sha256:28530d5e59f6ca75535b208d3a3afa5e7066a65c08a661307f647bc68bc243d4
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.test-strategy
+  - workflow_id: traceability-gate
+    legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-governance.batch.core-assurance-v0
+      policy_ref: policy.workflow.traceability-gate
+  - workflow_id: track-decision
+    legacy_workflow_digest: sha256:258461c04bdf3dd052c8f3b7841ade5622127924ceca7d0479ae0b0090cdd74b
+    disposition_intent:
+      kind: quarantined
+      quarantine:
+        reason_code: ambiguous_legacy_authority
+        risk_tier: critical
+        explanation: The legacy workflow mixes route, module-pack, and enterprise artifact authority that core governance cannot safely infer.
+        blocking_refs:
+        - gap.route-authority-model
+        - gap.module-pack-lifecycle
+        - gap.enterprise-artifact-adapter
+        affected_consumer_refs:
+        - consumer.workflow-routing
+        review_owner: owner.workflow-governance-review
+        review_due_release_version: 0.5.0
+  - workflow_id: trunk-based-plan
+    legacy_workflow_digest: sha256:4487a6ac33e9cee4ecf9008b0d7d105fcef82631add78f3318c607fd8bf20231
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: ux-plan
+    legacy_workflow_digest: sha256:0f94ee22ab34c6c1f8f92dcc39d0ba1edbc2eaabf391f74298f65be2c927403b
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: visual-alignment-prototype
+    legacy_workflow_digest: sha256:ae302f3ad5e7236b513f235a3cb753b79ef1843d3d38d98acf574f3f89d3d141
+    disposition_intent:
+      kind: domain_pack_candidate
+      candidate:
+        domain_id: domain.game-development
+        proposed_pack_id: pack.game-development
+        deferral_reason: domain_specific_lifecycle
+        explanation: Deferred to the governed P6 game-development domain pack.
+  - workflow_id: workflow-analyze
+    legacy_workflow_digest: sha256:85d0fb85a54ab8fad98cd1e902ee2ea2524806fa9b3ae2ab411e539f4b3c5d55
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: workflow-builder
+    legacy_workflow_digest: sha256:81a367d4ab4c3bcc5e0ab54f8e9a269e97fd5edeeff42421d13c8f01299001c5
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: workflow-validate
+    legacy_workflow_digest: sha256:dfab3e8dd917f7e37cd383d5582b53a611cf4c18980df59b1970e03f690825e5
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: working-backwards-challenge
+    legacy_workflow_digest: sha256:4953e3eafffb7428d0436ed9182df844c003cc14fa9c88be27f2d7d3877b9553
+    disposition_intent:
+      kind: compatibility_only
+      reason:
+        code: awaiting_migration
+        explanation: Retained as an exact, read-only, non-authoritative legacy compatibility projection.
+  - workflow_id: write-spec
+    legacy_workflow_digest: sha256:202e8b98e9fba9d1b82352b263580bfc4b7d6266485f47999420712e671faca5
+    disposition_intent:
+      kind: migration_candidate
+      batch_id: workflow-batch.golden-path-v0
+      policy_ref: policy.workflow.write-spec
+  compatibility_policy:
+    policy_version: 0.1.0
+    lifecycle:
+      status: supported
+    diagnostic_code: workflow.compatibility.foundation-retained
+    replacement_argv:
+    - forge-core
+    - guide
+    - rollout-audit
+    - --manifest-file
+    - contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml
+    - --batch-file
+    - contracts/migration/workflow-governance-batch-golden-path-v0.yaml
+    - --batch-file
+    - contracts/migration/workflow-governance-batch-core-assurance-v0.yaml
+    - --batch-file
+    - contracts/migration/workflow-governance-batch-assurance-operations-v0.yaml
+    - --batch-file
+    - contracts/migration/workflow-governance-batch-agent-native-continuity-v0.yaml
+    - --json
+    projection_mode: read_only_exact_projection
+    legacy_authority: non_authoritative
+    exact_fields:
+    - id
+    - phases
+    - workflow_ref
+    - triggers
+    - prerequisites
+    - outputs
+    consumer_diagnostics: required
+    minimum_consumer_version: 0.4.0
+    retirement_admission: verified_authorization_required

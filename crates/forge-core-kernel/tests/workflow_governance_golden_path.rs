@@ -56,6 +56,17 @@ fn bundle() -> WorkflowGovernanceBundleDocument {
     .expect("typed golden bundle")
 }
 
+fn agent_native_continuity_bundle() -> WorkflowGovernanceBundleDocument {
+    yaml_serde::from_str(
+        &fs::read_to_string(
+            repo_root()
+                .join("contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml"),
+        )
+        .expect("agent-native-continuity bundle"),
+    )
+    .expect("typed agent-native-continuity bundle")
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -988,11 +999,16 @@ fn assurance_operations_upgrade_is_adjacent_cas_bound_and_resumable() {
     .expect("replacement adapter");
     let resumed = replacement.resume().expect("replacement-agent resume");
     assert_eq!(resumed.release.release, target);
-    assert!(replacement
+    let continuity = replacement
         .release_status()
         .expect("assurance-operations status")
         .available_successor
-        .is_none());
+        .expect("agent-native-continuity successor");
+    assert_eq!(
+        continuity.release_id.0,
+        "workflow-governance.release.agent-native-continuity-v0"
+    );
+    assert_eq!(continuity.release_version, "0.4.0");
     let invalidated = replacement.next().expect("invalidated successor guidance");
     assert_ne!(
         invalidated.status,
@@ -1009,6 +1025,263 @@ fn assurance_operations_upgrade_is_adjacent_cas_bound_and_resumable() {
     assert!(matches!(
         replacement.consume_completion(
             prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift)
+    ));
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one persisted-project narrative must keep sequential upgrades, CAS, authority drift, and replacement resume causally connected"
+)]
+fn agent_native_continuity_upgrade_is_sequential_cas_bound_and_resumable() {
+    let fixture = SignedFixture::new("agent-native-continuity-upgrade");
+    let continuity_id =
+        StableId("workflow-governance.release.agent-native-continuity-v0".to_owned());
+    let initial = fixture.adapter.release_status().expect("initial status");
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &continuity_id,
+            &initial.active.release.release_digest,
+            &initial.ledger_head_digest,
+            &initial.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseNotAdjacent)
+    ));
+
+    let genesis_guidance = fixture.adapter.next().expect("genesis guidance");
+    let genesis_bundle = bundle();
+    let genesis_policy = selected_policy(&genesis_bundle, &genesis_guidance);
+    let genesis_evidence = evidence_request(
+        &genesis_guidance,
+        genesis_policy,
+        &genesis_policy.claims[0].id,
+        0,
+    );
+    fixture
+        .adapter
+        .record_authorized_evidence(fixture.evidence(genesis_evidence))
+        .expect("genesis evidence before release chain");
+    let prepared = fixture
+        .adapter
+        .prepare_completion()
+        .expect("prepared before reviewed release chain");
+
+    upgrade_to_foundation(&fixture);
+    for expected in [
+        "workflow-governance.release.core-assurance-v0",
+        "workflow-governance.release.assurance-operations-v0",
+    ] {
+        let status = fixture.adapter.release_status().expect("release status");
+        let target = status
+            .available_successor
+            .clone()
+            .expect("adjacent reviewed successor");
+        assert_eq!(target.release_id.0, expected);
+        fixture
+            .adapter
+            .release_upgrade(
+                &target.release_id,
+                &status.active.release.release_digest,
+                &status.ledger_head_digest,
+                &status.snapshot_digest,
+            )
+            .expect("sequential reviewed upgrade");
+    }
+
+    let assurance_status = fixture
+        .adapter
+        .release_status()
+        .expect("assurance-operations status");
+    let target = assurance_status
+        .available_successor
+        .clone()
+        .expect("agent-native-continuity successor");
+    assert_eq!(target.release_id, continuity_id);
+    assert_eq!(target.release_version, "0.4.0");
+
+    let prepared_assurance = {
+        let mut prepared = None;
+        let document = agent_native_continuity_bundle();
+        for _ in 0..64 {
+            let guidance = fixture
+                .adapter
+                .next()
+                .expect("assurance-operations completion guidance");
+            let policy = selected_policy(&document, &guidance);
+            match guidance.status {
+                WorkflowGovernanceGuidanceStatus::ApplicabilityRequired => {
+                    let request = applicability_request(&fixture, &guidance, false);
+                    fixture
+                        .adapter
+                        .record_authorized_applicability(fixture.applicability(request))
+                        .expect("signed assurance applicability disposition");
+                }
+                WorkflowGovernanceGuidanceStatus::ReadyToComplete => {
+                    prepared = Some(
+                        fixture
+                            .adapter
+                            .prepare_completion()
+                            .expect("prepared under assurance-operations"),
+                    );
+                    break;
+                }
+                WorkflowGovernanceGuidanceStatus::Active
+                | WorkflowGovernanceGuidanceStatus::Blocked => {
+                    if let Some(gap) = guidance
+                        .simulation
+                        .candidate_capability_gaps
+                        .iter()
+                        .find(|gap| gap.blocking)
+                    {
+                        let requirement = policy
+                            .capability_requirements
+                            .iter()
+                            .find(|requirement| requirement.id == gap.id)
+                            .expect("selected assurance capability");
+                        let observed = now();
+                        let request = WorkflowCapabilityAuthorizationRequest {
+                            project_id: guidance.project_id.clone(),
+                            policy_bundle_digest: guidance.bundle_digest.clone(),
+                            policy_ref: policy.id.clone(),
+                            capability_ref: requirement.id.clone(),
+                            state_version: guidance.state_version,
+                            current_phase: StableId(guidance.current_phase.clone()),
+                            snapshot_digest: guidance.snapshot_digest.clone(),
+                            ledger_head_digest: guidance.ledger_head_digest.clone(),
+                            probe_kind: requirement.probe_kind,
+                            available: true,
+                            authority_scope: StableId("workflow.capability.authorize".to_owned()),
+                            probe_ref: format!("runtime:continuity:after:{}", requirement.id.0),
+                            probe_digest: sha256_content_hash(requirement.id.0.as_bytes()),
+                            subject_kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
+                            subject_ref: guidance.project_id.0.clone(),
+                            subject_digest: guidance.snapshot_digest.clone(),
+                            observed_at_unix: observed,
+                            expires_at_unix: Some(observed + 3_600),
+                        };
+                        fixture
+                            .adapter
+                            .record_authorized_capability(fixture.capability(request))
+                            .expect("signed assurance capability");
+                        continue;
+                    }
+                    if let Some(result) =
+                        guidance
+                            .simulation
+                            .candidate_claim_results
+                            .iter()
+                            .find(|result| {
+                                !matches!(
+                                    result.status,
+                                    WorkflowClaimResultStatus::Verified
+                                        | WorkflowClaimResultStatus::Waived
+                                )
+                            })
+                    {
+                        let request = evidence_request(
+                            &guidance,
+                            policy,
+                            &StableId(result.claim_id.clone()),
+                            0,
+                        );
+                        fixture
+                            .adapter
+                            .record_authorized_evidence(fixture.evidence(request))
+                            .expect("signed assurance evidence");
+                        continue;
+                    }
+                    panic!("assurance policy active without an actionable gap");
+                }
+                WorkflowGovernanceGuidanceStatus::PhaseComplete => panic!(
+                    "assurance phase completed before minting continuity-upgrade drift authority"
+                ),
+            }
+        }
+        prepared.expect("assurance policy reached ready-to-complete")
+    };
+
+    let upgrade_status = fixture
+        .adapter
+        .release_status()
+        .expect("fresh assurance status");
+
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("assurance WAL");
+    assert!(matches!(
+        fixture.adapter.release_upgrade(
+            &target.release_id,
+            &upgrade_status.active.release.release_digest,
+            "sha256:stale-ledger-head",
+            &upgrade_status.snapshot_digest,
+        ),
+        Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch)
+    ));
+    assert_eq!(fs::read(&wal).expect("unchanged CAS WAL"), before);
+
+    let receipt = fixture
+        .adapter
+        .release_upgrade(
+            &target.release_id,
+            &upgrade_status.active.release.release_digest,
+            &upgrade_status.ledger_head_digest,
+            &upgrade_status.snapshot_digest,
+        )
+        .expect("agent-native-continuity upgrade");
+    let WorkflowGovernanceEvent::ReleaseUpgraded(transition) = &receipt
+        .transition_record
+        .as_ref()
+        .expect("continuity transition")
+        .event
+    else {
+        panic!("expected release-upgraded event");
+    };
+    assert_eq!(
+        transition.receipt_carryover,
+        WorkflowReceiptCarryover::InvalidateAll
+    );
+    assert_eq!(receipt.active.release, target);
+
+    let replacement = WorkflowGovernanceProjectAdapter::new(
+        fixture.project_id.clone(),
+        &fixture.root,
+        fixture.root.join(".forge-method"),
+    )
+    .expect("replacement adapter");
+    let resumed = replacement.resume().expect("replacement-agent resume");
+    assert_eq!(resumed.release.release, target);
+    assert!(replacement
+        .release_status()
+        .expect("continuity status")
+        .available_successor
+        .is_none());
+    let invalidated = replacement.next().expect("invalidated continuity guidance");
+    assert_ne!(
+        invalidated.status,
+        WorkflowGovernanceGuidanceStatus::ReadyToComplete
+    );
+    assert!(invalidated
+        .simulation
+        .candidate_claim_results
+        .iter()
+        .all(|result| !matches!(
+            result.status,
+            WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+        )));
+    assert!(matches!(
+        replacement.consume_completion(
+            prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift)
+    ));
+    assert!(matches!(
+        replacement.consume_completion(
+            prepared_assurance,
             PrincipalId("principal.workflow.replacement-agent".to_owned()),
         ),
         Err(WorkflowGovernanceAdapterError::CompletionDrift)

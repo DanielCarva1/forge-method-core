@@ -1535,6 +1535,13 @@ fn validate_library_passes_current_repo() {
         .expect("assurance-operations behavioral evidence check");
     assert_eq!(assurance_operations_check.status, ValidationStatus::Passed);
     assert_eq!(assurance_operations_check.diagnostics, 0);
+    let continuity_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_behavioral_evidence_agent_native_continuity")
+        .expect("agent-native-continuity behavioral evidence check");
+    assert_eq!(continuity_check.status, ValidationStatus::Passed);
+    assert_eq!(continuity_check.diagnostics, 0);
     let admission_check = summary
         .checks
         .iter()
@@ -1549,6 +1556,13 @@ fn validate_library_passes_current_repo() {
         .expect("V2 release admission check");
     assert_eq!(v2_admission_check.status, ValidationStatus::Passed);
     assert_eq!(v2_admission_check.diagnostics, 0);
+    let continuity_admission_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_release_v2_admission_agent_native_continuity")
+        .expect("agent-native-continuity V2 release admission check");
+    assert_eq!(continuity_admission_check.status, ValidationStatus::Passed);
+    assert_eq!(continuity_admission_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
@@ -1664,6 +1678,34 @@ fn workflow_release_v2_admission_rejects_tampered_authorization_bytes() {
         .iter()
         .find(|check| check.name == "workflow_release_v2_admission")
         .expect("V2 admission check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(summary
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.path.contains(AUTH_REF)));
+}
+
+#[test]
+fn agent_native_continuity_admission_rejects_tampered_authorization_bytes() {
+    const AUTH_REF: &str =
+        "contracts/migration/workflow-agent-native-continuity-admission-authorization-v0.yaml";
+    let root = merged_validation_root("agent-native-continuity-tampered-authorization");
+    let path = root.join(AUTH_REF);
+    let text = fs::read_to_string(&path).expect("read continuity authorization");
+    let marker = "nonce: ";
+    let offset = text.find(marker).expect("nonce field") + marker.len();
+    let mut bytes = text.into_bytes();
+    bytes[offset] = if bytes[offset] == b'a' { b'b' } else { b'a' };
+    fs::write(&path, bytes).expect("tamper continuity authorization");
+
+    let summary = run_validate(&root);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_release_v2_admission_agent_native_continuity")
+        .expect("continuity V2 admission check");
     assert_eq!(check.status, ValidationStatus::Failed);
     assert!(check.errors > 0);
     assert!(summary

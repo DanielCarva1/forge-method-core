@@ -66,6 +66,7 @@ pub const WORKFLOW_RELEASE_ADMISSION_AUDIENCE: &str =
 
 /// One repository-compiled V2 release admission. Every path is private and
 /// fixed in the binary; callers cannot substitute project or environment data.
+#[derive(Clone, Copy)]
 struct EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
     review_index_ref: &'static str,
     reviewer_registry_ref: &'static str,
@@ -77,8 +78,8 @@ struct EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
 /// V2 releases are appended here only after their signed artifacts exist.
 /// Order is security-sensitive: every descriptor must name the immediate
 /// successor of the registry accumulated by all preceding descriptors.
-const EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2: &[EmbeddedWorkflowReleaseAdmissionDescriptorV2] =
-    &[EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
+const EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2: &[EmbeddedWorkflowReleaseAdmissionDescriptorV2] = &[
+    EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
         review_index_ref: "contracts/migration/workflow-assurance-operations-review-index-v0.yaml",
         reviewer_registry_ref:
             "contracts/policies/workflow-release-reviewer-registry-assurance-operations-v0.yaml",
@@ -88,7 +89,20 @@ const EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2: &[EmbeddedWorkflowReleaseAdmissio
         frozen_history: include_bytes!(
             "../../../../contracts/evidence/workflow-core-assurance-frozen-history-v0.ndjson"
         ),
-    }];
+    },
+    EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
+        review_index_ref:
+            "contracts/migration/workflow-agent-native-continuity-review-index-v0.yaml",
+        reviewer_registry_ref:
+            "contracts/policies/workflow-release-reviewer-registry-agent-native-continuity-v0.yaml",
+        authorization_ref:
+            "contracts/migration/workflow-agent-native-continuity-admission-authorization-v0.yaml",
+        evaluator_source: include_bytes!("../../../forge-core-decisions/src/workflow_behavior.rs"),
+        frozen_history: include_bytes!(
+            "../../../../contracts/evidence/workflow-assurance-operations-frozen-history-v0.ndjson"
+        ),
+    },
+];
 
 /// Opaque repository-admitted policy bundle retained for P5c API compatibility.
 ///
@@ -1338,10 +1352,29 @@ mod tests {
         ));
     }
 
+    fn admitted_v1_reviewed_registry_for_v2_tests() -> AdmittedWorkflowGovernanceReleaseRegistry {
+        let input = load_review_candidate_input().expect("V1 candidate");
+        let reviewer_raw =
+            required_embedded_text(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF).expect("V1 reviewers");
+        let reviewers: WorkflowReleaseReviewerRegistryDocument =
+            parse_review_artifact(WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF, reviewer_raw)
+                .expect("V1 reviewers");
+        let authorization: WorkflowReleaseAdmissionAuthorizationDocument =
+            load_review_artifact(WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF)
+                .expect("V1 authorization");
+        let capability = verify_workflow_release_admission_authorization(
+            &reviewers,
+            reviewer_raw.as_bytes(),
+            &authorization,
+            WORKFLOW_RELEASE_ADMISSION_AUDIENCE,
+        )
+        .expect("V1 capability");
+        admit_reviewed_registry(input, capability).expect("V1 reviewed registry")
+    }
+
     #[test]
-    fn missing_or_wrong_later_authorization_blocks_the_entire_chain() {
-        let base = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("P5d.4a reviewed registry");
+    fn missing_or_wrong_second_v2_authorization_blocks_the_entire_chain() {
+        let base = admitted_v1_reviewed_registry_for_v2_tests();
         let missing = EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
             review_index_ref: "unused",
             reviewer_registry_ref: "unused",
@@ -1350,13 +1383,15 @@ mod tests {
             frozen_history: b"unused",
         };
         assert!(matches!(
-            admit_embedded_v2_release_chain(base, &[missing]),
+            admit_embedded_v2_release_chain(
+                base,
+                &[EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[0], missing],
+            ),
             Err(AdmittedWorkflowGovernanceReleaseError::ReviewArtifactMissing(reference))
                 if reference == "contracts/migration/missing-v2-authorization.yaml"
         ));
 
-        let base = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("P5d.4a reviewed registry");
+        let base = admitted_v1_reviewed_registry_for_v2_tests();
         let wrong_version = EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
             review_index_ref: "unused",
             reviewer_registry_ref: "unused",
@@ -1365,33 +1400,82 @@ mod tests {
             frozen_history: b"unused",
         };
         assert!(matches!(
-            admit_embedded_v2_release_chain(base, &[wrong_version]),
+            admit_embedded_v2_release_chain(
+                base,
+                &[EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[0], wrong_version,],
+            ),
             Err(AdmittedWorkflowGovernanceReleaseError::ReviewArtifactParse { .. })
         ));
     }
 
     #[test]
-    fn signed_assurance_operations_release_is_the_exact_fourth_registry_entry() {
+    fn batch_a_signed_authority_cannot_authorize_batch_b() {
+        let batch_a = EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[0];
+        let batch_b = EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[1];
+        let authorization: WorkflowReleaseAdmissionAuthorizationV2Document =
+            load_review_artifact(batch_a.authorization_ref).expect("Batch A authorization");
+        let reviewer_raw =
+            required_embedded_text(batch_a.reviewer_registry_ref).expect("Batch A reviewers");
+        let reviewers: WorkflowReleaseReviewerRegistryDocument =
+            parse_review_artifact(batch_a.reviewer_registry_ref, reviewer_raw)
+                .expect("Batch A reviewers");
+        let batch_b_index_raw =
+            required_embedded_text(batch_b.review_index_ref).expect("Batch B review index");
+        let batch_b_input =
+            load_review_candidate_input_v2(&batch_b, batch_b_index_raw).expect("Batch B candidate");
+        let batch_b_evaluation = evaluate_workflow_release_admission_candidate_v2(&batch_b_input);
+        assert_eq!(
+            batch_b_evaluation.status,
+            WorkflowReleaseAdmissionV2EvaluationStatus::ReadyForIndependentAuthorization
+        );
+        assert!(matches!(
+            verify_workflow_release_admission_authorization_v2(
+                &reviewers,
+                reviewer_raw.as_bytes(),
+                &authorization,
+                WorkflowReleaseAdmissionExpectedContextV2 {
+                    review_index: &batch_b_input.review_index,
+                    review_index_raw_bytes: batch_b_index_raw.as_bytes(),
+                    evaluation_digest: &batch_b_evaluation.evaluation_digest,
+                },
+                WORKFLOW_RELEASE_ADMISSION_AUDIENCE,
+            ),
+            Err(
+                forge_core_authority::WorkflowReleaseAdmissionAuthorityErrorV2::BindingMismatch { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn both_signed_v2_releases_form_the_exact_five_release_chain() {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("reviewed V1 plus signed V2 registry");
+            .expect("reviewed V1 plus two signed V2 releases");
+        let assurance = registry
+            .release_by_id(&StableId(
+                "workflow-governance.release.assurance-operations-v0".to_owned(),
+            ))
+            .expect("assurance-operations fourth release");
         let latest = registry.latest_release();
-        assert_eq!(registry.release_count(), 4);
+        assert_eq!(registry.release_count(), 5);
         assert_eq!(
             latest.release().release_id.0,
-            "workflow-governance.release.assurance-operations-v0"
+            "workflow-governance.release.agent-native-continuity-v0"
         );
-        assert_eq!(latest.policy_count(), 33);
+        assert_eq!(latest.release().release_version, "0.4.0");
+        assert_eq!(assurance.policy_count(), 33);
+        assert_eq!(latest.policy_count(), 42);
         assert_eq!(
             latest.receipt_carryover(),
             WorkflowReceiptCarryover::InvalidateAll
         );
-        assert!(latest.is_adjacent_successor_of(
+        assert!(assurance.is_adjacent_successor_of(
             registry
                 .release_by_id(&StableId(
                     "workflow-governance.release.core-assurance-v0".to_owned()
                 ))
                 .expect("core-assurance predecessor")
         ));
+        assert!(latest.is_adjacent_successor_of(assurance));
         for quarantined in ["edge-case-review", "track-decision", "release-readiness"] {
             assert!(!latest.contains_workflow_policy(quarantined));
         }

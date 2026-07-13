@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.research-closeout.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.research-closeout
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.research-closeout.durable-proof
+    decision_need_refs:
+    - decision.workflow.research-closeout.material-gap
+    resolved_decision_refs:
+    - decision.workflow.research-closeout.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.questions-covered.0
+      claim_ref: claim.workflow.research-closeout.questions-covered
+      evaluator_ref: evaluator.workflow.research-closeout.questions-covered
+      principal: principal.research-closeout.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.sources-provenanced.0
+      claim_ref: claim.workflow.research-closeout.sources-provenanced
+      evaluator_ref: evaluator.workflow.research-closeout.sources-provenanced
+      principal: principal.research-closeout.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.uncertainty-retained.0
+      claim_ref: claim.workflow.research-closeout.uncertainty-retained
+      evaluator_ref: evaluator.workflow.research-closeout.uncertainty-retained
+      principal: principal.research-closeout.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.research-closeout.resume.claim.workflow.research-closeout.decision-impact-explicit.0
+      claim_ref: claim.workflow.research-closeout.decision-impact-explicit
+      evaluator_ref: evaluator.workflow.research-closeout.decision-impact-explicit
+      principal: principal.research-closeout.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

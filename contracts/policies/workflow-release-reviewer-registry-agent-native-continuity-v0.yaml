@@ -1,0 +1,28 @@
+schema_version: '0.1'
+workflow_release_reviewer_registry:
+  registry_id: workflow-release-reviewers.agent-native-continuity-v0
+  registry_version: 0.3.0
+  authority: candidate_only
+  credentials:
+  - credential_id: reviewer.workflow-release.semantic-agent-native-continuity-v0
+    principal_id: principal.release-review.semantic-agent-native-continuity-v0
+    public_key_fingerprint: sha256:b9ae45b817df86b93c798d1dbccea5abfbb0caa9b7f5461ce1a43adc0ca1d643
+    public_key_hex: c4feb901057a42b12705e64961ac312e8d79662a208385b1c97c174cab572403
+    algorithm: ed25519
+    roles:
+    - semantic_reviewer
+    status: active
+    valid_from_unix: 1783778400
+    valid_until_unix: 1815314400
+    independence_domain: semantic-review
+  - credential_id: reviewer.workflow-release.authorizer-agent-native-continuity-v0
+    principal_id: principal.release-review.authorizer-agent-native-continuity-v0
+    public_key_fingerprint: sha256:195369655ffcf6e5ef22190296015994f9cb206b1a766342856d90f769d50334
+    public_key_hex: f7c6cca2e2cc5e4af9ce051d80dca12be2710699aeed4d1de0ac72ac154c7487
+    algorithm: ed25519
+    roles:
+    - release_authorizer
+    status: active
+    valid_from_unix: 1783778400
+    valid_until_unix: 1815314400
+    independence_domain: release-authorization

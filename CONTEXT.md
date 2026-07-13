@@ -187,9 +187,12 @@ Active implementation plan:
   for exactly one release-specific review and authorization at a time. The
   loader folds the 13-policy assurance-operations release sequentially into a
   four-release, 33-policy registry only after 91 scenarios and independent
-  authorization pass. Full-catalog disposition is 33 migration, 56
-  compatibility-only, three quarantined, and 18 domain-pack candidates.
-  P5d.4b remains in progress; trusted retirement stays in P5d.5.
+  authorization pass. P5d.4b.2 then folds nine agent-native continuity and
+  lifecycle policies after 63 scenarios into a five-release, 42-policy
+  registry, preserving the exact predecessor prefix. P5d.4b is complete with
+  42 migration, 47 compatibility-only, three quarantined, and 18 domain-pack
+  candidates. The latter three classes remain non-executable; trusted
+  retirement stays in P5d.5 and domain authority stays in P6.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -218,12 +221,14 @@ history, and moves it only through a crash-recoverable adjacent transition.
 P5d.3 owns candidate-only behavioral comparison and quarantine for the first
 reviewed batch. P5d.4a now admits those five policies only after independent
 cryptographic review, exact evaluator recomputation, and an explicit adjacent
-project upgrade. P5d.4b.1 now admits the assurance-operations batch through a
+project upgrade. P5d.4b.1 admits the assurance-operations batch through a
 sequential V2 authority chain without rewriting frozen V1 history. P5d.4b.2
-next owns the nine continuity/lifecycle workflows `checkpoint-preview`,
+completes reviewed core rollout with the nine continuity/lifecycle workflows `checkpoint-preview`,
 `collaboration-handoff`, `research-closeout`, `retrospective`, `sprint-status`,
 `project-context`, `spec-distillation`, `evolve-project`, and
-`product-area-map`. P5d.5 later owns signed deletion-backed retirement. The workflow
+`product-area-map`. P5d.5 now owns signed deletion-backed retirement and final
+scorecard proof; 47 compatibility-only workflows remain explicitly
+non-executable, three remain quarantined, and 18 remain reserved for P6. The workflow
 path targets the local agent-facing CLI; allowlist metadata does not constitute
 an end-to-end MCP workflow Adapter.
 

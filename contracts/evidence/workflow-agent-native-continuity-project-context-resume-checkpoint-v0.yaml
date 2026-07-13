@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.project-context.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.project-context
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.project-context.durable-proof
+    decision_need_refs:
+    - decision.workflow.project-context.material-gap
+    resolved_decision_refs:
+    - decision.workflow.project-context.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.sources-authoritative.0
+      claim_ref: claim.workflow.project-context.sources-authoritative
+      evaluator_ref: evaluator.workflow.project-context.sources-authoritative
+      principal: principal.project-context.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.constraints-current.0
+      claim_ref: claim.workflow.project-context.constraints-current
+      evaluator_ref: evaluator.workflow.project-context.constraints-current
+      principal: principal.project-context.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.gaps-visible.0
+      claim_ref: claim.workflow.project-context.gaps-visible
+      evaluator_ref: evaluator.workflow.project-context.gaps-visible
+      principal: principal.project-context.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.project-context.resume.claim.workflow.project-context.recovery-proven.0
+      claim_ref: claim.workflow.project-context.recovery-proven
+      evaluator_ref: evaluator.workflow.project-context.recovery-proven
+      principal: principal.project-context.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

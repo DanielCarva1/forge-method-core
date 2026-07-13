@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.collaboration-handoff.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.collaboration-handoff
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.collaboration-handoff.durable-proof
+    decision_need_refs:
+    - decision.workflow.collaboration-handoff.material-gap
+    resolved_decision_refs:
+    - decision.workflow.collaboration-handoff.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.durable-truth-bounded.0
+      claim_ref: claim.workflow.collaboration-handoff.durable-truth-bounded
+      evaluator_ref: evaluator.workflow.collaboration-handoff.durable-truth-bounded
+      principal: principal.collaboration-handoff.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.ownership-explicit.0
+      claim_ref: claim.workflow.collaboration-handoff.ownership-explicit
+      evaluator_ref: evaluator.workflow.collaboration-handoff.ownership-explicit
+      principal: principal.collaboration-handoff.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.evidence-linked.0
+      claim_ref: claim.workflow.collaboration-handoff.evidence-linked
+      evaluator_ref: evaluator.workflow.collaboration-handoff.evidence-linked
+      principal: principal.collaboration-handoff.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.collaboration-handoff.resume.claim.workflow.collaboration-handoff.next-action-executable.0
+      claim_ref: claim.workflow.collaboration-handoff.next-action-executable
+      evaluator_ref: evaluator.workflow.collaboration-handoff.next-action-executable
+      principal: principal.collaboration-handoff.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

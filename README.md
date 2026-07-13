@@ -692,11 +692,33 @@ forge-core validate --root .
 ```
 
 Repository validation retains the frozen 139-check P5d.4a anchor and adds the
-new surfaces for a 156-check aggregate. P5d.4b remains in progress. The next
-checkpoint is P5d.4b.2: `checkpoint-preview`, `collaboration-handoff`,
-`research-closeout`, `retrospective`, `sprint-status`, `project-context`,
-`spec-distillation`, `evolve-project`, and `product-area-map`. P5d.5 retirement
-does not begin until that reviewed continuity/lifecycle release is complete.
+Batch A surfaces for a 156-check checkpoint.
+
+### Complete core rollout with agent-native continuity (P5d.4b.2)
+
+P5d.4b.2 applies the same sequential V2 boundary to `checkpoint-preview`,
+`collaboration-handoff`, `research-closeout`, `retrospective`, `sprint-status`,
+`project-context`, `spec-distillation`, `evolve-project`, and
+`product-area-map`. These policies govern durable truth, handoff ownership,
+evidence-linked learning, replacement-agent context recovery, product-area
+mapping, and safe project evolution without prescribing speech or granting the
+agent authority to approve its own claims.
+
+```bash
+cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_evidence -- --check
+cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_candidate -- --check
+cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_admission -- --check
+forge-core validate --root .
+```
+
+The release adds 63 scenarios and produces a five-release, 42-policy registry
+while preserving the exact 33-policy predecessor prefix. P5d.4b is complete at
+42 migration candidates, 47 compatibility-only workflows, three quarantines,
+and 18 domain-pack candidates. The 47 compatibility-only workflows remain
+explicitly non-executable, the quarantines remain absent from runtime, and the
+18 domain workflows remain reserved for P6. Validation now preserves anchors
+of 139 historical checks, 156 through Batch A, and 169 aggregate checks. P5d.5
+signed retirement and deletion proof is the next checkpoint.
 
 ### Simulate workflow governance (P5b)
 
@@ -1368,6 +1390,10 @@ gates.
   13-policy assurance-operations release. The admitted registry now has four
   releases and 33 policies; 91 scenarios and 156 aggregate validation checks
   pass with catalog accounting fixed at 33/56/3/18.
+- P5d.4b.2 completes reviewed core rollout with nine agent-native continuity
+  policies, 63 scenarios, and a five-release 42-policy registry. Final P5d.4b
+  accounting is 42/47/3/18; compatibility-only, quarantined, and P6 workflows
+  remain non-executable.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1424,12 +1450,11 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.4b.2-P5d.5 remaining rollout and legacy retirement** -- P5d.4b.1 now
-  independently authorizes the assurance-operations batch while preserving
-  three explicit quarantines and frozen V1 history. Next, Forge must admit the
-  nine continuity/lifecycle workflows through the same sequential V2 boundary,
-  then cover remaining compatibility/quarantine/domain dispositions and
-  verify signed retirement authorizations. No quarantined or unreviewed workflow is runtime executable or
+- **P5d.5 legacy retirement** -- P5d.4b is complete with 42 executable policies
+  and explicit 47 compatibility-only / 3 quarantined / 18 P6 dispositions.
+  Forge must now verify signed retirement authorizations, compatibility-window
+  evidence, and deletion safety before removing any legacy authority. No
+  compatibility-only, quarantined, or P6 workflow is runtime executable or
   retirement-ready yet. Retirement requires measured behavioral compatibility,
   deletion/ablation evidence, consumer migration diagnostics, and human review
   rather than catalog-count parity.

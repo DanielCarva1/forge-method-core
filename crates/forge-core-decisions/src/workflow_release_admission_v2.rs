@@ -883,9 +883,7 @@ fn validate_registry_evolution(
         .review_subject
         .workflow_behavioral_review_subject
         .baseline_history;
-    if history_binding.embedded_ref != baseline_history.embedded_ref
-        || history_binding.raw_digest != baseline_history.expected_digest
-    {
+    if !frozen_history_binding_matches(history_binding, baseline_history) {
         push_issue(
             issues,
             WorkflowReleaseAdmissionV2IssueCode::FrozenHistoryIncompatible,
@@ -893,6 +891,15 @@ fn validate_registry_evolution(
             "review index must bind the exact frozen history consumed by behavioral resume evaluation",
         );
     }
+}
+
+fn frozen_history_binding_matches(
+    binding: &WorkflowReleaseReviewArtifactBindingV2,
+    baseline: &forge_core_contracts::WorkflowBehavioralArtifactReference,
+) -> bool {
+    binding.artifact_id == baseline.id
+        && binding.embedded_ref == baseline.embedded_ref
+        && binding.raw_digest == baseline.expected_digest
 }
 
 fn verify_typed_set<T: Serialize + DeserializeOwned + PartialEq>(
@@ -1078,7 +1085,11 @@ fn push_issue(
 
 #[cfg(test)]
 mod tests {
-    use super::{exact_nonempty_delta, has_exact_single_append_prefix};
+    use super::{
+        exact_nonempty_delta, frozen_history_binding_matches, has_exact_single_append_prefix,
+    };
+    use forge_core_contracts::workflow_release_review_v2::WorkflowReleaseReviewArtifactBindingV2;
+    use forge_core_contracts::{RepoPath, StableId, WorkflowBehavioralArtifactReference};
     use std::collections::BTreeSet;
 
     #[test]
@@ -1112,5 +1123,25 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert_ne!(delta, missing);
         assert_ne!(delta, substituted);
+    }
+
+    #[test]
+    fn frozen_history_rejects_semantically_stale_artifact_id() {
+        let baseline = WorkflowBehavioralArtifactReference {
+            id: StableId("history.release-n".to_owned()),
+            embedded_ref: RepoPath("contracts/evidence/history-n.ndjson".to_owned()),
+            expected_digest:
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+        };
+        let mut binding = WorkflowReleaseReviewArtifactBindingV2 {
+            artifact_id: baseline.id.clone(),
+            embedded_ref: baseline.embedded_ref.clone(),
+            raw_digest: baseline.expected_digest.clone(),
+            canonical_digest:
+                "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
+        };
+        assert!(frozen_history_binding_matches(&binding, &baseline));
+        binding.artifact_id = StableId("history.stale-predecessor".to_owned());
+        assert!(!frozen_history_binding_matches(&binding, &baseline));
     }
 }

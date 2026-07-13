@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.spec-distillation.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.spec-distillation
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.spec-distillation.durable-proof
+    decision_need_refs:
+    - decision.workflow.spec-distillation.material-gap
+    resolved_decision_refs:
+    - decision.workflow.spec-distillation.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.intent-preserved.0
+      claim_ref: claim.workflow.spec-distillation.intent-preserved
+      evaluator_ref: evaluator.workflow.spec-distillation.intent-preserved
+      principal: principal.spec-distillation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.requirements-testable.0
+      claim_ref: claim.workflow.spec-distillation.requirements-testable
+      evaluator_ref: evaluator.workflow.spec-distillation.requirements-testable
+      principal: principal.spec-distillation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.ambiguity-raised.0
+      claim_ref: claim.workflow.spec-distillation.ambiguity-raised
+      evaluator_ref: evaluator.workflow.spec-distillation.ambiguity-raised
+      principal: principal.spec-distillation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.spec-distillation.resume.claim.workflow.spec-distillation.authority-bounded.0
+      claim_ref: claim.workflow.spec-distillation.authority-bounded
+      evaluator_ref: evaluator.workflow.spec-distillation.authority-bounded
+      principal: principal.spec-distillation.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

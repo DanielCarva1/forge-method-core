@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.retrospective.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.retrospective
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.retrospective.durable-proof
+    decision_need_refs:
+    - decision.workflow.retrospective.material-gap
+    resolved_decision_refs:
+    - decision.workflow.retrospective.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.outcomes-evidenced.0
+      claim_ref: claim.workflow.retrospective.outcomes-evidenced
+      evaluator_ref: evaluator.workflow.retrospective.outcomes-evidenced
+      principal: principal.retrospective.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.causes-calibrated.0
+      claim_ref: claim.workflow.retrospective.causes-calibrated
+      evaluator_ref: evaluator.workflow.retrospective.causes-calibrated
+      principal: principal.retrospective.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.learnings-durable.0
+      claim_ref: claim.workflow.retrospective.learnings-durable
+      evaluator_ref: evaluator.workflow.retrospective.learnings-durable
+      principal: principal.retrospective.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.retrospective.resume.claim.workflow.retrospective.actions-owned.0
+      claim_ref: claim.workflow.retrospective.actions-owned
+      evaluator_ref: evaluator.workflow.retrospective.actions-owned
+      principal: principal.retrospective.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted

@@ -1,0 +1,57 @@
+bundle:
+  id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+  embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-candidate-v0.yaml
+  expected_digest: sha256:8a7161bb2b4c10dadb7208025743ae0a99eb2b8f8d7e9a58bdcbc32f294363b5
+evaluation:
+  schema_version: '0.1'
+  workflow_governance_evaluation:
+    observation_set_id: observations.checkpoint-preview.resume
+    state_version: 7
+    observed_at_unix: 1720000000
+    bundle_id: bundle.workflow-governance.agent-native-continuity-candidate-v0
+    policy_id: policy.workflow.checkpoint-preview
+    current_phase: 2-spec
+    target: execute
+    completed_policy_refs: []
+    not_applicable_policy_refs: []
+    available_capability_refs:
+    - capability.workflow.checkpoint-preview.durable-proof
+    decision_need_refs:
+    - decision.workflow.checkpoint-preview.material-gap
+    resolved_decision_refs:
+    - decision.workflow.checkpoint-preview.material-gap
+    waivers: []
+    evidence:
+    - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.state-bound.0
+      claim_ref: claim.workflow.checkpoint-preview.state-bound
+      evaluator_ref: evaluator.workflow.checkpoint-preview.state-bound
+      principal: principal.checkpoint-preview.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.change-summary-evidenced.0
+      claim_ref: claim.workflow.checkpoint-preview.change-summary-evidenced
+      evaluator_ref: evaluator.workflow.checkpoint-preview.change-summary-evidenced
+      principal: principal.checkpoint-preview.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.safe-resume-explicit.0
+      claim_ref: claim.workflow.checkpoint-preview.safe-resume-explicit
+      evaluator_ref: evaluator.workflow.checkpoint-preview.safe-resume-explicit
+      principal: principal.checkpoint-preview.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    - evidence_ref: evidence.checkpoint-preview.resume.claim.workflow.checkpoint-preview.non-authoritative.0
+      claim_ref: claim.workflow.checkpoint-preview.non-authoritative
+      evaluator_ref: evaluator.workflow.checkpoint-preview.non-authoritative
+      principal: principal.checkpoint-preview.0
+      kind: artifact_inspection
+      strength: inspected_artifact
+      freshness: current
+      outcome: pass
+    completion_assertion: asserted
