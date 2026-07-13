@@ -1,0 +1,401 @@
+schema_version: '0.1'
+domain_pack_composition_request:
+  request_id: composition.neutral.full
+  authority: candidate_only
+  forge_core_version: 0.6.0
+  core:
+    bundle_id: bundle.workflow-governance.golden-path-v0
+    bundle_digest: sha256:b285a2fd525c45c20db89777cef541074212ae066e12bd5adb5fee4f4d1d372f
+    policy_set_digest: sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+    bundle:
+      id: bundle.workflow-governance.golden-path-v0
+      policies: []
+  requirements:
+    project_id: project.neutral-composition
+    requirement_set_id: requirements.neutral-delivery
+    required_domains:
+    - id: requirement.neutral.delivery
+      domain_id: sample.foundation.domain.delivery
+      pack_version_requirement: ^1.0
+      required_capability_refs:
+      - sample.foundation.capability.repository-inspection
+    - id: requirement.neutral.independent-assurance
+      domain_id: sample.extension.domain.independent-assurance
+      pack_version_requirement: ^1.1
+      required_capability_refs:
+      - sample.extension.capability.independent-review
+  candidates:
+  - manifest_binding:
+      artifact_ref: docs/fixtures/domain-pack-v0/manifests/foundation.yaml
+      raw_sha256: sha256:e70bb02b57761bd16e8ef14b0c0e980504c65c742763827f0cd6342c65dba7cb
+      canonical_sha256: sha256:e4816bfa177b27453513004893b93a1ff934e763de5f5ca140cc3eafc6a1d407
+    manifest:
+      schema_version: '0.1'
+      domain_pack_manifest:
+        identity:
+          publisher: forge.fixture
+          name: foundation
+          namespace: sample.foundation
+          version: 1.0.0
+        authority: candidate_only
+        compatibility:
+          pack_schema_requirement: '>=0.1,<0.2'
+          forge_core_requirement: '>=0.5,<1.0'
+        provenance:
+          source_kind: local_candidate
+          source_uri: fixture://domain-pack-v0/foundation
+          source_revision: fixture-1.0.0
+          source_digest: sha256:e497dad6ab435f4786c1839b8073138bd58f678b8e6fc0c3250e5d55156fd639
+          authors:
+          - forge.fixture.author
+          license_spdx_expression: Apache-2.0
+          license_text:
+            artifact_ref: docs/fixtures/domain-pack-v0/artifacts/license-notice.yaml
+            raw_sha256: sha256:620e0a503eaf19cf245fde4042ee53086b2767fd2ad24de7f7d20750b9cc54c3
+            canonical_sha256: sha256:278702e156f1ce87da16228439919419ea1237205ce202fa685050db99a31b12
+        content:
+          content_ref: docs/fixtures/domain-pack-v0/content/foundation.yaml
+          raw_sha256: sha256:01db738f5167f613fc217b7836a0d1e63a16a9ee82aac522b471920c95514c5c
+          canonical_sha256: sha256:6a88179fc1238f04dba52213b16011d0e8a4a367b5892af0c30c03aa30fc1fd5
+        dependencies: []
+        conflicts: []
+        replacement_slots: []
+        replacement_declarations: []
+    content:
+      schema_version: '0.1'
+      domain_pack_content:
+        pack:
+          publisher: forge.fixture
+          name: foundation
+          version: 1.0.0
+        namespace: sample.foundation
+        workflow_overlay:
+          id: sample.foundation.overlay
+          base_bundle_id: bundle.workflow-governance.golden-path-v0
+          policies:
+          - id: sample.foundation.policy.delivery-foundation
+            compatibility_workflow_id: sample.foundation.workflow.delivery-foundation
+            routing:
+              priority: 10
+              readiness_target: execute
+              activation: required
+              signals: []
+            eligible_phases:
+            - anytime
+            prerequisites: []
+            obligations:
+            - id: sample.foundation.obligation.delivery-foundation.evidenced
+              description: The governed result is supported by inspectable evidence
+                before the target boundary.
+              criticality: critical
+              required_before: execute
+              claim_refs:
+              - sample.foundation.claim.delivery-foundation.evidenced
+            claims:
+            - id: sample.foundation.claim.delivery-foundation.evidenced
+              statement: The result has current evidence that can be independently
+                inspected.
+              evaluator_ref: sample.foundation.evaluator.delivery-foundation.evidence
+              waiver:
+                kind: not_waivable
+            evaluators:
+            - id: sample.foundation.evaluator.delivery-foundation.evidence
+              provider: repository_inspector
+              accepted_evidence_kinds:
+              - artifact_inspection
+              minimum_strength: inspected_artifact
+              minimum_passing_observations: 1
+              minimum_distinct_principals: 1
+              max_age_seconds: 86400
+              freshness: current_only
+              disproof_policy: reject_any_disproof
+            capability_requirements:
+            - id: sample.foundation.capability-requirement.delivery-foundation.inspection
+              kind: evaluator
+              probe_kind: static_registry
+              description: A declared evaluator is needed; this declaration does not
+                prove runtime availability.
+              affected_claim_refs:
+              - sample.foundation.claim.delivery-foundation.evidenced
+              resolution_options:
+              - Supply current inspectable evidence through an admitted evaluator.
+              - Defer the boundary while the evaluator is unavailable.
+              blocks_before: execute
+            decision_rules: []
+            advisory_playbook:
+              id: sample.foundation.playbook.delivery-foundation
+              steps:
+              - Bound the neutral work item and its acceptance claim.
+              - Collect evidence without treating prose as authority.
+              - Request an independent disposition when evidence is missing.
+        provided_domains:
+        - id: sample.foundation.domain.delivery
+          description: Neutral delivery governance primitives for bounded work and
+            inspectable acceptance.
+          policy_refs:
+          - sample.foundation.policy.delivery-foundation
+          hazard_refs:
+          - sample.foundation.hazard.unverified-delivery
+          lifecycle_model_refs:
+          - sample.foundation.lifecycle.delivery
+        provided_capabilities:
+        - id: sample.foundation.capability.repository-inspection
+          kind: evaluator
+          description: Declaration that repository inspection is required; it does
+            not assert availability or trust.
+          evidence_rule_refs:
+          - sample.foundation.claim.delivery-foundation.evidenced
+          authority: declaration_only
+        hazards:
+        - id: sample.foundation.hazard.unverified-delivery
+          category: quality
+          severity: high
+          description: An apparently complete result may lack inspectable acceptance
+            evidence.
+          trigger_refs:
+          - sample.foundation.policy.delivery-foundation
+          mitigation_obligation_refs:
+          - sample.foundation.obligation.delivery-foundation.evidenced
+          evidence_claim_refs:
+          - sample.foundation.claim.delivery-foundation.evidenced
+        lifecycle_models:
+        - id: sample.foundation.lifecycle.delivery
+          description: Candidate-only description of a neutral delivery lifecycle;
+            it does not activate transitions.
+          initial_state_ref: sample.foundation.state.proposed
+          terminal_state_refs:
+          - sample.foundation.state.verified
+          states:
+          - id: sample.foundation.state.proposed
+            description: A bounded result is proposed.
+            entry_obligation_refs:
+            - sample.foundation.obligation.delivery-foundation.evidenced
+            exit_claim_refs:
+            - sample.foundation.claim.delivery-foundation.evidenced
+          - id: sample.foundation.state.verified
+            description: Required evidence has been independently evaluated.
+            entry_obligation_refs: []
+            exit_claim_refs: []
+          transitions:
+          - id: sample.foundation.transition.verify
+            from_state_ref: sample.foundation.state.proposed
+            to_state_ref: sample.foundation.state.verified
+            guard_claim_refs:
+            - sample.foundation.claim.delivery-foundation.evidenced
+            required_capability_refs:
+            - sample.foundation.capability.repository-inspection
+        evaluators:
+        - id: sample.foundation.domain-evaluator.repository-inspection
+          implementation:
+            kind: built_in
+            provider: repository_inspector
+          accepted_evidence_kinds:
+          - artifact_inspection
+          minimum_strength: inspected_artifact
+          authority: declaration_only
+        fixtures:
+        - id: sample.foundation.fixture.representative-delivery
+          kind: representative
+          artifact:
+            artifact_ref: docs/fixtures/domain-pack-v0/artifacts/foundation-representative.yaml
+            raw_sha256: sha256:67980c0f42a7458681500e1bbe5cdddebc0d25392437e7147d5a9fdb9e342aff
+            canonical_sha256: sha256:b3da7dfeb45ace4adccccecb502a4e2304e4c8de2639051a5e9710a927ed5736
+          subject_refs:
+          - sample.foundation.domain.delivery
+        adapters:
+        - id: sample.foundation.adapter.repository-view
+          protocol: built_in
+          surface: sample.foundation.surface.repository-view
+          required_capability_refs:
+          - sample.foundation.capability.repository-inspection
+          authority: declaration_only
+  - manifest_binding:
+      artifact_ref: docs/fixtures/domain-pack-v0/manifests/assurance-extension.yaml
+      raw_sha256: sha256:fed6a4a56496214c56eaff42817d7550fb2525f942f6342b29ada1ffce5ded2d
+      canonical_sha256: sha256:834e9dc68021a9b527207bd8121503d121d7dd6c4034a03c380bebe329ee5e88
+    manifest:
+      schema_version: '0.1'
+      domain_pack_manifest:
+        identity:
+          publisher: forge.fixture
+          name: assurance-extension
+          namespace: sample.extension
+          version: 1.1.0
+        authority: candidate_only
+        compatibility:
+          pack_schema_requirement: '>=0.1,<0.2'
+          forge_core_requirement: '>=0.5,<1.0'
+        provenance:
+          source_kind: local_candidate
+          source_uri: fixture://domain-pack-v0/assurance-extension
+          source_revision: fixture-1.1.0
+          source_digest: sha256:264d166c658319dd0543ee1a75dde03f0275ba6e1f4e4666ffb18b282779c205
+          authors:
+          - forge.fixture.author
+          license_spdx_expression: Apache-2.0
+          license_text:
+            artifact_ref: docs/fixtures/domain-pack-v0/artifacts/license-notice.yaml
+            raw_sha256: sha256:620e0a503eaf19cf245fde4042ee53086b2767fd2ad24de7f7d20750b9cc54c3
+            canonical_sha256: sha256:278702e156f1ce87da16228439919419ea1237205ce202fa685050db99a31b12
+        content:
+          content_ref: docs/fixtures/domain-pack-v0/content/assurance-extension.yaml
+          raw_sha256: sha256:5d62b99b2db12fe11039046e5f6bcfb3c2185b5e0d09c604c0c59bc0070dba6e
+          canonical_sha256: sha256:bd59a0bc471d551a51c4320b8988067e11ef1f7b8a4e60c61554a7d8a570df0e
+        dependencies:
+        - pack:
+            publisher: forge.fixture
+            name: foundation
+          version_requirement: =1.0.0
+          required_content_digest: sha256:6a88179fc1238f04dba52213b16011d0e8a4a367b5892af0c30c03aa30fc1fd5
+        conflicts: []
+        replacement_slots: []
+        replacement_declarations: []
+    content:
+      schema_version: '0.1'
+      domain_pack_content:
+        pack:
+          publisher: forge.fixture
+          name: assurance-extension
+          version: 1.1.0
+        namespace: sample.extension
+        workflow_overlay:
+          id: sample.extension.overlay
+          base_bundle_id: bundle.workflow-governance.golden-path-v0
+          policies:
+          - id: sample.extension.policy.independent-assurance
+            compatibility_workflow_id: sample.extension.workflow.independent-assurance
+            routing:
+              priority: 20
+              readiness_target: release
+              activation: when_applicable
+              signals: []
+            eligible_phases:
+            - anytime
+            prerequisites: []
+            obligations:
+            - id: sample.extension.obligation.independent-assurance.evidenced
+              description: The governed result is supported by inspectable evidence
+                before the target boundary.
+              criticality: critical
+              required_before: release
+              claim_refs:
+              - sample.extension.claim.independent-assurance.evidenced
+            claims:
+            - id: sample.extension.claim.independent-assurance.evidenced
+              statement: The result has current evidence that can be independently
+                inspected.
+              evaluator_ref: sample.extension.evaluator.independent-assurance.evidence
+              waiver:
+                kind: not_waivable
+            evaluators:
+            - id: sample.extension.evaluator.independent-assurance.evidence
+              provider: independent_reviewer
+              accepted_evidence_kinds:
+              - independent_review
+              minimum_strength: independent_confirmation
+              minimum_passing_observations: 1
+              minimum_distinct_principals: 1
+              max_age_seconds: 86400
+              freshness: current_only
+              disproof_policy: reject_any_disproof
+            capability_requirements:
+            - id: sample.extension.capability-requirement.independent-assurance.inspection
+              kind: evaluator
+              probe_kind: static_registry
+              description: A declared evaluator is needed; this declaration does not
+                prove runtime availability.
+              affected_claim_refs:
+              - sample.extension.claim.independent-assurance.evidenced
+              resolution_options:
+              - Supply current inspectable evidence through an admitted evaluator.
+              - Defer the boundary while the evaluator is unavailable.
+              blocks_before: release
+            decision_rules: []
+            advisory_playbook:
+              id: sample.extension.playbook.independent-assurance
+              steps:
+              - Bound the neutral work item and its acceptance claim.
+              - Collect evidence without treating prose as authority.
+              - Request an independent disposition when evidence is missing.
+        provided_domains:
+        - id: sample.extension.domain.independent-assurance
+          description: Neutral independent challenge and disposition knowledge layered
+            on the foundation pack.
+          policy_refs:
+          - sample.extension.policy.independent-assurance
+          hazard_refs:
+          - sample.extension.hazard.confirmation-bias
+          lifecycle_model_refs:
+          - sample.extension.lifecycle.assurance
+        provided_capabilities:
+        - id: sample.extension.capability.independent-review
+          kind: human_review
+          description: Declaration that independent review is required; no reviewer,
+            credential, or trust is conferred.
+          evidence_rule_refs:
+          - sample.extension.claim.independent-assurance.evidenced
+          authority: declaration_only
+        hazards:
+        - id: sample.extension.hazard.confirmation-bias
+          category: quality
+          severity: high
+          description: The author may accept a result without a materially independent
+            challenge.
+          trigger_refs:
+          - sample.extension.policy.independent-assurance
+          mitigation_obligation_refs:
+          - sample.extension.obligation.independent-assurance.evidenced
+          evidence_claim_refs:
+          - sample.extension.claim.independent-assurance.evidenced
+        lifecycle_models:
+        - id: sample.extension.lifecycle.assurance
+          description: Candidate-only assurance states; composition does not execute
+            or activate them.
+          initial_state_ref: sample.extension.state.awaiting-review
+          terminal_state_refs:
+          - sample.extension.state.dispositioned
+          states:
+          - id: sample.extension.state.awaiting-review
+            description: Independent challenge is required.
+            entry_obligation_refs:
+            - sample.extension.obligation.independent-assurance.evidenced
+            exit_claim_refs:
+            - sample.extension.claim.independent-assurance.evidenced
+          - id: sample.extension.state.dispositioned
+            description: The independent finding has a governed disposition.
+            entry_obligation_refs: []
+            exit_claim_refs: []
+          transitions:
+          - id: sample.extension.transition.disposition
+            from_state_ref: sample.extension.state.awaiting-review
+            to_state_ref: sample.extension.state.dispositioned
+            guard_claim_refs:
+            - sample.extension.claim.independent-assurance.evidenced
+            required_capability_refs:
+            - sample.extension.capability.independent-review
+        evaluators:
+        - id: sample.extension.domain-evaluator.independent-review
+          implementation:
+            kind: adapter
+            adapter_ref: sample.extension.adapter.review-handshake
+            protocol: runtime_handshake
+          accepted_evidence_kinds:
+          - independent_review
+          minimum_strength: independent_confirmation
+          authority: declaration_only
+        fixtures:
+        - id: sample.extension.fixture.adversarial-review
+          kind: adversarial
+          artifact:
+            artifact_ref: docs/fixtures/domain-pack-v0/artifacts/extension-adversarial.yaml
+            raw_sha256: sha256:c1b5a62d394d0a7481a8b530732fc112dc3754ae38803ee316ae3f7c635fc7aa
+            canonical_sha256: sha256:c914bb628f34123b6be982c6b7343ef525a40943a951e3e709e9abc0ccb9fa38
+          subject_refs:
+          - sample.extension.domain.independent-assurance
+        adapters:
+        - id: sample.extension.adapter.review-handshake
+          protocol: runtime_handshake
+          surface: sample.extension.surface.independent-review
+          required_capability_refs:
+          - sample.extension.capability.independent-review
+          authority: declaration_only

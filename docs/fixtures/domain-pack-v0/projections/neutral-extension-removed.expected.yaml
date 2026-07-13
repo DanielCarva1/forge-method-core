@@ -1,0 +1,192 @@
+schema_version: '0.1'
+domain_pack_composition_projection:
+  request_id: composition.neutral.extension-removed
+  authority: candidate_only
+  status: blocked
+  core_bundle_digest: sha256:b285a2fd525c45c20db89777cef541074212ae066e12bd5adb5fee4f4d1d372f
+  ordered_packs:
+  - identity:
+      publisher: forge.fixture
+      name: foundation
+      namespace: sample.foundation
+      version: 1.0.0
+    content_digest: sha256:6a88179fc1238f04dba52213b16011d0e8a4a367b5892af0c30c03aa30fc1fd5
+    manifest_digest: sha256:e4816bfa177b27453513004893b93a1ff934e763de5f5ca140cc3eafc6a1d407
+    deterministic_order: 0
+  contribution_index:
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: policy
+    contribution_ref: sample.foundation.policy.delivery-foundation
+    contribution_digest: sha256:128c27e55f76c0967644216f41fe9e2ebf68ed857436fe3c1f0266cac73f6552
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: obligation
+    contribution_ref: sample.foundation.obligation.delivery-foundation.evidenced
+    contribution_digest: sha256:cef118055195d6e9a09d5536c9115e31bee41378322ac596f1428eda27dc2794
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: claim
+    contribution_ref: sample.foundation.claim.delivery-foundation.evidenced
+    contribution_digest: sha256:e775ae6c584df459b7656a8cf35a279bba2c7328c119b6eaf9be90aa7149448a
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: playbook
+    contribution_ref: sample.foundation.playbook.delivery-foundation
+    contribution_digest: sha256:aed388eed07012c6077c283531af58e73cfeac7bd79164bc1b2f48b96a21b372
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: sample.foundation.hazard.unverified-delivery
+    contribution_digest: sha256:e8237facca130c1bd43adde61459436032f0b852bd6cec9ceb7465029aa199ed
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: lifecycle_model
+    contribution_ref: sample.foundation.lifecycle.delivery
+    contribution_digest: sha256:e26e02e2d7bdbc0f0d2b0133ae7d4325794c533e0f93065d20a43372d9ec4f17
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: sample.foundation.domain-evaluator.repository-inspection
+    contribution_digest: sha256:9f7335ac9dbda56f15d05b5915d9bb67fff559ed24241a1f929288acf38f10c0
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: sample.foundation.evaluator.delivery-foundation.evidence
+    contribution_digest: sha256:3257e0447b99a13d639e286504964927dc0e6e3c38055752a89f87ea80780b38
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: fixture
+    contribution_ref: sample.foundation.fixture.representative-delivery
+    contribution_digest: sha256:b5e84a0a1b07de2006b658c4980f2a08fcf5fdc7152c53efef3b22f69c0a4378
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: capability
+    contribution_ref: sample.foundation.capability-requirement.delivery-foundation.inspection
+    contribution_digest: sha256:7b8edd6372d58b372493c6493d55810588e99eb18c7e1c4ef290cdfce1d77ce9
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: capability
+    contribution_ref: sample.foundation.capability.repository-inspection
+    contribution_digest: sha256:7524a3c26c7c89441fecec68a0681630828c91f6bfb6e50543e8123d3f318d19
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: adapter
+    contribution_ref: sample.foundation.adapter.repository-view
+    contribution_digest: sha256:c7f9feefbd09f006f37660312860a13a434b1ad0e315428b5ca16e23fc13e6a1
+    replaces_ref: null
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+      version: 1.0.0
+    kind: domain
+    contribution_ref: sample.foundation.domain.delivery
+    contribution_digest: sha256:1e2f888f62df7a03613455c80a3f5112e8c09ee8774ab74cfb1a59366bb83cc1
+    replaces_ref: null
+  provided_domain_refs:
+  - sample.foundation.domain.delivery
+  declared_capability_refs:
+  - sample.foundation.capability.repository-inspection
+  composed_bundle:
+    id: bundle.domain-pack-candidate.composition.neutral.extension-removed
+    policies:
+    - id: sample.foundation.policy.delivery-foundation
+      compatibility_workflow_id: sample.foundation.workflow.delivery-foundation
+      routing:
+        priority: 1
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: sample.foundation.obligation.delivery-foundation.evidenced
+        description: The governed result is supported by inspectable evidence before the target boundary.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - sample.foundation.claim.delivery-foundation.evidenced
+      claims:
+      - id: sample.foundation.claim.delivery-foundation.evidenced
+        statement: The result has current evidence that can be independently inspected.
+        evaluator_ref: sample.foundation.evaluator.delivery-foundation.evidence
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: sample.foundation.evaluator.delivery-foundation.evidence
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: sample.foundation.capability-requirement.delivery-foundation.inspection
+        kind: evaluator
+        probe_kind: static_registry
+        description: A declared evaluator is needed; this declaration does not prove runtime availability.
+        affected_claim_refs:
+        - sample.foundation.claim.delivery-foundation.evidenced
+        resolution_options:
+        - Supply current inspectable evidence through an admitted evaluator.
+        - Defer the boundary while the evaluator is unavailable.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: sample.foundation.playbook.delivery-foundation
+        steps:
+        - Bound the neutral work item and its acceptance claim.
+        - Collect evidence without treating prose as authority.
+        - Request an independent disposition when evidence is missing.
+  gaps:
+  - code: missing_capability
+    requirement_ref: requirement.neutral.independent-assurance
+    subject_ref: sample.extension.capability.independent-review
+    message: required domain capability is absent
+    authority: candidate_only
+  - code: missing_domain
+    requirement_ref: requirement.neutral.independent-assurance
+    subject_ref: sample.extension.domain.independent-assurance
+    message: required domain has no selected compatible pack
+    authority: candidate_only
+  issues: []
+  composition_digest: sha256:fae92698f6bcb2788a24a3ba53570be41aaba24753f16163b1955261e2cd15b9

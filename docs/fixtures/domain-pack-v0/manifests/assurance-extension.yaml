@@ -1,0 +1,36 @@
+schema_version: '0.1'
+domain_pack_manifest:
+  identity:
+    publisher: forge.fixture
+    name: assurance-extension
+    namespace: sample.extension
+    version: 1.1.0
+  authority: candidate_only
+  compatibility:
+    pack_schema_requirement: '>=0.1,<0.2'
+    forge_core_requirement: '>=0.5,<1.0'
+  provenance:
+    source_kind: local_candidate
+    source_uri: fixture://domain-pack-v0/assurance-extension
+    source_revision: fixture-1.1.0
+    source_digest: sha256:264d166c658319dd0543ee1a75dde03f0275ba6e1f4e4666ffb18b282779c205
+    authors:
+    - forge.fixture.author
+    license_spdx_expression: Apache-2.0
+    license_text:
+      artifact_ref: docs/fixtures/domain-pack-v0/artifacts/license-notice.yaml
+      raw_sha256: sha256:620e0a503eaf19cf245fde4042ee53086b2767fd2ad24de7f7d20750b9cc54c3
+      canonical_sha256: sha256:278702e156f1ce87da16228439919419ea1237205ce202fa685050db99a31b12
+  content:
+    content_ref: docs/fixtures/domain-pack-v0/content/assurance-extension.yaml
+    raw_sha256: sha256:5d62b99b2db12fe11039046e5f6bcfb3c2185b5e0d09c604c0c59bc0070dba6e
+    canonical_sha256: sha256:bd59a0bc471d551a51c4320b8988067e11ef1f7b8a4e60c61554a7d8a570df0e
+  dependencies:
+  - pack:
+      publisher: forge.fixture
+      name: foundation
+    version_requirement: =1.0.0
+    required_content_digest: sha256:6a88179fc1238f04dba52213b16011d0e8a4a367b5892af0c30c03aa30fc1fd5
+  conflicts: []
+  replacement_slots: []
+  replacement_declarations: []

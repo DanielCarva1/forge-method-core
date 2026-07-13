@@ -1,7 +1,9 @@
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
-    DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
+    DecisionCloseContractDocument, DomainPackCompositionProjectionDocument,
+    DomainPackCompositionRequestDocument, DomainPackContentDocument, DomainPackManifestDocument,
+    DomainPackProjectRequirementsDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
@@ -148,6 +150,36 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "AssuranceCaseDocument",
             Some("assurance_case"),
             "evidence-backed obligations and target-specific readiness; agent confidence is not authority",
+        ),
+        schema_artifact::<DomainPackManifestDocument>(
+            "domain_pack_manifest",
+            "DomainPackManifestDocument",
+            Some("domain_pack_manifest"),
+            "content-addressed candidate metadata only; provenance is not trust, installation, activation, or mutation authority",
+        ),
+        schema_artifact::<DomainPackContentDocument>(
+            "domain_pack_content",
+            "DomainPackContentDocument",
+            Some("domain_pack_content"),
+            "closed candidate knowledge only; prose, playbooks, capabilities, evaluators, and adapters remain untrusted declarations",
+        ),
+        schema_artifact::<DomainPackProjectRequirementsDocument>(
+            "domain_pack_project_requirements",
+            "DomainPackProjectRequirementsDocument",
+            Some("domain_pack_project_requirements"),
+            "durable desired domain surface independent of installed packs; absence must remain an explicit gap",
+        ),
+        schema_artifact::<DomainPackCompositionRequestDocument>(
+            "domain_pack_composition_request",
+            "DomainPackCompositionRequestDocument",
+            Some("domain_pack_composition_request"),
+            "read-only candidate composition input; it cannot shadow core, install packs, or authorize mutation",
+        ),
+        schema_artifact::<DomainPackCompositionProjectionDocument>(
+            "domain_pack_composition_projection",
+            "DomainPackCompositionProjectionDocument",
+            Some("domain_pack_composition_projection"),
+            "derived candidate-only projection; composable status and digest do not admit runtime authority",
         ),
         schema_artifact::<WorkflowMigrationPlanDocument>(
             "workflow_migration_plan",
@@ -445,6 +477,21 @@ fn authority_note(family_id: &str) -> &'static str {
         "coordination_eval_contract" => "coordination readiness requires failure-mode coverage",
         "assurance_case" => {
             "readiness requires coherent obligations, claims, evidence, blockers, and waivers"
+        }
+        "domain_pack_manifest" => {
+            "candidate-only content identity and source metadata; provenance is not trust or activation"
+        }
+        "domain_pack_content" => {
+            "candidate-only knowledge; prose and declarations cannot become prompts, tool arguments, or authority"
+        }
+        "domain_pack_project_requirements" => {
+            "requirements persist independently of packs so removal produces an explicit gap"
+        }
+        "domain_pack_composition_request" => {
+            "candidate-only read surface; composition cannot mutate core, install packs, or grant authority"
+        }
+        "domain_pack_composition_projection" => {
+            "derived candidate-only result; composable status requires later trusted lifecycle admission"
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"

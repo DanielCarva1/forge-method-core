@@ -26,7 +26,8 @@ use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
-    DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
+    DecisionCloseContractDocument, DomainPackCompositionProjectionDocument,
+    DomainPackCompositionRequestDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
     ToolEffectContractDocument, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusClass,
@@ -47,14 +48,14 @@ use forge_core_contracts::{
     WorkflowRetirementTombstoneCatalogDocument,
 };
 use forge_core_decisions::{
-    evaluate_workflow_behavior, evaluate_workflow_migration, evaluate_workflow_release,
-    evaluate_workflow_release_registry, evaluate_workflow_retirement, load_catalog,
-    load_workflow_documents, validate_workflow_governance_bundle, workflow_runtime_bundle_digest,
-    WorkflowBehavioralBundleInput, WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity,
-    WorkflowGovernanceIssue, WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority,
-    WorkflowReleaseEvaluationStatus, WorkflowReleaseEvidenceAssurance,
-    WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
-    WorkflowRetirementCandidateInput,
+    compose_domain_packs, evaluate_workflow_behavior, evaluate_workflow_migration,
+    evaluate_workflow_release, evaluate_workflow_release_registry, evaluate_workflow_retirement,
+    load_catalog, load_workflow_documents, validate_workflow_governance_bundle,
+    workflow_runtime_bundle_digest, DomainPackCandidateMaterial, WorkflowBehavioralBundleInput,
+    WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity, WorkflowGovernanceIssue,
+    WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
+    WorkflowReleaseEvidenceAssurance, WorkflowReleaseRegistryEvaluationAuthority,
+    WorkflowReleaseRegistryEvaluationStatus, WorkflowRetirementCandidateInput,
 };
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
@@ -341,10 +342,137 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_release_independent_admission(root, &mut summary);
         validate_workflow_release_v2_admission(root, &mut summary);
         validate_workflow_retirement_checkpoint(root, &mut summary);
+        validate_domain_pack_foundation(root, &mut summary);
     }
 
     summary.finish();
     summary
+}
+
+/// Recompute the repository-owned P6a neutral corpus from exact raw sidecars.
+/// This is one aggregate check so adding Domain Packs does not multiply the
+/// expensive workspace validation cadence.
+fn validate_domain_pack_foundation(root: &Path, summary: &mut ValidateSummary) {
+    const CASES: [(&str, &str); 2] = [
+        (
+            "docs/fixtures/domain-pack-v0/requests/neutral-two-pack.yaml",
+            "docs/fixtures/domain-pack-v0/projections/neutral-two-pack.expected.yaml",
+        ),
+        (
+            "docs/fixtures/domain-pack-v0/requests/neutral-extension-removed.yaml",
+            "docs/fixtures/domain-pack-v0/projections/neutral-extension-removed.expected.yaml",
+        ),
+    ];
+    let mut report = ValidationReport::new();
+    for (request_ref, expected_ref) in CASES {
+        let Some(request) = read_domain_pack_yaml::<DomainPackCompositionRequestDocument>(
+            root,
+            request_ref,
+            &mut report,
+        ) else {
+            continue;
+        };
+        let Some(expected) = read_domain_pack_yaml::<DomainPackCompositionProjectionDocument>(
+            root,
+            expected_ref,
+            &mut report,
+        ) else {
+            continue;
+        };
+        struct OwnedMaterial {
+            manifest: Vec<u8>,
+            content: Vec<u8>,
+            license: Vec<u8>,
+        }
+        let mut owned = Vec::new();
+        for candidate in &request.domain_pack_composition_request.candidates {
+            let manifest = &candidate.manifest.domain_pack_manifest;
+            let manifest_ref = format!(
+                "docs/fixtures/domain-pack-v0/manifests/{}.yaml",
+                manifest.identity.name.0
+            );
+            let paths = [
+                manifest_ref.as_str(),
+                manifest.content.content_ref.0.as_str(),
+                manifest.provenance.license_text.artifact_ref.0.as_str(),
+            ];
+            let mut bytes = Vec::new();
+            for reference in paths {
+                match fs::read(root.join(reference)) {
+                    Ok(found) => bytes.push(found),
+                    Err(error) => report.push(Diagnostic::error(
+                        DiagnosticCode::ReadFileFailed,
+                        reference,
+                        error.to_string(),
+                    )),
+                }
+            }
+            if bytes.len() == 3 {
+                owned.push(OwnedMaterial {
+                    manifest: bytes.remove(0),
+                    content: bytes.remove(0),
+                    license: bytes.remove(0),
+                });
+            }
+        }
+        if owned.len() != request.domain_pack_composition_request.candidates.len() {
+            continue;
+        }
+        let materials = request
+            .domain_pack_composition_request
+            .candidates
+            .iter()
+            .zip(&owned)
+            .map(|(candidate, owned)| {
+                let identity = &candidate.manifest.domain_pack_manifest.identity;
+                DomainPackCandidateMaterial {
+                    publisher: &identity.publisher.0,
+                    name: &identity.name.0,
+                    version: &identity.version,
+                    manifest_raw: &owned.manifest,
+                    content_raw: &owned.content,
+                    license_raw: &owned.license,
+                }
+            })
+            .collect::<Vec<_>>();
+        let actual = compose_domain_packs(&request, &materials);
+        if actual != expected {
+            report.push(Diagnostic::error(
+                DiagnosticCode::WorkflowGovernanceInvalid,
+                expected_ref,
+                "P6a expected projection does not equal deterministic recomputation",
+            ));
+        }
+    }
+    summary.add_report("domain_pack_foundation", report);
+}
+
+fn read_domain_pack_yaml<T: serde::de::DeserializeOwned>(
+    root: &Path,
+    reference: &str,
+    report: &mut ValidationReport,
+) -> Option<T> {
+    match fs::read_to_string(root.join(reference)) {
+        Ok(text) => match yaml_serde::from_str(&text) {
+            Ok(document) => Some(document),
+            Err(error) => {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::ParseYamlFailed,
+                    reference,
+                    error.to_string(),
+                ));
+                None
+            }
+        },
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                reference,
+                error.to_string(),
+            ));
+            None
+        }
+    }
 }
 
 /// Validate the core-owned workflow policy bundles. P5b registers

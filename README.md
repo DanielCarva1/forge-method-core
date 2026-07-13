@@ -73,6 +73,35 @@ cannot select the executable policy, advance phase, authorize completion, or
 write the workflow ledger. New agent integrations should use `workflow
 init|next|resume` instead.
 
+### Governed domain knowledge (P6a Domain Packs)
+
+When core does not know a product domain, it must expose the gap rather than
+let a confident agent fabricate readiness. Domain Packs are closed,
+content-addressed candidate inputs that contribute namespaced policies,
+obligations, hazards, lifecycle models, advisory playbooks, evaluators,
+fixtures, capability requirements, Adapter declarations, and provided domains.
+
+Agents can validate an exact manifest/content pair or compose a complete
+request against a sealed core binding:
+
+```bash
+forge-core domain-pack validate \
+  --manifest-file <manifest.yaml> \
+  --content-file <content.yaml> \
+  --artifact-root <root> --json
+
+forge-core domain-pack compose \
+  --request-file <composition-request.yaml> \
+  --artifact-root <root> --json
+```
+
+Both commands are read-only. Output is always `candidate_only`; even a
+`composable` result cannot install, trust, activate, execute, or grant mutation
+authority. Project domain requirements live independently of packs, so removing
+one produces explicit `missing_domain` / `missing_capability` gaps. P6b will add
+the governed lifecycle and supply-chain trust boundary; the real reference game
+pack remains P6d rather than special-case Rust core logic.
+
 ### One bootstrap command per chat (the `start-forge` skill)
 
 For zero-config onboarding, wire the **`start-forge` skill**
@@ -222,6 +251,14 @@ governs the merge back.
 
 **The validator** — a schema + semantic pass that rejects contracts that violate
 the method's own invariants, at write time.
+
+**Domain Pack composition** — five closed schema-0.1 contract families and a
+pure bounded composer validate exact raw/JCS manifest and content identities,
+SemVer compatibility, dependencies, conflicts, cycles, namespaces, bilateral
+whole-policy replacements, references, and
+capability gaps across core plus multiple domain extensions. The neutral
+two-pack/removal corpus proves deterministic composition and explicit ignorance
+without changing the admitted kernel registry.
 
 **Risk audit gate** — a fail-closed inspection pass that scans consumer
 source for AI-induced anti-patterns (fail-soft, exception swallowing,
@@ -743,7 +780,7 @@ scorecard deliberately has two axes: runtime is `42 executable / 47
 compatibility-only / 3 quarantined / 18 domain-pack`, while legacy authority is
 `42 retired / 68 retained`. Validation preserves the 169-check pre-retirement
 anchor and passes 170 aggregate checks. P5 is complete; P6a Domain Pack contract
-and composition is next.
+and composition now builds on that frozen authority boundary without changing it.
 
 Runtime proof is intentionally split rather than overstated. The retirement
 runtime-evidence test reexecutes 189 frozen P5d.4 scenarios for the 27 policies
@@ -759,6 +796,12 @@ extended guide `describe`/`status` payload must support guide payload schema
 `0.2`; the minimum compatible Forge package/consumer version for the retirement
 surface is `0.5.0`. Workflow governance release identity intentionally remains
 `0.4.0`: the package checkpoint does not rewrite the frozen five-release chain.
+
+P6a is the pullable `0.6.0` package checkpoint. It adds Domain Pack schema
+`0.1`, pure deterministic candidate composition, the neutral multi-pack/removal
+corpus, and the read-only agent CLI. It does not change the guide payload's
+minimum `0.5.0` retirement compatibility, rewrite workflow release identity,
+or claim pack lifecycle/trust authority.
 
 ### Simulate workflow governance (P5b)
 

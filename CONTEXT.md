@@ -24,7 +24,7 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Pullable compatibility checkpoint: the Rust workspace package version is
-`0.5.0`. Guide `describe`/`status` retirement diagnostics use payload schema
+`0.6.0`. Guide `describe`/`status` retirement diagnostics use payload schema
 `0.2`, and consumers of that extended surface must be at least `0.5.0`.
 Workflow governance release identity remains the frozen `0.4.0` five-release
 chain; package SemVer and governed release identity are separate axes.
@@ -60,8 +60,17 @@ chain; package SemVer and governed release identity are separate axes.
 - **Capability Gap**: an explicit statement that the current agent, tools,
   environment, knowledge, or evaluators cannot reliably complete or verify an
   obligation.
-- **Domain Pack**: an extension that contributes domain-specific obligations,
-  hazards, playbooks, evaluators, evidence rules, and capability requirements.
+- **Domain Pack**: a content-addressed, candidate-only extension that contributes
+  namespaced policies, obligations, hazards, lifecycle models, playbooks,
+  evaluators, fixtures, capability requirements, Adapter declarations, and
+  provided domains. P6a composes exact caller-supplied packs deterministically;
+  it does not install, trust, activate, execute, or grant mutation authority.
+- **Domain Pack Project Requirements**: durable desired domains and capabilities
+  stored independently of pack presence. Removing or rejecting a pack therefore
+  creates explicit missing-domain/capability gaps instead of erasing the need.
+- **Domain Pack Composition Projection**: a pure candidate-only projection over
+  one sealed core binding, persistent requirements, and exact raw/JCS-bound pack
+  inputs. Even `composable` is structural evidence, never runtime admission.
 - **Workflow Migration Manifest**: a deterministic, content-bound inventory
   that classifies every legacy workflow and links it to candidate governance
   targets. In P5a it is compatibility evidence only, never execution or
@@ -216,6 +225,16 @@ chain; package SemVer and governed release identity are separate axes.
   is consumed only after a lock-scoped late recheck, and authority prepared
   before an upgrade fails on the new head/bundle. Advisory playbooks and legacy
   simulation/shadow projections sit outside authority.
+- The **Domain Pack Composition Module** validates five closed schema-0.1
+  document families, exact raw and canonical manifest/content identities, SemVer
+  compatibility, dependency/conflict graphs, namespace ownership, bilateral
+  whole-policy replacements, typed cross-references, and bounded resource use. It then
+  topologically composes core plus multiple packs with deterministic priority
+  remapping and an auditable projection digest. `domain-pack validate|compose`
+  is a read-only agent surface; P6b still owns lifecycle resolution, trust,
+  install/upgrade/rollback/remove, and activation. The kernel registry remains
+  the exact five-release 42-policy P5 authority and excludes all 18 deferred
+  domain candidates.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

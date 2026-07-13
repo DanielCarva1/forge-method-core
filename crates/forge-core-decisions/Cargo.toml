@@ -6,7 +6,9 @@ edition.workspace = true
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
 include_dir.workspace = true
+semver.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 serde_json_canonicalizer.workspace = true
 sha2.workspace = true
 yaml_serde.workspace = true
@@ -14,5 +16,4 @@ yaml_serde.workspace = true
 [dev-dependencies]
 forge-core-authority = { path = "../forge-core-authority" }
 forge-core-validate = { path = "../forge-core-validate" }
-serde_json.workspace = true
 yaml_serde.workspace = true

@@ -1,0 +1,146 @@
+schema_version: '0.1'
+domain_pack_content:
+  pack:
+    publisher: forge.fixture
+    name: assurance-extension
+    version: 1.1.0
+  namespace: sample.extension
+  workflow_overlay:
+    id: sample.extension.overlay
+    base_bundle_id: bundle.workflow-governance.golden-path-v0
+    policies:
+    - id: sample.extension.policy.independent-assurance
+      compatibility_workflow_id: sample.extension.workflow.independent-assurance
+      routing:
+        priority: 20
+        readiness_target: release
+        activation: when_applicable
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: sample.extension.obligation.independent-assurance.evidenced
+        description: The governed result is supported by inspectable evidence before
+          the target boundary.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - sample.extension.claim.independent-assurance.evidenced
+      claims:
+      - id: sample.extension.claim.independent-assurance.evidenced
+        statement: The result has current evidence that can be independently inspected.
+        evaluator_ref: sample.extension.evaluator.independent-assurance.evidence
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: sample.extension.evaluator.independent-assurance.evidence
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: sample.extension.capability-requirement.independent-assurance.inspection
+        kind: evaluator
+        probe_kind: static_registry
+        description: A declared evaluator is needed; this declaration does not prove
+          runtime availability.
+        affected_claim_refs:
+        - sample.extension.claim.independent-assurance.evidenced
+        resolution_options:
+        - Supply current inspectable evidence through an admitted evaluator.
+        - Defer the boundary while the evaluator is unavailable.
+        blocks_before: release
+      decision_rules: []
+      advisory_playbook:
+        id: sample.extension.playbook.independent-assurance
+        steps:
+        - Bound the neutral work item and its acceptance claim.
+        - Collect evidence without treating prose as authority.
+        - Request an independent disposition when evidence is missing.
+  provided_domains:
+  - id: sample.extension.domain.independent-assurance
+    description: Neutral independent challenge and disposition knowledge layered on
+      the foundation pack.
+    policy_refs:
+    - sample.extension.policy.independent-assurance
+    hazard_refs:
+    - sample.extension.hazard.confirmation-bias
+    lifecycle_model_refs:
+    - sample.extension.lifecycle.assurance
+  provided_capabilities:
+  - id: sample.extension.capability.independent-review
+    kind: human_review
+    description: Declaration that independent review is required; no reviewer, credential,
+      or trust is conferred.
+    evidence_rule_refs:
+    - sample.extension.claim.independent-assurance.evidenced
+    authority: declaration_only
+  hazards:
+  - id: sample.extension.hazard.confirmation-bias
+    category: quality
+    severity: high
+    description: The author may accept a result without a materially independent challenge.
+    trigger_refs:
+    - sample.extension.policy.independent-assurance
+    mitigation_obligation_refs:
+    - sample.extension.obligation.independent-assurance.evidenced
+    evidence_claim_refs:
+    - sample.extension.claim.independent-assurance.evidenced
+  lifecycle_models:
+  - id: sample.extension.lifecycle.assurance
+    description: Candidate-only assurance states; composition does not execute or
+      activate them.
+    initial_state_ref: sample.extension.state.awaiting-review
+    terminal_state_refs:
+    - sample.extension.state.dispositioned
+    states:
+    - id: sample.extension.state.awaiting-review
+      description: Independent challenge is required.
+      entry_obligation_refs:
+      - sample.extension.obligation.independent-assurance.evidenced
+      exit_claim_refs:
+      - sample.extension.claim.independent-assurance.evidenced
+    - id: sample.extension.state.dispositioned
+      description: The independent finding has a governed disposition.
+      entry_obligation_refs: []
+      exit_claim_refs: []
+    transitions:
+    - id: sample.extension.transition.disposition
+      from_state_ref: sample.extension.state.awaiting-review
+      to_state_ref: sample.extension.state.dispositioned
+      guard_claim_refs:
+      - sample.extension.claim.independent-assurance.evidenced
+      required_capability_refs:
+      - sample.extension.capability.independent-review
+  evaluators:
+  - id: sample.extension.domain-evaluator.independent-review
+    implementation:
+      kind: adapter
+      adapter_ref: sample.extension.adapter.review-handshake
+      protocol: runtime_handshake
+    accepted_evidence_kinds:
+    - independent_review
+    minimum_strength: independent_confirmation
+    authority: declaration_only
+  fixtures:
+  - id: sample.extension.fixture.adversarial-review
+    kind: adversarial
+    artifact:
+      artifact_ref: docs/fixtures/domain-pack-v0/artifacts/extension-adversarial.yaml
+      raw_sha256: sha256:c1b5a62d394d0a7481a8b530732fc112dc3754ae38803ee316ae3f7c635fc7aa
+      canonical_sha256: sha256:c914bb628f34123b6be982c6b7343ef525a40943a951e3e709e9abc0ccb9fa38
+    subject_refs:
+    - sample.extension.domain.independent-assurance
+  adapters:
+  - id: sample.extension.adapter.review-handshake
+    protocol: runtime_handshake
+    surface: sample.extension.surface.independent-review
+    required_capability_refs:
+    - sample.extension.capability.independent-review
+    authority: declaration_only

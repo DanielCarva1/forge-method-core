@@ -12,6 +12,7 @@ pub mod checkpoint;
 pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
+pub mod domain_pack;
 pub mod eval_run;
 pub mod evidence;
 pub mod execution_principal;
@@ -63,6 +64,7 @@ pub use decision::{
     DecisionCloseContract, DecisionCloseContractDocument, DecisionEvidenceKind, DecisionKind,
     DecisionStatus,
 };
+pub use domain_pack::*;
 pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
 pub use execution_principal::ExecutionPrincipal;

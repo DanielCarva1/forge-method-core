@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P6a governed Domain Pack contracts and deterministic composition (`0.6.0`).**
+  Five closed schema-0.1 families model candidate manifests, typed content,
+  persistent project requirements, exact composition requests, and auditable
+  candidate projections. The pure bounded composer verifies raw/JCS manifest
+  and content identities plus license artifacts, SemVer compatibility, exact dependencies,
+  declared conflicts, cycles, namespace ownership, typed references, capability
+  gaps, and bilateral whole-policy replacements before deterministically composing a sealed
+  core with multiple packs. A neutral two-pack/removal corpus proves stable
+  order and explicit missing-domain/capability gaps. Read-only `domain-pack
+  validate|compose` commands provide the agent surface with path confinement and
+  zero-write E2E evidence. Domain Pack YAML remains unable to enter or mutate
+  the kernel's exact 42-policy registry; lifecycle resolution, trust,
+  install/upgrade/rollback/remove, and activation remain P6b work.
 - **P5d.5 signed legacy retirement and the pullable `0.5.0` checkpoint.** Forge
   preserves a byte-identical 110-workflow historical audit subject, routes only
   the 68-workflow operational catalog, and retires exactly 42 admitted legacy

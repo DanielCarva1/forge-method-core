@@ -30,6 +30,7 @@ pub mod catalog;
 pub mod claim_engine;
 pub mod conflict_detection;
 pub mod coordination_eval;
+pub mod domain_pack;
 pub mod embedded_contracts;
 pub mod eval;
 pub mod execution_admission;
@@ -103,6 +104,12 @@ pub use obligation_engine::{
 pub use coordination_eval::{
     coordination_fixture_gaps, score_coordination, validate_coordination_contract,
     CoordinationOutcome, CoordinationScore, CoordinationValidationError, CoordinationVerdict,
+};
+pub use domain_pack::{
+    compose_domain_packs, validate_domain_pack_candidate, DomainPackCandidateMaterial,
+    MAX_DOMAIN_PACK_CANDIDATES, MAX_DOMAIN_PACK_CONTRIBUTIONS,
+    MAX_DOMAIN_PACK_DEPENDENCIES_PER_PACK, MAX_DOMAIN_PACK_DEPENDENCY_DEPTH,
+    MAX_DOMAIN_PACK_DIAGNOSTICS, MAX_DOMAIN_PACK_RAW_DOCUMENT_BYTES,
 };
 pub use workflow_behavior::{
     derive_workflow_governed_outcome, evaluate_workflow_behavior,

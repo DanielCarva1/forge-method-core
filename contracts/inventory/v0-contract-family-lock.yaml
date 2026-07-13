@@ -9,6 +9,7 @@ contract_family_inventory:
       - "Forge Rust core v0 runtime authority contracts."
       - "Typed YAML fixtures used as behavioral evidence for the Rust validator."
       - "Operation-side references that determine host-agent authority, autonomy, gates, requests, effects, and handoff."
+      - "P6a Domain Pack candidate contracts and derived read-only composition projections; these do not extend runtime authority."
     excludes:
       - "README, installation instructions, and release notes."
       - "Migration notes that do not carry runtime authority."
@@ -278,6 +279,61 @@ contract_family_inventory:
       evidence_refs:
         - "llm_as_code_2606_15874"
         - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_manifest"
+      family_kind: "domain_pack_manifest"
+      schema_ref: "contracts/spec/domain-pack-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-v0/manifests/*.yaml"
+      validator_function: "forge_core_decisions::validate_domain_pack_candidate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_content"
+      family_kind: "domain_pack_content"
+      schema_ref: "contracts/spec/domain-pack-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-v0/content/*.yaml"
+      validator_function: "forge_core_decisions::validate_domain_pack_candidate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_project_requirements"
+      family_kind: "domain_pack_project_requirements"
+      schema_ref: "contracts/spec/domain-pack-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-v0/requirements/*.yaml"
+      validator_function: "forge_core_decisions::compose_domain_packs"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_composition_request"
+      family_kind: "domain_pack_composition_request"
+      schema_ref: "contracts/spec/domain-pack-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-v0/requests/*.yaml"
+      validator_function: "forge_core_decisions::compose_domain_packs"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_composition_projection"
+      family_kind: "domain_pack_composition_projection"
+      schema_ref: "contracts/spec/domain-pack-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-v0/projections/*.yaml"
+      validator_function: "forge_core_decisions::compose_domain_packs"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
     - id: "workflow_governance_release_manifest"
       family_kind: "workflow_governance_release"
       schema_ref: "contracts/spec/workflow-governance-release-v0.yaml"
@@ -421,4 +477,4 @@ contract_family_inventory:
         - "code_as_agent_harness_2605_18747"
         - "harnessfix_trace_guided_2606_06324"
         - "w3c_prov_dm"
-  inference_boundary: "This inventory locks the known v0 runtime contract families for schema/code generation. It does not claim the product is complete, and it does not prevent a future family when backed by evidence, grill review, fixtures, and Rust validation."
+  inference_boundary: "This inventory locks the known v0 runtime and candidate-only Domain Pack contract families for schema/code generation. Domain Pack presence or composition does not grant core, lifecycle, or mutation authority. The inventory does not claim the product is complete, and it does not prevent a future family when backed by evidence, grill review, fixtures, and Rust validation."

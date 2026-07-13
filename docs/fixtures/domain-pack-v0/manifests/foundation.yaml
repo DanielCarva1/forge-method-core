@@ -1,0 +1,31 @@
+schema_version: '0.1'
+domain_pack_manifest:
+  identity:
+    publisher: forge.fixture
+    name: foundation
+    namespace: sample.foundation
+    version: 1.0.0
+  authority: candidate_only
+  compatibility:
+    pack_schema_requirement: '>=0.1,<0.2'
+    forge_core_requirement: '>=0.5,<1.0'
+  provenance:
+    source_kind: local_candidate
+    source_uri: fixture://domain-pack-v0/foundation
+    source_revision: fixture-1.0.0
+    source_digest: sha256:e497dad6ab435f4786c1839b8073138bd58f678b8e6fc0c3250e5d55156fd639
+    authors:
+    - forge.fixture.author
+    license_spdx_expression: Apache-2.0
+    license_text:
+      artifact_ref: docs/fixtures/domain-pack-v0/artifacts/license-notice.yaml
+      raw_sha256: sha256:620e0a503eaf19cf245fde4042ee53086b2767fd2ad24de7f7d20750b9cc54c3
+      canonical_sha256: sha256:278702e156f1ce87da16228439919419ea1237205ce202fa685050db99a31b12
+  content:
+    content_ref: docs/fixtures/domain-pack-v0/content/foundation.yaml
+    raw_sha256: sha256:01db738f5167f613fc217b7836a0d1e63a16a9ee82aac522b471920c95514c5c
+    canonical_sha256: sha256:6a88179fc1238f04dba52213b16011d0e8a4a367b5892af0c30c03aa30fc1fd5
+  dependencies: []
+  conflicts: []
+  replacement_slots: []
+  replacement_declarations: []

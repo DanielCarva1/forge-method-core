@@ -342,6 +342,20 @@ pub const COMMAND_ASSURANCE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::DefaultReadOnly,
 };
 
+/// Read-only P6 Domain Pack contract and deterministic composition surface.
+/// The result is always a candidate projection: this command cannot install,
+/// activate, trust, execute, or grant mutation authority to a pack.
+pub const COMMAND_DOMAIN_PACK: CommandSpec = CommandSpec {
+    name: "domain-pack",
+    usage_lines: &[
+        "       forge-core domain-pack validate --manifest-file <path> --content-file <path> [--artifact-root <path>] [--forge-core-version <semver>] [--json|--no-json]",
+        "       forge-core domain-pack compose --request-file <path> [--artifact-root <path>] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
 pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
     name: "contract",
     usage_lines: &[
@@ -751,6 +765,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_CLAIM,
     COMMAND_AUTONOMY,
     COMMAND_ASSURANCE,
+    COMMAND_DOMAIN_PACK,
     COMMAND_CONTRACT,
     COMMAND_ISOLATION,
     COMMAND_MEMORY,
@@ -948,6 +963,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["derive", "resume"]
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["validate", "compose"]
         );
         assert_eq!(
             COMMAND_PREFLIGHT

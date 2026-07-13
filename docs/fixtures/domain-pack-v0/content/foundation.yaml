@@ -1,0 +1,145 @@
+schema_version: '0.1'
+domain_pack_content:
+  pack:
+    publisher: forge.fixture
+    name: foundation
+    version: 1.0.0
+  namespace: sample.foundation
+  workflow_overlay:
+    id: sample.foundation.overlay
+    base_bundle_id: bundle.workflow-governance.golden-path-v0
+    policies:
+    - id: sample.foundation.policy.delivery-foundation
+      compatibility_workflow_id: sample.foundation.workflow.delivery-foundation
+      routing:
+        priority: 10
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: sample.foundation.obligation.delivery-foundation.evidenced
+        description: The governed result is supported by inspectable evidence before
+          the target boundary.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - sample.foundation.claim.delivery-foundation.evidenced
+      claims:
+      - id: sample.foundation.claim.delivery-foundation.evidenced
+        statement: The result has current evidence that can be independently inspected.
+        evaluator_ref: sample.foundation.evaluator.delivery-foundation.evidence
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: sample.foundation.evaluator.delivery-foundation.evidence
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: sample.foundation.capability-requirement.delivery-foundation.inspection
+        kind: evaluator
+        probe_kind: static_registry
+        description: A declared evaluator is needed; this declaration does not prove
+          runtime availability.
+        affected_claim_refs:
+        - sample.foundation.claim.delivery-foundation.evidenced
+        resolution_options:
+        - Supply current inspectable evidence through an admitted evaluator.
+        - Defer the boundary while the evaluator is unavailable.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: sample.foundation.playbook.delivery-foundation
+        steps:
+        - Bound the neutral work item and its acceptance claim.
+        - Collect evidence without treating prose as authority.
+        - Request an independent disposition when evidence is missing.
+  provided_domains:
+  - id: sample.foundation.domain.delivery
+    description: Neutral delivery governance primitives for bounded work and inspectable
+      acceptance.
+    policy_refs:
+    - sample.foundation.policy.delivery-foundation
+    hazard_refs:
+    - sample.foundation.hazard.unverified-delivery
+    lifecycle_model_refs:
+    - sample.foundation.lifecycle.delivery
+  provided_capabilities:
+  - id: sample.foundation.capability.repository-inspection
+    kind: evaluator
+    description: Declaration that repository inspection is required; it does not assert
+      availability or trust.
+    evidence_rule_refs:
+    - sample.foundation.claim.delivery-foundation.evidenced
+    authority: declaration_only
+  hazards:
+  - id: sample.foundation.hazard.unverified-delivery
+    category: quality
+    severity: high
+    description: An apparently complete result may lack inspectable acceptance evidence.
+    trigger_refs:
+    - sample.foundation.policy.delivery-foundation
+    mitigation_obligation_refs:
+    - sample.foundation.obligation.delivery-foundation.evidenced
+    evidence_claim_refs:
+    - sample.foundation.claim.delivery-foundation.evidenced
+  lifecycle_models:
+  - id: sample.foundation.lifecycle.delivery
+    description: Candidate-only description of a neutral delivery lifecycle; it does
+      not activate transitions.
+    initial_state_ref: sample.foundation.state.proposed
+    terminal_state_refs:
+    - sample.foundation.state.verified
+    states:
+    - id: sample.foundation.state.proposed
+      description: A bounded result is proposed.
+      entry_obligation_refs:
+      - sample.foundation.obligation.delivery-foundation.evidenced
+      exit_claim_refs:
+      - sample.foundation.claim.delivery-foundation.evidenced
+    - id: sample.foundation.state.verified
+      description: Required evidence has been independently evaluated.
+      entry_obligation_refs: []
+      exit_claim_refs: []
+    transitions:
+    - id: sample.foundation.transition.verify
+      from_state_ref: sample.foundation.state.proposed
+      to_state_ref: sample.foundation.state.verified
+      guard_claim_refs:
+      - sample.foundation.claim.delivery-foundation.evidenced
+      required_capability_refs:
+      - sample.foundation.capability.repository-inspection
+  evaluators:
+  - id: sample.foundation.domain-evaluator.repository-inspection
+    implementation:
+      kind: built_in
+      provider: repository_inspector
+    accepted_evidence_kinds:
+    - artifact_inspection
+    minimum_strength: inspected_artifact
+    authority: declaration_only
+  fixtures:
+  - id: sample.foundation.fixture.representative-delivery
+    kind: representative
+    artifact:
+      artifact_ref: docs/fixtures/domain-pack-v0/artifacts/foundation-representative.yaml
+      raw_sha256: sha256:67980c0f42a7458681500e1bbe5cdddebc0d25392437e7147d5a9fdb9e342aff
+      canonical_sha256: sha256:b3da7dfeb45ace4adccccecb502a4e2304e4c8de2639051a5e9710a927ed5736
+    subject_refs:
+    - sample.foundation.domain.delivery
+  adapters:
+  - id: sample.foundation.adapter.repository-view
+    protocol: built_in
+    surface: sample.foundation.surface.repository-view
+    required_capability_refs:
+    - sample.foundation.capability.repository-inspection
+    authority: declaration_only

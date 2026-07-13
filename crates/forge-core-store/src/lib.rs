@@ -48,6 +48,7 @@ const CONTRACT_DEFINITIONS: &[&str] = &[
     "contracts/requests/request-contract-v0.yaml",
     "contracts/recovery/health-recovery-contract-v0.yaml",
     "contracts/runtimes/runtime-handoff-contract-v0.yaml",
+    "contracts/spec/domain-pack-v0.yaml",
     "contracts/spec/workflow-governance-release-v0.yaml",
     "contracts/spec/workflow-governance-release-admission-v0.yaml",
     "contracts/spec/workflow-governance-retirement-v0.yaml",
@@ -214,6 +215,11 @@ pub fn collect_known_repo_paths_with_diagnostics(
             .join("docs")
             .join("fixtures")
             .join("operation-contract-v0"),
+        &mut collection,
+    );
+    collect_known_paths_recursive(
+        root,
+        &root.join("docs").join("fixtures").join("domain-pack-v0"),
         &mut collection,
     );
     collection

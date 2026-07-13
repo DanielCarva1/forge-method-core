@@ -1,0 +1,6 @@
+schema_version: '0.1'
+license_notice:
+  spdx_expression: Apache-2.0
+  candidate_only: true
+  notice: Fixture metadata only; not a trust, installation, activation, or mutation
+    grant.

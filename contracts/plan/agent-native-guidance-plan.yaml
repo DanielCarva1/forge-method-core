@@ -56,15 +56,17 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.5.0"
-    publication_state: "source_pullable_after_repository_gates"
+    version: "0.6.0"
+    publication_state: "source_pullable"
     minimum_consumer_version: "0.5.0"
     guide_payload_schema: "0.2"
+    domain_pack_schema: "0.1"
     workflow_release_identity: "0.4.0"
     boundary: >-
-      Package SemVer identifies the pullable P5 completion checkpoint. It does
-      not rewrite the frozen five-release workflow-governance history, and no
-      tag is claimed before the release matrix succeeds.
+      Package SemVer identifies the pullable P6a contract/composition
+      checkpoint. It does not rewrite the frozen five-release
+      workflow-governance history or activate a pack, and no tag is claimed
+      before the release matrix succeeds.
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -72,7 +74,7 @@ delivery_strategy:
     - "claims, gates, and effect admission"
     - "host Adapter model"
   defer:
-    - "full Domain Pack ecosystem"
+    - "Domain Pack lifecycle/trust/registry and real reference pack"
     - "bulk conversion of the workflow catalog"
     - "new UI"
     - "model-specific orchestration"
@@ -369,26 +371,26 @@ phases:
           single-effect, and local file-backed operation-wide transactions.
           Typed saga compensation and external-system atomicity remain separate.
     current_program:
-      id: "P5-workflow-migration"
-      status: "completed"
+      id: "P6-domain-pack-ecosystem"
+      status: "in_progress"
       scope:
-        - "move workflow authority from ordered prose into executable governance"
-        - "preserve compatibility and prove deletion safety before retiring legacy fields"
+        - "extend Forge through governed domain knowledge without growing implicit core authority"
+        - "preserve deterministic composition, explicit gaps, and candidate-only boundaries"
     active_checkpoint:
-      id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
+      id: "P6a-domain-pack-contract-and-composition"
       status: "completed"
       scope:
-        - "retire exactly 42 legacy authority documents through aggregate dual-signature authorization"
-        - "preserve 47 compatibility-only, 3 quarantined, and 18 P6 workflows as visible non-executable states"
-        - "ship package 0.5.0 with guide payload schema 0.2 and minimum compatible consumer 0.5.0 while preserving workflow release identity 0.4.0"
+        - "define closed content-addressed domain-pack contracts and deterministic composition"
+        - "keep pack knowledge outside implicit core, install, activation, or mutation authority"
+        - "ship package 0.6.0 while preserving the frozen five-release 42-policy workflow registry"
     next_slice:
-      id: "P6a-domain-pack-contract-and-composition"
+      id: "P6b-pack-lifecycle-resolution-and-trust"
       status: "pending"
       scope:
-        - "define closed versioned domain-pack contracts and deterministic composition"
-        - "keep pack knowledge outside implicit core or mutation authority"
+        - "add deterministic resolution, lock state, staged lifecycle transactions, and trust policy"
+        - "prove rollback, poisoning resistance, capability confinement, and actionable gaps"
     following_slices:
-      - "P6b pack lifecycle, resolution, and trust"
+      - "P6c learning promotion and reviewed registry"
     checkpoint_evidence:
       - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
       - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
@@ -668,7 +670,7 @@ phases:
         publication: "one pullable P5 completion checkpoint after full workspace gates"
 
   - id: "P6-domain-pack-ecosystem"
-    status: "pending"
+    status: "in_progress"
     outcome: "Novel domains extend Forge through governed knowledge and evaluators rather than core-specific scripts."
     scope:
       - "pack manifest, version, provenance, conflicts, and compatibility"
@@ -687,6 +689,7 @@ phases:
     slices:
       - id: "P6a-domain-pack-contract-and-composition"
         size: "large"
+        status: "completed"
         depends_on: ["P5d-catalog-rollout-and-legacy-retirement"]
         outcome: >-
           A closed, versioned Domain Pack contract can contribute governed
@@ -702,6 +705,14 @@ phases:
           - "composition is deterministic and independent of filesystem discovery order"
           - "unknown fields, references, capabilities, and evaluator kinds fail closed"
           - "removing a pack produces explicit missing-domain gaps rather than fabricated readiness"
+        implementation_evidence:
+          - "five closed schema-0.1 contract families for manifest, content, persistent requirements, composition request, and candidate projection"
+          - "pure bounded composer with exact raw/JCS sidecars, semantic-version compatibility, deterministic dependency order, sealed core, namespace ownership, conflicts, bilateral replacement validation, dangling-reference checks, and content-addressed projection"
+          - "neutral two-pack corpus plus removal corpus recomputed from exact manifests, content, license artifacts, and persistent requirements"
+          - "read-only domain-pack validate/compose agent CLI with path-confinement and zero-write E2E"
+          - "kernel authority-boundary regression keeps the admitted five-release 42-policy registry unchanged and excludes all 18 domain candidates"
+          - "aggregate repository validation adds one domain_pack_foundation check"
+          - "171 aggregate repository checks pass with zero diagnostics"
         publication: "one pullable pack-contract/composition checkpoint after full workspace gates"
       - id: "P6b-pack-lifecycle-resolution-and-trust"
         size: "large"
@@ -817,12 +828,13 @@ first_executable_slice:
     - "P5d.4b.2 nine agent-native continuity/lifecycle policies, 63 scenarios, and sequential admission into a five-release 42-policy registry"
     - "P5d.4b complete catalog accounting at 42 migration / 47 compatibility-only / 3 quarantined / 18 domain-pack candidates, with 139 historical, 156 Batch A, and 169 aggregate clean checks"
     - "P5d.5 frozen 110-workflow evidence archive, 68-workflow operational catalog, signed all-42 retirement checkpoint, typed tombstones, five-surface deletion proof, and 170 aggregate clean checks"
+    - "P6a five closed Domain Pack families, exact manifest/content sidecars, deterministic bounded composition, bilateral whole-policy replacement, read-only confined CLI, neutral removal corpus, unchanged 42-policy core authority, and 171 aggregate clean checks"
   next_action: >-
-    P5 is complete. Execute P6a next by defining closed, content-addressed
-    Domain Pack contracts and deterministic core-plus-pack composition. Keep
-    all 18 domain candidates outside core authority until a reviewed pack can
-    prove provenance, compatibility, dependencies, conflicts, and namespace
-    safety without changing the completed P5 retirement boundary.
+    P5 and P6a are complete. Execute P6b next by adding deterministic pack
+    resolution, exact lock state, staged install/upgrade/remove transactions,
+    rollback, and explicit trust policy. Keep all pack output candidate-only
+    until the lifecycle boundary proves supply-chain integrity, capability
+    confinement, project compatibility, and atomic recovery.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

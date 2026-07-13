@@ -1,0 +1,158 @@
+schema_version: "0.1"
+spec: "domain_pack_v0"
+status: "p6a_implemented"
+purpose: >-
+  Define a closed, versioned, content-addressed Domain Pack contract and a
+  deterministic read-only composition boundary so agents can add typed domain
+  knowledge without silently expanding Forge Core authority.
+
+contract_families:
+  manifest:
+    rust_type: "DomainPackManifestDocument"
+    root_key: "domain_pack_manifest"
+    role: >-
+      Candidate package identity, compatibility, provenance, license, exact
+      content binding, dependencies, conflicts, and bilateral replacement intent.
+  content:
+    rust_type: "DomainPackContentDocument"
+    root_key: "domain_pack_content"
+    role: >-
+      Closed typed contributions for policy overlays, obligations, claims,
+      advisory playbooks, hazards, lifecycle models, evaluators, fixtures,
+      capability declarations, adapters, and provided domains.
+  project_requirements:
+    rust_type: "DomainPackProjectRequirementsDocument"
+    root_key: "domain_pack_project_requirements"
+    role: >-
+      Durable desired domain and capability surface stored independently from
+      pack presence so removal or incompatibility produces an explicit gap.
+  composition_request:
+    rust_type: "DomainPackCompositionRequestDocument"
+    root_key: "domain_pack_composition_request"
+    role: >-
+      Closed core binding, project requirements, and exact candidate inputs for
+      pure deterministic composition. It cannot install or activate a pack.
+  composition_projection:
+    rust_type: "DomainPackCompositionProjectionDocument"
+    root_key: "domain_pack_composition_projection"
+    role: >-
+      Derived candidate-only pack order, contribution index, composed policy
+      projection, explicit gaps and issues, and composition digest.
+
+identity_and_compatibility:
+  coordinate: "exact publisher, name, namespace, and semantic version"
+  dependency_resolution: >-
+    Dependencies name an exact publisher and pack name, a closed semantic-version
+    requirement, and an optional required canonical content digest. P6a performs
+    no discovery, latest-version selection, registry lookup, or network access.
+  source_metadata: >-
+    Provenance and license fields are declarative metadata only. They are not a
+    signature, trusted publisher assertion, security review, or admission result.
+  content_binding:
+    raw_sha256: "binds the exact authored bytes"
+    canonical_sha256: "binds the canonical typed semantics"
+    rule: >-
+      Manifest/content identity is valid only when both bindings recompute
+      exactly; changing either authored bytes or canonical semantics rejects.
+  composition_identity: >-
+    The projection digest binds the sealed core identity, persistent project
+    requirements, deterministic pack order, exact pack identities and content,
+    contribution index, gaps, and issues. Later P6 lifecycle receipts must bind
+    this digest rather than trusting an authored composable label.
+
+authority_boundary:
+  manifest_authority: "candidate_only"
+  content_authority: "candidate_only"
+  request_authority: "candidate_only"
+  projection_authority: "candidate_only"
+  core_is_sealed: >-
+    A pack cannot claim the core namespace, replace a core contribution, alter
+    the admitted core bundle identity, enter the kernel registry, or manufacture
+    a trusted capability. Core mutation and shadowing fail closed.
+  declaration_only_surfaces:
+    - "provided capabilities do not prove runtime capability"
+    - "evaluator declarations do not execute code"
+    - "adapter declarations do not start a process or connector"
+    - "lifecycle models describe a domain and do not activate a pack"
+  no_implicit_mutation: >-
+    Parsing, validating, composing, serializing, or obtaining a composable
+    projection never grants execution, completion, progression, installation,
+    activation, credential, tool, filesystem, network, or mutation authority.
+  untrusted_language: >-
+    Descriptions, explanations, hazards, and advisory playbooks are untrusted
+    data. They must never be interpolated into a system prompt, executable tool
+    arguments, shell commands, evaluator implementation, or authority decision.
+
+deterministic_composition:
+  inputs: >-
+    One exact sealed core binding, one persistent requirement set, and zero or
+    more fully embedded manifest/content candidate pairs.
+  ordering: >-
+    Validate all candidates first, topologically order exact dependencies, and
+    use stable lexical pack coordinates as the deterministic tie-breaker.
+  namespace_ownership: >-
+    Pack contributions remain inside the pack's exclusive namespace. Duplicate
+    coordinates, namespaces, contribution identifiers, or priority ownership
+    reject instead of using last-write-wins behavior.
+  replacements: >-
+    A pack-to-pack replacement is permitted only when the target publishes a
+    matching replacement slot and the replacer declares the exact target slot,
+    contribution kind, target reference, and target digest. Core replacement is
+    forbidden and unilateral replacement rejects. Schema 0.1 composes only
+    whole-policy replacement: the target policy subtree is removed and the
+    bilaterally authorized replacement subtree becomes the surviving policy.
+    Other declared contribution kinds remain reserved and fail closed until a
+    typed substitution rule exists.
+  project_gaps: >-
+    Required domains and capabilities are evaluated from the independent
+    project requirement set. Removing a previously satisfying pack must expose
+    missing_domain or missing_capability; it cannot erase the requirement.
+  fail_closed_conditions:
+    - "unknown schema versions or fields"
+    - "invalid identifiers, namespaces, versions, or version requirements"
+    - "raw or canonical content binding mismatch"
+    - "duplicate pack coordinates, namespaces, or contribution identifiers"
+    - "missing, incompatible, conflicting, cyclic, or digest-mismatched dependencies"
+    - "core shadowing, pack shadowing, or non-bilateral replacement"
+    - "dangling policy, hazard, lifecycle, evaluator, fixture, capability, or adapter references"
+    - "invalid lifecycle graph, evaluator, capability, adapter, or composed governance bundle"
+  side_effects: "none; composition is a pure read-only decision"
+
+resource_and_input_safety:
+  closed_input: >-
+    P6a accepts only caller-supplied typed documents and never resolves a URI,
+    fetches dependencies, imports code, loads credentials, or executes adapters.
+  bounded_semantics: >-
+    Implementations must enforce explicit document-byte, candidate-count,
+    contribution-count, dependency-depth, graph-depth, and diagnostic-count
+    limits before any future untrusted package ingestion surface is admitted.
+  dependency_confusion: >-
+    No bare name, implicit publisher, latest tag, ambient registry, or network
+    fallback may satisfy a dependency.
+
+p6a_scope:
+  included:
+    - "closed Rust/YAML contract families and generated schemas"
+    - "pure deterministic core plus multi-pack candidate composition"
+    - "content-addressed candidate projection and explicit requirement gaps"
+    - "read-only agent inspection and composition surfaces"
+  deferred_to_p6b:
+    - "installation, upgrade, rollback, removal transaction, and recovery"
+    - "publisher trust, signature verification, registry policy, and lifecycle admission"
+    - "activation, project pinning, or mutation of the admitted runtime snapshot"
+  deferred_to_p6d:
+    - "a real game-development Domain Pack and its domain evidence"
+
+adversarial_requirements:
+  - "a well-formed or digest-valid pack cannot enter the kernel authority registry"
+  - "provenance metadata, source URI, or license cannot be mistaken for trust"
+  - "a pack cannot hide a missing requirement by removing itself or its contribution"
+  - "candidate order, YAML map order, and filesystem enumeration cannot change the projection"
+  - "duplicate, conflicting, dangling, cyclic, incompatible, or shadowing input blocks composition"
+  - "prose and advisory playbooks remain inert even when they contain prompt or tool instructions"
+  - "a composable projection cannot activate an adapter, evaluator, capability, or pack lifecycle"
+
+references:
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/spec/workflow-governance-release-v0.yaml"
+  - "contracts/workflow-governance/workflow-governance-contract-v0.yaml"

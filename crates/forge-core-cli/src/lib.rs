@@ -30,6 +30,7 @@ pub mod command_registry;
 pub mod contract_cmd;
 pub mod coordination;
 pub mod cost_cmd;
+pub mod domain_pack_cmd;
 pub mod effect_index;
 pub mod eval_cmd;
 pub mod eval_harness_cmd;

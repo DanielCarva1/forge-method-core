@@ -98,4 +98,9 @@ pub enum FamilyKind {
     WorkflowConsumerCompatibilityMatrix,
     WorkflowRetirementTombstoneCatalog,
     WorkflowFinalScorecard,
+    DomainPackManifest,
+    DomainPackContent,
+    DomainPackProjectRequirements,
+    DomainPackCompositionRequest,
+    DomainPackCompositionProjection,
 }

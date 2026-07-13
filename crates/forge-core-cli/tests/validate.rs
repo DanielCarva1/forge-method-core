@@ -190,6 +190,10 @@ fn merged_validation_root(label: &str) -> PathBuf {
             .join("fixtures")
             .join("operation-contract-v0"),
     );
+    copy_dir_recursive(
+        &root.join("docs").join("fixtures").join("domain-pack-v0"),
+        &temp.join("docs").join("fixtures").join("domain-pack-v0"),
+    );
     // The ledger lives in the core repo's sibling sidecar via the Project Link;
     // fall back to a repo-local copy for repos that still ship it themselves.
     let ledger_source = [
@@ -1587,6 +1591,13 @@ fn validate_library_passes_current_repo() {
         .expect("P5d.5 retirement candidate check");
     assert_eq!(retirement_check.status, ValidationStatus::Passed);
     assert_eq!(retirement_check.diagnostics, 0);
+    let domain_pack_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_foundation")
+        .expect("P6a aggregate Domain Pack check");
+    assert_eq!(domain_pack_check.status, ValidationStatus::Passed);
+    assert_eq!(domain_pack_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {

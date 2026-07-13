@@ -1,0 +1,15 @@
+schema_version: '0.1'
+domain_pack_project_requirements:
+  project_id: project.neutral-composition
+  requirement_set_id: requirements.neutral-delivery
+  required_domains:
+  - id: requirement.neutral.delivery
+    domain_id: sample.foundation.domain.delivery
+    pack_version_requirement: ^1.0
+    required_capability_refs:
+    - sample.foundation.capability.repository-inspection
+  - id: requirement.neutral.independent-assurance
+    domain_id: sample.extension.domain.independent-assurance
+    pack_version_requirement: ^1.1
+    required_capability_refs:
+    - sample.extension.capability.independent-review
