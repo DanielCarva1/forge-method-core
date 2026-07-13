@@ -2131,6 +2131,7 @@ impl Drop for ClaimWalLock {
 /// exists only to populate diagnostic messages; the fuzzer supplies a
 /// placeholder. Not part of the stable API surface.
 #[cfg(feature = "fuzz")]
+#[must_use]
 pub fn recover_claim_wal_from_bytes(bytes: &[u8]) -> ClaimWalRecovery {
     decode_prefix(std::path::Path::new("<fuzz>"), bytes)
 }
