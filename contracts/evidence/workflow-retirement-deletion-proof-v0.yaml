@@ -1,0 +1,1199 @@
+schema_version: '0.1'
+workflow_deletion_proof:
+  id: workflow-retirement.deletion-proof.p5d-v0
+  proof_version: 0.1.0
+  authority: candidate_only
+  release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  runtime_bundle:
+    bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+    bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+    policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+  legacy_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  release_history:
+    artifact_id: workflow-governance.registry.foundation-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+    raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+    canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+  workflows:
+  - retirement:
+      workflow_id: adversarial-review
+      legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+      replacement_policy_ref: policy.workflow.adversarial-review
+      replacement_policy_digest: sha256:2be0bfaae8227d59ea40a0c53cab7b9eb9c52881b74f92a393b5bd950c7f72d4
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:55ae8f5c168887ca8a26ce60cf735e26997dadeb5c3ce0285250df94fa638aab
+      legacy_ablated_digest: sha256:55ae8f5c168887ca8a26ce60cf735e26997dadeb5c3ce0285250df94fa638aab
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:263bae58d8c4a248d7dc6c090749582897dc84f5cb3010a609e32a5b4dba6403
+      legacy_ablated_digest: sha256:263bae58d8c4a248d7dc6c090749582897dc84f5cb3010a609e32a5b4dba6403
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:477a88ba2b7fb3ec97012ed72a0e34762485d6aca5752bc08e36c01ffe3d8a15
+      legacy_ablated_digest: sha256:477a88ba2b7fb3ec97012ed72a0e34762485d6aca5752bc08e36c01ffe3d8a15
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:50653856dd100c721f3185f480ab6794e69f6fac699d4e265f1f6cfcfb5b0f5d
+      legacy_ablated_digest: sha256:50653856dd100c721f3185f480ab6794e69f6fac699d4e265f1f6cfcfb5b0f5d
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:05cd96198e16a63ed9c1b0efd830ac069ac5cf0131fb04c77eac11bfd23389a7
+      legacy_ablated_digest: sha256:05cd96198e16a63ed9c1b0efd830ac069ac5cf0131fb04c77eac11bfd23389a7
+      equivalent: true
+  - retirement:
+      workflow_id: architecture
+      legacy_workflow_digest: sha256:c2605ca63133039807edf10981a117c29ada46a5e34afe72a741891c6698c5dd
+      replacement_policy_ref: policy.workflow.architecture
+      replacement_policy_digest: sha256:401a911ef0cd4f60f91e4e29344b3aef8fbc9647e3c3cca82149388094bd266a
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:6e683035324226cdc1fd712086705e4082d347909ae09a28bc36494cec317874
+      legacy_ablated_digest: sha256:6e683035324226cdc1fd712086705e4082d347909ae09a28bc36494cec317874
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:bbbb71234a23d6dba9edc92b5c8d82d490d42c6a87fefe685966e7589fa902ec
+      legacy_ablated_digest: sha256:bbbb71234a23d6dba9edc92b5c8d82d490d42c6a87fefe685966e7589fa902ec
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:8d79fff20a9b0d4ac2e38e78c896d186e6426e9218b0b312a5a9a6b76d9baabc
+      legacy_ablated_digest: sha256:8d79fff20a9b0d4ac2e38e78c896d186e6426e9218b0b312a5a9a6b76d9baabc
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:4a63eca7da6a6cafa278fac63488d030736c0b8b908d0aacbaf3c5a49940cc17
+      legacy_ablated_digest: sha256:4a63eca7da6a6cafa278fac63488d030736c0b8b908d0aacbaf3c5a49940cc17
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:cf7ebf34477ec03ad1a142c4a72a1afb072ec720cc60d9c0e00c841ac6ed7ac6
+      legacy_ablated_digest: sha256:cf7ebf34477ec03ad1a142c4a72a1afb072ec720cc60d9c0e00c841ac6ed7ac6
+      equivalent: true
+  - retirement:
+      workflow_id: atdd-plan
+      legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d
+      replacement_policy_ref: policy.workflow.atdd-plan
+      replacement_policy_digest: sha256:6bdc2f0035a467d5e4cdf7e3b8e149e5fd41e61ab98c03a91cd853474ee9aacd
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:fe515c2b4615424486163b70f52eed6db019f33baa8cdacf07d91a677d330729
+      legacy_ablated_digest: sha256:fe515c2b4615424486163b70f52eed6db019f33baa8cdacf07d91a677d330729
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:e2dbe2d4e6f7ea6961b8dd80a6883e9a2b23b882da9912078e8bf80e4132f41e
+      legacy_ablated_digest: sha256:e2dbe2d4e6f7ea6961b8dd80a6883e9a2b23b882da9912078e8bf80e4132f41e
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:532987c8b62b0bec945679012f9ec7e3c0bc02f09c35662c2aeb555f4712acce
+      legacy_ablated_digest: sha256:532987c8b62b0bec945679012f9ec7e3c0bc02f09c35662c2aeb555f4712acce
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:7c1eaf137355485c8ee22c540c5bd3c121d3c333ac1214627799f270bdbe1176
+      legacy_ablated_digest: sha256:7c1eaf137355485c8ee22c540c5bd3c121d3c333ac1214627799f270bdbe1176
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:4e31bac0145d9bb2403e218149472b565d0faea19345e4f516a36d8ff2fcaf5c
+      legacy_ablated_digest: sha256:4e31bac0145d9bb2403e218149472b565d0faea19345e4f516a36d8ff2fcaf5c
+      equivalent: true
+  - retirement:
+      workflow_id: build-story
+      legacy_workflow_digest: sha256:179d2ba8eb1c20a0866f7cd3e496836effc873d296bf570a3e4fa15e1f9b2fcf
+      replacement_policy_ref: policy.workflow.build-story
+      replacement_policy_digest: sha256:2d1519f7daa442ff01240fba980f2382f9cb8294967376bb1c0409c6a29b6ed5
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:bb5372afa61ce95dfd3326a899208355f9b7deab5735ca3d6a28c972aef2b05e
+      legacy_ablated_digest: sha256:bb5372afa61ce95dfd3326a899208355f9b7deab5735ca3d6a28c972aef2b05e
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:75ff3931045ae3c19e76a3102b83358a6d6437017d7149670cd07a8f56b543be
+      legacy_ablated_digest: sha256:75ff3931045ae3c19e76a3102b83358a6d6437017d7149670cd07a8f56b543be
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:4e4067d6908d278d5824688c6a3544a301566d04eaddc2cefd7eab617f894425
+      legacy_ablated_digest: sha256:4e4067d6908d278d5824688c6a3544a301566d04eaddc2cefd7eab617f894425
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:c50229d0c7fc33767ec22dfc4fa2fcfd3b836e9ac516f75634cf92e47f207ca4
+      legacy_ablated_digest: sha256:c50229d0c7fc33767ec22dfc4fa2fcfd3b836e9ac516f75634cf92e47f207ca4
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:9cdae649e3a1d80ad48d66588600ce4ad1a241d9c13991b3e8e0460eca220076
+      legacy_ablated_digest: sha256:9cdae649e3a1d80ad48d66588600ce4ad1a241d9c13991b3e8e0460eca220076
+      equivalent: true
+  - retirement:
+      workflow_id: checkpoint-preview
+      legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+      replacement_policy_ref: policy.workflow.checkpoint-preview
+      replacement_policy_digest: sha256:529075de7d8b120fff42ebd117fd724a7c00f2c1d217e18855ae17f6641dc327
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:8b7d3ebf033474945dd89ee1b832a7d6b7859d572860c30c7ba5db9bcfa13fec
+      legacy_ablated_digest: sha256:8b7d3ebf033474945dd89ee1b832a7d6b7859d572860c30c7ba5db9bcfa13fec
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:4d3da80766ce2ea8693867822e021cf7d6a9e04c5257ac3d49673263ff4c8a7f
+      legacy_ablated_digest: sha256:4d3da80766ce2ea8693867822e021cf7d6a9e04c5257ac3d49673263ff4c8a7f
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:fda7d4d72806985d3a1b3729db564023d4d0fe69688f6446587066c1357fb40e
+      legacy_ablated_digest: sha256:fda7d4d72806985d3a1b3729db564023d4d0fe69688f6446587066c1357fb40e
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:6e8025776843a96bf783c7a03b3c902e723063cf03768ce8761a6f6039604fcf
+      legacy_ablated_digest: sha256:6e8025776843a96bf783c7a03b3c902e723063cf03768ce8761a6f6039604fcf
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:7b341880d679a09f747e9a156a8b230c7f993568a2b94cb19c9c6f4e521b200d
+      legacy_ablated_digest: sha256:7b341880d679a09f747e9a156a8b230c7f993568a2b94cb19c9c6f4e521b200d
+      equivalent: true
+  - retirement:
+      workflow_id: ci-quality-pipeline
+      legacy_workflow_digest: sha256:f02762a62672abdca2ae0e64329b01074476befe40cb64bd23ea29df3352b227
+      replacement_policy_ref: policy.workflow.ci-quality-pipeline
+      replacement_policy_digest: sha256:8ba71e68e5a5a1f7a47d2bb920ff7245ed6ee0b4a71425c5a20f5bf8f3a537f6
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:1e62605b5d2518898a7505f9ac11057def2d415e6acc40c8dfe1de1f5604fe03
+      legacy_ablated_digest: sha256:1e62605b5d2518898a7505f9ac11057def2d415e6acc40c8dfe1de1f5604fe03
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:6d42537aa0e66991046f343ca238dc9dc005dabe0431ddd3159fa313c291c212
+      legacy_ablated_digest: sha256:6d42537aa0e66991046f343ca238dc9dc005dabe0431ddd3159fa313c291c212
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:9ba34e62e5d2bf37d3163efc2b5666b28d620b8f777cb50743818a58455f0862
+      legacy_ablated_digest: sha256:9ba34e62e5d2bf37d3163efc2b5666b28d620b8f777cb50743818a58455f0862
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:db0bd17d0958b1f8f12b8398e179bfb669c327abddf7ec4963e9f187f0fd51ec
+      legacy_ablated_digest: sha256:db0bd17d0958b1f8f12b8398e179bfb669c327abddf7ec4963e9f187f0fd51ec
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:602279b3930d0acc31e0a126c29a1a227df7e7e76b14a03544a396a3d1f0d9bf
+      legacy_ablated_digest: sha256:602279b3930d0acc31e0a126c29a1a227df7e7e76b14a03544a396a3d1f0d9bf
+      equivalent: true
+  - retirement:
+      workflow_id: code-review
+      legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+      replacement_policy_ref: policy.workflow.code-review
+      replacement_policy_digest: sha256:6d4ed9315161925d436f22abc6e782f5b73f121f3a1ca5fce9aa3f63aa046359
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:6c8b71ccb0cb38c03661934e942edfd127bd61eac5276f66b66091598fc65709
+      legacy_ablated_digest: sha256:6c8b71ccb0cb38c03661934e942edfd127bd61eac5276f66b66091598fc65709
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:0290976921d5f388976f1afe963e2faf029363818f2ddf43fe949ea6399b980c
+      legacy_ablated_digest: sha256:0290976921d5f388976f1afe963e2faf029363818f2ddf43fe949ea6399b980c
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:dc8197164591ea7fda0489c9bca67d3af317ed334a214c1a536426afc3d25fb3
+      legacy_ablated_digest: sha256:dc8197164591ea7fda0489c9bca67d3af317ed334a214c1a536426afc3d25fb3
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:43c7f53ac0612a1652b58a81adcd32c1212121f6e69ca9af81c6c641d3eb0b15
+      legacy_ablated_digest: sha256:43c7f53ac0612a1652b58a81adcd32c1212121f6e69ca9af81c6c641d3eb0b15
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:d21b3431ed3846f771ae5734dcfafd17bbbb330c6842c473ede0f8fa1d1cacd7
+      legacy_ablated_digest: sha256:d21b3431ed3846f771ae5734dcfafd17bbbb330c6842c473ede0f8fa1d1cacd7
+      equivalent: true
+  - retirement:
+      workflow_id: collaboration-handoff
+      legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+      replacement_policy_ref: policy.workflow.collaboration-handoff
+      replacement_policy_digest: sha256:354185c9b4f58d3f2d5374d6d2980a07c4ff812ffc7eb7d23a5c4e79011588f0
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:518a527df620809e97beda99855fc2ac889db871dcbcf9d7c0943c447989fe00
+      legacy_ablated_digest: sha256:518a527df620809e97beda99855fc2ac889db871dcbcf9d7c0943c447989fe00
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:373e24b44c67040bf3867dc1146a160a125352f990d96dd81d666faad2717775
+      legacy_ablated_digest: sha256:373e24b44c67040bf3867dc1146a160a125352f990d96dd81d666faad2717775
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:bc549d7ef869948456a035b012022529059a7007fa1f9329e3f4fed4943c4dea
+      legacy_ablated_digest: sha256:bc549d7ef869948456a035b012022529059a7007fa1f9329e3f4fed4943c4dea
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:374fe3f70e2891398cb37df97e02647e3552a693e62c09d133790156294507e8
+      legacy_ablated_digest: sha256:374fe3f70e2891398cb37df97e02647e3552a693e62c09d133790156294507e8
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:0a3ca51bf4a8e19b6246b4107fed151ad44b47208b2646305b277ef7cb679aca
+      legacy_ablated_digest: sha256:0a3ca51bf4a8e19b6246b4107fed151ad44b47208b2646305b277ef7cb679aca
+      equivalent: true
+  - retirement:
+      workflow_id: compliance-checklist
+      legacy_workflow_digest: sha256:3d7f6a4bd100685f4c5cc870fa43872bd57196ae81046d35ddfb5a58d19e6ca2
+      replacement_policy_ref: policy.workflow.compliance-checklist
+      replacement_policy_digest: sha256:720167b9061d80bd611ac1a9ec0c198bd33e58616f9d3156b0539730a6271e58
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:0e86538243b50660827660d834afedf563cc83cb3b8a57a6d8af82f7671a447b
+      legacy_ablated_digest: sha256:0e86538243b50660827660d834afedf563cc83cb3b8a57a6d8af82f7671a447b
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:45136df705c514f2b93a916430d6ec7b17433f7c2643035f43aad0694a549424
+      legacy_ablated_digest: sha256:45136df705c514f2b93a916430d6ec7b17433f7c2643035f43aad0694a549424
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:9d360f1811d73ade2e307f307132bf201841f99696ae48622dac37b0a3dda3ad
+      legacy_ablated_digest: sha256:9d360f1811d73ade2e307f307132bf201841f99696ae48622dac37b0a3dda3ad
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:720d05f00f0d0b5ccf41540068938a399c0fd521dd94139a71f2fff19adbc846
+      legacy_ablated_digest: sha256:720d05f00f0d0b5ccf41540068938a399c0fd521dd94139a71f2fff19adbc846
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:5a95c742cbf98608b558d55ce90e24f7661ea3590f61e81370e6915f54f2f6f7
+      legacy_ablated_digest: sha256:5a95c742cbf98608b558d55ce90e24f7661ea3590f61e81370e6915f54f2f6f7
+      equivalent: true
+  - retirement:
+      workflow_id: context-recovery
+      legacy_workflow_digest: sha256:81bb94ce0a2fbe35463cba8ea3763b39a2d344cb3077c2972ec0232ed06c980a
+      replacement_policy_ref: policy.workflow.context-recovery
+      replacement_policy_digest: sha256:b89463ca48b98e6059921634d3fe1ae3c51914a9a1fab612487da34effd08ab3
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:7694e04e2dbe2f6c6d430a0a7c0136773d3ed56fdd064108210663cc87ef38fa
+      legacy_ablated_digest: sha256:7694e04e2dbe2f6c6d430a0a7c0136773d3ed56fdd064108210663cc87ef38fa
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:42748e91394c02441c6fe36055a5103af890dad9f7dc214efc11004aafb71f97
+      legacy_ablated_digest: sha256:42748e91394c02441c6fe36055a5103af890dad9f7dc214efc11004aafb71f97
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:b2ee1a14172d311e5e295d87fef82b83a006392b5e16e7512bebc013274f8173
+      legacy_ablated_digest: sha256:b2ee1a14172d311e5e295d87fef82b83a006392b5e16e7512bebc013274f8173
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:ad4367fe65f7408076986e56076cafba3813f046d5f919247ca47099ff75eb43
+      legacy_ablated_digest: sha256:ad4367fe65f7408076986e56076cafba3813f046d5f919247ca47099ff75eb43
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:8d3a37b219f310a079fd4851d15fd02b288966d5c4dc540d21c559bc348f72f7
+      legacy_ablated_digest: sha256:8d3a37b219f310a079fd4851d15fd02b288966d5c4dc540d21c559bc348f72f7
+      equivalent: true
+  - retirement:
+      workflow_id: correct-course
+      legacy_workflow_digest: sha256:1c6dfcbdcdf7a1e09d53d10f0fe5655516934f2ca5c413f9faac6d8d18163826
+      replacement_policy_ref: policy.workflow.correct-course
+      replacement_policy_digest: sha256:8378ef86bf1ab065ce5f4b6fe407d063cac850d580520d55c4c985bf4790fe70
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:d883814baffee69459e88369ea315967d6b3490d39220baf46c6011961e9e1ce
+      legacy_ablated_digest: sha256:d883814baffee69459e88369ea315967d6b3490d39220baf46c6011961e9e1ce
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:6bbabab7caf05ec1ea7c148e1f44a7a2952ca5e1eaf3e5fc63dd6ae11d4a05b0
+      legacy_ablated_digest: sha256:6bbabab7caf05ec1ea7c148e1f44a7a2952ca5e1eaf3e5fc63dd6ae11d4a05b0
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:b0e8a040526038a6bea31ec6acd827f3855c5d13951198a57dce072ea42fb6ed
+      legacy_ablated_digest: sha256:b0e8a040526038a6bea31ec6acd827f3855c5d13951198a57dce072ea42fb6ed
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:d74b4d88a191a50936e68d9bb008e4e5280665d0490f3646886563864865dbc3
+      legacy_ablated_digest: sha256:d74b4d88a191a50936e68d9bb008e4e5280665d0490f3646886563864865dbc3
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:1bcf0c282be66a9d6b713073bacdfce2e76649f0256832278a45703c864e00bc
+      legacy_ablated_digest: sha256:1bcf0c282be66a9d6b713073bacdfce2e76649f0256832278a45703c864e00bc
+      equivalent: true
+  - retirement:
+      workflow_id: devops-deployment-plan
+      legacy_workflow_digest: sha256:9d0a9479ea6726d52b3c2de46a3d7b8915de652979830e9b43d4718faa1486ef
+      replacement_policy_ref: policy.workflow.devops-deployment-plan
+      replacement_policy_digest: sha256:6d6a9d89a5c297492defdc6d40e8964809415508939143b182b61bef571b8bf8
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:4399c35cb1294b053bc5fff463dca7559811b78e9058822284469b24fd625f64
+      legacy_ablated_digest: sha256:4399c35cb1294b053bc5fff463dca7559811b78e9058822284469b24fd625f64
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:983e26fd8fea5d1be60452a2f754e90fd19b1da8c56bc319a51abed180872ae2
+      legacy_ablated_digest: sha256:983e26fd8fea5d1be60452a2f754e90fd19b1da8c56bc319a51abed180872ae2
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:530089e6f9126ecbe6d92afe5ba630ea5cd7f4ccbb9b40192fcb97ef6f266c5b
+      legacy_ablated_digest: sha256:530089e6f9126ecbe6d92afe5ba630ea5cd7f4ccbb9b40192fcb97ef6f266c5b
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:997309e066a8e6a77ed5d52fd2f87c3ce0aa183c1855af3ec0d28c7fc7f0cae0
+      legacy_ablated_digest: sha256:997309e066a8e6a77ed5d52fd2f87c3ce0aa183c1855af3ec0d28c7fc7f0cae0
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:732f9ea00c31076e0bf149f0577e28de6738e1b0751a4097f0f63bf437644306
+      legacy_ablated_digest: sha256:732f9ea00c31076e0bf149f0577e28de6738e1b0751a4097f0f63bf437644306
+      equivalent: true
+  - retirement:
+      workflow_id: discover-intent
+      legacy_workflow_digest: sha256:a95940c7324dcbe42deda32d2b88df985851f04d47f9cfac7bd8d1a26882e3da
+      replacement_policy_ref: policy.workflow.discover-intent
+      replacement_policy_digest: sha256:8af0a595d16a03254aa35cead90ae5de4cdf52b1e0a454caff285467d4541d1a
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:138004bc374dd02af2da15c886b6c92766009c058c76e648e69887e26966a391
+      legacy_ablated_digest: sha256:138004bc374dd02af2da15c886b6c92766009c058c76e648e69887e26966a391
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:04b22ce0dcba5ba2befadcf8009b60409c18fc7a8df0b94b247a79e53c0f4395
+      legacy_ablated_digest: sha256:04b22ce0dcba5ba2befadcf8009b60409c18fc7a8df0b94b247a79e53c0f4395
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:ca411736afa67f75e40efbc6b8e29957e132e19b2df350ab62e632830f8063ab
+      legacy_ablated_digest: sha256:ca411736afa67f75e40efbc6b8e29957e132e19b2df350ab62e632830f8063ab
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:d476eb7bd4cd81073d16736103a6e0172b503ffcc6295dbb2348a923a1f6fedb
+      legacy_ablated_digest: sha256:d476eb7bd4cd81073d16736103a6e0172b503ffcc6295dbb2348a923a1f6fedb
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:783393affbfa76f08338893a08d591c2bc2073f9d18305c3e7968a070f31754f
+      legacy_ablated_digest: sha256:783393affbfa76f08338893a08d591c2bc2073f9d18305c3e7968a070f31754f
+      equivalent: true
+  - retirement:
+      workflow_id: domain-scan
+      legacy_workflow_digest: sha256:3e16c0d56a4ecd6cf83b8fd652c5b87d18def4975a59dfba8c7a7daf2c093fec
+      replacement_policy_ref: policy.workflow.domain-scan
+      replacement_policy_digest: sha256:2dfc6e5fc5ab9e6c84492c97ae792fad181fd11317702151b3f10f181035b898
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:a11fab72bd19f44ed4575347fab17880497259d4e78ac9ada18883b44bf48129
+      legacy_ablated_digest: sha256:a11fab72bd19f44ed4575347fab17880497259d4e78ac9ada18883b44bf48129
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:da5073cbe1ffe8efbdc308a49d407a45fc61837855bc55c10cc546835b7b33b6
+      legacy_ablated_digest: sha256:da5073cbe1ffe8efbdc308a49d407a45fc61837855bc55c10cc546835b7b33b6
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:5a1a158deb1a51f4f2fb31b760aef15d057ac4967406fa9324ce95305cb803c0
+      legacy_ablated_digest: sha256:5a1a158deb1a51f4f2fb31b760aef15d057ac4967406fa9324ce95305cb803c0
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:61bf1b51df708add002337963f0b3e98969f366047a50a766e7bdc99d01a54cb
+      legacy_ablated_digest: sha256:61bf1b51df708add002337963f0b3e98969f366047a50a766e7bdc99d01a54cb
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:1b9abcbfdb68e3af1b6ff010aa51321611badfb63798908140d902a1e721f759
+      legacy_ablated_digest: sha256:1b9abcbfdb68e3af1b6ff010aa51321611badfb63798908140d902a1e721f759
+      equivalent: true
+  - retirement:
+      workflow_id: eval-design
+      legacy_workflow_digest: sha256:13c70a006b665b90db201e539879cf83196d055b09f26b0c124eb2e1968e67f8
+      replacement_policy_ref: policy.workflow.eval-design
+      replacement_policy_digest: sha256:7d31ef70f158a132367f2b29119a565b46a4275a2995cbd88be0f7b1dec6af59
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:e8f06440ef6d226545542333fa05193cc507ae35579d965458c1bcc7d3806d2d
+      legacy_ablated_digest: sha256:e8f06440ef6d226545542333fa05193cc507ae35579d965458c1bcc7d3806d2d
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:529583d634aadf21cb05d998d2ab4cdf919849fc8b2257698cc399dd64ac55c3
+      legacy_ablated_digest: sha256:529583d634aadf21cb05d998d2ab4cdf919849fc8b2257698cc399dd64ac55c3
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:3475a7e723c0ef3566e86dd9acd54db9188cc1045e5cf06f9d319cb3b03253a5
+      legacy_ablated_digest: sha256:3475a7e723c0ef3566e86dd9acd54db9188cc1045e5cf06f9d319cb3b03253a5
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:a6575308a1f1498d1c880f249b8d40d0539ea2907bf4dcd0af23279753652773
+      legacy_ablated_digest: sha256:a6575308a1f1498d1c880f249b8d40d0539ea2907bf4dcd0af23279753652773
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:4e276d7bee164d948fad33720fef09c054f0ce20dcd7b42c08356594c450d263
+      legacy_ablated_digest: sha256:4e276d7bee164d948fad33720fef09c054f0ce20dcd7b42c08356594c450d263
+      equivalent: true
+  - retirement:
+      workflow_id: evolve-project
+      legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+      replacement_policy_ref: policy.workflow.evolve-project
+      replacement_policy_digest: sha256:c41ee77ba3ad5ecf20e35701e9efbb68faec26da5487aab229dd5fd35089a8aa
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:a0dfa5190544b0f75e796d149a832936ee7fa470192671d8272267f36a612296
+      legacy_ablated_digest: sha256:a0dfa5190544b0f75e796d149a832936ee7fa470192671d8272267f36a612296
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:16c412fc2389d2c3a93992d9612b8b352609c5e294f13267a83268a8cce1bf1c
+      legacy_ablated_digest: sha256:16c412fc2389d2c3a93992d9612b8b352609c5e294f13267a83268a8cce1bf1c
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:f06c13de6b5a87d6c7bb9dd9153c0f77bc72b6f161684b720739078da0d8ff25
+      legacy_ablated_digest: sha256:f06c13de6b5a87d6c7bb9dd9153c0f77bc72b6f161684b720739078da0d8ff25
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:78157625142365c05f5f33f94a164e3256f93de4394160d9b289c47af92c7e92
+      legacy_ablated_digest: sha256:78157625142365c05f5f33f94a164e3256f93de4394160d9b289c47af92c7e92
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:583bc1cc1fe2bbfd4aaa3bcf72076d848759ec09be77faab26fe8458e67f023b
+      legacy_ablated_digest: sha256:583bc1cc1fe2bbfd4aaa3bcf72076d848759ec09be77faab26fe8458e67f023b
+      equivalent: true
+  - retirement:
+      workflow_id: investigation
+      legacy_workflow_digest: sha256:7c3caeb3a18805581e5c93156b952474aa81ee531d3bf4165074951c9e2868ff
+      replacement_policy_ref: policy.workflow.investigation
+      replacement_policy_digest: sha256:6fe4e4892a795f9b8b28e712ca340a0f757bd33b84ab3148ba4ab707f62f8be2
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:cd083a3c376d0e2477b061a0d5b5300bdffad3e0dd426d021606d6d5ef588185
+      legacy_ablated_digest: sha256:cd083a3c376d0e2477b061a0d5b5300bdffad3e0dd426d021606d6d5ef588185
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:a1e487cb0208d4216469665916208e6eaade1c43663ef73f2b11e85bbc303824
+      legacy_ablated_digest: sha256:a1e487cb0208d4216469665916208e6eaade1c43663ef73f2b11e85bbc303824
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:6a6640d02b8e5ee3940aafa476af6c919084b612878a1e8ac64f0e32f5e257a8
+      legacy_ablated_digest: sha256:6a6640d02b8e5ee3940aafa476af6c919084b612878a1e8ac64f0e32f5e257a8
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:dd45e2357a89e244b8e5331f5d470616952f6300937e51af755e5a1468891dfc
+      legacy_ablated_digest: sha256:dd45e2357a89e244b8e5331f5d470616952f6300937e51af755e5a1468891dfc
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:fd8ec068a7b36df8f9f1a7f76ae11e271c3389654f12484fda62dab573da4e5e
+      legacy_ablated_digest: sha256:fd8ec068a7b36df8f9f1a7f76ae11e271c3389654f12484fda62dab573da4e5e
+      equivalent: true
+  - retirement:
+      workflow_id: nfr-evidence-audit
+      legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+      replacement_policy_ref: policy.workflow.nfr-evidence-audit
+      replacement_policy_digest: sha256:fdd0b2f9dacac04f6527aa4887a00b0f6154f344433c69275c0fa7d7471fa6bb
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:be10b1c888b67596f47ee70e943107d6ae659780911ceefe8b4f1fdce579f886
+      legacy_ablated_digest: sha256:be10b1c888b67596f47ee70e943107d6ae659780911ceefe8b4f1fdce579f886
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:b7f2464ec1a5cb882fd199a2b18077914abdba96b6025e85d67732efeaaa95c7
+      legacy_ablated_digest: sha256:b7f2464ec1a5cb882fd199a2b18077914abdba96b6025e85d67732efeaaa95c7
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:8a190d24d3c47b4323179474a115b76708eb0d3556a12c7d3ccff822472cc001
+      legacy_ablated_digest: sha256:8a190d24d3c47b4323179474a115b76708eb0d3556a12c7d3ccff822472cc001
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:58b17a49f48332ac3d1334fcd1c40f4b8313d0fe8305644746feaf97e22d5b97
+      legacy_ablated_digest: sha256:58b17a49f48332ac3d1334fcd1c40f4b8313d0fe8305644746feaf97e22d5b97
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:6273d85003a7c27cd0d3540e72dcf50b18c6ca77cb44795346c4106ae544e3ba
+      legacy_ablated_digest: sha256:6273d85003a7c27cd0d3540e72dcf50b18c6ca77cb44795346c4106ae544e3ba
+      equivalent: true
+  - retirement:
+      workflow_id: observability-plan
+      legacy_workflow_digest: sha256:30e040344378beae53c84d0384939f8787b8e63f0cccb3db453f1e37629d2b1b
+      replacement_policy_ref: policy.workflow.observability-plan
+      replacement_policy_digest: sha256:6eec3e0cbd949eeee0dcf978c25577aecdc0db83d3e316406d8197c3db90da9f
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:15400931882ebc3b28a317ae5aaf839b7ed22fbc65665d4344a11da8c73481c8
+      legacy_ablated_digest: sha256:15400931882ebc3b28a317ae5aaf839b7ed22fbc65665d4344a11da8c73481c8
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:20c8f1348d492df527b7acd5b12bad2d0360dd84249ea5719101226b647645f3
+      legacy_ablated_digest: sha256:20c8f1348d492df527b7acd5b12bad2d0360dd84249ea5719101226b647645f3
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:906df60a6bd3e534bac92df4a50019c059ebad6584e48c87385bfd3bfcf3b1b6
+      legacy_ablated_digest: sha256:906df60a6bd3e534bac92df4a50019c059ebad6584e48c87385bfd3bfcf3b1b6
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:14ff8fd717a42ad787392f2d7c1747541facf7963eed3fc4521c5168a5c6a5ae
+      legacy_ablated_digest: sha256:14ff8fd717a42ad787392f2d7c1747541facf7963eed3fc4521c5168a5c6a5ae
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:283886e12b821c260e2bdaa4f0c328b463f28eecec5a186bbf463550ab230eb9
+      legacy_ablated_digest: sha256:283886e12b821c260e2bdaa4f0c328b463f28eecec5a186bbf463550ab230eb9
+      equivalent: true
+  - retirement:
+      workflow_id: plan-sprint
+      legacy_workflow_digest: sha256:2742eb7827341ee61af988d63e13d2b1f69c80710823111a9a121ac7908399a1
+      replacement_policy_ref: policy.workflow.plan-sprint
+      replacement_policy_digest: sha256:d48088efbe8d884aae0aa457d2a5322bcb58548a9489596f87d8bf38a98f3c5c
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:e7d3c708bb8d3db7306d305147ee50a71aadebec29221ac35c98b591bb08f780
+      legacy_ablated_digest: sha256:e7d3c708bb8d3db7306d305147ee50a71aadebec29221ac35c98b591bb08f780
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:48786bafff8898e47508a8ddd688f992599c47d902f6a5508e2573365608bb19
+      legacy_ablated_digest: sha256:48786bafff8898e47508a8ddd688f992599c47d902f6a5508e2573365608bb19
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:98b15fd91cca13f18cdbe1b4c56a39db75009055dab7cf1660be7eab1d7855cd
+      legacy_ablated_digest: sha256:98b15fd91cca13f18cdbe1b4c56a39db75009055dab7cf1660be7eab1d7855cd
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:8b244b82290747f227408f1f207d299a931c7f93d0df0e4a15db078845091545
+      legacy_ablated_digest: sha256:8b244b82290747f227408f1f207d299a931c7f93d0df0e4a15db078845091545
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:718608d864868916e79c341e101cd7e31f0541a258542752574e719cf3181d20
+      legacy_ablated_digest: sha256:718608d864868916e79c341e101cd7e31f0541a258542752574e719cf3181d20
+      equivalent: true
+  - retirement:
+      workflow_id: platform-ops-plan
+      legacy_workflow_digest: sha256:f392cac8a9b6b0d9973c5ded5e2ab23f265d1fd75932c7cd3b11ca5056bea52a
+      replacement_policy_ref: policy.workflow.platform-ops-plan
+      replacement_policy_digest: sha256:98b9f755727f4f8376c0ceb78c65537c1c9b460a8ad42aeaf35a7098128dc79c
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:ce867490cd33a69f419d15cf8968f865a80ff999891d3827ea6bf06030bc084d
+      legacy_ablated_digest: sha256:ce867490cd33a69f419d15cf8968f865a80ff999891d3827ea6bf06030bc084d
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:e580c4bb2c3a15be2662f247dfefabb7a23b5e0c9a69f6775a175770fc6d3f09
+      legacy_ablated_digest: sha256:e580c4bb2c3a15be2662f247dfefabb7a23b5e0c9a69f6775a175770fc6d3f09
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:340233d847c1ec7c014eff743a98a083216728a4cdf3ce14e335a01787fb4e5a
+      legacy_ablated_digest: sha256:340233d847c1ec7c014eff743a98a083216728a4cdf3ce14e335a01787fb4e5a
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:1b286c83f4163cb66df533ddc8659f0d9ac402014b0b74b893cb68c96030ee98
+      legacy_ablated_digest: sha256:1b286c83f4163cb66df533ddc8659f0d9ac402014b0b74b893cb68c96030ee98
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:0f6aca0e039d00e9520bc96499a4c8337656911fb516767b374b890377f1e378
+      legacy_ablated_digest: sha256:0f6aca0e039d00e9520bc96499a4c8337656911fb516767b374b890377f1e378
+      equivalent: true
+  - retirement:
+      workflow_id: privacy-data-plan
+      legacy_workflow_digest: sha256:f4d311e1366608007a1b64531ac081c453d2f49479ad8c0cfc2fcfb2ff818df4
+      replacement_policy_ref: policy.workflow.privacy-data-plan
+      replacement_policy_digest: sha256:ed0552c529ebf8ee144040ddca00b6e00e83cc6d909fe9a04619fae84fb2a877
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:ba0a81d1fc9d566512433de5b879567bac7c588d34e58dd1b271f17f89e97b6d
+      legacy_ablated_digest: sha256:ba0a81d1fc9d566512433de5b879567bac7c588d34e58dd1b271f17f89e97b6d
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:f088838e675727e699050af299504590c0804feca24002c47a46a6be2bee2cd7
+      legacy_ablated_digest: sha256:f088838e675727e699050af299504590c0804feca24002c47a46a6be2bee2cd7
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:35cbf2cbe97a4937cadf77fee632e06ac5536ef69d0a41e10ed08454c4822654
+      legacy_ablated_digest: sha256:35cbf2cbe97a4937cadf77fee632e06ac5536ef69d0a41e10ed08454c4822654
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:6be37c30b1a213296971a74095591bdccd2161269e300d76847fff9494dcd45d
+      legacy_ablated_digest: sha256:6be37c30b1a213296971a74095591bdccd2161269e300d76847fff9494dcd45d
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:4a0e38ba0f75454a8905f0b45f47e952b96c67650a731d49935ac591e1776b47
+      legacy_ablated_digest: sha256:4a0e38ba0f75454a8905f0b45f47e952b96c67650a731d49935ac591e1776b47
+      equivalent: true
+  - retirement:
+      workflow_id: product-area-map
+      legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+      replacement_policy_ref: policy.workflow.product-area-map
+      replacement_policy_digest: sha256:3634c6eb6548496041d28bac27963332fa31ce5c2278eb1c5f8a34ce628c684f
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:c33505fdafc9d7a5555ee7460c29036f81a2a957198fa08d3bb1408dacca04d6
+      legacy_ablated_digest: sha256:c33505fdafc9d7a5555ee7460c29036f81a2a957198fa08d3bb1408dacca04d6
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:7d503e2511d7e37d2a1c4ecab05e3d5fa1051ba8ce45bfea3389b0dd5c1d0301
+      legacy_ablated_digest: sha256:7d503e2511d7e37d2a1c4ecab05e3d5fa1051ba8ce45bfea3389b0dd5c1d0301
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:fe6f946a413a285d15f98231fdebe680899c285072412bfa9e72585b3ea5041e
+      legacy_ablated_digest: sha256:fe6f946a413a285d15f98231fdebe680899c285072412bfa9e72585b3ea5041e
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:b845e23e90aa1c846bbf296b4520bf5c4d574462514b4516dfa77b99eee80c78
+      legacy_ablated_digest: sha256:b845e23e90aa1c846bbf296b4520bf5c4d574462514b4516dfa77b99eee80c78
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:7d160a0110927495b86437492dc7266b635b24bed67ca5225b6ca6bb5b5ba6f1
+      legacy_ablated_digest: sha256:7d160a0110927495b86437492dc7266b635b24bed67ca5225b6ca6bb5b5ba6f1
+      equivalent: true
+  - retirement:
+      workflow_id: product-requirements
+      legacy_workflow_digest: sha256:dc57ec433c1a8991d2e33579f4acc30d074070031651bd23132ced0936f0166a
+      replacement_policy_ref: policy.workflow.product-requirements
+      replacement_policy_digest: sha256:6452144501701ae9561bf67f5044d8f3965d766588f7c9c4baa526a37c9113c4
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:e7d9928dce955ff5c7fd12439d9c594b7e8485944c7d373f643753a5a32f3dfc
+      legacy_ablated_digest: sha256:e7d9928dce955ff5c7fd12439d9c594b7e8485944c7d373f643753a5a32f3dfc
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:15f7dbaf7f82108442348723c997794a77904450342a44471dd6da7b5f13ee80
+      legacy_ablated_digest: sha256:15f7dbaf7f82108442348723c997794a77904450342a44471dd6da7b5f13ee80
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:3670ca7865bd5732c826ddebf342f47ca2f854b3272a576dd22d8fb506128897
+      legacy_ablated_digest: sha256:3670ca7865bd5732c826ddebf342f47ca2f854b3272a576dd22d8fb506128897
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:0379ab9741359834824e8b88674b0017efe7a2602b9826f47b3450e21945936d
+      legacy_ablated_digest: sha256:0379ab9741359834824e8b88674b0017efe7a2602b9826f47b3450e21945936d
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:2b42e0d53e3289fdca041b78150f5e06faf65634d879405025a3c0be6448c2ef
+      legacy_ablated_digest: sha256:2b42e0d53e3289fdca041b78150f5e06faf65634d879405025a3c0be6448c2ef
+      equivalent: true
+  - retirement:
+      workflow_id: project-context
+      legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+      replacement_policy_ref: policy.workflow.project-context
+      replacement_policy_digest: sha256:32de135dec1efc1875c7bf403f70213f4533c455ea1751d29f66dcaf039bc5ed
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:30b3f599f585e260f983aa35dd665045d77af68c82ae29ce656d8a4b4156fba1
+      legacy_ablated_digest: sha256:30b3f599f585e260f983aa35dd665045d77af68c82ae29ce656d8a4b4156fba1
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:1d221c04ed96da7940d4e44369a8fd9eb4af92cc2f9d881c93b456c68390c997
+      legacy_ablated_digest: sha256:1d221c04ed96da7940d4e44369a8fd9eb4af92cc2f9d881c93b456c68390c997
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:39c1aacae7292f26908529fb596992009f2f57296d1f05ecf0d028bb4acd8145
+      legacy_ablated_digest: sha256:39c1aacae7292f26908529fb596992009f2f57296d1f05ecf0d028bb4acd8145
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:4a387b5159577d89143ff8e9e0a838a60023f2964cf51717355a8e278c3cd2b2
+      legacy_ablated_digest: sha256:4a387b5159577d89143ff8e9e0a838a60023f2964cf51717355a8e278c3cd2b2
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:b35b707f606bca6ccf5770592f04b51cf201143814ba9b289314091be28a8894
+      legacy_ablated_digest: sha256:b35b707f606bca6ccf5770592f04b51cf201143814ba9b289314091be28a8894
+      equivalent: true
+  - retirement:
+      workflow_id: readiness-check
+      legacy_workflow_digest: sha256:1454b541c8799da625ebe7dbab6dc67fe8e1e89f77275350828ac96a270da4d7
+      replacement_policy_ref: policy.workflow.readiness-check
+      replacement_policy_digest: sha256:87951c8734bb00010f5bbfa2702644b7539e79af6e015b97f9b333544fe207a0
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:be20fa4b89ffa900df4c217e1f91acbdb4d9928af3d1d8edb38e59632fddcfad
+      legacy_ablated_digest: sha256:be20fa4b89ffa900df4c217e1f91acbdb4d9928af3d1d8edb38e59632fddcfad
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:2a94ef4efea525b51f521d640661b51a74ffadd8e753e4148cb014bb3faef55f
+      legacy_ablated_digest: sha256:2a94ef4efea525b51f521d640661b51a74ffadd8e753e4148cb014bb3faef55f
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:1b8c0c9aa81d296586982adeec5fe89176f8c7576e1a18432efa734ee16fed63
+      legacy_ablated_digest: sha256:1b8c0c9aa81d296586982adeec5fe89176f8c7576e1a18432efa734ee16fed63
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:264211e61a38a36b3991a2e8e5dfc89cb5d222277e1f822b7df2d5e56e64cf43
+      legacy_ablated_digest: sha256:264211e61a38a36b3991a2e8e5dfc89cb5d222277e1f822b7df2d5e56e64cf43
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:e25355d9c7310adc6ec1cda083e619c4d2bf14e4b4df42fd2727a7b9894f0ed2
+      legacy_ablated_digest: sha256:e25355d9c7310adc6ec1cda083e619c4d2bf14e4b4df42fd2727a7b9894f0ed2
+      equivalent: true
+  - retirement:
+      workflow_id: ready-release
+      legacy_workflow_digest: sha256:a720c6e9e4877b26903603c8abe28633f279fecb51ab0f462ba505a4f10d0ec7
+      replacement_policy_ref: policy.workflow.ready-release
+      replacement_policy_digest: sha256:307726df7d3ed1dd7be9d7f308b87920a635d2b65ab034b46a10d88d1d6c3a64
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:0025108226a81572c7487bf27f41b606643c2ad4c1c8f73afc34d6e508b2b476
+      legacy_ablated_digest: sha256:0025108226a81572c7487bf27f41b606643c2ad4c1c8f73afc34d6e508b2b476
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:bf44049103d76091d5a31b5793a3bf1ec1a7487a4a1a5747ef10cfb13fd6c41e
+      legacy_ablated_digest: sha256:bf44049103d76091d5a31b5793a3bf1ec1a7487a4a1a5747ef10cfb13fd6c41e
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:92414da79b1452a03388ef87cd339e7d46e906a43f4c3e9cf286b0cf7f69b957
+      legacy_ablated_digest: sha256:92414da79b1452a03388ef87cd339e7d46e906a43f4c3e9cf286b0cf7f69b957
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:ea9466e5906b660595a433cf80bc52dccfe2c55ec9e9ba5c9f47823e45fddd05
+      legacy_ablated_digest: sha256:ea9466e5906b660595a433cf80bc52dccfe2c55ec9e9ba5c9f47823e45fddd05
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:26455be13021d929ba20bdebced07f8667e01331b2f2a070a2fde47f6b53feac
+      legacy_ablated_digest: sha256:26455be13021d929ba20bdebced07f8667e01331b2f2a070a2fde47f6b53feac
+      equivalent: true
+  - retirement:
+      workflow_id: reality-evidence-gate
+      legacy_workflow_digest: sha256:af52bc3b6283aa45b90e124b1999e35f90f589bcaeaea93ad1c6d6674437e966
+      replacement_policy_ref: policy.workflow.reality-evidence-gate
+      replacement_policy_digest: sha256:6ca1325fcd87d9e846a7eda82fca6946d0e2963e5a6310d07363d0ad319d1f59
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:c4da72e80c296a4b6ae64876ddae7e3508e8d5a7cd7658fc7b51522ad46d7301
+      legacy_ablated_digest: sha256:c4da72e80c296a4b6ae64876ddae7e3508e8d5a7cd7658fc7b51522ad46d7301
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:fd5990a259168af53a83547b5d0dd41d211913b7a4855e602ae03e4fb5f3a604
+      legacy_ablated_digest: sha256:fd5990a259168af53a83547b5d0dd41d211913b7a4855e602ae03e4fb5f3a604
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:6852bdfeba587f297b0da071bca080fea343640d40f1800112327e893223ec8a
+      legacy_ablated_digest: sha256:6852bdfeba587f297b0da071bca080fea343640d40f1800112327e893223ec8a
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:4c71f9bd4435e2140a089c43f77dec5c52279949e3f6dfbf79d8551b20517b6b
+      legacy_ablated_digest: sha256:4c71f9bd4435e2140a089c43f77dec5c52279949e3f6dfbf79d8551b20517b6b
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:3a7f0dfb7ade5696b4ed36adc21816bc8db15eff3f3bddd678ffeb1e83a5a589
+      legacy_ablated_digest: sha256:3a7f0dfb7ade5696b4ed36adc21816bc8db15eff3f3bddd678ffeb1e83a5a589
+      equivalent: true
+  - retirement:
+      workflow_id: research-closeout
+      legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+      replacement_policy_ref: policy.workflow.research-closeout
+      replacement_policy_digest: sha256:fe64802d59cfb75486efd7814cf9e0172a1ba68ed23863075b00b5ed011baacc
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:23bbf1cb86de689c11fefe53028df21bb3805b5c048e2e4618e6c51bf0383550
+      legacy_ablated_digest: sha256:23bbf1cb86de689c11fefe53028df21bb3805b5c048e2e4618e6c51bf0383550
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:89b1a85e66cfe2e1eb9e77a68ea525671c47dab4edda2f4a0c0e726873b718b2
+      legacy_ablated_digest: sha256:89b1a85e66cfe2e1eb9e77a68ea525671c47dab4edda2f4a0c0e726873b718b2
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:86fb30ed1fc94ccd9924674cf2dafd6c1071b8d15f538ee164c5a40d7aea7b63
+      legacy_ablated_digest: sha256:86fb30ed1fc94ccd9924674cf2dafd6c1071b8d15f538ee164c5a40d7aea7b63
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:8aa4cf971880dc4ba789cd6bbb20cb2853b488616e589ed2141e3ee54dbb9172
+      legacy_ablated_digest: sha256:8aa4cf971880dc4ba789cd6bbb20cb2853b488616e589ed2141e3ee54dbb9172
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:e37528ef32d2555439afb3d10ceff73f8a9543d7e4ec5bd95e64fbb7abde3d36
+      legacy_ablated_digest: sha256:e37528ef32d2555439afb3d10ceff73f8a9543d7e4ec5bd95e64fbb7abde3d36
+      equivalent: true
+  - retirement:
+      workflow_id: retrospective
+      legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+      replacement_policy_ref: policy.workflow.retrospective
+      replacement_policy_digest: sha256:c6277d03de4495e3b61de9dc9ac2fdcdba11514e31a8b5dd6b81f97c3d7fa0cf
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:488f38afa79a1fc765d7cf870eba17489341426dceee727f78fc4a1f80a41441
+      legacy_ablated_digest: sha256:488f38afa79a1fc765d7cf870eba17489341426dceee727f78fc4a1f80a41441
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:4c93ac38f987caa145a62d24ed9e1c079d6cc8df02419e4aaea7aae4aa37d1ab
+      legacy_ablated_digest: sha256:4c93ac38f987caa145a62d24ed9e1c079d6cc8df02419e4aaea7aae4aa37d1ab
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:d755b5ead259dc3689779c6c3130d9acec74428ea4c2f5c2ae632ad510c6a8dd
+      legacy_ablated_digest: sha256:d755b5ead259dc3689779c6c3130d9acec74428ea4c2f5c2ae632ad510c6a8dd
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:9dd270d01f20e0333aaa7cbf4932332a73ffc395cc0eefacd1ed18bf02f39697
+      legacy_ablated_digest: sha256:9dd270d01f20e0333aaa7cbf4932332a73ffc395cc0eefacd1ed18bf02f39697
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:18be50a1254ba016893740ac5444a336edbd4a42127f162c6b689f4cec69d3ea
+      legacy_ablated_digest: sha256:18be50a1254ba016893740ac5444a336edbd4a42127f162c6b689f4cec69d3ea
+      equivalent: true
+  - retirement:
+      workflow_id: risk-register
+      legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+      replacement_policy_ref: policy.workflow.risk-register
+      replacement_policy_digest: sha256:06be2290e1424225998f511efe9f1e1038c6fdc2137685b6365b861e482834b7
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:8a4be4797e970a870fea49a04aceb9128e2fc61ccac9b72431c8080039656397
+      legacy_ablated_digest: sha256:8a4be4797e970a870fea49a04aceb9128e2fc61ccac9b72431c8080039656397
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:7ea2e4130ec39c160460efbce6ddab6019a26a83a360957c8d453107235f31bc
+      legacy_ablated_digest: sha256:7ea2e4130ec39c160460efbce6ddab6019a26a83a360957c8d453107235f31bc
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:639186125fc548c02fc1faa413cbf5f8c296eb61836a1f95438d3bfd20a33f4d
+      legacy_ablated_digest: sha256:639186125fc548c02fc1faa413cbf5f8c296eb61836a1f95438d3bfd20a33f4d
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:f3a40532fd3202e9ae641509d648af46bb072ec670c57cfb043f15be9f21ed36
+      legacy_ablated_digest: sha256:f3a40532fd3202e9ae641509d648af46bb072ec670c57cfb043f15be9f21ed36
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:1ceb5e3b86e51835eeb05dd3b6fb08eee5d61f51be76e184ccab3100bb779ac6
+      legacy_ablated_digest: sha256:1ceb5e3b86e51835eeb05dd3b6fb08eee5d61f51be76e184ccab3100bb779ac6
+      equivalent: true
+  - retirement:
+      workflow_id: security-plan
+      legacy_workflow_digest: sha256:5a78f1af75a27df9673a4bca3f953b395fb7a41e72d742f8bdf7002245467f4e
+      replacement_policy_ref: policy.workflow.security-plan
+      replacement_policy_digest: sha256:9a653dc45bd18b20bc789d810c656449241d3d83c91bba6ac727f7416b7c0fc4
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:2fa9b6e0683716254c9acf1c058fd3eb334b64c2ebef2ec3b60c59dfc2b3de29
+      legacy_ablated_digest: sha256:2fa9b6e0683716254c9acf1c058fd3eb334b64c2ebef2ec3b60c59dfc2b3de29
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:76c9a2757e86cb0f0c9226e633b5a0aacf6320b9c901330eef19605c2634d2de
+      legacy_ablated_digest: sha256:76c9a2757e86cb0f0c9226e633b5a0aacf6320b9c901330eef19605c2634d2de
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:923749c217dc97286be81fd3002788a67540f673914de79d99319061420c06a4
+      legacy_ablated_digest: sha256:923749c217dc97286be81fd3002788a67540f673914de79d99319061420c06a4
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:e4dfe226447704284fca3ace582a4452c80511fc25de2a8510b34a67ec1f6af8
+      legacy_ablated_digest: sha256:e4dfe226447704284fca3ace582a4452c80511fc25de2a8510b34a67ec1f6af8
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:b412100cc3ad7047fd8cff85878909819220f520d5b2f582c8bff025141ae322
+      legacy_ablated_digest: sha256:b412100cc3ad7047fd8cff85878909819220f520d5b2f582c8bff025141ae322
+      equivalent: true
+  - retirement:
+      workflow_id: spec-distillation
+      legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+      replacement_policy_ref: policy.workflow.spec-distillation
+      replacement_policy_digest: sha256:02200069d2a61ce417a5f1fa1bcf578b620605a69e153f75ecd3f5b8331098db
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:2f5c31070c6b5ab1116460eef3dab3cdabe5dfadac67bdbd7485091349531fcb
+      legacy_ablated_digest: sha256:2f5c31070c6b5ab1116460eef3dab3cdabe5dfadac67bdbd7485091349531fcb
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:b8cb916cfe9c625a46372f0b8451a14bd547138a17ae8769e287ed692fc6e3f9
+      legacy_ablated_digest: sha256:b8cb916cfe9c625a46372f0b8451a14bd547138a17ae8769e287ed692fc6e3f9
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:fc38cf64732f38855c17d2e135c584bdf0d6c89cb20a793204dc98303e56bfe1
+      legacy_ablated_digest: sha256:fc38cf64732f38855c17d2e135c584bdf0d6c89cb20a793204dc98303e56bfe1
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:6d50bd7d8c3537a47eb5fe85962e0153a0d74fcfc54ef689e360273a787b6f11
+      legacy_ablated_digest: sha256:6d50bd7d8c3537a47eb5fe85962e0153a0d74fcfc54ef689e360273a787b6f11
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:5e7851251d7ba4fa17336ed9284af0c13b0b67d7708ffc283fcf825cdd23e2e0
+      legacy_ablated_digest: sha256:5e7851251d7ba4fa17336ed9284af0c13b0b67d7708ffc283fcf825cdd23e2e0
+      equivalent: true
+  - retirement:
+      workflow_id: sprint-status
+      legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+      replacement_policy_ref: policy.workflow.sprint-status
+      replacement_policy_digest: sha256:fa586fd956be64979a4ee120e05c4e2f45eee51f72c35725654d4bc05ea28a12
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:0d53027a3fe9aec3f5464fc87e4519e00eee4e11a59fbb99067cec2e1944ea21
+      legacy_ablated_digest: sha256:0d53027a3fe9aec3f5464fc87e4519e00eee4e11a59fbb99067cec2e1944ea21
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:5800dfdf9365890d68dffc1d608854a294e173924c99c9b33a42439807839473
+      legacy_ablated_digest: sha256:5800dfdf9365890d68dffc1d608854a294e173924c99c9b33a42439807839473
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:01ccc124598f42589f0aadbf1d878081268eec07fd1715f6e97afa613fce8160
+      legacy_ablated_digest: sha256:01ccc124598f42589f0aadbf1d878081268eec07fd1715f6e97afa613fce8160
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:d2dc9795164422fba668a5405bdd03a07abc1070428183214328bd3e6934eaa3
+      legacy_ablated_digest: sha256:d2dc9795164422fba668a5405bdd03a07abc1070428183214328bd3e6934eaa3
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:7593b8a2a746fb6dd732c2537c3b4b8b35c20533daa52ede2468d541473da606
+      legacy_ablated_digest: sha256:7593b8a2a746fb6dd732c2537c3b4b8b35c20533daa52ede2468d541473da606
+      equivalent: true
+  - retirement:
+      workflow_id: story-creation
+      legacy_workflow_digest: sha256:1faef3dfecdf64264ae7521edbd360bb04e068f5decac0f11f6a9f962a957faf
+      replacement_policy_ref: policy.workflow.story-creation
+      replacement_policy_digest: sha256:5b12c15baa8bb0319fecd5d824b21dde30b5ce6fb372bc012dff5e77053c6dfa
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:e9495886f80651931e852003e8349a121733fa2c9a97da0122384f0cdae9d442
+      legacy_ablated_digest: sha256:e9495886f80651931e852003e8349a121733fa2c9a97da0122384f0cdae9d442
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:61e380c8d23cee1abd31b53d29a0a4f2bc859c4db5da5ed1253b5a9c6b19819e
+      legacy_ablated_digest: sha256:61e380c8d23cee1abd31b53d29a0a4f2bc859c4db5da5ed1253b5a9c6b19819e
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:07be61a1db60494af57f4666262ce15d528cb6eec178e27f1554dcdd82141bbf
+      legacy_ablated_digest: sha256:07be61a1db60494af57f4666262ce15d528cb6eec178e27f1554dcdd82141bbf
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:e4081dafafb6a8f00386f3a0a63796a7675ce66ffd2cd32c50aa1ccd6094c318
+      legacy_ablated_digest: sha256:e4081dafafb6a8f00386f3a0a63796a7675ce66ffd2cd32c50aa1ccd6094c318
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:354808facb78516dc62e43ccf674425d9f422e36aaaaee2b766286ce81aa9c46
+      legacy_ablated_digest: sha256:354808facb78516dc62e43ccf674425d9f422e36aaaaee2b766286ce81aa9c46
+      equivalent: true
+  - retirement:
+      workflow_id: technical-feasibility-scan
+      legacy_workflow_digest: sha256:cf392d6597cab2802a58da12a361d83285328816a0c47bdfb1e35da90d242909
+      replacement_policy_ref: policy.workflow.technical-feasibility-scan
+      replacement_policy_digest: sha256:3e10b279f19c5ac0ff6655352e4edd85d5becf2e3b470dfce143c6f9ae6023be
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:1660ac3b3e2a03458fba80c166a3024e0b61bd28ba8881794df7c2cf9f66574f
+      legacy_ablated_digest: sha256:1660ac3b3e2a03458fba80c166a3024e0b61bd28ba8881794df7c2cf9f66574f
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:90acaaf9348ca62be77b9426c2e9779b471684af5865c5e4e1e025a1eb94b166
+      legacy_ablated_digest: sha256:90acaaf9348ca62be77b9426c2e9779b471684af5865c5e4e1e025a1eb94b166
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:28ae09abb23f02867abece33acdc52e1705238d2f6de9530c242b1d58020d1b7
+      legacy_ablated_digest: sha256:28ae09abb23f02867abece33acdc52e1705238d2f6de9530c242b1d58020d1b7
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:c7bdbd9a4f2d408ec688ac303060a32d7aa522946c70993da743c86ed78c0848
+      legacy_ablated_digest: sha256:c7bdbd9a4f2d408ec688ac303060a32d7aa522946c70993da743c86ed78c0848
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:4cf21f16201acbba867687649d5cf453db6469b9dc1eff243504b0b2e1f38793
+      legacy_ablated_digest: sha256:4cf21f16201acbba867687649d5cf453db6469b9dc1eff243504b0b2e1f38793
+      equivalent: true
+  - retirement:
+      workflow_id: test-automation
+      legacy_workflow_digest: sha256:f807c26e59729905a118d9bac0124f331f6530372814733b802e2769f3ca2914
+      replacement_policy_ref: policy.workflow.test-automation
+      replacement_policy_digest: sha256:9ba2cb1b60d4c093920bad7a9fd2208d360994d48a1af27dfb1e977375a2539d
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:6d7a518ac5d838e294df721ab5bfb0a7d8ae6d80a6dc86c2d4eda8e789508359
+      legacy_ablated_digest: sha256:6d7a518ac5d838e294df721ab5bfb0a7d8ae6d80a6dc86c2d4eda8e789508359
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:4386816a884d0a4ea4b2417c263c397fa340651f12645a4460a8a91e2743fa41
+      legacy_ablated_digest: sha256:4386816a884d0a4ea4b2417c263c397fa340651f12645a4460a8a91e2743fa41
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:996b7cbda20f81e3a01226848f968502861fed7ede8648a4e8f65640e36a463d
+      legacy_ablated_digest: sha256:996b7cbda20f81e3a01226848f968502861fed7ede8648a4e8f65640e36a463d
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:7bf8b10067ccd730a7c6a492110506a5d5b188ca3fef1032006f05e2d06902e3
+      legacy_ablated_digest: sha256:7bf8b10067ccd730a7c6a492110506a5d5b188ca3fef1032006f05e2d06902e3
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:f7db808d39f40e1fd37b9c1e97897b9a79341470068f79dbdab3e1de417a0794
+      legacy_ablated_digest: sha256:f7db808d39f40e1fd37b9c1e97897b9a79341470068f79dbdab3e1de417a0794
+      equivalent: true
+  - retirement:
+      workflow_id: test-framework
+      legacy_workflow_digest: sha256:d4fed3976edf84ae8e72b3c00a4f385046aaa1137f1b043d8a20c2e1bfb7d619
+      replacement_policy_ref: policy.workflow.test-framework
+      replacement_policy_digest: sha256:6942046ebe3140aba32064d832a7507ff6da357f2eb90a038847c6c00d7ab83c
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:c02a8dfc26f87e80d6f7eff3f7585cc5502425658c0f23369543bcf2029b1460
+      legacy_ablated_digest: sha256:c02a8dfc26f87e80d6f7eff3f7585cc5502425658c0f23369543bcf2029b1460
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:7c948fe2638147050fdc9fd2f70d90ed7068555614ba9ad172c60a1cb8a8b448
+      legacy_ablated_digest: sha256:7c948fe2638147050fdc9fd2f70d90ed7068555614ba9ad172c60a1cb8a8b448
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:76eeee0b26d9006cb2373041afbb174b350009f0d8a00f73eb2b62ace2587b16
+      legacy_ablated_digest: sha256:76eeee0b26d9006cb2373041afbb174b350009f0d8a00f73eb2b62ace2587b16
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:d792c3ba9fb5ac238319d774a2b372e1b5a620a09051e91fc5992a396d73bef3
+      legacy_ablated_digest: sha256:d792c3ba9fb5ac238319d774a2b372e1b5a620a09051e91fc5992a396d73bef3
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:6c199281cc2e8e327deca711455c60929cd0aad39ace80e407a51b8486cfa510
+      legacy_ablated_digest: sha256:6c199281cc2e8e327deca711455c60929cd0aad39ace80e407a51b8486cfa510
+      equivalent: true
+  - retirement:
+      workflow_id: test-review
+      legacy_workflow_digest: sha256:0a601bc00a7600646f54ffc5dc9f94dcd4db6d8b450a2787d7ec60fe9c108b27
+      replacement_policy_ref: policy.workflow.test-review
+      replacement_policy_digest: sha256:5ee9fd798cc571f6ce11bdaf39b3dc14b20e77aa7847a10fda71b35d8f36ef9d
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:acde4895dfdc74f2a8e631459b310ce9698c0e63a770c0bfc350a2539ddfde30
+      legacy_ablated_digest: sha256:acde4895dfdc74f2a8e631459b310ce9698c0e63a770c0bfc350a2539ddfde30
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:6f5fcc2cd9d4e001f055df67dfaa0faadc90e485b1a3ff2ea349edf5d2eb05f0
+      legacy_ablated_digest: sha256:6f5fcc2cd9d4e001f055df67dfaa0faadc90e485b1a3ff2ea349edf5d2eb05f0
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:bc7d49ca62b009a919c403172525d77a9ad27d1a08c5ea44c67dd693cd48b988
+      legacy_ablated_digest: sha256:bc7d49ca62b009a919c403172525d77a9ad27d1a08c5ea44c67dd693cd48b988
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:69f3172a225d883395eae9abdbd025b6072d546f648ba357f03e91b77dc65435
+      legacy_ablated_digest: sha256:69f3172a225d883395eae9abdbd025b6072d546f648ba357f03e91b77dc65435
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:6dcda66eb071e6751cbb367d13f217e5f5f2a6c87d38ee42c61e3e01d937fa04
+      legacy_ablated_digest: sha256:6dcda66eb071e6751cbb367d13f217e5f5f2a6c87d38ee42c61e3e01d937fa04
+      equivalent: true
+  - retirement:
+      workflow_id: test-strategy
+      legacy_workflow_digest: sha256:28530d5e59f6ca75535b208d3a3afa5e7066a65c08a661307f647bc68bc243d4
+      replacement_policy_ref: policy.workflow.test-strategy
+      replacement_policy_digest: sha256:5d07b41f6b8b69cc3d4f5b3bc99dac7e01236608eff68c8f1cd6f79bfba451c8
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:6d66d640de54f6dd2c92dba9ede6d1994a978d62ed0e1e9f5b07db36970adebe
+      legacy_ablated_digest: sha256:6d66d640de54f6dd2c92dba9ede6d1994a978d62ed0e1e9f5b07db36970adebe
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:23b3aadbdb740a6da545f3503245294fe48936b5dfc622bb10077407570c7cbc
+      legacy_ablated_digest: sha256:23b3aadbdb740a6da545f3503245294fe48936b5dfc622bb10077407570c7cbc
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:8957785834e2e0ec1fe0ec55562478841629ceff538d1004f425297167e46d1b
+      legacy_ablated_digest: sha256:8957785834e2e0ec1fe0ec55562478841629ceff538d1004f425297167e46d1b
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:e1a7077d1452b8d4df67dd66097ea2bb4b0665c06ab9912a4e9097fae3597f66
+      legacy_ablated_digest: sha256:e1a7077d1452b8d4df67dd66097ea2bb4b0665c06ab9912a4e9097fae3597f66
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:5184d4e70f978174c852b9e0a5879458e62b2644f9968d0ac6ac99f38f07d912
+      legacy_ablated_digest: sha256:5184d4e70f978174c852b9e0a5879458e62b2644f9968d0ac6ac99f38f07d912
+      equivalent: true
+  - retirement:
+      workflow_id: traceability-gate
+      legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+      replacement_policy_ref: policy.workflow.traceability-gate
+      replacement_policy_digest: sha256:221caa0e03e91b1ac40bbd7452eab2c0f61e3a79d460c58983d48085c6315e46
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:a6516fa871d30e41e16d426b36eace74042d9b07ea3727b4e41e4e850fe818df
+      legacy_ablated_digest: sha256:a6516fa871d30e41e16d426b36eace74042d9b07ea3727b4e41e4e850fe818df
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:954e8fae0b350bd58e5de3c865f67af2a149f4b76da0c4f1ae807f5609293ece
+      legacy_ablated_digest: sha256:954e8fae0b350bd58e5de3c865f67af2a149f4b76da0c4f1ae807f5609293ece
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:941110e2f6da64622660cdfd278f8cf1c3ccc3d1dc7b592f16ca7524ac0b30d6
+      legacy_ablated_digest: sha256:941110e2f6da64622660cdfd278f8cf1c3ccc3d1dc7b592f16ca7524ac0b30d6
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:14318e1fe75a5c85a3ac5af2eebce760056872845fc5b6b2b77261d34d20cc22
+      legacy_ablated_digest: sha256:14318e1fe75a5c85a3ac5af2eebce760056872845fc5b6b2b77261d34d20cc22
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:af0a54b60fb537dd2d2e2e949b6d622ba752690e74d321a2b8b1aafa190b43d6
+      legacy_ablated_digest: sha256:af0a54b60fb537dd2d2e2e949b6d622ba752690e74d321a2b8b1aafa190b43d6
+      equivalent: true
+  - retirement:
+      workflow_id: write-spec
+      legacy_workflow_digest: sha256:202e8b98e9fba9d1b82352b263580bfc4b7d6266485f47999420712e671faca5
+      replacement_policy_ref: policy.workflow.write-spec
+      replacement_policy_digest: sha256:7078b1a955db62abed87ed4b1dfec4af7b49ae1fa28e43bc03529fdcd6e75b38
+    legacy_present_in_control: true
+    legacy_present_after_ablation: false
+    surfaces:
+    - surface: routing
+      control_digest: sha256:2147e69c5e1a6d430a13340580562aee98a4068213004609403d861818551bc4
+      legacy_ablated_digest: sha256:2147e69c5e1a6d430a13340580562aee98a4068213004609403d861818551bc4
+      equivalent: true
+    - surface: readiness
+      control_digest: sha256:1a60d5eeaa33abe7c4b09ca36372d382adea86bf6c38ce06ff2641fa717658dc
+      legacy_ablated_digest: sha256:1a60d5eeaa33abe7c4b09ca36372d382adea86bf6c38ce06ff2641fa717658dc
+      equivalent: true
+    - surface: verdicts
+      control_digest: sha256:94cc33fa42b48498d186a41b939aa738a926766c5eb065b454f4d3c57e4c7898
+      legacy_ablated_digest: sha256:94cc33fa42b48498d186a41b939aa738a926766c5eb065b454f4d3c57e4c7898
+      equivalent: true
+    - surface: receipts
+      control_digest: sha256:fc28b903fe33fe216fa8f735d5d8d8cd39940cdf7f841af2f287cafc616f2fbb
+      legacy_ablated_digest: sha256:fc28b903fe33fe216fa8f735d5d8d8cd39940cdf7f841af2f287cafc616f2fbb
+      equivalent: true
+    - surface: continuation
+      control_digest: sha256:cba898fb47ee06db46c71dcc61f1d513801a3ddc68e2cdc8a956b32ce818a969
+      legacy_ablated_digest: sha256:cba898fb47ee06db46c71dcc61f1d513801a3ddc68e2cdc8a956b32ce818a969
+      equivalent: true
+  mismatch_count: 0
+  evaluation_error_count: 0

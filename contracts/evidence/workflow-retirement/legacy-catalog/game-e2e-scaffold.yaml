@@ -1,0 +1,40 @@
+schema_version: "0.1"
+workflow:
+  id: "game-e2e-scaffold"
+  phases:
+  - "4-build-verify"
+  trigger:
+  - "game project needs an end-to-end smoke path"
+  - "playable slice needs launch-to-result verification"
+  inputs:
+  - "playable slice definition"
+  - "engine/platform commands"
+  - "test framework plan"
+  - "acceptance checks"
+  - "release/readiness gate expectations"
+  steps:
+  - "define the shortest launch-to-result path"
+  - "scaffold or specify setup, action, assertion, teardown, and deterministic success signal"
+  - "decide automated, semi-automated, or manual evidence mode"
+  - "record command, evidence capture, failure repair policy, and release/readiness gate link"
+  - "run artifact game-e2e-scaffold with launch command, smoke path, evidence mode, gate link, and next_workflow"
+  - "run artifact test-check --path <game-e2e-artifact>"
+  outputs:
+  - "game E2E scaffold"
+  - "smoke path"
+  - "evidence requirement"
+  - "release gate link"
+  done_when:
+  - "launch-to-result path is explicit"
+  - "setup/action/assertion/teardown are explicit"
+  - "observable success signal is stable"
+  - "check mode and evidence are clear"
+  - "release/readiness gate can consume the result"
+  - "artifact game-e2e-scaffold registered the durable smoke artifact"
+  - "test-check proof passes or waiver is explicit"
+  blocked_when:
+  - "playable slice cannot launch"
+  - "no observable success condition exists"
+  - "evidence cannot be captured and no manual proof is acceptable"
+  handoff:
+  - "preserve launch command, smoke path, setup/action/assertion/teardown, success signal, evidence mode, gate link, and next automation action"

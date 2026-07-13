@@ -41,7 +41,7 @@ use forge_core_contracts::{
     PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    find_entry, load_embedded_catalog, project_legacy_workflow_compatibility,
+    find_entry, load_embedded_frozen_legacy_catalog, project_legacy_workflow_compatibility,
     simulate_workflow_governance, LegacyWorkflowGovernanceProjection, WorkflowGovernanceRejection,
     WorkflowGovernanceSimulation, WorkflowGovernanceStatus,
 };
@@ -387,7 +387,11 @@ impl WorkflowGovernanceProjectAdapter {
     /// Returns a typed error when migrated or legacy projection cannot be read.
     pub fn shadow(&self) -> Result<WorkflowGovernanceShadowReport, WorkflowGovernanceAdapterError> {
         let guidance = self.next()?;
-        let report = load_embedded_catalog();
+        // Shadow is an evidence-only comparison, never a routing or authority
+        // surface. Retired workflows therefore resolve from the frozen P5d.5
+        // subject while operational guidance remains bound to the separate
+        // 68-entry catalog.
+        let report = load_embedded_frozen_legacy_catalog();
         if !report.errors.is_empty() {
             return Err(WorkflowGovernanceAdapterError::EmbeddedCatalogInvalid);
         }

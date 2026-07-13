@@ -156,7 +156,7 @@ mod tests {
 
     fn corpus_dir() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../contracts/workflows")
+            .join("../../contracts/evidence/workflow-retirement/legacy-catalog")
             .canonicalize()
             .unwrap()
     }

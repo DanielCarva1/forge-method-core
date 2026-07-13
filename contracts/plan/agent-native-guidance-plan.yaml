@@ -55,6 +55,16 @@ delivery_strategy:
     - commit: "d18006c"
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
+  current_package_checkpoint:
+    version: "0.5.0"
+    publication_state: "source_pullable_after_repository_gates"
+    minimum_consumer_version: "0.5.0"
+    guide_payload_schema: "0.2"
+    workflow_release_identity: "0.4.0"
+    boundary: >-
+      Package SemVer identifies the pullable P5 completion checkpoint. It does
+      not rewrite the frozen five-release workflow-governance history, and no
+      tag is claimed before the release matrix succeeds.
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -360,24 +370,25 @@ phases:
           Typed saga compensation and external-system atomicity remain separate.
     current_program:
       id: "P5-workflow-migration"
-      status: "in_progress"
+      status: "completed"
       scope:
         - "move workflow authority from ordered prose into executable governance"
         - "preserve compatibility and prove deletion safety before retiring legacy fields"
     active_checkpoint:
-      id: "P5d.4b.2-continuity-lifecycle-reviewed-admission"
+      id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
       status: "completed"
       scope:
-        - "admit the nine agent-native continuity/lifecycle policies through the sequential V2 boundary"
-        - "preserve the exact three quarantines, 18 P6 candidates, and 47 compatibility-only workflows without executable authority"
+        - "retire exactly 42 legacy authority documents through aggregate dual-signature authorization"
+        - "preserve 47 compatibility-only, 3 quarantined, and 18 P6 workflows as visible non-executable states"
+        - "ship package 0.5.0 with guide payload schema 0.2 and minimum compatible consumer 0.5.0 while preserving workflow release identity 0.4.0"
     next_slice:
-      id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
+      id: "P6a-domain-pack-contract-and-composition"
       status: "pending"
       scope:
-        - "verify signed retirement authorization before removing any legacy authority"
-        - "prove deletion safety and the final executable/compatibility/quarantine/domain scorecard"
+        - "define closed versioned domain-pack contracts and deterministic composition"
+        - "keep pack knowledge outside implicit core or mutation authority"
     following_slices:
-      - "P6 domain-pack ecosystem"
+      - "P6b pack lifecycle, resolution, and trust"
     checkpoint_evidence:
       - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
       - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
@@ -391,12 +402,15 @@ phases:
       - "P5d.4b.1 admits 13 assurance/quality/operations workflows through 91 scenarios into a four-release, 33-policy runtime; catalog dispositions are 33/56/3/18 and aggregate validation is 156 clean checks"
       - "P5d.4b.2 admits nine agent-native continuity/lifecycle workflows through 63 scenarios into a five-release, 42-policy runtime; catalog dispositions are 42/47/3/18 and aggregate validation is 169 clean checks"
       - "P5d.4b completes core reviewed rollout while leaving all 47 compatibility-only workflows non-executable, all three quarantines excluded, and all 18 P6 candidates outside core authority"
+      - "P5d.5 archives a byte-identical 110-workflow historical catalog, removes exactly 42 admitted workflows from the 68-workflow operational catalog, and keeps P5d.4 recomputation intact"
+      - "P5d.5 admits an exact all-42 retirement checkpoint only after policy-derived five-surface deletion proof, repository consumer fixtures, two independent Ed25519 signatures, opaque kernel admission, 42/47/3/18 runtime accounting, 42/68 legacy accounting, and 170 clean validation checks"
+      - "P5d.5 runtime evidence is split: 189 frozen P5d.4 scenarios prove exact report/outcome/digest equality for 27 promoted policies, while the independent golden-path suite proves signed authority, readiness, completion receipts, and continuation for the 15 base policies; no single test adapter claims all 42"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
 
   - id: "P5-workflow-migration"
-    status: "in_progress"
+    status: "completed"
     outcome: "The catalog is incrementally expressed as policies, obligations, Assurance Claims, playbooks, and evaluators."
     strategy:
       - "Choose a small set of high-leverage workflows used by the golden path."
@@ -503,7 +517,7 @@ phases:
           isolation boundary.
         publication: "one pullable golden-path migration checkpoint after full workspace gates"
       - id: "P5d-catalog-rollout-and-legacy-retirement"
-        status: "in_progress"
+        status: "completed"
         size: "medium_to_large"
         depends_on: ["P5c-golden-path-workflow-migration"]
         outcome: >-
@@ -633,13 +647,20 @@ phases:
               - "batch composition and selection remain deterministic at catalog scale"
               - "P6 candidates cannot leak into the core executable denominator"
           - id: "P5d.5-signed-retirement-deletion-proof-and-final-scorecard"
-            status: "pending"
+            status: "completed"
             size: "large"
             depends_on: ["P5d.4b-remaining-core-reviewed-batches"]
             outcome: >-
               Legacy authority is retired only by a verified authorization
               bound to exact replacement, release, compatibility, shadow, and
               deletion evidence.
+            delivers:
+              - "byte-identical evidence-only snapshot of all 110 legacy workflows and a 68-workflow operational catalog with exactly the 42 admitted legacy documents removed"
+              - "policy-derived routing, readiness, verdict, receipt, and continuation deletion projections recomputed by the evaluator"
+              - "repository compatibility matrix, typed replacement tombstones, and fail-closed agent diagnostics for every retired id"
+              - "aggregate exact-set authorization with two independent Ed25519 roles and a kernel-owned opaque OnceLock capability"
+              - "final two-axis scorecard: runtime 42 executable / 47 compatibility / 3 quarantine / 18 domain; legacy 42 retired / 68 retained"
+              - "verified read-only retirement-status, caller override rejection, zero-write E2E, and 170 clean repository checks"
             exit:
               - "removing retired legacy documents cannot change routing, readiness, verdicts, receipts, or continuation"
               - "consumer compatibility window and typed replacement diagnostics are observed before retirement"
@@ -795,13 +816,13 @@ first_executable_slice:
     - "P5d.4b.1 complete catalog accounting at 33 migration / 56 compatibility-only / 3 quarantined / 18 domain-pack candidates, with 139 historical and 156 aggregate clean checks"
     - "P5d.4b.2 nine agent-native continuity/lifecycle policies, 63 scenarios, and sequential admission into a five-release 42-policy registry"
     - "P5d.4b complete catalog accounting at 42 migration / 47 compatibility-only / 3 quarantined / 18 domain-pack candidates, with 139 historical, 156 Batch A, and 169 aggregate clean checks"
+    - "P5d.5 frozen 110-workflow evidence archive, 68-workflow operational catalog, signed all-42 retirement checkpoint, typed tombstones, five-surface deletion proof, and 170 aggregate clean checks"
   next_action: >-
-    P5d.4b is complete. Execute P5d.5 next by defining and verifying signed
-    retirement authorization, compatibility-window evidence, deletion proof,
-    and the final catalog scorecard before removing any legacy authority. Keep
-    all 47 compatibility-only workflows non-executable, all three quarantines
-    excluded, and all 18 domain-pack candidates reserved for P6 until those
-    separate authority boundaries are complete.
+    P5 is complete. Execute P6a next by defining closed, content-addressed
+    Domain Pack contracts and deterministic core-plus-pack composition. Keep
+    all 18 domain candidates outside core authority until a reviewed pack can
+    prove provenance, compatibility, dependencies, conflicts, and namespace
+    safety without changing the completed P5 retirement boundary.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

@@ -43,11 +43,12 @@ pub mod workflow_migration;
 pub mod workflow_release;
 pub mod workflow_release_admission;
 pub mod workflow_release_admission_v2;
+pub mod workflow_retirement;
 
 pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
-    load_embedded_workflow_documents, load_workflow_documents, CatalogFileError, CatalogLoadReport,
-    LoadedWorkflowDocument, WorkflowDocumentLoadReport,
+    load_embedded_frozen_legacy_catalog, load_embedded_workflow_documents, load_workflow_documents,
+    CatalogFileError, CatalogLoadReport, LoadedWorkflowDocument, WorkflowDocumentLoadReport,
 };
 pub use embedded_contracts::{
     embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,
@@ -148,6 +149,12 @@ pub use workflow_release_admission_v2::{
     WorkflowReleaseAdmissionV2Evaluation, WorkflowReleaseAdmissionV2EvaluationAuthority,
     WorkflowReleaseAdmissionV2EvaluationStatus, WorkflowReleaseAdmissionV2Issue,
     WorkflowReleaseAdmissionV2IssueCode,
+};
+pub use workflow_retirement::{
+    evaluate_workflow_retirement, workflow_deletion_surface_digest,
+    WorkflowRetirementCandidateInput, WorkflowRetirementEvaluation,
+    WorkflowRetirementEvaluationAuthority, WorkflowRetirementEvaluationStatus,
+    WorkflowRetirementIssue, WorkflowRetirementIssueCode,
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.

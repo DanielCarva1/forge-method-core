@@ -1,0 +1,402 @@
+schema_version: '0.1'
+workflow_final_scorecard:
+  id: workflow-governance.final-scorecard.p5d-v0
+  scorecard_version: 0.1.0
+  authority: derived_candidate_only
+  release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  runtime_bundle:
+    bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+    bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+    policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+  legacy_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  evidence_index:
+    artifact_id: workflow-retirement.evidence-index.p5d-v0
+    embedded_ref: contracts/migration/workflow-retirement-evidence-index-v0.yaml
+    raw_digest: sha256:54af4c9b8d8c8ee10c988f7d6ac7cfb0400073b573da45260f6ff941c4d2e27b
+    canonical_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  runtime_disposition_counts:
+    executable: 42
+    compatibility_only: 47
+    quarantined: 3
+    domain_pack_candidate: 18
+  legacy_authority_counts:
+    retired: 42
+    retained: 68
+  assessments:
+  - workflow_id: adversarial-review
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: agent-analyze
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: agent-builder
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: api-browser-utility
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: architecture
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: atdd-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: brainstorming
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: build-story
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: builder-scaffold
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: checkpoint-preview
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: ci-quality-pipeline
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: code-review
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: collaboration-handoff
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: compliance-checklist
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: concept-selection
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: config-customization
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: context-recovery
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: correct-course
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: council-decision
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: create-epics
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: creative-session
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: design-thinking
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: devops-deployment-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: discover-intent
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: doc-index
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: doc-shard
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: domain-scan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: edge-case-review
+    runtime_disposition: quarantined
+    legacy_authority: retained
+  - workflow_id: editorial-review
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: engine-architecture
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: engine-setup
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: eval-design
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: evolve-project
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: game-brief
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-context
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-e2e-scaffold
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-prd
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-project
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-qa-review
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-retrospective
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-sprint-planning
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-sprint-status
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-story-creation
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-test-automation
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-test-framework
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: game-ux-design
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: gdd
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: grill-gate
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: guidance-engine
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: guide-route
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: guideline-audit
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: hook-event-plan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: innovation-strategy
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: investigation
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: isolated-eval-runner
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: market-scan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: mechanics-design
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: module-builder
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: module-distribution
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: module-ideation
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: module-validate
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: narrative-design
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: nfr-evidence-audit
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: observability-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: performance-plan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: plan-sprint
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: platform-ops-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: playtest-plan
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: privacy-data-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: problem-solving
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: product-area-map
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: product-requirements
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: project-context
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: quick-dev
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: quick-prototype
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: readiness-check
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: ready-release
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: reality-evidence-gate
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: release-readiness
+    runtime_disposition: quarantined
+    legacy_authority: retained
+  - workflow_id: repo-split-plan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: research-closeout
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: retrospective
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: risk-register
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: runtime-builder
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: security-plan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: session-prep
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: skill-convert
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: spec-distillation
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: sprint-status
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: start-runtime
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: story-creation
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: storytelling
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: teach-testing
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: team-operating-model
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: technical-feasibility-scan
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: test-automation
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: test-engagement-model
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: test-framework
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: test-review
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: test-strategy
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: traceability-gate
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  - workflow_id: track-decision
+    runtime_disposition: quarantined
+    legacy_authority: retained
+  - workflow_id: trunk-based-plan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: ux-plan
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: visual-alignment-prototype
+    runtime_disposition: domain_pack_candidate
+    legacy_authority: retained
+  - workflow_id: workflow-analyze
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: workflow-builder
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: workflow-validate
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: working-backwards-challenge
+    runtime_disposition: compatibility_only
+    legacy_authority: retained
+  - workflow_id: write-spec
+    runtime_disposition: executable
+    legacy_authority: retired
+    retirement_evidence_digest: sha256:30132a3074e310829dfd6f2d7cdd5a1624f7b11fe326c7583fd039bc3765d145
+  evaluation_digest: sha256:9b00a1943115a386e7bfc2a6fe7b89b65654a4d961a96421076bfecfd369201d

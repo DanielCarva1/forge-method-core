@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "skill-convert"
+  phases:
+  - "1-discovery"
+  - "6-evolve"
+  trigger:
+  - "user asks to convert an external skill or prompt into Forge runtime form"
+  - "existing instructions need Codex-native state-machine packaging"
+  inputs:
+  - "source skill or prompt"
+  - "target Forge module"
+  - "expected behavior"
+  - "validation needs"
+  steps:
+  - "extract intent, triggers, inputs, outputs, and constraints"
+  - "separate human facilitation from agent runtime state machine"
+  - "create Forge workflow, pack, catalog entry, and tests as needed"
+  - "validate without copying public product language"
+  outputs:
+  - "converted workflow/pack"
+  - "catalog/module updates"
+  - "validation evidence"
+  done_when:
+  - "converted artifact follows Forge structure"
+  - "human and agent surfaces are separated"
+  - "tests or validation cover the behavior"
+  blocked_when:
+  - "source licensing or copying boundary is unclear"
+  - "target behavior cannot be described independently"
+  handoff:
+  - "preserve source summary, generated paths, validation command, and copying boundary"

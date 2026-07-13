@@ -1,0 +1,36 @@
+schema_version: "0.1"
+workflow:
+  id: "creative-session"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "user asks for brainstorming, innovation, design thinking, storytelling, or creative direction"
+  - "state.module == creative-studio"
+  inputs:
+  - "creative question"
+  - "target audience"
+  - "constraints"
+  - "desired output format"
+  - "optional prior artifacts"
+  steps:
+  - "{'identify creative mode': 'brainstorm, design-thinking, innovation, storytelling, or presentation'}"
+  - "generate divergent options"
+  - "cluster and label options"
+  - "apply selection criteria"
+  - "produce a concrete artifact"
+  - "decide whether artifact feeds specification, remains reference, or becomes ephemeral"
+  - "update artifact index"
+  outputs:
+  - "creative artifact"
+  - "selected direction"
+  - "rejected/parked options summary"
+  - "next action"
+  done_when:
+  - "selected direction is explicit"
+  - "artifact is saved or summarized into state"
+  - "next workflow is known"
+  blocked_when:
+  - "user preference is required between materially different directions"
+  - "target audience or output format is missing"
+  handoff:
+  - "preserve selected direction, artifact path, rejected options summary, and next workflow"

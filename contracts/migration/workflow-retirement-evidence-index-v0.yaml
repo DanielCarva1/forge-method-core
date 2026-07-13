@@ -1,0 +1,219 @@
+schema_version: '0.1'
+workflow_retirement_evidence_index:
+  id: workflow-retirement.evidence-index.p5d-v0
+  index_version: 0.1.0
+  authority: candidate_only
+  release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  runtime_bundle:
+    bundle_id: bundle.workflow-governance.agent-native-continuity-v0
+    bundle_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+    policy_set_digest: sha256:d957c151eeebd13f7a58b9c1092164c8b0ba01ab696b94234bee7c807135e860
+  legacy_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  release_manifest:
+    artifact_id: workflow-governance.release.agent-native-continuity-v0
+    embedded_ref: contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml
+    raw_digest: sha256:aee405fd7aeeb18ee5fe9786a732235fc71b6752f21866692262fbcce1e71a67
+    canonical_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  runtime_bundle_artifact:
+    artifact_id: bundle.workflow-governance.agent-native-continuity-v0
+    embedded_ref: contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml
+    raw_digest: sha256:5faa16919223e609d0d9aee74e7dce4a9b350ab4596cec8b81b18e1606b9a4c6
+    canonical_digest: sha256:780d2667512a06436ce9c657cfb36632d54db23e3a9ed85dd47be8ccf9538c5b
+  snapshot_manifest:
+    artifact_id: workflow-retirement.legacy-snapshot-manifest.p5d-v0
+    embedded_ref: contracts/evidence/workflow-retirement-legacy-snapshot-manifest-v0.yaml
+    raw_digest: sha256:3cecc0e30bdb479b59b096e3525d2363f930bb8fb3796e2cc0924d87ebcda2ec
+    canonical_digest: sha256:0e427528e01986deff32f5f3e77529489baafb3f3915f9aafb25c7c5a0fb0041
+  runtime_evidence:
+    artifact_id: workflow-retirement.runtime-evidence.p5d-v0
+    embedded_ref: crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs
+    raw_digest: sha256:9cca0547574be20c74fb6901e5abd927f3902c239922e07bdeb132b5c8edbb36
+    canonical_digest: sha256:a74df0823af8f05d6d63bb64046c70c4fbf6d994772d6817bd5210f87f5baf94
+  release_history:
+    artifact_id: workflow-governance.registry.foundation-v0
+    embedded_ref: contracts/migration/workflow-governance-release-registry-agent-native-continuity-v0.yaml
+    raw_digest: sha256:508ed9b2590bdf4042138fcce5585ad1c8ac200560a1a915698499a151da6fc4
+    canonical_digest: sha256:86571b86d732e8bafd37f808fe6f62660fe56748ac05612f1d3e82de317bacd2
+  retirements:
+  - workflow_id: adversarial-review
+    legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+    replacement_policy_ref: policy.workflow.adversarial-review
+    replacement_policy_digest: sha256:2be0bfaae8227d59ea40a0c53cab7b9eb9c52881b74f92a393b5bd950c7f72d4
+  - workflow_id: architecture
+    legacy_workflow_digest: sha256:c2605ca63133039807edf10981a117c29ada46a5e34afe72a741891c6698c5dd
+    replacement_policy_ref: policy.workflow.architecture
+    replacement_policy_digest: sha256:401a911ef0cd4f60f91e4e29344b3aef8fbc9647e3c3cca82149388094bd266a
+  - workflow_id: atdd-plan
+    legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d
+    replacement_policy_ref: policy.workflow.atdd-plan
+    replacement_policy_digest: sha256:6bdc2f0035a467d5e4cdf7e3b8e149e5fd41e61ab98c03a91cd853474ee9aacd
+  - workflow_id: build-story
+    legacy_workflow_digest: sha256:179d2ba8eb1c20a0866f7cd3e496836effc873d296bf570a3e4fa15e1f9b2fcf
+    replacement_policy_ref: policy.workflow.build-story
+    replacement_policy_digest: sha256:2d1519f7daa442ff01240fba980f2382f9cb8294967376bb1c0409c6a29b6ed5
+  - workflow_id: checkpoint-preview
+    legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+    replacement_policy_ref: policy.workflow.checkpoint-preview
+    replacement_policy_digest: sha256:529075de7d8b120fff42ebd117fd724a7c00f2c1d217e18855ae17f6641dc327
+  - workflow_id: ci-quality-pipeline
+    legacy_workflow_digest: sha256:f02762a62672abdca2ae0e64329b01074476befe40cb64bd23ea29df3352b227
+    replacement_policy_ref: policy.workflow.ci-quality-pipeline
+    replacement_policy_digest: sha256:8ba71e68e5a5a1f7a47d2bb920ff7245ed6ee0b4a71425c5a20f5bf8f3a537f6
+  - workflow_id: code-review
+    legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+    replacement_policy_ref: policy.workflow.code-review
+    replacement_policy_digest: sha256:6d4ed9315161925d436f22abc6e782f5b73f121f3a1ca5fce9aa3f63aa046359
+  - workflow_id: collaboration-handoff
+    legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+    replacement_policy_ref: policy.workflow.collaboration-handoff
+    replacement_policy_digest: sha256:354185c9b4f58d3f2d5374d6d2980a07c4ff812ffc7eb7d23a5c4e79011588f0
+  - workflow_id: compliance-checklist
+    legacy_workflow_digest: sha256:3d7f6a4bd100685f4c5cc870fa43872bd57196ae81046d35ddfb5a58d19e6ca2
+    replacement_policy_ref: policy.workflow.compliance-checklist
+    replacement_policy_digest: sha256:720167b9061d80bd611ac1a9ec0c198bd33e58616f9d3156b0539730a6271e58
+  - workflow_id: context-recovery
+    legacy_workflow_digest: sha256:81bb94ce0a2fbe35463cba8ea3763b39a2d344cb3077c2972ec0232ed06c980a
+    replacement_policy_ref: policy.workflow.context-recovery
+    replacement_policy_digest: sha256:b89463ca48b98e6059921634d3fe1ae3c51914a9a1fab612487da34effd08ab3
+  - workflow_id: correct-course
+    legacy_workflow_digest: sha256:1c6dfcbdcdf7a1e09d53d10f0fe5655516934f2ca5c413f9faac6d8d18163826
+    replacement_policy_ref: policy.workflow.correct-course
+    replacement_policy_digest: sha256:8378ef86bf1ab065ce5f4b6fe407d063cac850d580520d55c4c985bf4790fe70
+  - workflow_id: devops-deployment-plan
+    legacy_workflow_digest: sha256:9d0a9479ea6726d52b3c2de46a3d7b8915de652979830e9b43d4718faa1486ef
+    replacement_policy_ref: policy.workflow.devops-deployment-plan
+    replacement_policy_digest: sha256:6d6a9d89a5c297492defdc6d40e8964809415508939143b182b61bef571b8bf8
+  - workflow_id: discover-intent
+    legacy_workflow_digest: sha256:a95940c7324dcbe42deda32d2b88df985851f04d47f9cfac7bd8d1a26882e3da
+    replacement_policy_ref: policy.workflow.discover-intent
+    replacement_policy_digest: sha256:8af0a595d16a03254aa35cead90ae5de4cdf52b1e0a454caff285467d4541d1a
+  - workflow_id: domain-scan
+    legacy_workflow_digest: sha256:3e16c0d56a4ecd6cf83b8fd652c5b87d18def4975a59dfba8c7a7daf2c093fec
+    replacement_policy_ref: policy.workflow.domain-scan
+    replacement_policy_digest: sha256:2dfc6e5fc5ab9e6c84492c97ae792fad181fd11317702151b3f10f181035b898
+  - workflow_id: eval-design
+    legacy_workflow_digest: sha256:13c70a006b665b90db201e539879cf83196d055b09f26b0c124eb2e1968e67f8
+    replacement_policy_ref: policy.workflow.eval-design
+    replacement_policy_digest: sha256:7d31ef70f158a132367f2b29119a565b46a4275a2995cbd88be0f7b1dec6af59
+  - workflow_id: evolve-project
+    legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+    replacement_policy_ref: policy.workflow.evolve-project
+    replacement_policy_digest: sha256:c41ee77ba3ad5ecf20e35701e9efbb68faec26da5487aab229dd5fd35089a8aa
+  - workflow_id: investigation
+    legacy_workflow_digest: sha256:7c3caeb3a18805581e5c93156b952474aa81ee531d3bf4165074951c9e2868ff
+    replacement_policy_ref: policy.workflow.investigation
+    replacement_policy_digest: sha256:6fe4e4892a795f9b8b28e712ca340a0f757bd33b84ab3148ba4ab707f62f8be2
+  - workflow_id: nfr-evidence-audit
+    legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+    replacement_policy_ref: policy.workflow.nfr-evidence-audit
+    replacement_policy_digest: sha256:fdd0b2f9dacac04f6527aa4887a00b0f6154f344433c69275c0fa7d7471fa6bb
+  - workflow_id: observability-plan
+    legacy_workflow_digest: sha256:30e040344378beae53c84d0384939f8787b8e63f0cccb3db453f1e37629d2b1b
+    replacement_policy_ref: policy.workflow.observability-plan
+    replacement_policy_digest: sha256:6eec3e0cbd949eeee0dcf978c25577aecdc0db83d3e316406d8197c3db90da9f
+  - workflow_id: plan-sprint
+    legacy_workflow_digest: sha256:2742eb7827341ee61af988d63e13d2b1f69c80710823111a9a121ac7908399a1
+    replacement_policy_ref: policy.workflow.plan-sprint
+    replacement_policy_digest: sha256:d48088efbe8d884aae0aa457d2a5322bcb58548a9489596f87d8bf38a98f3c5c
+  - workflow_id: platform-ops-plan
+    legacy_workflow_digest: sha256:f392cac8a9b6b0d9973c5ded5e2ab23f265d1fd75932c7cd3b11ca5056bea52a
+    replacement_policy_ref: policy.workflow.platform-ops-plan
+    replacement_policy_digest: sha256:98b9f755727f4f8376c0ceb78c65537c1c9b460a8ad42aeaf35a7098128dc79c
+  - workflow_id: privacy-data-plan
+    legacy_workflow_digest: sha256:f4d311e1366608007a1b64531ac081c453d2f49479ad8c0cfc2fcfb2ff818df4
+    replacement_policy_ref: policy.workflow.privacy-data-plan
+    replacement_policy_digest: sha256:ed0552c529ebf8ee144040ddca00b6e00e83cc6d909fe9a04619fae84fb2a877
+  - workflow_id: product-area-map
+    legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+    replacement_policy_ref: policy.workflow.product-area-map
+    replacement_policy_digest: sha256:3634c6eb6548496041d28bac27963332fa31ce5c2278eb1c5f8a34ce628c684f
+  - workflow_id: product-requirements
+    legacy_workflow_digest: sha256:dc57ec433c1a8991d2e33579f4acc30d074070031651bd23132ced0936f0166a
+    replacement_policy_ref: policy.workflow.product-requirements
+    replacement_policy_digest: sha256:6452144501701ae9561bf67f5044d8f3965d766588f7c9c4baa526a37c9113c4
+  - workflow_id: project-context
+    legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+    replacement_policy_ref: policy.workflow.project-context
+    replacement_policy_digest: sha256:32de135dec1efc1875c7bf403f70213f4533c455ea1751d29f66dcaf039bc5ed
+  - workflow_id: readiness-check
+    legacy_workflow_digest: sha256:1454b541c8799da625ebe7dbab6dc67fe8e1e89f77275350828ac96a270da4d7
+    replacement_policy_ref: policy.workflow.readiness-check
+    replacement_policy_digest: sha256:87951c8734bb00010f5bbfa2702644b7539e79af6e015b97f9b333544fe207a0
+  - workflow_id: ready-release
+    legacy_workflow_digest: sha256:a720c6e9e4877b26903603c8abe28633f279fecb51ab0f462ba505a4f10d0ec7
+    replacement_policy_ref: policy.workflow.ready-release
+    replacement_policy_digest: sha256:307726df7d3ed1dd7be9d7f308b87920a635d2b65ab034b46a10d88d1d6c3a64
+  - workflow_id: reality-evidence-gate
+    legacy_workflow_digest: sha256:af52bc3b6283aa45b90e124b1999e35f90f589bcaeaea93ad1c6d6674437e966
+    replacement_policy_ref: policy.workflow.reality-evidence-gate
+    replacement_policy_digest: sha256:6ca1325fcd87d9e846a7eda82fca6946d0e2963e5a6310d07363d0ad319d1f59
+  - workflow_id: research-closeout
+    legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+    replacement_policy_ref: policy.workflow.research-closeout
+    replacement_policy_digest: sha256:fe64802d59cfb75486efd7814cf9e0172a1ba68ed23863075b00b5ed011baacc
+  - workflow_id: retrospective
+    legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+    replacement_policy_ref: policy.workflow.retrospective
+    replacement_policy_digest: sha256:c6277d03de4495e3b61de9dc9ac2fdcdba11514e31a8b5dd6b81f97c3d7fa0cf
+  - workflow_id: risk-register
+    legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+    replacement_policy_ref: policy.workflow.risk-register
+    replacement_policy_digest: sha256:06be2290e1424225998f511efe9f1e1038c6fdc2137685b6365b861e482834b7
+  - workflow_id: security-plan
+    legacy_workflow_digest: sha256:5a78f1af75a27df9673a4bca3f953b395fb7a41e72d742f8bdf7002245467f4e
+    replacement_policy_ref: policy.workflow.security-plan
+    replacement_policy_digest: sha256:9a653dc45bd18b20bc789d810c656449241d3d83c91bba6ac727f7416b7c0fc4
+  - workflow_id: spec-distillation
+    legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+    replacement_policy_ref: policy.workflow.spec-distillation
+    replacement_policy_digest: sha256:02200069d2a61ce417a5f1fa1bcf578b620605a69e153f75ecd3f5b8331098db
+  - workflow_id: sprint-status
+    legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+    replacement_policy_ref: policy.workflow.sprint-status
+    replacement_policy_digest: sha256:fa586fd956be64979a4ee120e05c4e2f45eee51f72c35725654d4bc05ea28a12
+  - workflow_id: story-creation
+    legacy_workflow_digest: sha256:1faef3dfecdf64264ae7521edbd360bb04e068f5decac0f11f6a9f962a957faf
+    replacement_policy_ref: policy.workflow.story-creation
+    replacement_policy_digest: sha256:5b12c15baa8bb0319fecd5d824b21dde30b5ce6fb372bc012dff5e77053c6dfa
+  - workflow_id: technical-feasibility-scan
+    legacy_workflow_digest: sha256:cf392d6597cab2802a58da12a361d83285328816a0c47bdfb1e35da90d242909
+    replacement_policy_ref: policy.workflow.technical-feasibility-scan
+    replacement_policy_digest: sha256:3e10b279f19c5ac0ff6655352e4edd85d5becf2e3b470dfce143c6f9ae6023be
+  - workflow_id: test-automation
+    legacy_workflow_digest: sha256:f807c26e59729905a118d9bac0124f331f6530372814733b802e2769f3ca2914
+    replacement_policy_ref: policy.workflow.test-automation
+    replacement_policy_digest: sha256:9ba2cb1b60d4c093920bad7a9fd2208d360994d48a1af27dfb1e977375a2539d
+  - workflow_id: test-framework
+    legacy_workflow_digest: sha256:d4fed3976edf84ae8e72b3c00a4f385046aaa1137f1b043d8a20c2e1bfb7d619
+    replacement_policy_ref: policy.workflow.test-framework
+    replacement_policy_digest: sha256:6942046ebe3140aba32064d832a7507ff6da357f2eb90a038847c6c00d7ab83c
+  - workflow_id: test-review
+    legacy_workflow_digest: sha256:0a601bc00a7600646f54ffc5dc9f94dcd4db6d8b450a2787d7ec60fe9c108b27
+    replacement_policy_ref: policy.workflow.test-review
+    replacement_policy_digest: sha256:5ee9fd798cc571f6ce11bdaf39b3dc14b20e77aa7847a10fda71b35d8f36ef9d
+  - workflow_id: test-strategy
+    legacy_workflow_digest: sha256:28530d5e59f6ca75535b208d3a3afa5e7066a65c08a661307f647bc68bc243d4
+    replacement_policy_ref: policy.workflow.test-strategy
+    replacement_policy_digest: sha256:5d07b41f6b8b69cc3d4f5b3bc99dac7e01236608eff68c8f1cd6f79bfba451c8
+  - workflow_id: traceability-gate
+    legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+    replacement_policy_ref: policy.workflow.traceability-gate
+    replacement_policy_digest: sha256:221caa0e03e91b1ac40bbd7452eab2c0f61e3a79d460c58983d48085c6315e46
+  - workflow_id: write-spec
+    legacy_workflow_digest: sha256:202e8b98e9fba9d1b82352b263580bfc4b7d6266485f47999420712e671faca5
+    replacement_policy_ref: policy.workflow.write-spec
+    replacement_policy_digest: sha256:7078b1a955db62abed87ed4b1dfec4af7b49ae1fa28e43bc03529fdcd6e75b38
+  deletion_proof:
+    artifact_id: workflow-retirement.deletion-proof.p5d-v0
+    embedded_ref: contracts/evidence/workflow-retirement-deletion-proof-v0.yaml
+    raw_digest: sha256:111be14339326bd2d8d61c4c58b12fe2f44c821f8f76100153055fe5500df18b
+    canonical_digest: sha256:cff55d885ded0c40ec8f3e86e8baa0c500f0f67b441319e1b95c91821372707a
+  consumer_report:
+    artifact_id: workflow-retirement.consumer-window.p5d-v0
+    embedded_ref: contracts/evidence/workflow-retirement-consumer-window-v0.yaml
+    raw_digest: sha256:a4ec3877ae61d2d41c4fee77cb91c80ec31f7992d4aec2f6ef4a127c30164b3a
+    canonical_digest: sha256:4b27463a5b43bb6ece3fe3dc51019e84322115f06880cc0375389e126fc13e44

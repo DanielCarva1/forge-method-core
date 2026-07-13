@@ -168,6 +168,18 @@ fn merged_validation_root(label: &str) -> PathBuf {
     fs::create_dir_all(baseline_target.parent().expect("baseline history parent"))
         .expect("create baseline history directory");
     fs::copy(baseline_source, baseline_target).expect("copy P5d.2 baseline history");
+    let retirement_evidence_source =
+        root.join("crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs");
+    let retirement_evidence_target =
+        temp.join("crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs");
+    fs::create_dir_all(
+        retirement_evidence_target
+            .parent()
+            .expect("retirement evidence parent"),
+    )
+    .expect("create retirement evidence directory");
+    fs::copy(retirement_evidence_source, retirement_evidence_target)
+        .expect("copy P5d.5 runtime evidence source");
     copy_dir_recursive(
         &root
             .join("docs")
@@ -1499,7 +1511,12 @@ fn rekor_entry_fixture_for_dsse(
 fn validate_library_passes_current_repo() {
     let root = merged_validation_root("validate-library-current-repo");
     let summary = run_validate(&root);
-    assert_eq!(summary.status, ValidationStatus::Passed);
+    assert_eq!(
+        summary.status,
+        ValidationStatus::Passed,
+        "diagnostics: {:?}",
+        summary.diagnostics
+    );
     assert!(
         summary.diagnostics.is_empty(),
         "diagnostics: {:?}",
@@ -1563,6 +1580,13 @@ fn validate_library_passes_current_repo() {
         .expect("agent-native-continuity V2 release admission check");
     assert_eq!(continuity_admission_check.status, ValidationStatus::Passed);
     assert_eq!(continuity_admission_check.diagnostics, 0);
+    let retirement_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_retirement_checkpoint")
+        .expect("P5d.5 retirement candidate check");
+    assert_eq!(retirement_check.status, ValidationStatus::Passed);
+    assert_eq!(retirement_check.diagnostics, 0);
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
@@ -1617,6 +1641,59 @@ fn assert_behavioral_check_failed(summary: &forge_core_cli::ValidateSummary, pat
         "expected behavioral diagnostic containing {path:?}, found {:?}",
         summary.diagnostics
     );
+}
+
+fn assert_retirement_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "workflow_retirement_checkpoint")
+        .expect("P5d.5 retirement candidate check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected retirement diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
+}
+
+#[test]
+fn workflow_retirement_candidate_rejects_tampered_content_binding() {
+    const DELETION_REF: &str = "contracts/evidence/workflow-retirement-deletion-proof-v0.yaml";
+    let root = merged_validation_root("workflow-retirement-tampered-deletion-proof");
+    let path = root.join(DELETION_REF);
+    let text = fs::read_to_string(&path).expect("read retirement deletion proof");
+    let tampered = text.replacen(
+        "legacy_present_after_ablation: false",
+        "legacy_present_after_ablation: true",
+        1,
+    );
+    fs::write(&path, tampered).expect("tamper retirement deletion proof");
+
+    let summary = run_validate(&root);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_retirement_check_failed(&summary, DELETION_REF);
+}
+
+#[test]
+fn workflow_retirement_checkpoint_rejects_tampered_signature() {
+    const AUTH_REF: &str = "contracts/migration/workflow-retirement-authorization-v0.yaml";
+    let root = merged_validation_root("workflow-retirement-tampered-signature");
+    let path = root.join(AUTH_REF);
+    let text = fs::read_to_string(&path).expect("read retirement authorization");
+    let marker = "    signature: ";
+    let offset = text.find(marker).expect("retirement signature") + marker.len();
+    let mut bytes = text.into_bytes();
+    bytes[offset] = if bytes[offset] == b'0' { b'1' } else { b'0' };
+    fs::write(&path, bytes).expect("tamper retirement signature");
+
+    let summary = run_validate(&root);
+    assert_eq!(summary.status, ValidationStatus::Failed);
+    assert_retirement_check_failed(&summary, AUTH_REF);
 }
 
 fn assert_independent_admission_check_failed(

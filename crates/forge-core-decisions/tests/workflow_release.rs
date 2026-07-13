@@ -32,7 +32,7 @@ fn repo_root() -> PathBuf {
 
 fn fixture() -> Fixture {
     let root = repo_root();
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
     let loaded = load_workflow_documents(&catalog_dir);
     assert!(loaded.is_clean(), "catalog errors: {:?}", loaded.errors);
     let workflows = loaded.workflows;

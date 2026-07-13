@@ -1,0 +1,41 @@
+schema_version: "0.1"
+workflow:
+  id: "visual-alignment-prototype"
+  phases:
+  - "1-discovery"
+  - "2-specification"
+  - "3-plan"
+  trigger:
+  - "discovery, specification, or planning is shaping a user-facing product, game, creative surface, or interaction"
+  - "user-facing product shape is still abstract"
+  - "human needs to see a screen, mockup, wireframe, screenshot, clickable sketch, or style direction before build"
+  - "previous implementation missed the intended experience"
+  inputs:
+  - "discovery, PRD, UX notes, references, and anti-references"
+  - "target user and first successful session"
+  - "platform and visual constraints"
+  - "available prototype tool or artifact format"
+  steps:
+  - "define the first visible moment and what the human must be able to judge"
+  - "{'choose option count': 'one narrow proof, two contrasting directions, or three exploration lanes'}"
+  - "{'choose prototype form': 'sketch, wireframe, static screen, screenshot, clickable mock, style tile, or runnable thin slice'}"
+  - "create or specify the visible artifact(s) and proof command/manual check"
+  - "compare artifact against intent, references, anti-references, accessibility, and domain taste"
+  - "record mismatch, correction choices, accepted decisions, rejected directions, and next workflow"
+  outputs:
+  - "visible prototype artifact"
+  - "option count and rationale"
+  - "visual mismatch list"
+  - "human correction choices"
+  - "accepted and rejected visual decisions"
+  - "next workflow"
+  done_when:
+  - "human can inspect the product shape before build"
+  - "mismatches are accepted, corrected, or routed"
+  - "next workflow is known"
+  blocked_when:
+  - "no user-facing surface can be named"
+  - "prototype format cannot be created or inspected"
+  - "visual direction changes core requirements"
+  handoff:
+  - "preserve artifact paths, option count, inspection result, corrections, accepted/rejected decisions, proof, and next workflow"

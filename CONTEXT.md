@@ -23,6 +23,12 @@ Active architecture direction:
 Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
+Pullable compatibility checkpoint: the Rust workspace package version is
+`0.5.0`. Guide `describe`/`status` retirement diagnostics use payload schema
+`0.2`, and consumers of that extended surface must be at least `0.5.0`.
+Workflow governance release identity remains the frozen `0.4.0` five-release
+chain; package SemVer and governed release identity are separate axes.
+
 ## Domain language
 
 - **Human**: the source of intent, preferences, value judgments, trade-offs,
@@ -191,8 +197,13 @@ Active implementation plan:
   lifecycle policies after 63 scenarios into a five-release, 42-policy
   registry, preserving the exact predecessor prefix. P5d.4b is complete with
   42 migration, 47 compatibility-only, three quarantined, and 18 domain-pack
-  candidates. The latter three classes remain non-executable; trusted
-  retirement stays in P5d.5 and domain authority stays in P6.
+  candidates. P5d.5 then freezes the full 110-workflow historical subject,
+  removes exactly the 42 admitted legacy documents from the 68-workflow
+  operational catalog, and admits their retirement through policy-derived
+  five-surface deletion evidence, repository consumer fixtures, two
+  independent Ed25519 roles, and an opaque kernel capability. Runtime and
+  legacy lifecycle remain separate scorecard axes: 42/47/3/18 and 42/68.
+  Domain authority stays in P6.
 - The **Workflow Governance Kernel Module** validates a closed policy bundle
   and separates two lanes. `guide govern-simulate` derives candidate guidance
   from raw YAML and is never authority. The opaque verified lane receives a
@@ -226,8 +237,9 @@ sequential V2 authority chain without rewriting frozen V1 history. P5d.4b.2
 completes reviewed core rollout with the nine continuity/lifecycle workflows `checkpoint-preview`,
 `collaboration-handoff`, `research-closeout`, `retrospective`, `sprint-status`,
 `project-context`, `spec-distillation`, `evolve-project`, and
-`product-area-map`. P5d.5 now owns signed deletion-backed retirement and final
-scorecard proof; 47 compatibility-only workflows remain explicitly
+`product-area-map`. P5d.5 completes P5 with signed deletion-backed retirement,
+verified tombstone diagnostics, a byte-identical evidence archive, and the
+final two-axis scorecard; 47 compatibility-only workflows remain explicitly
 non-executable, three remain quarantined, and 18 remain reserved for P6. The workflow
 path targets the local agent-facing CLI; allowlist metadata does not constitute
 an end-to-end MCP workflow Adapter.

@@ -39,8 +39,8 @@ use forge_core_decisions::workflow_release_admission_v2::{
 use forge_core_decisions::{
     embedded_text, embedded_yaml_paths, evaluate_workflow_migration,
     evaluate_workflow_release_admission_candidate, evaluate_workflow_release_registry,
-    load_embedded_catalog, load_embedded_workflow_documents, validate_workflow_governance_bundle,
-    workflow_policy_set_digest, workflow_runtime_bundle_digest, WorkflowBehavioralBundleInput,
+    validate_workflow_governance_bundle, workflow_policy_set_digest,
+    workflow_runtime_bundle_digest, WorkflowBehavioralBundleInput,
     WorkflowBehavioralReportIdentity, WorkflowReleaseAdmissionCandidateInput,
     WorkflowReleaseAdmissionEvaluationStatus, WorkflowReleaseRegistryEvaluationAuthority,
     WorkflowReleaseRegistryEvaluationStatus, WorkflowReleaseRegistryIssue,
@@ -782,8 +782,13 @@ fn load_review_candidate_input_v2(
     let proposed_registry: WorkflowGovernanceReleaseRegistryDocument =
         load_binding_v2(&index.proposed_registry)?;
 
-    let loaded_workflows = load_embedded_workflow_documents();
-    let loaded_catalog = load_embedded_catalog();
+    // P5d.4 admission must remain independently recomputable after P5d.5
+    // removes retired projections from the operational compatibility catalog.
+    // The frozen loader preserves the original 110 typed documents and their
+    // logical refs but is deliberately not available to routing.
+    let loaded_workflows =
+        forge_core_decisions::catalog::load_embedded_frozen_legacy_workflow_documents();
+    let loaded_catalog = forge_core_decisions::catalog::load_embedded_frozen_legacy_catalog();
     if !loaded_workflows.errors.is_empty() || !loaded_catalog.errors.is_empty() {
         return Err(AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked);
     }
@@ -792,12 +797,7 @@ fn load_review_candidate_input_v2(
         &loaded_workflows.workflows,
         &loaded_catalog.catalog,
     );
-    let mut source_bytes = HashMap::new();
-    for path in embedded_yaml_paths() {
-        if let Some(text) = embedded_text(&path) {
-            source_bytes.insert(RepoPath(path), text.as_bytes().to_vec());
-        }
-    }
+    let mut source_bytes = embedded_review_source_bytes();
     source_bytes.insert(
         index.evaluator_source.embedded_ref.clone(),
         descriptor.evaluator_source.to_vec(),
@@ -921,12 +921,7 @@ fn load_review_candidate_input(
     let proposed_registry: WorkflowGovernanceReleaseRegistryDocument =
         load_binding(&index.proposed_registry)?;
 
-    let mut source_bytes = HashMap::new();
-    for path in embedded_yaml_paths() {
-        if let Some(text) = embedded_text(&path) {
-            source_bytes.insert(RepoPath(path), text.as_bytes().to_vec());
-        }
-    }
+    let mut source_bytes = embedded_review_source_bytes();
     source_bytes.insert(
         index.evaluator_source.embedded_ref.clone(),
         include_bytes!("../../../forge-core-decisions/src/workflow_behavior.rs").to_vec(),
@@ -1031,6 +1026,25 @@ fn collect_behavioral_bundle_refs(
         }
     }
     refs
+}
+
+fn embedded_review_source_bytes() -> HashMap<RepoPath, Vec<u8>> {
+    let mut source_bytes = HashMap::new();
+    for path in embedded_yaml_paths() {
+        if let Some(text) = embedded_text(&path) {
+            source_bytes.insert(RepoPath(path), text.as_bytes().to_vec());
+        }
+    }
+    // The evidence-only snapshot supplies historical logical refs removed from
+    // the operational catalog. For the 68 surviving refs these exact frozen
+    // bytes deliberately overwrite the operational copy, ensuring every P5d.4
+    // recomputation is anchored to one immutable pre-retirement baseline.
+    for (path, bytes) in
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+    {
+        source_bytes.insert(path, bytes.to_vec());
+    }
+    source_bytes
 }
 
 fn load_binding<T: serde::de::DeserializeOwned>(
@@ -1448,6 +1462,12 @@ mod tests {
 
     #[test]
     fn both_signed_v2_releases_form_the_exact_five_release_chain() {
+        let operational = forge_core_decisions::load_embedded_catalog();
+        let frozen = forge_core_decisions::catalog::load_embedded_frozen_legacy_catalog();
+        assert!(operational.is_clean() && frozen.is_clean());
+        assert_eq!(operational.catalog.len(), 68);
+        assert_eq!(frozen.catalog.len(), 110);
+
         let registry = load_admitted_workflow_governance_reviewed_release_registry()
             .expect("reviewed V1 plus two signed V2 releases");
         let assurance = registry

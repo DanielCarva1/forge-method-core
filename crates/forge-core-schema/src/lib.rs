@@ -7,13 +7,16 @@ use forge_core_contracts::{
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
     WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
     WorkflowBehavioralReviewSubjectDocument, WorkflowBehavioralScenarioCorpusDocument,
-    WorkflowBehavioralShadowReportDocument, WorkflowGovernanceBundleDocument,
+    WorkflowBehavioralShadowReportDocument, WorkflowConsumerCompatibilityMatrixDocument,
+    WorkflowConsumerCompatibilityReportDocument, WorkflowDeletionProofDocument,
+    WorkflowFinalScorecardDocument, WorkflowGovernanceBundleDocument,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceLedgerDocument,
     WorkflowGovernancePolicyOverlayDocument, WorkflowGovernanceReceiptDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
     WorkflowMigrationPlanDocument, WorkflowReleaseAdmissionAuthorizationDocument,
     WorkflowReleaseReviewIndexDocument, WorkflowReleaseReviewerRegistryDocument,
-    WorkflowRetirementAuthorizationDocument,
+    WorkflowRetirementAuthorizationDocument, WorkflowRetirementAuthorizationV2Document,
+    WorkflowRetirementEvidenceIndexDocument, WorkflowRetirementTombstoneCatalogDocument,
 };
 use schemars::{schema_for, JsonSchema};
 use serde::Serialize;
@@ -223,6 +226,48 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "WorkflowRetirementAuthorizationDocument",
             Some("workflow_retirement_authorization"),
             "retirement proposal requires trusted binding and signature verification; deserialization is not authority",
+        ),
+        schema_artifact::<WorkflowRetirementEvidenceIndexDocument>(
+            "workflow_retirement_evidence_index",
+            "WorkflowRetirementEvidenceIndexDocument",
+            Some("workflow_retirement_evidence_index"),
+            "candidate-only exact retirement/evidence inventory; authored bindings cannot retire legacy authority",
+        ),
+        schema_artifact::<WorkflowDeletionProofDocument>(
+            "workflow_deletion_proof",
+            "WorkflowDeletionProofDocument",
+            Some("workflow_deletion_proof"),
+            "candidate-only ablation result; authored equality requires deterministic recomputation",
+        ),
+        schema_artifact::<WorkflowConsumerCompatibilityReportDocument>(
+            "workflow_consumer_compatibility_report",
+            "WorkflowConsumerCompatibilityReportDocument",
+            Some("workflow_consumer_compatibility_report"),
+            "candidate-only compatibility-window observations; authored counts cannot authorize retirement",
+        ),
+        schema_artifact::<WorkflowConsumerCompatibilityMatrixDocument>(
+            "workflow_consumer_compatibility_matrix",
+            "WorkflowConsumerCompatibilityMatrixDocument",
+            Some("workflow_consumer_compatibility_matrix"),
+            "candidate-only repository fixture matrix; it is not runtime telemetry or retirement authority",
+        ),
+        schema_artifact::<WorkflowRetirementTombstoneCatalogDocument>(
+            "workflow_retirement_tombstone_catalog",
+            "WorkflowRetirementTombstoneCatalogDocument",
+            Some("workflow_retirement_tombstone_catalog"),
+            "non-authoritative diagnostics only; tombstones cannot route, execute, or retire workflows",
+        ),
+        schema_artifact::<WorkflowFinalScorecardDocument>(
+            "workflow_final_scorecard",
+            "WorkflowFinalScorecardDocument",
+            Some("workflow_final_scorecard"),
+            "derived candidate-only two-axis scorecard; authored counts are not retirement authority",
+        ),
+        schema_artifact::<WorkflowRetirementAuthorizationV2Document>(
+            "workflow_retirement_authorization_v2",
+            "WorkflowRetirementAuthorizationV2Document",
+            Some("workflow_retirement_authorization_v2"),
+            "aggregate candidate authorization; trusted independent signature verification is required",
         ),
         schema_artifact::<WorkflowGovernanceBundleDocument>(
             "workflow_governance_bundle",
@@ -439,6 +484,27 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "workflow_retirement_authorization" => {
             "retirement requires trusted evidence binding and signature verification; deserialization is not authority"
+        }
+        "workflow_retirement_evidence_index" => {
+            "candidate-only exact evidence index; bindings cannot retire legacy authority"
+        }
+        "workflow_deletion_proof" => {
+            "candidate-only deletion comparison; authored equality cannot retire legacy authority"
+        }
+        "workflow_consumer_compatibility_report" => {
+            "candidate-only window observations; authored counts cannot retire legacy authority"
+        }
+        "workflow_consumer_compatibility_matrix" => {
+            "candidate-only repository fixture matrix; it is not telemetry or retirement authority"
+        }
+        "workflow_retirement_tombstone_catalog" => {
+            "non-authoritative diagnostics only; tombstones cannot route or execute workflows"
+        }
+        "workflow_final_scorecard" => {
+            "derived candidate-only two-axis view; authored counts cannot create retired authority"
+        }
+        "workflow_retirement_authorization_v2" => {
+            "candidate authorization only; trusted two-role signature verification is required"
         }
         "workflow_governance_bundle" => {
             "raw policy evaluation is simulation-only; verified use requires an opaque trusted kernel snapshot"

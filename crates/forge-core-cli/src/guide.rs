@@ -10,26 +10,34 @@ use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, RepoPath, WorkflowDocument,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowMigrationBatchDocument,
-    WorkflowMigrationPlanDocument, ENVELOPE_SCHEMA_VERSION,
+    WorkflowMigrationPlanDocument, WorkflowRetirementTombstone,
+    WorkflowRetirementTombstoneCatalogDocument,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
 use forge_core_decisions::{
     evaluate_workflow_migration, evaluate_workflow_release, load_catalog, load_embedded_catalog,
-    load_embedded_workflow_documents, load_workflow_documents,
-    project_legacy_workflow_compatibility, simulate_workflow_governance, CatalogLoadReport,
-    LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport, WorkflowGovernanceSimulation,
-    WorkflowMigrationAudit, WorkflowMigrationAuditStatus, WorkflowReleaseEvaluation,
-    WorkflowReleaseEvaluationStatus,
+    load_workflow_documents, project_legacy_workflow_compatibility, simulate_workflow_governance,
+    CatalogLoadReport, LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport,
+    WorkflowGovernanceSimulation, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
+    WorkflowReleaseEvaluation, WorkflowReleaseEvaluationStatus,
 };
 use forge_core_decisions::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
 };
+use forge_core_kernel::load_admitted_workflow_retirement_checkpoint;
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::cli_error::ExitError;
 
 const DEFAULT_WORKFLOW_MIGRATION_PLAN_REF: &str =
     "contracts/policies/workflow-migration-foundation-v0.yaml";
+
+/// Version of the compact routing payload carried by `guide describe` and
+/// `guide status`. This is intentionally independent of the CLI envelope
+/// version: removing 42 routes changes the meaning of workflow counts and a
+/// 0.1 host must fail closed instead of interpreting 68 as the old 110.
+pub const GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION: &str = "0.2";
 
 // ============================================================================
 // guide describe — the compact routing surface (R3 token cliff, DD13).
@@ -58,23 +66,33 @@ pub struct DescribePayload {
     pub schema_version: String,
     pub phases: Vec<String>,
     pub workflows: Vec<DescribeWorkflow>,
+    /// Non-routable compatibility identifiers retained only so an agent can
+    /// recover from a stale workflow recommendation without guessing.
+    pub retired_workflows: Vec<RetiredWorkflowDiagnostic>,
     pub gates: Vec<DescribeGate>,
     pub exit_reasons: Vec<String>,
 }
 
 impl DescribePayload {
     /// Build the describe payload from a loaded catalog + the static gate map.
-    #[must_use]
-    pub fn from_catalog(catalog: &Catalog) -> Self {
+    ///
+    /// # Errors
+    /// Fails closed when the embedded tombstone catalog cannot be parsed; a
+    /// host must never mistake a retired id for an unknown routable id.
+    pub fn from_catalog(catalog: &Catalog) -> Result<Self, String> {
+        let tombstones = embedded_retirement_tombstones()?;
+        let retired_ids = retirement_ids(tombstones);
         let workflows = catalog
             .entries
             .iter()
+            .filter(|entry| !retired_ids.contains(entry.id.0.as_str()))
             .map(compact_workflow)
             .collect::<Vec<_>>();
-        Self {
-            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+        Ok(Self {
+            schema_version: GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION.to_owned(),
             phases: Phase::ALL.iter().map(Phase::to_string).collect(),
             workflows,
+            retired_workflows: retirement_rows(tombstones),
             gates: gate_table(),
             exit_reasons: vec![
                 "ok".into(),
@@ -83,8 +101,66 @@ impl DescribePayload {
                 "conflict".into(),
                 "env_config".into(),
             ],
-        }
+        })
     }
+}
+
+/// Typed, non-authoritative compatibility diagnostic for one retired legacy
+/// workflow. This is deliberately distinct from [`DescribeWorkflow`], so a
+/// host cannot accidentally treat a tombstone as routable catalog content.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct RetiredWorkflowDiagnostic {
+    pub workflow_id: String,
+    pub diagnostic_code: String,
+    pub replacement_policy_ref: String,
+    pub replacement_release_id: String,
+    pub replacement_argv: Vec<String>,
+}
+
+fn embedded_retirement_tombstones(
+) -> Result<&'static WorkflowRetirementTombstoneCatalogDocument, String> {
+    load_admitted_workflow_retirement_checkpoint()
+        .map(forge_core_kernel::AdmittedWorkflowRetirementCheckpoint::tombstones)
+        .map_err(|error| format!("verified retirement checkpoint is unavailable: {error}"))
+}
+
+fn retirement_rows(
+    catalog: &WorkflowRetirementTombstoneCatalogDocument,
+) -> Vec<RetiredWorkflowDiagnostic> {
+    catalog
+        .workflow_retirement_tombstone_catalog
+        .tombstones
+        .iter()
+        .map(retirement_row)
+        .collect()
+}
+
+fn retirement_ids(catalog: &WorkflowRetirementTombstoneCatalogDocument) -> BTreeSet<&str> {
+    catalog
+        .workflow_retirement_tombstone_catalog
+        .tombstones
+        .iter()
+        .map(|tombstone| tombstone.workflow_id.0.as_str())
+        .collect()
+}
+
+fn retirement_row(tombstone: &WorkflowRetirementTombstone) -> RetiredWorkflowDiagnostic {
+    RetiredWorkflowDiagnostic {
+        workflow_id: tombstone.workflow_id.0.clone(),
+        diagnostic_code: tombstone.diagnostic_code.0.clone(),
+        replacement_policy_ref: tombstone.replacement_policy_ref.0.clone(),
+        replacement_release_id: tombstone.replacement_release_id.0.clone(),
+        replacement_argv: tombstone.replacement_argv.clone(),
+    }
+}
+
+fn retired_workflow(workflow_id: &str) -> Result<Option<RetiredWorkflowDiagnostic>, String> {
+    Ok(embedded_retirement_tombstones()?
+        .workflow_retirement_tombstone_catalog
+        .tombstones
+        .iter()
+        .find(|tombstone| tombstone.workflow_id.0 == workflow_id)
+        .map(retirement_row))
 }
 
 /// Compress a catalog entry to the compact describe row.
@@ -131,9 +207,8 @@ fn gate_table() -> Vec<DescribeGate> {
 ///   current working directory, use it (brownfield/forge workspace); otherwise
 ///   load the catalog embedded in the binary (greenfield, zero-config).
 ///
-/// This is the fix for the greenfield blocker: a freshly installed
-/// `forge-core` binary now carries its 110 workflows inside it, so
-/// `guide status` works on any machine without `--catalog-dir`.
+/// A freshly installed binary carries only the current operational catalog,
+/// so routing never falls back to the frozen legacy retirement subject.
 fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
     if let Some(dir) = catalog_dir {
         load_catalog(dir)
@@ -147,15 +222,33 @@ fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
     }
 }
 
-fn resolve_workflow_documents(catalog_dir: Option<&Path>) -> WorkflowDocumentLoadReport {
+const FROZEN_LEGACY_CATALOG_DIR: &str = "contracts/evidence/workflow-retirement/legacy-catalog";
+
+/// Resolve the historical P5a audit subject without ever leaking it into the
+/// live routing surface. An explicit directory remains caller-owned input;
+/// default source is the frozen 110-document retirement evidence snapshot.
+fn resolve_migration_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
+    if let Some(dir) = catalog_dir {
+        load_catalog(dir)
+    } else {
+        let local = Path::new(FROZEN_LEGACY_CATALOG_DIR);
+        if local.is_dir() {
+            load_catalog(local)
+        } else {
+            forge_core_decisions::catalog::load_embedded_frozen_legacy_catalog()
+        }
+    }
+}
+
+fn resolve_migration_workflow_documents(catalog_dir: Option<&Path>) -> WorkflowDocumentLoadReport {
     if let Some(dir) = catalog_dir {
         load_workflow_documents(dir)
     } else {
-        let local = Path::new("contracts/workflows");
+        let local = Path::new(FROZEN_LEGACY_CATALOG_DIR);
         if local.is_dir() {
             load_workflow_documents(local)
         } else {
-            load_embedded_workflow_documents()
+            forge_core_decisions::catalog::load_embedded_frozen_legacy_workflow_documents()
         }
     }
 }
@@ -170,8 +263,10 @@ pub fn run_describe(catalog_dir: Option<&Path>) -> CliEnvelope<DescribePayload> 
             format!("catalog load failed: {} error(s)", report.errors.len()),
         );
     }
-    let payload = DescribePayload::from_catalog(&report.catalog);
-    CliEnvelope::ok("guide.describe", payload)
+    match DescribePayload::from_catalog(&report.catalog) {
+        Ok(payload) => CliEnvelope::ok("guide.describe", payload),
+        Err(error) => CliEnvelope::err("guide.describe", ExitReason::EnvConfig, error),
+    }
 }
 
 // Re-export the load report type for callers that want the raw errors.
@@ -184,8 +279,8 @@ pub fn run_migration_audit(
     catalog_dir: Option<&Path>,
     plan_file: Option<&Path>,
 ) -> CliEnvelope<WorkflowMigrationAudit> {
-    let workflows = resolve_workflow_documents(catalog_dir);
-    let catalog = resolve_catalog(catalog_dir);
+    let workflows = resolve_migration_workflow_documents(catalog_dir);
+    let catalog = resolve_migration_catalog(catalog_dir);
     if !workflows.is_clean() || !catalog.is_clean() {
         return CliEnvelope::err(
             "guide.migration-audit",
@@ -292,7 +387,7 @@ pub fn run_rollout_audit(
         return CliEnvelope::err("guide.rollout-audit", exit, message);
     };
 
-    let workflows = resolve_workflow_documents(catalog_dir);
+    let workflows = resolve_migration_workflow_documents(catalog_dir);
     if !workflows.is_clean() {
         return CliEnvelope::err(
             "guide.rollout-audit",
@@ -613,6 +708,34 @@ pub fn run_decide(
             }
         };
 
+    // Tombstones are checked before the operational catalog. A retired id is
+    // neither Unknown nor Accepted, even if a stale external catalog still
+    // contains the legacy workflow.
+    let retired = match retired_workflow(&decision.recommended_workflow.0) {
+        Ok(retired) => retired,
+        Err(error) => {
+            return CliEnvelope::err("guide.decide", ExitReason::EnvConfig, error);
+        }
+    };
+    if let Some(retired) = retired {
+        let detail = match serde_json::to_string(&retired) {
+            Ok(detail) => detail,
+            Err(error) => {
+                return CliEnvelope::err(
+                    "guide.decide",
+                    ExitReason::EnvConfig,
+                    format!("cannot serialize retirement diagnostic: {error}"),
+                );
+            }
+        };
+        let mut envelope: CliEnvelope<DecideAccepted> =
+            CliEnvelope::err("guide.decide", ExitReason::RejectedByGate, detail);
+        if let Some(error) = envelope.error.as_mut() {
+            "workflow_retired".clone_into(&mut error.code.0);
+        }
+        return envelope;
+    }
+
     // 2. Load the catalog.
     let report = resolve_catalog(catalog_dir);
     if !report.is_clean() {
@@ -730,6 +853,9 @@ pub struct StatusPayload {
     pub current_phase: String,
     /// Workflows eligible in `current_phase` (id + phases).
     pub eligible_workflows: Vec<StatusWorkflow>,
+    /// Compatibility-only tombstones. These identifiers are never eligible
+    /// and never enter routing candidates.
+    pub retired_workflows: Vec<RetiredWorkflowDiagnostic>,
     /// Gates required to move FORWARD out of this phase, if any.
     pub pending_gates: Vec<StatusGate>,
     /// The phase each pending gate unlocks.
@@ -775,10 +901,16 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
         );
     }
 
+    let tombstones = match embedded_retirement_tombstones() {
+        Ok(catalog) => catalog,
+        Err(error) => return CliEnvelope::err("guide.status", ExitReason::EnvConfig, error),
+    };
+    let retired_ids = retirement_ids(tombstones);
     let eligible_workflows = report
         .catalog
         .entries
         .iter()
+        .filter(|entry| !retired_ids.contains(entry.id.0.as_str()))
         .filter(|e| {
             e.phases
                 .iter()
@@ -790,14 +922,16 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
         })
         .collect::<Vec<_>>();
 
+    let retired_workflows = retirement_rows(tombstones);
     let (pending_gates, next_phases) = forward_gates_for(current);
 
     CliEnvelope::ok(
         "guide.status",
         StatusPayload {
-            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            schema_version: GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION.to_owned(),
             current_phase: current.to_string(),
             eligible_workflows,
+            retired_workflows,
             pending_gates,
             next_phases,
         },
@@ -1472,12 +1606,12 @@ mod tests {
     }
 
     #[test]
-    fn describe_emits_all_110_workflows_compactly() {
+    fn describe_emits_all_68_operational_workflows_compactly() {
         let env = run_describe(Some(&real_catalog_dir()));
         assert!(env.ok, "describe should succeed");
         assert_eq!(env.exit_code(), 0);
         let payload = env.data.as_ref().expect("payload");
-        assert_eq!(payload.workflows.len(), 110);
+        assert_eq!(payload.workflows.len(), 68);
         // every row is compact: id + phases + one summary line
         for w in &payload.workflows {
             assert!(!w.id.is_empty());
@@ -1490,7 +1624,7 @@ mod tests {
     fn describe_includes_phases_gates_exit_reasons_and_schema_version() {
         let env = run_describe(Some(&real_catalog_dir()));
         let p = env.data.as_ref().expect("payload");
-        assert_eq!(p.schema_version, ENVELOPE_SCHEMA_VERSION);
+        assert_eq!(p.schema_version, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION);
         assert!(p.phases.contains(&"1-discovery".to_string()));
         assert!(p.phases.contains(&"6-evolve".to_string()));
         assert!(p.gates.iter().any(|g| g.gate == "system-design"));
@@ -1537,8 +1671,8 @@ mod tests {
         p
     }
 
-    const VALID_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: discover-intent\n  reason: start here\n  current_phase: 1-discovery\n";
-    const PLAN_IN_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: plan-sprint\n  reason: skip\n  current_phase: 1-discovery\n";
+    const VALID_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: brainstorming\n  reason: start here\n  current_phase: 1-discovery\n";
+    const PLAN_IN_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: create-epics\n  reason: skip\n  current_phase: 1-discovery\n";
     const UNKNOWN_WF: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: nope\n  reason: x\n  current_phase: 1-discovery\n";
     const BAD_YAML: &str = "schema_version: \"0.1\"\nguide_decision: { not valid";
 
@@ -1550,7 +1684,7 @@ mod tests {
         assert!(env.ok, "should accept: {:?}", env.error);
         assert_eq!(env.exit_code(), 0);
         let p = env.data.as_ref().expect("payload");
-        assert_eq!(p.recommended_workflow, "discover-intent");
+        assert_eq!(p.recommended_workflow, "brainstorming");
     }
 
     #[test]
@@ -1573,6 +1707,78 @@ mod tests {
         assert!(!env.ok);
         let code = env.error.as_ref().expect("error").code.0.clone();
         assert!(code.starts_with("unknown_workflow"), "got: {code}");
+    }
+
+    #[test]
+    fn retired_workflow_is_typed_and_never_unknown_or_accepted() {
+        let tmp = tempfile_dir();
+        let retired = "schema_version: '0.1'\nguide_decision:\n  recommended_workflow: architecture\n  reason: stale host recommendation\n  current_phase: 1-discovery\n";
+        let df = write_decision(&tmp, "retired.yaml", retired);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
+
+        assert_eq!(env.exit_reason.0, "rejected_by_gate");
+        assert!(env.data.is_none());
+        let error = env.error.expect("typed retirement diagnostic");
+        assert_eq!(error.code.0, "workflow_retired");
+        assert!(error.message.contains("policy.workflow.architecture"));
+        assert!(error.message.contains("replacement_argv"));
+    }
+
+    #[test]
+    fn every_retired_workflow_is_typed_and_never_routed() {
+        let tombstones = embedded_retirement_tombstones().expect("embedded tombstones");
+        assert_eq!(
+            tombstones
+                .workflow_retirement_tombstone_catalog
+                .tombstones
+                .len(),
+            42
+        );
+        let tmp = tempfile_dir();
+        let decision_path = tmp.join("retired.yaml");
+
+        for tombstone in &tombstones.workflow_retirement_tombstone_catalog.tombstones {
+            let decision = format!(
+                "schema_version: '0.1'\nguide_decision:\n  recommended_workflow: {}\n  reason: stale host recommendation\n  current_phase: 1-discovery\n",
+                tombstone.workflow_id.0
+            );
+            std::fs::write(&decision_path, decision).expect("write retired decision");
+            let envelope = run_decide(&decision_path, Some(&real_catalog_dir()), &[], None);
+
+            assert!(!envelope.ok, "{} must not route", tombstone.workflow_id.0);
+            assert!(envelope.data.is_none());
+            let error = envelope.error.expect("typed retirement diagnostic");
+            assert_eq!(
+                error.code.0, "workflow_retired",
+                "{} must not degrade to unknown_workflow",
+                tombstone.workflow_id.0
+            );
+        }
+    }
+
+    #[test]
+    fn describe_separates_operational_routes_from_retired_tombstones() {
+        let env = run_describe(Some(&real_catalog_dir()));
+        let payload = env.data.expect("describe payload");
+        assert_eq!(payload.workflows.len(), 68);
+        assert_eq!(payload.retired_workflows.len(), 42);
+        assert!(payload
+            .retired_workflows
+            .iter()
+            .any(|row| row.workflow_id == "architecture"));
+        assert!(!payload.workflows.iter().any(|row| row.id == "architecture"));
+    }
+
+    #[test]
+    fn tombstones_come_only_from_the_verified_checkpoint() {
+        let tombstones = embedded_retirement_tombstones().expect("verified checkpoint");
+        assert_eq!(
+            tombstones
+                .workflow_retirement_tombstone_catalog
+                .tombstones
+                .len(),
+            42
+        );
     }
 
     #[test]
@@ -1607,11 +1813,16 @@ mod tests {
         let p = env.data.as_ref().expect("payload");
         assert_eq!(p.current_phase, "2-specification");
         assert!(!p.eligible_workflows.is_empty());
-        // anytime workflows must be eligible in every phase
-        assert!(p
+        assert_eq!(p.retired_workflows.len(), 42);
+        assert!(!p
             .eligible_workflows
             .iter()
-            .any(|w| w.id == "adversarial-review"));
+            .any(|workflow| workflow.id == "architecture"));
+        // Tombstones remain diagnostics only, never eligible routes.
+        assert!(p
+            .retired_workflows
+            .iter()
+            .any(|workflow| workflow.workflow_id == "adversarial-review"));
         // the system-design gate unlocks 3-plan
         assert_eq!(p.pending_gates.len(), 1);
         assert_eq!(p.pending_gates[0].gate, "system-design");
@@ -1775,18 +1986,36 @@ mod tests {
     }
 
     #[test]
-    fn migration_audit_classifies_real_catalog_without_mutation_or_drift() {
+    fn post_retirement_migration_audit_is_read_only_and_reports_historical_plan_drift() {
         let envelope = run_migration_audit(Some(&real_catalog_dir()), None);
-        assert!(envelope.ok, "migration audit: {:?}", envelope.error);
+        assert!(!envelope.ok, "the historical 110-item plan must not be replayed over the 68-item operational catalog");
+        let audit = envelope.data.expect("migration audit payload");
+        assert_eq!(audit.catalog_count, 68);
+        assert_eq!(audit.classified_count, 68);
+        assert_eq!(audit.shadow_parity.equivalent_count, 68);
+        assert_eq!(audit.shadow_parity.drift_count, 0);
+        assert!(!audit.shadow_parity.mutation_allowed);
+        assert!(!audit.deletion_baseline.retirement_allowed);
+        assert_eq!(audit.manifest.entries.len(), 68);
+        assert!(audit.manifest.manifest_digest.starts_with("sha256:"));
+        assert!(audit.issues.iter().any(|issue| {
+            matches!(
+                issue.code,
+                forge_core_decisions::WorkflowMigrationIssueCode::CatalogCountMismatch
+            )
+        }));
+    }
+
+    #[test]
+    fn default_migration_audit_uses_frozen_110_item_legacy_subject() {
+        let envelope = run_migration_audit(None, None);
+        assert!(envelope.ok, "frozen audit: {:?}", envelope.error);
         let audit = envelope.data.expect("migration audit payload");
         assert_eq!(audit.catalog_count, 110);
         assert_eq!(audit.classified_count, 110);
         assert_eq!(audit.shadow_parity.equivalent_count, 110);
         assert_eq!(audit.shadow_parity.drift_count, 0);
         assert!(!audit.shadow_parity.mutation_allowed);
-        assert!(!audit.deletion_baseline.retirement_allowed);
-        assert_eq!(audit.manifest.entries.len(), 110);
-        assert!(audit.manifest.manifest_digest.starts_with("sha256:"));
     }
 
     #[test]
@@ -1800,7 +2029,8 @@ mod tests {
             plan.to_str().expect("plan utf-8"),
             "--json",
         ]));
-        assert!(result.is_ok());
+        let error = result.expect_err("historical plan must be rejected after retirement");
+        assert_eq!(error.exit_code(), 2);
 
         let error = run_guide_migration_audit(&args(&["--mutate-legacy"]))
             .expect_err("authority-like flag must fail");

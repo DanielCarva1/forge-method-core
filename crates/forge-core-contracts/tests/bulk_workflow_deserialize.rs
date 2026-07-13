@@ -3,8 +3,8 @@
 //! together. Any file that fails to deserialize (unknown field, bad type) fails
 //! this test by name, so regressions are localized.
 //!
-//! The workflow files live in the workspace root `contracts/workflows/`,
-//! reachable from this crate's tests as `../../contracts/workflows/`.
+//! P5d.5 freezes all 110 historical documents under retirement evidence while
+//! `contracts/workflows/` retains only the 68 non-retired operational documents.
 use forge_core_contracts::{Phase, WorkflowDocument};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,9 +16,16 @@ fn workflows_dir() -> PathBuf {
         .expect("contracts/workflows dir must exist (run scripts/migrate_workflows.py)")
 }
 
+fn frozen_workflows_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/evidence/workflow-retirement/legacy-catalog")
+        .canonicalize()
+        .expect("frozen 110-workflow retirement snapshot must exist")
+}
+
 #[test]
 fn all_migrated_workflows_deserialize_into_typed_schema() {
-    let dir = workflows_dir();
+    let dir = frozen_workflows_dir();
     let mut files: Vec<PathBuf> = fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("read {dir:?}: {e}"))
         .filter_map(Result::ok)
@@ -82,6 +89,33 @@ fn all_migrated_workflows_deserialize_into_typed_schema() {
         "expected exactly 110 workflow files, got {}",
         files.len()
     );
+}
+
+#[test]
+fn operational_catalog_contains_exact_retained_subset() {
+    let operational = workflows_dir();
+    let frozen = frozen_workflows_dir();
+    let ids = |dir: &Path| {
+        fs::read_dir(dir)
+            .expect("workflow directory")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+            .map(|path| {
+                let raw = fs::read_to_string(path).expect("workflow bytes");
+                yaml_serde::from_str::<WorkflowDocument>(&raw)
+                    .expect("typed workflow")
+                    .workflow
+                    .id
+                    .0
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let operational_ids = ids(&operational);
+    let frozen_ids = ids(&frozen);
+    assert_eq!(operational_ids.len(), 68);
+    assert_eq!(frozen_ids.len(), 110);
+    assert!(operational_ids.is_subset(&frozen_ids));
 }
 
 #[test]

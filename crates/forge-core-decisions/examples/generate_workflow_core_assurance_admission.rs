@@ -443,6 +443,11 @@ fn fixture() -> WorkflowReleaseAdmissionCandidateInput {
 
     let mut sources = HashMap::new();
     add_files(&root().join("contracts"), &mut sources);
+    sources.extend(
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+            .into_iter()
+            .map(|(path, bytes)| (path, bytes.to_vec())),
+    );
     for relative in [EVALUATOR, HISTORY] {
         sources.insert(
             path(relative),

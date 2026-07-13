@@ -1,0 +1,28 @@
+schema_version: '0.1'
+workflow_release_reviewer_registry:
+  registry_id: workflow-retirement-reviewers.p5d-v0
+  registry_version: 0.1.0
+  authority: candidate_only
+  credentials:
+  - credential_id: reviewer.workflow-retirement.evidence-review.p5d-v0
+    principal_id: principal.workflow-retirement.evidence-review.p5d-v0
+    public_key_fingerprint: sha256:c3ef6bb19f098211e6d083a9d5394197a12226b77964b988ceee9508f87565e4
+    public_key_hex: b637d0adef39f2b8886005973e31b1aff6df968a7b5fb3d542789c4e9c6c6f90
+    algorithm: ed25519
+    roles:
+    - semantic_reviewer
+    status: active
+    valid_from_unix: 1783814400
+    valid_until_unix: 1815350400
+    independence_domain: retirement-evidence-review
+  - credential_id: reviewer.workflow-retirement.authorization.p5d-v0
+    principal_id: principal.workflow-retirement.authorization.p5d-v0
+    public_key_fingerprint: sha256:3cba322e182dd6620017210ea840aae21e890d079f21f4192c2ed5c770d1c926
+    public_key_hex: d9e66fda49179ba62c1f3f10843e1f50f8375e451e2df4e7bc79b91325eae6a9
+    algorithm: ed25519
+    roles:
+    - release_authorizer
+    status: active
+    valid_from_unix: 1783814400
+    valid_until_unix: 1815350400
+    independence_domain: retirement-authorization

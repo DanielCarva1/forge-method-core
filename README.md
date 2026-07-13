@@ -117,9 +117,9 @@ meeting or a branch policy — it is a property of the system.
 
 ### It is growing into a complete build method
 
-Governance is only half of the product vision. Forge carries a typed catalog of
-110 legacy workflows spanning the intended path from idea to delivery across
-seven phases:
+Governance is only half of the product vision. Forge preserves a frozen,
+typed 110-workflow historical subject while exposing a 68-workflow operational
+catalog spanning the intended path from idea to delivery across seven phases:
 
 ```
 0-route → 1-discovery → 2-specification → 3-plan → 4-build-verify → 5-ready-operate → 6-evolve
@@ -127,11 +127,11 @@ seven phases:
 
 The target experience interrogates and scopes an idea, designs and slices it,
 builds and verifies representative behavior, proves readiness, and preserves
-continuity after release. Today, the P5c runtime admits 15 policies covering the
-representative golden path. The other 95 catalog workflows remain explicit
-compatibility, migration, quarantine, or future Domain Pack material until P5d
-and P6 provide equivalent governed evidence. Named gates reduce guesswork, but
-only admitted policies and verified receipts can authorize progression or done.
+continuity after release. P5 admits 42 executable policies and retires their 42
+legacy authority documents with signed deletion evidence. The remaining runtime
+dispositions are 47 compatibility-only, three quarantined, and 18 future Domain
+Pack candidates. Named gates reduce guesswork, but only admitted policies and
+verified receipts can authorize progression or done.
 
 ---
 
@@ -201,11 +201,11 @@ agent at runtime.*
 
 ## Features
 
-**The method (catalog of 110 typed workflows)** — discovery, brainstorming,
-requirements, architecture, planning, story creation, build, adversarial review,
-edge-case review, reality-evidence gates, readiness checks, traceability, and
-more. Each carries `trigger`, `inputs`, `steps`, `outputs`, and the phases it
-belongs to.
+**The method (68 operational workflows plus a frozen 110-workflow historical
+subject)** — discovery, brainstorming, requirements, architecture, planning,
+story creation, build, adversarial review, edge-case review, reality-evidence
+gates, readiness checks, traceability, and more. The 42 retired ids remain
+available only as typed compatibility tombstones and immutable audit evidence.
 
 **The guide** — a state-aware router that, given the current phase and a decision
 request, returns the workflow(s) the agent should run next. Describe the whole
@@ -513,8 +513,8 @@ Use `workflow init|next|resume` for executable agent-native guidance.
 
 ### Audit workflow migration safety (P5a)
 
-This is an agent-facing, read-only migration surface. It inventories all 110
-typed workflow documents, classifies each one, derives stable links to future
+This is an agent-facing, read-only migration surface. It inventories the frozen
+110-document historical subject, classifies each one, derives stable links to future
 policies/obligations/claims/playbooks/evaluators, and compares the derived
 compatibility projection with the existing guide catalog:
 
@@ -717,8 +717,48 @@ while preserving the exact 33-policy predecessor prefix. P5d.4b is complete at
 and 18 domain-pack candidates. The 47 compatibility-only workflows remain
 explicitly non-executable, the quarantines remain absent from runtime, and the
 18 domain workflows remain reserved for P6. Validation now preserves anchors
-of 139 historical checks, 156 through Batch A, and 169 aggregate checks. P5d.5
-signed retirement and deletion proof is the next checkpoint.
+of 139 historical checks, 156 through Batch A, and 169 pre-retirement checks.
+
+### Retire legacy authority with signed deletion evidence (P5d.5)
+
+P5d.5 keeps a byte-identical evidence-only snapshot of all 110 legacy workflow
+documents and removes exactly the 42 admitted replacements from the operational
+catalog. Historical P5d review still recomputes against the frozen subject;
+agent routing sees only the 68 non-retired workflows. A retired id never becomes
+unknown or routable: `guide describe|status|decide` returns a typed tombstone
+with its replacement policy, release, and argv.
+
+```bash
+cargo run -p forge-core-decisions --example generate_workflow_retirement_checkpoint -- --check
+forge-core validate --root .
+forge-core workflow retirement-status --root . --json
+```
+
+The checkpoint derives routing, readiness, verdict, receipt, and continuation
+digests from the exact replacement policies; binds a repository compatibility
+matrix and typed diagnostics; requires two independent Ed25519 roles; and is
+held by a kernel-owned opaque capability. Caller/project artifact overrides do
+not select retirement authority, and the status command is read-only. The final
+scorecard deliberately has two axes: runtime is `42 executable / 47
+compatibility-only / 3 quarantined / 18 domain-pack`, while legacy authority is
+`42 retired / 68 retained`. Validation preserves the 169-check pre-retirement
+anchor and passes 170 aggregate checks. P5 is complete; P6a Domain Pack contract
+and composition is next.
+
+Runtime proof is intentionally split rather than overstated. The retirement
+runtime-evidence test reexecutes 189 frozen P5d.4 scenarios for the 27 policies
+added after the base release and requires exact report, outcome, and digest
+equality in the promoted admitted runtime. The separate golden-path suite proves
+the 15 base policies through signed authority, readiness, completion receipts,
+and replacement-agent continuation. Their union is the admitted 42-policy set;
+neither test alone claims an all-42 adapter path. The operational routing catalog
+remains a separate 68-workflow surface.
+
+P5d.5 is the pullable `0.5.0` package checkpoint. Consumers that read the
+extended guide `describe`/`status` payload must support guide payload schema
+`0.2`; the minimum compatible Forge package/consumer version for the retirement
+surface is `0.5.0`. Workflow governance release identity intentionally remains
+`0.4.0`: the package checkpoint does not rewrite the frozen five-release chain.
 
 ### Simulate workflow governance (P5b)
 
@@ -732,7 +772,7 @@ ranked next actions without granting those candidates runtime authority:
 forge-core guide govern-simulate \
   --bundle-file contracts/workflow-governance/kernel-v0.yaml \
   --input-file docs/fixtures/workflow-governance-kernel-v0/complete.yaml \
-  --legacy-workflow-file contracts/workflows/build-story.yaml \
+  --legacy-workflow-file contracts/evidence/workflow-retirement/legacy-catalog/build-story.yaml \
   --json
 ```
 
@@ -1363,8 +1403,8 @@ gates.
   governance ledger, signed applicability/capability/evidence/decision/waiver
   authority, late completion recheck, read-only legacy shadow comparison, and
   replacement-agent resume, isolated ledger TCB, atomic multi-record commits,
-  and adversarial plus full-workspace proof. P5d remains responsible for the
-  rest of the catalog and safe legacy retirement.
+  and adversarial plus full-workspace proof. P5d subsequently completed the
+  remaining reviewed core rollout and safe legacy retirement.
 - P5d.1 versioned release foundation: closed release/batch/retirement proposal
   contracts, one explicit disposition per workflow, a canonical generated
   110-entry foundation manifest and 15-policy candidate batch, real embedded
@@ -1394,6 +1434,10 @@ gates.
   policies, 63 scenarios, and a five-release 42-policy registry. Final P5d.4b
   accounting is 42/47/3/18; compatibility-only, quarantined, and P6 workflows
   remain non-executable.
+- P5d.5 completes P5 with a frozen 110-workflow evidence archive, a
+  68-workflow operational catalog, exact all-42 signed retirement, policy-derived
+  five-surface deletion proof, repository consumer fixtures, typed tombstones,
+  opaque kernel admission, and the final 42/47/3/18 plus 42/68 scorecard.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1450,14 +1494,10 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P5d.5 legacy retirement** -- P5d.4b is complete with 42 executable policies
-  and explicit 47 compatibility-only / 3 quarantined / 18 P6 dispositions.
-  Forge must now verify signed retirement authorizations, compatibility-window
-  evidence, and deletion safety before removing any legacy authority. No
-  compatibility-only, quarantined, or P6 workflow is runtime executable or
-  retirement-ready yet. Retirement requires measured behavioral compatibility,
-  deletion/ablation evidence, consumer migration diagnostics, and human review
-  rather than catalog-count parity.
+- **P6 Domain Pack ecosystem** -- P5 is complete. The 18 domain candidates
+  remain outside core authority until closed pack contracts, deterministic
+  composition, provenance, compatibility, lifecycle, and conflict handling are
+  implemented and independently reviewed.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
@@ -1495,7 +1535,8 @@ gates.
 ### Patch notes — v0.1.0
 
 - Initial typed-contract runtime: contracts, engine, store, validator, CLI.
-- 110-workflow catalog migrated and eligible.
+- Historical 110-workflow catalog migrated and eligible at the time of v0.1.0;
+  P5d.5 later froze that subject and reduced current routing to 68 workflows.
 - Guide (describe / decide / status) with router eval corpus.
 - Claim engine + conflict detection + worktree isolation + coordination eval.
 - Integrity spine: non-malleable, origin-bound authority; write-time rejection.
@@ -1536,7 +1577,9 @@ cargo run -p forge-core-command-surface --example generate_command_surface_docs 
 
 Other top-level authority surfaces:
 
-- `contracts/workflows/` — the 110-workflow catalog (the method).
+- `contracts/workflows/` — the 68-workflow operational catalog used by routing.
+- `contracts/evidence/workflow-retirement/legacy-catalog/` — the immutable
+  110-workflow historical audit subject; never a routing fallback.
 - `contracts/spec/`, `contracts/plan/`, `contracts/stories/` — typed discovery
   and delivery artifacts.
 - `contracts/claims/` — claim fixtures and schemas.

@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P5d.5 signed legacy retirement and the pullable `0.5.0` checkpoint.** Forge
+  preserves a byte-identical 110-workflow historical audit subject, routes only
+  the 68-workflow operational catalog, and retires exactly 42 admitted legacy
+  authorities through policy-derived five-surface deletion evidence, typed
+  consumer diagnostics, independent Ed25519 roles, and opaque kernel admission.
+  Runtime evidence re-executes 189 frozen P5d.4 scenarios for the 27 additional
+  policies and requires exact report, outcome, and digest equality in the
+  promoted admitted runtime. The separate golden-path suite exercises the 15
+  base policies with signed authority, readiness, completion receipts, and
+  replacement-agent continuation; together the two gates cover 42 policies.
+  Guide payload schema `0.2` and minimum consumer/package version `0.5.0` are
+  additive distribution boundaries; the frozen workflow governance release
+  identity remains `0.4.0`.
 - **P5a workflow migration foundation.** A closed typed plan and pure
   `forge-core-decisions` evaluator now inventory all 110 workflow documents,
   classify 15 golden-path workflows, 18 domain-pack candidates, and 77

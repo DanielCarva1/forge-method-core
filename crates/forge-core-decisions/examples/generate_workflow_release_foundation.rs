@@ -246,7 +246,7 @@ fn load_foundation_inputs(root: &Path) -> Result<FoundationInputs, Box<dyn Error
 fn load_clean_catalog(
     root: &Path,
 ) -> Result<(Vec<LoadedWorkflowDocument>, forge_core_contracts::Catalog), Box<dyn Error>> {
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
     let workflows = load_workflow_documents(&catalog_dir);
     if !workflows.is_clean() || workflows.workflows.len() != 110 {
         return Err(error(format!(

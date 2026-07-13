@@ -128,7 +128,7 @@ mod tests {
     /// actual routing data, not a stub.
     fn real_catalog() -> Catalog {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../contracts/workflows")
+            .join("../../contracts/evidence/workflow-retirement/legacy-catalog")
             .canonicalize()
             .expect("catalog dir");
         let report = load_catalog(&dir);

@@ -20,7 +20,7 @@ fn load_plan() -> WorkflowMigrationPlanDocument {
 }
 
 fn evaluate(plan: &WorkflowMigrationPlanDocument) -> forge_core_decisions::WorkflowMigrationAudit {
-    let catalog_dir = repo_root().join("contracts/workflows");
+    let catalog_dir = repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog");
     let workflows = load_workflow_documents(&catalog_dir);
     assert!(
         workflows.is_clean(),
@@ -98,7 +98,7 @@ fn p5a_classifies_complete_catalog_and_proves_exact_shadow_parity() {
 #[test]
 fn p5a_audit_is_byte_deterministic_and_independent_of_input_order() {
     let plan = load_plan();
-    let catalog_dir = repo_root().join("contracts/workflows");
+    let catalog_dir = repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog");
     let mut workflows = load_workflow_documents(&catalog_dir).workflows;
     let catalog = load_catalog(&catalog_dir).catalog;
     let first = evaluate_workflow_migration(&plan, &workflows, &catalog);
@@ -148,7 +148,7 @@ fn p5a_blocks_unknown_overlap_and_unsafe_retirement_policy() {
 #[test]
 fn p5a_detects_legacy_projection_drift_without_mutation() {
     let plan = load_plan();
-    let catalog_dir = repo_root().join("contracts/workflows");
+    let catalog_dir = repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog");
     let workflows = load_workflow_documents(&catalog_dir);
     let mut catalog = load_catalog(&catalog_dir).catalog;
     let entry = catalog
@@ -177,7 +177,7 @@ fn p5a_detects_legacy_projection_drift_without_mutation() {
 #[test]
 fn p5a_deletion_baseline_detects_loss_outside_legacy_projection() {
     let plan = load_plan();
-    let catalog_dir = repo_root().join("contracts/workflows");
+    let catalog_dir = repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog");
     let mut workflows = load_workflow_documents(&catalog_dir).workflows;
     let catalog = load_catalog(&catalog_dir).catalog;
     let baseline = evaluate_workflow_migration(&plan, &workflows, &catalog);
@@ -211,7 +211,7 @@ fn p5a_deletion_baseline_detects_loss_outside_legacy_projection() {
 #[test]
 fn p5a_rejects_workflow_schema_drift() {
     let plan = load_plan();
-    let catalog_dir = repo_root().join("contracts/workflows");
+    let catalog_dir = repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog");
     let mut workflows = load_workflow_documents(&catalog_dir).workflows;
     let catalog = load_catalog(&catalog_dir).catalog;
     workflows[0].document.schema_version = "9.9".to_owned();
@@ -229,7 +229,7 @@ fn published_plan_and_catalog_paths_exist() {
     for path in [
         "contracts/policies/workflow-migration-foundation-v0.yaml",
         "contracts/spec/workflow-migration-foundation-v0.yaml",
-        "contracts/workflows",
+        "contracts/evidence/workflow-retirement/legacy-catalog",
     ] {
         assert!(
             Path::new(&repo_root().join(path)).exists(),

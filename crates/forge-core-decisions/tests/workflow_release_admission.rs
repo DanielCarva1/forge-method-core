@@ -231,6 +231,23 @@ fn fixture() -> WorkflowReleaseAdmissionCandidateInput {
 
     let mut sources = HashMap::new();
     add_files(&root().join("contracts"), &mut sources);
+    // Historical P5d.4 evidence remains bound to the original workflow refs.
+    // P5d.5 keeps retired bytes in a frozen evidence snapshot, so provide those
+    // bytes under their original content-addressed refs for replay only.
+    let frozen = root().join("contracts/evidence/workflow-retirement/legacy-catalog");
+    for entry in std::fs::read_dir(&frozen).expect("frozen legacy catalog") {
+        let path = entry.expect("frozen entry").path();
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "yaml")
+        {
+            let name = path.file_name().expect("workflow file").to_string_lossy();
+            sources.insert(
+                RepoPath(format!("contracts/workflows/{name}")),
+                std::fs::read(path).expect("frozen workflow bytes"),
+            );
+        }
+    }
     for relative in [EVALUATOR, HISTORY] {
         sources.insert(
             path(relative),

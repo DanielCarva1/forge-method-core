@@ -26,7 +26,7 @@ stories:
   - id: "S2.1"
     title: "Catalog loader + phase-eligibility filter in engine"
     detail: "contracts/stories/S2.1-catalog-eligibility.yaml"
-    intent: "engine loads contracts/workflows/*.yaml into the typed Catalog at runtime; provides eligibility filtering given a current project phase (Phase::tag_eligible over workflow.phases). Foundation every other slice-2 story depends on."
+    intent: "engine loads the 68 operational contracts/workflows/*.yaml entries for routing and keeps the frozen 110-document retirement snapshot exclusive to migration audit; provides phase eligibility without routing any tombstone."
   - id: "S2.2"
     title: "GuideDecision typed contract"
     detail: "contracts/stories/S2.2-guide-decision-contract.yaml"
@@ -42,7 +42,7 @@ stories:
 
 sequencing: "S2.1 -> S2.2 -> S2.3 (S2.3 needs both catalog + decision contract). S2.4 parallelizable after S2.1."
 
-exit_signal: "guide scaffolding complete: catalog loads, eligibility filters, decisions validate against gates, eval corpus exists. Slice 2 done when a host can produce a GuideDecision that the engine accepts/rejects correctly."
+exit_signal: "guide scaffolding complete: the operational 68-entry catalog loads, the frozen 110-entry historical subject remains audit-only, eligibility filters, retired ids fail with typed tombstones, decisions validate against gates, and the eval corpus exists."
 
 open_question_carried:
   - id: OQ_R2

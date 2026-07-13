@@ -1,11 +1,13 @@
 //! Slice-3 end-to-end parity test — the full agent loop through the guide CLI.
 //!
-//! Exercises the DC1 loop as a host agent would, against the REAL 110-workflow
-//! catalog. This is the slice-3 acceptance gate (R7 parity): the guide surface
+//! Exercises the DC1 loop as a host agent would, against the operational
+//! 68-workflow catalog plus 42 compatibility tombstones. This is the slice-3 acceptance gate (R7 parity): the guide surface
 //! is deterministic, machine-readable, and the engine blocks illegal routing
 //! with typed reasons.
 
-use forge_core_cli::guide::{run_decide, run_describe, run_status};
+use forge_core_cli::guide::{
+    run_decide, run_describe, run_status, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION,
+};
 use forge_core_contracts::CliEnvelope;
 use std::io::Write;
 
@@ -62,7 +64,9 @@ fn e2e_full_agent_loop_describe_status_decide() {
     let describe = run_describe(Some(&catalog_dir()));
     assert!(describe.ok);
     let d = describe.data.as_ref().expect("describe payload");
-    assert_eq!(d.workflows.len(), 110);
+    assert_eq!(d.workflows.len(), 68);
+    assert_eq!(d.retired_workflows.len(), 42);
+    assert_eq!(d.schema_version, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION);
     // host now knows: phases, workflows, gates, exit_reasons, schema_version.
 
     // STEP 2: host calls `guide status --phase 1-discovery` to orient.
@@ -70,18 +74,19 @@ fn e2e_full_agent_loop_describe_status_decide() {
     assert!(status.ok);
     let s = status.data.as_ref().expect("status payload");
     assert_eq!(s.current_phase, "1-discovery");
+    assert_eq!(s.schema_version, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION);
     // grill gate unlocks specification
     assert_eq!(s.pending_gates[0].gate, "grill");
     assert_eq!(s.pending_gates[0].unlocks, "2-specification");
 
-    // STEP 3a: host proposes a LEGAL decision (discover-intent in discovery).
-    let legal = decision_file("discover-intent", "1-discovery", None, "begin");
+    // STEP 3a: host proposes a LEGAL operational decision in discovery.
+    let legal = decision_file("brainstorming", "1-discovery", None, "begin");
     let accepted = run_decide(&legal, Some(&catalog_dir()), &[], None);
     assert!(accepted.ok);
     assert_eq!(accepted.exit_code(), 0);
 
-    // STEP 3b: host proposes an ILLEGAL decision (plan-sprint in discovery).
-    let illegal = decision_file("plan-sprint", "1-discovery", None, "skip ahead");
+    // STEP 3b: host proposes an ILLEGAL operational plan workflow in discovery.
+    let illegal = decision_file("create-epics", "1-discovery", None, "skip ahead");
     let rejected: CliEnvelope<_> = run_decide(&illegal, Some(&catalog_dir()), &[], None);
     assert!(!rejected.ok);
     assert_eq!(rejected.exit_code(), 2);
@@ -94,18 +99,37 @@ fn e2e_full_agent_loop_describe_status_decide() {
 }
 
 #[test]
+fn legacy_0_1_routing_consumer_rejects_the_0_2_68_route_payload() {
+    fn legacy_consume(schema_version: &str, workflow_count: usize) -> Result<usize, String> {
+        if schema_version != "0.1" {
+            return Err(format!(
+                "unsupported guide routing payload schema {schema_version}; expected 0.1"
+            ));
+        }
+        Ok(workflow_count)
+    }
+
+    let describe = run_describe(Some(&catalog_dir()));
+    let payload = describe.data.expect("describe payload");
+    let error = legacy_consume(&payload.schema_version, payload.workflows.len())
+        .expect_err("legacy host must fail closed on the breaking routing payload");
+    assert!(error.contains("expected 0.1"));
+    assert_eq!(payload.workflows.len(), 68);
+}
+
+#[test]
 fn e2e_legal_transition_when_gate_provided() {
     use forge_core_contracts::gate::GateStatus;
     use forge_core_decisions::{GateKind, ProvidedGateResult};
 
-    // Host in specification, proposes plan-sprint (a 3-plan workflow) with a
+    // Host in specification, proposes create-epics (a 3-plan workflow) with a
     // PROPOSED transition spec->plan. Without the system-design gate: blocked.
-    let no_gate = decision_file("plan-sprint", "2-specification", Some("3-plan"), "promote");
+    let no_gate = decision_file("create-epics", "2-specification", Some("3-plan"), "promote");
     let blocked = run_decide(&no_gate, Some(&catalog_dir()), &[], None);
     assert!(!blocked.ok);
     assert_eq!(blocked.exit_code(), 2);
 
-    // With the gate provided+passing: the transition clears, plan-sprint is
+    // With the gate provided+passing: the transition clears, create-epics is
     // eligible in the proposed phase, decision accepted.
     let gates = [ProvidedGateResult {
         gate_kind: GateKind::SystemDesign,

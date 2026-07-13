@@ -16,6 +16,7 @@ pub mod principal_registry;
 pub mod workflow_authority;
 pub mod workflow_release_review;
 pub mod workflow_release_review_v2;
+pub mod workflow_retirement;
 
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
@@ -63,4 +64,13 @@ pub use workflow_release_review_v2::{
     WorkflowReleaseAdmissionAuditAuthorityV2, WorkflowReleaseAdmissionAuthorityErrorV2,
     WorkflowReleaseAdmissionExpectedContextV2, WORKFLOW_RELEASE_ADMISSION_PAYLOAD_DOMAIN_V2,
     WORKFLOW_RELEASE_ADMISSION_SIGNATURE_DOMAIN_V2,
+};
+pub use workflow_retirement::{
+    verify_workflow_retirement_authorization_v2, workflow_retirement_payload_digest_v2,
+    workflow_retirement_reviewer_key_fingerprint_v2, workflow_retirement_signing_bytes_v2,
+    VerifiedWorkflowRetirementAuthorizationAuditV2, VerifiedWorkflowRetirementAuthorizationV2,
+    VerifiedWorkflowRetirementReviewerAuditV2, WorkflowRetirementAuditAuthorityV2,
+    WorkflowRetirementAuthorityErrorV2, WorkflowRetirementExpectedContextV2,
+    WORKFLOW_RETIREMENT_AGGREGATE_SIZE, WORKFLOW_RETIREMENT_PAYLOAD_DOMAIN_V2,
+    WORKFLOW_RETIREMENT_SIGNATURE_DOMAIN_V2,
 };

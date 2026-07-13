@@ -13,7 +13,7 @@ Workspace members: **21**
 | `forge-core-command-surface` | `crates/forge-core-command-surface` | lib, example | - |
 | `forge-core-contracts` | `crates/forge-core-contracts` | lib, test | - |
 | `forge-core-crypto` | `crates/forge-core-crypto` | lib, test, bench | forge-core-contracts |
-| `forge-core-decisions` | `crates/forge-core-decisions` | lib, example, test | forge-core-contracts, forge-core-validate |
+| `forge-core-decisions` | `crates/forge-core-decisions` | lib, example, test | forge-core-contracts, forge-core-authority, forge-core-validate |
 | `forge-core-eval` | `crates/forge-core-eval` | lib | forge-core-contracts, forge-core-validate |
 | `forge-core-eval-harness` | `crates/forge-core-eval-harness` | lib | forge-core-contracts, forge-core-eval, forge-core-validate |
 | `forge-core-eventlog` | `crates/forge-core-eventlog` | lib | forge-core-store |

@@ -1,0 +1,445 @@
+schema_version: '0.1'
+workflow_retirement_snapshot_manifest:
+  id: workflow-retirement.legacy-snapshot-manifest.p5d-v0
+  snapshot_version: 0.1.0
+  entries:
+  - logical_ref: contracts/workflows/adversarial-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/adversarial-review.yaml
+    raw_digest: sha256:524c669e022019e4a3fdcbf1b7d0c3601389e5e811a4ec300b096368150928bd
+    canonical_digest: sha256:5ae6557f11d92cce84be24f7c0715d8f3550e713cdbca0b4972e05ed72a2876c
+  - logical_ref: contracts/workflows/agent-analyze.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/agent-analyze.yaml
+    raw_digest: sha256:4ebf43ca4303efd14b86a9a7266c008c9b2986b50e93028c0309f48ea57c325a
+    canonical_digest: sha256:7478fd81378321d5f3ecd8fabcf9ab6343d286b8c598cb1475dd6d69af50fd10
+  - logical_ref: contracts/workflows/agent-builder.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/agent-builder.yaml
+    raw_digest: sha256:bfa379fbb10901d0cf69ada24b4207321ba9e35149a822a95e9c34bb8dc57910
+    canonical_digest: sha256:f8973fa4195de619b6132c9e6635d4ee4d1b6817d96d6661f7c38c8d5d15c890
+  - logical_ref: contracts/workflows/api-browser-utility.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/api-browser-utility.yaml
+    raw_digest: sha256:f2a8b98ef08d8c27d73826efc26d0fb6cd890d4758497e68f2d77b09da26791b
+    canonical_digest: sha256:679ae90b5f1aba2e052d6861b44835d0dffce115cd9fb5e089075f7489bef0df
+  - logical_ref: contracts/workflows/architecture.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/architecture.yaml
+    raw_digest: sha256:f377dcc0937610ffe505e14a7076a1dbaadbdd6dfba4d03b81beecf88ece51f9
+    canonical_digest: sha256:86f25dce723fb7cac8e40f4094e37fa63825ca9666c80ccff14b85ca75f0bb46
+  - logical_ref: contracts/workflows/atdd-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/atdd-plan.yaml
+    raw_digest: sha256:e49d57b3daf71454e844cda548386c49861888a5de8be41656204f5b8c9a5db7
+    canonical_digest: sha256:32fc3cc4c2ba8520f4962e70d7d59b7a570663977658279cf75476c09317e066
+  - logical_ref: contracts/workflows/brainstorming.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/brainstorming.yaml
+    raw_digest: sha256:eda067313458a8464138b0225da4efb8709ddb7fa26cab70e77802a1f02cc109
+    canonical_digest: sha256:b3befce730700e7e92e23cde2c66d0b001876776ab7a4bb7ab51ffedb9093219
+  - logical_ref: contracts/workflows/build-story.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/build-story.yaml
+    raw_digest: sha256:61e4a7c6e02d0c4642555bee97bf0b27dc441500242d16ac17e58293ec3aa955
+    canonical_digest: sha256:cc7b16f797d2e73d21bfe953337ab74535ea18ebb12e556a6c0b0029f97e1f91
+  - logical_ref: contracts/workflows/builder-scaffold.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/builder-scaffold.yaml
+    raw_digest: sha256:caaf34573b78f2d45249fff8b1f30e73881dd2a9341d793953b3169880970a0c
+    canonical_digest: sha256:cab8406f5c690ba6d6ff2d3314193666ddbcf8fccdda6b7ea8f94fc260139188
+  - logical_ref: contracts/workflows/checkpoint-preview.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/checkpoint-preview.yaml
+    raw_digest: sha256:8e81b0226dd0e703e5b9c44e67afc96b284dd0215ff7dddb2bf3a5a461d79707
+    canonical_digest: sha256:8c80a41f38ff88e5a8056385547657b1ee0e335be730eb5f1306484320b05079
+  - logical_ref: contracts/workflows/ci-quality-pipeline.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/ci-quality-pipeline.yaml
+    raw_digest: sha256:6eabcd85b766f96470fc50e5f4cdfa98eb794fd31f9c9f13a103cfe5811bc27e
+    canonical_digest: sha256:56b8cfc8b6c0e0f681ecb13ca4a87ca9a783a411a034a9b3b7ca116a370b08dd
+  - logical_ref: contracts/workflows/code-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/code-review.yaml
+    raw_digest: sha256:46b53b2d6d09783b449f607ce5c433667b1a9ff2901f56a201d28e0d98b972f0
+    canonical_digest: sha256:4edea08906091da539ff37c07873de09a7755d25483876d2022732941a31a0af
+  - logical_ref: contracts/workflows/collaboration-handoff.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/collaboration-handoff.yaml
+    raw_digest: sha256:e244a93dd4de90c52fedd09603309ea4ce314816ff777d57d2f7baf5de8394fe
+    canonical_digest: sha256:56192da9db69d3398f38e6599d415d050a7fc36643fd4c2780911b8edaf3a953
+  - logical_ref: contracts/workflows/compliance-checklist.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/compliance-checklist.yaml
+    raw_digest: sha256:1e334bb3be29a8d0e3e711cf465bdb2fc60a4243cdcf722b02a55d006ae66544
+    canonical_digest: sha256:9ec02625b4a21d57c333c9926eae6139bae23352064edc08a4a48725fd8b4a42
+  - logical_ref: contracts/workflows/concept-selection.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/concept-selection.yaml
+    raw_digest: sha256:3acab17f267385e566453b32c94488b00fbb366d1e71f20843a6e33661f5ceec
+    canonical_digest: sha256:7625fab882107d769ba5da931af1a537786d3a18acf6a9c6980cf41a7cabb738
+  - logical_ref: contracts/workflows/config-customization.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/config-customization.yaml
+    raw_digest: sha256:48758afc02a1abfa2b0b14a4658b8dbcae36f65eef1e2d6c1383f7ff32c1d0a6
+    canonical_digest: sha256:4061ec442f990b3c75348ab7ff0173ff8279aa20117e78318a6ebc0d1237cf0a
+  - logical_ref: contracts/workflows/context-recovery.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/context-recovery.yaml
+    raw_digest: sha256:4bf7e2c4392e2699f84e429552924eaddfea2becbdf6c47be30844fb915460e7
+    canonical_digest: sha256:94e105760b97228b56ce3bf673d32865f50084819be6e49458672931a1a4f764
+  - logical_ref: contracts/workflows/correct-course.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/correct-course.yaml
+    raw_digest: sha256:b66faa45a3b00b078058054c4c9e361982f09c6c6a6af3c1a497c5f7784cbba3
+    canonical_digest: sha256:28d89f06ea2c486e6cc21a5c92f09f1fee3ea27d10ad2abd85adbf062d17124d
+  - logical_ref: contracts/workflows/council-decision.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/council-decision.yaml
+    raw_digest: sha256:adfe1df5eb8ba13b64720d01997fa7256ef48cbe3121cc69a4b3416130d132a5
+    canonical_digest: sha256:477340027f52d6ffa00995c0f183b3b7c25259a4551739ae3ae2192c4b7ee026
+  - logical_ref: contracts/workflows/create-epics.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/create-epics.yaml
+    raw_digest: sha256:16982f2c8fa504e5a4e9b1e343235fa8efe8dc4b959d3c6cf25bb67600a7eee3
+    canonical_digest: sha256:88e9594af946edfdcb80ffc9d798c0e6672268955f8e7b582f81ce6f6d41ba27
+  - logical_ref: contracts/workflows/creative-session.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/creative-session.yaml
+    raw_digest: sha256:243c04fe2c50296c64a2cdf4458fe68daae27bd77916e5bf796c03f9122bbd6d
+    canonical_digest: sha256:300de67eefd102ceef45a568f6d21686b2b89c83ec62c518adf9f46a0c5a1d34
+  - logical_ref: contracts/workflows/design-thinking.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/design-thinking.yaml
+    raw_digest: sha256:651af209e4efe8667f03112eaee0e5c03a8cef9dedb92abdf6a0a792b2a2bd0a
+    canonical_digest: sha256:b34a0a362a7aeb081522a1cd7a9568535fb8b0e09870829abce38900db185bc5
+  - logical_ref: contracts/workflows/devops-deployment-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/devops-deployment-plan.yaml
+    raw_digest: sha256:52f5cba7ee0e3fff5063bf3f95eee2e394d0f2e124ac0424a5abae339ab20983
+    canonical_digest: sha256:0fedeba8db2ec4bead1dd02dcc9d5eaf13ed3096f1a3bf81fc371d13c403932a
+  - logical_ref: contracts/workflows/discover-intent.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/discover-intent.yaml
+    raw_digest: sha256:19fd91518c486c730f69ec95bb556b1513ae29fc5b97b299fcb02be2a2e451bf
+    canonical_digest: sha256:46b2a72e869feb17729836fb7213d27961d2c3611bd98e8d2d3338c6e9f3453e
+  - logical_ref: contracts/workflows/doc-index.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/doc-index.yaml
+    raw_digest: sha256:5f28ece7fd61bfe3a6270015519829db961ad706bb522525bb54e934b49408f6
+    canonical_digest: sha256:863732ca49799a336b08f2994b4df96d61d9be6de1f9d87abbf2f00d5e7cadc7
+  - logical_ref: contracts/workflows/doc-shard.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/doc-shard.yaml
+    raw_digest: sha256:ecf6dce8235222e424236f6ead00eefb759dd288adbd7bbbed18a201d157f366
+    canonical_digest: sha256:7ac155a806b692e95a55ef6fa8a1962c7ea3c83a73acbb4d8e08b64a4dae2fbf
+  - logical_ref: contracts/workflows/domain-scan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/domain-scan.yaml
+    raw_digest: sha256:f96256896585339c05b78180e9e99ad5b806edc18fba3f26daaab83f96dda988
+    canonical_digest: sha256:5d74e2f346df2124f91c274412a562b8d61320b13623b5e77fcbbe8a0ba4b8b6
+  - logical_ref: contracts/workflows/edge-case-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/edge-case-review.yaml
+    raw_digest: sha256:785fccabbc804ab480ee6b9a8d887e82d6eb014d509aa48cd44edd7565c4e3fb
+    canonical_digest: sha256:984b710fedfd246e39fde8ef6730979bd1ce47c59f3e2ca1dd7cb1db4a1d640a
+  - logical_ref: contracts/workflows/editorial-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/editorial-review.yaml
+    raw_digest: sha256:083da523c217992c6cfd286d92e54f905e1dc7434e54e72f5f4528ad37b8417b
+    canonical_digest: sha256:b06c214dd4430ca6fa0f14570eeb6a94ae9114d87302578fab6965983a4403a7
+  - logical_ref: contracts/workflows/engine-architecture.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/engine-architecture.yaml
+    raw_digest: sha256:f9fef00c96d61149031f07070065dbe6d5d415934ffc644c763f1f580744fc82
+    canonical_digest: sha256:6eafc5e62bafe367a0aa7783f8b26f3feb5e0dba5f58910ee562879141b25d40
+  - logical_ref: contracts/workflows/engine-setup.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/engine-setup.yaml
+    raw_digest: sha256:fb71239e6cc5a0772d9dc08f5070f69faa2a287efff9e4be848fbb64dc8c32d9
+    canonical_digest: sha256:2c19709241af44bc6ba6d3ff4c68163ec9132c377673fdac62ff08b49e6d021e
+  - logical_ref: contracts/workflows/eval-design.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/eval-design.yaml
+    raw_digest: sha256:b9e67c310b4a9ab816eea760064ee3e62fb8fa79f0d4ac34980e2088ce00f434
+    canonical_digest: sha256:c6b17a52d1e43b32b38ed16f8c82f12d4e25c385944746b28de62a1973b5c5f0
+  - logical_ref: contracts/workflows/evolve-project.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/evolve-project.yaml
+    raw_digest: sha256:17c69d6a4d8c60274f0d25e1258a896e8ea683a61daa8b44e2227692ad987b74
+    canonical_digest: sha256:b391ae421c8b9d207f5b112230be789371fe9cd7a9b3aa1dde1bd14780fa7579
+  - logical_ref: contracts/workflows/game-brief.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-brief.yaml
+    raw_digest: sha256:b109fd4ca101a61b7f73141ad81319fd5b369022a917df67816d6209474459e8
+    canonical_digest: sha256:bda73b36502e68e45d440a471f0dc2c4798929a23a5e31e7c71b0de0a90fec91
+  - logical_ref: contracts/workflows/game-context.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-context.yaml
+    raw_digest: sha256:beb8932211a0da8349aed77dc79bdad1e36ef56565cc74dd5655434681e18e10
+    canonical_digest: sha256:b5421a2e353e46aa04446e2a99e0d02bfc8ec1ffdd6a4b2e2e87916f1006d0d1
+  - logical_ref: contracts/workflows/game-e2e-scaffold.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-e2e-scaffold.yaml
+    raw_digest: sha256:152be29c13dc4bd191d0c4cc48bee68cef4267fd70623b3b0d7e75bf0f0eec4b
+    canonical_digest: sha256:25c9777631d3ef88ed233dcc21ce76f48a85ac9b81c79396ff855b3f94d6f74b
+  - logical_ref: contracts/workflows/game-prd.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-prd.yaml
+    raw_digest: sha256:f818b0c10b367857eba356b9c351a78542c371069d7f38a6224f455aed1d67ad
+    canonical_digest: sha256:7c0eb01cfb02524c1cde32018aa6bc455d8f65b539ce30cd303a4944c54183b3
+  - logical_ref: contracts/workflows/game-project.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-project.yaml
+    raw_digest: sha256:76da9a514e72c601ad21a5118850e6860e70564ef40934de497b72a6e4090f56
+    canonical_digest: sha256:b39ef37c61ebcc4d7931de1c7f798ea5762a8fe868ff133ee16ac77e8c0ba924
+  - logical_ref: contracts/workflows/game-qa-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-qa-review.yaml
+    raw_digest: sha256:d60a0f9e6d06da67e372f04c515d2c61c1a84ab42656e4d1adee8b92f3b3d3ee
+    canonical_digest: sha256:468c91617457f2484469cc2e4eef56b65ad76d29e8fc8437641a8181488cdf56
+  - logical_ref: contracts/workflows/game-retrospective.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-retrospective.yaml
+    raw_digest: sha256:4ff89281dc992b06d472de369147b203eb7437cb637d381bd3d971996e84e7b9
+    canonical_digest: sha256:3c6f71ed49a10dc26921daca989d042ddcbf9d672d2dfb90678932bab93d1c99
+  - logical_ref: contracts/workflows/game-sprint-planning.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-sprint-planning.yaml
+    raw_digest: sha256:fd8cfac74d83a4236920378e0fde4e021fcc7ee717ac51be26400595c5dc0082
+    canonical_digest: sha256:0435915a73c57594ada9f169d22ab70aff9865f8088235fb6ccbaf2db30860b3
+  - logical_ref: contracts/workflows/game-sprint-status.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-sprint-status.yaml
+    raw_digest: sha256:0667b33b0a60805ad9f3721cba881103bd30a529e4b24106f452bdfcdc9637f2
+    canonical_digest: sha256:6aded20d0241f206f5df509e5e5c8aba9fe771be14a53ab3573dc3027570b295
+  - logical_ref: contracts/workflows/game-story-creation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-story-creation.yaml
+    raw_digest: sha256:d4da960226db58492d3b054b1b858567541cf72879d5144e9e3dffb51fec573e
+    canonical_digest: sha256:b8c2048bf4a64294afeaedc1eea87622293adfc3364d2c3d47d027cd0e9c6e65
+  - logical_ref: contracts/workflows/game-test-automation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-test-automation.yaml
+    raw_digest: sha256:c42f117d854f1a1e8c1aaec4a0b7cf2fdd195d124e63633464a2bbc168850034
+    canonical_digest: sha256:037666939b8d239ffee3a97abaaa20d58c90fe04d68eb6862d451f6f0f371658
+  - logical_ref: contracts/workflows/game-test-framework.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-test-framework.yaml
+    raw_digest: sha256:286a5ced2835f206bf4f47c43e2c20c4561b819a8686b68493a53c42f1baf4da
+    canonical_digest: sha256:dfb8a8fbadd0d43d75097754ae01423734e63c81c10070ba39ef24ba404c8f62
+  - logical_ref: contracts/workflows/game-ux-design.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/game-ux-design.yaml
+    raw_digest: sha256:a0b46219eb402f9d4ec4d576e7a1a8731be15ac6311d0af3a239803dbc7b9a5a
+    canonical_digest: sha256:a66a0e966723da6ce06f285d054d2b7cb24012e85597cac0e88e0ceca0db957b
+  - logical_ref: contracts/workflows/gdd.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/gdd.yaml
+    raw_digest: sha256:c7818406a135f97e5b04bc041041f0143b2faa25e8ca0fd51915d85903830f77
+    canonical_digest: sha256:f02ffbab88add2280a0ef2d23fb13b1cc60aec37eb515c7d8d13909392a4c179
+  - logical_ref: contracts/workflows/grill-gate.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/grill-gate.yaml
+    raw_digest: sha256:9c0f2309ceb85dc0dbb663887b2356a72a05edb91cbc32b88ed9bc0f11f569f3
+    canonical_digest: sha256:d169140e1ef772cc3c9f393d67d867bf632b3fffb03ae4e8b46ea559c5e8e8ba
+  - logical_ref: contracts/workflows/guidance-engine.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/guidance-engine.yaml
+    raw_digest: sha256:99adcb0fd6b418ed7b5efafff461db76b64881176df6f29f99982396ca9fa715
+    canonical_digest: sha256:88e2037b902f7199b793b22191d741dc3fcca12b97b84269ca1642a095a264a2
+  - logical_ref: contracts/workflows/guide-route.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/guide-route.yaml
+    raw_digest: sha256:de750f5a5372dceb8ed7c046de16d40ed0b96171aa7d6929c54f950ce39725bf
+    canonical_digest: sha256:4ad461f3c1a4850fea3120ff33ea84ef3e8ce25d882ae4ee2cb34e881de7268c
+  - logical_ref: contracts/workflows/guideline-audit.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/guideline-audit.yaml
+    raw_digest: sha256:2df25cc98101056e1e912967014e947642d3db59eda93eb06e02c9532eed0d83
+    canonical_digest: sha256:d337d95932a147fc58d7ec482845756c7c6e9d9e7de9f42e02de072ab4f3fe9a
+  - logical_ref: contracts/workflows/hook-event-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/hook-event-plan.yaml
+    raw_digest: sha256:6c23c792d02ba275c493358fe502899b8adb2d3f068a613f0e251ffcd1fe8c09
+    canonical_digest: sha256:c0dab08fb9e444bab9fa296d1724b56ec3f383ee65a5e85f4413fcec51fd406d
+  - logical_ref: contracts/workflows/innovation-strategy.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/innovation-strategy.yaml
+    raw_digest: sha256:7ee64edcbd91951e7dcdd97aeca653eff052163e2827936a3e1d652cc71e0588
+    canonical_digest: sha256:1add44dcfd6a9748a8a66601273a425bf9a3d4e3cda3721f4f34021f2f590f76
+  - logical_ref: contracts/workflows/investigation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/investigation.yaml
+    raw_digest: sha256:ffdcba5f8ad2c55cf302abeea524bedea658201345566d03f60322621b075d66
+    canonical_digest: sha256:17af4afcb9dfbac27ff6582e0368d1f5c759e48fca8a09c8dd215f6d699c450e
+  - logical_ref: contracts/workflows/isolated-eval-runner.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/isolated-eval-runner.yaml
+    raw_digest: sha256:196491dac134345f2445ccf7c439d0c0a9a2811ba7b7a299a0d478de2f96ae98
+    canonical_digest: sha256:9799ada2c6c49ea4b2ef2ff00cbda831df41ec54757dc0b58fe8bd9f345eebb4
+  - logical_ref: contracts/workflows/market-scan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/market-scan.yaml
+    raw_digest: sha256:c500dd567a1c5adfe1c3ae7ab0a20dc130c87e1a355fa0b327c281c66658b159
+    canonical_digest: sha256:c59cad150a3dc6a8a1d134b76ce25d5f7eac5fb5fd5e101eeff67be2cb49aa9f
+  - logical_ref: contracts/workflows/mechanics-design.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/mechanics-design.yaml
+    raw_digest: sha256:dc3b423e7338ccf4125d658d61f8cf82958cb026e12a2e8298612e47c8a08e9f
+    canonical_digest: sha256:193c2ef238ad2fa8f8c109d12dc68770c297c53a7acd4bd749a092cad006781b
+  - logical_ref: contracts/workflows/module-builder.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/module-builder.yaml
+    raw_digest: sha256:048a8ac434e103626a1ff77971b711371ae50c2870cf7b98831f739aae0f3dd8
+    canonical_digest: sha256:167b33e127e63daabe6e409107b7c32a291645ed276eec19987379c13156c40c
+  - logical_ref: contracts/workflows/module-distribution.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/module-distribution.yaml
+    raw_digest: sha256:24ef2a8607b23a290ff206e1c97d5a127353b292e9805a6c6203caafc6da836d
+    canonical_digest: sha256:c22e9c48a9476ba4bf86f59fb8bc44d747b0415e358a50f2c53429ff41695330
+  - logical_ref: contracts/workflows/module-ideation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/module-ideation.yaml
+    raw_digest: sha256:c053ba60448c69a51535505ac6e102e83858091e6bb5d4a928435f3849ae010b
+    canonical_digest: sha256:92f5fa0fc74179833c99e3b5f304e97bdd62e4cb4c654f40291115c5e2f48cf8
+  - logical_ref: contracts/workflows/module-validate.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/module-validate.yaml
+    raw_digest: sha256:711a03a26b963fd10248c84b58867c1562655650bde7b00a4a37602368a43dec
+    canonical_digest: sha256:d37996592464ba77f0fd7512e5e9050ba2a567a5e67d90a880548565066f6b1d
+  - logical_ref: contracts/workflows/narrative-design.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/narrative-design.yaml
+    raw_digest: sha256:ce94a1c6787874c3b7ca0fbb7917fde385b61c536116758acd8b24d0f9a59039
+    canonical_digest: sha256:3bea4a4ea448f49a561e2201123a7ce7c969e136b5c6ee60b77e9e426c9026ec
+  - logical_ref: contracts/workflows/nfr-evidence-audit.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/nfr-evidence-audit.yaml
+    raw_digest: sha256:f6e9db0df17828f45d7b0738d31e416825a15e7f42912597b29c6a517b228c21
+    canonical_digest: sha256:9a841ae68a78d57c06ba22f6c387808a3e900b638f0337cc8631c46f6d6bd07f
+  - logical_ref: contracts/workflows/observability-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/observability-plan.yaml
+    raw_digest: sha256:244d28f7a1fc74acb4b4be5bcdd5fab05ad235dc0767749e3bc7ff718df7557f
+    canonical_digest: sha256:5d03dab9abca7f247f432a93c0368740cf8303e1a731f54465b585922e79cf60
+  - logical_ref: contracts/workflows/performance-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/performance-plan.yaml
+    raw_digest: sha256:0da108fcb5cc481d2299709611031268c10229f56571e82638511b70fe5b24fb
+    canonical_digest: sha256:2184b0625340cfd1674134b40a1e24d2dfcff8f21b32e40a3e5de986ecf3a321
+  - logical_ref: contracts/workflows/plan-sprint.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/plan-sprint.yaml
+    raw_digest: sha256:a7acd57d16887243986276f6956e45a364e0fd4059c6098db2b51c7e454e093f
+    canonical_digest: sha256:da956fb2ad8afbc3284faffb8ca3e008cfd1dcd7ad9eee623494653803f5c124
+  - logical_ref: contracts/workflows/platform-ops-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/platform-ops-plan.yaml
+    raw_digest: sha256:0a57ad9c745b44d65c01ca6a90056f7fec35d716be19bf8c58bb3d2501bf3c94
+    canonical_digest: sha256:55c89b342527b4fc83a530206ec4c1d139f3fd0abf17dfb0f26b46205d1f9772
+  - logical_ref: contracts/workflows/playtest-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/playtest-plan.yaml
+    raw_digest: sha256:fbfd9da957f30ce5b6e76324b33e78add3d11dbc7db17422130e1550ce268e86
+    canonical_digest: sha256:5e27eea77515a35c186131df34c8b71497e283b8d5584e658d4145d6a53d8143
+  - logical_ref: contracts/workflows/privacy-data-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/privacy-data-plan.yaml
+    raw_digest: sha256:3ff53605ef77e7f36801e75ad88e1e304532dd8d6b5fe28d1fea2fcdfa087211
+    canonical_digest: sha256:c61a23f84b12a8ab24c10f95d5c7507ff8e74413c639d14c3beddb23a1180987
+  - logical_ref: contracts/workflows/problem-solving.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/problem-solving.yaml
+    raw_digest: sha256:7bef8c5b4dd4d7d2a2a765b451245c084260e8ae5398591efd4c4ad7033ef334
+    canonical_digest: sha256:e926fe9ef955294d7bd91decc72d7007e0d844fbd851ebb06a529c33f45f350c
+  - logical_ref: contracts/workflows/product-area-map.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/product-area-map.yaml
+    raw_digest: sha256:07c4587698c18ef3a833768bce646118aae327a5d8c577a72d3541ee5403c0f5
+    canonical_digest: sha256:5e55302057eb7a03ab794aee4180c2e18f9f3afa7f59cd80769ab54d9a98e2ee
+  - logical_ref: contracts/workflows/product-requirements.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/product-requirements.yaml
+    raw_digest: sha256:70e54dd352384f8dc7a5cf33fc4a6372dc2dd9025ab0a822b2e8d2f86c300563
+    canonical_digest: sha256:01d34267fe68611c75d65919f7867d2aa862d40a38d01ab9f3e6b9e8a3ec2d4a
+  - logical_ref: contracts/workflows/project-context.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/project-context.yaml
+    raw_digest: sha256:34bd12c8bcfd550d61e74191d60a0db4d1ff5b04986234b1b84c54d6521fe8cf
+    canonical_digest: sha256:a9a4bd339108311af44ac408bd9fba068d8eebdcae817ab8b04ffe83f112b8b3
+  - logical_ref: contracts/workflows/quick-dev.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/quick-dev.yaml
+    raw_digest: sha256:6e5e4bae069f8571d1cf4109e3087d402363dd4d693deade4411399d4547cf21
+    canonical_digest: sha256:29bc839fb411ce78b0cc917a639ae9e1f2dcc9bc0b178aba2fe100cfd2700ca4
+  - logical_ref: contracts/workflows/quick-prototype.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/quick-prototype.yaml
+    raw_digest: sha256:67be5cc9096d89d97b9163005f6110fa9f20e257c5262142e2fb12dbf87b953c
+    canonical_digest: sha256:e0dfe2d6b6ec5bb27487f8c236b1293bf17ec3d888a80029731dafa3712a3b4a
+  - logical_ref: contracts/workflows/readiness-check.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/readiness-check.yaml
+    raw_digest: sha256:eded4c0247afc3a95887d1517c272be773a1a502075817ddc0294a6c2f952a2d
+    canonical_digest: sha256:f8c645c301d672d5b948a01cda82337491f200264370fd59b73fa1ec273fa574
+  - logical_ref: contracts/workflows/ready-release.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/ready-release.yaml
+    raw_digest: sha256:ffc612cb91ed022652dc90be1b877cd1b098046553a832d768321b7c9ca452aa
+    canonical_digest: sha256:cf750fa3d1516d7fa614363f475f1ea957804bcee27cfc64e45b4709f4ad173b
+  - logical_ref: contracts/workflows/reality-evidence-gate.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/reality-evidence-gate.yaml
+    raw_digest: sha256:79e09c1657ec05f435626242a17fea0bfe04e27709944bff9a81a758484aeb1d
+    canonical_digest: sha256:d6ca33c90be0787c4153ad41dcfcaae93e85b0697dafe316ab04a7b5b3b53dbe
+  - logical_ref: contracts/workflows/release-readiness.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/release-readiness.yaml
+    raw_digest: sha256:e0f9124d4b5bd36f201c314cb8ce3084aa5faa66043e9b8a40e5ee6e94f5ea2d
+    canonical_digest: sha256:1ba1fdcb5db272e99049864d953efb935f6239b92d6df680147bb841ece0800e
+  - logical_ref: contracts/workflows/repo-split-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/repo-split-plan.yaml
+    raw_digest: sha256:9df9b6cfb57a7e9e73a2e8b00d73f939bf40bb8c611b1c852df88b56e78af1b7
+    canonical_digest: sha256:d120f3133d8e50ce472f40c6a2e01adb61baf84123b165a5056f301ecedb86f8
+  - logical_ref: contracts/workflows/research-closeout.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/research-closeout.yaml
+    raw_digest: sha256:1ca0c1f3cec397f1f8378a4f7ba5cd763fc2061667e9d0d9137dbe1b0a10e178
+    canonical_digest: sha256:572d88a184b7bed297118a0d0e3949d56cad5fd8b5f063c7b71ea76ee18ea2bd
+  - logical_ref: contracts/workflows/retrospective.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/retrospective.yaml
+    raw_digest: sha256:2906fab9870365d07ef4152c72bd24f7524249714ca5a53ea35d62652ed7b5bf
+    canonical_digest: sha256:1ceb71fc8b9595dc822068f3b59d6a4017dd0379f0d8856b52057681225952b1
+  - logical_ref: contracts/workflows/risk-register.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/risk-register.yaml
+    raw_digest: sha256:25dca3fcd969c6b372b0aee172220898b55e0f6fcb0b829f5c0e60c021e7facb
+    canonical_digest: sha256:e5c1aeecffd9d929c847ef50fabe3a51a33196dea12b16b14de2b8fe6e05e681
+  - logical_ref: contracts/workflows/runtime-builder.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/runtime-builder.yaml
+    raw_digest: sha256:f637f572dc4297116c25c329632a63863f4ef7d39037d8c1ca5b3557271b4a04
+    canonical_digest: sha256:c257209aa727a795c522111c3acd3a7d64be13700e3a0ef161292ea1c70fc550
+  - logical_ref: contracts/workflows/security-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/security-plan.yaml
+    raw_digest: sha256:9914568332c7db891f42adf9398552c46babb3d53b903791b7ecc128c80c6e68
+    canonical_digest: sha256:0476656d21c215b8cb08a8f40075159c6bc63306b480f0875505846dda9a36aa
+  - logical_ref: contracts/workflows/session-prep.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/session-prep.yaml
+    raw_digest: sha256:6af1355e23c99de50aac0bc13da9e023faa9faafc699250109049f157c197cac
+    canonical_digest: sha256:4dde64357e054bac07a1cf07d246c5ea6a3c9c49acb7286f49f62e87a3b68352
+  - logical_ref: contracts/workflows/skill-convert.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/skill-convert.yaml
+    raw_digest: sha256:ba3ebdeb3c6745dc42966e40b73ee9f9030b81e139907933264a897267fbafb1
+    canonical_digest: sha256:31b7981d29665a1a2f935dc7e0f38d1cf77848cc5c6307b1f44bb35b5b33e1dc
+  - logical_ref: contracts/workflows/spec-distillation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/spec-distillation.yaml
+    raw_digest: sha256:573e168ca1b4f05d637d1dc70f6dae89e60bb68572197038c524a4a49c60fb64
+    canonical_digest: sha256:c39bdd3db38eb0138011c57f9582862c2edeaab66399aa395d3d80cf5eb33f31
+  - logical_ref: contracts/workflows/sprint-status.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/sprint-status.yaml
+    raw_digest: sha256:7802c1fcc5e0a0165a6ecc13c40743ccc3bfdb1ef236f74ae015ccf4e9baab0c
+    canonical_digest: sha256:f3c7330cff4498cc2ac48c759dc6de9968cc8424975aa23b31d87764557e1554
+  - logical_ref: contracts/workflows/start-runtime.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/start-runtime.yaml
+    raw_digest: sha256:99e8c4c5550aa03706ab3e0b94b4cc0c20839c7ff312076d16865e5b86cddbf4
+    canonical_digest: sha256:8d63caed5d42013ff74a8f5eea813e061cc62371d8e6b0245217821dda5b3434
+  - logical_ref: contracts/workflows/story-creation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/story-creation.yaml
+    raw_digest: sha256:b4e61d805c0466d58c0c0bb5a3fabd47007c3d32a917d6357a1d81b5d5aeb037
+    canonical_digest: sha256:7d7396731d5be1d4acf8114b6eb2b02ca51277250f573a569156e84bfeab5d84
+  - logical_ref: contracts/workflows/storytelling.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/storytelling.yaml
+    raw_digest: sha256:a24248bc226b649204381489264849236d97fe076a9d83aba5a33f0200b2f812
+    canonical_digest: sha256:0bde079fb67ffef8f35e4121e8c0e17be6c3e8151cd1ef78ed29857d9610d97d
+  - logical_ref: contracts/workflows/teach-testing.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/teach-testing.yaml
+    raw_digest: sha256:e26827c2fa2a07e2111dca6bc9e2a530de0ba57a1433d5336cf6130e186364ac
+    canonical_digest: sha256:9b882e17834e7b5f2e74b25ab6f484d4dcdb66e01c2b7d2458a767b03e61e1bf
+  - logical_ref: contracts/workflows/team-operating-model.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/team-operating-model.yaml
+    raw_digest: sha256:799aa016ffc20972cca3f67aeb05cfa709987356f8eaf081f4720c0f79ed69ca
+    canonical_digest: sha256:d2940a40382f447c442e38b189dfe1d1c090ff4f809ea4133a7ad1c74a0d90a8
+  - logical_ref: contracts/workflows/technical-feasibility-scan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/technical-feasibility-scan.yaml
+    raw_digest: sha256:06a962a0ff5338977e31e1c0af152865ab086447987f6305d8a8333a127c3919
+    canonical_digest: sha256:1c04e0d4d1e4f645912dfdd7507ac6e267d4117b4bf9604af34cb61f3fab3c26
+  - logical_ref: contracts/workflows/test-automation.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/test-automation.yaml
+    raw_digest: sha256:b1bbaa6c2c84ea08486cb72b1fc655bb9de6d25ee5c44eb978209a7a4c220fa7
+    canonical_digest: sha256:b8c15913b4ad7eff1df9b7d25048365eb6465ab53697f7c0bf498ced0cca20bd
+  - logical_ref: contracts/workflows/test-engagement-model.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/test-engagement-model.yaml
+    raw_digest: sha256:511cf18cd2eaf202378943e179d642906026dcce7a589359ff470bc86b9a2ebe
+    canonical_digest: sha256:aeec3bc9df16b9b9b74cafb6e1474ea10c85197952f9dd4c65eda4ed6fa2cab3
+  - logical_ref: contracts/workflows/test-framework.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/test-framework.yaml
+    raw_digest: sha256:56a4e2bbf55c3e9e0dfbdd43a35d6c93b5817aad230627f7c3a87205703c96f3
+    canonical_digest: sha256:582771e0134a197c9bab06e117b7ecd49732e750b81c009e636421e956d1d6ec
+  - logical_ref: contracts/workflows/test-review.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/test-review.yaml
+    raw_digest: sha256:1dda640a6b15fb7d211d782268ff2f78ff73c3f947c7e9a84e6ec12c2d694b96
+    canonical_digest: sha256:643363bc55666c9d055067508e7626fd87d2b77622ea9a192ca7c92296f7de10
+  - logical_ref: contracts/workflows/test-strategy.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/test-strategy.yaml
+    raw_digest: sha256:c7884be5f0cac02c227b2d1b73cbacfe74fc6727c7e70037835521a4fc3953ff
+    canonical_digest: sha256:322bf315eb6fba10e8733cfe91a43473fd05e578cc5b98cf4e92ef7a0d355cec
+  - logical_ref: contracts/workflows/traceability-gate.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/traceability-gate.yaml
+    raw_digest: sha256:88989b0882915d835e5a9d4cbe49a7d877be81fcd843d64df5de56a542ed77e8
+    canonical_digest: sha256:2ff65dddb21697ff1b32ee076a3da9778dd90c8d3cb823af9484bcd7ca4e0f36
+  - logical_ref: contracts/workflows/track-decision.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/track-decision.yaml
+    raw_digest: sha256:fcda5cdef6aa5204aa4297eca9a22cec1b661bb08ff8ff49c5b524effd894ba1
+    canonical_digest: sha256:9b3ed1f3711bdc84ea243226faec42f52e7c69dacd919a05d04944aedda096ef
+  - logical_ref: contracts/workflows/trunk-based-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/trunk-based-plan.yaml
+    raw_digest: sha256:66385764bc39bccf210b7293ab4c5e6e1f5a8173a2dfb51b86acd34673df6bfb
+    canonical_digest: sha256:26f4881ce507a36555ac1363b1962fe796a652756d07eb5a479e83067cb445fd
+  - logical_ref: contracts/workflows/ux-plan.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/ux-plan.yaml
+    raw_digest: sha256:e3ec135ab182f0a3bae720ea947dd350ca674edbd4ffa6cd4a8598499280fcd5
+    canonical_digest: sha256:9cd3e36bc43a289863f4351726b192b37e32a6cb9c35a27d9008e558d64e8a5b
+  - logical_ref: contracts/workflows/visual-alignment-prototype.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/visual-alignment-prototype.yaml
+    raw_digest: sha256:846e24d69806ba3741e5128baf4438ee72db0d33d669097cde36a87a173cc642
+    canonical_digest: sha256:445e43cdc78ff4a0fd9c065c425b701e99ee85ed5b1bd9ad03ad754f397ce50d
+  - logical_ref: contracts/workflows/workflow-analyze.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/workflow-analyze.yaml
+    raw_digest: sha256:50b1a0cca7c2e552a46043d91de97e7b726f0477327505f31a9b38d50d58f535
+    canonical_digest: sha256:8e9ca421bd0c9b166dba0f3a6d2277d2390945c8b1b9fe2304ab2a9ada681d23
+  - logical_ref: contracts/workflows/workflow-builder.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/workflow-builder.yaml
+    raw_digest: sha256:992c8a733b0283249e32243668dd1bb607213060fb77c49f4fd34343df6d4675
+    canonical_digest: sha256:c97aba3da9b4ffb4d2db491a791621d5070f3b51ca097218a81b5279731155d4
+  - logical_ref: contracts/workflows/workflow-validate.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/workflow-validate.yaml
+    raw_digest: sha256:6f3126ca5146fb1d87943d5732ed288226bb09c7796fc8d775610bedf3bfab22
+    canonical_digest: sha256:a5245410b915a28542aa3a3667c96c22de37af090177f1feedcb55fe0ff0e9f9
+  - logical_ref: contracts/workflows/working-backwards-challenge.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/working-backwards-challenge.yaml
+    raw_digest: sha256:fa9243f86f80e1cb165489bff54fb6499582c9238f16d97bcdf6dd6a2ec1fec8
+    canonical_digest: sha256:f36b800bafdde54e281401098f3c92fb125291908726681d655311cbb12d6880
+  - logical_ref: contracts/workflows/write-spec.yaml
+    archive_ref: contracts/evidence/workflow-retirement/legacy-catalog/write-spec.yaml
+    raw_digest: sha256:6691efc0a860146b2f58d86eae32e1b97f6ac15471540f02c62e5f2ae62b4008
+    canonical_digest: sha256:29b826ce4c9b3ab88fc68ffc510151b1d3cb25914d1410d26dd880bbe8a5d958

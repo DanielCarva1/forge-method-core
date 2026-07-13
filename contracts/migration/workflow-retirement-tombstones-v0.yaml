@@ -1,0 +1,473 @@
+schema_version: '0.1'
+workflow_retirement_tombstone_catalog:
+  id: workflow-retirement.tombstones.p5d-v0
+  catalog_version: 0.1.0
+  authority: non_authoritative_diagnostics_only
+  release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  tombstones:
+  - workflow_id: adversarial-review
+    legacy_workflow_digest: sha256:7a82ee6de0d09af8f2a42797b0d342e82441e61a6ea7d1d3025fc483205dbc3a
+    diagnostic_code: workflow.retired.adversarial-review
+    replacement_policy_ref: policy.workflow.adversarial-review
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: architecture
+    legacy_workflow_digest: sha256:c2605ca63133039807edf10981a117c29ada46a5e34afe72a741891c6698c5dd
+    diagnostic_code: workflow.retired.architecture
+    replacement_policy_ref: policy.workflow.architecture
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: atdd-plan
+    legacy_workflow_digest: sha256:08df9302a5518ac00adf6aefb1ea2c3f7f009058a2672463bfb08e9cfb0eec0d
+    diagnostic_code: workflow.retired.atdd-plan
+    replacement_policy_ref: policy.workflow.atdd-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: build-story
+    legacy_workflow_digest: sha256:179d2ba8eb1c20a0866f7cd3e496836effc873d296bf570a3e4fa15e1f9b2fcf
+    diagnostic_code: workflow.retired.build-story
+    replacement_policy_ref: policy.workflow.build-story
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: checkpoint-preview
+    legacy_workflow_digest: sha256:122cde07f04dca95ecb85f0898b773fddf705f40b2b38b32587a2abf156612e6
+    diagnostic_code: workflow.retired.checkpoint-preview
+    replacement_policy_ref: policy.workflow.checkpoint-preview
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: ci-quality-pipeline
+    legacy_workflow_digest: sha256:f02762a62672abdca2ae0e64329b01074476befe40cb64bd23ea29df3352b227
+    diagnostic_code: workflow.retired.ci-quality-pipeline
+    replacement_policy_ref: policy.workflow.ci-quality-pipeline
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: code-review
+    legacy_workflow_digest: sha256:7d32a156868848da7c2d498785b2502df5d0197cbaee1d9de97ec9bd472d7f45
+    diagnostic_code: workflow.retired.code-review
+    replacement_policy_ref: policy.workflow.code-review
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: collaboration-handoff
+    legacy_workflow_digest: sha256:6fe9b18c318740765199e87df27aa74860e37d6d1a43a73c9738fa3587a2337e
+    diagnostic_code: workflow.retired.collaboration-handoff
+    replacement_policy_ref: policy.workflow.collaboration-handoff
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: compliance-checklist
+    legacy_workflow_digest: sha256:3d7f6a4bd100685f4c5cc870fa43872bd57196ae81046d35ddfb5a58d19e6ca2
+    diagnostic_code: workflow.retired.compliance-checklist
+    replacement_policy_ref: policy.workflow.compliance-checklist
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: context-recovery
+    legacy_workflow_digest: sha256:81bb94ce0a2fbe35463cba8ea3763b39a2d344cb3077c2972ec0232ed06c980a
+    diagnostic_code: workflow.retired.context-recovery
+    replacement_policy_ref: policy.workflow.context-recovery
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: correct-course
+    legacy_workflow_digest: sha256:1c6dfcbdcdf7a1e09d53d10f0fe5655516934f2ca5c413f9faac6d8d18163826
+    diagnostic_code: workflow.retired.correct-course
+    replacement_policy_ref: policy.workflow.correct-course
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: devops-deployment-plan
+    legacy_workflow_digest: sha256:9d0a9479ea6726d52b3c2de46a3d7b8915de652979830e9b43d4718faa1486ef
+    diagnostic_code: workflow.retired.devops-deployment-plan
+    replacement_policy_ref: policy.workflow.devops-deployment-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: discover-intent
+    legacy_workflow_digest: sha256:a95940c7324dcbe42deda32d2b88df985851f04d47f9cfac7bd8d1a26882e3da
+    diagnostic_code: workflow.retired.discover-intent
+    replacement_policy_ref: policy.workflow.discover-intent
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: domain-scan
+    legacy_workflow_digest: sha256:3e16c0d56a4ecd6cf83b8fd652c5b87d18def4975a59dfba8c7a7daf2c093fec
+    diagnostic_code: workflow.retired.domain-scan
+    replacement_policy_ref: policy.workflow.domain-scan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: eval-design
+    legacy_workflow_digest: sha256:13c70a006b665b90db201e539879cf83196d055b09f26b0c124eb2e1968e67f8
+    diagnostic_code: workflow.retired.eval-design
+    replacement_policy_ref: policy.workflow.eval-design
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: evolve-project
+    legacy_workflow_digest: sha256:bf59b8790e63cb1d286ce9a6cd6884cd6e3f82f5d433a38db2ff8b1d2e91a4d8
+    diagnostic_code: workflow.retired.evolve-project
+    replacement_policy_ref: policy.workflow.evolve-project
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: investigation
+    legacy_workflow_digest: sha256:7c3caeb3a18805581e5c93156b952474aa81ee531d3bf4165074951c9e2868ff
+    diagnostic_code: workflow.retired.investigation
+    replacement_policy_ref: policy.workflow.investigation
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: nfr-evidence-audit
+    legacy_workflow_digest: sha256:dfa1141df062a0612b1f770d23c4a30eeb5f368b0182603568474c64fd164a03
+    diagnostic_code: workflow.retired.nfr-evidence-audit
+    replacement_policy_ref: policy.workflow.nfr-evidence-audit
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: observability-plan
+    legacy_workflow_digest: sha256:30e040344378beae53c84d0384939f8787b8e63f0cccb3db453f1e37629d2b1b
+    diagnostic_code: workflow.retired.observability-plan
+    replacement_policy_ref: policy.workflow.observability-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: plan-sprint
+    legacy_workflow_digest: sha256:2742eb7827341ee61af988d63e13d2b1f69c80710823111a9a121ac7908399a1
+    diagnostic_code: workflow.retired.plan-sprint
+    replacement_policy_ref: policy.workflow.plan-sprint
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: platform-ops-plan
+    legacy_workflow_digest: sha256:f392cac8a9b6b0d9973c5ded5e2ab23f265d1fd75932c7cd3b11ca5056bea52a
+    diagnostic_code: workflow.retired.platform-ops-plan
+    replacement_policy_ref: policy.workflow.platform-ops-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: privacy-data-plan
+    legacy_workflow_digest: sha256:f4d311e1366608007a1b64531ac081c453d2f49479ad8c0cfc2fcfb2ff818df4
+    diagnostic_code: workflow.retired.privacy-data-plan
+    replacement_policy_ref: policy.workflow.privacy-data-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: product-area-map
+    legacy_workflow_digest: sha256:9a476a6c373611b1b0d18759b984ff690aa6cad096e242a05df62de91aa2a64f
+    diagnostic_code: workflow.retired.product-area-map
+    replacement_policy_ref: policy.workflow.product-area-map
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: product-requirements
+    legacy_workflow_digest: sha256:dc57ec433c1a8991d2e33579f4acc30d074070031651bd23132ced0936f0166a
+    diagnostic_code: workflow.retired.product-requirements
+    replacement_policy_ref: policy.workflow.product-requirements
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: project-context
+    legacy_workflow_digest: sha256:1b5bea33909c03fa92291272e50adc2c76d945f098240438b19961d9a392a52b
+    diagnostic_code: workflow.retired.project-context
+    replacement_policy_ref: policy.workflow.project-context
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: readiness-check
+    legacy_workflow_digest: sha256:1454b541c8799da625ebe7dbab6dc67fe8e1e89f77275350828ac96a270da4d7
+    diagnostic_code: workflow.retired.readiness-check
+    replacement_policy_ref: policy.workflow.readiness-check
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: ready-release
+    legacy_workflow_digest: sha256:a720c6e9e4877b26903603c8abe28633f279fecb51ab0f462ba505a4f10d0ec7
+    diagnostic_code: workflow.retired.ready-release
+    replacement_policy_ref: policy.workflow.ready-release
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: reality-evidence-gate
+    legacy_workflow_digest: sha256:af52bc3b6283aa45b90e124b1999e35f90f589bcaeaea93ad1c6d6674437e966
+    diagnostic_code: workflow.retired.reality-evidence-gate
+    replacement_policy_ref: policy.workflow.reality-evidence-gate
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: research-closeout
+    legacy_workflow_digest: sha256:df8f7f4055174c3dde6d1c635feb6dd6a5d921cee8557074db1f7028600a40b3
+    diagnostic_code: workflow.retired.research-closeout
+    replacement_policy_ref: policy.workflow.research-closeout
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: retrospective
+    legacy_workflow_digest: sha256:5a4d0bfcab1bc4eb7f77b4f084185444fa6c5e950c92fba7ba47291268b2fc30
+    diagnostic_code: workflow.retired.retrospective
+    replacement_policy_ref: policy.workflow.retrospective
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: risk-register
+    legacy_workflow_digest: sha256:008c609a1d65ea0e98451d9304ce18012448f1d5f179a89c6fcae09cb0fd642a
+    diagnostic_code: workflow.retired.risk-register
+    replacement_policy_ref: policy.workflow.risk-register
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: security-plan
+    legacy_workflow_digest: sha256:5a78f1af75a27df9673a4bca3f953b395fb7a41e72d742f8bdf7002245467f4e
+    diagnostic_code: workflow.retired.security-plan
+    replacement_policy_ref: policy.workflow.security-plan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: spec-distillation
+    legacy_workflow_digest: sha256:3a323965afeb02b567ada880bd0cc913aa704b8d0a40d94a08315653ab118968
+    diagnostic_code: workflow.retired.spec-distillation
+    replacement_policy_ref: policy.workflow.spec-distillation
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: sprint-status
+    legacy_workflow_digest: sha256:e1409e4462ab4ddb8ef175c9c159b466a718bb6a532279cd4a66e884aae59f4d
+    diagnostic_code: workflow.retired.sprint-status
+    replacement_policy_ref: policy.workflow.sprint-status
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: story-creation
+    legacy_workflow_digest: sha256:1faef3dfecdf64264ae7521edbd360bb04e068f5decac0f11f6a9f962a957faf
+    diagnostic_code: workflow.retired.story-creation
+    replacement_policy_ref: policy.workflow.story-creation
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: technical-feasibility-scan
+    legacy_workflow_digest: sha256:cf392d6597cab2802a58da12a361d83285328816a0c47bdfb1e35da90d242909
+    diagnostic_code: workflow.retired.technical-feasibility-scan
+    replacement_policy_ref: policy.workflow.technical-feasibility-scan
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: test-automation
+    legacy_workflow_digest: sha256:f807c26e59729905a118d9bac0124f331f6530372814733b802e2769f3ca2914
+    diagnostic_code: workflow.retired.test-automation
+    replacement_policy_ref: policy.workflow.test-automation
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: test-framework
+    legacy_workflow_digest: sha256:d4fed3976edf84ae8e72b3c00a4f385046aaa1137f1b043d8a20c2e1bfb7d619
+    diagnostic_code: workflow.retired.test-framework
+    replacement_policy_ref: policy.workflow.test-framework
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: test-review
+    legacy_workflow_digest: sha256:0a601bc00a7600646f54ffc5dc9f94dcd4db6d8b450a2787d7ec60fe9c108b27
+    diagnostic_code: workflow.retired.test-review
+    replacement_policy_ref: policy.workflow.test-review
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: test-strategy
+    legacy_workflow_digest: sha256:28530d5e59f6ca75535b208d3a3afa5e7066a65c08a661307f647bc68bc243d4
+    diagnostic_code: workflow.retired.test-strategy
+    replacement_policy_ref: policy.workflow.test-strategy
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: traceability-gate
+    legacy_workflow_digest: sha256:13759fb1357d5371463e82791cc646a4ee8dd01788cd27b57f2f7bd15e102507
+    diagnostic_code: workflow.retired.traceability-gate
+    replacement_policy_ref: policy.workflow.traceability-gate
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+  - workflow_id: write-spec
+    legacy_workflow_digest: sha256:202e8b98e9fba9d1b82352b263580bfc4b7d6266485f47999420712e671faca5
+    diagnostic_code: workflow.retired.write-spec
+    replacement_policy_ref: policy.workflow.write-spec
+    replacement_release_id: workflow-governance.release.agent-native-continuity-v0
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json

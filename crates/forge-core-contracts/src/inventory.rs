@@ -92,4 +92,10 @@ pub enum FamilyKind {
     WorkflowGovernanceReleaseRegistry,
     WorkflowMigrationBatch,
     WorkflowRetirementAuthorization,
+    WorkflowRetirementEvidenceIndex,
+    WorkflowDeletionProof,
+    WorkflowConsumerCompatibilityReport,
+    WorkflowConsumerCompatibilityMatrix,
+    WorkflowRetirementTombstoneCatalog,
+    WorkflowFinalScorecard,
 }

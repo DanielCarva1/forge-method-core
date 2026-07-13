@@ -1,0 +1,31 @@
+schema_version: "0.1"
+workflow:
+  id: "brainstorming"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "user asks for many ideas or directions"
+  - "state.module == creative-studio"
+  inputs:
+  - "creative question"
+  - "constraints"
+  - "audience"
+  - "selection criteria"
+  steps:
+  - "generate diverse options"
+  - "cluster related ideas"
+  - "mark risky, safe, strange, and promising options"
+  - "select candidates for deeper work"
+  outputs:
+  - "idea set"
+  - "clusters"
+  - "candidate directions"
+  done_when:
+  - "options are meaningfully different"
+  - "selection criteria are applied"
+  - "next creative workflow is known"
+  blocked_when:
+  - "prompt lacks audience or constraint"
+  - "options cannot be compared"
+  handoff:
+  - "preserve selected ideas, rejected patterns, criteria, and next workflow"

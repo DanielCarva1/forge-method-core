@@ -19,6 +19,9 @@ use sha2::{Digest, Sha256};
 
 use tracing::instrument;
 
+use forge_core_authority::{
+    verify_workflow_retirement_authorization_v2, WorkflowRetirementExpectedContextV2,
+};
 use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
@@ -31,21 +34,27 @@ use forge_core_contracts::{
     WorkflowBehavioralDisposition, WorkflowBehavioralReviewSubjectDocument,
     WorkflowBehavioralScenarioCorpusDocument, WorkflowBehavioralScenarioExecution,
     WorkflowBehavioralShadowReportDocument, WorkflowBehavioralVerdict,
+    WorkflowConsumerCompatibilityMatrixDocument, WorkflowConsumerCompatibilityReportDocument,
+    WorkflowDeletionProofDocument, WorkflowFinalScorecardDocument,
     WorkflowGovernanceBundleDocument, WorkflowGovernancePolicyOverlayDocument,
     WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
     WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument,
     WorkflowReleaseAdmissionAuthorizationDocument, WorkflowReleaseAdmissionAuthorizationV2Document,
     WorkflowReleaseDispositionIntent, WorkflowReleaseReviewIndexDocument,
     WorkflowReleaseReviewIndexV2Document, WorkflowReleaseReviewerRegistryDocument,
+    WorkflowRetirementArtifactBinding, WorkflowRetirementAuthorizationV2Document,
+    WorkflowRetirementEvidenceIndexDocument, WorkflowRetirementSnapshotManifestDocument,
+    WorkflowRetirementTombstoneCatalogDocument,
 };
 use forge_core_decisions::{
     evaluate_workflow_behavior, evaluate_workflow_migration, evaluate_workflow_release,
-    evaluate_workflow_release_registry, load_catalog, load_workflow_documents,
-    validate_workflow_governance_bundle, workflow_runtime_bundle_digest,
+    evaluate_workflow_release_registry, evaluate_workflow_retirement, load_catalog,
+    load_workflow_documents, validate_workflow_governance_bundle, workflow_runtime_bundle_digest,
     WorkflowBehavioralBundleInput, WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity,
     WorkflowGovernanceIssue, WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority,
     WorkflowReleaseEvaluationStatus, WorkflowReleaseEvidenceAssurance,
     WorkflowReleaseRegistryEvaluationAuthority, WorkflowReleaseRegistryEvaluationStatus,
+    WorkflowRetirementCandidateInput,
 };
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
@@ -60,7 +69,7 @@ use forge_core_validate::{
     validate_runtime_handoff_cross_references, validate_runtime_registry_cross_references,
     validate_runtime_registry_entry, validate_tool_effect, validate_tool_effect_cross_references,
     validate_yaml_known_repo_references, validate_yaml_source_id_references, Diagnostic,
-    DiagnosticCode, DiagnosticSeverity, ReferenceIndex, ValidationReport,
+    DiagnosticCode, DiagnosticSeverity, ReferenceIndex, ReferenceKind, ValidationReport,
 };
 
 /// Outcome of a single named validation check (passed/failed + counts).
@@ -226,8 +235,13 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     // a consumer repo that ships no `contracts/` tree still resolves the
     // shared definitions served from the binary (disk copies still win when
     // present, via insert_existing).
-    let embedded_refs = forge_core_decisions::embedded_yaml_paths();
-    let index = match forge_core_store::ReferenceIndexBuilder::new()
+    let mut embedded_refs = forge_core_decisions::embedded_yaml_paths();
+    embedded_refs.extend(
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+            .into_iter()
+            .map(|(path, _)| path.0),
+    );
+    let mut index = match forge_core_store::ReferenceIndexBuilder::new()
         .with_known_embedded_refs(embedded_refs)
         .build(root)
     {
@@ -242,8 +256,16 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
             return summary;
         }
     };
+    for (path, _) in forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes() {
+        index.insert(path.0, ReferenceKind::EvidenceArtifact);
+    }
     let yaml_documents = collect_validation_yaml_documents(root);
-    let known_repo_paths = collect_known_repo_paths(root);
+    let mut known_repo_paths = collect_known_repo_paths(root);
+    known_repo_paths.extend(
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+            .into_iter()
+            .map(|(path, _)| path.0),
+    );
     summary.add_validation_diagnostics("yaml_parse", &yaml_documents.diagnostics);
 
     let evidence_path = root.join("contracts/research/field-evidence-20260625.yaml");
@@ -318,6 +340,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_behavioral_evidence(root, &mut summary);
         validate_workflow_release_independent_admission(root, &mut summary);
         validate_workflow_release_v2_admission(root, &mut summary);
+        validate_workflow_retirement_checkpoint(root, &mut summary);
     }
 
     summary.finish();
@@ -365,6 +388,8 @@ const WORKFLOW_RELEASE_FOUNDATION_BATCH_REF: &str =
     "contracts/migration/workflow-governance-batch-golden-path-v0.yaml";
 const WORKFLOW_MIGRATION_PLAN_REF: &str =
     "contracts/policies/workflow-migration-foundation-v0.yaml";
+const FROZEN_LEGACY_WORKFLOW_CATALOG_REF: &str =
+    "contracts/evidence/workflow-retirement/legacy-catalog";
 
 /// Validate the repository-owned P5d.1 aggregate, rather than merely claiming
 /// its evaluator in the inventory. Compatibility/domain blockers are expected
@@ -442,12 +467,12 @@ fn workflow_release_foundation_validation_report(root: &Path) -> ValidationRepor
         return report;
     };
 
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join(FROZEN_LEGACY_WORKFLOW_CATALOG_REF);
     let workflows = load_workflow_documents(&catalog_dir);
     for error in &workflows.errors {
         report.push(Diagnostic::error(
             DiagnosticCode::ParseYamlFailed,
-            format!("contracts/workflows/{}", error.path.0),
+            format!("{FROZEN_LEGACY_WORKFLOW_CATALOG_REF}/{}", error.path.0),
             error.reason.clone(),
         ));
     }
@@ -455,7 +480,7 @@ fn workflow_release_foundation_validation_report(root: &Path) -> ValidationRepor
     for error in &catalog.errors {
         report.push(Diagnostic::error(
             DiagnosticCode::ParseYamlFailed,
-            format!("contracts/workflows/{}", error.path.0),
+            format!("{FROZEN_LEGACY_WORKFLOW_CATALOG_REF}/{}", error.path.0),
             error.reason.clone(),
         ));
     }
@@ -1044,7 +1069,7 @@ fn workflow_behavioral_evidence_validation_report(
     for (path, expected_digests) in referenced_paths {
         let path = forge_core_contracts::RepoPath(path);
         if !source_bytes.contains_key(&path) {
-            match fs::read(root.join(&path.0)) {
+            match read_repo_or_frozen_legacy(root, &path.0) {
                 Ok(bytes) => {
                     source_bytes.insert(path.clone(), bytes);
                 }
@@ -1156,6 +1181,18 @@ fn workflow_behavioral_evidence_validation_report(
     );
     validate_candidate_absent_from_admission(profile, root, &review_subject, &mut report);
     report
+}
+
+fn read_repo_or_frozen_legacy(root: &Path, repo_ref: &str) -> std::io::Result<Vec<u8>> {
+    match fs::read(root.join(repo_ref)) {
+        Ok(bytes) => Ok(bytes),
+        Err(error) => {
+            let Some(name) = repo_ref.strip_prefix("contracts/workflows/") else {
+                return Err(error);
+            };
+            fs::read(root.join(FROZEN_LEGACY_WORKFLOW_CATALOG_REF).join(name))
+        }
+    }
 }
 
 const WORKFLOW_RELEASE_INDEPENDENT_ADMISSION_SPEC_REF: &str =
@@ -1481,6 +1518,414 @@ fn validate_workflow_release_v2_admission_profile(
     summary.add_report(profile.check_name, report);
 }
 
+const WORKFLOW_RETIREMENT_INDEX_REF: &str =
+    "contracts/migration/workflow-retirement-evidence-index-v0.yaml";
+const WORKFLOW_RETIREMENT_DELETION_REF: &str =
+    "contracts/evidence/workflow-retirement-deletion-proof-v0.yaml";
+const WORKFLOW_RETIREMENT_CONSUMER_MATRIX_REF: &str =
+    "contracts/evidence/workflow-retirement-consumer-matrix-v0.yaml";
+const WORKFLOW_RETIREMENT_CONSUMER_REF: &str =
+    "contracts/evidence/workflow-retirement-consumer-window-v0.yaml";
+const WORKFLOW_RETIREMENT_TOMBSTONES_REF: &str =
+    "contracts/migration/workflow-retirement-tombstones-v0.yaml";
+const WORKFLOW_RETIREMENT_SCORECARD_REF: &str =
+    "contracts/migration/workflow-governance-final-scorecard-v0.yaml";
+const WORKFLOW_RETIREMENT_AUTHORIZATION_REF: &str =
+    "contracts/migration/workflow-retirement-authorization-v0.yaml";
+const WORKFLOW_RETIREMENT_RELEASE_REF: &str =
+    "contracts/migration/workflow-governance-release-agent-native-continuity-candidate-v0.yaml";
+const WORKFLOW_RETIREMENT_RUNTIME_REF: &str =
+    "contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml";
+
+#[allow(clippy::too_many_lines)]
+fn validate_workflow_retirement_checkpoint(root: &Path, summary: &mut ValidateSummary) {
+    let mut report = ValidationReport::new();
+    let Some((index, index_bytes)) = read_behavioral_yaml::<WorkflowRetirementEvidenceIndexDocument>(
+        root,
+        WORKFLOW_RETIREMENT_INDEX_REF,
+        &mut report,
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((deletion, deletion_bytes)) = read_behavioral_yaml::<WorkflowDeletionProofDocument>(
+        root,
+        WORKFLOW_RETIREMENT_DELETION_REF,
+        &mut report,
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((consumer_matrix, consumer_matrix_bytes)) =
+        read_behavioral_yaml::<WorkflowConsumerCompatibilityMatrixDocument>(
+            root,
+            WORKFLOW_RETIREMENT_CONSUMER_MATRIX_REF,
+            &mut report,
+        )
+    else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((consumer, consumer_bytes)) = read_behavioral_yaml::<
+        WorkflowConsumerCompatibilityReportDocument,
+    >(
+        root, WORKFLOW_RETIREMENT_CONSUMER_REF, &mut report
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((tombstones, tombstone_bytes)) =
+        read_behavioral_yaml::<WorkflowRetirementTombstoneCatalogDocument>(
+            root,
+            WORKFLOW_RETIREMENT_TOMBSTONES_REF,
+            &mut report,
+        )
+    else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((scorecard, scorecard_bytes)) = read_behavioral_yaml::<WorkflowFinalScorecardDocument>(
+        root,
+        WORKFLOW_RETIREMENT_SCORECARD_REF,
+        &mut report,
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((authorization, _)) = read_behavioral_yaml::<WorkflowRetirementAuthorizationV2Document>(
+        root,
+        WORKFLOW_RETIREMENT_AUTHORIZATION_REF,
+        &mut report,
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((manifest, manifest_bytes)) = read_behavioral_yaml::<
+        WorkflowGovernanceReleaseManifestDocument,
+    >(root, WORKFLOW_RETIREMENT_RELEASE_REF, &mut report) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    let Some((runtime, runtime_bytes)) = read_behavioral_yaml::<WorkflowGovernanceBundleDocument>(
+        root,
+        WORKFLOW_RETIREMENT_RUNTIME_REF,
+        &mut report,
+    ) else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+
+    let scorecard_index_binding = &scorecard.workflow_final_scorecard.evidence_index;
+    validate_retirement_binding(
+        root,
+        scorecard_index_binding,
+        &index.workflow_retirement_evidence_index.id,
+        &index,
+        &index_bytes,
+        &mut report,
+    );
+    let index_state = &index.workflow_retirement_evidence_index;
+    validate_retirement_binding(
+        root,
+        &index_state.release_manifest,
+        &manifest.workflow_governance_release_manifest.release_id,
+        &manifest,
+        &manifest_bytes,
+        &mut report,
+    );
+    validate_retirement_binding(
+        root,
+        &index_state.runtime_bundle_artifact,
+        &runtime.workflow_governance_bundle.id,
+        &runtime,
+        &runtime_bytes,
+        &mut report,
+    );
+    if let Some((snapshot, snapshot_bytes)) =
+        read_behavioral_yaml::<WorkflowRetirementSnapshotManifestDocument>(
+            root,
+            &index_state.snapshot_manifest.embedded_ref.0,
+            &mut report,
+        )
+    {
+        validate_retirement_binding(
+            root,
+            &index_state.snapshot_manifest,
+            &snapshot.workflow_retirement_snapshot_manifest.id,
+            &snapshot,
+            &snapshot_bytes,
+            &mut report,
+        );
+        validate_retirement_snapshot_entries(root, &snapshot, &mut report);
+    }
+    match fs::read(root.join(&index_state.runtime_evidence.embedded_ref.0)) {
+        Ok(runtime_evidence_bytes) => match String::from_utf8(runtime_evidence_bytes.clone()) {
+            Ok(runtime_evidence_source) => validate_retirement_binding(
+                root,
+                &index_state.runtime_evidence,
+                &forge_core_contracts::StableId(
+                    "workflow-retirement.runtime-evidence.p5d-v0".to_owned(),
+                ),
+                &runtime_evidence_source,
+                &runtime_evidence_bytes,
+                &mut report,
+            ),
+            Err(error) => behavioral_error(
+                &mut report,
+                index_state.runtime_evidence.embedded_ref.0.clone(),
+                format!("P5d.5 runtime evidence source is not UTF-8: {error}"),
+            ),
+        },
+        Err(error) => behavioral_error(
+            &mut report,
+            index_state.runtime_evidence.embedded_ref.0.clone(),
+            format!("P5d.5 runtime evidence source is missing: {error}"),
+        ),
+    }
+    validate_retirement_binding(
+        root,
+        &index_state.deletion_proof,
+        &deletion.workflow_deletion_proof.id,
+        &deletion,
+        &deletion_bytes,
+        &mut report,
+    );
+    validate_retirement_binding(
+        root,
+        &consumer
+            .workflow_consumer_compatibility_report
+            .compatibility_matrix,
+        &consumer_matrix.workflow_consumer_compatibility_matrix.id,
+        &consumer_matrix,
+        &consumer_matrix_bytes,
+        &mut report,
+    );
+    validate_retirement_binding(
+        root,
+        &index_state.consumer_report,
+        &consumer.workflow_consumer_compatibility_report.id,
+        &consumer,
+        &consumer_bytes,
+        &mut report,
+    );
+
+    let auth = &authorization.workflow_retirement_authorization_v2;
+    if let Some((history, history_bytes)) =
+        read_behavioral_yaml::<WorkflowGovernanceReleaseRegistryDocument>(
+            root,
+            &index_state.release_history.embedded_ref.0,
+            &mut report,
+        )
+    {
+        validate_retirement_binding(
+            root,
+            &index_state.release_history,
+            &history.workflow_governance_release_registry.registry_id,
+            &history,
+            &history_bytes,
+            &mut report,
+        );
+    }
+    let Some((reviewers, reviewer_bytes)) =
+        read_behavioral_yaml::<WorkflowReleaseReviewerRegistryDocument>(
+            root,
+            &auth.payload.reviewer_registry.embedded_ref.0,
+            &mut report,
+        )
+    else {
+        summary.add_report("workflow_retirement_checkpoint", report);
+        return;
+    };
+    validate_retirement_binding(
+        root,
+        &auth.payload.reviewer_registry,
+        &reviewers.workflow_release_reviewer_registry.registry_id,
+        &reviewers,
+        &reviewer_bytes,
+        &mut report,
+    );
+    validate_retirement_binding(
+        root,
+        &auth.payload.tombstone_catalog,
+        &tombstones.workflow_retirement_tombstone_catalog.id,
+        &tombstones,
+        &tombstone_bytes,
+        &mut report,
+    );
+    validate_retirement_binding(
+        root,
+        &auth.payload.final_scorecard,
+        &scorecard.workflow_final_scorecard.id,
+        &scorecard,
+        &scorecard_bytes,
+        &mut report,
+    );
+
+    let evaluation = evaluate_workflow_retirement(&WorkflowRetirementCandidateInput {
+        evidence_index: index.clone(),
+        evidence_index_binding: scorecard_index_binding.clone(),
+        deletion_proof: deletion,
+        consumer_matrix,
+        consumer_report: consumer,
+        tombstone_catalog: tombstones,
+        release_manifest: manifest,
+        runtime_bundle: runtime,
+    });
+    for issue in &evaluation.issues {
+        behavioral_error(
+            &mut report,
+            format!("workflow_retirement_candidate.{}", issue.path),
+            format!("retirement candidate {:?}: {}", issue.code, issue.message),
+        );
+    }
+    if evaluation.authority
+        != forge_core_decisions::WorkflowRetirementEvaluationAuthority::CandidateOnly
+        || evaluation.status
+            != forge_core_decisions::WorkflowRetirementEvaluationStatus::ReadyForIndependentAuthorization
+        || evaluation.scorecard != scorecard
+        || evaluation.retired_legacy_count != 42
+    {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_RETIREMENT_SCORECARD_REF,
+            "P5d.5 scorecard must recompute exactly as candidate_only with 42 retired and 68 retained legacy authorities",
+        );
+    }
+    if auth.payload.evidence_index != *scorecard_index_binding
+        || auth.payload.retirements != index_state.retirements
+        || auth.payload.release != index_state.release
+        || auth.payload.runtime_bundle != index_state.runtime_bundle
+        || auth.payload.legacy_catalog_digest != index_state.legacy_catalog_digest
+        || auth.payload.release_manifest != index_state.release_manifest
+        || auth.payload.runtime_bundle_artifact != index_state.runtime_bundle_artifact
+        || auth.payload.snapshot_manifest != index_state.snapshot_manifest
+        || auth.payload.runtime_evidence != index_state.runtime_evidence
+    {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_RETIREMENT_AUTHORIZATION_REF,
+            "retirement authorization payload must bind the exact evaluator-selected aggregate",
+        );
+    }
+    if let Err(error) = verify_workflow_retirement_authorization_v2(
+        &reviewers,
+        &reviewer_bytes,
+        &authorization,
+        WorkflowRetirementExpectedContextV2 {
+            release: &index_state.release,
+            runtime_bundle: &index_state.runtime_bundle,
+            legacy_catalog_digest: &index_state.legacy_catalog_digest,
+            retirements: &index_state.retirements,
+            release_manifest: &index_state.release_manifest,
+            runtime_bundle_artifact: &index_state.runtime_bundle_artifact,
+            snapshot_manifest: &index_state.snapshot_manifest,
+            runtime_evidence: &index_state.runtime_evidence,
+            release_history: &index_state.release_history,
+            evidence_index: scorecard_index_binding,
+            deletion_proof: &index_state.deletion_proof,
+            consumer_report: &index_state.consumer_report,
+            tombstone_catalog: &auth.payload.tombstone_catalog,
+            final_scorecard: &auth.payload.final_scorecard,
+            reviewer_registry: &auth.payload.reviewer_registry,
+            admission_epoch_unix: forge_core_kernel::WORKFLOW_RETIREMENT_ADMISSION_EPOCH_UNIX,
+            consumer_observed_until_unix:
+                forge_core_kernel::WORKFLOW_RETIREMENT_CONSUMER_OBSERVED_UNTIL_UNIX,
+            reviewer_registry_raw_digest:
+                forge_core_kernel::WORKFLOW_RETIREMENT_REVIEWER_REGISTRY_RAW_DIGEST,
+            evidence_reviewer_key_fingerprint:
+                forge_core_kernel::WORKFLOW_RETIREMENT_EVIDENCE_REVIEWER_KEY_FINGERPRINT,
+            retirement_authorizer_key_fingerprint:
+                forge_core_kernel::WORKFLOW_RETIREMENT_AUTHORIZER_KEY_FINGERPRINT,
+        },
+        "forge-core:workflow-retirement:embedded",
+    ) {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_RETIREMENT_AUTHORIZATION_REF,
+            format!("P5d.5 independent retirement authorization failed closed: {error}"),
+        );
+    }
+    if let Err(error) = forge_core_kernel::load_admitted_workflow_retirement_checkpoint() {
+        behavioral_error(
+            &mut report,
+            WORKFLOW_RETIREMENT_AUTHORIZATION_REF,
+            format!("P5d.5 kernel retirement admission failed closed: {error}"),
+        );
+    }
+    summary.add_report("workflow_retirement_checkpoint", report);
+}
+
+fn validate_retirement_snapshot_entries(
+    root: &Path,
+    snapshot: &WorkflowRetirementSnapshotManifestDocument,
+    report: &mut ValidationReport,
+) {
+    let entries = &snapshot.workflow_retirement_snapshot_manifest.entries;
+    if entries.len() != 110 {
+        behavioral_error(
+            report,
+            "workflow_retirement_snapshot_manifest.entries",
+            format!(
+                "P5d.5 snapshot manifest must contain 110 entries, found {}",
+                entries.len()
+            ),
+        );
+    }
+    for entry in entries {
+        let Ok(bytes) = fs::read(root.join(&entry.archive_ref.0)) else {
+            behavioral_error(
+                report,
+                entry.archive_ref.0.clone(),
+                "snapshot archive entry missing",
+            );
+            continue;
+        };
+        let canonical = yaml_serde::from_slice::<serde_json::Value>(&bytes)
+            .ok()
+            .and_then(|value| serde_json_canonicalizer::to_vec(&value).ok())
+            .map(|value| behavior_sha256(&value));
+        let file_name = Path::new(&entry.archive_ref.0)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        if entry.raw_digest != behavior_sha256(&bytes)
+            || canonical.as_deref() != Some(entry.canonical_digest.as_str())
+            || entry.logical_ref.0 != format!("contracts/workflows/{file_name}")
+        {
+            behavioral_error(
+                report,
+                entry.archive_ref.0.clone(),
+                "snapshot raw/canonical/logical binding mismatch",
+            );
+        }
+    }
+}
+
+fn validate_retirement_binding<T: Serialize>(
+    root: &Path,
+    binding: &WorkflowRetirementArtifactBinding,
+    expected_id: &forge_core_contracts::StableId,
+    document: &T,
+    bytes: &[u8],
+    report: &mut ValidationReport,
+) {
+    let canonical = serde_json_canonicalizer::to_vec(document)
+        .map(|value| behavior_sha256(&value))
+        .unwrap_or_default();
+    let ref_bytes = fs::read(root.join(&binding.embedded_ref.0)).ok();
+    if &binding.artifact_id != expected_id
+        || ref_bytes.as_deref() != Some(bytes)
+        || binding.raw_digest != behavior_sha256(bytes)
+        || binding.canonical_digest != canonical
+    {
+        behavioral_error(
+            report,
+            binding.embedded_ref.0.clone(),
+            "P5d.5 artifact binding id/ref/raw/canonical digest mismatch",
+        );
+    }
+}
+
 fn validate_behavioral_report_baseline(
     profile: &BehavioralValidationProfile,
     document: &WorkflowBehavioralShadowReportDocument,
@@ -1685,12 +2130,12 @@ fn validate_behavioral_candidate_release(
     ) else {
         return;
     };
-    let workflows = load_workflow_documents(&root.join("contracts/workflows"));
-    let catalog = load_catalog(&root.join("contracts/workflows"));
+    let workflows = load_workflow_documents(&root.join(FROZEN_LEGACY_WORKFLOW_CATALOG_REF));
+    let catalog = load_catalog(&root.join(FROZEN_LEGACY_WORKFLOW_CATALOG_REF));
     if !workflows.is_clean() || !catalog.is_clean() {
         behavioral_error(
             report,
-            "contracts/workflows",
+            FROZEN_LEGACY_WORKFLOW_CATALOG_REF,
             "candidate release requires a clean legacy workflow catalog",
         );
         return;

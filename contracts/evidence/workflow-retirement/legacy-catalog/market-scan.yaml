@@ -1,0 +1,39 @@
+schema_version: "0.1"
+workflow:
+  id: "market-scan"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "reality/evidence gate needs market or competitor evidence"
+  - "user asks about demand, adoption, willingness to switch, price, or alternatives"
+  - "product claim depends on scarcity, differentiation, or buying path"
+  inputs:
+  - "product idea or requirement"
+  - "target audience, segment, geography, price, or channel constraints"
+  - "known alternatives, substitutes, and assumptions"
+  - "decision the research must unlock"
+  steps:
+  - "frame the claim, decision_to_unlock, and falsifier before browsing or comparing"
+  - "map alternatives, substitutes, switching costs, and adoption friction"
+  - "separate demand signal, inference, speculation, and taste"
+  - "grade sources by recency, authority, directness, and bias"
+  - "run artifact research-scan with alternatives, adoption_friction, demand_signal, contradictions_or_falsifiers, uncertainty, stance, and next_workflow"
+  - "run artifact research-check --path <research-scan-artifact>"
+  - "route to research-closeout, product-requirements, concept-selection, or correct-course"
+  outputs:
+  - "market scan artifact"
+  - "alternative map"
+  - "adoption and demand risk"
+  - "research stance and next workflow"
+  done_when:
+  - "audience, alternatives, adoption friction, and demand signal are explicit"
+  - "weak or missing demand evidence is labeled as uncertainty"
+  - "contradictions_or_falsifiers and next workflow are concrete"
+  - "artifact research-scan has registered the durable scan"
+  - "artifact research-check passes"
+  blocked_when:
+  - "target audience or decision_to_unlock is undefined"
+  - "current sources are required but unavailable"
+  - "market claim depends on regulated, private, or paid data"
+  handoff:
+  - "preserve artifact path, claim, sources, evidence grade, alternatives, demand signal, uncertainty, stance, and next workflow"

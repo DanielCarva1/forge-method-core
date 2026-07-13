@@ -14,7 +14,7 @@ fn repo_root() -> PathBuf {
 fn agent_receives_complete_p5a_manifest_from_one_read_only_command() {
     let output = bin()
         .args(["guide", "migration-audit", "--catalog-dir"])
-        .arg(repo_root().join("contracts/workflows"))
+        .arg(repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog"))
         .arg("--plan-file")
         .arg(repo_root().join("contracts/policies/workflow-migration-foundation-v0.yaml"))
         .arg("--json")
@@ -64,7 +64,7 @@ fn malformed_plan_fails_closed_before_manifest_projection() {
     .expect("invalid plan");
     let output = bin()
         .args(["guide", "migration-audit", "--catalog-dir"])
-        .arg(repo_root().join("contracts/workflows"))
+        .arg(repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog"))
         .arg("--plan-file")
         .arg(&plan)
         .arg("--json")

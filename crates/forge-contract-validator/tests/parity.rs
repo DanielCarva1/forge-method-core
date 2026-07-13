@@ -260,6 +260,11 @@ fn copy_validation_tree(source: &Path, target: &Path) {
         target,
         "crates/forge-core-kernel/tests/fixtures/p5d2-foundation-history.ndjson",
     );
+    copy_validation_source(
+        source,
+        target,
+        "crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs",
+    );
     copy_dir(
         &source
             .join("docs")

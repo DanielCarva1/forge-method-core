@@ -10,22 +10,24 @@ decision_sources:
   - "contracts/spec/engine-architecture.yaml#orchestrator_guide (inputs: typed catalog + current project state)"
   - "crates/forge-core-contracts/src/catalog.rs (Catalog/CatalogEntry)"
 
-intent: "The engine must be able to (a) load the 110 typed workflow documents into the typed Catalog at runtime, and (b) filter the catalog to workflows eligible in a given current project phase. This is the routing substrate every other slice-2 story depends on (the host LLM reasons over the ELIGIBLE subset, not all 110)."
+intent: "The engine loads the current 68-document operational catalog for routing and filters it by project phase. The frozen 110-document historical subject is loaded only by explicit migration-audit paths and can never leak into routing."
 
 tasks:
   - "add a catalog module to forge-core-decisions: load_catalog(dir) reads contracts/workflows/*.yaml, deserializes each into WorkflowDocument, builds a Catalog of CatalogEntry (id, phases, workflow_ref, triggers, prerequisites, outputs)"
   - "add eligibility filter: eligible_in(catalog, current_phase) -> Vec<&CatalogEntry> using Phase::tag_eligible over entry.phases"
   - "handle the 'anytime' wildcard: workflows tagged anytime are eligible in every phase"
-  - "cache/load once; the catalog is static for a project session"
+  - "cache/load once; the operational catalog is static for a project session"
+  - "keep the frozen 110-document snapshot behind the migration-audit loader; retired ids resolve through typed tombstones, never as routable or unknown"
 
 acceptance_criteria:
-  - "load_catalog succeeds on contracts/workflows/ and yields exactly 110 entries"
+  - "load_catalog succeeds on contracts/workflows/ and yields exactly 68 operational entries"
+  - "the migration-audit default loads exactly 110 frozen historical entries without changing operational eligibility"
   - "eligible_in(Discovery) returns only workflows whose phases include 1-discovery or anytime"
   - "an anytime-tagged workflow appears in eligible_in for EVERY phase"
   - "a malformed workflow file fails load_catalog with a typed error (not a panic)"
 
 checks:
-  - "unit tests: load-110, eligibility-per-phase, anytime-universal, malformed-rejected"
+  - "unit tests: load-operational-68, audit-frozen-110, eligibility-per-phase, anytime-universal, malformed-rejected, retired-never-routed"
   - "cargo clippy -p forge-core-decisions -- -W pedantic clean"
 
 blocks: ["S2.3", "S2.4"]

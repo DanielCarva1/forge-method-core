@@ -38,7 +38,10 @@ fn agent_receives_explicit_simulation_and_simulation_only_compatibility_projecti
         .arg("--input-file")
         .arg(&input)
         .arg("--legacy-workflow-file")
-        .arg(repo_root().join("contracts/workflows/build-story.yaml"))
+        .arg(
+            repo_root()
+                .join("contracts/evidence/workflow-retirement/legacy-catalog/build-story.yaml"),
+        )
         .arg("--json")
         .output()
         .expect("govern-simulate command");
@@ -85,9 +88,12 @@ fn agent_receives_explicit_simulation_and_simulation_only_compatibility_projecti
         envelope["data"]["legacy_projection"]["catalog_entry"]["id"],
         "build-story"
     );
-    assert_eq!(
-        envelope["data"]["legacy_projection"]["catalog_entry"]["workflow_ref"],
-        "contracts/workflows/build-story.yaml"
+    assert!(
+        envelope["data"]["legacy_projection"]["catalog_entry"]["workflow_ref"]
+            .as_str()
+            .expect("legacy workflow ref")
+            .replace('\\', "/")
+            .ends_with("contracts/evidence/workflow-retirement/legacy-catalog/build-story.yaml")
     );
 }
 

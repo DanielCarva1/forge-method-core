@@ -1471,27 +1471,54 @@ fn unavailable_expired_and_misbound_capabilities_keep_the_gap_visible_across_han
         serde_json::to_value(&gap).expect("original guidance JSON")
     );
 
-    // Leave enough headroom for a loaded Windows runner to recompute the
-    // expanded reviewed registry before the first assertion. The previous
-    // two-second window became timing-dependent after the fourth release.
-    let expiring = capability_request(&gap, policy, true, Some(now() + 10));
-    fixture
-        .adapter
-        .record_authorized_capability(fixture.capability(expiring))
-        .expect("short-lived available capability");
-    assert!(!fixture
-        .adapter
-        .next()
-        .expect("fresh capability")
+    // Expiration semantics must not depend on a wall-clock sleep or runner
+    // speed. Re-append the trusted unavailable probe metadata as an expired
+    // available observation through the internal TCB seam. It must not satisfy
+    // the capability, while a later fresh signed observation must do so.
+    let state_root = fixture.root.join(".forge-method");
+    let projection = recover_workflow_governance_ledger(&state_root).expect("recover capability");
+    let identity = projection.identity().expect("ledger identity");
+    let head = projection.head_digest.as_deref().expect("ledger head");
+    let state_version = projection
+        .current_state_version()
+        .expect("ledger state version");
+    let mut expired = projection
+        .records
+        .iter()
+        .rev()
+        .find_map(|record| match &record.event {
+            WorkflowGovernanceEvent::CapabilityProbed(event) => Some(event.clone()),
+            _ => None,
+        })
+        .expect("latest trusted capability probe");
+    expired.available = true;
+    expired.ledger_head_digest = head.to_owned();
+    expired.observed_at_unix = now();
+    expired.expires_at_unix = Some(now().saturating_sub(1));
+    append_workflow_governance_event_tcb(
+        &state_root,
+        head,
+        &identity,
+        state_version,
+        WorkflowGovernanceEvent::CapabilityProbed(expired),
+    )
+    .expect("append expired trusted probe");
+    let expired_gap = fixture.adapter.next().expect("expired capability");
+    assert!(expired_gap
         .simulation
         .candidate_capability_gaps
         .iter()
         .any(|candidate| candidate.id == capability_id));
-    thread::sleep(Duration::from_secs(11));
-    assert!(fixture
+
+    let fresh_request = capability_request(&expired_gap, policy, true, Some(now() + 3_600));
+    fixture
+        .adapter
+        .record_authorized_capability(fixture.capability(fresh_request))
+        .expect("fresh signed available capability");
+    assert!(!fixture
         .adapter
         .next()
-        .expect("expired capability")
+        .expect("fresh capability")
         .simulation
         .candidate_capability_gaps
         .iter()
@@ -2162,4 +2189,18 @@ fn all_admitted_required_policies_use_signed_authority_and_reach_terminal_resume
     }
 
     panic!("signed golden path did not converge: {completed:?}");
+}
+
+#[test]
+fn operational_legacy_deletion_preserves_the_trusted_five_release_registry() {
+    let operational = forge_core_decisions::load_embedded_catalog();
+    let frozen = forge_core_decisions::catalog::load_embedded_frozen_legacy_catalog();
+    assert!(operational.is_clean() && frozen.is_clean());
+    assert_eq!(operational.catalog.len(), 68);
+    assert_eq!(frozen.catalog.len(), 110);
+
+    let registry = forge_core_kernel::load_admitted_workflow_governance_reviewed_release_registry()
+        .expect("frozen full-catalog evidence keeps independent admission reproducible");
+    assert_eq!(registry.release_count(), 5);
+    assert_eq!(registry.latest_release().policy_count(), 42);
 }

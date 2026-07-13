@@ -1,0 +1,83 @@
+schema_version: "0.1"
+spec: "workflow_governance_retirement_v0"
+status: "p5d_5_implemented"
+purpose: >-
+  Retire legacy workflow authority only after exact replacement, history,
+  deletion, consumer compatibility, reviewer, and scorecard evidence is
+  recomputed and independently authorized.
+
+distribution_compatibility:
+  package_version: "0.5.0"
+  minimum_consumer_version: "0.5.0"
+  guide_payload_schema: "0.2"
+  workflow_governance_release_identity: "0.4.0"
+  boundary: >-
+    The package and guide schema versions expose the pullable retirement
+    checkpoint. They do not mutate the frozen five-release governance chain.
+
+authority_boundary:
+  candidate_documents: >-
+    Evidence, scorecard, tombstone, and authorization YAML remain authored
+    inputs and cannot mint retirement authority by deserialization.
+  trusted_admission: >-
+    A fixed kernel loader recomputes the complete candidate, verifies the
+    five-release 42-policy history and two independent Ed25519 signatures, and
+    retains a non-serializable capability in a process-wide OnceLock.
+  caller_overrides: "project paths, flags, and local tombstones cannot select authority"
+
+catalog_split:
+  historical_evidence: 110
+  operational: 68
+  retired_legacy: 42
+  invariant: >-
+    The evidence archive is byte-identical to the pre-retirement catalog. The
+    operational deletion set exactly equals the admitted policy compatibility ids.
+
+deletion_proof:
+  surfaces:
+    - "routing"
+    - "readiness"
+    - "verdicts"
+    - "receipts"
+    - "continuation"
+  rule: >-
+    Each digest is recomputed from the exact replacement policy, release,
+    runtime bundle, and release history. Authored equality flags or matching
+    invented hashes cannot satisfy the evaluator.
+
+consumer_compatibility:
+  source: "repository_compatibility_matrix"
+  requirements:
+    - "all 42 retired ids have typed workflow_retired fixtures"
+    - "diagnostic code, replacement policy, release, and argv match tombstones"
+    - "unsupported repository consumer count is zero"
+    - "routing never treats a retired id as unknown or accepted"
+
+final_scorecard:
+  runtime_disposition:
+    executable: 42
+    compatibility_only: 47
+    quarantined: 3
+    domain_pack_candidate: 18
+  legacy_authority:
+    retired: 42
+    retained: 68
+  note: >-
+    Executable replacement and retired legacy authority are simultaneous axes,
+    not mutually exclusive workflow states.
+
+adversarial_requirements:
+  - "missing, reordered, duplicate, subset, or cross-history retirement sets reject"
+  - "raw or canonical artifact drift rejects"
+  - "invented deletion hashes reject even when authored as equivalent"
+  - "consumer matrix/report divergence or unsupported fixtures reject"
+  - "single signer, shared principal, shared credential, shared domain, shared key, bad signature, premature, or expired authorization rejects"
+  - "caller tombstone and scorecard overrides do not affect trusted status"
+
+references:
+  - "contracts/plan/agent-native-guidance-plan.yaml"
+  - "contracts/migration/workflow-retirement-evidence-index-v0.yaml"
+  - "contracts/migration/workflow-retirement-authorization-v0.yaml"
+  - "contracts/migration/workflow-governance-final-scorecard-v0.yaml"
+  - "contracts/evidence/workflow-retirement-deletion-proof-v0.yaml"
+  - "contracts/evidence/workflow-retirement-consumer-matrix-v0.yaml"

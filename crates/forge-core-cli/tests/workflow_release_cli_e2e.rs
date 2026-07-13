@@ -54,7 +54,7 @@ fn run_rollout(manifest: &Path, batch: Option<&Path>) -> std::process::Output {
     }
     command
         .arg("--catalog-dir")
-        .arg(repo_root().join("contracts/workflows"))
+        .arg(repo_root().join("contracts/evidence/workflow-retirement/legacy-catalog"))
         .arg("--plan-file")
         .arg(repo_root().join("contracts/policies/workflow-migration-foundation-v0.yaml"))
         .arg("--json")

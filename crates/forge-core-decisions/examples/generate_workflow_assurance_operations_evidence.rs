@@ -449,7 +449,10 @@ fn load_context(root: &Path) -> Result<EvidenceContext, Box<dyn Error>> {
     }
     for workflow_id in WORKFLOW_IDS {
         let path = format!("contracts/workflows/{workflow_id}.yaml");
-        let bytes = std::fs::read(root.join(&path))?;
+        let bytes = std::fs::read(
+            root.join("contracts/evidence/workflow-retirement/legacy-catalog")
+                .join(format!("{workflow_id}.yaml")),
+        )?;
         sources.insert(RepoPath(path), bytes);
     }
     let subject_state = &subject.workflow_behavioral_review_subject;
@@ -983,7 +986,10 @@ fn bindings(
         "contracts/workflows/{}.yaml",
         policy.compatibility_workflow_id.0
     );
-    let legacy_bytes = std::fs::read(root.join(&legacy_path))?;
+    let legacy_bytes = std::fs::read(
+        root.join("contracts/evidence/workflow-retirement/legacy-catalog")
+            .join(format!("{}.yaml", policy.compatibility_workflow_id.0)),
+    )?;
     Ok(WorkflowBehavioralEvidenceBindings {
         review_subject: context.subject_artifact.clone(),
         review_subject_digest: context.subject_digest.clone(),

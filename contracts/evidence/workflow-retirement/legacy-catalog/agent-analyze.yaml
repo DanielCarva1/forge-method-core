@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "agent-analyze"
+  phases:
+  - "1-discovery"
+  - "6-evolve"
+  trigger:
+  - "user asks to analyze an agent profile, skill, or persona behavior"
+  - "generated agent behavior needs quality review before use"
+  inputs:
+  - "agent profile or skill"
+  - "intended workflow"
+  - "constraints and failure cases"
+  - "validation expectations"
+  steps:
+  - "inspect role, triggers, permissions, and handoff"
+  - "test against expected and adversarial scenarios"
+  - "identify missing state, unclear boundaries, and unsafe autonomy"
+  - "recommend patch, eval, or rejection"
+  outputs:
+  - "agent analysis"
+  - "findings"
+  - "recommended changes"
+  done_when:
+  - "behavior risks are explicit"
+  - "required changes or evals are known"
+  - "ownership boundary is clear"
+  blocked_when:
+  - "source agent artifact is unavailable"
+  - "intended behavior is undefined"
+  handoff:
+  - "preserve analyzed path, findings, recommendation, and validation command"

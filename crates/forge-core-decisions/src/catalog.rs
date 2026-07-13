@@ -1,10 +1,11 @@
 //! Catalog loading and phase-eligibility filtering.
 //!
-//! The engine loads the typed workflow catalog (the 110 `contracts/workflows/
-//! *.yaml` documents produced by the S1.3 migration) into a [`Catalog`] at
-//! runtime, then filters it to the workflows eligible in the project's current
-//! phase. The host LLM reasons over the ELIGIBLE subset (not all 110) — this is
-//! the routing substrate (DC1).
+//! The engine loads the operational compatibility catalog under
+//! `contracts/workflows/` into a [`Catalog`] at runtime, then filters it to the
+//! workflows eligible in the project's current phase. Retired projections are
+//! absent from this routing substrate. A separate evidence-only frozen loader
+//! preserves the complete historical 110-workflow catalog for migration and
+//! release-admission recomputation; it must never be used for routing.
 //!
 //! ## Error model (accumulator, not short-circuit)
 //!
@@ -196,7 +197,7 @@ fn catalog_entry_from_workflow(workflow: &LoadedWorkflowDocument) -> CatalogEntr
 }
 
 // ============================================================================
-// Embedded catalog — the 110 workflow documents compiled INTO the binary via
+// Embedded operational catalog compiled INTO the binary via
 // `include_dir!`. This is what makes forge-core work zero-config on any
 // machine: a freshly `cargo install`ed binary carries its full workflow
 // catalog, so greenfield projects (no local `contracts/workflows/` tree) can
@@ -208,6 +209,15 @@ use include_dir::{include_dir, Dir, DirEntry};
 
 static EMBEDDED_WORKFLOWS: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/../../contracts/workflows");
+
+/// Evidence-only snapshot of the complete pre-retirement legacy catalog.
+///
+/// These bytes remain available solely so trusted migration and release
+/// evaluators can recompute historical digests and semantic evidence after a
+/// projection is removed from the operational compatibility catalog. Public
+/// routing must use [`EMBEDDED_WORKFLOWS`], never this directory.
+static EMBEDDED_FROZEN_LEGACY_WORKFLOWS: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/../../contracts/evidence/workflow-retirement/legacy-catalog");
 
 /// Load the catalog from the workflows compiled into the binary.
 ///
@@ -236,9 +246,59 @@ pub fn load_embedded_catalog() -> CatalogLoadReport {
 /// Load the complete workflow documents compiled into the binary.
 #[must_use]
 pub fn load_embedded_workflow_documents() -> WorkflowDocumentLoadReport {
+    load_embedded_documents_from(&EMBEDDED_WORKFLOWS)
+}
+
+/// Load the complete evidence-only pre-retirement workflow snapshot.
+///
+/// Returned references intentionally retain their historical logical
+/// `contracts/workflows/<name>.yaml` identities. The physical evidence archive
+/// path is not a routable workflow namespace.
+#[must_use]
+pub fn load_embedded_frozen_legacy_workflow_documents() -> WorkflowDocumentLoadReport {
+    load_embedded_documents_from(&EMBEDDED_FROZEN_LEGACY_WORKFLOWS)
+}
+
+/// Load the catalog projection of the complete evidence-only snapshot.
+///
+/// This function exists for deterministic migration/release recomputation. It
+/// is not a compatibility or agent-routing surface.
+#[must_use]
+pub fn load_embedded_frozen_legacy_catalog() -> CatalogLoadReport {
+    let loaded = load_embedded_frozen_legacy_workflow_documents();
+    CatalogLoadReport {
+        catalog: Catalog {
+            entries: loaded
+                .workflows
+                .iter()
+                .map(catalog_entry_from_workflow)
+                .collect(),
+        },
+        errors: loaded.errors,
+    }
+}
+
+/// Return exact frozen source bytes under their historical logical refs.
+///
+/// Trusted historical evaluators use this to satisfy raw content-addressed
+/// bindings after a retired workflow has left the operational embedded tree.
+/// The returned paths remain `contracts/workflows/...`; the physical archive
+/// location is intentionally not observable as workflow authority.
+#[must_use]
+pub fn embedded_frozen_legacy_workflow_source_bytes() -> Vec<(RepoPath, &'static [u8])> {
+    let mut files = Vec::new();
+    collect_bytes(&EMBEDDED_FROZEN_LEGACY_WORKFLOWS, &mut files);
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files
+        .into_iter()
+        .map(|(name, bytes)| (RepoPath(format!("contracts/workflows/{name}")), bytes))
+        .collect()
+}
+
+fn load_embedded_documents_from(dir: &Dir<'static>) -> WorkflowDocumentLoadReport {
     let mut report = WorkflowDocumentLoadReport::default();
     let mut files: Vec<(String, &str)> = Vec::new();
-    collect_yaml(&EMBEDDED_WORKFLOWS, &mut files);
+    collect_yaml(dir, &mut files);
     files.sort();
     for (name, text) in &files {
         match parse_workflow_document_yaml(name, text) {
@@ -264,6 +324,18 @@ fn collect_yaml<'a>(dir: &Dir<'a>, out: &mut Vec<(String, &'a str)>) {
                     out.push((name, text));
                 }
             }
+        }
+    }
+}
+
+fn collect_bytes(dir: &'static Dir<'static>, out: &mut Vec<(String, &'static [u8])>) {
+    for entry in dir.entries() {
+        match entry {
+            DirEntry::Dir(child) => collect_bytes(child, out),
+            DirEntry::File(file) if file.path().extension().is_some_and(|ext| ext == "yaml") => {
+                out.push((file.path().to_string_lossy().into_owned(), file.contents()));
+            }
+            DirEntry::File(_) => {}
         }
     }
 }
@@ -309,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_catalog_loads_cleanly_and_matches_disk_count() {
+    fn embedded_operational_catalog_loads_cleanly_and_matches_disk_count() {
         // Regression for the greenfield blocker: the embedded catalog (compiled
         // into the binary via include_dir!) must load with zero errors and
         // carry exactly as many workflows as the on-disk catalog. This is what
@@ -333,14 +405,88 @@ mod tests {
     }
 
     #[test]
-    fn loads_all_110_workflows_cleanly() {
+    fn operational_catalog_contains_only_68_non_retired_workflows() {
         let report = load_catalog(&real_catalog_dir());
         assert!(
             report.is_clean(),
             "load errors: {:?}",
             report.errors.iter().map(|e| &e.reason).collect::<Vec<_>>()
         );
-        assert_eq!(report.catalog.len(), 110, "expected 110 catalog entries");
+        assert_eq!(report.catalog.len(), 68, "expected 68 operational entries");
+    }
+
+    #[test]
+    fn frozen_legacy_snapshot_preserves_complete_historical_catalog() {
+        let frozen_documents = load_embedded_frozen_legacy_workflow_documents();
+        let frozen_catalog = load_embedded_frozen_legacy_catalog();
+        assert!(
+            frozen_documents.is_clean() && frozen_catalog.is_clean(),
+            "frozen legacy evidence must parse cleanly"
+        );
+        assert_eq!(frozen_documents.workflows.len(), 110);
+        assert_eq!(frozen_catalog.catalog.len(), 110);
+        let frozen_sources = embedded_frozen_legacy_workflow_source_bytes();
+        assert_eq!(frozen_sources.len(), 110);
+        assert!(frozen_sources.iter().all(|(path, bytes)| {
+            path.0.starts_with("contracts/workflows/") && !bytes.is_empty()
+        }));
+        assert!(frozen_documents
+            .workflows
+            .iter()
+            .all(|workflow| workflow.workflow_ref.0.starts_with("contracts/workflows/")));
+    }
+
+    #[test]
+    fn operational_catalog_is_exact_frozen_subset_after_retirement() {
+        use std::collections::BTreeSet;
+
+        let operational = load_embedded_catalog();
+        let frozen = load_embedded_frozen_legacy_catalog();
+        assert!(operational.is_clean() && frozen.is_clean());
+        let operational_ids = operational
+            .catalog
+            .entries
+            .iter()
+            .map(|entry| entry.id.0.as_str())
+            .collect::<BTreeSet<_>>();
+        let frozen_ids = frozen
+            .catalog
+            .entries
+            .iter()
+            .map(|entry| entry.id.0.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(operational_ids.is_subset(&frozen_ids));
+        let removed_ids = frozen_ids
+            .difference(&operational_ids)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(removed_ids.len(), 42);
+
+        let runtime_raw = crate::embedded_text(
+            "contracts/workflow-governance/runtime-agent-native-continuity-v0.yaml",
+        )
+        .expect("final P5d.4 runtime bundle");
+        let runtime: forge_core_contracts::WorkflowGovernanceBundleDocument =
+            yaml_serde::from_str(runtime_raw).expect("typed final runtime bundle");
+        let admitted_workflow_ids = runtime
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .map(|policy| policy.compatibility_workflow_id.0.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(removed_ids, admitted_workflow_ids);
+
+        let frozen_documents = load_embedded_frozen_legacy_workflow_documents();
+        for operational_workflow in load_embedded_workflow_documents().workflows {
+            let frozen_workflow = frozen_documents
+                .workflows
+                .iter()
+                .find(|candidate| {
+                    candidate.document.workflow.id == operational_workflow.document.workflow.id
+                })
+                .expect("every operational workflow remains byte-semantically frozen");
+            assert_eq!(&operational_workflow, frozen_workflow);
+        }
     }
 
     #[test]
@@ -428,8 +574,8 @@ workflow:
     fn find_entry_resolves_known_id() {
         let report = load_catalog(&real_catalog_dir());
         assert!(report.is_clean());
-        // plan-sprint is one of the 110.
-        assert!(find_entry(&report.catalog, &StableId("plan-sprint".into())).is_some());
+        // brainstorming remains on the operational compatibility surface.
+        assert!(find_entry(&report.catalog, &StableId("brainstorming".into())).is_some());
         assert!(find_entry(&report.catalog, &StableId("does-not-exist".into())).is_none());
     }
 }

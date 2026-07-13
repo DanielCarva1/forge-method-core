@@ -7,20 +7,34 @@ audited: "Forge-method-core/skills/forge-method/references/ + modules/ + facilit
 method: "deterministic grep + structural parse (reproducible), not opinion"
 
 purpose:
-  one_line: "Mechanically verify the existing 110-workflow catalog: are they well-made, do they cover 'build anything', and where are the gaps and integrity bugs."
+  one_line: "Mechanically preserve and verify the frozen 110-workflow historical subject while routing only the 68-workflow operational catalog after P5d.5 retirement."
+
+catalog_subjects:
+  historical_audit_subject:
+    count: 110
+    path: "contracts/evidence/workflow-retirement/legacy-catalog/"
+    role: "immutable evidence and migration-audit input; never a routing fallback"
+  operational_catalog:
+    count: 68
+    path: "contracts/workflows/"
+    role: "only source eligible for current guide routing"
+  retired_with_typed_tombstones: 42
 
 # ---------------------------------------------------------------------------
 # headline findings
 # ---------------------------------------------------------------------------
 headline:
   structure_is_sound: true
-  text: "The 110 workflow contracts are structurally COMPLETE (all 7 state-machine fields) and COMPACT (33-61 lines). The references/workflow-*.md set is NOT the problem. Problems are: (1) 101/110 omit their phase in trigger, breaking router dispatch; (2) data-integrity bugs in IDs/filenames; (3) system-design is present but not a mandatory gate; (4) 34 facilitation .md files carry persona-venom duplicated against clean references; (5) coverage is broad but not universal."
+  text: "Historical finding: all 110 workflow contracts were structurally complete and compact. P5d.5 preserves those exact documents as evidence, retires 42 admitted legacy authorities, and exposes only 68 retained workflows to routing; historical gaps below are an audit record, not the current operational state."
 
 # ---------------------------------------------------------------------------
 # structural truth (reproducible)
 # ---------------------------------------------------------------------------
 structural_truth:
   total_workflows: 110
+  subject: "frozen historical retirement evidence"
+  operational_workflows_after_p5d5: 68
+  typed_retirement_tombstones: 42
   contract_fields_required: ["trigger", "inputs", "steps", "outputs", "done_when", "blocked_when", "handoff"]
   workflows_complete_all_7: 110
   workflows_incomplete: 0
@@ -164,7 +178,7 @@ fixes_required:
   - id: "FX6"
     fix: "convert references/workflow-*.md from md-with-yaml-block to pure typed YAML contracts consumed by the rust engine"
     blocks: "G1 (markdown is not runtime authority)"
-    status: "CLOSED — 110 typed YAML in contracts/workflows/; no references/workflow-*.md remain; loaded via load_catalog (catalog.rs)"
+    status: "CLOSED — the frozen 110 typed YAML documents live under contracts/evidence/workflow-retirement/legacy-catalog; contracts/workflows contains only the 68 operational documents loaded by current guide routing"
   - id: "FX7"
     fix: "make module-builder turnkey (scaffold + validate + gate a new domain module end-to-end)"
     blocks: "build-anything promise credibility"

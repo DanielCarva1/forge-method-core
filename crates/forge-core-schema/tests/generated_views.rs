@@ -40,6 +40,13 @@ fn generated_schemas_cover_v0_contract_surface() {
         "workflow_governance_release_manifest",
         "workflow_migration_batch",
         "workflow_retirement_authorization",
+        "workflow_retirement_evidence_index",
+        "workflow_deletion_proof",
+        "workflow_consumer_compatibility_report",
+        "workflow_consumer_compatibility_matrix",
+        "workflow_retirement_tombstone_catalog",
+        "workflow_final_scorecard",
+        "workflow_retirement_authorization_v2",
         "workflow_governance_bundle",
         "workflow_governance_evaluation",
         "workflow_governance_ledger",
@@ -47,6 +54,60 @@ fn generated_schemas_cover_v0_contract_surface() {
     ] {
         assert!(families.contains(expected), "missing schema for {expected}");
     }
+}
+
+#[test]
+fn p5d5_retirement_views_preserve_candidate_only_two_axis_boundary() {
+    let views = compact_agent_views();
+    for (family, root) in [
+        (
+            "workflow_retirement_evidence_index",
+            "workflow_retirement_evidence_index",
+        ),
+        ("workflow_deletion_proof", "workflow_deletion_proof"),
+        (
+            "workflow_consumer_compatibility_report",
+            "workflow_consumer_compatibility_report",
+        ),
+        (
+            "workflow_consumer_compatibility_matrix",
+            "workflow_consumer_compatibility_matrix",
+        ),
+        (
+            "workflow_retirement_tombstone_catalog",
+            "workflow_retirement_tombstone_catalog",
+        ),
+        ("workflow_final_scorecard", "workflow_final_scorecard"),
+        (
+            "workflow_retirement_authorization_v2",
+            "workflow_retirement_authorization_v2",
+        ),
+    ] {
+        let view = views
+            .iter()
+            .find(|view| view.family_id == family)
+            .unwrap_or_else(|| panic!("missing P5d.5 view {family}"));
+        assert_eq!(view.root_key, Some(root));
+        assert!(
+            view.authority_note.contains("candidate")
+                || view.authority_note.contains("non-authoritative")
+        );
+        assert!(
+            view.authority_note.contains("cannot")
+                || view.authority_note.contains("required")
+                || view.authority_note.contains("not ")
+        );
+    }
+    let scorecard = views
+        .iter()
+        .find(|view| view.family_id == "workflow_final_scorecard")
+        .expect("final scorecard view");
+    assert!(scorecard
+        .enum_definitions
+        .contains(&"WorkflowFinalRuntimeDisposition".to_owned()));
+    assert!(scorecard
+        .enum_definitions
+        .contains(&"WorkflowFinalLegacyAuthorityState".to_owned()));
 }
 
 #[test]

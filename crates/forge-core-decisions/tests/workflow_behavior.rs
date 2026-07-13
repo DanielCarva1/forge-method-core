@@ -203,7 +203,7 @@ fn fixture() -> Fixture {
     let legacy_bytes = std::fs::read(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
-            .join(&legacy_ref.0),
+            .join("contracts/evidence/workflow-retirement/legacy-catalog/build-story.yaml"),
     )
     .expect("legacy bytes");
     let legacy_document =

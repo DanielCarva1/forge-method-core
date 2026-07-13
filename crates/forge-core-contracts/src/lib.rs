@@ -39,6 +39,7 @@ pub mod workflow_migration;
 pub mod workflow_release;
 pub mod workflow_release_review;
 pub mod workflow_release_review_v2;
+pub mod workflow_retirement;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
 pub use assurance::{
@@ -162,3 +163,4 @@ pub use workflow_release::{
 };
 pub use workflow_release_review::*;
 pub use workflow_release_review_v2::*;
+pub use workflow_retirement::*;

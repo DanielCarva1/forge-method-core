@@ -13,7 +13,10 @@ use forge_core_authority::{
 };
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::{CliEnvelope, ExitReason, PrincipalId, StableId};
-use forge_core_kernel::{WorkflowGovernanceAdapterError, WorkflowGovernanceProjectAdapter};
+use forge_core_kernel::{
+    load_admitted_workflow_retirement_checkpoint, WorkflowGovernanceAdapterError,
+    WorkflowGovernanceProjectAdapter,
+};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -70,6 +73,14 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             parsed.want_json,
         );
     }
+    if parsed.subcommand == "retirement-status" {
+        return match retirement_status(&parsed.root) {
+            Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
+            Err(message) => {
+                emit_failure(&command, ExitReason::EnvConfig, message, parsed.want_json)
+            }
+        };
+    }
     let adapter = match resolve_adapter(&parsed.root) {
         Ok(adapter) => adapter,
         Err(message) => {
@@ -121,6 +132,54 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             parsed.want_json,
         ),
     }
+}
+
+const RETIREMENT_EVIDENCE_INDEX: &str =
+    "contracts/migration/workflow-retirement-evidence-index-v0.yaml";
+const RETIREMENT_TOMBSTONES: &str = "contracts/migration/workflow-retirement-tombstones-v0.yaml";
+const RETIREMENT_SCORECARD: &str =
+    "contracts/migration/workflow-governance-final-scorecard-v0.yaml";
+
+#[derive(Debug, serde::Serialize)]
+struct WorkflowRetirementStatus {
+    /// This is an audit projection. The underlying capability remains opaque
+    /// and process-owned by the kernel.
+    authority: &'static str,
+    authorization_projection: &'static str,
+    release_id: String,
+    verified_retirement_count: usize,
+    operational_workflow_count: usize,
+    authorization_id: String,
+    payload_digest: String,
+    retirement_set_digest: String,
+    final_scorecard_digest: String,
+    evidence_index_ref: &'static str,
+    tombstone_catalog_ref: &'static str,
+    scorecard_ref: &'static str,
+}
+
+/// Read-only audit projection of the kernel-admitted retirement checkpoint.
+/// Caller/project files are never consulted and cannot select authority.
+fn retirement_status(_root: &Path) -> Result<Value, String> {
+    let checkpoint = load_admitted_workflow_retirement_checkpoint()
+        .map_err(|error| format!("verified retirement checkpoint is unavailable: {error}"))?;
+    let audit = checkpoint.audit();
+    let score = &checkpoint.scorecard().workflow_final_scorecard;
+    serde_json::to_value(WorkflowRetirementStatus {
+        authority: "verified_retirement_checkpoint",
+        authorization_projection: "non_authoritative_audit_of_opaque_capability",
+        release_id: audit.release_id.clone(),
+        verified_retirement_count: score.legacy_authority_counts.retired,
+        operational_workflow_count: score.legacy_authority_counts.retained,
+        authorization_id: audit.authorization_id.clone(),
+        payload_digest: audit.payload_digest.clone(),
+        retirement_set_digest: audit.retirement_set_digest.clone(),
+        final_scorecard_digest: audit.final_scorecard_digest.clone(),
+        evidence_index_ref: RETIREMENT_EVIDENCE_INDEX,
+        tombstone_catalog_ref: RETIREMENT_TOMBSTONES,
+        scorecard_ref: RETIREMENT_SCORECARD,
+    })
+    .map_err(|error| format!("serialize retirement status: {error}"))
 }
 
 fn release_upgrade(
@@ -430,9 +489,10 @@ fn invalid_observation(message: String) -> forge_core_kernel::WorkflowGovernance
 
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
     match args.subcommand.as_str() {
-        "release-status" if !args.flags.is_empty() => {
-            Err("workflow release-status accepts only --root and the JSON output switch".to_owned())
-        }
+        "release-status" | "retirement-status" if !args.flags.is_empty() => Err(format!(
+            "workflow {} accepts only --root and the JSON output switch",
+            args.subcommand
+        )),
         "release-upgrade" => {
             let expected = [
                 "target-release-id",
@@ -614,5 +674,38 @@ mod tests {
             }),
             ExitReason::EnvConfig
         );
+    }
+
+    #[test]
+    fn retirement_status_projects_verified_opaque_authority_without_runtime_state() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root")
+            .to_path_buf();
+        let value = retirement_status(&root).expect("verified audit projection");
+        assert_eq!(value["authority"], "verified_retirement_checkpoint");
+        assert_eq!(
+            value["authorization_projection"],
+            "non_authoritative_audit_of_opaque_capability"
+        );
+        assert_eq!(value["verified_retirement_count"], 42);
+        assert_eq!(value["operational_workflow_count"], 68);
+        assert!(value["payload_digest"]
+            .as_str()
+            .unwrap()
+            .starts_with("sha256:"));
+    }
+
+    #[test]
+    fn retirement_status_rejects_authority_selection_flags() {
+        let parsed = parse_args(&argv(&[
+            "workflow",
+            "retirement-status",
+            "--target-release-id",
+            "attacker-selected",
+        ]))
+        .expect("generic parser accepts known flag before subcommand policy validation");
+        assert!(validate_release_args(&parsed).is_err());
     }
 }

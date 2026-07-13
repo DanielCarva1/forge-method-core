@@ -552,13 +552,16 @@ fn fixture() -> WorkflowReleaseAdmissionCandidateV2Input {
     let candidate_bundle: WorkflowGovernanceBundleDocument = load(CANDIDATE_BUNDLE);
     let predecessor_registry: WorkflowGovernanceReleaseRegistryDocument =
         load(PREDECESSOR_REGISTRY);
-    let loaded = load_workflow_documents(&root().join("contracts/workflows"));
+    let loaded = load_workflow_documents(
+        &root().join("contracts/evidence/workflow-retirement/legacy-catalog"),
+    );
     assert!(
         loaded.is_clean(),
         "legacy workflow inventory must parse cleanly"
     );
     let legacy_workflows = loaded.workflows;
-    let catalog = load_catalog(&root().join("contracts/workflows"));
+    let catalog =
+        load_catalog(&root().join("contracts/evidence/workflow-retirement/legacy-catalog"));
     assert!(
         catalog.is_clean(),
         "legacy routing catalog must parse cleanly"
@@ -632,6 +635,11 @@ fn fixture() -> WorkflowReleaseAdmissionCandidateV2Input {
 
     let mut sources = HashMap::new();
     add_files(&root().join("contracts"), &mut sources);
+    sources.extend(
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+            .into_iter()
+            .map(|(path, bytes)| (path, bytes.to_vec())),
+    );
     for relative in [EVALUATOR, HISTORY] {
         sources.insert(
             path(relative),

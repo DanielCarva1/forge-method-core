@@ -1,3 +1,4 @@
+use forge_core_contracts::inventory::{FamilyStatus, ValidationSurface};
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
@@ -60,6 +61,38 @@ fn deserializes_contract_family_inventory_lock() {
         .iter()
         .any(|path| path.0 == "contracts/policies/rust-contract-type-order.yaml"));
     assert!(inventory.contract_family_inventory.families.len() >= 12);
+    let retirement = inventory
+        .contract_family_inventory
+        .families
+        .iter()
+        .filter(|family| {
+            family.id.0.starts_with("workflow_retirement_")
+                || matches!(
+                    family.id.0.as_str(),
+                    "workflow_deletion_proof"
+                        | "workflow_consumer_compatibility_report"
+                        | "workflow_consumer_compatibility_matrix"
+                        | "workflow_final_scorecard"
+                )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(retirement.len(), 8);
+    assert!(retirement.iter().all(|family| {
+        family.schema_ref.0 == "contracts/spec/workflow-governance-retirement-v0.yaml"
+    }));
+    let authorization_v2 = retirement
+        .iter()
+        .find(|family| family.id.0 == "workflow_retirement_authorization_v2")
+        .expect("retirement V2 inventory family");
+    assert_eq!(authorization_v2.status, FamilyStatus::Active);
+    assert_eq!(
+        authorization_v2.validation_surface,
+        ValidationSurface::RustContractValidator
+    );
+    assert_eq!(
+        authorization_v2.validator_function,
+        "verify_workflow_retirement_authorization_v2"
+    );
 }
 
 #[test]

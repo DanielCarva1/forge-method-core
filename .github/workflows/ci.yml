@@ -60,6 +60,12 @@ jobs:
       - name: Check generated agent-native continuity reviewed admission
         run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_admission -- --check
 
+      - name: Check generated signed workflow retirement checkpoint
+        run: cargo run -p forge-core-decisions --example generate_workflow_retirement_checkpoint -- --check
+
+      - name: Verify trusted workflow retirement runtime evidence
+        run: cargo test -p forge-core-kernel --test workflow_retirement_runtime_evidence
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -72,7 +78,7 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchors (139 historical, 156 Batch A, 169 aggregate)
+      - name: Regression anchors (139 historical, 156 Batch A, 169 pre-retirement, 170 aggregate)
         run: |
           cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json
           python - <<'PY'
@@ -84,6 +90,7 @@ jobs:
               check for check in checks
               if "agent-native-continuity" not in check["name"]
               and "agent_native_continuity" not in check["name"]
+              and check["name"] != "workflow_retirement_checkpoint"
           ]
           historical = [
               check for check in batch_a
@@ -94,11 +101,17 @@ jobs:
           assert summary["status"] == "passed", summary["diagnostics"]
           assert len(historical) == 139, len(historical)
           assert len(batch_a) == 156, len(batch_a)
-          assert len(checks) == 169, len(checks)
+          pre_retirement = [
+              check for check in checks
+              if check["name"] != "workflow_retirement_checkpoint"
+          ]
+          assert len(pre_retirement) == 169, len(pre_retirement)
+          assert len(checks) == 170, len(checks)
           assert all(check["diagnostics"] == 0 for check in checks), checks
           print(
               f"Historical anchor: {len(historical)}; "
-              f"Batch A anchor: {len(batch_a)}; aggregate: {len(checks)}"
+              f"Batch A anchor: {len(batch_a)}; "
+              f"pre-retirement: {len(pre_retirement)}; aggregate: {len(checks)}"
           )
           PY
 

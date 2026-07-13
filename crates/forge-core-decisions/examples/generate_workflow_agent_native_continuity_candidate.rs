@@ -343,7 +343,7 @@ fn generate(root: &Path, mode: Mode) -> Result<Vec<GeneratedArtifact>, Box<dyn E
 }
 
 fn load_clean_workflows(root: &Path) -> Result<Vec<LoadedWorkflowDocument>, Box<dyn Error>> {
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
     let loaded = load_workflow_documents(&catalog_dir);
     if !loaded.is_clean() || loaded.workflows.len() != 110 {
         return Err(error(format!(
@@ -369,7 +369,7 @@ fn load_migration_audit(
     root: &Path,
     workflows: &[LoadedWorkflowDocument],
 ) -> Result<forge_core_decisions::WorkflowMigrationAudit, Box<dyn Error>> {
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
     let catalog = load_catalog(&catalog_dir);
     if !catalog.is_clean() || catalog.catalog.entries.len() != 110 {
         return Err(error(

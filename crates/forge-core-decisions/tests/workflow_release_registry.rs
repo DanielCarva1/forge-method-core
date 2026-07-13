@@ -45,7 +45,7 @@ fn repo_root() -> PathBuf {
 
 fn p5d1_evaluated_release_digest() -> String {
     let root = repo_root();
-    let catalog_dir = root.join("contracts/workflows");
+    let catalog_dir = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
     let loaded = load_workflow_documents(&catalog_dir);
     assert!(loaded.is_clean(), "catalog errors: {:?}", loaded.errors);
     let catalog = load_catalog(&catalog_dir);

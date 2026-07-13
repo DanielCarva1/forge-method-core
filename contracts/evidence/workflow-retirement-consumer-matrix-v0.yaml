@@ -1,0 +1,476 @@
+schema_version: '0.1'
+workflow_consumer_compatibility_matrix:
+  id: workflow-retirement.consumer-matrix.p5d-v0
+  matrix_version: 0.1.0
+  authority: candidate_only
+  release:
+    lineage_id: workflow-governance.core
+    release_id: workflow-governance.release.agent-native-continuity-v0
+    release_version: 0.4.0
+    release_digest: sha256:2c46626240350dcb98e89b3840df07dbfd5fc746a08c21284cb1894e4617db35
+  legacy_catalog_digest: sha256:ce9568def11729a44ac067595548c3f415af0aa1774571504a57accd727e4850
+  operational_catalog_digest: sha256:c828e8147b1a8a2dc0297e0638595cba1192f2ecc0141296dbc7b85de5c52cba
+  minimum_consumer_version: 0.5.0
+  entries:
+  - workflow_id: adversarial-review
+    diagnostic_code: workflow.retired.adversarial-review
+    replacement_policy_ref: policy.workflow.adversarial-review
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: architecture
+    diagnostic_code: workflow.retired.architecture
+    replacement_policy_ref: policy.workflow.architecture
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: atdd-plan
+    diagnostic_code: workflow.retired.atdd-plan
+    replacement_policy_ref: policy.workflow.atdd-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: build-story
+    diagnostic_code: workflow.retired.build-story
+    replacement_policy_ref: policy.workflow.build-story
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: checkpoint-preview
+    diagnostic_code: workflow.retired.checkpoint-preview
+    replacement_policy_ref: policy.workflow.checkpoint-preview
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: ci-quality-pipeline
+    diagnostic_code: workflow.retired.ci-quality-pipeline
+    replacement_policy_ref: policy.workflow.ci-quality-pipeline
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: code-review
+    diagnostic_code: workflow.retired.code-review
+    replacement_policy_ref: policy.workflow.code-review
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: collaboration-handoff
+    diagnostic_code: workflow.retired.collaboration-handoff
+    replacement_policy_ref: policy.workflow.collaboration-handoff
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: compliance-checklist
+    diagnostic_code: workflow.retired.compliance-checklist
+    replacement_policy_ref: policy.workflow.compliance-checklist
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: context-recovery
+    diagnostic_code: workflow.retired.context-recovery
+    replacement_policy_ref: policy.workflow.context-recovery
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: correct-course
+    diagnostic_code: workflow.retired.correct-course
+    replacement_policy_ref: policy.workflow.correct-course
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: devops-deployment-plan
+    diagnostic_code: workflow.retired.devops-deployment-plan
+    replacement_policy_ref: policy.workflow.devops-deployment-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: discover-intent
+    diagnostic_code: workflow.retired.discover-intent
+    replacement_policy_ref: policy.workflow.discover-intent
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: domain-scan
+    diagnostic_code: workflow.retired.domain-scan
+    replacement_policy_ref: policy.workflow.domain-scan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: eval-design
+    diagnostic_code: workflow.retired.eval-design
+    replacement_policy_ref: policy.workflow.eval-design
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: evolve-project
+    diagnostic_code: workflow.retired.evolve-project
+    replacement_policy_ref: policy.workflow.evolve-project
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: investigation
+    diagnostic_code: workflow.retired.investigation
+    replacement_policy_ref: policy.workflow.investigation
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: nfr-evidence-audit
+    diagnostic_code: workflow.retired.nfr-evidence-audit
+    replacement_policy_ref: policy.workflow.nfr-evidence-audit
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: observability-plan
+    diagnostic_code: workflow.retired.observability-plan
+    replacement_policy_ref: policy.workflow.observability-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: plan-sprint
+    diagnostic_code: workflow.retired.plan-sprint
+    replacement_policy_ref: policy.workflow.plan-sprint
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: platform-ops-plan
+    diagnostic_code: workflow.retired.platform-ops-plan
+    replacement_policy_ref: policy.workflow.platform-ops-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: privacy-data-plan
+    diagnostic_code: workflow.retired.privacy-data-plan
+    replacement_policy_ref: policy.workflow.privacy-data-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: product-area-map
+    diagnostic_code: workflow.retired.product-area-map
+    replacement_policy_ref: policy.workflow.product-area-map
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: product-requirements
+    diagnostic_code: workflow.retired.product-requirements
+    replacement_policy_ref: policy.workflow.product-requirements
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: project-context
+    diagnostic_code: workflow.retired.project-context
+    replacement_policy_ref: policy.workflow.project-context
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: readiness-check
+    diagnostic_code: workflow.retired.readiness-check
+    replacement_policy_ref: policy.workflow.readiness-check
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: ready-release
+    diagnostic_code: workflow.retired.ready-release
+    replacement_policy_ref: policy.workflow.ready-release
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: reality-evidence-gate
+    diagnostic_code: workflow.retired.reality-evidence-gate
+    replacement_policy_ref: policy.workflow.reality-evidence-gate
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: research-closeout
+    diagnostic_code: workflow.retired.research-closeout
+    replacement_policy_ref: policy.workflow.research-closeout
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: retrospective
+    diagnostic_code: workflow.retired.retrospective
+    replacement_policy_ref: policy.workflow.retrospective
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: risk-register
+    diagnostic_code: workflow.retired.risk-register
+    replacement_policy_ref: policy.workflow.risk-register
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: security-plan
+    diagnostic_code: workflow.retired.security-plan
+    replacement_policy_ref: policy.workflow.security-plan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: spec-distillation
+    diagnostic_code: workflow.retired.spec-distillation
+    replacement_policy_ref: policy.workflow.spec-distillation
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: sprint-status
+    diagnostic_code: workflow.retired.sprint-status
+    replacement_policy_ref: policy.workflow.sprint-status
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: story-creation
+    diagnostic_code: workflow.retired.story-creation
+    replacement_policy_ref: policy.workflow.story-creation
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: technical-feasibility-scan
+    diagnostic_code: workflow.retired.technical-feasibility-scan
+    replacement_policy_ref: policy.workflow.technical-feasibility-scan
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: test-automation
+    diagnostic_code: workflow.retired.test-automation
+    replacement_policy_ref: policy.workflow.test-automation
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: test-framework
+    diagnostic_code: workflow.retired.test-framework
+    replacement_policy_ref: policy.workflow.test-framework
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: test-review
+    diagnostic_code: workflow.retired.test-review
+    replacement_policy_ref: policy.workflow.test-review
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: test-strategy
+    diagnostic_code: workflow.retired.test-strategy
+    replacement_policy_ref: policy.workflow.test-strategy
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: traceability-gate
+    diagnostic_code: workflow.retired.traceability-gate
+    replacement_policy_ref: policy.workflow.traceability-gate
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
+  - workflow_id: write-spec
+    diagnostic_code: workflow.retired.write-spec
+    replacement_policy_ref: policy.workflow.write-spec
+    replacement_argv:
+    - forge-core
+    - start
+    - --root
+    - .
+    - --json
+    repository_fixture_refs:
+    - contracts/migration/workflow-retirement-tombstones-v0.yaml
