@@ -8,7 +8,7 @@
 
 use crate::assurance::{
     CapabilityGapKind, DecisionAlternative, HumanDecisionReason, ObligationCriticality,
-    ReadinessTarget,
+    ReadinessTarget, UniversalAssuranceLens, WorkflowHumanIntentRevision,
 };
 use crate::common::{PrincipalId, StableId};
 use crate::workflow_release::{
@@ -21,8 +21,18 @@ pub const WORKFLOW_GOVERNANCE_SCHEMA_VERSION: &str = "0.1";
 pub const WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION: &str = "0.1";
 /// Ledger records written after a Domain Pack effective-bundle epoch exists.
 /// Readers continue to accept the frozen `0.1` history; `0.2` makes the new
-/// transition impossible to smuggle into the historical wire version.
+/// transition impossible to smuggle into the historical wire version. An
+/// accepted human intent supersedes it with `0.3`; frozen pre-intent `0.2`
+/// bytes remain valid and are never rewritten.
 pub const WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION: &str = "0.2";
+/// Ledger records written from the first accepted human-intent revision.
+///
+/// `0.3` is a strict successor of both historical wires: a ledger remains on
+/// `0.1` until a Domain Pack epoch (`0.2`) or an accepted intent (`0.3`), and
+/// an accepted intent permanently advances subsequent records to `0.3`.
+/// Readers retain exact `0.1`/`0.2` compatibility but never admit the new
+/// event under either older schema.
+pub const WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION: &str = "0.3";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -140,6 +150,14 @@ pub struct WorkflowClaimPolicy {
     pub id: StableId,
     pub statement: String,
     pub evaluator_ref: StableId,
+    /// Universal assurance dimensions covered by this policy claim.
+    ///
+    /// Historical releases predate durable Assurance Case lenses and
+    /// therefore deserialize to an empty set. An empty set is compatibility
+    /// data, not proof that a claim covers every lens; release admission owns
+    /// the stronger completeness invariant for lens-aware successors.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assurance_lenses: Vec<UniversalAssuranceLens>,
     pub waiver: WorkflowClaimWaiverPolicy,
 }
 
@@ -341,6 +359,7 @@ pub struct WorkflowGovernanceLedgerRecord {
 )]
 pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
+    HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     PhaseAdvanced(PhaseAdvancedEvent),
@@ -355,6 +374,27 @@ pub enum WorkflowGovernanceEvent {
     PolicyCompleted(PolicyCompletedEvent),
     ReceiptRevoked(ReceiptRevokedEvent),
     ContinuityRecorded(ContinuityRecordedEvent),
+}
+
+/// One bounded human intent revision admitted by the workflow mutation TCB.
+///
+/// The event contains the accepted semantic content plus the exact epoch,
+/// predecessor, project-state, action-packet, and authority bindings derived at
+/// admission. It intentionally has no claim status, readiness, or evaluator
+/// field for a host to choose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HumanIntentRevisionAcceptedEvent {
+    pub assurance_epoch: u64,
+    pub intent: WorkflowHumanIntentRevision,
+    pub intent_digest: String,
+    #[serde(default)]
+    pub previous_intent_digest: Option<String>,
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub acceptance_action_packet_digest: String,
+    pub accepted_by: PrincipalId,
+    pub accepted_at_unix: u64,
 }
 
 /// Durable provenance companion for one action produced from a separately

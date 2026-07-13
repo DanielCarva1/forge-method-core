@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use forge_core_authority::{
     AttestationPolicy, AttestationVerifier, AuthorizedWorkflowBrokerRegistry,
     WorkflowAuthorizationKind, WorkflowBrokerError, WorkflowBrokerEventEnvelope,
-    WorkflowBrokerFreshnessPolicy, WorkflowBrokerRegistryDocument,
+    WorkflowBrokerEventKind, WorkflowBrokerFreshnessPolicy, WorkflowBrokerRegistryDocument,
 };
 use forge_core_contracts::{CliEnvelope, StableId};
 use forge_core_kernel::{
@@ -188,7 +188,42 @@ fn authority_rejected(error: impl std::fmt::Display) -> ExitError {
 fn apply(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), ExitError> {
     let root = required_path(flags, "--root")?;
     let envelope_path = required_path(flags, "--origin-envelope-file")?;
-    let adapter = resolve_adapter(&root)?;
+    apply_origin_envelope(
+        &root,
+        &envelope_path,
+        None,
+        "workflow.action.apply",
+        want_json,
+    )
+}
+
+/// Verify and apply one broker envelope through the shared public mutation
+/// path. A specialized caller may require an exact semantic kind; that check
+/// happens immediately after bounded parsing and before any kernel mutation.
+pub(crate) fn apply_origin_envelope(
+    root: &Path,
+    envelope_path: &Path,
+    required_kind: Option<WorkflowBrokerEventKind>,
+    command: &'static str,
+    want_json: bool,
+) -> Result<(), ExitError> {
+    let envelope_raw = read_bounded(envelope_path, "workflow broker origin envelope")?;
+    let envelope: WorkflowBrokerEventEnvelope =
+        serde_json::from_str(&envelope_raw).map_err(|error| {
+            ExitError::env_config(format!(
+                "invalid workflow broker envelope {}: {error}",
+                envelope_path.display()
+            ))
+        })?;
+    if required_kind
+        .is_some_and(|kind| envelope.event_kind != kind || envelope.semantic_input.kind() != kind)
+    {
+        return Err(ExitError::failed(
+            "workflow intent record accepts only an intent_revision envelope from an external human broker"
+                .to_owned(),
+        ));
+    }
+    let adapter = resolve_adapter(root)?;
     let registry_path = adapter.trusted_broker_registry_path();
     reject_existing_links(&registry_path)?;
     let registry_raw = read_bounded(&registry_path, "workflow broker registry")?;
@@ -202,14 +237,6 @@ fn apply(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), E
     let registry =
         AuthorizedWorkflowBrokerRegistry::from_document(registry_document).map_err(|error| {
             ExitError::env_config(format!("invalid workflow broker registry: {error}"))
-        })?;
-    let envelope_raw = read_bounded(&envelope_path, "workflow broker origin envelope")?;
-    let envelope: WorkflowBrokerEventEnvelope =
-        serde_json::from_str(&envelope_raw).map_err(|error| {
-            ExitError::env_config(format!(
-                "invalid workflow broker envelope {}: {error}",
-                envelope_path.display()
-            ))
         })?;
     let now = now_unix()?;
     let current = registry.verify_event(
@@ -241,7 +268,7 @@ fn apply(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), E
         }
     }
     .map_err(|error| ExitError::failed(format!("workflow action rejected: {error}")))?;
-    emit_envelope(CliEnvelope::ok("workflow.action.apply", receipt), want_json)
+    emit_envelope(CliEnvelope::ok(command, receipt), want_json)
 }
 
 fn resolve_adapter(root: &Path) -> Result<WorkflowGovernanceProjectAdapter, ExitError> {

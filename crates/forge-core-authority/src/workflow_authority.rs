@@ -39,6 +39,7 @@ pub enum WorkflowAuthorizationKind {
     Capability,
     Decision,
     Evidence,
+    IntentRevision,
     Signal,
     Waiver,
 }
@@ -52,6 +53,7 @@ impl WorkflowAuthorizationKind {
             Self::Capability => "capability_authorize",
             Self::Decision => "decision_resolve",
             Self::Evidence => "evidence_authorize",
+            Self::IntentRevision => "intent_revision_accept",
             Self::Signal => "signal_authorize",
             Self::Waiver => "waiver_authorize",
         }

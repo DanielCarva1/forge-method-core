@@ -41,6 +41,19 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
+    if args.get(1).is_some_and(|value| value == "intent") {
+        let want_json = wants_json(args);
+        return match crate::workflow_intent_cmd::run(&args[2..]) {
+            Ok(()) => Ok(()),
+            Err(error) if want_json => emit_failure(
+                "workflow.intent",
+                credential_exit_reason(&error),
+                error.message().to_owned(),
+                true,
+            ),
+            Err(error) => Err(error),
+        };
+    }
     if args.get(1).is_some_and(|value| value == "action") {
         let want_json = wants_json(args);
         return match crate::workflow_action_cmd::run(&args[2..]) {

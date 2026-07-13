@@ -4,10 +4,18 @@ use serde::{Deserialize, Serialize};
 
 pub const ASSURANCE_CASE_SCHEMA_VERSION: &str = "0.1";
 
-/// A versioned, agent-facing Assurance Case document.
+pub const MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES: usize = 16 * 1024;
+pub const MAX_WORKFLOW_INTENT_LIST_ITEMS: usize = 64;
+pub const MAX_WORKFLOW_INTENT_ITEM_BYTES: usize = 2 * 1024;
+pub const MAX_WORKFLOW_INTENT_TOTAL_BYTES: usize = 64 * 1024;
+pub const MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES: usize = 1024;
+
+/// A versioned, agent-facing Assurance Case **proposal**.
 ///
-/// The host agent proposes the content. Forge validation decides whether the
-/// resulting readiness claim is internally coherent; proposal is not authority.
+/// The host agent proposes every field, including claim status and readiness.
+/// This legacy read-only derivation format therefore has no durable workflow
+/// authority. Only admitted governance-ledger events and their deterministic
+/// projection can establish durable Assurance state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AssuranceCaseDocument {
@@ -40,6 +48,123 @@ pub struct IntentProposal {
     pub preferences: Vec<String>,
     pub unacceptable_outcomes: Vec<String>,
     pub uncertainties: Vec<String>,
+}
+
+/// One human-origin revision admitted into the governance ledger.
+///
+/// The human supplies semantic content and conversation provenance. The
+/// trusted mutation boundary, not the host, assigns `revision` and the
+/// enclosing assurance epoch and verifies every bound digest. Claim status,
+/// readiness, and evaluator selection are deliberately absent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowHumanIntentRevision {
+    pub intent_id: StableId,
+    pub revision: u64,
+    pub desired_outcome: String,
+    #[serde(default)]
+    pub constraints: Vec<String>,
+    #[serde(default)]
+    pub preferences: Vec<String>,
+    #[serde(default)]
+    pub unacceptable_outcomes: Vec<String>,
+    #[serde(default)]
+    pub uncertainties: Vec<String>,
+    pub source_conversation_ref: String,
+    pub source_conversation_digest: String,
+}
+
+/// Universal assurance questions that apply across product domains.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum UniversalAssuranceLens {
+    IntendedOutcome,
+    CriticalJourneys,
+    SystemIntegrity,
+    QualityAttributes,
+    Operability,
+    LifecycleCoverage,
+    RiskAndFailure,
+    EvidenceRepresentativeness,
+}
+
+impl UniversalAssuranceLens {
+    pub const ALL: [Self; 8] = [
+        Self::IntendedOutcome,
+        Self::CriticalJourneys,
+        Self::SystemIntegrity,
+        Self::QualityAttributes,
+        Self::Operability,
+        Self::LifecycleCoverage,
+        Self::RiskAndFailure,
+        Self::EvidenceRepresentativeness,
+    ];
+
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::IntendedOutcome => "intended_outcome",
+            Self::CriticalJourneys => "critical_journeys",
+            Self::SystemIntegrity => "system_integrity",
+            Self::QualityAttributes => "quality_attributes",
+            Self::Operability => "operability",
+            Self::LifecycleCoverage => "lifecycle_coverage",
+            Self::RiskAndFailure => "risk_and_failure",
+            Self::EvidenceRepresentativeness => "evidence_representativeness",
+        }
+    }
+}
+
+/// Exact durable epoch identity reconstructed from the accepted ledger event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceEpochBinding {
+    pub project_id: StableId,
+    pub assurance_epoch: u64,
+    pub intent_id: StableId,
+    pub intent_revision: u64,
+    pub intent_digest: String,
+    pub accepted_record_digest: String,
+    pub accepted_state_version: u64,
+    pub snapshot_digest: String,
+    pub ledger_head_before_acceptance: String,
+}
+
+/// Durable state for one universal lens.
+///
+/// No accepted intent event contains these authority-bearing fields. The pure
+/// projector initializes them, and later slices may change them only from
+/// separately admitted typed observations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceLensProjection {
+    pub lens: UniversalAssuranceLens,
+    pub claim_status: AssuranceClaimStatus,
+    pub evidence_refs: Vec<String>,
+    pub evaluator_ref: Option<StableId>,
+}
+
+/// Conservative readiness knowledge for a durable Assurance epoch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DurableAssuranceReadinessState {
+    Unknown,
+    Blocked,
+    Ready,
+}
+
+/// Deterministic, non-caller-authored projection of the latest accepted intent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DurableAssuranceProjection {
+    pub binding: DurableAssuranceEpochBinding,
+    pub intent: WorkflowHumanIntentRevision,
+    pub lenses: Vec<DurableAssuranceLensProjection>,
+    pub readiness: DurableAssuranceReadinessState,
+    pub blocker_lenses: Vec<UniversalAssuranceLens>,
+    pub projection_digest: String,
 }
 
 /// A derived project-state observation used to evaluate the Assurance Case.
@@ -292,5 +417,21 @@ mod tests {
         let result = yaml_serde::from_str::<AssuranceCaseDocument>(&yaml);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepted_intent_shape_cannot_smuggle_assurance_authority() {
+        let proposed = serde_json::json!({
+            "intent_id": "intent.example",
+            "revision": 1,
+            "desired_outcome": "Create a reliable product",
+            "source_conversation_ref": "conversation:turn:42",
+            "source_conversation_digest": format!("sha256:{}", "a".repeat(64)),
+            "claim_status": "verified",
+            "readiness": "ready",
+            "evaluator_ref": "evaluator.host"
+        });
+
+        assert!(serde_json::from_value::<WorkflowHumanIntentRevision>(proposed).is_err());
     }
 }

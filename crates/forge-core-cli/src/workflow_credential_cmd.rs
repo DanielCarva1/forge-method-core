@@ -532,6 +532,12 @@ fn normalized_request_value(
         WorkflowAuthorizationKind::Evidence => {
             serde_json::from_value(raw_value).map(NormalizedWorkflowRequest::Evidence)
         }
+        WorkflowAuthorizationKind::IntentRevision => {
+            return Err(ExitError::usage(
+                "human intent revisions require `forge-core workflow intent record` with an external human-broker envelope; local workflow credentials cannot sign them"
+                    .to_owned(),
+            ));
+        }
         WorkflowAuthorizationKind::Signal => {
             serde_json::from_value(raw_value).map(NormalizedWorkflowRequest::Signal)
         }
@@ -548,6 +554,10 @@ fn parse_kind(value: &str) -> Result<WorkflowAuthorizationKind, ExitError> {
         "capability" => Ok(WorkflowAuthorizationKind::Capability),
         "decision" => Ok(WorkflowAuthorizationKind::Decision),
         "evidence" => Ok(WorkflowAuthorizationKind::Evidence),
+        "intent_revision" | "intent-revision" => Err(ExitError::usage(
+            "human intent revisions require `forge-core workflow intent record` with an external human-broker envelope; local workflow credentials cannot sign them"
+                .to_owned(),
+        )),
         "signal" => Ok(WorkflowAuthorizationKind::Signal),
         "waiver" => Ok(WorkflowAuthorizationKind::Waiver),
         _ => Err(ExitError::usage(

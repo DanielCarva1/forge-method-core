@@ -8,6 +8,7 @@
 //! an external rollback anchor: an actor able to replace the WAL and remove all
 //! protocol artifacts can still present an older, internally valid ledger.
 
+use forge_core_contracts::workflow_governance::WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION;
 use forge_core_contracts::{
     DomainPackGenerationTransitionedEvent, ReleaseUpgradedEvent, StableId,
     WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
@@ -114,6 +115,15 @@ impl WorkflowGovernanceLedgerProjection {
     pub fn current_state_version(&self) -> Option<u64> {
         self.records.last().map(|record| record.state_version)
     }
+
+    fn contains_human_intent_revision(&self) -> bool {
+        self.records.iter().any(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+            )
+        })
+    }
 }
 
 impl WorkflowGovernanceLedgerIdentity {
@@ -177,6 +187,12 @@ impl WorkflowGovernanceLedgerBatch<'_> {
                 WorkflowGovernanceLedgerError::DomainPackTransitionRequiresDedicatedAuthority,
             );
         }
+        if matches!(
+            event,
+            WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+        ) {
+            return Err(WorkflowGovernanceLedgerError::HumanIntentRevisionRequiresBrokerAuthority);
+        }
         if matches!(event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
         }
@@ -238,6 +254,21 @@ impl WorkflowGovernanceLedgerBatch<'_> {
             return Err(WorkflowGovernanceLedgerError::InvalidBrokerActionBinding {
                 reason: "packet/event digests and verified broker clock are required",
             });
+        }
+        if let WorkflowGovernanceEvent::HumanIntentRevisionAccepted(intent) = &event {
+            if intent.acceptance_action_packet_digest != action_packet_digest
+                || intent.accepted_at_unix != recorded_at_unix
+                || self.projection.head_digest.as_deref()
+                    != Some(intent.ledger_head_digest.as_str())
+                || !is_lower_sha256(&intent.intent_digest)
+                || !is_lower_sha256(&intent.snapshot_digest)
+                || intent.assurance_epoch == 0
+                || intent.intent.revision == 0
+            {
+                return Err(WorkflowGovernanceLedgerError::InvalidBrokerActionBinding {
+                    reason: "human intent event does not match its packet, head, clock, or epoch",
+                });
+            }
         }
         let previous_state_version = self
             .projection
@@ -668,6 +699,7 @@ pub enum WorkflowGovernanceLedgerError {
     },
     ReleaseUpgradeRequiresDedicatedAuthority,
     DomainPackTransitionRequiresDedicatedAuthority,
+    HumanIntentRevisionRequiresBrokerAuthority,
     InvalidBrokerActionBinding {
         reason: &'static str,
     },
@@ -782,6 +814,10 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
             Self::DomainPackTransitionRequiresDedicatedAuthority => write!(
                 formatter,
                 "domain_pack_generation_transitioned requires the dedicated TCB transition API"
+            ),
+            Self::HumanIntentRevisionRequiresBrokerAuthority => write!(
+                formatter,
+                "human_intent_revision_accepted requires verified broker authority"
             ),
             Self::InvalidBrokerActionBinding { reason } => {
                 write!(formatter, "verified broker action binding is invalid: {reason}")
@@ -1038,27 +1074,39 @@ fn recover_under_lock(
             })?;
         if document.schema_version != WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
                 found: document.schema_version,
             });
         }
-        let effective_wire =
-            document.schema_version == WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION;
         let record = document.workflow_governance_receipt;
         let is_domain_transition = matches!(
             &record.event,
             WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
         );
-        if effective_wire != (is_domain_transition || identity_state.active_effective.is_some()) {
+        let is_intent_revision = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+        );
+        let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
+        let effective_wire_required =
+            is_domain_transition || identity_state.active_effective.is_some();
+        let expected_schema = if intent_wire_required {
+            WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
+        } else if effective_wire_required {
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+        } else {
+            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+        };
+        if document.schema_version != expected_schema {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
-                found: if effective_wire {
-                    "0.2 before a Domain Pack effective epoch".to_owned()
-                } else {
-                    "0.1 after a Domain Pack effective epoch".to_owned()
-                },
+                found: format!(
+                    "{} for event/ledger epoch requiring {expected_schema}",
+                    document.schema_version
+                ),
             });
         }
         validate_record_fields(&record, Some(line_number))?;
@@ -1127,6 +1175,7 @@ struct RecoveredIdentityState {
     active_release: Option<WorkflowGovernanceReleaseIdentity>,
     active_runtime: Option<WorkflowRuntimeBundleIdentity>,
     active_effective: Option<WorkflowEffectiveBundleIdentity>,
+    intent_revision_seen: bool,
 }
 
 fn validate_recovered_semantics(
@@ -1172,6 +1221,12 @@ fn validate_recovered_semantics(
         });
     }
     validate_recovered_transition_semantics(record, identity, previous_state_version)?;
+    if matches!(
+        &record.event,
+        WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+    ) {
+        identity.intent_revision_seen = true;
+    }
     Ok(())
 }
 
@@ -1302,17 +1357,8 @@ fn build_record_line(
         event,
     };
     record.record_digest = workflow_governance_record_digest(&record)?;
-    let effective_wire = matches!(
-        &record.event,
-        WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
-    ) || projection.active_effective_bundle_identity().is_some();
     let document = WorkflowGovernanceReceiptDocument {
-        schema_version: if effective_wire {
-            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
-        } else {
-            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
-        }
-        .to_owned(),
+        schema_version: ledger_wire_schema(projection, &record.event).to_owned(),
         workflow_governance_receipt: record.clone(),
     };
     let mut line = serde_json::to_vec(&document).map_err(|error| {
@@ -1366,14 +1412,8 @@ fn build_deterministic_broker_record_line(
         event,
     };
     record.record_digest = workflow_governance_record_digest(&record)?;
-    let effective_wire = projection.active_effective_bundle_identity().is_some();
     let document = WorkflowGovernanceReceiptDocument {
-        schema_version: if effective_wire {
-            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
-        } else {
-            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
-        }
-        .to_owned(),
+        schema_version: ledger_wire_schema(projection, &record.event).to_owned(),
         workflow_governance_receipt: record.clone(),
     };
     let mut line = serde_json::to_vec(&document).map_err(|error| {
@@ -1385,8 +1425,30 @@ fn build_deterministic_broker_record_line(
     Ok((record, line))
 }
 
+fn ledger_wire_schema(
+    projection: &WorkflowGovernanceLedgerProjection,
+    event: &WorkflowGovernanceEvent,
+) -> &'static str {
+    if matches!(
+        event,
+        WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+    ) || projection.contains_human_intent_revision()
+    {
+        WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
+    } else if matches!(
+        event,
+        WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+    ) || projection.active_effective_bundle_identity().is_some()
+    {
+        WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+    } else {
+        WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+    }
+}
+
 const fn broker_action_event_kind(event: &WorkflowGovernanceEvent) -> Option<&'static str> {
     match event {
+        WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_) => Some("intent_revision"),
         WorkflowGovernanceEvent::ApplicabilityAssessed(_) => Some("applicability"),
         WorkflowGovernanceEvent::CapabilityProbed(_) => Some("capability"),
         WorkflowGovernanceEvent::DecisionResolved(_) => Some("decision"),
@@ -2582,9 +2644,9 @@ fn io_error(path: &Path, source: std::io::Error) -> WorkflowGovernanceLedgerErro
 mod replacement_protocol_tests {
     use super::*;
     use forge_core_contracts::{
-        PhaseAdvancedEvent, PrincipalId, ProjectImportedEvent, SignalChangedEvent,
-        WorkflowGovernanceSignal, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
-        WorkflowReleaseRegistryProvenance,
+        HumanIntentRevisionAcceptedEvent, PhaseAdvancedEvent, PrincipalId, ProjectImportedEvent,
+        SignalChangedEvent, WorkflowGovernanceSignal, WorkflowHumanIntentRevision,
+        WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryProvenance,
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -2805,6 +2867,232 @@ mod replacement_protocol_tests {
         })
     }
 
+    fn broker_intent_event(head: &str, packet: &str) -> WorkflowGovernanceEvent {
+        WorkflowGovernanceEvent::HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent {
+            assurance_epoch: 1,
+            intent: WorkflowHumanIntentRevision {
+                intent_id: StableId("intent.workflow.project-protocol-test".to_owned()),
+                revision: 1,
+                desired_outcome: "Build a dependable governed product".to_owned(),
+                constraints: Vec::new(),
+                preferences: Vec::new(),
+                unacceptable_outcomes: Vec::new(),
+                uncertainties: Vec::new(),
+                source_conversation_ref: "conversation://test/intent".to_owned(),
+                source_conversation_digest: sha256_digest(b"conversation"),
+            },
+            intent_digest: sha256_digest(b"intent"),
+            previous_intent_digest: None,
+            snapshot_digest: sha256_digest(b"snapshot"),
+            ledger_head_digest: head.to_owned(),
+            acceptance_action_packet_digest: packet.to_owned(),
+            accepted_by: PrincipalId("principal.human".to_owned()),
+            accepted_at_unix: 100,
+        })
+    }
+
+    fn schema_from_line(line: &[u8]) -> String {
+        let document: WorkflowGovernanceReceiptDocument =
+            serde_json::from_slice(line.strip_suffix(b"\n").unwrap_or(line))
+                .expect("typed receipt line");
+        document.schema_version
+    }
+
+    #[test]
+    fn historical_wire_remains_byte_exact_until_an_intent_revision_exists() {
+        let root = test_root("historical-wire-preserved");
+        let (target, _, historical_wal) = valid_wal_versions(&root);
+        fs::write(&target, &historical_wal).expect("install historical WAL");
+        let before = fs::read(&target).expect("historical bytes before recovery");
+        let recovered = recover_under_lock(&root).expect("recover historical wire");
+        assert_eq!(recovered.records.len(), 2);
+        assert_eq!(
+            fs::read(&target).expect("historical bytes after recovery"),
+            before,
+            "recovery must not rewrite frozen 0.1 bytes"
+        );
+        for line in before.split_inclusive(|byte| *byte == b'\n') {
+            if !line.is_empty() {
+                assert_eq!(
+                    schema_from_line(line),
+                    WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+                );
+            }
+        }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn intent_revision_advances_the_wire_to_0_3_and_keeps_it_there() {
+        let root = test_root("intent-wire-successor");
+        let (target, _, historical_wal) = valid_wal_versions(&root);
+        fs::write(&target, &historical_wal).expect("install historical WAL");
+        let projection = recover_under_lock(&root).expect("historical projection");
+        let head = projection.head_digest.clone().expect("historical head");
+        let packet = sha256_digest(b"intent-packet");
+        let origin = sha256_digest(b"intent-origin");
+        let (_, intent_line) = build_deterministic_broker_record_line(
+            &projection,
+            &test_identity(),
+            1,
+            broker_intent_event(&head, &packet),
+            &DeterministicBrokerRecordBinding {
+                action_packet_digest: &packet,
+                broker_event_digest: &origin,
+                event_kind: "intent_revision",
+                recorded_at_unix: 100,
+            },
+        )
+        .expect("intent successor record");
+        assert_eq!(
+            schema_from_line(&intent_line),
+            WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
+        );
+
+        let mut with_intent = historical_wal;
+        with_intent.extend_from_slice(&intent_line);
+        fs::write(&target, &with_intent).expect("install intent WAL");
+        let projection = recover_under_lock(&root).expect("recover intent successor wire");
+        let intent_head = projection.head_digest.clone().expect("intent head");
+        let (_, later_line) = build_deterministic_broker_record_line(
+            &projection,
+            &test_identity(),
+            1,
+            broker_signal_event(&intent_head),
+            &DeterministicBrokerRecordBinding {
+                action_packet_digest: &sha256_digest(b"later-packet"),
+                broker_event_digest: &sha256_digest(b"later-origin"),
+                event_kind: "signal",
+                recorded_at_unix: 100,
+            },
+        )
+        .expect("post-intent record");
+        assert_eq!(
+            schema_from_line(&later_line),
+            WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
+            "the first accepted intent permanently advances the ledger wire"
+        );
+        with_intent.extend_from_slice(&later_line);
+        fs::write(&target, &with_intent).expect("install post-intent WAL");
+        assert_eq!(
+            recover_under_lock(&root)
+                .expect("recover post-intent successor wire")
+                .records
+                .len(),
+            4
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn intent_event_cannot_be_downgraded_and_0_3_cannot_be_used_early() {
+        for old_schema in [
+            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+        ] {
+            let root = test_root(&format!("intent-wire-downgrade-{old_schema}"));
+            let (target, _, historical_wal) = valid_wal_versions(&root);
+            fs::write(&target, &historical_wal).expect("install historical WAL");
+            let projection = recover_under_lock(&root).expect("historical projection");
+            let head = projection.head_digest.clone().expect("historical head");
+            let packet = sha256_digest(b"intent-packet");
+            let origin = sha256_digest(b"intent-origin");
+            let (_, intent_line) = build_deterministic_broker_record_line(
+                &projection,
+                &test_identity(),
+                1,
+                broker_intent_event(&head, &packet),
+                &DeterministicBrokerRecordBinding {
+                    action_packet_digest: &packet,
+                    broker_event_digest: &origin,
+                    event_kind: "intent_revision",
+                    recorded_at_unix: 100,
+                },
+            )
+            .expect("intent successor record");
+            let intent_text = String::from_utf8(intent_line).expect("intent UTF-8");
+            let downgraded = intent_text.replacen(
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION}\""
+                ),
+                &format!("\"schema_version\":\"{old_schema}\""),
+                1,
+            );
+            let mut mutant = historical_wal;
+            mutant.extend_from_slice(downgraded.as_bytes());
+            fs::write(&target, mutant).expect("install downgraded intent WAL");
+            assert!(matches!(
+                recover_under_lock(&root),
+                Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
+            ));
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+
+        let root = test_root("intent-wire-too-early");
+        let (target, _, historical_wal) = valid_wal_versions(&root);
+        let historical_text = String::from_utf8(historical_wal).expect("historical UTF-8");
+        let premature = historical_text.replacen(
+            &format!("\"schema_version\":\"{WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION}\""),
+            &format!("\"schema_version\":\"{WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION}\""),
+            1,
+        );
+        fs::write(&target, premature).expect("install premature 0.3 WAL");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 1, .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn assert_intent_broker_path_is_deterministic_and_exclusive(
+        root: &Path,
+        head: &str,
+        identity: &WorkflowGovernanceLedgerIdentity,
+        packet: &str,
+        origin: &str,
+    ) {
+        let intent_first = {
+            let mut ledger = lock_workflow_governance_ledger_tcb(root).expect("intent ledger");
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(head, identity)
+                .expect("intent batch");
+            batch
+                .push_verified_broker_action_unchecked_tcb(
+                    0,
+                    broker_intent_event(head, packet),
+                    packet,
+                    origin,
+                    100,
+                )
+                .expect("first deterministic intent record")
+        };
+        let intent_retry = {
+            let mut ledger =
+                lock_workflow_governance_ledger_tcb(root).expect("intent retry ledger");
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(head, identity)
+                .expect("intent retry batch");
+            batch
+                .push_verified_broker_action_unchecked_tcb(
+                    0,
+                    broker_intent_event(head, packet),
+                    packet,
+                    origin,
+                    100,
+                )
+                .expect("exact deterministic intent retry")
+        };
+        assert_eq!(intent_first, intent_retry);
+        let mut ledger = lock_workflow_governance_ledger_tcb(root).expect("generic intent ledger");
+        let mut batch = ledger
+            .begin_unchecked_tcb_batch(head, identity)
+            .expect("generic intent batch");
+        assert!(matches!(
+            batch.push_event(0, broker_intent_event(head, packet)),
+            Err(WorkflowGovernanceLedgerError::HumanIntentRevisionRequiresBrokerAuthority)
+        ));
+    }
+
     #[test]
     fn broker_action_record_is_exactly_retryable_while_legacy_api_remains_random() {
         let root = test_root("deterministic-broker-record");
@@ -2846,6 +3134,9 @@ mod replacement_protocol_tests {
                 .expect("exact deterministic retry")
         };
         assert_eq!(first, retry);
+        assert_intent_broker_path_is_deterministic_and_exclusive(
+            &root, &head, &identity, &packet, &origin,
+        );
 
         let (legacy_one, legacy_two) = {
             let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("legacy ledger");

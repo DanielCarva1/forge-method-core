@@ -4,9 +4,11 @@
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    AttestationInput, CanonicalIntent, PrincipalCredentialStatus, PrincipalRegistryContract,
-    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowApplicabilityAuthorizationRequest,
-    WorkflowEvidenceAuthorizationRequest, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
+    workflow_broker_event_signing_bytes, AttestationInput, CanonicalIntent,
+    PrincipalCredentialStatus, PrincipalRegistryContract, PrincipalRegistryDocument,
+    PrincipalRegistryEntry, WorkflowApplicabilityAuthorizationRequest, WorkflowBrokerEventEnvelope,
+    WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput, WorkflowEvidenceAuthorizationRequest,
+    PRINCIPAL_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_contracts::{
@@ -389,75 +391,123 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
         .expect("provision one-call credential");
     assert_ok(&provisioned);
 
+    let broker_key = SigningKey::from_bytes(&[83; 32]);
+    let broker_public = consumer.parent.join("one-call-human-broker.pub");
+    let broker_ceremony = consumer.parent.join("one-call-human-broker-ceremony.md");
+    fs::write(&broker_public, hex(&broker_key.verifying_key().to_bytes()))
+        .expect("broker public key");
+    fs::write(&broker_ceremony, "external human broker enrollment\n").expect("broker ceremony");
+    let trusted = bin()
+        .args([
+            "workflow",
+            "broker",
+            "trust",
+            "--root",
+            &root,
+            "--issuer-id",
+            "broker.workflow.one-call-human",
+            "--profile",
+            "human",
+            "--public-key-file",
+            &broker_public.display().to_string(),
+            "--ceremony-ref",
+            "operator://ceremony/one-call-human",
+            "--ceremony-file",
+            &broker_ceremony.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("trust one-call human broker");
+    let trusted = assert_ok(&trusted);
+
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
     let human_packet = packet_set["data"]["packets"]
         .as_array()
         .expect("action packet list")
-        .iter()
-        .find(|packet| packet["required_authority"]["approval_boundary"] == "human_approval_broker")
-        .expect("fresh discovery exposes a human broker packet");
+        .first()
+        .expect("fresh discovery exposes the human intent packet");
+    assert_eq!(human_packet["authorization_kind"], "intent_revision");
     let human_packet_digest = human_packet["packet_digest"]
         .as_str()
         .expect("human packet digest");
-    let human_input_value = match human_packet["authorization_kind"]
-        .as_str()
-        .expect("human authorization kind")
-    {
-        "applicability" => serde_json::json!({
-            "kind": "applicability",
-            "applicable": true,
-            "basis_refs": ["README.md"]
-        }),
-        "decision" => serde_json::json!({
-            "kind": "decision",
-            "selected_alternative_ref": human_packet["input_contract"]["alternatives"][0]["id"]
-        }),
-        "evidence" => {
-            let subject_kind = human_packet["input_contract"]["subject_kinds"][0]
-                .as_str()
-                .expect("human evidence subject kind");
-            let subject_ref = match subject_kind {
-                "artifact" => "README.md",
-                "repository_state" | "project_snapshot" => human_packet["binding"]["project_id"]
-                    .as_str()
-                    .expect("packet project id"),
-                _ => "subject.workflow.one-call-human",
-            };
-            serde_json::json!({
-                "kind": "evidence",
-                "outcome": "pass",
-                "subject_kind": subject_kind,
-                "subject_ref": subject_ref,
-                "scenario_ref": "README.md"
-            })
-        }
-        "waiver" => serde_json::json!({
-            "kind": "waiver",
-            "reason": "negative boundary test only"
-        }),
-        other => panic!("unexpected human packet kind: {other}"),
-    };
-    let human_input = consumer.write_json("human-closed-input.json", &human_input_value);
-    let human_input_arg = human_input.display().to_string();
+    let fake_request = consumer.write_json("intent-local-request.json", &serde_json::json!({}));
     let rejected_local_human = bin()
         .args([
             "workflow",
-            "action",
-            "authorize",
+            "credential",
+            "sign",
             "--root",
             &root,
-            "--packet-digest",
-            human_packet_digest,
-            "--input-file",
-            &human_input_arg,
             "--credential-id",
             "credential.workflow.one-call-operator",
+            "--kind",
+            "intent_revision",
+            "--request-file",
+            &fake_request.display().to_string(),
             "--json",
         ])
         .output()
-        .expect("reject local human-boundary action");
+        .expect("reject local intent signing");
     assert!(!rejected_local_human.status.success());
-    assert!(String::from_utf8_lossy(&rejected_local_human.stdout).contains("external human"));
+    assert!(String::from_utf8_lossy(&rejected_local_human.stdout)
+        .contains("external human-broker envelope"));
+
+    let issued = now();
+    let mut intent_envelope = WorkflowBrokerEventEnvelope {
+        schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+        audience: trusted["data"]["audience"]
+            .as_str()
+            .expect("broker audience")
+            .to_owned(),
+        issuer_id: StableId("broker.workflow.one-call-human".to_owned()),
+        issuer_profile: WorkflowBrokerIssuerProfile::Human,
+        origin_principal_id: PrincipalId("principal.workflow.one-call-human".to_owned()),
+        separation_domain: StableId("human-session.one-call".to_owned()),
+        event_kind: forge_core_authority::WorkflowBrokerEventKind::IntentRevision,
+        project_id: StableId(
+            human_packet["binding"]["project_id"]
+                .as_str()
+                .expect("packet project id")
+                .to_owned(),
+        ),
+        action_packet_digest: human_packet_digest.to_owned(),
+        semantic_input: WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome: "Exercise the permitted local action lane".to_owned(),
+            constraints: Vec::new(),
+            preferences: Vec::new(),
+            unacceptable_outcomes: Vec::new(),
+            uncertainties: Vec::new(),
+            conversation_ref: "conversation://workflow/one-call".to_owned(),
+            conversation_digest: format!("sha256:{}", "7".repeat(64)),
+        },
+        issued_at_unix: issued,
+        expires_at_unix: issued + 120,
+        nonce: "workflow-one-call-human-intent-0001".to_owned(),
+        signature: String::new(),
+    };
+    intent_envelope.signature = hex(&broker_key
+        .sign(
+            &workflow_broker_event_signing_bytes(&intent_envelope)
+                .expect("human intent signing bytes"),
+        )
+        .to_bytes());
+    let intent_path = consumer.write_json("human-intent-envelope.json", &intent_envelope);
+    let intent_applied = bin()
+        .args([
+            "workflow",
+            "intent",
+            "record",
+            "--root",
+            &root,
+            "--origin-envelope-file",
+            &intent_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("record external human intent");
+    assert_ok(&intent_applied);
+
+    let packet_set = assert_ok(&consumer.run(&["action-packets"]));
 
     let packet = packet_set["data"]["packets"]
         .as_array()

@@ -870,7 +870,7 @@ phases:
               independence, runtime integrity, and representative production-
               host operation remain P7f evidence.
       - id: "P7b-unified-durable-assurance-case"
-        status: "planned"
+        status: "in_progress"
         size: "large"
         depends_on: ["P7a-workflow-authority-bridge"]
         outcome: >-
@@ -883,6 +883,21 @@ phases:
           - "unknown universal lenses block optimistic progress and generate bounded research or evaluator actions"
           - "host/model proposals remain non-authoritative until admitted through typed observations"
           - "replacement agents recover the exact intent, assurance gaps, evidence bindings, and next action"
+        active_subslices:
+          - id: "P7b.1-durable-human-intent-and-assurance-epoch"
+            status: "implementation_in_progress"
+            delivers:
+              - "bounded human-broker intent acceptance with kernel-derived id, revision, epoch, and digest"
+              - "ledger plus BrokerOriginApplied provenance and exact retry recovery"
+              - "workflow next/resume projection bound to current snapshot, head, state, and effective bundle"
+              - "all eight universal lenses explicit and unknown rather than silently omitted"
+          - id: "P7b.2-governed-lens-observations-and-representative-slice"
+            status: "implementation_in_progress"
+            delivers:
+              - "adjacent reviewed release with explicit universal-lens claim coverage"
+              - "typed epistemic and competence observations that cannot self-declare readiness"
+              - "intent-bound representative-slice requirement and scenario-matched evidence"
+              - "bounded research, evaluator, capability-acquisition, and challenge actions"
       - id: "P7c-domain-demand-and-pack-acquisition"
         status: "planned"
         size: "large"
@@ -981,8 +996,8 @@ phases:
       and evolve Domain Packs without modifying the domain-agnostic Rust core.
 
 current_executable_slice:
-  name: "P7a.2-request-packets-and-one-call-authorize"
-  status: "implemented_pending_cumulative_gate"
+  name: "P7b-unified-durable-assurance-case"
+  status: "implementation_in_progress"
   completed_foundation:
     - "agent-native constitution documented"
     - "universal assurance and competence-acquisition proposal documented"
@@ -1042,11 +1057,16 @@ current_executable_slice:
     - "P6b fourteen closed lifecycle families, signed supply-chain verification, deterministic exact resolution, default-deny capability confinement, fresh project-bound opaque activation, crash-safe immutable generations, governed lifecycle CLI, adversarial corpus, and 172 aggregate clean checks"
     - "P6c nine closed learning families, inert local capture, evidence-backed ablation or strong-judge promotion, independent semantic and registry authority, monotonic reviewed registry, dual-anchor lifecycle admission, and 173 aggregate clean checks"
     - "P6d governed game-development reference pack, generic effective workflow epoch, lifecycle auto-detection, complete representative-evidence workflow journey, verified-claim human decision, replacement resume, four-operation lifecycle persistence E2E, typed degraded empty generations, rebase-required core upgrade, no reference-domain Rust logic, and 174 aggregate clean checks"
+    - "P7a origin-bound external human, reviewer, and runtime brokers with deterministic state-bound action packets, replay recovery, and one-call operator authorization"
+    - "P7b.1 bounded human-broker intent acceptance with kernel-derived monotonic revision and assurance epoch"
+    - "P7b.1 explicit eight-lens unknown projection, canonical case digest, 0.3 assurance ledger wire, and fail-closed phase advancement"
+    - "P7b.1 public workflow intent record plus replacement-agent next/resume continuity"
   next_action: >-
-    Run the focused public broker/action checks and the single cumulative
-    workspace checkpoint. If green, publish the coherent 0.11.0 source commit
-    and begin P7b unified durable Assurance Case work. Do not repeat the
-    expensive reference journey per edit.
+    Complete P7b.2 with an admitted lens-aware successor release, governed
+    epistemic and competence projection, reviewer-admitted representative-slice
+    definition, exact runtime proof binding, and replacement-agent journey.
+    Run the full workspace and expensive reference journey once for the coherent
+    P7b checkpoint rather than per edit.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

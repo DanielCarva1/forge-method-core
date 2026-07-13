@@ -37,13 +37,14 @@ use forge_core_authority::{
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_contracts::workflow_governance::{
-    BrokerOriginAppliedEvent, WorkflowBrokerOriginProfile,
+    BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, WorkflowBrokerOriginProfile,
 };
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ContinuityRecordedEvent,
-    DecisionAlternative, DecisionResolvedEvent, DomainPackCompositionGap, EvaluatorObservedEvent,
-    Phase, PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent,
-    ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent, SignalChangedEvent, StableId,
+    DecisionAlternative, DecisionResolvedEvent, DomainPackCompositionGap,
+    DurableAssuranceProjection, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent,
+    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget,
+    ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
     WaiverAuthorizedEvent, WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation,
     WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowContentAddressedReference,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
@@ -52,14 +53,19 @@ use forge_core_contracts::{
     WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
     WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
-    WorkflowPolicyActivation, WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover,
-    WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity, PROJECT_LINK_FILE_NAME,
-    PROJECT_LINK_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
+    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity,
+    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
+    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
+    MAX_WORKFLOW_INTENT_TOTAL_BYTES, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    find_entry, load_embedded_frozen_legacy_catalog, project_legacy_workflow_compatibility,
-    simulate_workflow_governance, LegacyWorkflowGovernanceProjection, WorkflowClaimResultStatus,
-    WorkflowGovernanceRejection, WorkflowGovernanceSimulation, WorkflowGovernanceStatus,
+    find_entry, load_embedded_frozen_legacy_catalog, project_durable_assurance,
+    project_legacy_workflow_compatibility, simulate_workflow_governance,
+    workflow_human_intent_digest, AssuranceProjectionError, LegacyWorkflowGovernanceProjection,
+    WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
+    WorkflowGovernanceStatus,
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle, AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
@@ -168,6 +174,16 @@ pub enum WorkflowSignalInputTransition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkflowAuthorizationInputContract {
+    IntentRevision {
+        intent_id: StableId,
+        next_intent_revision: u64,
+        next_assurance_epoch: u64,
+        desired_outcome_max_bytes: usize,
+        list_max_items: usize,
+        list_item_max_bytes: usize,
+        source_ref_max_bytes: usize,
+        total_max_bytes: usize,
+    },
     Applicability {
         basis_refs_min_items: usize,
         basis_refs_repo_relative: bool,
@@ -285,6 +301,42 @@ pub struct WorkflowAuthorizationGuidance {
     pub action_packets: Vec<WorkflowAuthorizationActionPacket>,
 }
 
+/// Durable human-intent authority reconstructed from the workflow ledger.
+/// Proposal-only Assurance Case files and host readiness claims are never
+/// consulted by this projection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowDurableAssuranceGuidance {
+    pub status: WorkflowDurableAssuranceStatus,
+    pub blockers: Vec<WorkflowDurableAssuranceBlocker>,
+    pub current_snapshot_digest: String,
+    pub source_ledger_head_digest: String,
+    pub case_digest: String,
+    pub projection: Option<DurableAssuranceProjection>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowDurableAssuranceStatus {
+    MissingHumanIntent,
+    IntentAccepted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowDurableAssuranceBlocker {
+    pub code: WorkflowDurableAssuranceBlockerCode,
+    pub lens: Option<UniversalAssuranceLens>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowDurableAssuranceBlockerCode {
+    MissingAcceptedHumanIntent,
+    UniversalLensUnknown,
+}
+
 #[derive(Debug, Clone)]
 struct TrustedBrokerRegistryState {
     digest: Option<String>,
@@ -300,6 +352,18 @@ struct WorkflowAuthorizationActionPacketDigestBasis<'a> {
     binding: &'a WorkflowAuthorizationPacketBinding,
     required_authority: &'a WorkflowAuthorizationRequiredAuthority,
     input_contract: &'a WorkflowAuthorizationInputContract,
+}
+
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowDurableAssuranceCaseDigestBasis<'a> {
+    schema_version: &'static str,
+    project_id: &'a StableId,
+    current_snapshot_digest: &'a str,
+    source_ledger_head_digest: &'a str,
+    state_version: u64,
+    effective_bundle_digest: &'a str,
+    durable_projection_digest: Option<&'a str>,
 }
 
 /// Minimal semantic answer accepted by [`WorkflowGovernanceProjectAdapter::prepare_authorization`].
@@ -777,23 +841,30 @@ impl WorkflowGovernanceProjectAdapter {
         .find(|packet| packet.packet_digest == audit.action_packet_digest)
         .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
         validate_broker_packet_audit(&packet, &semantic_input, &audit, &broker_registry_digest)?;
-        let closed_input = broker_semantic_input_to_closed(semantic_input);
-        let mut prepared = prepare_authorization_from_packet(
-            effective.document(),
-            &projection,
-            &self.binding.project_root,
-            packet,
-            closed_input,
-            audit.issued_at_unix,
-        )?;
-        bound_prepared_expiry(&mut prepared, audit.expires_at_unix)?;
-        let (packet, action_event, phase_may_advance) = broker_action_event_from_prepared(
-            effective.document(),
-            &self.binding.project_root,
-            prepared,
-            &audit,
-            &broker_registry_digest,
-        )?;
+        let (packet, action_event, phase_may_advance) = if matches!(
+            &semantic_input,
+            WorkflowBrokerSemanticInput::IntentRevision { .. }
+        ) {
+            broker_intent_event_from_semantic(&projection, packet, semantic_input, &audit)?
+        } else {
+            let closed_input = broker_semantic_input_to_closed(semantic_input)?;
+            let mut prepared = prepare_authorization_from_packet(
+                effective.document(),
+                &projection,
+                &self.binding.project_root,
+                packet,
+                closed_input,
+                audit.issued_at_unix,
+            )?;
+            bound_prepared_expiry(&mut prepared, audit.expires_at_unix)?;
+            broker_action_event_from_prepared(
+                effective.document(),
+                &self.binding.project_root,
+                prepared,
+                &audit,
+                &broker_registry_digest,
+            )?
+        };
 
         let head = projection
             .head_digest
@@ -2646,8 +2717,9 @@ impl WorkflowGovernanceProjectAdapter {
             ADAPTER_SOURCE_ID.to_owned(),
         )?;
         let verified = evaluate_verified_workflow_governance(trusted)?;
+        let durable_assurance_projection = project_durable_assurance(&projection.records)?;
         let applicability = derived.applicability.get(&selected.id).copied();
-        let guidance_status =
+        let policy_guidance_status =
             if effective.is_domain_pack_degraded() || !boundary_rechecks.is_empty() {
                 WorkflowGovernanceGuidanceStatus::Blocked
             } else if selected_already_completed {
@@ -2667,6 +2739,66 @@ impl WorkflowGovernanceProjectAdapter {
                     }
                 }
             };
+        let assurance_has_blockers = durable_assurance_projection
+            .as_ref()
+            .is_none_or(|projection| !projection.blocker_lenses.is_empty());
+        let guidance_status = if assurance_has_blockers {
+            WorkflowGovernanceGuidanceStatus::Blocked
+        } else {
+            policy_guidance_status
+        };
+        let assurance_source_head = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
+        let assurance_case_digest = durable_assurance_case_digest(
+            &self.binding.project_id,
+            &snapshot_digest,
+            &assurance_source_head,
+            projection.current_state_version().unwrap_or_default(),
+            &effective.identity().effective_runtime_bundle.bundle_digest,
+            durable_assurance_projection
+                .as_ref()
+                .map(|projection| projection.projection_digest.as_str()),
+        )?;
+        let durable_assurance = match durable_assurance_projection {
+            Some(projection) => {
+                let blockers = projection
+                    .blocker_lenses
+                    .iter()
+                    .copied()
+                    .map(|lens| WorkflowDurableAssuranceBlocker {
+                        code: WorkflowDurableAssuranceBlockerCode::UniversalLensUnknown,
+                        lens: Some(lens),
+                        summary: format!(
+                            "Universal assurance lens {} remains unknown.",
+                            lens.id()
+                        ),
+                    })
+                    .collect();
+                WorkflowDurableAssuranceGuidance {
+                    status: WorkflowDurableAssuranceStatus::IntentAccepted,
+                    blockers,
+                    current_snapshot_digest: snapshot_digest.clone(),
+                    source_ledger_head_digest: assurance_source_head.clone(),
+                    case_digest: assurance_case_digest.clone(),
+                    projection: Some(projection),
+                }
+            }
+            None => WorkflowDurableAssuranceGuidance {
+                status: WorkflowDurableAssuranceStatus::MissingHumanIntent,
+                blockers: vec![WorkflowDurableAssuranceBlocker {
+                    code: WorkflowDurableAssuranceBlockerCode::MissingAcceptedHumanIntent,
+                    lens: None,
+                    summary: "A human-origin intent revision must be accepted before governed work can proceed."
+                        .to_owned(),
+                }],
+                current_snapshot_digest: snapshot_digest.clone(),
+                source_ledger_head_digest: assurance_source_head,
+                case_digest: assurance_case_digest,
+                projection: None,
+            },
+        };
         let mut guidance = WorkflowGovernanceGuidance {
             authority: WorkflowGovernanceGuidanceAuthority::VerifiedProjectSnapshot,
             status: guidance_status,
@@ -2698,6 +2830,7 @@ impl WorkflowGovernanceProjectAdapter {
             applicability,
             boundary_rechecks,
             simulation: verified.simulation.clone(),
+            durable_assurance,
             authorization: WorkflowAuthorizationGuidance {
                 registry_setup: WorkflowAuthorizationRegistrySetup {
                     principal_registry: registry_setup_status(trusted_registry_digest.as_deref()),
@@ -2789,7 +2922,7 @@ impl WorkflowGovernanceProjectAdapter {
                 derived.completed_policy_refs.contains(&policy.id)
                     || derived.not_applicable_policy_refs.contains(&policy.id)
             });
-        if !phase_done {
+        if !phase_advance_allowed_by_assurance(projection, phase_done)? {
             return Ok(None);
         }
         let next = match current_phase_value {
@@ -2815,6 +2948,17 @@ impl WorkflowGovernanceProjectAdapter {
         });
         Ok(Some((state_version, event)))
     }
+}
+
+fn phase_advance_allowed_by_assurance(
+    projection: &WorkflowGovernanceLedgerProjection,
+    legacy_phase_done: bool,
+) -> Result<bool, WorkflowGovernanceAdapterError> {
+    if !legacy_phase_done {
+        return Ok(false);
+    }
+    Ok(project_durable_assurance(&projection.records)?
+        .is_some_and(|assurance| assurance.blocker_lenses.is_empty()))
 }
 
 /// Prepared completion authority; opaque and intentionally non-Clone/non-serde.
@@ -2915,6 +3059,7 @@ pub struct WorkflowGovernanceGuidance {
     pub applicability: Option<bool>,
     pub boundary_rechecks: Vec<WorkflowGovernanceBoundaryRecheck>,
     pub simulation: WorkflowGovernanceSimulation,
+    pub durable_assurance: WorkflowDurableAssuranceGuidance,
     pub authorization: WorkflowAuthorizationGuidance,
 }
 
@@ -3027,6 +3172,7 @@ pub enum WorkflowGovernanceAdapterError {
     ActionReplay(WorkflowActionReplayError),
     TrustedSnapshot(TrustedWorkflowGovernanceSnapshotError),
     Evaluation(WorkflowGovernanceRejection),
+    AssuranceProjection(AssuranceProjectionError),
     LedgerIdentityMismatch,
     LedgerUninitialized,
     UnknownRelease(String),
@@ -3098,6 +3244,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::ActionReplay(error) => write!(f, "workflow action replay failed: {error}"),
             Self::TrustedSnapshot(error) => write!(f, "trusted snapshot failed: {error:?}"),
             Self::Evaluation(error) => write!(f, "governance evaluation rejected: {:?}", error.issues),
+            Self::AssuranceProjection(error) => {
+                write!(f, "durable Assurance projection rejected: {error}")
+            }
             Self::LedgerIdentityMismatch => f.write_str("governance ledger identity does not match the resolved project and admitted bundle"),
             Self::LedgerUninitialized => f.write_str("governance ledger is not initialized; run workflow init"),
             Self::UnknownRelease(id) => write!(f, "unknown admitted workflow release {id}"),
@@ -3183,6 +3332,12 @@ impl From<TrustedWorkflowGovernanceSnapshotError> for WorkflowGovernanceAdapterE
 impl From<WorkflowGovernanceRejection> for WorkflowGovernanceAdapterError {
     fn from(value: WorkflowGovernanceRejection) -> Self {
         Self::Evaluation(value)
+    }
+}
+
+impl From<AssuranceProjectionError> for WorkflowGovernanceAdapterError {
+    fn from(value: AssuranceProjectionError) -> Self {
+        Self::AssuranceProjection(value)
     }
 }
 
@@ -4011,8 +4166,8 @@ fn validate_identity(
 
 fn broker_semantic_input_to_closed(
     input: WorkflowBrokerSemanticInput,
-) -> WorkflowAuthorizationClosedInput {
-    match input {
+) -> Result<WorkflowAuthorizationClosedInput, WorkflowGovernanceAdapterError> {
+    Ok(match input {
         WorkflowBrokerSemanticInput::Applicability {
             applicable,
             basis_refs,
@@ -4047,13 +4202,16 @@ fn broker_semantic_input_to_closed(
             subject_ref,
             scenario_ref,
         },
+        WorkflowBrokerSemanticInput::IntentRevision { .. } => {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         WorkflowBrokerSemanticInput::Signal { active, basis_refs } => {
             WorkflowAuthorizationClosedInput::Signal { active, basis_refs }
         }
         WorkflowBrokerSemanticInput::Waiver { reason } => {
             WorkflowAuthorizationClosedInput::Waiver { reason }
         }
-    }
+    })
 }
 
 fn validate_broker_packet_audit(
@@ -4063,6 +4221,7 @@ fn validate_broker_packet_audit(
     broker_registry_digest: &str,
 ) -> Result<(), WorkflowGovernanceAdapterError> {
     let expected_kind = match packet.authorization_kind {
+        WorkflowAuthorizationKind::IntentRevision => WorkflowBrokerEventKind::IntentRevision,
         WorkflowAuthorizationKind::Applicability => WorkflowBrokerEventKind::Applicability,
         WorkflowAuthorizationKind::Capability => WorkflowBrokerEventKind::Capability,
         WorkflowAuthorizationKind::Decision => WorkflowBrokerEventKind::Decision,
@@ -4070,14 +4229,7 @@ fn validate_broker_packet_audit(
         WorkflowAuthorizationKind::Signal => WorkflowBrokerEventKind::Signal,
         WorkflowAuthorizationKind::Waiver => WorkflowBrokerEventKind::Waiver,
     };
-    let input_kind = match input {
-        WorkflowBrokerSemanticInput::Applicability { .. } => WorkflowBrokerEventKind::Applicability,
-        WorkflowBrokerSemanticInput::Capability { .. } => WorkflowBrokerEventKind::Capability,
-        WorkflowBrokerSemanticInput::Decision { .. } => WorkflowBrokerEventKind::Decision,
-        WorkflowBrokerSemanticInput::Evidence { .. } => WorkflowBrokerEventKind::Evidence,
-        WorkflowBrokerSemanticInput::Signal { .. } => WorkflowBrokerEventKind::Signal,
-        WorkflowBrokerSemanticInput::Waiver { .. } => WorkflowBrokerEventKind::Waiver,
-    };
+    let input_kind = input.kind();
     let profile_allowed = match packet.required_authority.approval_boundary {
         WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker => {
             audit.issuer_profile == WorkflowBrokerIssuerProfile::Human
@@ -4103,6 +4255,103 @@ fn validate_broker_packet_audit(
         return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
     }
     Ok(())
+}
+
+fn broker_intent_event_from_semantic(
+    projection: &WorkflowGovernanceLedgerProjection,
+    packet: WorkflowAuthorizationActionPacket,
+    input: WorkflowBrokerSemanticInput,
+    audit: &VerifiedWorkflowBrokerEventAudit,
+) -> Result<
+    (
+        WorkflowAuthorizationActionPacket,
+        WorkflowGovernanceEvent,
+        bool,
+    ),
+    WorkflowGovernanceAdapterError,
+> {
+    let WorkflowAuthorizationInputContract::IntentRevision {
+        intent_id,
+        next_intent_revision,
+        next_assurance_epoch,
+        ..
+    } = &packet.input_contract
+    else {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    };
+    let WorkflowBrokerSemanticInput::IntentRevision {
+        desired_outcome,
+        constraints,
+        preferences,
+        unacceptable_outcomes,
+        uncertainties,
+        conversation_ref,
+        conversation_digest,
+    } = input
+    else {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    };
+
+    let current = project_durable_assurance(&projection.records)?;
+    let (expected_revision, expected_epoch, expected_intent_id, previous_intent_digest) =
+        if let Some(current) = current {
+            (
+                current
+                    .binding
+                    .intent_revision
+                    .checked_add(1)
+                    .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?,
+                current
+                    .binding
+                    .assurance_epoch
+                    .checked_add(1)
+                    .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?,
+                current.binding.intent_id,
+                Some(current.binding.intent_digest),
+            )
+        } else {
+            (
+                1,
+                1,
+                StableId(format!("intent.workflow.{}", packet.binding.project_id.0)),
+                None,
+            )
+        };
+    if *next_intent_revision != expected_revision
+        || *next_assurance_epoch != expected_epoch
+        || *intent_id != expected_intent_id
+    {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    }
+
+    let intent = WorkflowHumanIntentRevision {
+        intent_id: expected_intent_id,
+        revision: expected_revision,
+        desired_outcome,
+        constraints,
+        preferences,
+        unacceptable_outcomes,
+        uncertainties,
+        source_conversation_ref: conversation_ref,
+        source_conversation_digest: conversation_digest,
+    };
+    let intent_digest = workflow_human_intent_digest(&intent)?;
+    let event = HumanIntentRevisionAcceptedEvent {
+        assurance_epoch: expected_epoch,
+        intent,
+        intent_digest,
+        previous_intent_digest,
+        snapshot_digest: packet.binding.snapshot_digest.clone(),
+        ledger_head_digest: packet.binding.ledger_head_digest.clone(),
+        acceptance_action_packet_digest: packet.packet_digest.clone(),
+        accepted_by: audit.origin_principal_id.clone(),
+        accepted_at_unix: audit.issued_at_unix,
+    };
+    Ok((
+        packet,
+        WorkflowGovernanceEvent::HumanIntentRevisionAccepted(event),
+        false,
+    ))
 }
 
 fn bound_prepared_expiry(
@@ -4485,6 +4734,9 @@ fn prepare_authorization_from_packet(
 ) -> Result<PreparedWorkflowAuthorization, WorkflowGovernanceAdapterError> {
     let policy = policy_by_id(bundle, &packet.binding.policy_ref)?;
     let contract_kind = match &packet.input_contract {
+        WorkflowAuthorizationInputContract::IntentRevision { .. } => {
+            WorkflowAuthorizationKind::IntentRevision
+        }
         WorkflowAuthorizationInputContract::Applicability { .. } => {
             WorkflowAuthorizationKind::Applicability
         }
@@ -4886,6 +5138,55 @@ fn authorization_action_packets(
     };
     let mut packets = Vec::new();
 
+    let (intent_id, next_intent_revision, next_assurance_epoch) =
+        if let Some(assurance) = guidance.durable_assurance.projection.as_ref() {
+            if assurance.binding.project_id != guidance.project_id {
+                return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+            }
+            (
+                assurance.binding.intent_id.clone(),
+                assurance
+                    .binding
+                    .intent_revision
+                    .checked_add(1)
+                    .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?,
+                assurance
+                    .binding
+                    .assurance_epoch
+                    .checked_add(1)
+                    .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?,
+            )
+        } else {
+            (
+                StableId(format!("intent.workflow.{}", guidance.project_id.0)),
+                1,
+                1,
+            )
+        };
+    packets.push(make_authorization_action_packet(
+        WorkflowAuthorizationKind::IntentRevision,
+        StableId(format!("packet.workflow.intent-revision.{}", intent_id.0)),
+        binding_for(selected, intent_id.clone()),
+        human_authority("workflow.intent.accept_revision"),
+        WorkflowAuthorizationInputContract::IntentRevision {
+            intent_id,
+            next_intent_revision,
+            next_assurance_epoch,
+            desired_outcome_max_bytes: MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+            list_max_items: MAX_WORKFLOW_INTENT_LIST_ITEMS,
+            list_item_max_bytes: MAX_WORKFLOW_INTENT_ITEM_BYTES,
+            source_ref_max_bytes: MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
+            total_max_bytes: MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+        },
+    )?);
+
+    // Until a human-origin intent is durably accepted, no policy mutation is
+    // actionable. The single intent packet is the complete executable next
+    // step; policy simulation remains visible only as read-only context.
+    if guidance.durable_assurance.projection.is_none() {
+        return Ok(packets);
+    }
+
     if guidance.status == WorkflowGovernanceGuidanceStatus::ApplicabilityRequired {
         packets.push(make_authorization_action_packet(
             WorkflowAuthorizationKind::Applicability,
@@ -5122,6 +5423,28 @@ fn authorization_action_packet_digest(
         binding,
         required_authority,
         input_contract,
+    };
+    let canonical = serde_json_canonicalizer::to_vec(&basis)
+        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
+    Ok(sha256_content_hash(&canonical))
+}
+
+fn durable_assurance_case_digest(
+    project_id: &StableId,
+    current_snapshot_digest: &str,
+    source_ledger_head_digest: &str,
+    state_version: u64,
+    effective_bundle_digest: &str,
+    durable_projection_digest: Option<&str>,
+) -> Result<String, WorkflowGovernanceAdapterError> {
+    let basis = WorkflowDurableAssuranceCaseDigestBasis {
+        schema_version: "workflow_durable_assurance_case_v1",
+        project_id,
+        current_snapshot_digest,
+        source_ledger_head_digest,
+        state_version,
+        effective_bundle_digest,
+        durable_projection_digest,
     };
     let canonical = serde_json_canonicalizer::to_vec(&basis)
         .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
@@ -5770,6 +6093,108 @@ mod tests {
         document
     }
 
+    fn install_human_broker_registry(
+        adapter: &WorkflowGovernanceProjectAdapter,
+        key: &SigningKey,
+    ) -> WorkflowBrokerRegistryDocument {
+        let document = WorkflowBrokerRegistryDocument {
+            schema_version: WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION.to_owned(),
+            audience: adapter.expected_broker_audience(),
+            issuers: vec![WorkflowBrokerIssuerEntry {
+                issuer_id: StableId("broker.human.test".to_owned()),
+                profile: WorkflowBrokerIssuerProfile::Human,
+                public_key_hex: hex(key.verifying_key().as_bytes()),
+                status: WorkflowBrokerIssuerStatus::Active,
+                enrollment: WorkflowBrokerEnrollmentDeclaration {
+                    ceremony_ref: "operator://ceremony/human-test".to_owned(),
+                    ceremony_digest: format!("sha256:{}", "b".repeat(64)),
+                    declared_at_unix: 10,
+                },
+            }],
+        };
+        let path = adapter.trusted_broker_registry_path();
+        fs::create_dir_all(path.parent().expect("broker registry parent"))
+            .expect("broker registry parent");
+        fs::write(
+            path,
+            yaml_serde::to_string(&document).expect("broker registry YAML"),
+        )
+        .expect("broker registry");
+        document
+    }
+
+    fn signed_intent_envelope(
+        project_id: &StableId,
+        packet: &WorkflowAuthorizationActionPacket,
+        key: &SigningKey,
+        issued_at_unix: u64,
+        nonce: &str,
+        desired_outcome: &str,
+    ) -> WorkflowBrokerEventEnvelope {
+        assert!(matches!(
+            &packet.input_contract,
+            WorkflowAuthorizationInputContract::IntentRevision { .. }
+        ));
+        let mut envelope = WorkflowBrokerEventEnvelope {
+            schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+            audience: format!("forge-core:workflow:{}", project_id.0),
+            issuer_id: StableId("broker.human.test".to_owned()),
+            issuer_profile: WorkflowBrokerIssuerProfile::Human,
+            origin_principal_id: PrincipalId("principal.human.origin".to_owned()),
+            separation_domain: StableId("human.test.session".to_owned()),
+            event_kind: WorkflowBrokerEventKind::IntentRevision,
+            project_id: project_id.clone(),
+            action_packet_digest: packet.packet_digest.clone(),
+            semantic_input: WorkflowBrokerSemanticInput::IntentRevision {
+                desired_outcome: desired_outcome.to_owned(),
+                constraints: vec!["Keep the governed result recoverable".to_owned()],
+                preferences: vec!["Prefer reversible choices".to_owned()],
+                unacceptable_outcomes: vec!["Do not claim unverified readiness".to_owned()],
+                uncertainties: vec!["Delivery constraints remain unknown".to_owned()],
+                conversation_ref: "conversation://test/intent".to_owned(),
+                conversation_digest: format!("sha256:{}", "c".repeat(64)),
+            },
+            issued_at_unix,
+            expires_at_unix: issued_at_unix + 120,
+            nonce: nonce.to_owned(),
+            signature: String::new(),
+        };
+        let signing_bytes =
+            workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
+        envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
+        envelope
+    }
+
+    fn accept_test_intent(adapter: &WorkflowGovernanceProjectAdapter) {
+        let key = SigningKey::from_bytes(&[17_u8; 32]);
+        let broker_document = install_human_broker_registry(adapter, &key);
+        let now = unix_time().expect("clock");
+        let packets = adapter.action_packets_at(now).expect("intent packet set");
+        assert_eq!(packets.packets.len(), 1);
+        let envelope = signed_intent_envelope(
+            &packets.project_id,
+            &packets.packets[0],
+            &key,
+            now,
+            "test-intent-acceptance-nonce-0001",
+            "Build a dependable governed product",
+        );
+        adapter
+            .apply_verified_broker_action(
+                AuthorizedWorkflowBrokerRegistry::from_document(broker_document)
+                    .expect("authorized broker registry")
+                    .verify_event(
+                        envelope,
+                        &packets.project_id,
+                        i64::try_from(now).expect("clock fits i64"),
+                        WorkflowBrokerFreshnessPolicy::default(),
+                    )
+                    .expect("verified intent"),
+                now,
+            )
+            .expect("accepted intent");
+    }
+
     fn signed_signal_envelope(
         project_id: &StableId,
         packet: &WorkflowAuthorizationActionPacket,
@@ -6082,6 +6507,307 @@ mod tests {
     }
 
     #[test]
+    fn human_intent_is_the_durable_first_blocker_and_revises_monotonically() {
+        let (root, state) = temp_project("durable-human-intent");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.broker-apply".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+
+        let missing = adapter.next().expect("missing-intent guidance");
+        assert_eq!(
+            missing.durable_assurance.status,
+            WorkflowDurableAssuranceStatus::MissingHumanIntent
+        );
+        assert_eq!(missing.durable_assurance.blockers.len(), 1);
+        assert!(missing.durable_assurance.projection.is_none());
+        assert_eq!(missing.authorization.action_packets.len(), 1);
+        assert_eq!(
+            adapter
+                .resume()
+                .expect("repeat missing-intent view")
+                .durable_assurance
+                .case_digest,
+            missing.durable_assurance.case_digest,
+            "missing-intent case identity must be deterministic at one state"
+        );
+        let first_packet = missing.authorization.action_packets[0].clone();
+        assert_eq!(
+            first_packet.authorization_kind,
+            WorkflowAuthorizationKind::IntentRevision
+        );
+        assert_eq!(
+            first_packet.required_authority.approval_boundary,
+            WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker
+        );
+
+        let key = SigningKey::from_bytes(&[41_u8; 32]);
+        let broker_document = install_human_broker_registry(&adapter, &key);
+        let now = unix_time().expect("clock");
+        let refreshed = adapter.action_packets_at(now).expect("broker-bound packet");
+        assert_eq!(refreshed.packets.len(), 1);
+        let first_packet = refreshed.packets[0].clone();
+        let first_envelope = signed_intent_envelope(
+            &refreshed.project_id,
+            &first_packet,
+            &key,
+            now,
+            "human-intent-first-nonce-0001",
+            "Enable a novice to create a dependable product",
+        );
+        let verify = |envelope: WorkflowBrokerEventEnvelope| {
+            AuthorizedWorkflowBrokerRegistry::from_document(broker_document.clone())
+                .expect("authorized human broker")
+                .verify_event(
+                    envelope,
+                    &refreshed.project_id,
+                    i64::try_from(now).expect("clock fits i64"),
+                    WorkflowBrokerFreshnessPolicy::default(),
+                )
+                .expect("verified human intent")
+        };
+        let first = adapter
+            .apply_verified_broker_action(verify(first_envelope.clone()), now)
+            .expect("first accepted intent");
+        let WorkflowGovernanceEvent::HumanIntentRevisionAccepted(first_event) =
+            &first.action_record.event
+        else {
+            panic!("typed intent action");
+        };
+        assert_eq!(first_event.assurance_epoch, 1);
+        assert_eq!(first_event.intent.revision, 1);
+        assert_eq!(
+            first.origin_record.previous_record_digest.as_deref(),
+            Some(first.action_record.record_digest.as_str())
+        );
+
+        let accepted = &first
+            .next
+            .durable_assurance
+            .projection
+            .as_ref()
+            .expect("durable assurance projection");
+        assert_eq!(accepted.binding.assurance_epoch, 1);
+        assert_eq!(accepted.binding.intent_revision, 1);
+        assert_eq!(accepted.intent, first_event.intent);
+        assert_eq!(
+            accepted.lenses.len(),
+            forge_core_contracts::UniversalAssuranceLens::ALL.len()
+        );
+        assert!(accepted.lenses.iter().all(|lens| {
+            lens.claim_status == forge_core_contracts::AssuranceClaimStatus::Unknown
+                && lens.evidence_refs.is_empty()
+                && lens.evaluator_ref.is_none()
+        }));
+        assert_eq!(
+            first.next.status,
+            WorkflowGovernanceGuidanceStatus::Blocked,
+            "unknown universal lenses must remain honest blockers"
+        );
+        assert_eq!(first.next.durable_assurance.blockers.len(), 8);
+        assert!(first.next.durable_assurance.blockers.iter().all(|blocker| {
+            blocker.code == WorkflowDurableAssuranceBlockerCode::UniversalLensUnknown
+                && blocker.lens.is_some()
+        }));
+        let accepted_case_digest = first.next.durable_assurance.case_digest.clone();
+        let accepted_projection_digest = accepted.projection_digest.clone();
+
+        let record_count = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("projection")
+            .records
+            .len();
+        let retry = adapter
+            .apply_verified_broker_action(verify(first_envelope), now)
+            .expect("exact idempotent retry");
+        assert_eq!(retry.action_record, first.action_record);
+        assert_eq!(retry.origin_record, first.origin_record);
+        assert_eq!(
+            lock_workflow_governance_ledger_tcb(&state)
+                .expect("ledger")
+                .recover()
+                .expect("projection")
+                .records
+                .len(),
+            record_count,
+            "retry must append no ledger records"
+        );
+
+        let revision_packet = retry
+            .next
+            .authorization
+            .action_packets
+            .iter()
+            .find(|packet| packet.authorization_kind == WorkflowAuthorizationKind::IntentRevision)
+            .expect("revision packet")
+            .clone();
+        let stale_envelope = signed_intent_envelope(
+            &refreshed.project_id,
+            &revision_packet,
+            &key,
+            now,
+            "human-intent-stale-nonce-0002",
+            "This stale revision must not commit",
+        );
+        let replay_count =
+            forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
+                .expect("replay before stale attempt")
+                .entries
+                .len();
+        fs::write(root.join("README.md"), b"project changed\n").expect("snapshot drift");
+        let drifted = adapter.resume().expect("drifted replacement-agent view");
+        assert_ne!(
+            drifted.durable_assurance.case_digest, accepted_case_digest,
+            "current project drift must change the case digest"
+        );
+        assert_ne!(
+            drifted.durable_assurance.current_snapshot_digest,
+            first.next.durable_assurance.current_snapshot_digest
+        );
+        assert_eq!(
+            drifted
+                .durable_assurance
+                .projection
+                .as_ref()
+                .expect("accepted intent survives project drift")
+                .projection_digest,
+            accepted_projection_digest,
+            "project drift must not rewrite accepted human intent history"
+        );
+        assert!(matches!(
+            adapter.apply_verified_broker_action(verify(stale_envelope), now),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        assert_eq!(
+            forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
+                .expect("replay after stale attempt")
+                .entries
+                .len(),
+            replay_count,
+            "stale packet must write no replay reservation"
+        );
+        assert_eq!(
+            lock_workflow_governance_ledger_tcb(&state)
+                .expect("ledger")
+                .recover()
+                .expect("projection")
+                .records
+                .len(),
+            record_count,
+            "stale packet must write no ledger record"
+        );
+
+        let current_packets = adapter.action_packets_at(now).expect("current packets");
+        let revision_packet = current_packets
+            .packets
+            .iter()
+            .find(|packet| packet.authorization_kind == WorkflowAuthorizationKind::IntentRevision)
+            .expect("current revision packet");
+        let second_envelope = signed_intent_envelope(
+            &current_packets.project_id,
+            revision_packet,
+            &key,
+            now,
+            "human-intent-second-nonce-0003",
+            "Enable a novice to create, verify, and recover a dependable product",
+        );
+        let second = adapter
+            .apply_verified_broker_action(verify(second_envelope), now)
+            .expect("second accepted intent");
+        let WorkflowGovernanceEvent::HumanIntentRevisionAccepted(second_event) =
+            &second.action_record.event
+        else {
+            panic!("second typed intent action");
+        };
+        assert_eq!(second_event.assurance_epoch, 2);
+        assert_eq!(second_event.intent.revision, 2);
+        assert_eq!(
+            second_event.previous_intent_digest.as_deref(),
+            Some(first_event.intent_digest.as_str())
+        );
+        let durable = second
+            .next
+            .durable_assurance
+            .projection
+            .as_ref()
+            .expect("revised durable projection");
+        assert_eq!(durable.binding.assurance_epoch, 2);
+        assert_eq!(durable.binding.intent_revision, 2);
+        assert_eq!(durable.intent, second_event.intent);
+        let ledger = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("projection");
+        assert_eq!(
+            ledger
+                .records
+                .iter()
+                .filter(|record| matches!(
+                    &record.event,
+                    WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+                ))
+                .count(),
+            2,
+            "the prior accepted revision must remain in append-only history"
+        );
+        let resumed = adapter.resume().expect("replacement-agent resume");
+        assert_eq!(
+            resumed
+                .durable_assurance
+                .projection
+                .expect("resumed durable projection"),
+            (*durable).clone()
+        );
+    }
+
+    #[test]
+    fn unknown_assurance_blocks_phase_even_when_legacy_phase_is_otherwise_done() {
+        let (root, state) = temp_project("unknown-assurance-phase-boundary");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.unknown-assurance-boundary".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        accept_test_intent(&adapter);
+
+        let projection = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("projection");
+        let assurance = project_durable_assurance(&projection.records)
+            .expect("durable projection")
+            .expect("accepted intent");
+        assert_eq!(assurance.blocker_lenses.len(), 8);
+        assert!(assurance
+            .lenses
+            .iter()
+            .all(|lens| lens.claim_status == forge_core_contracts::AssuranceClaimStatus::Unknown));
+
+        assert!(
+            !phase_advance_allowed_by_assurance(&projection, true)
+                .expect("assurance boundary evaluation"),
+            "legacy phase completion cannot outrank eight unknown Assurance lenses"
+        );
+        assert_eq!(
+            projection
+                .records
+                .iter()
+                .filter(|record| {
+                    matches!(&record.event, WorkflowGovernanceEvent::PhaseAdvanced(_))
+                })
+                .count(),
+            0,
+            "the blocked boundary must contain no PhaseAdvanced authority"
+        );
+    }
+
+    #[test]
     fn action_packets_are_deterministic_cas_bound_and_authority_typed() {
         let (root, state) = temp_project("action-packets");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -6091,6 +6817,7 @@ mod tests {
         )
         .expect("adapter");
         adapter.initialize().expect("initialize");
+        accept_test_intent(&adapter);
 
         let first = adapter.action_packets().expect("first packets");
         let repeated = adapter.action_packets().expect("repeated packets");
@@ -6285,6 +7012,9 @@ mod tests {
         )
         .expect("adapter");
         adapter.initialize().expect("initialize");
+        accept_test_intent(&adapter);
+        fs::remove_file(adapter.trusted_broker_registry_path())
+            .expect("remove test intent broker registry");
         let now = unix_time().expect("clock");
         let packet_set = adapter.action_packets_at(now).expect("packets");
         assert_eq!(
@@ -6457,6 +7187,7 @@ mod tests {
         )
         .expect("adapter");
         adapter.initialize().expect("initialize with replay");
+        accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[23_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
         let now = unix_time().expect("clock");
@@ -6539,7 +7270,11 @@ mod tests {
                 .expect("replay recovery");
         let raw = fs::read_to_string(&replay.wal_path).expect("replay WAL");
         let mut lines = raw.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 2, "reserve and commit records");
+        assert_eq!(
+            lines.len(),
+            4,
+            "intent and signal each have reserve and commit records"
+        );
         lines.pop();
         fs::write(&replay.wal_path, format!("{}\n", lines.join("\n")))
             .expect("simulate crash before replay commit");
@@ -6577,6 +7312,7 @@ mod tests {
         )
         .expect("adapter");
         adapter.initialize().expect("initialize with replay");
+        accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[29_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
         let now = unix_time().expect("clock");
@@ -6605,6 +7341,11 @@ mod tests {
         let verified = verify_broker_envelope(&broker_document, envelope.clone(), now);
         let audit = verified.audit().clone();
         let semantic_input = verified.semantic_input().clone();
+        let baseline_replay_entries =
+            forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
+                .expect("replay before dropped batch")
+                .entries
+                .len();
 
         let release_registry = load_admitted_workflow_governance_reviewed_release_registry()
             .expect("release registry");
@@ -6626,7 +7367,7 @@ mod tests {
             &projection,
             &root,
             packet.clone(),
-            broker_semantic_input_to_closed(semantic_input),
+            broker_semantic_input_to_closed(semantic_input).expect("closed broker input"),
             audit.issued_at_unix,
         )
         .expect("prepare");
@@ -6658,11 +7399,13 @@ mod tests {
         drop(effective);
         drop(domain);
 
-        assert!(
+        assert_eq!(
             forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
                 .expect("replay after dropped batch")
                 .entries
-                .is_empty()
+                .len(),
+            baseline_replay_entries,
+            "dropped precommit batch must not add a replay tombstone"
         );
 
         let historical = AuthorizedWorkflowBrokerRegistry::from_document(broker_document.clone())

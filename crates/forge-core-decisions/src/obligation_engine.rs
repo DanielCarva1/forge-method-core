@@ -10,7 +10,7 @@ use forge_core_contracts::{
     CapabilityGap, CapabilityGapKind, DecisionAlternative, DecisionRequest, HumanDecisionReason,
     IntentProposal, NextAction, NextActionKind, Obligation, ObligationCriticality,
     ObligationStatus, ProjectSnapshot, ReadinessAssessment, ReadinessTarget, ReadinessVerdict,
-    StableId, ASSURANCE_CASE_SCHEMA_VERSION,
+    StableId, UniversalAssuranceLens, ASSURANCE_CASE_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -56,68 +56,46 @@ impl RiskLevel {
     }
 }
 
-/// Cross-domain assurance lenses from the accepted architecture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum UniversalAssuranceLens {
-    IntendedOutcome,
-    CriticalJourneys,
-    SystemIntegrity,
-    QualityAttributes,
-    Operability,
-    LifecycleCoverage,
-    RiskAndFailure,
-    EvidenceRepresentativeness,
+fn lens_statement(lens: UniversalAssuranceLens) -> &'static str {
+    match lens {
+        UniversalAssuranceLens::IntendedOutcome => {
+            "The integrated result solves the intended human problem."
+        }
+        UniversalAssuranceLens::CriticalJourneys => {
+            "Representative critical user journeys work end to end."
+        }
+        UniversalAssuranceLens::SystemIntegrity => {
+            "State, data, effects, authority, and recovery remain coherent."
+        }
+        UniversalAssuranceLens::QualityAttributes => {
+            "Applicable quality attributes meet explicit expectations."
+        }
+        UniversalAssuranceLens::Operability => {
+            "The result can be delivered, observed, diagnosed, updated, and recovered as applicable."
+        }
+        UniversalAssuranceLens::LifecycleCoverage => {
+            "Consequential before, during, and after-use lifecycle concerns are covered."
+        }
+        UniversalAssuranceLens::RiskAndFailure => {
+            "Unacceptable outcomes have credible prevention, detection, or recovery evidence."
+        }
+        UniversalAssuranceLens::EvidenceRepresentativeness => {
+            "Readiness evidence exercises the integrated result in a representative environment."
+        }
+    }
 }
 
-impl UniversalAssuranceLens {
-    pub const ALL: [Self; 8] = [
-        Self::IntendedOutcome,
-        Self::CriticalJourneys,
-        Self::SystemIntegrity,
-        Self::QualityAttributes,
-        Self::Operability,
-        Self::LifecycleCoverage,
-        Self::RiskAndFailure,
-        Self::EvidenceRepresentativeness,
-    ];
-
-    const fn id(self) -> &'static str {
-        match self {
-            Self::IntendedOutcome => "intended_outcome",
-            Self::CriticalJourneys => "critical_journeys",
-            Self::SystemIntegrity => "system_integrity",
-            Self::QualityAttributes => "quality_attributes",
-            Self::Operability => "operability",
-            Self::LifecycleCoverage => "lifecycle_coverage",
-            Self::RiskAndFailure => "risk_and_failure",
-            Self::EvidenceRepresentativeness => "evidence_representativeness",
+const fn lens_action_kind(lens: UniversalAssuranceLens) -> NextActionKind {
+    match lens {
+        UniversalAssuranceLens::IntendedOutcome | UniversalAssuranceLens::LifecycleCoverage => {
+            NextActionKind::Research
         }
-    }
-
-    const fn statement(self) -> &'static str {
-        match self {
-            Self::IntendedOutcome => "The integrated result solves the intended human problem.",
-            Self::CriticalJourneys => "Representative critical user journeys work end to end.",
-            Self::SystemIntegrity => "State, data, effects, authority, and recovery remain coherent.",
-            Self::QualityAttributes => "Applicable quality attributes meet explicit expectations.",
-            Self::Operability => "The result can be delivered, observed, diagnosed, updated, and recovered as applicable.",
-            Self::LifecycleCoverage => "Consequential before, during, and after-use lifecycle concerns are covered.",
-            Self::RiskAndFailure => "Unacceptable outcomes have credible prevention, detection, or recovery evidence.",
-            Self::EvidenceRepresentativeness => "Readiness evidence exercises the integrated result in a representative environment.",
-        }
-    }
-
-    const fn action_kind(self) -> NextActionKind {
-        match self {
-            Self::IntendedOutcome | Self::LifecycleCoverage => NextActionKind::Research,
-            Self::RiskAndFailure => NextActionKind::Challenge,
-            Self::CriticalJourneys
-            | Self::SystemIntegrity
-            | Self::QualityAttributes
-            | Self::Operability
-            | Self::EvidenceRepresentativeness => NextActionKind::Evaluate,
-        }
+        UniversalAssuranceLens::RiskAndFailure => NextActionKind::Challenge,
+        UniversalAssuranceLens::CriticalJourneys
+        | UniversalAssuranceLens::SystemIntegrity
+        | UniversalAssuranceLens::QualityAttributes
+        | UniversalAssuranceLens::Operability
+        | UniversalAssuranceLens::EvidenceRepresentativeness => NextActionKind::Evaluate,
     }
 }
 
@@ -337,7 +315,12 @@ struct ActionDraft {
     action: NextAction,
 }
 
-/// Derive one internally coherent Assurance Case without IO or mutation.
+/// Derive one internally coherent, proposal-only Assurance Case without IO or
+/// mutation.
+///
+/// This compatibility API accepts host-authored status and readiness inputs;
+/// its output is advisory and cannot establish durable workflow authority. Use
+/// [`crate::project_durable_assurance`] for admitted ledger state.
 ///
 /// # Errors
 ///
@@ -386,7 +369,7 @@ pub fn derive_assurance_case(
 
         claims.push(AssuranceClaim {
             id: claim_id.clone(),
-            statement: lens.statement().to_owned(),
+            statement: lens_statement(lens).to_owned(),
             status,
             evidence_refs,
             waiver,
@@ -714,7 +697,7 @@ fn action_for_lens(
         stable_key: lens.id().to_owned(),
         action: NextAction {
             id: StableId(format!("action.assurance.{}", lens.id())),
-            kind: lens.action_kind(),
+            kind: lens_action_kind(lens),
             description: format!("Acquire representative evidence for {}.", lens.id()),
             addresses_claim_refs: vec![claim_id.clone()],
             rationale: format!(

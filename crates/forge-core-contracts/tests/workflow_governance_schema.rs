@@ -1,7 +1,7 @@
 use forge_core_contracts::{
-    WorkflowCompletionAssertion, WorkflowDecisionActivation, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
+    UniversalAssuranceLens, WorkflowCompletionAssertion, WorkflowDecisionActivation,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
+    WorkflowGovernanceEvent, WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use std::{collections::BTreeSet, path::PathBuf};
@@ -29,6 +29,10 @@ fn published_bundle_round_trips_as_a_closed_typed_contract() {
         .expect("build-story policy");
     assert_eq!(build.obligations.len(), 2);
     assert_eq!(build.claims.len(), 2);
+    assert!(build
+        .claims
+        .iter()
+        .all(|claim| claim.assurance_lenses.is_empty()));
     assert_eq!(build.evaluators.len(), 2);
     assert_eq!(build.capability_requirements.len(), 1);
     assert_eq!(build.decision_rules.len(), 1);
@@ -38,9 +42,54 @@ fn published_bundle_round_trips_as_a_closed_typed_contract() {
     );
 
     let serialized = yaml_serde::to_string(&document).expect("serialize governance bundle");
+    assert!(
+        !serialized.contains("assurance_lenses:"),
+        "legacy empty lens tags must retain the historical wire shape"
+    );
     let round_trip: WorkflowGovernanceBundleDocument =
         yaml_serde::from_str(&serialized).expect("round-trip governance bundle");
     assert_eq!(round_trip, document);
+}
+
+#[test]
+fn claim_lens_tags_are_typed_while_historical_omission_defaults_empty() {
+    let historical = r"
+id: claim.workflow.historical
+statement: Historical claim
+evaluator_ref: evaluator.workflow.historical
+waiver:
+  kind: not_waivable
+";
+    let historical: forge_core_contracts::WorkflowClaimPolicy =
+        yaml_serde::from_str(historical).expect("historical claim without lens tags");
+    assert!(historical.assurance_lenses.is_empty());
+    let historical_wire =
+        yaml_serde::to_string(&historical).expect("serialize historical claim without lens tags");
+    assert!(!historical_wire.contains("assurance_lenses:"));
+    let historical_round_trip: forge_core_contracts::WorkflowClaimPolicy =
+        yaml_serde::from_str(&historical_wire).expect("round-trip historical claim wire");
+    assert_eq!(historical_round_trip, historical);
+
+    let tagged_yaml = r"
+id: claim.workflow.assurance.intended-outcome
+statement: Accepted intent defines observable success.
+evaluator_ref: evaluator.workflow.assurance.intended-outcome
+assurance_lenses:
+  - intended_outcome
+waiver:
+  kind: not_waivable
+";
+    let tagged: forge_core_contracts::WorkflowClaimPolicy =
+        yaml_serde::from_str(tagged_yaml).expect("typed lens-aware claim");
+    assert_eq!(
+        tagged.assurance_lenses,
+        vec![UniversalAssuranceLens::IntendedOutcome]
+    );
+    let tagged_wire = yaml_serde::to_string(&tagged).expect("serialize tagged claim");
+    assert!(tagged_wire.contains("assurance_lenses:"));
+
+    let unknown = tagged_yaml.replace("intended_outcome", "caller_invented_lens");
+    assert!(yaml_serde::from_str::<forge_core_contracts::WorkflowClaimPolicy>(&unknown).is_err());
 }
 
 #[test]

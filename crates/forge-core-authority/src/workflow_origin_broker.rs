@@ -12,6 +12,9 @@ use std::fmt;
 use ed25519_dalek::{Signature, VerifyingKey};
 use forge_core_contracts::{
     PrincipalId, StableId, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
+    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
+    MAX_WORKFLOW_INTENT_TOTAL_BYTES,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -75,6 +78,7 @@ pub enum WorkflowBrokerEventKind {
     Capability,
     Decision,
     Evidence,
+    IntentRevision,
     Signal,
     Waiver,
 }
@@ -103,6 +107,21 @@ pub enum WorkflowBrokerSemanticInput {
         subject_ref: String,
         scenario_ref: String,
     },
+    /// Human-authored intent content only. Intent identifiers, revision
+    /// numbers, assurance epochs, policy, readiness, claim status, targets, and
+    /// evaluators are deliberately absent and must be derived by the kernel
+    /// from current governed state.
+    IntentRevision {
+        desired_outcome: String,
+        constraints: Vec<String>,
+        preferences: Vec<String>,
+        unacceptable_outcomes: Vec<String>,
+        uncertainties: Vec<String>,
+        /// Stable external conversation locator, never raw transcript content.
+        conversation_ref: String,
+        /// Digest of the source conversation as observed by the human broker.
+        conversation_digest: String,
+    },
     Signal {
         active: bool,
         basis_refs: Vec<String>,
@@ -120,6 +139,7 @@ impl WorkflowBrokerSemanticInput {
             Self::Capability { .. } => WorkflowBrokerEventKind::Capability,
             Self::Decision { .. } => WorkflowBrokerEventKind::Decision,
             Self::Evidence { .. } => WorkflowBrokerEventKind::Evidence,
+            Self::IntentRevision { .. } => WorkflowBrokerEventKind::IntentRevision,
             Self::Signal { .. } => WorkflowBrokerEventKind::Signal,
             Self::Waiver { .. } => WorkflowBrokerEventKind::Waiver,
         }
@@ -617,6 +637,35 @@ fn validate_semantic_input(input: &WorkflowBrokerSemanticInput) -> Result<(), Wo
             require_nonblank("semantic_input.subject_ref", subject_ref)?;
             require_nonblank("semantic_input.scenario_ref", scenario_ref)
         }
+        WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome,
+            constraints,
+            preferences,
+            unacceptable_outcomes,
+            uncertainties,
+            conversation_ref,
+            conversation_digest,
+        } => {
+            validate_bounded_text(
+                "semantic_input.desired_outcome",
+                desired_outcome,
+                MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+            )?;
+            validate_intent_items("semantic_input.constraints", constraints)?;
+            validate_intent_items("semantic_input.preferences", preferences)?;
+            validate_intent_items(
+                "semantic_input.unacceptable_outcomes",
+                unacceptable_outcomes,
+            )?;
+            validate_intent_items("semantic_input.uncertainties", uncertainties)?;
+            validate_bounded_text(
+                "semantic_input.conversation_ref",
+                conversation_ref,
+                MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
+            )?;
+            require_digest("semantic_input.conversation_digest", conversation_digest)?;
+            validate_intent_total_size(input)
+        }
         WorkflowBrokerSemanticInput::Waiver { reason } => {
             require_nonblank("semantic_input.reason", reason)
         }
@@ -634,6 +683,7 @@ fn require_profile_kind(
             WorkflowBrokerEventKind::Applicability
                 | WorkflowBrokerEventKind::Decision
                 | WorkflowBrokerEventKind::Evidence
+                | WorkflowBrokerEventKind::IntentRevision
                 | WorkflowBrokerEventKind::Waiver
         ) | (
             WorkflowBrokerIssuerProfile::Reviewer,
@@ -649,6 +699,56 @@ fn require_profile_kind(
         Ok(())
     } else {
         Err(WorkflowBrokerError::ProfileKindMismatch)
+    }
+}
+
+fn validate_bounded_text(
+    field: &'static str,
+    value: &str,
+    max_bytes: usize,
+) -> Result<(), WorkflowBrokerError> {
+    require_nonblank(field, value)?;
+    if value.len() > max_bytes {
+        Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "exceeds the byte limit",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_intent_items(
+    field: &'static str,
+    values: &[String],
+) -> Result<(), WorkflowBrokerError> {
+    if values.len() > MAX_WORKFLOW_INTENT_LIST_ITEMS {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "contains too many items",
+        });
+    }
+    for value in values {
+        validate_bounded_text(field, value, MAX_WORKFLOW_INTENT_ITEM_BYTES)?;
+    }
+    Ok(())
+}
+
+fn validate_intent_total_size(
+    input: &WorkflowBrokerSemanticInput,
+) -> Result<(), WorkflowBrokerError> {
+    let encoded = serde_json_canonicalizer::to_vec(
+        &serde_json::to_value(input)
+            .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?,
+    )
+    .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
+    if encoded.len() > MAX_WORKFLOW_INTENT_TOTAL_BYTES {
+        Err(WorkflowBrokerError::InvalidField {
+            field: "semantic_input.intent_revision",
+            reason: "exceeds the total byte limit",
+        })
+    } else {
+        Ok(())
     }
 }
 
@@ -818,6 +918,25 @@ mod tests {
         value
     }
 
+    fn assert_no_forbidden_keys(value: &serde_json::Value, forbidden: &[&str]) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                for key in fields.keys() {
+                    assert!(!forbidden.contains(&key.as_str()), "unexpected key {key}");
+                }
+                for value in fields.values() {
+                    assert_no_forbidden_keys(value, forbidden);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    assert_no_forbidden_keys(value, forbidden);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn key() -> SigningKey {
         SigningKey::from_bytes(&[7_u8; 32])
     }
@@ -894,6 +1013,25 @@ mod tests {
         }
     }
 
+    fn unsigned_intent_revision() -> WorkflowBrokerEventEnvelope {
+        WorkflowBrokerEventEnvelope {
+            event_kind: WorkflowBrokerEventKind::IntentRevision,
+            semantic_input: WorkflowBrokerSemanticInput::IntentRevision {
+                desired_outcome: "Enable a novice to build a dependable product".to_owned(),
+                constraints: vec!["The human interacts only through conversation".to_owned()],
+                preferences: vec!["Prefer reversible technical choices".to_owned()],
+                unacceptable_outcomes: vec![
+                    "Do not claim readiness without representative evidence".to_owned(),
+                ],
+                uncertainties: vec!["The delivery domain is not known yet".to_owned()],
+                conversation_ref: "conversation://thread/intent-turn-42".to_owned(),
+                conversation_digest: digest('d'),
+            },
+            nonce: "intent-revision-nonce-0001".to_owned(),
+            ..unsigned()
+        }
+    }
+
     fn sign(
         mut envelope: WorkflowBrokerEventEnvelope,
         key: &SigningKey,
@@ -939,6 +1077,172 @@ mod tests {
             verified.semantic_input(),
             WorkflowBrokerSemanticInput::Decision { .. }
         ));
+    }
+
+    #[test]
+    fn verifies_closed_human_intent_revision_and_binds_source_provenance() {
+        let key = key();
+        let envelope = sign(unsigned_intent_revision(), &key);
+        let verified = verify(
+            &registry(&key, WorkflowBrokerIssuerProfile::Human),
+            envelope,
+            NOW,
+        )
+        .expect("verified intent revision");
+        assert_eq!(
+            verified.audit().event_kind,
+            WorkflowBrokerEventKind::IntentRevision
+        );
+        assert!(matches!(
+            verified.semantic_input(),
+            WorkflowBrokerSemanticInput::IntentRevision {
+                conversation_ref,
+                conversation_digest,
+                ..
+            } if conversation_ref == "conversation://thread/intent-turn-42"
+                && conversation_digest == &digest('d')
+        ));
+    }
+
+    #[test]
+    fn intent_revision_is_human_only_and_tampering_fails_closed() {
+        let key = key();
+        let reviewer = registry(&key, WorkflowBrokerIssuerProfile::Reviewer);
+        let mut reviewer_event = unsigned_intent_revision();
+        reviewer_event.issuer_profile = WorkflowBrokerIssuerProfile::Reviewer;
+        assert_eq!(
+            verify(&reviewer, sign(reviewer_event, &key), NOW)
+                .expect_err("reviewer cannot revise human intent"),
+            WorkflowBrokerError::ProfileKindMismatch
+        );
+
+        let human = registry(&key, WorkflowBrokerIssuerProfile::Human);
+        let mut tampered = sign(unsigned_intent_revision(), &key);
+        let WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome, ..
+        } = &mut tampered.semantic_input
+        else {
+            panic!("intent input");
+        };
+        desired_outcome.push_str(" but with an unapproved changed outcome");
+        assert_eq!(
+            verify(&human, tampered, NOW).expect_err("content tamper"),
+            WorkflowBrokerError::InvalidSignature
+        );
+
+        let mut provenance_tamper = sign(unsigned_intent_revision(), &key);
+        let WorkflowBrokerSemanticInput::IntentRevision {
+            conversation_digest,
+            ..
+        } = &mut provenance_tamper.semantic_input
+        else {
+            panic!("intent input");
+        };
+        *conversation_digest = digest('e');
+        assert_eq!(
+            verify(&human, provenance_tamper, NOW).expect_err("provenance tamper"),
+            WorkflowBrokerError::InvalidSignature
+        );
+    }
+
+    #[test]
+    fn intent_revision_enforces_canonical_bounds_and_exposes_no_authority_fields() {
+        let key = key();
+        let human = registry(&key, WorkflowBrokerIssuerProfile::Human);
+
+        let mut oversized = unsigned_intent_revision();
+        let WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome, ..
+        } = &mut oversized.semantic_input
+        else {
+            panic!("intent input");
+        };
+        *desired_outcome = "x".repeat(MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES + 1);
+        assert!(matches!(
+            verify(&human, sign(oversized, &key), NOW),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "semantic_input.desired_outcome",
+                ..
+            })
+        ));
+
+        let mut too_many = unsigned_intent_revision();
+        let WorkflowBrokerSemanticInput::IntentRevision { constraints, .. } =
+            &mut too_many.semantic_input
+        else {
+            panic!("intent input");
+        };
+        *constraints = vec!["bounded".to_owned(); MAX_WORKFLOW_INTENT_LIST_ITEMS + 1];
+        assert!(matches!(
+            verify(&human, sign(too_many, &key), NOW),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "semantic_input.constraints",
+                ..
+            })
+        ));
+
+        let mut oversized_total = unsigned_intent_revision();
+        let WorkflowBrokerSemanticInput::IntentRevision {
+            constraints,
+            preferences,
+            unacceptable_outcomes,
+            uncertainties,
+            ..
+        } = &mut oversized_total.semantic_input
+        else {
+            panic!("intent input");
+        };
+        for values in [
+            constraints,
+            preferences,
+            unacceptable_outcomes,
+            uncertainties,
+        ] {
+            *values = vec!["z".repeat(300); MAX_WORKFLOW_INTENT_LIST_ITEMS];
+        }
+        assert!(matches!(
+            verify(&human, sign(oversized_total, &key), NOW),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "semantic_input.intent_revision",
+                ..
+            })
+        ));
+
+        let json = serde_json::to_value(unsigned_intent_revision()).expect("intent json");
+        let forbidden = [
+            "raw_chat",
+            "transcript",
+            "intent_id",
+            "revision",
+            "assurance_epoch",
+            "policy_ref",
+            "claim_status",
+            "readiness",
+            "target_ref",
+            "evaluator_ref",
+        ];
+        assert_no_forbidden_keys(&json, &forbidden);
+    }
+
+    #[test]
+    fn historical_intent_revision_recovery_preserves_signature_without_reopening_admission() {
+        let key = key();
+        let mut expired = unsigned_intent_revision();
+        expired.issued_at_unix = u64::try_from(NOW - 600).expect("positive time");
+        expired.expires_at_unix = u64::try_from(NOW - 300).expect("positive time");
+        let expired = sign(expired, &key);
+        let active = registry(&key, WorkflowBrokerIssuerProfile::Human);
+        assert!(matches!(
+            verify(&active, expired.clone(), NOW),
+            Err(WorkflowBrokerError::FreshnessOutOfBounds)
+        ));
+        let historical = active
+            .verify_event_for_recovery(expired, &StableId("project.test".to_owned()))
+            .expect("historical intent signature");
+        assert_eq!(
+            historical.audit().event_kind,
+            WorkflowBrokerEventKind::IntentRevision
+        );
     }
 
     #[test]
@@ -1111,6 +1415,15 @@ mod tests {
         ));
 
         let json = serde_json::to_string(&unsigned()).expect("json");
+        let value = serde_json::to_value(&unsigned().semantic_input).expect("legacy value");
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "kind": "decision",
+                "selected_alternative_ref": "alternative.safe"
+            }),
+            "the pre-intent decision wire shape must remain unchanged"
+        );
         for forbidden in [
             "policy_bundle_digest",
             "policy_ref",

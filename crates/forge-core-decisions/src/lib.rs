@@ -35,6 +35,7 @@ pub mod domain_pack_compatibility;
 pub mod domain_pack_learning;
 pub mod domain_pack_resolution;
 pub mod domain_pack_trust;
+pub mod durable_assurance;
 pub mod embedded_contracts;
 pub mod eval;
 pub mod execution_admission;
@@ -54,6 +55,10 @@ pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
     load_embedded_frozen_legacy_catalog, load_embedded_workflow_documents, load_workflow_documents,
     CatalogFileError, CatalogLoadReport, LoadedWorkflowDocument, WorkflowDocumentLoadReport,
+};
+pub use durable_assurance::{
+    project_durable_assurance, workflow_human_intent_digest, AssuranceProjectionError,
+    AssuranceProjectionIssue,
 };
 pub use embedded_contracts::{
     embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,
@@ -102,7 +107,7 @@ pub use obligation_engine::{
     derive_assurance_case, CapabilityAvailability, CapabilityObservation, DecisionNeed,
     EpistemicRiskSignal, LensApplicability, LensObservation, ObligationEngineInput,
     ObligationEngineInputDocument, ObligationEngineIssue, ObligationEngineRejection, RiskLevel,
-    UniversalAssuranceLens, OBLIGATION_ENGINE_INPUT_SCHEMA_VERSION,
+    OBLIGATION_ENGINE_INPUT_SCHEMA_VERSION,
 };
 
 pub use coordination_eval::{
@@ -194,4 +199,4 @@ pub use workflow_retirement::{
 };
 // Re-export the canonical phase type so downstream consumers can depend on the
 // engine crate alone without reaching into contracts for the common case.
-pub use forge_core_contracts::Phase;
+pub use forge_core_contracts::{Phase, UniversalAssuranceLens};

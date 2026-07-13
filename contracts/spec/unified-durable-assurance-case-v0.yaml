@@ -1,0 +1,154 @@
+schema_version: forge_method_product_spec_v1
+spec:
+  id: unified-durable-assurance-case-v0
+  status: implementation_in_progress
+  product_outcome: >-
+    A replacement agent reconstructs the accepted human intent, universal
+    assurance unknowns, governed evidence bindings, competence gaps, and the
+    exact next action from Forge authority alone. Chat history and
+    caller-authored Assurance Case files are never authority.
+
+  authority_model:
+    normative_policy:
+      - admitted core workflow release
+      - admitted effective Domain Pack epoch
+    durable_observation:
+      - hash-chain-valid workflow governance records
+      - exact BrokerOriginApplied companion for broker-origin records
+    executable_authority:
+      - opaque kernel capabilities after current snapshot, head, epoch, and registry recheck
+    proposal_only:
+      - assurance derive input
+      - assurance resume file and token
+      - model confidence, plan prose, chat transcript, and host-selected claim status
+
+  human_intent:
+    semantic_input:
+      - desired_outcome
+      - constraints
+      - preferences
+      - unacceptable_outcomes
+      - uncertainties
+      - conversation_ref
+      - conversation_digest
+    kernel_derived:
+      - intent_id
+      - revision
+      - assurance_epoch
+      - intent_digest
+      - project, snapshot, ledger head, state version, and effective bundle bindings
+      - action packet, authority, principal, clock, and replay bindings
+    rules:
+      - only an external HumanApprovalBroker may accept or amend intent
+      - raw chat is not persisted by default
+      - every amendment opens the next monotonic assurance epoch
+      - older intent remains auditable but cannot remain the current epoch
+      - stale packet, wrong origin profile, or missing companion produces zero authority
+
+  universal_lenses:
+    exact_set:
+      - intended_outcome
+      - critical_journeys
+      - system_integrity
+      - quality_attributes
+      - operability
+      - lifecycle_coverage
+      - risk_and_failure
+      - evidence_representativeness
+    epistemic_states:
+      - unknown
+      - supported
+      - verified
+      - disproven
+      - waived
+    rules:
+      - omission is unknown, never absent or satisfied
+      - research may support a claim but cannot by itself verify an independent or runtime claim
+      - verified and waived status derive only from admitted policy plus current governed receipts
+      - all due unknown or disproven lenses block optimistic boundary advancement
+
+  competence:
+    rules:
+      - a host may propose planned, in_progress, or blocked acquisition work
+      - a host cannot declare competence acquired
+      - acquired derives only from current capability probes, admitted packs, or equivalent governed receipts
+      - novel-domain, method, weak-provenance, and unavailable-evaluator gaps yield bounded research or acquisition actions
+
+  representative_slice:
+    required_definition:
+      - current intent digest
+      - critical journey
+      - falsifier
+      - representative environment expectation
+      - scenario references
+      - material failure modes
+    rules:
+      - intent amendment invalidates the previous definition
+      - artifact existence or component completion never substitutes for representative execution
+      - runtime evidence must bind the current scenario, subject, snapshot, and effective epoch
+
+  deterministic_projection:
+    inputs:
+      - admitted effective workflow bundle
+      - verified workflow ledger projection
+      - current project snapshot and head
+      - current receipt/carryover window
+    outputs:
+      - accepted intent and assurance epoch
+      - exactly eight lens projections
+      - evidence and evaluator receipt bindings
+      - epistemic and competence gaps
+      - representative-slice state
+      - ranked bounded next actions and their current action packet digests
+      - canonical case digest and source record digests
+    forbidden_inputs:
+      - chat history
+      - caller readiness verdict
+      - caller claim or evidence status
+      - caller policy, evaluator, target, phase, epoch, revision, or record id
+
+  replacement_agent:
+    invariants:
+      - workflow next and workflow resume derive from the same locked authority projection
+      - a replacement process returns the same case digest for unchanged durable state
+      - a serialized projection is audit data and cannot recreate mutation authority
+      - corrupt, orphaned, mixed-epoch, or stale authority fails closed
+
+  compatibility:
+    rules:
+      - historical 0.1 and effective-bundle 0.2 ledger bytes remain readable and byte-stable
+      - intent acceptance and every later record in that assurance epoch use an explicit successor ledger schema
+      - a HumanIntentRevisionAccepted event is invalid under a pre-assurance ledger schema
+      - optional assurance lens metadata is omitted when empty so legacy policy serialization does not drift
+
+  delivery:
+    p7b_1:
+      - durable human intent and monotonic assurance epoch
+      - exact eight-lens unknown projection in workflow next and resume
+      - public intent record action through the external broker
+    p7b_2:
+      - admitted universal-lens policy coverage
+      - typed epistemic and competence observations
+      - representative-slice requirement and evidence binding
+      - bounded research, evaluator, acquisition, and challenge actions
+      - public replacement-agent journey from intent through one verified lens
+    cumulative_gate: >-
+      Run formatting, affected compilation, and focused tests during integration.
+      Run the full workspace and expensive reference journey once after P7b.1
+      and P7b.2 form one coherent pullable checkpoint.
+
+  acceptance:
+    - fresh next exposes missing human intent and no optimistic progress
+    - accepted intent is exact, bounded, human-broker-origin, and idempotently retryable
+    - all eight lenses appear explicitly and unknowns yield actionable gaps
+    - proposal-only assurance files cannot alter workflow next, resume, or the ledger
+    - research never silently becomes verified authority
+    - representative runtime proof must match the current scenario and intent epoch
+    - a replacement process reconstructs exact intent, gaps, evidence bindings, and next action
+    - stale, wrong-profile, orphan, replayed, or tampered mutations append no partial authority
+
+  honest_boundary: >-
+    Forge proves that configured authority and current evidence satisfy admitted
+    governance. It cannot guarantee that all unknown unknowns were discovered,
+    and it does not infer physical human presence, reviewer independence, or
+    runtime integrity beyond the configured broker and evidence deployment.
