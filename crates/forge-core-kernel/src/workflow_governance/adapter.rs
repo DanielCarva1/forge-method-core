@@ -899,10 +899,35 @@ impl WorkflowGovernanceProjectAdapter {
             principal_registry_digest.as_deref(),
             Some(&broker_registry_digest),
         )?;
+        let base_assurance_projection = project_durable_assurance(&projection.records)?;
+        let assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
+            derive_governed_assurance_facts(
+                effective.document(),
+                effective.identity(),
+                &projection,
+                base,
+                &self.binding.project_root,
+                &guidance.snapshot_digest,
+                guidance.target,
+                current_now,
+                principal_registry_digest.as_deref(),
+                Some(&broker_registry_digest),
+            )?
+        } else {
+            GovernedAssuranceFacts {
+                target: guidance.target,
+                evidence: Vec::new(),
+                capabilities: Vec::new(),
+                decisions: Vec::new(),
+                waivers: Vec::new(),
+                action_packets: Vec::new(),
+            }
+        };
         let packet = authorization_action_packets(
             effective.document(),
             &guidance,
             &derived,
+            Some(&assurance_facts),
             principal_registry_digest,
             Some(broker_registry_digest.clone()),
         )?
