@@ -47,6 +47,7 @@ fn broker(app: &str, args: &[&str]) -> Value {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One chronological trust ceremony keeps every public lifecycle transition visible.
 fn operator_trusts_rotates_and_revokes_public_broker_keys_outside_project_state() {
     let parent = temp_root();
     let app = parent.join("app");

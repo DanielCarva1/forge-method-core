@@ -2696,7 +2696,7 @@ impl WorkflowGovernanceProjectAdapter {
             simulation: verified.simulation.clone(),
             authorization: WorkflowAuthorizationGuidance {
                 registry_setup: WorkflowAuthorizationRegistrySetup {
-                    principal_registry: registry_setup_status(&trusted_registry_digest),
+                    principal_registry: registry_setup_status(trusted_registry_digest.as_deref()),
                     broker_registry: trusted_broker_registry.setup,
                 },
                 setup_gaps: Vec::new(),
@@ -5118,7 +5118,7 @@ const fn readiness_target_label(target: ReadinessTarget) -> &'static str {
     }
 }
 
-fn registry_setup_status(digest: &Option<String>) -> WorkflowAuthorizationRegistrySetupStatus {
+fn registry_setup_status(digest: Option<&str>) -> WorkflowAuthorizationRegistrySetupStatus {
     if digest.is_some() {
         WorkflowAuthorizationRegistrySetupStatus::Ready
     } else {
@@ -5480,6 +5480,7 @@ mod tests {
         WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION,
     };
     use forge_core_store::workflow_action_replay::WorkflowActionReplayState;
+    use std::fmt::Write as _;
 
     fn temp_project(label: &str) -> (PathBuf, PathBuf) {
         let root =
@@ -5493,7 +5494,13 @@ mod tests {
     }
 
     fn hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+        bytes.iter().fold(
+            String::with_capacity(bytes.len().saturating_mul(2)),
+            |mut output, byte| {
+                write!(output, "{byte:02x}").expect("writing to String cannot fail");
+                output
+            },
+        )
     }
 
     fn install_runtime_broker_registry(
@@ -6187,7 +6194,7 @@ mod tests {
 
         let stale_packet = evidence_packet.clone();
         fs::write(root.join("README.md"), b"stale packet\n").expect("mutate project");
-        let stale = adapter.prepare_authorization(
+        let stale_result = adapter.prepare_authorization(
             &stale_packet.packet_digest,
             WorkflowAuthorizationClosedInput::Evidence {
                 outcome: WorkflowEvidenceOutcome::Pass,
@@ -6198,7 +6205,7 @@ mod tests {
             now,
         );
         assert!(matches!(
-            stale,
+            stale_result,
             Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
         ));
     }

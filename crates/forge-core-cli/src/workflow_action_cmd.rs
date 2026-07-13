@@ -79,11 +79,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Applicability,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_applicability(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_applicability(verified)
+            adapter.record_authorized_applicability(authorization)
         }
         PreparedWorkflowAuthorization::Capability { request, .. } => {
             let signed = crate::workflow_credential_cmd::sign_typed_request(
@@ -92,11 +92,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Capability,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_capability(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_capability(verified)
+            adapter.record_authorized_capability(authorization)
         }
         PreparedWorkflowAuthorization::Decision { request, .. } => {
             let signed = crate::workflow_credential_cmd::sign_typed_request(
@@ -105,11 +105,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Decision,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_decision(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_decision(verified)
+            adapter.record_authorized_decision(authorization)
         }
         PreparedWorkflowAuthorization::Evidence { request, .. } => {
             let signed = crate::workflow_credential_cmd::sign_typed_request(
@@ -118,11 +118,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Evidence,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_evidence(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_evidence(verified)
+            adapter.record_authorized_evidence(authorization)
         }
         PreparedWorkflowAuthorization::Signal { request, .. } => {
             let signed = crate::workflow_credential_cmd::sign_typed_request(
@@ -131,11 +131,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Signal,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_signal(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_signal(verified)
+            adapter.record_authorized_signal(authorization)
         }
         PreparedWorkflowAuthorization::Waiver { request, .. } => {
             let signed = crate::workflow_credential_cmd::sign_typed_request(
@@ -144,11 +144,11 @@ fn authorize(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(
                 WorkflowAuthorizationKind::Waiver,
                 serde_json::to_value(&request).map_err(serialize_request)?,
             )?;
-            let verified = signed
+            let authorization = signed
                 .registry
                 .authorize_workflow_waiver(&verifier, request, &signed.attestation)
                 .map_err(authority_rejected)?;
-            adapter.record_authorized_waiver(verified)
+            adapter.record_authorized_waiver(authorization)
         }
     }
     .map_err(|error| ExitError::failed(format!("workflow action commit rejected: {error}")))?;

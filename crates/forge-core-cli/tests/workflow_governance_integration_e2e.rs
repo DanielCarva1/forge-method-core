@@ -244,6 +244,7 @@ fn basis_digest(root: &Path, refs: &[String]) -> String {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One projection chain keeps next and packet CAS assertions auditable.
 fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let consumer = Consumer::new();
     let initialized = assert_ok(&consumer.run(&["init"]));
@@ -362,6 +363,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One public ceremony proves both local denial and permitted one-call commit.
 fn local_action_authorize_prepares_signs_and_commits_without_intermediate_authority_files() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
