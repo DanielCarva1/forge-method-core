@@ -204,6 +204,16 @@ fn merged_validation_root(label: &str) -> PathBuf {
             .join("fixtures")
             .join("domain-pack-lifecycle-v0"),
     );
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-learning-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-learning-v0"),
+    );
     // The ledger lives in the core repo's sibling sidecar via the Project Link;
     // fall back to a repo-local copy for repos that still ship it themselves.
     let ledger_source = [
