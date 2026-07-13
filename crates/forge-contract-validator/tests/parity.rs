@@ -88,6 +88,16 @@ fn legacy_validator_and_forge_core_cli_both_reject_unknown_source_id() {
         &source.join("docs").join("fixtures").join("domain-pack-v0"),
         &temp.join("docs").join("fixtures").join("domain-pack-v0"),
     );
+    copy_dir(
+        &source
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
+    );
     let synthetic_policy = temp
         .join("contracts")
         .join("policies")
@@ -282,6 +292,16 @@ fn copy_validation_tree(source: &Path, target: &Path) {
     copy_dir(
         &source.join("docs").join("fixtures").join("domain-pack-v0"),
         &target.join("docs").join("fixtures").join("domain-pack-v0"),
+    );
+    copy_dir(
+        &source
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
+        &target
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-lifecycle-v0"),
     );
     // completion contracts reference the append-only ledger; copy it so
     // cross-refs resolve. The core repo's runtime state (including the ledger)
