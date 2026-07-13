@@ -11,7 +11,7 @@
 use super::{
     admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
     domain_pack_generation_transition_event, evaluate_verified_workflow_governance,
-    load_admitted_workflow_governance_reviewed_release_registry,
+    load_admitted_workflow_governance_universal_assurance_release_registry,
     AdmittedEffectiveWorkflowGovernanceBundle, AdmittedWorkflowGovernanceRelease,
     AdmittedWorkflowGovernanceReleaseError, AdmittedWorkflowGovernanceReleaseRegistry,
     EffectiveWorkflowGovernanceBundleError, TrustedWorkflowGovernanceSnapshot,
@@ -107,6 +107,7 @@ const MAX_TRUSTED_REGISTRY_BYTES: u64 = 1024 * 1024;
 const WORKFLOW_AUTHORIZATION_ACTION_PACKET_SCHEMA_VERSION: &str =
     "workflow_authorization_action_packets_v1";
 const WORKFLOW_AUTHORIZATION_PREPARATION_TTL_SECONDS: u64 = 300;
+const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
 
 /// Canonical project binding used by every live governance operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -406,6 +407,14 @@ fn durable_assurance_blockers(
         .collect()
 }
 
+fn durable_assurance_is_enforced(bundle: &WorkflowGovernanceBundleDocument) -> bool {
+    bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .any(|policy| policy.id.0 == UNIVERSAL_ASSURANCE_POLICY_ID)
+}
+
 #[derive(Debug, Clone)]
 struct TrustedBrokerRegistryState {
     digest: Option<String>,
@@ -619,7 +628,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
         initialize_workflow_action_replay(&self.binding.state_root)?;
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let genesis = registry.genesis();
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
@@ -706,7 +715,7 @@ impl WorkflowGovernanceProjectAdapter {
     /// Returns a typed error when binding, recovery, or policy evaluation fails.
     pub fn next(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -737,7 +746,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         now: u64,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -790,7 +799,7 @@ impl WorkflowGovernanceProjectAdapter {
             .find(|candidate| candidate.packet_digest == packet_digest)
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
 
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -834,7 +843,7 @@ impl WorkflowGovernanceProjectAdapter {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
 
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1042,7 +1051,7 @@ impl WorkflowGovernanceProjectAdapter {
         if audit.project_id != self.binding.project_id {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1092,7 +1101,7 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn release_status(
         &self,
     ) -> Result<WorkflowGovernanceReleaseStatus, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1155,7 +1164,7 @@ impl WorkflowGovernanceProjectAdapter {
         expected_head_digest: &str,
         expected_snapshot_digest: &str,
     ) -> Result<WorkflowGovernanceReleaseUpgradeReceipt, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         if domain.has_active_generation() {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseRequired);
@@ -1330,7 +1339,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowApplicabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1416,7 +1425,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowCapabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1503,7 +1512,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowEvidenceAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1644,7 +1653,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowDecisionAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1764,7 +1773,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowWaiverAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1870,7 +1879,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         authorization: VerifiedWorkflowSignalAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -1966,7 +1975,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -2017,7 +2026,7 @@ impl WorkflowGovernanceProjectAdapter {
             ));
         }
         let now = unix_time()?;
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
@@ -2841,6 +2850,7 @@ impl WorkflowGovernanceProjectAdapter {
                 project_governed_durable_assurance(base, effective.document(), &assurance_facts)
             })
             .transpose()?;
+        let assurance_is_enforced = durable_assurance_is_enforced(effective.document());
         let applicability = derived.applicability.get(&selected.id).copied();
         let policy_guidance_status =
             if effective.is_domain_pack_degraded() || !boundary_rechecks.is_empty() {
@@ -2862,9 +2872,10 @@ impl WorkflowGovernanceProjectAdapter {
                     }
                 }
             };
-        let assurance_has_blockers = durable_assurance_projection
-            .as_ref()
-            .is_none_or(|projection| !projection.blocker_lenses.is_empty());
+        let assurance_has_blockers = assurance_is_enforced
+            && durable_assurance_projection
+                .as_ref()
+                .is_none_or(|projection| !projection.blocker_lenses.is_empty());
         let guidance_status = if assurance_has_blockers {
             WorkflowGovernanceGuidanceStatus::Blocked
         } else {
@@ -2978,11 +2989,12 @@ impl WorkflowGovernanceProjectAdapter {
                 &effective.identity().effective_runtime_bundle.bundle_digest,
                 Some(&final_projection.projection_digest),
             )?;
-            guidance.status = if final_projection.blocker_lenses.is_empty() {
-                policy_guidance_status
-            } else {
-                WorkflowGovernanceGuidanceStatus::Blocked
-            };
+            guidance.status =
+                if !assurance_is_enforced || final_projection.blocker_lenses.is_empty() {
+                    policy_guidance_status
+                } else {
+                    WorkflowGovernanceGuidanceStatus::Blocked
+                };
             guidance.durable_assurance.blockers = durable_assurance_blockers(&final_projection);
             guidance.durable_assurance.case_digest = final_case_digest;
             guidance.durable_assurance.projection = Some(final_projection);
@@ -3098,7 +3110,11 @@ impl WorkflowGovernanceProjectAdapter {
         } else {
             None
         };
-        if !phase_advance_allowed_by_assurance(governed_assurance.as_ref(), phase_done) {
+        if !phase_advance_allowed_by_assurance(
+            governed_assurance.as_ref(),
+            phase_done,
+            durable_assurance_is_enforced(effective.document()),
+        ) {
             return Ok(None);
         }
         let next = match current_phase_value {
@@ -3129,11 +3145,12 @@ impl WorkflowGovernanceProjectAdapter {
 fn phase_advance_allowed_by_assurance(
     assurance: Option<&DurableAssuranceProjection>,
     legacy_phase_done: bool,
+    assurance_is_enforced: bool,
 ) -> bool {
     if !legacy_phase_done {
         return false;
     }
-    assurance.is_some_and(|assurance| assurance.blocker_lenses.is_empty())
+    !assurance_is_enforced || assurance.is_some_and(|assurance| assurance.blocker_lenses.is_empty())
 }
 
 /// Prepared completion authority; opaque and intentionally non-Clone/non-serde.
@@ -7521,8 +7538,12 @@ mod tests {
             .all(|lens| lens.claim_status == DurableAssuranceEpistemicState::Unknown));
 
         assert!(
-            !phase_advance_allowed_by_assurance(Some(&assurance), true),
+            !phase_advance_allowed_by_assurance(Some(&assurance), true, true),
             "legacy phase completion cannot outrank eight unknown Assurance lenses"
+        );
+        assert!(
+            phase_advance_allowed_by_assurance(Some(&assurance), true, false),
+            "a historical bundle without the Universal Assurance policy must retain its admitted phase semantics"
         );
         assert_eq!(
             projection
@@ -7838,8 +7859,9 @@ mod tests {
             },
         )
         .expect("decision packet");
-        let release_registry = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("release registry");
+        let release_registry =
+            load_admitted_workflow_governance_universal_assurance_release_registry()
+                .expect("release registry");
         let domain = LockedWorkflowDomainPackContext::acquire(&state).expect("domain");
         let ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger");
         let projection = ledger.recover().expect("projection");
@@ -8077,8 +8099,9 @@ mod tests {
                 .entries
                 .len();
 
-        let release_registry = load_admitted_workflow_governance_reviewed_release_registry()
-            .expect("release registry");
+        let release_registry =
+            load_admitted_workflow_governance_universal_assurance_release_registry()
+                .expect("release registry");
         let domain = LockedWorkflowDomainPackContext::acquire(&state).expect("domain");
         let mut ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger");
         let projection = ledger.recover().expect("projection");
@@ -8250,7 +8273,7 @@ mod tests {
                 head_digest: records.last().map(|record| record.record_digest.clone()),
                 records,
             };
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
             .expect("admitted registry");
         let derive = |projection: &WorkflowGovernanceLedgerProjection, current_broker: &str| {
             derive_receipts(
@@ -8323,7 +8346,7 @@ mod tests {
     fn current_legacy_local_evidence_keeps_its_admitted_provider_semantics() {
         let (root, _) = temp_project("legacy-local-evidence-receipt");
         let snapshot = project_snapshot_digest(&root).expect("snapshot");
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
             .expect("admitted registry");
         let bundle = registry.genesis().document();
         let (policy_ref, claim_ref, evaluator) = bundle
@@ -8469,7 +8492,7 @@ mod tests {
         fs::write(root.join("new-domain-input.md"), b"new domain constraint\n")
             .expect("snapshot drift");
         let current_snapshot = project_snapshot_digest(&root).expect("current snapshot");
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
             .expect("admitted registry");
         let admitted = registry.genesis();
         let derived = derive_receipts(
@@ -8529,7 +8552,7 @@ mod tests {
 
         fs::write(root.join("README.md"), b"changed after completion\n").expect("snapshot drift");
         let current_snapshot = project_snapshot_digest(&root).expect("current snapshot");
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
             .expect("admitted registry");
         let admitted = registry.genesis();
         let derived = derive_receipts(

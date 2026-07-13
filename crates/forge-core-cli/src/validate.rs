@@ -1954,6 +1954,25 @@ const AGENT_NATIVE_CONTINUITY_V2_PROFILE: WorkflowReleaseV2ValidationProfile =
         release_count: 5,
         policy_count: 42,
         latest_release_id: "workflow-governance.release.agent-native-continuity-v0",
+        validate_trusted_tail: false,
+    };
+
+const UNIVERSAL_ASSURANCE_V2_PROFILE: WorkflowReleaseV2ValidationProfile =
+    WorkflowReleaseV2ValidationProfile {
+        review_index: "contracts/migration/workflow-universal-assurance-review-index-v0.yaml",
+        reviewer_registry:
+            "contracts/policies/workflow-release-reviewer-registry-universal-assurance-v0.yaml",
+        authorization:
+            "contracts/migration/workflow-universal-assurance-admission-authorization-v0.yaml",
+        registry:
+            "contracts/migration/workflow-governance-release-registry-universal-assurance-v0.yaml",
+        bundle: "contracts/workflow-governance/runtime-universal-assurance-v0.yaml",
+        independent_review:
+            "contracts/evidence/workflow-universal-assurance-independent-review-v0.yaml",
+        check_name: "workflow_release_v2_admission_universal_assurance",
+        release_count: 6,
+        policy_count: 43,
+        latest_release_id: "workflow-governance.release.universal-assurance-v0",
         validate_trusted_tail: true,
     };
 
@@ -1964,6 +1983,7 @@ fn validate_workflow_release_v2_admission(root: &Path, summary: &mut ValidateSum
         summary,
         &AGENT_NATIVE_CONTINUITY_V2_PROFILE,
     );
+    validate_workflow_release_v2_admission_profile(root, summary, &UNIVERSAL_ASSURANCE_V2_PROFILE);
 }
 
 fn validate_workflow_release_v2_admission_profile(
@@ -2072,7 +2092,8 @@ fn validate_workflow_release_v2_admission_profile(
         }
     }
     if profile.validate_trusted_tail {
-        match forge_core_kernel::load_admitted_workflow_governance_reviewed_release_registry() {
+        match forge_core_kernel::load_admitted_workflow_governance_universal_assurance_release_registry()
+        {
             Ok(registry) => {
                 let latest = registry.latest_release();
                 if registry.release_count() != profile.release_count

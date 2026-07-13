@@ -118,6 +118,7 @@ const EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2: &[EmbeddedWorkflowReleaseAdmissio
         ),
     },
 ];
+const REVIEWED_RELEASE_V2_ADMISSION_COUNT: usize = 2;
 
 /// Opaque repository-admitted policy bundle retained for P5c API compatibility.
 ///
@@ -535,7 +536,37 @@ fn load_admitted_workflow_governance_reviewed_release_registry_uncached(
         AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationInvalid(error.to_string())
     })?;
     let v1_registry = admit_reviewed_registry(input, capability)?;
-    admit_embedded_v2_release_chain(v1_registry, EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2)
+    admit_embedded_v2_release_chain(
+        v1_registry,
+        &EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[..REVIEWED_RELEASE_V2_ADMISSION_COUNT],
+    )
+}
+
+/// Admit the Universal Assurance successor on top of the frozen reviewed
+/// five-release authority surface.
+///
+/// Keeping this loader distinct preserves byte-bound P5d retirement evidence
+/// while giving current adapters an explicit six-release trusted tail. No
+/// caller can supply admission artifacts or choose a release.
+///
+/// # Errors
+/// Fails closed if either the reviewed prefix or the signed Universal
+/// Assurance append cannot be independently admitted.
+pub fn load_admitted_workflow_governance_universal_assurance_release_registry(
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    static ADMITTED: OnceLock<
+        Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError>,
+    > = OnceLock::new();
+    match ADMITTED.get_or_init(|| {
+        let reviewed = load_admitted_workflow_governance_reviewed_release_registry()?;
+        admit_embedded_v2_release_chain(
+            reviewed,
+            &EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[REVIEWED_RELEASE_V2_ADMISSION_COUNT..],
+        )
+    }) {
+        Ok(registry) => Ok(duplicate_admitted_registry(registry)),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 fn admit_embedded_v2_release_chain(
@@ -1765,7 +1796,7 @@ mod tests {
         assert_eq!(operational.catalog.len(), 68);
         assert_eq!(frozen.catalog.len(), 110);
 
-        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
             .expect("reviewed V1 plus three signed V2 releases");
         let assurance = registry
             .release_by_id(&StableId(
