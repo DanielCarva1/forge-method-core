@@ -207,6 +207,7 @@ pub fn collect_known_repo_paths_with_diagnostics(
     let root = root.as_ref();
     let mut collection = KnownRepoPathsCollection::default();
     collect_known_paths_recursive(root, &root.join("contracts"), &mut collection);
+    collect_frozen_workflow_logical_refs(root, &mut collection);
     collect_known_paths_recursive(
         root,
         &root
@@ -216,6 +217,27 @@ pub fn collect_known_repo_paths_with_diagnostics(
         &mut collection,
     );
     collection
+}
+
+/// Register the historical logical names preserved by the P5d.5 frozen
+/// catalog. These aliases are validation-only identities: the physical files
+/// remain under evidence and this does not restore them to operational routing.
+fn collect_frozen_workflow_logical_refs(root: &Path, collection: &mut KnownRepoPathsCollection) {
+    let archive = root.join("contracts/evidence/workflow-retirement/legacy-catalog");
+    let Ok(entries) = fs::read_dir(&archive) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("yaml") {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|value| value.to_str()) {
+            collection
+                .paths
+                .insert(format!("contracts/workflows/{name}"));
+        }
+    }
 }
 
 /// Append a single JSON record followed by a newline to a repo-relative

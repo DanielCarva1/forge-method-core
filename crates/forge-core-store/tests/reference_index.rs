@@ -375,6 +375,10 @@ fn store_known_paths_satisfy_current_generic_known_refs() {
     let known_paths = collect_known_repo_paths(&root);
     assert!(known_paths.contains("contracts"));
     assert!(known_paths.contains("docs/fixtures/operation-contract-v0"));
+    assert!(known_paths.contains("contracts/workflows/discover-intent.yaml"));
+    assert!(!root
+        .join("contracts/workflows/discover-intent.yaml")
+        .exists());
 
     let report = validate_yaml_known_repo_references(&collection.documents, &known_paths);
     assert_report_ok("known repo refs", report);
