@@ -180,9 +180,18 @@ impl CommandSpec {
     /// subcommand hints honest for command trees with real children.
     #[must_use = "iterators are lazy; consume the iterator to render concrete subcommand names"]
     pub fn concrete_subcommand_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        let mut seen = Vec::new();
         self.local_usage_lines()
             .filter_map(|line| line.split_whitespace().next())
             .filter(|token| is_concrete_subcommand_token(token))
+            .filter(move |token| {
+                if seen.contains(token) {
+                    false
+                } else {
+                    seen.push(*token);
+                    true
+                }
+            })
     }
 
     /// Iterate over local usage lines below a concrete subcommand path.
@@ -342,21 +351,29 @@ pub const COMMAND_ASSURANCE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::DefaultReadOnly,
 };
 
-/// P6 Domain Pack inspection, deterministic projection, and governed lifecycle
-/// surface. `trust-provision` mutates the external operator trust anchor only,
-/// `apply` activates project state, and `status`/`recover` may complete an
-/// interrupted crash-safe pointer replacement before returning a projection.
+/// P6 Domain Pack inspection, deterministic projection, governed learning, and
+/// lifecycle surface. Trust provisioning, reviewer rotation, and promotion
+/// mutate external monotonic anchors; `apply` activates project state; status
+/// commands may complete an interrupted crash-safe replacement before reading.
 pub const COMMAND_DOMAIN_PACK: CommandSpec = CommandSpec {
     name: "domain-pack",
     usage_lines: &[
         "       forge-core domain-pack validate --manifest-file <path> --content-file <path> [--artifact-root <path>] [--forge-core-version <semver>] [--json|--no-json]",
         "       forge-core domain-pack compose --request-file <path> [--artifact-root <path>] [--json|--no-json]",
         "       forge-core domain-pack resolve --request-file <path> --registry-file <path> [--json|--no-json]",
+        "       forge-core domain-pack learning capture --candidate-file <yaml> --state-root <.forge-method> [--json|--no-json]",
+        "       forge-core domain-pack learning status --state-root <.forge-method> [--json|--no-json]",
+        "       forge-core domain-pack learning evaluate --dossier-file <yaml> [--candidate-file <yaml>]... [--review-file <yaml>]... [--conflict-file <yaml>]... [--json|--no-json]",
+        "       forge-core domain-pack learning conflict-check --dossier-file <yaml> [--candidate-file <yaml>]... [--review-file <yaml>]... [--conflict-file <yaml>]... [--json|--no-json]",
+        "       forge-core domain-pack learning trust-provision --operator-root <dir> --reviewer-registry-file <yaml> --reviewed-registry-file <yaml> --project-root <dir> --state-root <.forge-method> --operator-acknowledge-trust-on-first-use I_UNDERSTAND_REVIEW_TRUST_ON_FIRST_USE [--json|--no-json]",
+        "       forge-core domain-pack learning reviewer-rotate --operator-root <dir> --reviewer-registry-file <current-yaml> --proposed-reviewer-registry-file <yaml> --project-root <dir> --state-root <.forge-method> [--json|--no-json]",
+        "       forge-core domain-pack learning registry-check --operator-root <dir> --reviewer-registry-file <yaml> --reviewed-registry-file <yaml> --project-root <dir> --state-root <.forge-method> [--json|--no-json]",
+        "       forge-core domain-pack learning promote --operator-root <dir> --reviewer-registry-file <yaml> --reviewed-registry-file <current-yaml> --proposed-registry-file <yaml> --dossier-file <yaml> --candidate-file <yaml> [--candidate-file <yaml>]... [--conflict-file <yaml>]... --decision-file <yaml> --authorization-file <yaml> --review-file <yaml> --review-file <yaml> --project-root <dir> --state-root <.forge-method> [--json|--no-json]",
         "       forge-core domain-pack trust-provision --operator-root <path> --trust-policy-file <path> --registry-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] --operator-acknowledge-trust-on-first-use I_UNDERSTAND_TRUST_ON_FIRST_USE [--json|--no-json]",
         "       forge-core domain-pack status [--state-root <.forge-method>] [--json|--no-json]",
         "       forge-core domain-pack recover [--state-root <.forge-method>] [--json|--no-json]",
-        "       forge-core domain-pack preflight --preflight-file <path> --trust-policy-file <path> --registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
-        "       forge-core domain-pack apply --preflight-file <path> --trust-policy-file <path> --registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack preflight --preflight-file <path> --trust-policy-file <path> --registry-file <path> --reviewer-registry-file <path> --reviewed-registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack apply --preflight-file <path> --trust-policy-file <path> --registry-file <path> --reviewer-registry-file <path> --reviewed-registry-file <path> --resolution-request-file <path> --composition-request-file <path> --trust-input-file <path> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
     ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -895,6 +912,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One table-driven assertion covers the complete public command registry.
     fn concrete_subcommand_helpers_project_claim_and_project_children() {
         assert_eq!(
             COMMAND_CLAIM
@@ -979,6 +997,7 @@ mod tests {
                 "validate",
                 "compose",
                 "resolve",
+                "learning",
                 "trust-provision",
                 "status",
                 "recover",

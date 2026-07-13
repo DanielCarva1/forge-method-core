@@ -5,11 +5,20 @@ use std::path::{Path, PathBuf};
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,
+    domain_pack_independent_review_digest, domain_pack_package_record_digest,
+    domain_pack_promotion_decision_digest, domain_pack_promotion_dossier_digest,
+    domain_pack_promotion_payload_digest, domain_pack_promotion_reviewer_key_fingerprint,
+    domain_pack_promotion_signing_bytes, domain_pack_publisher_signing_bytes,
     domain_pack_registry_signing_bytes, domain_pack_registry_snapshot_digest,
+    domain_pack_reviewed_registry_digest, domain_pack_reviewed_registry_entry_digest,
+    domain_pack_reviewed_registry_proposal_digest, domain_pack_reviewed_registry_signing_bytes,
+    domain_pack_reviewer_registry_digest, domain_pack_reviewer_registry_rotation_signing_bytes,
+    DOMAIN_PACK_PROMOTION_PAYLOAD_DOMAIN,
 };
 use forge_core_contracts::*;
 use forge_core_decisions::MAX_DOMAIN_PACK_RAW_DOCUMENT_BYTES;
+use forge_core_domain_pack_learning_store::candidate_self_digest;
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
@@ -75,6 +84,395 @@ fn write_oversized(path: &Path) {
         .expect("size oversized input");
 }
 
+#[allow(clippy::too_many_lines)] // Cohesive cryptographic graph sealed from one clock and key set.
+fn write_signed_learning_roots(operator_root: &Path) -> (PathBuf, PathBuf, PathBuf) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs();
+    let semantic_key = SigningKey::from_bytes(&[71_u8; 32]);
+    let authorizer_key = SigningKey::from_bytes(&[72_u8; 32]);
+    let reviewer_json = |id: &str, credential: &str, role: &str, domain: &str, key: &SigningKey| {
+        serde_json::json!({
+            "reviewer_id": id,
+            "credential_id": credential,
+            "public_key_hex": hex(key.verifying_key().as_bytes()),
+            "public_key_fingerprint": domain_pack_promotion_reviewer_key_fingerprint(key.verifying_key().as_bytes()),
+            "algorithm": "ed25519",
+            "roles": [role],
+            "independence_domains": [domain],
+            "status": "active",
+            "valid_from_unix": now.saturating_sub(60),
+            "valid_until_unix": now + 3_600
+        })
+    };
+    let mut reviewers: DomainPackReviewerRegistryDocument = serde_json::from_value(
+        serde_json::json!({
+            "schema_version": "0.3",
+            "domain_pack_reviewer_registry": {
+                "registry_id": "reviewers.cli.e2e",
+                "audience": "forge-domain-pack-runtime",
+                "generation": 0,
+                "previous_registry_digest": null,
+                "trust_policy_digest": format!("{:x}", Sha256::digest(b"cli-learning-trust")),
+                "signature_threshold": 2,
+                "reviewers": [
+                    reviewer_json("principal.semantic", "credential.semantic", "domain_expert", "domain.semantic", &semantic_key),
+                    reviewer_json("principal.authorizer", "credential.authorizer", "registry_authorizer", "domain.registry", &authorizer_key)
+                ],
+                "rotation_signatures": [
+                    {"signer_id":"principal.semantic","credential_id":"credential.semantic","predecessor_registry_digest":null,"payload_digest":"0".repeat(64),"algorithm":"ed25519","signature":"00","signed_at_unix":now},
+                    {"signer_id":"principal.authorizer","credential_id":"credential.authorizer","predecessor_registry_digest":null,"payload_digest":"1".repeat(64),"algorithm":"ed25519","signature":"11","signed_at_unix":now}
+                ],
+                "registry_digest": "2".repeat(64)
+            }
+        }),
+    )
+    .expect("reviewer registry");
+    reviewers.domain_pack_reviewer_registry.registry_digest =
+        domain_pack_reviewer_registry_digest(&reviewers).expect("reviewer digest");
+    let predecessor_digest = reviewers
+        .domain_pack_reviewer_registry
+        .registry_digest
+        .clone();
+    let mut successor = reviewers.clone();
+    successor.domain_pack_reviewer_registry.generation = 1;
+    successor
+        .domain_pack_reviewer_registry
+        .previous_registry_digest = Some(predecessor_digest.clone());
+    for signature in &mut successor.domain_pack_reviewer_registry.rotation_signatures {
+        signature.predecessor_registry_digest = Some(predecessor_digest.clone());
+        signature.payload_digest = "6".repeat(64);
+        signature.signature = "00".repeat(64);
+        signature.signed_at_unix = now;
+    }
+    let successor_digest =
+        domain_pack_reviewer_registry_digest(&successor).expect("successor digest");
+    successor
+        .domain_pack_reviewer_registry
+        .registry_digest
+        .clone_from(&successor_digest);
+    for (index, key) in [&semantic_key, &authorizer_key].into_iter().enumerate() {
+        successor.domain_pack_reviewer_registry.rotation_signatures[index]
+            .payload_digest
+            .clone_from(&successor_digest);
+        let signed = successor.domain_pack_reviewer_registry.rotation_signatures[index].clone();
+        let bytes = domain_pack_reviewer_registry_rotation_signing_bytes(&successor, &signed)
+            .expect("reviewer rotation signing bytes");
+        successor.domain_pack_reviewer_registry.rotation_signatures[index].signature =
+            hex(&key.sign(&bytes).to_bytes());
+    }
+
+    let signature_stubs = serde_json::json!([
+        {"reviewer_id":"principal.semantic","credential_id":"credential.semantic","role":"domain_expert","algorithm":"ed25519","payload_digest":"3".repeat(64),"signature":"00".repeat(64),"signed_at_unix":now},
+        {"reviewer_id":"principal.authorizer","credential_id":"credential.authorizer","role":"registry_authorizer","algorithm":"ed25519","payload_digest":"4".repeat(64),"signature":"00".repeat(64),"signed_at_unix":now}
+    ]);
+    let mut reviewed: DomainPackReviewedRegistryDocument =
+        serde_json::from_value(serde_json::json!({
+            "schema_version": "0.3",
+            "domain_pack_reviewed_registry": {
+                "registry_id": "reviewed.cli.e2e",
+                "audience": "forge-domain-pack-runtime",
+                "generation": 0,
+                "previous_registry_digest": null,
+                "entries": [],
+                "snapshot_signatures": signature_stubs,
+                "registry_digest": "5".repeat(64)
+            }
+        }))
+        .expect("reviewed registry");
+    let snapshot_digest = domain_pack_reviewed_registry_digest(&reviewed).expect("reviewed digest");
+    reviewed
+        .domain_pack_reviewed_registry
+        .registry_digest
+        .clone_from(&snapshot_digest);
+    for (index, key) in [&semantic_key, &authorizer_key].into_iter().enumerate() {
+        reviewed.domain_pack_reviewed_registry.snapshot_signatures[index]
+            .payload_digest
+            .clone_from(&snapshot_digest);
+        let signed = reviewed.domain_pack_reviewed_registry.snapshot_signatures[index].clone();
+        let bytes = domain_pack_reviewed_registry_signing_bytes(&reviewed, &signed)
+            .expect("reviewed signing bytes");
+        reviewed.domain_pack_reviewed_registry.snapshot_signatures[index].signature =
+            hex(&key.sign(&bytes).to_bytes());
+    }
+
+    let reviewer_path = operator_root.join("reviewers.yaml");
+    let reviewed_path = operator_root.join("reviewed.yaml");
+    let successor_path = operator_root.join("reviewers-next.yaml");
+    fs::write(
+        &reviewer_path,
+        yaml_serde::to_string(&reviewers).expect("reviewers yaml"),
+    )
+    .expect("write reviewers");
+    fs::write(
+        &successor_path,
+        yaml_serde::to_string(&successor).expect("successor yaml"),
+    )
+    .expect("write successor");
+    fs::write(
+        &reviewed_path,
+        yaml_serde::to_string(&reviewed).expect("reviewed yaml"),
+    )
+    .expect("write reviewed");
+    (reviewer_path, reviewed_path, successor_path)
+}
+
+struct PromotionGraphPaths {
+    proposed: PathBuf,
+    candidate: PathBuf,
+    dossier: PathBuf,
+    reviews: [PathBuf; 2],
+    decision: PathBuf,
+    authorization: PathBuf,
+}
+
+fn learning_hash(label: &str) -> String {
+    format!("{:x}", Sha256::digest(label.as_bytes()))
+}
+
+fn supply_hash(label: &str) -> String {
+    format!("sha256:{}", learning_hash(label))
+}
+
+fn write_typed_yaml<T: Serialize>(root: &Path, name: &str, value: &T) -> PathBuf {
+    let path = root.join(name);
+    fs::write(
+        &path,
+        yaml_serde::to_string(value).expect("typed fixture YAML"),
+    )
+    .expect("write typed fixture");
+    path
+}
+
+#[allow(clippy::too_many_lines)] // One cryptographically sealed promotion graph avoids fake CLI authority.
+fn write_promotable_learning_graph(
+    operator_root: &Path,
+    reviewer_path: &Path,
+    current_path: &Path,
+) -> PromotionGraphPaths {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs();
+    let issued = now.saturating_sub(60);
+    let expires = now + 3_600;
+    let semantic_key = SigningKey::from_bytes(&[71_u8; 32]);
+    let authorizer_key = SigningKey::from_bytes(&[72_u8; 32]);
+    let reviewer_registry: DomainPackReviewerRegistryDocument = yaml_serde::from_str(
+        &fs::read_to_string(reviewer_path).expect("reviewer registry fixture"),
+    )
+    .expect("typed reviewer registry");
+    let current: DomainPackReviewedRegistryDocument =
+        yaml_serde::from_str(&fs::read_to_string(current_path).expect("reviewed registry fixture"))
+            .expect("typed reviewed registry");
+    let current_digest = current
+        .domain_pack_reviewed_registry
+        .registry_digest
+        .clone();
+    let signature_stubs = || {
+        serde_json::json!([
+            {"reviewer_id":"principal.semantic","credential_id":"credential.semantic","role":"domain_expert","algorithm":"ed25519","payload_digest":learning_hash("pending"),"signature":"00".repeat(64),"signed_at_unix":now},
+            {"reviewer_id":"principal.authorizer","credential_id":"credential.authorizer","role":"registry_authorizer","algorithm":"ed25519","payload_digest":learning_hash("pending"),"signature":"00".repeat(64),"signed_at_unix":now}
+        ])
+    };
+    let proposed_value = serde_json::json!({
+        "schema_version":"0.3", "domain_pack_reviewed_registry": {
+            "registry_id":"reviewed.cli.e2e", "audience":"forge-domain-pack-runtime", "generation":1,
+            "previous_registry_digest":current_digest, "entries":[{
+                "pack":{"publisher":"publisher.acme","name":"safety","version":"1.0.0"},
+                "package_digest":supply_hash("package"), "supply_chain_record_digest":supply_hash("record"),
+                "manifest_digest":supply_hash("manifest"), "content_digest":supply_hash("content"),
+                "license_digest":supply_hash("license"), "fixture_digests":[supply_hash("fixture-canonical")],
+                "stage":"reviewed", "eligibility":"eligible_reviewed",
+                "promotion_decision_digest":"", "authorization_digest":"",
+                "independent_review_digests":[],
+                "compatibility":{"forge_core_requirement":">=0.7.0","pack_schema_requirement":"^0.2","evaluator_protocol_versions":["1"],"predecessor_content_digests":[],"breaking_change":false,"migration_evidence_refs":[]},
+                "deprecation":null,"revocation":null,"supersession":null,"entry_digest":""
+            }], "snapshot_signatures":signature_stubs(), "registry_digest":""
+        }
+    });
+    let mut proposed: DomainPackReviewedRegistryDocument =
+        serde_json::from_value(proposed_value).expect("reviewed successor");
+
+    let mut candidate: DomainPackLocalLearningCandidateDocument = serde_json::from_value(
+        serde_json::json!({
+            "schema_version":"0.3", "domain_pack_local_learning_candidate": {
+                "candidate_id":"candidate.safety", "authority":"non_authoritative_observation",
+                "target":{"pack":{"publisher":"publisher.acme","name":"safety"},"base_version":"1.0.0","contribution_ref":null,"proposed_namespace":"guidance.safety"},
+                "assertion":"the safety guidance improves the exact evaluator outcome",
+                "provenance":{"source_kind":"evaluator_observation","source_ref":"runs/safety.yaml","source_digest":learning_hash("candidate-source"),"captured_by":"principal.capture","capture_run_id":"capture.safety","chat_transcript_ref":null},
+                "evidence":[{"evidence_id":"evidence.candidate","kind":"evaluation_run","artifact":{"artifact_ref":"evidence/candidate.yaml","raw_sha256":supply_hash("candidate-raw"),"canonical_sha256":supply_hash("candidate-canonical")},"producer":"principal.evidence","produced_at_unix":issued,"provenance_digest":learning_hash("candidate-provenance")}],
+                "observed_at_unix":issued,"candidate_digest":learning_hash("pending")
+            }
+        }),
+    )
+    .expect("local candidate");
+    candidate
+        .domain_pack_local_learning_candidate
+        .candidate_digest = candidate_self_digest(&candidate).expect("candidate self digest");
+    let candidate_digest = candidate
+        .domain_pack_local_learning_candidate
+        .candidate_digest
+        .clone();
+
+    let mut dossier: DomainPackPromotionDossierDocument = serde_json::from_value(
+        serde_json::json!({
+            "schema_version":"0.3", "domain_pack_promotion_dossier": {
+                "dossier_id":"dossier.safety", "authority":"candidate_only",
+                "pack":{"publisher":"publisher.acme","name":"safety","version":"1.0.0"},
+                "package_digest":supply_hash("package"),"manifest_digest":supply_hash("manifest"),"content_digest":supply_hash("content"),"license_digest":supply_hash("license"),
+                "transition":{"from":"validated","to":"reviewed"}, "candidate_digests":[candidate_digest],
+                "prior_promotion_record_digest":null,
+                "evidence":[{"evidence_id":"evidence.ablation","kind":"ablation","artifact":{"artifact_ref":"evidence/ablation.yaml","raw_sha256":supply_hash("raw-evidence"),"canonical_sha256":supply_hash("canonical-evidence")},"producer":"principal.evidence","produced_at_unix":issued,"provenance_digest":learning_hash("provenance")}],
+                "evaluator_runs":[{"run_id":"run.ablation","evaluator_ref":"evaluator.ablation","evaluator_principal":"principal.evaluator","evaluator_digest":learning_hash("evaluator"),"fixture_set_digest":learning_hash("fixtures"),"protocol_version":"1","comparison":{"method":"ablation","baseline_outcome_digest":learning_hash("baseline"),"candidate_outcome_digest":learning_hash("candidate-outcome"),"verdict":"improved","regression_finding_refs":[],"unknown_gap_refs":[],"rationale":"improved with no regression"},"strong_judge_proof":null,"evidence_ref":"evidence.ablation","run_digest":learning_hash("run")}],
+                "fixture_bindings":[{"fixture_id":"fixture.one","fixture_ref":"fixtures/one.yaml","producer":"principal.fixture","raw_sha256":supply_hash("fixture-raw"),"canonical_sha256":supply_hash("fixture-canonical"),"expected_outcome_digest":learning_hash("expected"),"provenance_digest":learning_hash("fixture-provenance")}],
+                "provenance":{"authored_by":["principal.author"],"source_repository":"https://example.invalid/repo","source_revision":"abc123","source_tree_digest":learning_hash("tree"),"build_recipe_digest":learning_hash("build"),"generated_artifact_refs":[]},
+                "conflict_record_digests":[],"open_gap_refs":[],"dossier_digest":learning_hash("pending")
+            }
+        }),
+    )
+    .expect("promotion dossier");
+    dossier.domain_pack_promotion_dossier.dossier_digest =
+        domain_pack_promotion_dossier_digest(&dossier).expect("dossier digest");
+    let dossier_digest = dossier.domain_pack_promotion_dossier.dossier_digest.clone();
+    let reviewer_digest = reviewer_registry
+        .domain_pack_reviewer_registry
+        .registry_digest
+        .clone();
+    let reviews = [
+        (
+            "review.semantic",
+            "principal.semantic",
+            "credential.semantic",
+            "domain_expert",
+        ),
+        (
+            "review.authorizer",
+            "principal.authorizer",
+            "credential.authorizer",
+            "registry_authorizer",
+        ),
+    ]
+    .into_iter()
+    .map(|(id, principal, credential, role)| {
+        let mut review: DomainPackIndependentReviewDocument = serde_json::from_value(
+            serde_json::json!({
+                "schema_version":"0.3", "domain_pack_independent_review": {
+                    "review_id":id,"authority":"review_evidence_only","dossier_digest":dossier_digest,
+                    "reviewer_id":principal,"reviewer_role":role,"reviewer_registry_digest":reviewer_digest,
+                    "credential_id":credential,"independence":{"kind":"independent","attestation":"independent"},
+                    "decision":"approve","findings":[],"signed_subject_digest":dossier_digest,
+                    "issued_at_unix":issued,"expires_at_unix":expires,"review_digest":learning_hash("pending")
+                }
+            }),
+        )
+        .expect("independent review");
+        review.domain_pack_independent_review.review_digest =
+            domain_pack_independent_review_digest(&review).expect("review digest");
+        review
+    })
+    .collect::<Vec<_>>();
+    let review_digests = reviews
+        .iter()
+        .map(|review| review.domain_pack_independent_review.review_digest.clone())
+        .collect::<Vec<_>>();
+    proposed.domain_pack_reviewed_registry.entries[0]
+        .independent_review_digests
+        .clone_from(&review_digests);
+    let proposed_binding_digest =
+        domain_pack_reviewed_registry_proposal_digest(&proposed).expect("reviewed proposal digest");
+    let mut decision: DomainPackPromotionDecisionDocument = serde_json::from_value(
+        serde_json::json!({
+            "schema_version":"0.3", "domain_pack_promotion_decision": {
+                "decision_id":"decision.safety","authority":"candidate_decision_only","dossier_digest":dossier_digest,
+                "transition":{"from":"validated","to":"reviewed"},"decision":"approve",
+                "independent_review_digests":review_digests,"resolved_conflict_digests":[],
+                "registry_predecessor_digest":current_digest,"proposed_registry_digest":proposed_binding_digest,
+                "rationale":"approved exact promotion","decided_at_unix":now,"decision_digest":learning_hash("pending")
+            }
+        }),
+    )
+    .expect("promotion decision");
+    decision.domain_pack_promotion_decision.decision_digest =
+        domain_pack_promotion_decision_digest(&decision).expect("decision digest");
+    let mut authorization: DomainPackPromotionAuthorizationDocument = serde_json::from_value(
+        serde_json::json!({
+            "schema_version":"0.3", "domain_pack_promotion_authorization": {
+                "authority":"candidate_authorization", "payload": {
+                    "authorization_id":"authorization.safety","dossier_digest":dossier_digest,
+                    "decision_digest":decision.domain_pack_promotion_decision.decision_digest,
+                    "independent_review_digests":review_digests,"reviewer_registry_digest":reviewer_digest,
+                    "current_reviewed_registry_digest":current_digest,"proposed_reviewed_registry_digest":proposed_binding_digest,
+                    "transition":{"from":"validated","to":"reviewed"},"audience":"forge-domain-pack-runtime",
+                    "domain":DOMAIN_PACK_PROMOTION_PAYLOAD_DOMAIN,"nonce":"nonce-cli-e2e","issued_at_unix":issued,"expires_at_unix":expires
+                }, "signatures":[
+                    {"reviewer_id":"principal.semantic","credential_id":"credential.semantic","role":"domain_expert","algorithm":"ed25519","payload_digest":learning_hash("pending"),"signature":"00".repeat(64),"signed_at_unix":now},
+                    {"reviewer_id":"principal.authorizer","credential_id":"credential.authorizer","role":"registry_authorizer","algorithm":"ed25519","payload_digest":learning_hash("pending"),"signature":"00".repeat(64),"signed_at_unix":now}
+                ]
+            }
+        }),
+    )
+    .expect("promotion authorization");
+    let payload_digest = domain_pack_promotion_payload_digest(
+        &authorization.domain_pack_promotion_authorization.payload,
+    )
+    .expect("authorization payload digest");
+    for (index, signed) in authorization
+        .domain_pack_promotion_authorization
+        .signatures
+        .iter_mut()
+        .enumerate()
+    {
+        signed.payload_digest.clone_from(&payload_digest);
+        let bytes = domain_pack_promotion_signing_bytes(
+            &authorization.domain_pack_promotion_authorization.payload,
+            signed,
+        )
+        .expect("promotion signing bytes");
+        signed.signature = hex(&[&semantic_key, &authorizer_key][index]
+            .sign(&bytes)
+            .to_bytes());
+    }
+    let promoted_entry = &mut proposed.domain_pack_reviewed_registry.entries[0];
+    promoted_entry
+        .promotion_decision_digest
+        .clone_from(&decision.domain_pack_promotion_decision.decision_digest);
+    promoted_entry
+        .authorization_digest
+        .clone_from(&payload_digest);
+    promoted_entry.entry_digest =
+        domain_pack_reviewed_registry_entry_digest(promoted_entry).expect("reviewed entry digest");
+    let final_registry_digest =
+        domain_pack_reviewed_registry_digest(&proposed).expect("final reviewed registry digest");
+    proposed
+        .domain_pack_reviewed_registry
+        .registry_digest
+        .clone_from(&final_registry_digest);
+    for (index, key) in [&semantic_key, &authorizer_key].into_iter().enumerate() {
+        proposed.domain_pack_reviewed_registry.snapshot_signatures[index]
+            .payload_digest
+            .clone_from(&final_registry_digest);
+        let signed = proposed.domain_pack_reviewed_registry.snapshot_signatures[index].clone();
+        let bytes = domain_pack_reviewed_registry_signing_bytes(&proposed, &signed)
+            .expect("final snapshot signing bytes");
+        proposed.domain_pack_reviewed_registry.snapshot_signatures[index].signature =
+            hex(&key.sign(&bytes).to_bytes());
+    }
+
+    PromotionGraphPaths {
+        proposed: write_typed_yaml(operator_root, "reviewed-next.yaml", &proposed),
+        candidate: write_typed_yaml(operator_root, "candidate.yaml", &candidate),
+        dossier: write_typed_yaml(operator_root, "dossier.yaml", &dossier),
+        reviews: [
+            write_typed_yaml(operator_root, "review-semantic.yaml", &reviews[0]),
+            write_typed_yaml(operator_root, "review-authorizer.yaml", &reviews[1]),
+        ],
+        decision: write_typed_yaml(operator_root, "decision.yaml", &decision),
+        authorization: write_typed_yaml(operator_root, "authorization.yaml", &authorization),
+    }
+}
+
 fn assert_too_large(temp: &Path, args: &[&str], label: &str) {
     let output = Command::cargo_bin("forge-core")
         .expect("forge-core binary")
@@ -132,6 +530,356 @@ fn remove_dir_link(link: &Path) {
 
     #[cfg(not(any(windows, unix)))]
     panic!("directory-link escape tests require Windows junctions or Unix symlinks");
+}
+
+#[test]
+fn domain_pack_learning_help_exposes_governed_journey_without_caller_time() {
+    let output = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(["domain-pack", "learning", "--help"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8_lossy(&output);
+    for command in [
+        "learning capture",
+        "learning status",
+        "learning evaluate",
+        "learning conflict-check",
+        "learning trust-provision",
+        "learning reviewer-rotate",
+        "learning registry-check",
+        "learning promote",
+    ] {
+        assert!(stdout.contains(command), "missing {command}: {stdout}");
+    }
+    assert!(
+        !stdout.contains("--now-unix"),
+        "caller time leaked: {stdout}"
+    );
+    assert!(
+        stdout.contains("--candidate-file <yaml> [--candidate-file <yaml>]...")
+            && stdout.contains("[--conflict-file <yaml>]..."),
+        "promotion exact-graph inputs missing from help: {stdout}"
+    );
+}
+
+#[test]
+fn domain_pack_learning_capture_then_status_remains_non_authoritative() {
+    let temp = fresh_temp("learning-capture-status");
+    let state = temp.join("state");
+    let fixture = repo_root()
+        .join("docs/fixtures/domain-pack-learning-v0/valid/local-learning-candidate.yaml");
+    let mut candidate: DomainPackLocalLearningCandidateDocument =
+        yaml_serde::from_str(&fs::read_to_string(fixture).expect("candidate fixture"))
+            .expect("typed candidate");
+    candidate
+        .domain_pack_local_learning_candidate
+        .candidate_digest = candidate_self_digest(&candidate).expect("candidate self digest");
+    let candidate_path = temp.join("candidate.yaml");
+    fs::write(
+        &candidate_path,
+        yaml_serde::to_string(&candidate).expect("candidate yaml"),
+    )
+    .expect("write candidate");
+
+    let capture = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "capture",
+            "--candidate-file",
+            candidate_path.to_str().expect("candidate path"),
+            "--state-root",
+            state.to_str().expect("state path"),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(
+        String::from_utf8_lossy(&capture).contains("non_authoritative"),
+        "capture must disclose authority boundary"
+    );
+
+    let status = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "status",
+            "--state-root",
+            state.to_str().expect("state path"),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8_lossy(&status);
+    assert!(stdout.contains("learning.game-loop.1"), "{stdout}");
+    assert!(stdout.contains("not semantic review"), "{stdout}");
+    fs::remove_dir_all(temp).expect("remove temp");
+}
+
+#[test]
+fn domain_pack_learning_trust_provision_requires_exact_operator_acknowledgement() {
+    let stderr = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(["domain-pack", "learning", "trust-provision"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(
+        String::from_utf8_lossy(&stderr).contains("I_UNDERSTAND_REVIEW_TRUST_ON_FIRST_USE"),
+        "missing explicit trust acknowledgement gate"
+    );
+}
+
+#[test]
+fn domain_pack_learning_reviewer_rotate_rejects_caller_authored_time() {
+    let stderr = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "reviewer-rotate",
+            "--now-unix",
+            "1783900000",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(stderr.contains("usage:"), "unexpected error: {stderr}");
+    assert!(
+        stderr.contains("caller-authored time is forbidden"),
+        "trusted-time boundary missing: {stderr}"
+    );
+}
+
+#[test]
+fn domain_pack_learning_promote_blocks_an_incomplete_candidate_graph() {
+    let stderr = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(["domain-pack", "learning", "promote"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(stderr.contains("requires --candidate-file"), "{stderr}");
+    assert!(stderr.contains("exact promotion graph"), "{stderr}");
+}
+
+#[test]
+fn domain_pack_learning_provisions_one_atomic_head_then_freshly_checks_registry() {
+    let temp = fresh_temp("learning-trust-registry-check");
+    let operator = temp.join("operator");
+    let project = temp.join("project");
+    let state = temp.join("state");
+    fs::create_dir_all(&operator).expect("operator root");
+    fs::create_dir_all(&project).expect("project root");
+    fs::create_dir_all(&state).expect("state root");
+    let (reviewers, reviewed, successor) = write_signed_learning_roots(&operator);
+    let common = [
+        "--operator-root",
+        operator.to_str().expect("operator path"),
+        "--reviewer-registry-file",
+        reviewers.to_str().expect("reviewers path"),
+        "--reviewed-registry-file",
+        reviewed.to_str().expect("reviewed path"),
+        "--project-root",
+        project.to_str().expect("project path"),
+        "--state-root",
+        state.to_str().expect("state path"),
+    ];
+    let mut provision_args = vec!["domain-pack", "learning", "trust-provision"];
+    provision_args.extend(common);
+    provision_args.extend([
+        "--operator-acknowledge-trust-on-first-use",
+        "I_UNDERSTAND_REVIEW_TRUST_ON_FIRST_USE",
+    ]);
+    Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(provision_args)
+        .assert()
+        .success();
+    assert!(operator
+        .join(".forge-domain-pack-learning-anchor.yaml")
+        .is_file());
+    assert!(!operator
+        .join(".forge-domain-pack-reviewer-anchor.yaml")
+        .exists());
+    assert!(!operator
+        .join(".forge-domain-pack-reviewed-anchor.yaml")
+        .exists());
+
+    let mut check_args = vec!["domain-pack", "learning", "registry-check"];
+    check_args.extend(common);
+    let output = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(check_args)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8_lossy(&output);
+    assert!(
+        stdout.contains("fresh exact cryptographic replay"),
+        "{stdout}"
+    );
+
+    let rotation = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "reviewer-rotate",
+            "--operator-root",
+            operator.to_str().expect("operator path"),
+            "--reviewer-registry-file",
+            reviewers.to_str().expect("reviewers path"),
+            "--proposed-reviewer-registry-file",
+            successor.to_str().expect("successor path"),
+            "--project-root",
+            project.to_str().expect("project path"),
+            "--state-root",
+            state.to_str().expect("state path"),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rotation = String::from_utf8_lossy(&rotation);
+    let rotation_json: serde_json::Value =
+        serde_json::from_str(&rotation).expect("rotation JSON envelope");
+    assert_eq!(rotation_json["data"]["generation"], 1);
+    assert!(rotation.contains("predecessor-signed"), "{rotation}");
+    fs::remove_dir_all(temp).expect("remove temp");
+}
+
+#[test]
+fn domain_pack_lifecycle_supply_only_inputs_are_blocked_without_reviewed_authority() {
+    let stderr = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "preflight",
+            "--preflight-file",
+            "preflight.yaml",
+            "--trust-policy-file",
+            "trust.yaml",
+            "--registry-file",
+            "supply.yaml",
+            "--resolution-request-file",
+            "resolution.yaml",
+            "--composition-request-file",
+            "composition.yaml",
+            "--trust-input-file",
+            "trust-input.yaml",
+            "--project-root",
+            ".",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(stderr.contains("--reviewer-registry-file"), "{stderr}");
+    assert!(stderr.contains("--reviewed-registry-file"), "{stderr}");
+}
+
+#[test]
+fn domain_pack_learning_promote_consumes_the_complete_exact_graph() {
+    let temp = fresh_temp("learning-promote-exact-graph");
+    let operator = temp.join("operator");
+    let project = temp.join("project");
+    let state = temp.join("state");
+    fs::create_dir_all(&operator).expect("operator root");
+    fs::create_dir_all(&project).expect("project root");
+    fs::create_dir_all(&state).expect("state root");
+    let (reviewers, reviewed, _) = write_signed_learning_roots(&operator);
+    let graph = write_promotable_learning_graph(&operator, &reviewers, &reviewed);
+
+    Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "trust-provision",
+            "--operator-root",
+            operator.to_str().expect("operator path"),
+            "--reviewer-registry-file",
+            reviewers.to_str().expect("reviewers path"),
+            "--reviewed-registry-file",
+            reviewed.to_str().expect("reviewed path"),
+            "--project-root",
+            project.to_str().expect("project path"),
+            "--state-root",
+            state.to_str().expect("state path"),
+            "--operator-acknowledge-trust-on-first-use",
+            "I_UNDERSTAND_REVIEW_TRUST_ON_FIRST_USE",
+        ])
+        .assert()
+        .success();
+
+    let output = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "domain-pack",
+            "learning",
+            "promote",
+            "--operator-root",
+            operator.to_str().expect("operator path"),
+            "--reviewer-registry-file",
+            reviewers.to_str().expect("reviewers path"),
+            "--reviewed-registry-file",
+            reviewed.to_str().expect("reviewed path"),
+            "--proposed-registry-file",
+            graph.proposed.to_str().expect("proposed path"),
+            "--dossier-file",
+            graph.dossier.to_str().expect("dossier path"),
+            "--candidate-file",
+            graph.candidate.to_str().expect("candidate path"),
+            "--decision-file",
+            graph.decision.to_str().expect("decision path"),
+            "--authorization-file",
+            graph.authorization.to_str().expect("authorization path"),
+            "--review-file",
+            graph.reviews[0].to_str().expect("semantic review path"),
+            "--review-file",
+            graph.reviews[1].to_str().expect("authorizer review path"),
+            "--project-root",
+            project.to_str().expect("project path"),
+            "--state-root",
+            state.to_str().expect("state path"),
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let envelope: serde_json::Value =
+        serde_json::from_slice(&output).expect("promotion JSON envelope");
+    assert_eq!(envelope["data"]["generation"], 1);
+    assert_eq!(
+        envelope["data"]["boundary"],
+        "opaque dual-reviewed authority consumed under retained operator lock and monotonic CAS"
+    );
+    fs::remove_dir_all(temp).expect("remove temp");
 }
 
 fn digest(seed: u64) -> String {

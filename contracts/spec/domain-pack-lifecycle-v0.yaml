@@ -1,4 +1,4 @@
-schema_version: "0.2"
+schema_version: "0.3"
 domain_pack_lifecycle_spec:
   id: "spec.domain-pack-lifecycle-v0"
   status: "implementation"
@@ -10,15 +10,15 @@ domain_pack_lifecycle_spec:
     serialized_documents: "evidence_and_requests_only"
     activation_authority: "opaque_kernel_preflight_consumed_by_domain_pack_tcb"
     universal_core: "sealed_and_unchanged"
-    semantic_review: "deferred_to_p6c"
-    external_execution: "denied_in_p6b"
+    semantic_review: "opaque_reviewed_registry_required_for_activation"
+    external_execution: "denied_by_default"
     rollback_protection: >-
       Local crash recovery, hash-chain continuity, and an operator-protected
       monotonic registry anchor are enforced. An old still-valid registry
       snapshot, same-generation fork, or skipped generation cannot mint the
       opaque activation capability.
   schema_families:
-    version: "0.2"
+    version: "0.3"
     roots:
       - "domain_pack_supply_chain_registry"
       - "domain_pack_trust_policy"
@@ -122,9 +122,11 @@ domain_pack_lifecycle_spec:
       capability gaps. Forge must never attempt the evaluator or Adapter.
   exact_lock:
     content: >-
-      Project, sealed core, persistent requirements, roots, supply-chain/trust/
-      capability/sandbox policy digests, exact ordered packages, resolution and
-      composition digests, verified built-in bindings, and unresolved gaps.
+      Project, sealed core, persistent requirements, roots, supply-chain,
+      reviewer-registry, reviewed-registry, trust, capability, and sandbox
+      policy digests; exact ordered packages with independent source and
+      semantic assurance; resolution/composition digests; verified built-in
+      bindings; and unresolved gaps.
     excludes:
       - "wall-clock timestamps"
       - "transaction identifiers"
@@ -154,9 +156,11 @@ domain_pack_lifecycle_spec:
       Every request binds the project snapshot plus either uninitialized state
       or the exact generation, active lock digest, and lifecycle ledger head.
     preflight: >-
-      Under the retained lifecycle lock, the kernel rechecks registry, trust,
-      resolution, raw package sidecars, composition, runtime capability
-      bindings, sandbox decisions, project snapshot, compatibility, and CAS.
+      Under the retained lifecycle lock, the kernel consumes both opaque
+      supply-chain and reviewed-registry snapshots, performs the exact dual-axis
+      join, then rechecks trust, resolution, raw package sidecars, fixtures,
+      composition, runtime capability bindings, sandbox decisions, project
+      snapshot, compatibility, and CAS.
       Supply-chain verification time comes from the host clock and must remain
       fresh through commit; caller-selected historical time cannot revive an
       expired credential or snapshot.
@@ -171,7 +175,10 @@ domain_pack_lifecycle_spec:
       reachable committed receipt and its exact historical lock.
     removal: >-
       Removal remains possible even when it creates missing-domain or capability
-      gaps. Requirements remain durable and readiness becomes explicitly blocked.
+      gaps. A deprecated, revoked, or superseded package may be removed, but an
+      ineligible remaining package must be byte-identical to the previous lock
+      and removal cannot introduce any package. Requirements remain durable and
+      readiness becomes explicitly blocked.
   persistence:
     root: "<resolved-state-root>/domain-packs"
     layout:
@@ -229,8 +236,11 @@ domain_pack_lifecycle_spec:
     - "rollback to a now-revoked package"
     - "remove preserving explicit domain and capability gaps"
     - "static junction, symlink, reparse-point, traversal, special-file, and oversized input"
-  p6c_boundary: >-
-    P6b proves source identity, integrity, namespace grant, deterministic
-    resolution, capability confinement, and crash-safe lifecycle. Evidence-
-    backed semantic promotion, reviewed knowledge, deprecation, supersession,
-    and learning quality remain P6c.
+  p6c_integration: >-
+    Supply-chain assurance and semantic assurance are independent. Pure
+    resolution emits unreviewed packages and no review digests. Only the TCB,
+    after consuming both non-serializable anchored snapshots and matching every
+    supply record, package, manifest, content, license, and fixture digest, may
+    bind reviewed entry and promotion authorization digests and promote the
+    exact package to reviewed. Serialized audits never substitute either opaque
+    capability.

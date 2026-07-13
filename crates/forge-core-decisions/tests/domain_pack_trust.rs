@@ -51,6 +51,10 @@ fn selected_package() -> DomainPackTrustSelectedPackage {
             registry_record_digest: RECORD_DIGEST.to_owned(),
             namespace_grant_id: StableId("grant.sample.foundation".to_owned()),
             source_assurance: DomainPackSourceAssurance::SupplyChainVerified,
+            semantic_assurance:
+                forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Reviewed,
+            reviewed_entry_digest: Some(RECORD_DIGEST.to_owned()),
+            promotion_authorization_digest: Some(IMPLEMENTATION_DIGEST.to_owned()),
             dependencies: manifest.dependencies.clone(),
             deterministic_order: 0,
         },

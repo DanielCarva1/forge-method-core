@@ -16,7 +16,7 @@ fn fixture(path: &str) -> String {
 }
 
 #[test]
-fn representative_v02_documents_are_closed_and_candidate_only() {
+fn representative_v03_documents_are_closed_and_candidate_only() {
     let trust: DomainPackTrustPolicyDocument =
         yaml_serde::from_str(&fixture("valid/trust-policy.yaml")).expect("trust policy");
     let registry: DomainPackSupplyChainRegistryDocument =

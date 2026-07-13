@@ -9,6 +9,7 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::domain_pack_learning::DomainPackSemanticAssurance;
 use crate::domain_pack_policy::{
     DomainPackLockedCapabilityBinding, DomainPackRuntimeCapabilityGap, DomainPackSourceAssurance,
 };
@@ -238,6 +239,11 @@ pub struct DomainPackResolvedPackage {
     pub registry_record_digest: String,
     pub namespace_grant_id: StableId,
     pub source_assurance: DomainPackSourceAssurance,
+    /// Independent semantic-review axis. Pure resolution always emits
+    /// `Unreviewed`; only the lifecycle TCB may promote an exact reviewed join.
+    pub semantic_assurance: DomainPackSemanticAssurance,
+    pub reviewed_entry_digest: Option<String>,
+    pub promotion_authorization_digest: Option<String>,
     pub dependencies: Vec<DomainPackDependency>,
     pub deterministic_order: u32,
 }
@@ -318,6 +324,8 @@ pub struct DomainPackExactLockPayload {
     pub requirements_digest: String,
     pub roots: Vec<DomainPackResolutionRoot>,
     pub registry_snapshot_digest: String,
+    pub reviewer_registry_digest: String,
+    pub reviewed_registry_digest: String,
     pub trust_policy_digest: String,
     pub capability_registry_digest: String,
     pub sandbox_policy_digest: String,
@@ -341,6 +349,9 @@ pub struct DomainPackLockedPackage {
     pub namespace_grant_id: StableId,
     pub registry_record_digest: String,
     pub source_assurance: DomainPackSourceAssurance,
+    pub semantic_assurance: DomainPackSemanticAssurance,
+    pub reviewed_entry_digest: Option<String>,
+    pub promotion_authorization_digest: Option<String>,
     pub dependencies: Vec<DomainPackDependency>,
     pub deterministic_order: u32,
 }

@@ -9,7 +9,9 @@
 
 use forge_core_authority::{
     domain_pack_registry_snapshot_digest, AnchoredDomainPackSupplyChainSnapshot,
+    AnchoredReviewedDomainPackRegistrySnapshot,
 };
+use forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance;
 use forge_core_contracts::{
     DomainPackActivePointer, DomainPackActivePointerDocument, DomainPackArtifactBinding,
     DomainPackCandidateAuthority, DomainPackCapabilitySandboxPolicyDocument,
@@ -26,9 +28,11 @@ use forge_core_contracts::{
 };
 use forge_core_decisions::{
     compose_domain_packs, domain_pack_resolution_projection_digest,
-    evaluate_domain_pack_compatibility, evaluate_domain_pack_trust, resolve_domain_packs,
-    DomainPackCandidateMaterial, DomainPackCapabilityDemand, DomainPackCompatibilityInput,
-    DomainPackTrustEvaluationInput, DomainPackTrustEvaluationStatus,
+    evaluate_domain_pack_compatibility, evaluate_domain_pack_trust,
+    join_reviewed_registry_to_resolution, resolve_domain_packs, DomainPackCandidateMaterial,
+    DomainPackCapabilityDemand, DomainPackCompatibilityInput,
+    DomainPackReviewedResolutionJoinStatus, DomainPackTrustEvaluationInput,
+    DomainPackTrustEvaluationStatus,
 };
 use forge_core_store::crash_replace::{
     recover_file_crash_safe_under_lock, replace_file_crash_safe_under_lock, CrashReplaceError,
@@ -122,11 +126,26 @@ pub struct PreparedDomainPackLifecycleTransaction {
 }
 
 /// Fresh non-authoritative inputs that the TCB recomputes before minting commit
-/// authority. Only `anchored_snapshot` is an opaque monotonic capability; all
-/// other fields are untrusted material whose exact output must match the
-/// prepared preflight.
+/// authority. `anchored_snapshot` and `anchored_reviewed_snapshot` are opaque
+/// monotonic capabilities; all other fields are untrusted material whose exact
+/// output must match the prepared preflight.
+///
+/// Serialized or cloned audit evidence cannot substitute the reviewed-registry
+/// capability:
+///
+/// ```compile_fail
+/// use forge_core_authority::{
+///     AnchoredReviewedDomainPackRegistrySnapshot,
+///     VerifiedDomainPackPromotionAuthorizationAudit,
+/// };
+/// fn requires_opaque(_: &AnchoredReviewedDomainPackRegistrySnapshot) {}
+/// fn audit_is_not_authority(audit: &VerifiedDomainPackPromotionAuthorizationAudit) {
+///     requires_opaque(audit);
+/// }
+/// ```
 pub struct DomainPackLifecycleAuthorizationContext<'a> {
     pub anchored_snapshot: &'a AnchoredDomainPackSupplyChainSnapshot,
+    pub anchored_reviewed_snapshot: &'a AnchoredReviewedDomainPackRegistrySnapshot,
     pub project_snapshot: &'a VerifiedDomainPackProjectSnapshot,
     pub trust_policy_document: &'a DomainPackTrustPolicyDocument,
     pub registry_document: &'a DomainPackSupplyChainRegistryDocument,
@@ -469,6 +488,8 @@ impl LockedDomainPackLifecycle {
             composition_digest: lock.composition_digest.clone(),
             compatibility_report_digest: record.compatibility_report_digest.clone(),
             trust_policy_digest: lock.trust_policy_digest.clone(),
+            reviewer_registry_digest: lock.reviewer_registry_digest.clone(),
+            reviewed_registry_digest: lock.reviewed_registry_digest.clone(),
             capability_registry_digest: lock.capability_registry_digest.clone(),
             sandbox_policy_digest: lock.sandbox_policy_digest.clone(),
             from_state: previous_pointer
@@ -591,6 +612,7 @@ pub fn authorize_prepared_domain_pack_lifecycle(
     validate_preflight(&prepared.preflight)?;
     let body = &prepared.preflight.domain_pack_lifecycle_preflight;
     let verified_snapshot = context.anchored_snapshot.verified_snapshot();
+    let reviewed_snapshot = context.anchored_reviewed_snapshot;
     let resolution = &body.resolution.domain_pack_resolution_projection;
     let composition = &body.composition.domain_pack_composition_projection;
     let lock = &body.proposed_lock.domain_pack_exact_lock;
@@ -612,8 +634,13 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         body.request.domain_pack_lifecycle_request.operation,
         DomainPackLifecycleOperation::Remove { .. }
     );
+    let is_historical_empty_rollback = matches!(
+        body.request.domain_pack_lifecycle_request.operation,
+        DomainPackLifecycleOperation::Rollback { .. }
+    ) && lock.payload.packages.is_empty()
+        && prepared.rollback_target.is_some();
     let composition_allowed = composition.issues.is_empty()
-        && if is_remove {
+        && if is_remove || is_historical_empty_rollback {
             matches!(
                 composition.status,
                 DomainPackCompositionStatus::Composable | DomainPackCompositionStatus::Blocked
@@ -629,10 +656,12 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         .map_err(|error| blocked(&format!("registry digest verification failed: {error}")))?;
     if registry_digest != verified_snapshot.snapshot_digest()
         || lock.payload.registry_snapshot_digest != verified_snapshot.snapshot_digest()
+        || lock.payload.reviewer_registry_digest != reviewed_snapshot.reviewer_registry_digest()
+        || lock.payload.reviewed_registry_digest != reviewed_snapshot.registry_digest()
         || lock.payload.trust_policy_digest != verified_snapshot.trust_policy_digest()
     {
         return Err(blocked(
-            "verified snapshot or trust policy digest differs from exact lock",
+            "verified supply-chain, reviewed, reviewer, or trust-policy digest differs from exact lock",
         ));
     }
     if context.trust_policy_document.schema_version != DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION
@@ -731,6 +760,13 @@ pub fn authorize_prepared_domain_pack_lifecycle(
 
     let mut recomputed_resolution =
         resolve_domain_packs(context.resolution_request, context.registry_document);
+    let reviewed_join =
+        join_reviewed_registry_to_resolution(&recomputed_resolution, reviewed_snapshot.registry());
+    if reviewed_join.reviewed_registry_digest != reviewed_snapshot.registry_digest() {
+        return Err(blocked(
+            "reviewed eligibility join differs from opaque reviewed registry",
+        ));
+    }
     for selected in &mut recomputed_resolution
         .domain_pack_resolution_projection
         .selected
@@ -743,6 +779,13 @@ pub fn authorize_prepared_domain_pack_lifecycle(
                 && record.manifest_digest == selected.package.manifest.canonical_sha256
                 && record.content_digest == selected.package.content.canonical_sha256
                 && record.license_digest == selected.package.license.canonical_sha256
+                && record.fixture_digests
+                    == selected
+                        .package
+                        .fixtures
+                        .iter()
+                        .map(|fixture| fixture.canonical_sha256.clone())
+                        .collect::<Vec<_>>()
                 && record.namespace_grant_id == selected.namespace_grant_id
         });
         if verified.is_none() {
@@ -751,6 +794,82 @@ pub fn authorize_prepared_domain_pack_lifecycle(
             ));
         }
         selected.source_assurance = DomainPackSourceAssurance::SupplyChainVerified;
+        let Some(review) = reviewed_join.joins.iter().find(|review| {
+            review.publisher == selected.identity.publisher.0
+                && review.name == selected.identity.name.0
+                && review.version == selected.identity.version
+                && review.package_digest == selected.package.package_digest
+                && review.registry_record_digest == selected.registry_record_digest
+        }) else {
+            return Err(blocked(
+                "resolved package is absent from exact reviewed-registry join",
+            ));
+        };
+        match review.status {
+            DomainPackReviewedResolutionJoinStatus::EligibleReviewed => {
+                let Some(entry_digest) = review.reviewed_entry_digest.as_ref() else {
+                    return Err(blocked("eligible reviewed join lacks an entry digest"));
+                };
+                let Some(entry) = reviewed_snapshot
+                    .registry()
+                    .domain_pack_reviewed_registry
+                    .entries
+                    .iter()
+                    .find(|entry| &entry.entry_digest == entry_digest)
+                else {
+                    return Err(blocked(
+                        "eligible reviewed join is absent from opaque reviewed registry",
+                    ));
+                };
+                selected.semantic_assurance = DomainPackSemanticAssurance::Reviewed;
+                selected.reviewed_entry_digest = Some(entry.entry_digest.clone());
+                selected.promotion_authorization_digest = Some(entry.authorization_digest.clone());
+            }
+            DomainPackReviewedResolutionJoinStatus::IneligibleDeprecated
+            | DomainPackReviewedResolutionJoinStatus::IneligibleRevoked
+            | DomainPackReviewedResolutionJoinStatus::IneligibleSuperseded
+                if is_remove =>
+            {
+                let previous = prepared
+                    .previous_lock
+                    .as_ref()
+                    .and_then(|lock| {
+                        lock.domain_pack_exact_lock
+                            .payload
+                            .packages
+                            .iter()
+                            .find(|package| {
+                                package.identity == selected.identity
+                                    && package.package_digest == selected.package.package_digest
+                                    && package.registry_record_digest
+                                        == selected.registry_record_digest
+                            })
+                    })
+                    .ok_or_else(|| {
+                        blocked(
+                            "remove may retain an ineligible package only from the exact previous lock",
+                        )
+                    })?;
+                if previous.source_assurance != DomainPackSourceAssurance::SupplyChainVerified
+                    || previous.semantic_assurance != DomainPackSemanticAssurance::Reviewed
+                    || previous.reviewed_entry_digest.is_none()
+                    || previous.promotion_authorization_digest.is_none()
+                {
+                    return Err(blocked(
+                        "retained ineligible package lacks prior dual-axis assurance",
+                    ));
+                }
+                selected.semantic_assurance = previous.semantic_assurance;
+                selected.reviewed_entry_digest = previous.reviewed_entry_digest.clone();
+                selected.promotion_authorization_digest =
+                    previous.promotion_authorization_digest.clone();
+            }
+            _ => {
+                return Err(blocked(
+                    "selected package is not exactly eligible in the reviewed registry",
+                ));
+            }
+        }
     }
     let promoted = &mut recomputed_resolution.domain_pack_resolution_projection;
     promoted.resolution_digest = domain_pack_resolution_projection_digest(
@@ -763,6 +882,12 @@ pub fn authorize_prepared_domain_pack_lifecycle(
             "fresh deterministic resolution differs from prepared preflight",
         ));
     }
+    validate_reviewed_operation_transition(
+        &lifecycle_request.operation,
+        prepared.previous_lock.as_ref(),
+        &lock.payload.packages,
+        &reviewed_join,
+    )?;
     let recomputed_composition =
         compose_domain_packs(context.composition_request, context.materials);
     if recomputed_composition != body.composition {
@@ -813,6 +938,14 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         if locked.source_assurance != DomainPackSourceAssurance::SupplyChainVerified {
             return Err(blocked("locked package is not supply-chain verified"));
         }
+        if locked.semantic_assurance != DomainPackSemanticAssurance::Reviewed
+            || locked.reviewed_entry_digest.is_none()
+            || locked.promotion_authorization_digest.is_none()
+        {
+            return Err(blocked(
+                "locked package lacks exact reviewed semantic assurance",
+            ));
+        }
         let Some(record) = verified_records.remove(locked.registry_record_digest.as_str()) else {
             return Err(blocked(
                 "locked package has no exact verified registry record",
@@ -829,15 +962,12 @@ pub fn authorize_prepared_domain_pack_lifecycle(
                 "locked package differs from verified registry record",
             ));
         }
-        let mut fixture_digests = locked
+        let fixture_digests = locked
             .fixture_bindings
             .iter()
             .map(|binding| binding.canonical_sha256.clone())
             .collect::<Vec<_>>();
-        let mut recorded_fixture_digests = record.fixture_digests.clone();
-        fixture_digests.sort();
-        recorded_fixture_digests.sort();
-        if fixture_digests != recorded_fixture_digests {
+        if fixture_digests != record.fixture_digests {
             return Err(blocked(
                 "locked fixtures differ from verified registry record",
             ));
@@ -872,6 +1002,9 @@ pub fn authorize_prepared_domain_pack_lifecycle(
             || selected.dependencies != locked.dependencies
             || selected.deterministic_order != locked.deterministic_order
             || selected.source_assurance != DomainPackSourceAssurance::SupplyChainVerified
+            || selected.semantic_assurance != locked.semantic_assurance
+            || selected.reviewed_entry_digest != locked.reviewed_entry_digest
+            || selected.promotion_authorization_digest != locked.promotion_authorization_digest
         {
             return Err(blocked("resolved and locked package bindings differ"));
         }
@@ -1283,6 +1416,19 @@ fn load_state_under_lock(
         || receipt_value.to_state != *pointer_value
         || receipt_value.operation != head.operation
         || receipt_value.preflight_digest != head.preflight_digest
+        || receipt_value.trust_policy_digest
+            != lock.domain_pack_exact_lock.payload.trust_policy_digest
+        || receipt_value.reviewer_registry_digest
+            != lock.domain_pack_exact_lock.payload.reviewer_registry_digest
+        || receipt_value.reviewed_registry_digest
+            != lock.domain_pack_exact_lock.payload.reviewed_registry_digest
+        || receipt_value.capability_registry_digest
+            != lock
+                .domain_pack_exact_lock
+                .payload
+                .capability_registry_digest
+        || receipt_value.sandbox_policy_digest
+            != lock.domain_pack_exact_lock.payload.sandbox_policy_digest
     {
         return Err(invalid(
             "generation.receipt",
@@ -1395,11 +1541,21 @@ fn validate_preflight(
         return Err(invalid("preflight.preflight_digest", "digest mismatch"));
     }
     let report = &body.compatibility_report.domain_pack_compatibility_report;
-    let allowed = match &body.request.domain_pack_lifecycle_request.operation {
+    let operation = &body.request.domain_pack_lifecycle_request.operation;
+    let historical_empty_rollback =
+        matches!(operation, DomainPackLifecycleOperation::Rollback { .. })
+            && body
+                .proposed_lock
+                .domain_pack_exact_lock
+                .payload
+                .packages
+                .is_empty();
+    let allowed = match operation {
         DomainPackLifecycleOperation::Remove { .. } => matches!(
             report.status,
             DomainPackCompatibilityStatus::Compatible | DomainPackCompatibilityStatus::Degraded
         ),
+        DomainPackLifecycleOperation::Rollback { .. } if historical_empty_rollback => true,
         _ => report.status == DomainPackCompatibilityStatus::Compatible,
     };
     if !allowed || !report.universal_core_unchanged {
@@ -1507,6 +1663,82 @@ fn validate_operation_intent(
                     "rollback target receipt and proposed lock are not the exact historical state",
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+fn validate_reviewed_operation_transition(
+    operation: &DomainPackLifecycleOperation,
+    from_lock: Option<&DomainPackExactLockDocument>,
+    to_packages: &[DomainPackLockedPackage],
+    reviewed_join: &forge_core_decisions::DomainPackReviewedResolutionProjection,
+) -> Result<(), DomainPackLifecycleStoreError> {
+    if matches!(operation, DomainPackLifecycleOperation::Rollback { .. })
+        && to_packages.is_empty()
+        && reviewed_join.joins.is_empty()
+    {
+        // The exact historical remove-last lock contains no package that could
+        // require semantic review. Operation-intent validation has already
+        // bound this lock to a reachable immutable receipt, so the empty set is
+        // vacuously eligible without creating an install/upgrade shortcut.
+        return Ok(());
+    }
+    if !matches!(operation, DomainPackLifecycleOperation::Remove { .. }) {
+        if !reviewed_join.all_selected_eligible
+            || to_packages.is_empty()
+            || reviewed_join
+                .joins
+                .iter()
+                .any(|join| join.status != DomainPackReviewedResolutionJoinStatus::EligibleReviewed)
+        {
+            return Err(blocked(
+                "install, upgrade, and rollback require every selected package to be eligible-reviewed",
+            ));
+        }
+        return Ok(());
+    }
+
+    let Some(from_lock) = from_lock else {
+        return Err(blocked("remove requires an initialized exact lock"));
+    };
+    let previous = &from_lock.domain_pack_exact_lock.payload.packages;
+    for target in to_packages {
+        let Some(prior) = previous.iter().find(|prior| {
+            prior.identity == target.identity
+                && prior.package_digest == target.package_digest
+                && prior.registry_record_digest == target.registry_record_digest
+        }) else {
+            return Err(blocked(
+                "remove cannot introduce a package absent from the previous lock",
+            ));
+        };
+        if prior != target {
+            return Err(blocked(
+                "remove must preserve every remaining package byte-exactly",
+            ));
+        }
+        let Some(join) = reviewed_join.joins.iter().find(|join| {
+            join.publisher == target.identity.publisher.0
+                && join.name == target.identity.name.0
+                && join.version == target.identity.version
+                && join.package_digest == target.package_digest
+                && join.registry_record_digest == target.registry_record_digest
+        }) else {
+            return Err(blocked(
+                "remaining remove package lacks an exact reviewed join",
+            ));
+        };
+        if !matches!(
+            join.status,
+            DomainPackReviewedResolutionJoinStatus::EligibleReviewed
+                | DomainPackReviewedResolutionJoinStatus::IneligibleDeprecated
+                | DomainPackReviewedResolutionJoinStatus::IneligibleRevoked
+                | DomainPackReviewedResolutionJoinStatus::IneligibleSuperseded
+        ) {
+            return Err(blocked(
+                "remove cannot retain a package without reviewed history",
+            ));
         }
     }
     Ok(())

@@ -32,6 +32,7 @@ pub mod conflict_detection;
 pub mod coordination_eval;
 pub mod domain_pack;
 pub mod domain_pack_compatibility;
+pub mod domain_pack_learning;
 pub mod domain_pack_resolution;
 pub mod domain_pack_trust;
 pub mod embedded_contracts;
@@ -116,6 +117,17 @@ pub use domain_pack::{
 };
 pub use domain_pack_compatibility::{
     evaluate_domain_pack_compatibility, DomainPackCompatibilityInput,
+};
+pub use domain_pack_learning::{
+    evaluate_domain_pack_promotion, evaluate_domain_pack_resolution_reviewed_eligibility,
+    evaluate_domain_pack_reviewed_registry_evolution, join_reviewed_registry_to_resolution,
+    DomainPackActivationCandidate, DomainPackDetectedSemanticConflict,
+    DomainPackExplicitReviewRequest, DomainPackLearningDecisionAuthority, DomainPackLearningIssue,
+    DomainPackLearningIssueCode, DomainPackPromotionEvaluation, DomainPackPromotionEvaluationInput,
+    DomainPackPromotionReadinessStatus, DomainPackReviewedRegistryEvolution,
+    DomainPackReviewedRegistryEvolutionInput, DomainPackReviewedRegistryEvolutionStatus,
+    DomainPackReviewedResolutionJoin, DomainPackReviewedResolutionJoinStatus,
+    DomainPackReviewedResolutionProjection, MAX_DOMAIN_PACK_LEARNING_DIAGNOSTICS,
 };
 pub use domain_pack_resolution::{
     domain_pack_resolution_projection_digest, resolve_domain_packs,

@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_trust_policy:
   policy_id: policy.domain-pack.attacker
   policy_version: 1.0.0

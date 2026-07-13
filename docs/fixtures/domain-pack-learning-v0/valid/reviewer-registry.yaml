@@ -1,0 +1,45 @@
+schema_version: "0.3"
+domain_pack_reviewer_registry:
+  registry_id: "registry.domain-pack-reviewers"
+  audience: "forge.domain-pack-promotion"
+  generation: 0
+  previous_registry_digest: null
+  trust_policy_digest: "1111111111111111111111111111111111111111111111111111111111111111"
+  signature_threshold: 2
+  reviewers:
+    - reviewer_id: "reviewer.domain"
+      credential_id: "credential.reviewer.domain.1"
+      public_key_hex: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      public_key_fingerprint: "2222222222222222222222222222222222222222222222222222222222222222"
+      algorithm: "ed25519"
+      roles: ["domain_expert"]
+      independence_domains: ["game-design"]
+      status: "active"
+      valid_from_unix: 1783000000
+      valid_until_unix: 1814536000
+    - reviewer_id: "reviewer.safety"
+      credential_id: "credential.reviewer.safety.1"
+      public_key_hex: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+      public_key_fingerprint: "3333333333333333333333333333333333333333333333333333333333333333"
+      algorithm: "ed25519"
+      roles: ["safety_reviewer"]
+      independence_domains: ["product-safety"]
+      status: "active"
+      valid_from_unix: 1783000000
+      valid_until_unix: 1814536000
+  rotation_signatures:
+    - signer_id: "operator.root.1"
+      credential_id: "credential.operator.1"
+      predecessor_registry_digest: null
+      payload_digest: "4444444444444444444444444444444444444444444444444444444444444444"
+      algorithm: "ed25519"
+      signature: "signature-one"
+      signed_at_unix: 1783900100
+    - signer_id: "operator.root.2"
+      credential_id: "credential.operator.2"
+      predecessor_registry_digest: null
+      payload_digest: "4444444444444444444444444444444444444444444444444444444444444444"
+      algorithm: "ed25519"
+      signature: "signature-two"
+      signed_at_unix: 1783900100
+  registry_digest: "5555555555555555555555555555555555555555555555555555555555555555"

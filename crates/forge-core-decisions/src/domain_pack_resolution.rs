@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance;
 use forge_core_contracts::{
     DomainPackCandidateAuthority, DomainPackCoordinate, DomainPackCredentialStatus,
     DomainPackExactLockDocument, DomainPackIdentity, DomainPackRegistryPackageRecord,
@@ -924,6 +925,9 @@ fn build_selected(selected: &BTreeMap<String, Admitted<'_>>) -> Vec<DomainPackRe
             // The TCB may promote this field after consuming an opaque,
             // cryptographically verified supply-chain snapshot.
             source_assurance: DomainPackSourceAssurance::ExplicitlyUntrusted,
+            semantic_assurance: DomainPackSemanticAssurance::Unreviewed,
+            reviewed_entry_digest: None,
+            promotion_authorization_digest: None,
             dependencies: sorted_dependencies(
                 candidate
                     .candidate

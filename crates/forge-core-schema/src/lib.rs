@@ -4,14 +4,18 @@ use forge_core_contracts::{
     DecisionCloseContractDocument, DomainPackActivePointerDocument,
     DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
     DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
-    DomainPackContentDocument, DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
-    DomainPackLifecyclePreflightDocument, DomainPackLifecycleReceiptDocument,
-    DomainPackLifecycleRequestDocument, DomainPackManifestDocument,
-    DomainPackProjectRequirementsDocument, DomainPackRecoveryReportDocument,
-    DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
-    DomainPackRuntimeCapabilityRegistryDocument, DomainPackSupplyChainRegistryDocument,
-    DomainPackTrustPolicyDocument, FieldEvidenceRegistry, GateContractDocument,
-    HealthRecoveryContractDocument, OperationContractDocument,
+    DomainPackContentDocument, DomainPackExactLockDocument, DomainPackIndependentReviewDocument,
+    DomainPackLearningConflictDocument, DomainPackLearningReviewRequestDocument,
+    DomainPackLifecycleLedgerDocument, DomainPackLifecyclePreflightDocument,
+    DomainPackLifecycleReceiptDocument, DomainPackLifecycleRequestDocument,
+    DomainPackLocalLearningCandidateDocument, DomainPackManifestDocument,
+    DomainPackProjectRequirementsDocument, DomainPackPromotionAuthorizationDocument,
+    DomainPackPromotionDecisionDocument, DomainPackPromotionDossierDocument,
+    DomainPackRecoveryReportDocument, DomainPackResolutionProjectionDocument,
+    DomainPackResolutionRequestDocument, DomainPackReviewedRegistryDocument,
+    DomainPackReviewerRegistryDocument, DomainPackRuntimeCapabilityRegistryDocument,
+    DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, FieldEvidenceRegistry,
+    GateContractDocument, HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
     RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
     WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
@@ -271,6 +275,60 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "DomainPackRecoveryReportDocument",
             Some("domain_pack_recovery_report"),
             "candidate recovery assessment only; ambiguous state must fail closed at the trusted store boundary",
+        ),
+        schema_artifact::<DomainPackLocalLearningCandidateDocument>(
+            "domain_pack_local_learning_candidate",
+            "DomainPackLocalLearningCandidateDocument",
+            Some("domain_pack_local_learning_candidate"),
+            "non-authoritative local observation only; chat, memory, and agent assertion cannot promote reusable knowledge",
+        ),
+        schema_artifact::<DomainPackPromotionDossierDocument>(
+            "domain_pack_promotion_dossier",
+            "DomainPackPromotionDossierDocument",
+            Some("domain_pack_promotion_dossier"),
+            "candidate promotion evidence only; a dossier cannot approve its own stage transition",
+        ),
+        schema_artifact::<DomainPackIndependentReviewDocument>(
+            "domain_pack_independent_review",
+            "DomainPackIndependentReviewDocument",
+            Some("domain_pack_independent_review"),
+            "signed review evidence only; authored independence and approval labels require anchored credential verification",
+        ),
+        schema_artifact::<DomainPackLearningConflictDocument>(
+            "domain_pack_learning_conflict",
+            "DomainPackLearningConflictDocument",
+            Some("domain_pack_learning_conflict"),
+            "non-authoritative conflict evidence; unresolved learning cannot silently replace reviewed knowledge",
+        ),
+        schema_artifact::<DomainPackLearningReviewRequestDocument>(
+            "domain_pack_learning_review_request",
+            "DomainPackLearningReviewRequestDocument",
+            Some("domain_pack_learning_review_request"),
+            "candidate review request only; satisfied status cannot substitute for independent verified reviews",
+        ),
+        schema_artifact::<DomainPackPromotionDecisionDocument>(
+            "domain_pack_promotion_decision",
+            "DomainPackPromotionDecisionDocument",
+            Some("domain_pack_promotion_decision"),
+            "candidate decision evidence only; approval cannot mutate the reviewed registry without trusted authorization",
+        ),
+        schema_artifact::<DomainPackReviewerRegistryDocument>(
+            "domain_pack_reviewer_registry",
+            "DomainPackReviewerRegistryDocument",
+            Some("domain_pack_reviewer_registry"),
+            "candidate credential registry; proposed keys cannot authorize their own rotation or promotion",
+        ),
+        schema_artifact::<DomainPackPromotionAuthorizationDocument>(
+            "domain_pack_promotion_authorization",
+            "DomainPackPromotionAuthorizationDocument",
+            Some("domain_pack_promotion_authorization"),
+            "candidate authorization envelope; signatures create no authority until exact anchored verification",
+        ),
+        schema_artifact::<DomainPackReviewedRegistryDocument>(
+            "domain_pack_reviewed_registry",
+            "DomainPackReviewedRegistryDocument",
+            Some("domain_pack_reviewed_registry"),
+            "candidate registry snapshot; reviewed labels cannot activate without monotonic trusted admission",
         ),
         schema_artifact::<WorkflowMigrationPlanDocument>(
             "workflow_migration_plan",
@@ -628,6 +686,33 @@ fn authority_note(family_id: &str) -> &'static str {
         }
         "domain_pack_recovery_report" => {
             "recovery assessment is candidate-only; ambiguous state must remain blocked"
+        }
+        "domain_pack_local_learning_candidate" => {
+            "non-authoritative observation; chat and agent memory cannot promote reusable knowledge"
+        }
+        "domain_pack_promotion_dossier" => {
+            "candidate evidence bundle; cannot approve its own promotion transition"
+        }
+        "domain_pack_independent_review" => {
+            "review evidence only; cannot self-assert credential validity or independence"
+        }
+        "domain_pack_learning_conflict" => {
+            "non-authoritative conflict record; cannot silently overwrite reviewed knowledge"
+        }
+        "domain_pack_learning_review_request" => {
+            "candidate request; cannot substitute a satisfied label for verified independent review"
+        }
+        "domain_pack_promotion_decision" => {
+            "candidate decision; cannot mutate the reviewed registry without trusted authorization"
+        }
+        "domain_pack_reviewer_registry" => {
+            "candidate credential registry; proposed keys cannot authorize their own rotation"
+        }
+        "domain_pack_promotion_authorization" => {
+            "candidate authorization envelope; signatures require exact anchored verification"
+        }
+        "domain_pack_reviewed_registry" => {
+            "candidate registry snapshot; reviewed labels cannot activate without monotonic trusted admission"
         }
         "workflow_migration_plan" => {
             "classification is read-only; runtime mutation and retirement remain forbidden"

@@ -24,7 +24,7 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Pullable compatibility checkpoint: the Rust workspace package version is
-`0.7.0`. Guide `describe`/`status` retirement diagnostics use payload schema
+`0.8.0`. Guide `describe`/`status` retirement diagnostics use payload schema
 `0.2`, and consumers of that extended surface must be at least `0.5.0`.
 Workflow governance release identity remains the frozen `0.4.0` five-release
 chain; package SemVer and governed release identity are separate axes.
@@ -71,6 +71,14 @@ chain; package SemVer and governed release identity are separate axes.
 - **Domain Pack Composition Projection**: a pure candidate-only projection over
   one sealed core binding, persistent requirements, and exact raw/JCS-bound pack
   inputs. Even `composable` is structural evidence, never runtime admission.
+- **Local Learning Candidate**: a content-addressed observation captured for
+  later evaluation. Capture proves only identity and provenance; it is inert
+  and cannot become pack, registry, resolution, or activation authority.
+- **Reviewed Domain Pack Registry**: an append-only, operator-anchored index of
+  exact pack artifacts that survived evidence-backed promotion, independent
+  semantic review, and separate registry authorization. Deprecated, revoked,
+  and superseded entries remain auditable but are ineligible for new
+  activation.
 - **Workflow Migration Manifest**: a deterministic, content-bound inventory
   that classifies every legacy workflow and links it to candidate governance
   targets. In P5a it is compatibility evidence only, never execution or
@@ -243,13 +251,23 @@ chain; package SemVer and governed release identity are separate axes.
   reusing its transactional generation. Initial registry trust requires an
   explicit operator provisioning ceremony that pins the exact trust-policy
   digest; lifecycle preflight/apply never silently perform trust on first use.
+  P6c advances the lifecycle wire schema to 0.3 for its required review
+  bindings and adds nine closed schema-0.3 learning/promotion families, immutable local
+  candidate capture, reproducible ablation or blind strong-judge evaluation,
+  explicit conflict review requests, independent semantic review, separate
+  registry authorization, predecessor-signed reviewer rotation, and a monotonic
+  reviewed registry. The lifecycle TCB requires opaque fresh anchors for both
+  the P6b supply chain and the exact P6c reviewed registry; neither source can
+  substitute for the other, and a raw audit document is never authority.
   Static links, junctions, traversal,
   special files, and non-concurrent tamper fail closed. A malicious process
   running as the same OS principal can still race-replace a node after
   validation or mutate the project after the final snapshot check; that hostile
   model requires separate OS-principal permissions and remote CAS for immutable
   artifacts. `domain-pack
-  validate|compose|resolve|trust-provision|status|recover|preflight|apply` is the agent surface;
+  validate|compose|resolve|trust-provision|status|recover|preflight|apply` plus
+  `domain-pack learning` capture/evaluate/conflict/trust/rotation/check/promote
+  operations is the agent surface;
   only `apply` activates, while status/recovery may finish an interrupted
   pointer transaction. The universal kernel registry remains the exact
   five-release 42-policy P5 authority and excludes all 18 deferred domain

@@ -10,6 +10,7 @@ contract_family_inventory:
       - "Typed YAML fixtures used as behavioral evidence for the Rust validator."
       - "Operation-side references that determine host-agent authority, autonomy, gates, requests, effects, and handoff."
       - "P6a Domain Pack candidate contracts and derived read-only composition projections; these do not extend runtime authority."
+      - "P6b Domain Pack lifecycle and P6c learning-promotion evidence, review, authorization, and reviewed-registry contracts; serialized labels never replace trusted admission."
     excludes:
       - "README, installation instructions, and release notes."
       - "Migration notes that do not carry runtime authority."
@@ -481,6 +482,99 @@ contract_family_inventory:
       instance_globs:
         - "docs/fixtures/domain-pack-lifecycle-v0/valid/recovery-report.yaml"
       validator_function: "forge_core_domain_pack_tcb::LockedDomainPackLifecycle::recovery_report"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_local_learning_candidate"
+      family_kind: "domain_pack_local_learning_candidate"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-learning-v0/valid/local-learning-candidate.yaml"
+      validator_function: "forge_core_contracts::DomainPackLocalLearningCandidateDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_promotion_dossier"
+      family_kind: "domain_pack_promotion_dossier"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_contracts::DomainPackPromotionDossierDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_independent_review"
+      family_kind: "domain_pack_independent_review"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_contracts::DomainPackIndependentReviewDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_learning_conflict"
+      family_kind: "domain_pack_learning_conflict"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_contracts::DomainPackLearningConflictDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_learning_review_request"
+      family_kind: "domain_pack_learning_review_request"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_contracts::DomainPackLearningReviewRequestDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_promotion_decision"
+      family_kind: "domain_pack_promotion_decision"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_contracts::DomainPackPromotionDecisionDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_reviewer_registry"
+      family_kind: "domain_pack_reviewer_registry"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-learning-v0/valid/reviewer-registry.yaml"
+      validator_function: "forge_core_contracts::DomainPackReviewerRegistryDocument::validate"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_promotion_authorization"
+      family_kind: "domain_pack_promotion_authorization"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs: []
+      validator_function: "forge_core_authority::verify_domain_pack_promotion_authorization"
+      validation_surface: "rust_contract_validator"
+      status: "active"
+      evidence_refs:
+        - "llm_as_code_2606_15874"
+        - "code_as_agent_harness_2605_18747"
+    - id: "domain_pack_reviewed_registry"
+      family_kind: "domain_pack_reviewed_registry"
+      schema_ref: "contracts/spec/domain-pack-learning-v0.yaml"
+      instance_globs:
+        - "docs/fixtures/domain-pack-learning-v0/valid/reviewed-registry.yaml"
+      validator_function: "forge_core_decisions::evaluate_domain_pack_reviewed_registry_evolution"
       validation_surface: "rust_contract_validator"
       status: "active"
       evidence_refs:

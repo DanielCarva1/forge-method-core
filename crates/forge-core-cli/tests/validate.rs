@@ -1615,6 +1615,13 @@ fn validate_library_passes_current_repo() {
         .expect("P6b aggregate Domain Pack lifecycle check");
     assert_eq!(lifecycle_check.status, ValidationStatus::Passed);
     assert_eq!(lifecycle_check.diagnostics, 0);
+    let learning_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_learning_foundation")
+        .expect("P6c aggregate Domain Pack learning check");
+    assert_eq!(learning_check.status, ValidationStatus::Passed);
+    assert_eq!(learning_check.diagnostics, 0);
 }
 
 fn assert_domain_pack_lifecycle_check_failed(
@@ -1639,10 +1646,15 @@ fn assert_domain_pack_lifecycle_check_failed(
 }
 
 #[test]
-fn domain_pack_lifecycle_aggregate_rejects_missing_and_authority_shortcut_drift() {
+fn domain_pack_lifecycle_and_learning_aggregates_reject_missing_and_authority_drift() {
     const LOCK_REF: &str = "docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml";
     const ADVERSARIAL_REF: &str =
         "docs/fixtures/domain-pack-lifecycle-v0/adversarial/trust-policy-active-authority.invalid.yaml";
+    const REVIEWED_REGISTRY_REF: &str =
+        "docs/fixtures/domain-pack-learning-v0/valid/reviewed-registry.yaml";
+    const LEARNING_ADVERSARIAL_REF: &str =
+        "docs/fixtures/domain-pack-learning-v0/adversarial/candidate-authority.invalid.yaml";
+    const LEARNING_SPEC_REF: &str = "contracts/spec/domain-pack-learning-v0.yaml";
 
     let clean = merged_validation_root("p6b-lifecycle-clean");
     let clean_summary = run_validate(&clean);
@@ -1652,10 +1664,19 @@ fn domain_pack_lifecycle_aggregate_rejects_missing_and_authority_shortcut_drift(
         .find(|check| check.name == "domain_pack_lifecycle_foundation")
         .expect("clean P6b lifecycle aggregate");
     assert_eq!(clean_check.status, ValidationStatus::Passed);
+    let clean_learning_check = clean_summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_learning_foundation")
+        .expect("clean P6c learning aggregate");
+    assert_eq!(clean_learning_check.status, ValidationStatus::Passed);
 
     let missing = merged_validation_root("p6b-lifecycle-missing-lock");
     fs::remove_file(missing.join(LOCK_REF)).expect("remove exact lock fixture");
-    assert_domain_pack_lifecycle_check_failed(&run_validate(&missing), LOCK_REF);
+    fs::remove_file(missing.join(REVIEWED_REGISTRY_REF)).expect("remove reviewed registry fixture");
+    let missing_summary = run_validate(&missing);
+    assert_domain_pack_lifecycle_check_failed(&missing_summary, LOCK_REF);
+    assert_domain_pack_learning_check_failed(&missing_summary, REVIEWED_REGISTRY_REF);
 
     let shortcut = merged_validation_root("p6b-lifecycle-authority-shortcut");
     fs::copy(
@@ -1663,7 +1684,37 @@ fn domain_pack_lifecycle_aggregate_rejects_missing_and_authority_shortcut_drift(
         shortcut.join(ADVERSARIAL_REF),
     )
     .expect("replace adversarial policy with an accepted document");
-    assert_domain_pack_lifecycle_check_failed(&run_validate(&shortcut), ADVERSARIAL_REF);
+    fs::copy(
+        shortcut.join("docs/fixtures/domain-pack-learning-v0/valid/local-learning-candidate.yaml"),
+        shortcut.join(LEARNING_ADVERSARIAL_REF),
+    )
+    .expect("replace adversarial candidate with an accepted document");
+    let learning_spec = shortcut.join(LEARNING_SPEC_REF);
+    let mut drifted_spec = fs::read_to_string(&learning_spec).expect("read learning spec");
+    drifted_spec.push_str("\naudit_drift: true\n");
+    fs::write(&learning_spec, drifted_spec).expect("write semantic learning spec drift");
+    let shortcut_summary = run_validate(&shortcut);
+    assert_domain_pack_lifecycle_check_failed(&shortcut_summary, ADVERSARIAL_REF);
+    assert_domain_pack_learning_check_failed(&shortcut_summary, LEARNING_ADVERSARIAL_REF);
+    assert_domain_pack_learning_check_failed(&shortcut_summary, LEARNING_SPEC_REF);
+}
+
+fn assert_domain_pack_learning_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_learning_foundation")
+        .expect("aggregate P6c learning check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(
+        summary
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.path.contains(path)),
+        "expected P6c diagnostic containing {path:?}, found {:?}",
+        summary.diagnostics
+    );
 }
 
 fn assert_release_foundation_check_failed(summary: &forge_core_cli::ValidateSummary, path: &str) {

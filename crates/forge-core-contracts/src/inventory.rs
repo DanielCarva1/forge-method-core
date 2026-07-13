@@ -117,4 +117,13 @@ pub enum FamilyKind {
     DomainPackLifecycleLedger,
     DomainPackLifecycleReceipt,
     DomainPackRecoveryReport,
+    DomainPackLocalLearningCandidate,
+    DomainPackPromotionDossier,
+    DomainPackIndependentReview,
+    DomainPackLearningConflict,
+    DomainPackLearningReviewRequest,
+    DomainPackPromotionDecision,
+    DomainPackReviewerRegistry,
+    DomainPackPromotionAuthorization,
+    DomainPackReviewedRegistry,
 }

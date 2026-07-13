@@ -30,28 +30,29 @@ use forge_core_contracts::{
     DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
     DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
     DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
-    DomainPackLifecycleReceiptDocument, DomainPackRecoveryReportDocument,
-    DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
-    DomainPackRuntimeCapabilityRegistryDocument, DomainPackSupplyChainRegistryDocument,
-    DomainPackTrustPolicyDocument, FieldEvidenceRegistry, GateContractDocument,
-    HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
-    RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
-    ToolEffectContractDocument, WorkflowBehavioralArtifactReference, WorkflowBehavioralCorpusClass,
-    WorkflowBehavioralCorpusSetDocument, WorkflowBehavioralCoveragePolicyDocument,
-    WorkflowBehavioralDisposition, WorkflowBehavioralReviewSubjectDocument,
-    WorkflowBehavioralScenarioCorpusDocument, WorkflowBehavioralScenarioExecution,
-    WorkflowBehavioralShadowReportDocument, WorkflowBehavioralVerdict,
-    WorkflowConsumerCompatibilityMatrixDocument, WorkflowConsumerCompatibilityReportDocument,
-    WorkflowDeletionProofDocument, WorkflowFinalScorecardDocument,
-    WorkflowGovernanceBundleDocument, WorkflowGovernancePolicyOverlayDocument,
-    WorkflowGovernanceReleaseManifestDocument, WorkflowGovernanceReleaseRegistryDocument,
-    WorkflowMigrationBatchDocument, WorkflowMigrationPlanDocument,
-    WorkflowReleaseAdmissionAuthorizationDocument, WorkflowReleaseAdmissionAuthorizationV2Document,
-    WorkflowReleaseDispositionIntent, WorkflowReleaseReviewIndexDocument,
-    WorkflowReleaseReviewIndexV2Document, WorkflowReleaseReviewerRegistryDocument,
-    WorkflowRetirementArtifactBinding, WorkflowRetirementAuthorizationV2Document,
-    WorkflowRetirementEvidenceIndexDocument, WorkflowRetirementSnapshotManifestDocument,
-    WorkflowRetirementTombstoneCatalogDocument,
+    DomainPackLifecycleReceiptDocument, DomainPackLocalLearningCandidateDocument,
+    DomainPackRecoveryReportDocument, DomainPackResolutionProjectionDocument,
+    DomainPackResolutionRequestDocument, DomainPackReviewedRegistryDocument,
+    DomainPackReviewerRegistryDocument, DomainPackRuntimeCapabilityRegistryDocument,
+    DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, FieldEvidenceRegistry,
+    GateContractDocument, HealthRecoveryContractDocument, OperationContractDocument,
+    RequestContractDocument, RuntimeCapabilityDocument, RuntimeHandoffContractDocument,
+    RuntimeRegistryEntryDocument, ToolEffectContractDocument, WorkflowBehavioralArtifactReference,
+    WorkflowBehavioralCorpusClass, WorkflowBehavioralCorpusSetDocument,
+    WorkflowBehavioralCoveragePolicyDocument, WorkflowBehavioralDisposition,
+    WorkflowBehavioralReviewSubjectDocument, WorkflowBehavioralScenarioCorpusDocument,
+    WorkflowBehavioralScenarioExecution, WorkflowBehavioralShadowReportDocument,
+    WorkflowBehavioralVerdict, WorkflowConsumerCompatibilityMatrixDocument,
+    WorkflowConsumerCompatibilityReportDocument, WorkflowDeletionProofDocument,
+    WorkflowFinalScorecardDocument, WorkflowGovernanceBundleDocument,
+    WorkflowGovernancePolicyOverlayDocument, WorkflowGovernanceReleaseManifestDocument,
+    WorkflowGovernanceReleaseRegistryDocument, WorkflowMigrationBatchDocument,
+    WorkflowMigrationPlanDocument, WorkflowReleaseAdmissionAuthorizationDocument,
+    WorkflowReleaseAdmissionAuthorizationV2Document, WorkflowReleaseDispositionIntent,
+    WorkflowReleaseReviewIndexDocument, WorkflowReleaseReviewIndexV2Document,
+    WorkflowReleaseReviewerRegistryDocument, WorkflowRetirementArtifactBinding,
+    WorkflowRetirementAuthorizationV2Document, WorkflowRetirementEvidenceIndexDocument,
+    WorkflowRetirementSnapshotManifestDocument, WorkflowRetirementTombstoneCatalogDocument,
 };
 use forge_core_decisions::{
     compose_domain_packs, evaluate_workflow_behavior, evaluate_workflow_migration,
@@ -356,6 +357,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_workflow_retirement_checkpoint(root, &mut summary);
         validate_domain_pack_foundation(root, &mut summary);
         validate_domain_pack_lifecycle_foundation(root, &mut summary);
+        validate_domain_pack_learning_foundation(root, &mut summary);
     }
 
     summary.finish();
@@ -537,7 +539,7 @@ fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut Validate
             let compiled = yaml_serde::from_str::<serde_json::Value>(include_str!(
                 "../../../contracts/spec/domain-pack-lifecycle-v0.yaml"
             ));
-            if actual.ok() != compiled.ok() {
+            if !matches!((actual, compiled), (Ok(actual), Ok(compiled)) if actual == compiled) {
                 report.push(Diagnostic::error(
                     DiagnosticCode::WorkflowGovernanceInvalid,
                     SPEC_REF,
@@ -557,7 +559,7 @@ fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut Validate
             Ok(_) => report.push(Diagnostic::error(
                 DiagnosticCode::ParseYamlFailed,
                 *reference,
-                "P6b valid fixture must be a closed schema 0.2 document",
+                "P6 lifecycle fixture must be a closed schema 0.3 document",
             )),
             Err(error) => report.push(Diagnostic::error(
                 DiagnosticCode::ReadFileFailed,
@@ -585,15 +587,139 @@ fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut Validate
 }
 
 fn parses_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {
-    let schema_is_v02 = yaml_serde::from_str::<serde_json::Value>(text)
+    let schema_is_v03 = yaml_serde::from_str::<serde_json::Value>(text)
         .ok()
         .and_then(|value| value.get("schema_version").cloned())
-        .is_some_and(|value| value == "0.2");
-    schema_is_v02 && yaml_serde::from_str::<T>(text).is_ok()
+        .is_some_and(|value| value == "0.3");
+    schema_is_v03 && yaml_serde::from_str::<T>(text).is_ok()
 }
 
 fn rejects_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {
     yaml_serde::from_str::<T>(text).is_err()
+}
+
+/// Validate the repository-owned P6c learning and reviewed-registry boundary
+/// as one bounded aggregate. Local capture and raw registry documents are
+/// evidence only; this check must never manufacture an opaque authority.
+fn validate_domain_pack_learning_foundation(root: &Path, summary: &mut ValidateSummary) {
+    type FixtureShapePredicate = fn(&str) -> bool;
+    const SPEC_REF: &str = "contracts/spec/domain-pack-learning-v0.yaml";
+    const VALID: &[(&str, FixtureShapePredicate)] = &[
+        (
+            "docs/fixtures/domain-pack-learning-v0/valid/local-learning-candidate.yaml",
+            parses_p6c_candidate,
+        ),
+        (
+            "docs/fixtures/domain-pack-learning-v0/valid/reviewer-registry.yaml",
+            parses_p6c_reviewer_registry,
+        ),
+        (
+            "docs/fixtures/domain-pack-learning-v0/valid/reviewed-registry.yaml",
+            parses_p6c_reviewed_registry,
+        ),
+    ];
+    const INVALID: &[(&str, FixtureShapePredicate)] = &[
+        (
+            "docs/fixtures/domain-pack-learning-v0/adversarial/candidate-authority.invalid.yaml",
+            rejects_p6c_candidate,
+        ),
+        (
+            "docs/fixtures/domain-pack-learning-v0/adversarial/candidate-unknown.invalid.yaml",
+            rejects_p6c_candidate,
+        ),
+        (
+            "docs/fixtures/domain-pack-learning-v0/adversarial/revoked-eligible.invalid.yaml",
+            rejects_p6c_reviewed_registry,
+        ),
+    ];
+
+    let mut report = ValidationReport::new();
+    match fs::read_to_string(root.join(SPEC_REF)) {
+        Ok(text) => {
+            let actual = yaml_serde::from_str::<serde_json::Value>(&text);
+            let compiled = yaml_serde::from_str::<serde_json::Value>(include_str!(
+                "../../../contracts/spec/domain-pack-learning-v0.yaml"
+            ));
+            if !matches!((actual, compiled), (Ok(actual), Ok(compiled)) if actual == compiled) {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    SPEC_REF,
+                    "P6c learning spec differs from the compiled repository contract",
+                ));
+            }
+        }
+        Err(error) => report.push(Diagnostic::error(
+            DiagnosticCode::ReadFileFailed,
+            SPEC_REF,
+            error.to_string(),
+        )),
+    }
+    for (reference, parser) in VALID {
+        match fs::read_to_string(root.join(reference)) {
+            Ok(text) if parser(&text) => {}
+            Ok(_) => report.push(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
+                *reference,
+                "P6c valid fixture must be a closed schema 0.3 document",
+            )),
+            Err(error) => report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                *reference,
+                error.to_string(),
+            )),
+        }
+    }
+    for (reference, rejection) in INVALID {
+        match fs::read_to_string(root.join(reference)) {
+            Ok(text) if rejection(&text) => {}
+            Ok(_) => report.push(Diagnostic::error(
+                DiagnosticCode::WorkflowGovernanceInvalid,
+                *reference,
+                "P6c adversarial fixture no longer fails closed",
+            )),
+            Err(error) => report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                *reference,
+                error.to_string(),
+            )),
+        }
+    }
+    summary.add_report("domain_pack_learning_foundation", report);
+}
+
+fn is_p6c_schema(text: &str) -> bool {
+    yaml_serde::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|value| value.get("schema_version").cloned())
+        .is_some_and(|value| value == "0.3")
+}
+
+fn parses_p6c_candidate(text: &str) -> bool {
+    is_p6c_schema(text)
+        && yaml_serde::from_str::<DomainPackLocalLearningCandidateDocument>(text)
+            .is_ok_and(|document| document.validate().is_empty())
+}
+
+fn parses_p6c_reviewer_registry(text: &str) -> bool {
+    is_p6c_schema(text)
+        && yaml_serde::from_str::<DomainPackReviewerRegistryDocument>(text)
+            .is_ok_and(|document| document.validate().is_empty())
+}
+
+fn parses_p6c_reviewed_registry(text: &str) -> bool {
+    is_p6c_schema(text)
+        && yaml_serde::from_str::<DomainPackReviewedRegistryDocument>(text)
+            .is_ok_and(|document| document.validate().is_empty())
+}
+
+fn rejects_p6c_candidate(text: &str) -> bool {
+    yaml_serde::from_str::<DomainPackLocalLearningCandidateDocument>(text)
+        .map_or(true, |document| !document.validate().is_empty())
+}
+
+fn rejects_p6c_reviewed_registry(text: &str) -> bool {
+    yaml_serde::from_str::<DomainPackReviewedRegistryDocument>(text)
+        .map_or(true, |document| !document.validate().is_empty())
 }
 
 fn read_domain_pack_yaml<T: serde::de::DeserializeOwned>(

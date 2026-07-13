@@ -170,6 +170,8 @@ fn exact_lock(
                 requirements_digest: digest(101),
                 roots: request.domain_pack_resolution_request.roots.clone(),
                 registry_snapshot_digest: digest(9_000),
+                reviewer_registry_digest: digest(9_001),
+                reviewed_registry_digest: digest(9_002),
                 trust_policy_digest: digest(102),
                 capability_registry_digest: digest(103),
                 sandbox_policy_digest: digest(104),
@@ -186,6 +188,9 @@ fn exact_lock(
                     namespace_grant_id: StableId("grant.fixture".to_owned()),
                     registry_record_digest: candidate.registry_record_digest.clone().unwrap(),
                     source_assurance: DomainPackSourceAssurance::SupplyChainVerified,
+                    semantic_assurance: forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Reviewed,
+                    reviewed_entry_digest: Some(digest(9_003)),
+                    promotion_authorization_digest: Some(digest(9_004)),
                     dependencies: candidate
                         .input
                         .manifest
@@ -236,7 +241,60 @@ fn resolution_is_input_order_independent_and_selects_highest_stable() {
             .version,
         "2.0.0"
     );
+    let selected = &first.domain_pack_resolution_projection.selected[0];
+    assert_eq!(
+        selected.semantic_assurance,
+        forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Unreviewed
+    );
+    assert!(selected.reviewed_entry_digest.is_none());
+    assert!(selected.promotion_authorization_digest.is_none());
     assert!(first.domain_pack_resolution_projection.issues.is_empty());
+}
+
+#[test]
+fn pure_resolution_never_semantically_promotes_a_transitive_dependency() {
+    let mut transitive = candidate("1.0.0", 41);
+    transitive.input.manifest.domain_pack_manifest.identity.name =
+        StableId("transitive".to_owned());
+    transitive.input.content.domain_pack_content.pack.name = StableId("transitive".to_owned());
+    transitive.package.package_ref = RepoPath("packages/transitive-1.0.0.yaml".to_owned());
+
+    let mut root_candidate = candidate("1.0.0", 40);
+    root_candidate
+        .input
+        .manifest
+        .domain_pack_manifest
+        .dependencies = vec![DomainPackDependency {
+        pack: DomainPackCoordinate {
+            publisher: StableId("forge.fixture".to_owned()),
+            name: StableId("transitive".to_owned()),
+        },
+        version_requirement: "^1.0".to_owned(),
+        required_content_digest: Some(transitive.package.content.canonical_sha256.clone()),
+    }];
+    let candidates = vec![root_candidate, transitive];
+    let registry = registry(&candidates);
+    let request = request(
+        candidates,
+        vec![root("^1.0", DomainPackResolutionRootReason::InstallIntent)],
+    );
+    let projection = resolve_domain_packs(&request, &registry);
+    assert_eq!(
+        projection.domain_pack_resolution_projection.status,
+        DomainPackResolutionStatus::Resolved
+    );
+    assert_eq!(
+        projection.domain_pack_resolution_projection.selected.len(),
+        2
+    );
+    assert!(projection
+        .domain_pack_resolution_projection
+        .selected
+        .iter()
+        .all(|selected| selected.semantic_assurance
+            == forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Unreviewed
+            && selected.reviewed_entry_digest.is_none()
+            && selected.promotion_authorization_digest.is_none()));
 }
 
 #[test]

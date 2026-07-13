@@ -127,6 +127,96 @@ fn p6b_schema_registry_covers_every_closed_lifecycle_family() {
 }
 
 #[test]
+fn p6c_schema_registry_covers_every_learning_and_review_family() {
+    let schemas = generated_contract_schemas();
+    let views = compact_agent_views();
+    let expected = [
+        (
+            "domain_pack_local_learning_candidate",
+            "domain_pack_local_learning_candidate",
+            "assertion",
+        ),
+        (
+            "domain_pack_promotion_dossier",
+            "domain_pack_promotion_dossier",
+            "transition",
+        ),
+        (
+            "domain_pack_independent_review",
+            "domain_pack_independent_review",
+            "decision",
+        ),
+        (
+            "domain_pack_learning_conflict",
+            "domain_pack_learning_conflict",
+            "status",
+        ),
+        (
+            "domain_pack_learning_review_request",
+            "domain_pack_learning_review_request",
+            "required_roles",
+        ),
+        (
+            "domain_pack_promotion_decision",
+            "domain_pack_promotion_decision",
+            "transition",
+        ),
+        (
+            "domain_pack_reviewer_registry",
+            "domain_pack_reviewer_registry",
+            "reviewers",
+        ),
+        (
+            "domain_pack_promotion_authorization",
+            "domain_pack_promotion_authorization",
+            "signatures",
+        ),
+        (
+            "domain_pack_reviewed_registry",
+            "domain_pack_reviewed_registry",
+            "entries",
+        ),
+    ];
+
+    for (family, root, required) in expected {
+        let schema = schemas
+            .iter()
+            .find(|schema| schema.family_id == family)
+            .unwrap_or_else(|| panic!("missing P6c schema {family}"));
+        assert_eq!(schema.root_key, Some(root));
+        assert_eq!(schema.schema["x-forge-family-id"], family);
+
+        let view = views
+            .iter()
+            .find(|view| view.family_id == family)
+            .unwrap_or_else(|| panic!("missing P6c compact view {family}"));
+        assert_eq!(view.root_key, Some(root));
+        assert!(view
+            .top_level_required_fields
+            .contains(&"schema_version".to_owned()));
+        assert!(view.top_level_required_fields.contains(&root.to_owned()));
+        assert!(view.contract_required_fields.contains(&required.to_owned()));
+        assert!(view.authority_note.contains("cannot") || view.authority_note.contains("require"));
+    }
+
+    let dossier = views
+        .iter()
+        .find(|view| view.family_id == "domain_pack_promotion_dossier")
+        .expect("promotion dossier view");
+    assert!(dossier
+        .enum_definitions
+        .contains(&"DomainPackPromotionStage".to_owned()));
+
+    let authorization = views
+        .iter()
+        .find(|view| view.family_id == "domain_pack_promotion_authorization")
+        .expect("promotion authorization view");
+    assert!(authorization
+        .enum_definitions
+        .contains(&"DomainPackReviewerRole".to_owned()));
+}
+
+#[test]
 fn p5d5_retirement_views_preserve_candidate_only_two_axis_boundary() {
     let views = compact_agent_views();
     for (family, root) in [

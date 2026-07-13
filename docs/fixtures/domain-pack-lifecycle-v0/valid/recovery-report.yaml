@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_recovery_report:
   authority: candidate_only
   status: clean

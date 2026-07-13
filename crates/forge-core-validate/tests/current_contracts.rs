@@ -69,6 +69,31 @@ fn validates_current_evidence_and_inventory() {
         "inventory diagnostics: {:?}",
         inventory_report.diagnostics()
     );
+
+    let p6c_families = inventory
+        .contract_family_inventory
+        .families
+        .iter()
+        .filter(|family| family.schema_ref.0 == "contracts/spec/domain-pack-learning-v0.yaml")
+        .map(|family| family.id.0.as_str())
+        .collect::<HashSet<_>>();
+    assert_eq!(p6c_families.len(), 9, "P6c family inventory must be exact");
+    for expected in [
+        "domain_pack_local_learning_candidate",
+        "domain_pack_promotion_dossier",
+        "domain_pack_independent_review",
+        "domain_pack_learning_conflict",
+        "domain_pack_learning_review_request",
+        "domain_pack_promotion_decision",
+        "domain_pack_reviewer_registry",
+        "domain_pack_promotion_authorization",
+        "domain_pack_reviewed_registry",
+    ] {
+        assert!(
+            p6c_families.contains(expected),
+            "missing P6c family {expected}"
+        );
+    }
 }
 
 #[test]
@@ -630,6 +655,7 @@ fn add_contract_definitions(index: &mut ReferenceIndex) {
         "contracts/requests/request-contract-v0.yaml",
         "contracts/recovery/health-recovery-contract-v0.yaml",
         "contracts/runtimes/runtime-handoff-contract-v0.yaml",
+        "contracts/spec/domain-pack-learning-v0.yaml",
         "contracts/spec/domain-pack-lifecycle-v0.yaml",
         "contracts/spec/domain-pack-v0.yaml",
         "contracts/spec/workflow-governance-release-v0.yaml",

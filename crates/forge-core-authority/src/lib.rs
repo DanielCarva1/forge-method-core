@@ -11,6 +11,7 @@
 //! authorization.
 
 pub mod attestation;
+pub mod domain_pack_promotion;
 pub mod domain_pack_supply_chain;
 pub mod execution_handoff;
 pub mod principal_registry;
@@ -22,6 +23,23 @@ pub mod workflow_retirement;
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
     AttestationVerifier, CanonicalIntent,
+};
+pub use domain_pack_promotion::{
+    domain_pack_independent_review_digest, domain_pack_promotion_decision_digest,
+    domain_pack_promotion_dossier_digest, domain_pack_promotion_payload_digest,
+    domain_pack_promotion_reviewer_key_fingerprint, domain_pack_promotion_signing_bytes,
+    domain_pack_reviewed_registry_digest, domain_pack_reviewed_registry_entry_digest,
+    domain_pack_reviewed_registry_proposal_digest, domain_pack_reviewed_registry_signing_bytes,
+    domain_pack_reviewer_registry_digest, domain_pack_reviewer_registry_rotation_signing_bytes,
+    verify_domain_pack_promotion_authorization, AnchoredReviewedDomainPackRegistrySnapshot,
+    DomainPackPromotionAuditAuthority, DomainPackPromotionAuthorityError,
+    DomainPackPromotionExpectedContext, DomainPackReviewerRegistryAdvanceAudit,
+    DomainPackReviewerRegistryAnchor, DomainPackReviewerRegistryAnchorVersion,
+    ReviewedDomainPackRegistryAnchor, ReviewedDomainPackRegistryAnchorVersion,
+    VerifiedDomainPackPromotionAuthorization, VerifiedDomainPackPromotionAuthorizationAudit,
+    VerifiedDomainPackPromotionReviewerAudit, DOMAIN_PACK_PROMOTION_PAYLOAD_DOMAIN,
+    DOMAIN_PACK_PROMOTION_SIGNATURE_DOMAIN, DOMAIN_PACK_REVIEWED_REGISTRY_SIGNATURE_DOMAIN,
+    DOMAIN_PACK_REVIEWER_REGISTRY_ROTATION_SIGNATURE_DOMAIN,
 };
 pub use domain_pack_supply_chain::{
     domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,

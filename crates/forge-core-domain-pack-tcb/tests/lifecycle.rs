@@ -1,9 +1,13 @@
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,
-    domain_pack_registry_signing_bytes, domain_pack_registry_snapshot_digest,
-    verify_domain_pack_supply_chain_snapshot, AnchoredDomainPackSupplyChainSnapshot,
-    DomainPackRegistryAnchor, DomainPackRegistryAnchorAdvance,
+    domain_pack_package_record_digest, domain_pack_promotion_reviewer_key_fingerprint,
+    domain_pack_publisher_signing_bytes, domain_pack_registry_signing_bytes,
+    domain_pack_registry_snapshot_digest, domain_pack_reviewed_registry_digest,
+    domain_pack_reviewed_registry_entry_digest, domain_pack_reviewed_registry_signing_bytes,
+    domain_pack_reviewer_registry_digest, verify_domain_pack_supply_chain_snapshot,
+    AnchoredDomainPackSupplyChainSnapshot, AnchoredReviewedDomainPackRegistrySnapshot,
+    DomainPackRegistryAnchor, DomainPackRegistryAnchorAdvance, DomainPackReviewerRegistryAnchor,
+    ReviewedDomainPackRegistryAnchor,
 };
 use forge_core_contracts::*;
 use forge_core_decisions::{
@@ -28,6 +32,10 @@ fn id(value: &str) -> StableId {
     StableId(value.to_owned())
 }
 
+fn pid(value: &str) -> PrincipalId {
+    PrincipalId(value.to_owned())
+}
+
 fn digest(byte: char) -> String {
     format!("sha256:{}", byte.to_string().repeat(64))
 }
@@ -43,6 +51,15 @@ fn hex(bytes: &[u8]) -> String {
 fn canonical_digest<T: Serialize>(value: &T) -> String {
     let bytes = serde_json_canonicalizer::to_vec(value).expect("canonical JSON");
     format!("sha256:{:x}", Sha256::digest(bytes))
+}
+
+fn learning_digest(label: &str) -> String {
+    format!("{:x}", Sha256::digest(label.as_bytes()))
+}
+
+fn learning_full_digest<T: Serialize>(value: &T) -> String {
+    let bytes = serde_json_canonicalizer::to_vec(value).expect("canonical learning JSON");
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn temp_state_root(label: &str) -> PathBuf {
@@ -64,14 +81,17 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+#[derive(Clone)]
 struct Fixture {
     policy: DomainPackTrustPolicyDocument,
     snapshot: DomainPackSupplyChainRegistryDocument,
     resolved: DomainPackResolvedPackage,
+    reviewer_registry: DomainPackReviewerRegistryDocument,
+    reviewed_registry: DomainPackReviewedRegistryDocument,
 }
 
 impl Fixture {
-    #[allow(clippy::too_many_lines)] // One cohesive signed fixture keeps every binding identical.
+    #[allow(clippy::too_many_lines, clippy::similar_names)] // One cohesive signed fixture keeps every binding identical.
     fn new() -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -218,12 +238,182 @@ impl Fixture {
                 .map(|fixture| fixture.artifact.clone())
                 .collect(),
         };
+        let semantic_key = SigningKey::from_bytes(&[4_u8; 32]);
+        let authorizer_key = SigningKey::from_bytes(&[5_u8; 32]);
+        let reviewer_trust_policy_digest = learning_digest("operator-reviewer-trust");
+        let reviewer_entries = [
+            (
+                "principal.semantic",
+                "credential.semantic",
+                DomainPackReviewerRole::DomainExpert,
+                "domain.semantic",
+                &semantic_key,
+            ),
+            (
+                "principal.authorizer",
+                "credential.authorizer",
+                DomainPackReviewerRole::RegistryAuthorizer,
+                "domain.registry",
+                &authorizer_key,
+            ),
+        ];
+        let mut reviewer_registry = DomainPackReviewerRegistryDocument {
+            schema_version: DOMAIN_PACK_LEARNING_SCHEMA_VERSION.to_owned(),
+            domain_pack_reviewer_registry: DomainPackReviewerRegistry {
+                registry_id: id("reviewers.domain-pack.test"),
+                audience: "forge-domain-pack-runtime".to_owned(),
+                generation: 0,
+                previous_registry_digest: None,
+                trust_policy_digest: reviewer_trust_policy_digest,
+                signature_threshold: 2,
+                reviewers: reviewer_entries
+                    .iter()
+                    .map(|(principal, credential, role, domain, key)| {
+                        DomainPackReviewerRegistryEntry {
+                            reviewer_id: pid(principal),
+                            credential_id: id(credential),
+                            public_key_hex: hex(&key.verifying_key().to_bytes()),
+                            public_key_fingerprint: domain_pack_promotion_reviewer_key_fingerprint(
+                                &key.verifying_key().to_bytes(),
+                            ),
+                            algorithm: DomainPackPromotionSignatureAlgorithm::Ed25519,
+                            roles: vec![*role],
+                            independence_domains: vec![id(domain)],
+                            status: DomainPackReviewerStatus::Active,
+                            valid_from_unix: now.saturating_sub(3_600),
+                            valid_until_unix: now + 3_600,
+                        }
+                    })
+                    .collect(),
+                rotation_signatures: reviewer_entries
+                    .iter()
+                    .map(
+                        |(principal, credential, _, _, _)| DomainPackReviewerRegistrySignature {
+                            signer_id: pid(principal),
+                            credential_id: id(credential),
+                            predecessor_registry_digest: None,
+                            payload_digest: learning_digest("operator-genesis"),
+                            algorithm: DomainPackPromotionSignatureAlgorithm::Ed25519,
+                            signature: "00".repeat(64),
+                            signed_at_unix: now,
+                        },
+                    )
+                    .collect(),
+                registry_digest: learning_digest("pending-reviewers"),
+            },
+        };
+        reviewer_registry
+            .domain_pack_reviewer_registry
+            .registry_digest = domain_pack_reviewer_registry_digest(&reviewer_registry)
+            .expect("reviewer registry digest");
+
+        let mut reviewed_entry = DomainPackReviewedRegistryEntry {
+            pack: DomainPackVersionReference {
+                publisher: manifest.identity.publisher.clone(),
+                name: manifest.identity.name.clone(),
+                version: manifest.identity.version.clone(),
+            },
+            package_digest: package.package_digest.clone(),
+            supply_chain_record_digest: record.record_digest.clone(),
+            manifest_digest: package.manifest.canonical_sha256.clone(),
+            content_digest: package.content.canonical_sha256.clone(),
+            license_digest: package.license.canonical_sha256.clone(),
+            fixture_digests: package
+                .fixtures
+                .iter()
+                .map(|fixture| fixture.canonical_sha256.clone())
+                .collect(),
+            stage: DomainPackPromotionStage::Reviewed,
+            eligibility: DomainPackReviewedEligibility::EligibleReviewed,
+            promotion_decision_digest: learning_digest("promotion-decision"),
+            authorization_digest: learning_digest("promotion-authorization"),
+            independent_review_digests: vec![
+                learning_digest("review-semantic"),
+                learning_digest("review-authorizer"),
+            ],
+            compatibility: DomainPackReviewedCompatibility {
+                forge_core_requirement: ">=0.7.0".to_owned(),
+                pack_schema_requirement: "^0.1".to_owned(),
+                evaluator_protocol_versions: vec!["1".to_owned()],
+                predecessor_content_digests: Vec::new(),
+                breaking_change: false,
+                migration_evidence_refs: Vec::new(),
+            },
+            deprecation: None,
+            revocation: None,
+            supersession: None,
+            entry_digest: learning_digest("pending-entry"),
+        };
+        reviewed_entry.entry_digest = domain_pack_reviewed_registry_entry_digest(&reviewed_entry)
+            .expect("reviewed entry digest");
+        let signature_stubs = reviewer_entries
+            .iter()
+            .map(
+                |(principal, credential, role, _, _)| DomainPackReviewedRegistrySignature {
+                    reviewer_id: pid(principal),
+                    credential_id: id(credential),
+                    role: *role,
+                    algorithm: DomainPackPromotionSignatureAlgorithm::Ed25519,
+                    payload_digest: learning_digest("pending-reviewed-registry"),
+                    signature: "00".repeat(64),
+                    signed_at_unix: now,
+                },
+            )
+            .collect();
+        let mut reviewed_registry = DomainPackReviewedRegistryDocument {
+            schema_version: DOMAIN_PACK_LEARNING_SCHEMA_VERSION.to_owned(),
+            domain_pack_reviewed_registry: DomainPackReviewedRegistry {
+                registry_id: id("reviewed.domain-pack.test"),
+                audience: "forge-domain-pack-runtime".to_owned(),
+                generation: 0,
+                previous_registry_digest: None,
+                entries: vec![reviewed_entry],
+                snapshot_signatures: signature_stubs,
+                registry_digest: learning_digest("pending-reviewed-registry"),
+            },
+        };
+        reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest = domain_pack_reviewed_registry_digest(&reviewed_registry)
+            .expect("reviewed registry digest");
+        let reviewed_digest = reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest
+            .clone();
+        for (index, key) in [&semantic_key, &authorizer_key].into_iter().enumerate() {
+            reviewed_registry
+                .domain_pack_reviewed_registry
+                .snapshot_signatures[index]
+                .payload_digest
+                .clone_from(&reviewed_digest);
+            let signature = reviewed_registry
+                .domain_pack_reviewed_registry
+                .snapshot_signatures[index]
+                .clone();
+            let bytes = domain_pack_reviewed_registry_signing_bytes(&reviewed_registry, &signature)
+                .expect("reviewed registry signing bytes");
+            reviewed_registry
+                .domain_pack_reviewed_registry
+                .snapshot_signatures[index]
+                .signature = hex(&key.sign(&bytes).to_bytes());
+        }
         let resolved = DomainPackResolvedPackage {
             identity: manifest.identity.clone(),
             package,
             registry_record_digest: record.record_digest,
             namespace_grant_id,
             source_assurance: DomainPackSourceAssurance::SupplyChainVerified,
+            semantic_assurance: DomainPackSemanticAssurance::Reviewed,
+            reviewed_entry_digest: Some(
+                reviewed_registry.domain_pack_reviewed_registry.entries[0]
+                    .entry_digest
+                    .clone(),
+            ),
+            promotion_authorization_digest: Some(
+                reviewed_registry.domain_pack_reviewed_registry.entries[0]
+                    .authorization_digest
+                    .clone(),
+            ),
             dependencies: manifest.dependencies.clone(),
             deterministic_order: 0,
         };
@@ -231,6 +421,8 @@ impl Fixture {
             policy,
             snapshot,
             resolved,
+            reviewer_registry,
+            reviewed_registry,
         }
     }
 
@@ -254,6 +446,76 @@ impl Fixture {
                 panic!("fresh trust-on-first-use anchor cannot replay")
             }
         }
+    }
+
+    #[allow(clippy::similar_names)] // Reviewer authority and reviewed content are independent axes.
+    fn reviewed_anchored(&self, now: u64) -> AnchoredReviewedDomainPackRegistrySnapshot {
+        let reviewer_trust = &self
+            .reviewer_registry
+            .domain_pack_reviewer_registry
+            .trust_policy_digest;
+        let reviewer_full = learning_full_digest(&self.reviewer_registry);
+        let reviewer_anchor = DomainPackReviewerRegistryAnchor::from_operator_protected_genesis(
+            self.reviewer_registry.clone(),
+            reviewer_trust,
+            &reviewer_full,
+        )
+        .expect("operator-protected reviewer registry");
+        let reviewed_digest = self
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest
+            .clone();
+        let mut reviewed_anchor = ReviewedDomainPackRegistryAnchor::from_operator_protected_head(
+            &reviewer_anchor,
+            self.reviewed_registry.clone(),
+            &reviewed_digest,
+            now,
+        )
+        .expect("operator-protected reviewed registry");
+        reviewed_anchor
+            .verify_exact_replay(&reviewer_anchor, self.reviewed_registry.clone(), now)
+            .expect("fresh reviewed registry replay")
+    }
+
+    fn with_reviewed_registry(&self, mutate: impl FnOnce(&mut DomainPackReviewedRegistry)) -> Self {
+        let mut changed = self.clone();
+        mutate(&mut changed.reviewed_registry.domain_pack_reviewed_registry);
+        for entry in &mut changed
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .entries
+        {
+            entry.entry_digest = domain_pack_reviewed_registry_entry_digest(entry)
+                .expect("changed reviewed entry digest");
+        }
+        resign_reviewed_registry(&mut changed.reviewed_registry);
+        changed
+    }
+}
+
+fn resign_reviewed_registry(registry: &mut DomainPackReviewedRegistryDocument) {
+    let keys = [
+        SigningKey::from_bytes(&[4_u8; 32]),
+        SigningKey::from_bytes(&[5_u8; 32]),
+    ];
+    registry.domain_pack_reviewed_registry.registry_digest =
+        domain_pack_reviewed_registry_digest(registry).expect("changed reviewed registry digest");
+    let subject_digest = registry
+        .domain_pack_reviewed_registry
+        .registry_digest
+        .clone();
+    for (index, key) in keys.iter().enumerate() {
+        registry.domain_pack_reviewed_registry.snapshot_signatures[index]
+            .payload_digest
+            .clone_from(&subject_digest);
+        registry.domain_pack_reviewed_registry.snapshot_signatures[index].signature =
+            "00".repeat(64);
+        let signature = registry.domain_pack_reviewed_registry.snapshot_signatures[index].clone();
+        let bytes = domain_pack_reviewed_registry_signing_bytes(registry, &signature)
+            .expect("changed reviewed registry signing bytes");
+        registry.domain_pack_reviewed_registry.snapshot_signatures[index].signature =
+            hex(&key.sign(&bytes).to_bytes());
     }
 }
 
@@ -304,6 +566,9 @@ fn locked_package(package: &DomainPackResolvedPackage) -> DomainPackLockedPackag
         namespace_grant_id: package.namespace_grant_id.clone(),
         registry_record_digest: package.registry_record_digest.clone(),
         source_assurance: package.source_assurance,
+        semantic_assurance: package.semantic_assurance,
+        reviewed_entry_digest: package.reviewed_entry_digest.clone(),
+        promotion_authorization_digest: package.promotion_authorization_digest.clone(),
         dependencies: package.dependencies.clone(),
         deterministic_order: package.deterministic_order,
     }
@@ -429,6 +694,23 @@ fn integrated_install_preflight(
     );
     for selected in &mut resolution.domain_pack_resolution_projection.selected {
         selected.source_assurance = DomainPackSourceAssurance::SupplyChainVerified;
+        selected.semantic_assurance = DomainPackSemanticAssurance::Reviewed;
+        selected.reviewed_entry_digest = Some(
+            fixture
+                .reviewed_registry
+                .domain_pack_reviewed_registry
+                .entries[0]
+                .entry_digest
+                .clone(),
+        );
+        selected.promotion_authorization_digest = Some(
+            fixture
+                .reviewed_registry
+                .domain_pack_reviewed_registry
+                .entries[0]
+                .authorization_digest
+                .clone(),
+        );
     }
     resolution
         .domain_pack_resolution_projection
@@ -542,6 +824,16 @@ fn integrated_install_preflight(
         requirements_digest: canonical_digest(&requirements),
         roots: vec![root],
         registry_snapshot_digest: verified.snapshot_digest().to_owned(),
+        reviewer_registry_digest: fixture
+            .reviewer_registry
+            .domain_pack_reviewer_registry
+            .registry_digest
+            .clone(),
+        reviewed_registry_digest: fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest
+            .clone(),
         trust_policy_digest: verified.trust_policy_digest().to_owned(),
         capability_registry_digest: canonical_digest(&capability_registry_document),
         sandbox_policy_digest: canonical_digest(&sandbox_policy_document),
@@ -736,6 +1028,18 @@ fn integrated_remove_preflight(
     let mut payload = previous_lock.domain_pack_exact_lock.payload.clone();
     payload.requirements_digest = canonical_digest(&requirements);
     payload.roots.clear();
+    payload.reviewer_registry_digest.clone_from(
+        &fixture
+            .reviewer_registry
+            .domain_pack_reviewer_registry
+            .registry_digest,
+    );
+    payload.reviewed_registry_digest.clone_from(
+        &fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest,
+    );
     payload.capability_registry_digest = canonical_digest(&capability_registry_document);
     payload.sandbox_policy_digest = canonical_digest(&sandbox_policy_document);
     payload.resolution_digest.clone_from(
@@ -914,12 +1218,14 @@ fn authorize_integrated(
         verify_domain_pack_supply_chain_snapshot(&inputs.trust_policy, &fixture.snapshot, now)
             .expect("fresh integrated supply-chain proof");
     let anchored = fixture.anchored(verified);
+    let reviewed_anchored = fixture.reviewed_anchored(now);
     let materials = [raw.material(fixture)];
     let artifacts = raw.immutable(fixture);
     authorize_prepared_domain_pack_lifecycle(
         prepared,
         &DomainPackLifecycleAuthorizationContext {
             anchored_snapshot: &anchored,
+            anchored_reviewed_snapshot: &reviewed_anchored,
             project_snapshot: &project_snapshot,
             trust_policy_document: &inputs.trust_policy,
             registry_document: &fixture.snapshot,
@@ -951,10 +1257,12 @@ fn authorize_without_artifacts(
         verify_domain_pack_supply_chain_snapshot(&inputs.trust_policy, &fixture.snapshot, now)
             .expect("fresh supply-chain proof");
     let anchored = fixture.anchored(verified);
+    let reviewed_anchored = fixture.reviewed_anchored(now);
     authorize_prepared_domain_pack_lifecycle(
         prepared,
         &DomainPackLifecycleAuthorizationContext {
             anchored_snapshot: &anchored,
+            anchored_reviewed_snapshot: &reviewed_anchored,
             project_snapshot: &project_snapshot,
             trust_policy_document: &inputs.trust_policy,
             registry_document: &fixture.snapshot,
@@ -998,6 +1306,18 @@ fn commit_integrated_remove(
     fixture: &Fixture,
     base_inputs: &IntegratedInstallInputs,
 ) -> DomainPackLifecycleReceiptDocument {
+    commit_integrated_remove_with_preflight(state_root, fixture, base_inputs).0
+}
+
+fn commit_integrated_remove_with_preflight(
+    state_root: &Path,
+    fixture: &Fixture,
+    base_inputs: &IntegratedInstallInputs,
+) -> (
+    DomainPackLifecycleReceiptDocument,
+    DomainPackLifecyclePreflightDocument,
+    IntegratedInstallInputs,
+) {
     let project_root = state_root.parent().expect("project root");
     let project_digest = current_project_snapshot_digest(project_root);
     let mut locked = lock_domain_pack_lifecycle(state_root).expect("lock installed lifecycle");
@@ -1010,13 +1330,56 @@ fn commit_integrated_remove(
     let (document, inputs) =
         integrated_remove_preflight(fixture, base_inputs, expected, previous_lock);
     let prepared = locked
-        .prepare_candidate(document)
+        .prepare_candidate(document.clone())
         .expect("prepare integrated remove");
     let authority = authorize_without_artifacts(project_root, fixture, &inputs, &prepared)
         .expect("authorize integrated remove");
+    let receipt = locked
+        .commit(prepared, authority)
+        .expect("commit integrated remove");
+    (receipt, document, inputs)
+}
+
+fn commit_integrated_reinstall(
+    state_root: &Path,
+    fixture: &Fixture,
+    raw: &RawArtifactFixture,
+) -> DomainPackLifecycleReceiptDocument {
+    let project_root = state_root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let mut locked = lock_domain_pack_lifecycle(state_root).expect("lock removed lifecycle");
+    let expected = expected_from_projection(locked.projection(), &project_digest);
+    let previous_lock = locked
+        .projection()
+        .active_lock
+        .clone()
+        .expect("active empty lock");
+    let material = raw.material(fixture);
+    let (mut document, inputs) = integrated_install_preflight(fixture, expected, &material);
+    let body = &mut document.domain_pack_lifecycle_preflight;
+    body.compatibility_report = evaluate_domain_pack_compatibility(&DomainPackCompatibilityInput {
+        report_id: id("compatibility.integrated-reinstall"),
+        operation: body.request.domain_pack_lifecycle_request.operation.clone(),
+        sealed_core: body
+            .proposed_lock
+            .domain_pack_exact_lock
+            .payload
+            .core
+            .clone(),
+        from_lock: Some(previous_lock),
+        to_lock: body.proposed_lock.clone(),
+    });
+    body.preflight_digest.clear();
+    let preflight_digest = canonical_digest(&document);
+    document.domain_pack_lifecycle_preflight.preflight_digest = preflight_digest;
+    let prepared = locked
+        .prepare_candidate(document)
+        .expect("prepare integrated reinstall");
+    let authority = authorize_integrated(project_root, fixture, raw, &inputs, &prepared)
+        .expect("authorize integrated reinstall");
     locked
         .commit(prepared, authority)
-        .expect("commit integrated remove")
+        .expect("commit integrated reinstall")
 }
 
 fn lifecycle_variant(
@@ -1063,6 +1426,70 @@ fn lifecycle_variant(
     document
 }
 
+fn rebind_preflight_to_reviewed_registry(
+    mut document: DomainPackLifecyclePreflightDocument,
+    resolution_request: &DomainPackResolutionRequestDocument,
+    fixture: &Fixture,
+) -> DomainPackLifecyclePreflightDocument {
+    let body = &mut document.domain_pack_lifecycle_preflight;
+    if let Some(entry) = fixture
+        .reviewed_registry
+        .domain_pack_reviewed_registry
+        .entries
+        .first()
+    {
+        for selected in &mut body.resolution.domain_pack_resolution_projection.selected {
+            selected.reviewed_entry_digest = Some(entry.entry_digest.clone());
+            selected.promotion_authorization_digest = Some(entry.authorization_digest.clone());
+        }
+        for package in &mut body.proposed_lock.domain_pack_exact_lock.payload.packages {
+            package.reviewed_entry_digest = Some(entry.entry_digest.clone());
+            package.promotion_authorization_digest = Some(entry.authorization_digest.clone());
+        }
+    }
+    let projection = &mut body.resolution.domain_pack_resolution_projection;
+    projection.resolution_digest = domain_pack_resolution_projection_digest(
+        resolution_request,
+        &resolution_request
+            .domain_pack_resolution_request
+            .registry_snapshot_digest,
+        projection,
+    );
+    let lock = &mut body.proposed_lock.domain_pack_exact_lock;
+    lock.payload.reviewer_registry_digest.clone_from(
+        &fixture
+            .reviewer_registry
+            .domain_pack_reviewer_registry
+            .registry_digest,
+    );
+    lock.payload.reviewed_registry_digest.clone_from(
+        &fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .registry_digest,
+    );
+    lock.payload
+        .resolution_digest
+        .clone_from(&projection.resolution_digest);
+    lock.lock_digest = canonical_digest(&lock.payload);
+    let operation = body.request.domain_pack_lifecycle_request.operation.clone();
+    body.compatibility_report = evaluate_domain_pack_compatibility(&DomainPackCompatibilityInput {
+        report_id: body
+            .compatibility_report
+            .domain_pack_compatibility_report
+            .report_id
+            .clone(),
+        operation,
+        sealed_core: lock.payload.core.clone(),
+        from_lock: None,
+        to_lock: body.proposed_lock.clone(),
+    });
+    body.preflight_digest.clear();
+    let preflight_digest = canonical_digest(&document);
+    document.domain_pack_lifecycle_preflight.preflight_digest = preflight_digest;
+    document
+}
+
 fn attempt_variant(
     state_root: &Path,
     fixture: &Fixture,
@@ -1084,6 +1511,29 @@ fn attempt_variant(
     let document = lifecycle_variant(base, expected, previous_lock, operation, marker);
     let prepared = locked.prepare_candidate(document)?;
     let authority = authorize_integrated(project_root, fixture, raw, inputs, &prepared)?;
+    locked.commit(prepared, authority)
+}
+
+fn attempt_empty_variant(
+    state_root: &Path,
+    fixture: &Fixture,
+    base: &DomainPackLifecyclePreflightDocument,
+    inputs: &IntegratedInstallInputs,
+    operation: DomainPackLifecycleOperation,
+    marker: &str,
+) -> Result<DomainPackLifecycleReceiptDocument, DomainPackLifecycleStoreError> {
+    let project_root = state_root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let mut locked = lock_domain_pack_lifecycle(state_root)?;
+    let expected = expected_from_projection(locked.projection(), &project_digest);
+    let previous_lock = locked
+        .projection()
+        .active_lock
+        .clone()
+        .expect("initialized exact lock");
+    let document = lifecycle_variant(base, expected, previous_lock, operation, marker);
+    let prepared = locked.prepare_candidate(document)?;
+    let authority = authorize_without_artifacts(project_root, fixture, inputs, &prepared)?;
     locked.commit(prepared, authority)
 }
 
@@ -1317,6 +1767,172 @@ fn rollback_replays_exact_history_without_generation_collision_and_rejects_orpha
 }
 
 #[test]
+fn rollback_to_exact_historical_empty_lock_is_vacuously_reviewed() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("rollback-empty-lock");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    let (remove, empty_preflight, empty_inputs) =
+        commit_integrated_remove_with_preflight(&root, &fixture, &install_inputs);
+    let target_receipt_digest = remove.domain_pack_lifecycle_receipt.receipt_digest.clone();
+    let target_lock_digest = remove
+        .domain_pack_lifecycle_receipt
+        .to_state
+        .active_lock_digest
+        .clone();
+
+    commit_integrated_reinstall(&root, &fixture, &raw);
+    let rollback = attempt_empty_variant(
+        &root,
+        &fixture,
+        &empty_preflight,
+        &empty_inputs,
+        DomainPackLifecycleOperation::Rollback {
+            target_receipt_digest,
+            target_lock_digest: target_lock_digest.clone(),
+        },
+        "rollback-empty-exact",
+    )
+    .expect("exact historical remove-last lock is vacuously reviewed eligible");
+    assert_eq!(
+        rollback
+            .domain_pack_lifecycle_receipt
+            .to_state
+            .active_lock_digest,
+        target_lock_digest
+    );
+    let locked = lock_domain_pack_lifecycle(&root).expect("load rolled-back empty lock");
+    assert!(locked
+        .projection()
+        .active_lock
+        .as_ref()
+        .expect("active empty lock")
+        .domain_pack_exact_lock
+        .payload
+        .packages
+        .is_empty());
+    drop(locked);
+
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn dual_axis_review_is_mandatory_and_exactly_bound_to_supply_chain_artifacts() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("dual-axis-adversarial");
+    let project_root = root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let locked = lock_domain_pack_lifecycle(&root).expect("lock fresh lifecycle");
+    let expected = expected_from_projection(locked.projection(), &project_digest);
+    let material = raw.material(&fixture);
+    let (base, inputs) = integrated_install_preflight(&fixture, expected, &material);
+
+    let without_review = fixture.with_reviewed_registry(|registry| registry.entries.clear());
+    let no_review = rebind_preflight_to_reviewed_registry(
+        base.clone(),
+        &inputs.resolution_request,
+        &without_review,
+    );
+    let prepared = locked
+        .prepare_candidate(no_review)
+        .expect("structurally prepare supply-only candidate");
+    let error = authorize_integrated(project_root, &without_review, &raw, &inputs, &prepared)
+        .expect_err("supply-chain verification without reviewed semantics must fail closed");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    let mismatched_supply = fixture.with_reviewed_registry(|registry| {
+        registry.entries[0].supply_chain_record_digest = digest('e');
+    });
+    let mismatched = rebind_preflight_to_reviewed_registry(
+        base.clone(),
+        &inputs.resolution_request,
+        &mismatched_supply,
+    );
+    let prepared = locked
+        .prepare_candidate(mismatched)
+        .expect("structurally prepare mismatched reviewed record");
+    let error = authorize_integrated(project_root, &mismatched_supply, &raw, &inputs, &prepared)
+        .expect_err("review cannot substitute for the exact supply-chain record");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    let mismatched_fixture = fixture.with_reviewed_registry(|registry| {
+        registry.entries[0].fixture_digests[0] = digest('f');
+    });
+    let mismatched = rebind_preflight_to_reviewed_registry(
+        base,
+        &inputs.resolution_request,
+        &mismatched_fixture,
+    );
+    let prepared = locked
+        .prepare_candidate(mismatched)
+        .expect("structurally prepare mismatched fixture review");
+    let error = authorize_integrated(project_root, &mismatched_fixture, &raw, &inputs, &prepared)
+        .expect_err("review without exact fixture binding must fail closed");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    drop(locked);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn revoked_review_blocks_rollback_but_does_not_trap_removal() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let revoked = fixture.with_reviewed_registry(|registry| {
+        let entry = &mut registry.entries[0];
+        entry.stage = DomainPackPromotionStage::Revoked;
+        entry.eligibility = DomainPackReviewedEligibility::IneligibleRevoked;
+        entry.revocation = Some(DomainPackRevocationBinding {
+            reason: "adversarial revocation".to_owned(),
+            effective_at_unix: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_secs(),
+            authorization_digest: learning_digest("revocation-authorization"),
+        });
+    });
+    let root = temp_state_root("revoked-lifecycle");
+    let (install, base, inputs) = commit_integrated_install(&root, &fixture, &raw);
+    let target_receipt_digest = install.domain_pack_lifecycle_receipt.receipt_digest.clone();
+    let target_lock_digest = install
+        .domain_pack_lifecycle_receipt
+        .to_state
+        .active_lock_digest
+        .clone();
+
+    commit_integrated_remove(&root, &revoked, &inputs);
+    let error = attempt_variant(
+        &root,
+        &revoked,
+        &raw,
+        &base,
+        &inputs,
+        DomainPackLifecycleOperation::Rollback {
+            target_receipt_digest,
+            target_lock_digest,
+        },
+        "rollback-revoked",
+    )
+    .expect_err("a revoked package cannot be reactivated by historical rollback evidence");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
 fn persisted_generation_object_and_crosslink_tamper_block_state_load() {
     let fixture = Fixture::new();
     let raw = RawArtifactFixture::new(&fixture);
@@ -1489,6 +2105,7 @@ fn non_empty_raw_sidecar_install_recomputes_every_boundary_and_blocks_tamper() {
         verify_domain_pack_supply_chain_snapshot(&inputs.trust_policy, &fixture.snapshot, now)
             .expect("fresh integrated supply-chain proof");
     let anchored = fixture.anchored(verified);
+    let reviewed_anchored = fixture.reviewed_anchored(now);
     let project_snapshot = verify_domain_pack_project_snapshot(project_root, &project_digest)
         .expect("fresh project snapshot");
     let valid_materials = [material];
@@ -1504,6 +2121,7 @@ fn non_empty_raw_sidecar_install_recomputes_every_boundary_and_blocks_tamper() {
         &prepared,
         &DomainPackLifecycleAuthorizationContext {
             anchored_snapshot: &anchored,
+            anchored_reviewed_snapshot: &reviewed_anchored,
             project_snapshot: &project_snapshot,
             trust_policy_document: &inputs.trust_policy,
             registry_document: &fixture.snapshot,
@@ -1524,6 +2142,7 @@ fn non_empty_raw_sidecar_install_recomputes_every_boundary_and_blocks_tamper() {
         &staged_prepared,
         &DomainPackLifecycleAuthorizationContext {
             anchored_snapshot: &anchored,
+            anchored_reviewed_snapshot: &reviewed_anchored,
             project_snapshot: &project_snapshot,
             trust_policy_document: &inputs.trust_policy,
             registry_document: &fixture.snapshot,
@@ -1544,6 +2163,7 @@ fn non_empty_raw_sidecar_install_recomputes_every_boundary_and_blocks_tamper() {
         &prepared,
         &DomainPackLifecycleAuthorizationContext {
             anchored_snapshot: &anchored,
+            anchored_reviewed_snapshot: &reviewed_anchored,
             project_snapshot: &project_snapshot,
             trust_policy_document: &inputs.trust_policy,
             registry_document: &fixture.snapshot,

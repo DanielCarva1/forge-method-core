@@ -17,6 +17,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P6c reviewed Domain Pack learning and promotion (`0.8.0`).** Local
+  observations are captured as immutable, content-addressed candidates but
+  remain inert. Nine closed schema-0.3 families bind promotion dossiers,
+  evaluator and fixture evidence, ablation or blind strong-judge comparison,
+  independent reviews, conflicts, reviewer rotation, promotion authorization,
+  and the append-only reviewed registry. Semantic review and registry
+  authorization are separate cryptographic roles; authors, evaluators, fixture
+  producers, and judges cannot review their own work. Reviewer roots and
+  reviewed-registry heads are operator-protected, monotonic, predecessor-signed,
+  and replayed through fresh opaque snapshots. Conflicting learning emits an
+  explicit review request rather than silently merging. The lifecycle TCB now
+  requires both the exact anchored P6b supply-chain snapshot and exact anchored
+  reviewed-registry snapshot, including package, manifest, content, license,
+  fixture, entry, authorization, and registry digests. Deprecated, revoked, or
+  superseded knowledge stays auditable but cannot enter new install, upgrade,
+  or rollback resolutions; exact removal of already-active ineligible content
+  remains available for recovery. The agent CLI adds capture, evaluation,
+  conflict, review-trust, reviewer-rotation, registry inspection, and promotion
+  journeys while keeping mutations out of the default MCP projection. The real
+  reference pack and novel-domain proof remain P6d. The cumulative local
+  workspace gate is intentionally deferred until P6 completion; focused crate,
+  adversarial, schema, CLI, lint, and aggregate repository gates cover this
+  pullable checkpoint.
+  Because exact locks, resolutions, and receipts now carry required semantic
+  assurance and reviewed-registry bindings, the lifecycle wire schema advances
+  from 0.2 to 0.3 rather than pretending the change is additive.
 - **P6b governed Domain Pack resolution, trust, and lifecycle (`0.7.0`).**
   Closed schema-0.2 contracts and a bounded deterministic resolver preserve
   compatible locks, reject dependency confusion/equivocation/revocation, and

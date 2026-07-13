@@ -1,0 +1,15 @@
+[package]
+name = "forge-core-domain-pack-learning-store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-store = { path = "../forge-core-store" }
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
+yaml_serde.workspace = true
+
+[dev-dependencies]

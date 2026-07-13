@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_compatibility_report:
   report_id: report.domain-pack-compatibility.fixture
   authority: candidate_only

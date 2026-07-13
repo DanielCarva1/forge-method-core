@@ -45,6 +45,10 @@ fn locked_package(assurance: DomainPackSourceAssurance) -> DomainPackLockedPacka
         namespace_grant_id: StableId("grant.sample.foundation".to_owned()),
         registry_record_digest: B.to_owned(),
         source_assurance: assurance,
+        semantic_assurance:
+            forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Reviewed,
+        reviewed_entry_digest: Some(B.to_owned()),
+        promotion_authorization_digest: Some(C.to_owned()),
         dependencies: manifest.dependencies.clone(),
         deterministic_order: 0,
     }
@@ -58,6 +62,8 @@ fn lock(packages: Vec<DomainPackLockedPackage>) -> DomainPackExactLockDocument {
         requirements_digest: A.to_owned(),
         roots: vec![],
         registry_snapshot_digest: B.to_owned(),
+        reviewer_registry_digest: C.to_owned(),
+        reviewed_registry_digest: D.to_owned(),
         trust_policy_digest: C.to_owned(),
         capability_registry_digest: D.to_owned(),
         sandbox_policy_digest: A.to_owned(),

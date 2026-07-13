@@ -1,0 +1,31 @@
+schema_version: "0.3"
+domain_pack_local_learning_candidate:
+  candidate_id: "learning.game-loop.1"
+  authority: "non_authoritative_observation"
+  target:
+    pack:
+      publisher: "forge.reference"
+      name: "game-production"
+    base_version: "1.0.0"
+    contribution_ref: "hazard.first-playable"
+    proposed_namespace: "domain.game"
+  assertion: "A first-playable usability pass is required before readiness."
+  provenance:
+    source_kind: "evaluator_observation"
+    source_ref: "run://first-playable/42"
+    source_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    captured_by: "agent.qa"
+    capture_run_id: "run.42"
+    chat_transcript_ref: null
+  evidence:
+    - evidence_id: "evidence.first-playable.42"
+      kind: "evaluation_run"
+      artifact:
+        artifact_ref: "evidence/first-playable-42.yaml"
+        raw_sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        canonical_sha256: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      producer: "evaluator.first-playable"
+      produced_at_unix: 1783900000
+      provenance_digest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  observed_at_unix: 1783900001
+  candidate_digest: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"

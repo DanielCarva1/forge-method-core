@@ -56,18 +56,19 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.7.0"
+    version: "0.8.0"
     publication_state: "source_pullable"
     minimum_consumer_version: "0.6.0"
     guide_payload_schema: "0.2"
     domain_pack_schema: "0.1"
-    domain_pack_lifecycle_schema: "0.2"
+    domain_pack_lifecycle_schema: "0.3"
+    domain_pack_learning_schema: "0.3"
     workflow_release_identity: "0.4.0"
     boundary: >-
-      Package SemVer identifies the pullable P6b governed lifecycle checkpoint.
+      Package SemVer identifies the pullable P6c reviewed-learning checkpoint.
       It does not rewrite the frozen five-release workflow-governance history;
-      lifecycle authority remains opaque, monotonic, project-bound, and
-      operator-rooted. No tag is claimed before the cumulative P6 release
+      lifecycle and reviewed-learning authority remain opaque, monotonic,
+      project-bound, and operator-rooted. No tag is claimed before the cumulative P6 release
       matrix succeeds.
   preserve:
     - "Command Surface"
@@ -379,20 +380,20 @@ phases:
         - "extend Forge through governed domain knowledge without growing implicit core authority"
         - "preserve deterministic composition, explicit gaps, and candidate-only boundaries"
     active_checkpoint:
-      id: "P6b-pack-lifecycle-resolution-and-trust"
+      id: "P6c-learning-promotion-and-reviewed-registry"
       status: "completed"
       scope:
-        - "govern deterministic resolution, exact locks, trust, capability confinement, and lifecycle mutation"
-        - "persist exact raw objects and complete immutable generations behind one crash-safe pointer"
-        - "ship package 0.7.0 while preserving the frozen five-release 42-policy workflow registry"
+        - "capture local learning without granting authority"
+        - "admit reusable knowledge only through evidence, independent review, and a monotonic reviewed registry"
+        - "ship package 0.8.0 while preserving the frozen five-release 42-policy workflow registry"
     next_slice:
-      id: "P6c-learning-promotion-and-reviewed-registry"
+      id: "P6d-reference-pack-and-novel-domain-proof"
       status: "pending"
       scope:
-        - "capture local learning without granting authority"
-        - "add evidence-backed promotion, independent review, conflicts, deprecation, revocation, and supersession"
+        - "prove one real reviewed reference pack without domain-specific core logic"
+        - "exercise chat-only guidance, representative execution, hostile rejection, and replacement-agent continuity"
     following_slices:
-      - "P6d reference pack and novel-domain proof"
+      - "P6 cumulative full-workspace and release gates"
     checkpoint_evidence:
       - "fixed-registry signed applicability, capability, evidence, signal, decision, and waiver boundaries pass adversarial tests"
       - "Decision Need activation and repeated on-signal episodes are proven without caller-authored authority"
@@ -747,7 +748,7 @@ phases:
         publication: "one pullable governed lifecycle checkpoint after focused gates; cumulative full-workspace gate remains deferred to P6 completion"
       - id: "P6c-learning-promotion-and-reviewed-registry"
         size: "medium_to_large"
-        status: "pending"
+        status: "completed"
         depends_on: ["P6b-pack-lifecycle-resolution-and-trust"]
         outcome: >-
           Useful local learning can become reusable domain knowledge only through
@@ -763,7 +764,14 @@ phases:
           - "promotion decisions are reproducible from durable evidence and review records"
           - "revoked or superseded content remains auditable but cannot activate in new resolutions"
           - "conflicting local learning produces an explicit review request"
-        publication: "one pullable learning-promotion checkpoint after full workspace gates"
+        implementation_evidence:
+          - "nine closed schema-0.3 learning/promotion families with exact cross-axis P6b digest bindings"
+          - "inert content-addressed local candidate capture with retained OS locking, CAS, recovery, and same-id equivocation rejection"
+          - "pure promotion, ablation/strong-judge, conflict, monotonic registry, and exact activation-join decisions"
+          - "independent semantic review plus separate registry authorization and predecessor-signed reviewer rotation"
+          - "opaque anchored reviewed-registry snapshots consumed jointly with anchored supply-chain snapshots by the Domain Pack TCB"
+          - "agent CLI capture/status/evaluate/conflict-check/trust-provision/reviewer-rotate/registry-check/promote and lifecycle integration"
+        publication: "one pullable learning-promotion checkpoint after focused gates; cumulative full-workspace gate remains deferred to P6 completion"
       - id: "P6d-reference-pack-and-novel-domain-proof"
         size: "large"
         status: "pending"
@@ -844,12 +852,13 @@ first_executable_slice:
     - "P5d.5 frozen 110-workflow evidence archive, 68-workflow operational catalog, signed all-42 retirement checkpoint, typed tombstones, five-surface deletion proof, and 170 aggregate clean checks"
     - "P6a five closed Domain Pack families, exact manifest/content sidecars, deterministic bounded composition, bilateral whole-policy replacement, read-only confined CLI, neutral removal corpus, unchanged 42-policy core authority, and 171 aggregate clean checks"
     - "P6b fourteen closed lifecycle families, signed supply-chain verification, deterministic exact resolution, default-deny capability confinement, fresh project-bound opaque activation, crash-safe immutable generations, governed lifecycle CLI, adversarial corpus, and 172 aggregate clean checks"
+    - "P6c nine closed learning families, inert local capture, evidence-backed ablation or strong-judge promotion, independent semantic and registry authority, monotonic reviewed registry, dual-anchor lifecycle admission, and 173 aggregate clean checks"
   next_action: >-
-    P5, P6a, and P6b are complete. Execute P6c next by adding evidence-backed
-    local learning capture, promotion stages, semantic review, versioning,
-    conflict analysis, and a reviewed registry. Keep learned or proposed
-    knowledge non-authoritative until durable evidence and independent review
-    satisfy the exact promotion boundary.
+    P5 and P6a-P6c are complete. Execute P6d next with one real reviewed
+    reference pack, a hostile comparison pack, a chat-only novel-domain journey,
+    representative execution evidence, replacement-agent lifecycle continuity,
+    and a core-deletion proof. Run the deferred cumulative full-workspace gate
+    only after that P6 ecosystem proof is complete.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

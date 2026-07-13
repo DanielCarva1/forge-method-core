@@ -135,6 +135,7 @@ pub fn run_domain_pack_command(args: &[String]) -> Result<(), ExitError> {
         "validate" => run_validate(&args[2..]),
         "compose" => run_compose(&args[2..]),
         "resolve" => run_resolve(&args[2..]),
+        "learning" => crate::domain_pack_learning_cmd::run_domain_pack_learning_command(&args[2..]),
         "trust-provision" => run_trust_provision(&args[2..]),
         "status" => run_lifecycle_state(&args[2..], false),
         "recover" => run_lifecycle_state(&args[2..], true),
@@ -348,10 +349,13 @@ fn run_lifecycle_state(args: &[String], recover: bool) -> Result<(), ExitError> 
     crate::cli_util::emit_envelope(CliEnvelope::ok(command, payload), want_json)
 }
 
+#[allow(clippy::similar_names)] // Reviewer and reviewed registries are separate required roots.
 fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitError> {
     let mut preflight_file: Option<PathBuf> = None;
     let mut trust_policy_file: Option<PathBuf> = None;
     let mut registry_file: Option<PathBuf> = None;
+    let mut reviewer_registry_file: Option<PathBuf> = None;
+    let mut reviewed_registry_file: Option<PathBuf> = None;
     let mut resolution_request_file: Option<PathBuf> = None;
     let mut composition_request_file: Option<PathBuf> = None;
     let mut trust_input_file: Option<PathBuf> = None;
@@ -365,6 +369,8 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
             "--preflight-file" => set_path(&mut preflight_file, value),
             "--trust-policy-file" => set_path(&mut trust_policy_file, value),
             "--registry-file" => set_path(&mut registry_file, value),
+            "--reviewer-registry-file" => set_path(&mut reviewer_registry_file, value),
+            "--reviewed-registry-file" => set_path(&mut reviewed_registry_file, value),
             "--resolution-request-file" => set_path(&mut resolution_request_file, value),
             "--composition-request-file" => set_path(&mut composition_request_file, value),
             "--trust-input-file" => set_path(&mut trust_input_file, value),
@@ -384,6 +390,8 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
     let preflight_file = required(preflight_file)?;
     let trust_policy_file = required(trust_policy_file)?;
     let registry_file = required(registry_file)?;
+    let reviewer_registry_file = required(reviewer_registry_file)?;
+    let reviewed_registry_file = required(reviewed_registry_file)?;
     let resolution_request_file = required(resolution_request_file)?;
     let composition_request_file = required(composition_request_file)?;
     let trust_input_file = required(trust_input_file)?;
@@ -401,12 +409,32 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         "signed supply-chain registry",
         &controlled_roots,
     )?;
+    let reviewer_registry_file = trusted_external_file(
+        &reviewer_registry_file,
+        "signed reviewer registry",
+        &controlled_roots,
+    )?;
+    let reviewed_registry_file = trusted_external_file(
+        &reviewed_registry_file,
+        "dual-signed reviewed registry",
+        &controlled_roots,
+    )?;
 
     let preflight: DomainPackLifecyclePreflightDocument =
         read_typed(&preflight_file, "lifecycle preflight")?;
     let owned_artifacts = load_immutable_artifacts(&preflight, &artifact_root)?;
     let artifacts = immutable_artifact_views(&owned_artifacts);
     let operator_anchor = lock_operator_registry_anchor(&registry_file)?;
+    require_direct_operator_file(
+        &reviewer_registry_file,
+        &operator_anchor.operator_root,
+        "signed reviewer registry",
+    )?;
+    require_direct_operator_file(
+        &reviewed_registry_file,
+        &operator_anchor.operator_root,
+        "dual-signed reviewed registry",
+    )?;
     let trust_policy: DomainPackTrustPolicyDocument =
         read_typed(&trust_policy_file, "operator trust policy")?;
     let registry: DomainPackSupplyChainRegistryDocument =
@@ -444,6 +472,15 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         &mut registry_anchor,
         verified_snapshot,
     )?;
+    // Deterministic cross-anchor order: supply-chain lock first, then the
+    // combined reviewer/reviewed learning lock. The guard is explicitly kept
+    // through authorization and commit below.
+    let reviewed_guard = crate::domain_pack_learning_cmd::lock_reviewed_snapshot_for_lifecycle(
+        &operator_anchor.operator_root,
+        &reviewer_registry_file,
+        &reviewed_registry_file,
+        now_unix,
+    )?;
     let owned = load_composition_materials(&composition_request, &artifact_root)?;
     let materials = material_views(&composition_request, &owned);
     let mut lifecycle = lock_domain_pack_lifecycle(&state_root).map_err(map_lifecycle_error)?;
@@ -452,6 +489,7 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         .map_err(map_lifecycle_error)?;
     let context = DomainPackLifecycleAuthorizationContext {
         anchored_snapshot: &anchored_snapshot,
+        anchored_reviewed_snapshot: reviewed_guard.snapshot(),
         project_snapshot: &project_snapshot,
         trust_policy_document: &trust_policy,
         registry_document: &registry,
@@ -467,6 +505,7 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         let receipt = lifecycle
             .commit(prepared, authority)
             .map_err(map_lifecycle_error)?;
+        drop(reviewed_guard);
         crate::cli_util::emit_envelope(CliEnvelope::ok("domain-pack apply", receipt), want_json)
     } else {
         let payload = DomainPackLifecyclePreflightPayload {
@@ -475,6 +514,7 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
             supply_chain: anchored_snapshot.verified_snapshot().audit(),
             boundary: "fresh verification completed under lifecycle lock; this preflight did not activate the candidate generation",
         };
+        drop(reviewed_guard);
         crate::cli_util::emit_envelope(CliEnvelope::ok("domain-pack preflight", payload), want_json)
     }
 }

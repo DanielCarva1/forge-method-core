@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_capability_sandbox_policy:
   policy_id: policy.domain-pack-sandbox.fixture
   policy_version: 1.0.0

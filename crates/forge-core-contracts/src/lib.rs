@@ -13,6 +13,7 @@ pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
 pub mod domain_pack;
+pub mod domain_pack_learning;
 pub mod domain_pack_lifecycle;
 pub mod domain_pack_policy;
 pub mod domain_pack_resolution;
@@ -68,6 +69,7 @@ pub use decision::{
     DecisionStatus,
 };
 pub use domain_pack::*;
+pub use domain_pack_learning::*;
 pub use domain_pack_lifecycle::*;
 pub use domain_pack_policy::*;
 pub use domain_pack_resolution::*;

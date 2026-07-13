@@ -1,0 +1,182 @@
+schema_version: "0.3"
+domain_pack_learning_spec:
+  id: "spec.domain-pack-learning-v0"
+  status: "implementation"
+  purpose: >-
+    Preserve useful local observations without mistaking them for truth, then
+    promote reusable Domain Pack knowledge only through reproducible evidence,
+    independent review, conflict handling, signed authorization, and a
+    monotonic reviewed registry.
+  authority_boundary:
+    local_candidate: "non_authoritative_observation"
+    promotion_documents: "candidate_evidence_only"
+    independent_review: "signed_review_evidence_only"
+    authorization: "candidate_until_verified_by_the_trusted_boundary"
+    reviewed_registry: "candidate_until_signature_and_monotonic_anchor_verification"
+    forbidden_authority_sources:
+      - "chat history"
+      - "agent memory"
+      - "an agent assertion"
+      - "document presence"
+      - "passing structural validation"
+  schema_families:
+    version: "0.3"
+    roots:
+      - "domain_pack_local_learning_candidate"
+      - "domain_pack_promotion_dossier"
+      - "domain_pack_independent_review"
+      - "domain_pack_learning_conflict"
+      - "domain_pack_learning_review_request"
+      - "domain_pack_promotion_decision"
+      - "domain_pack_reviewer_registry"
+      - "domain_pack_promotion_authorization"
+      - "domain_pack_reviewed_registry"
+    rules:
+      - "all roots and nested records deny unknown fields"
+      - "all enums are closed"
+      - "all collections have semantic resource limits"
+      - "all evidence, fixture, evaluator, registry, and provenance artifacts bind exact digests"
+      - "serialized authority labels are not opaque capabilities"
+  local_learning:
+    authority: "non_authoritative_observation"
+    durable_capture:
+      - "exact target pack, optional base version, contribution, and namespace"
+      - "source kind, source reference, source digest, principal, and run"
+      - "one or more content-addressed evidence artifacts"
+      - "capture time and candidate digest"
+    chat_boundary: >-
+      A transcript reference may support audit, but chat text alone cannot
+      satisfy durable evidence, evaluation, review, or promotion requirements.
+  promotion:
+    stages:
+      - "candidate"
+      - "trial"
+      - "validated"
+      - "reviewed"
+      - "deprecated"
+      - "revoked"
+      - "superseded"
+    forward_transitions:
+      - "candidate_to_trial"
+      - "trial_to_validated"
+      - "validated_to_reviewed"
+      - "reviewed_to_deprecated"
+      - "reviewed_to_revoked"
+      - "reviewed_to_superseded"
+      - "deprecated_to_revoked"
+      - "deprecated_to_superseded"
+    emergency_revocation:
+      - "candidate_to_revoked"
+      - "trial_to_revoked"
+      - "validated_to_revoked"
+    terminal:
+      - "revoked"
+      - "superseded"
+    dossier_requires:
+      - "exact package, manifest, and content digests"
+      - "candidate and prior-promotion lineage"
+      - "durable evidence"
+      - "content-addressed evaluators and fixtures"
+      - "source repository, revision, tree, build recipe, and authors"
+      - "all known conflicts and open gaps"
+    reviewed_boundary: >-
+      Validated-to-reviewed requires at least one ablation or strong-judge
+      comparison. Unknown gaps remain explicit; a favorable aggregate score
+      cannot hide regressions or unresolved gaps.
+    strong_judge_proof: >-
+      A strong-judge run binds a distinct judge principal and independence
+      domain, blind A/B=true, deterministic ordering, rubric, model, prompt,
+      input, and output digests. Evaluator and fixture producer principals are
+      explicit so review independence is machine-checkable.
+  review:
+    independence:
+      - "reviewer credential resolves from the currently anchored reviewer registry"
+      - "reviewer is active, within validity window, and authorized for its exact role"
+      - "reviewer declares an independence domain and no disqualifying conflict"
+      - "approvals with open blocking findings are invalid"
+    conflicts: >-
+      Contradictory local learning, reviewed-knowledge disagreement, fixture
+      mismatch, evaluator disagreement, provenance dispute, or compatibility
+      dispute creates a durable conflict. An unresolved conflict must bind an
+      explicit review request and cannot be silently overwritten.
+    request: >-
+      A request names the dossier, conflicts, exact roles, minimum independent
+      count, reason, status, and resulting review digests.
+  reviewer_registry:
+    chain: >-
+      Registry id, audience, generation, predecessor digest, trust-policy
+      digest, threshold, complete reviewer set, and registry digest are bound.
+    genesis: "signed by the operator trust root and explicitly anchored"
+    rotation: >-
+      A successor is signed only by credentials resolved from the already
+      anchored predecessor. Proposed keys cannot authorize their own rotation.
+    reviewer_entry:
+      - "principal and credential identity"
+      - "Ed25519 public key and fingerprint"
+      - "authorized roles and independence domains"
+      - "active, suspended, or revoked status"
+      - "strict validity window"
+  authorization:
+    payload_binds:
+      - "dossier and promotion decision"
+      - "independent reviews"
+      - "anchored reviewer registry"
+      - "current and proposed reviewed registries"
+      - "exact stage transition"
+      - "audience, domain, nonce, and validity window"
+    threshold: >-
+      At least two distinct active reviewers in at least two distinct roles
+      must sign the exact payload. The trusted boundary may require a stronger
+      transition-specific role policy.
+  reviewed_registry:
+    chain: "generation zero omits a predecessor; every successor binds the exact prior digest"
+    entry_identity:
+      - "publisher, name, version, and exact package digest"
+      - "manifest and content digests"
+      - "supply-chain record, license, and every exact fixture digest"
+      - "promotion decision and authorization digests"
+      - "independent review digests"
+      - "compatibility and migration metadata"
+    digest_join_format:
+      p6b_supply_chain_bindings: >-
+        Package, supply-chain-record, manifest, content, license, fixture, and
+        P6b artifact-binding digests use the exact P6b token format
+        sha256:<64 lowercase hexadecimal characters>.
+      p6c_internal_bindings: >-
+        Candidate, dossier, review, decision, authorization, registry, entry,
+        provenance, and other P6c-internal self-digests remain bare 64-character
+        hexadecimal values.
+    eligibility:
+      reviewed: "eligible_reviewed"
+      deprecated: "ineligible_deprecated"
+      revoked: "ineligible_revoked"
+      superseded: "ineligible_superseded"
+    append_only_history: >-
+      Trusted admission compares every successor with the anchored predecessor.
+      Existing identities and terminal dispositions cannot disappear, mutate,
+      or resurrect. Deprecation, revocation, and supersession remain auditable
+      forever but cannot enter new resolution.
+    exact_replay: >-
+      Every snapshot carries fresh-verifiable signatures from a semantic
+      reviewer and a distinct registry authorizer over the exact snapshot
+      digest. An exact anchored replay rechecks those signatures without
+      treating historical dossier replay as current authorization.
+    supersession: >-
+      The replacement binds a different exact package identity plus the
+      authorization that approved it. A superseded entry remains in history.
+  resource_limits:
+    evidence_per_document: 256
+    findings_per_review: 256
+    fixtures_per_dossier: 128
+    reviews_per_boundary: 32
+    conflicts_per_document: 128
+    reviewed_registry_entries: 4096
+  acceptance:
+    - "local observation remains non-authoritative after serialization and validation"
+    - "unknown fields and invented authority variants fail deserialization"
+    - "stage skips, backward transitions, and terminal resurrection fail closed"
+    - "reviewed promotion without durable comparison evidence fails closed"
+    - "self-review, duplicate signer, one-role quorum, stale credential, and proposed-key self-rotation fail closed"
+    - "unresolved conflicting learning emits a review request"
+    - "registry fork, skip, truncation, rewrite, revocation removal, and resurrection fail closed"
+    - "revoked and superseded entries remain queryable but never newly activate"

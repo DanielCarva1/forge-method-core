@@ -113,6 +113,28 @@ lock that preserves explicit `missing_domain` / `missing_capability` gaps. See
 reviewed real reference pack remains P6d rather than special-case Rust core
 logic.
 
+P6c keeps local learning deliberately inert. `domain-pack learning capture`
+stores an exact candidate and provenance, but capture alone never changes a
+pack, resolution, registry, or active generation. Promotion requires durable
+evaluator and fixture evidence, either ablation or a blind strong-judge
+comparison, independent semantic review, and a distinct registry authorizer.
+Conflicting learning produces an explicit review request instead of a silent
+merge. Reviewer rotation is predecessor-signed and the reviewed-registry head
+is monotonic and operator-protected. Deprecated, revoked, and superseded
+records remain visible for audit but cannot enter a new install, upgrade, or
+rollback.
+
+Lifecycle mutation now joins two independent opaque authorities: the exact
+P6b supply-chain snapshot and the exact P6c reviewed-registry snapshot. The
+join binds package, manifest, content, license, fixtures, review entry,
+promotion authorization, and both registry heads. Supplying only one registry,
+passing raw audit output, or changing any bound digest fails closed. Exact
+removal of previously active content stays available even after ineligibility,
+so revocation cannot trap a project in the state it is intended to leave. Use
+`forge-core domain-pack learning --help` for the agent-oriented capture,
+evaluation, conflict, trust, reviewer-rotation, registry-check, and promotion
+surface.
+
 The first trust anchor requires an explicit operator provisioning ceremony;
 `preflight` and `apply` never silently trust a registry on first use. The
 ceremony places the crash-safe anchor beside the operator-selected registry;

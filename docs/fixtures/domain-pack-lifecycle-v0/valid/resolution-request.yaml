@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_resolution_request:
   request_id: resolution.domain-pack.fixture
   authority: candidate_only

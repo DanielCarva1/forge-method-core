@@ -278,6 +278,7 @@ pub enum DomainPackLifecycleIssueCode {
     SandboxDenied,
     CompatibilityBlocked,
     ArtifactBindingMismatch,
+    SemanticReviewRejected,
     ResourceLimitExceeded,
     RecoveryRequired,
 }
@@ -349,6 +350,8 @@ pub struct DomainPackLifecycleReceipt {
     pub composition_digest: String,
     pub compatibility_report_digest: String,
     pub trust_policy_digest: String,
+    pub reviewer_registry_digest: String,
+    pub reviewed_registry_digest: String,
     pub capability_registry_digest: String,
     pub sandbox_policy_digest: String,
     pub from_state: Option<DomainPackActivePointer>,

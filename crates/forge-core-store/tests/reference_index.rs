@@ -387,22 +387,31 @@ fn store_known_paths_satisfy_current_generic_known_refs() {
 }
 
 #[test]
-fn p6b_spec_is_a_contract_definition_and_corpus_is_known() {
+fn p6_specs_are_contract_definitions_and_corpora_are_known() {
     let root = repo_root();
-    let index = build_reference_index(&root).expect("build P6b-aware reference index");
-    assert_eq!(
-        index.kind_of("contracts/spec/domain-pack-lifecycle-v0.yaml"),
-        Some(forge_core_validate::ReferenceKind::ContractDefinition)
-    );
+    let index = build_reference_index(&root).expect("build P6-aware reference index");
+    for reference in [
+        "contracts/spec/domain-pack-lifecycle-v0.yaml",
+        "contracts/spec/domain-pack-learning-v0.yaml",
+    ] {
+        assert_eq!(
+            index.kind_of(reference),
+            Some(forge_core_validate::ReferenceKind::ContractDefinition),
+            "missing P6 contract definition {reference}"
+        );
+    }
     let known = collect_known_repo_paths(&root);
     for reference in [
         "docs/fixtures/domain-pack-lifecycle-v0/valid/resolution-request.yaml",
         "docs/fixtures/domain-pack-lifecycle-v0/valid/exact-lock.yaml",
         "docs/fixtures/domain-pack-lifecycle-v0/adversarial/sandbox-external-allow.invalid.yaml",
+        "docs/fixtures/domain-pack-learning-v0/valid/local-learning-candidate.yaml",
+        "docs/fixtures/domain-pack-learning-v0/valid/reviewer-registry.yaml",
+        "docs/fixtures/domain-pack-learning-v0/valid/reviewed-registry.yaml",
     ] {
         assert!(
             known.contains(reference),
-            "missing known P6b path {reference}"
+            "missing known P6 path {reference}"
         );
     }
 }

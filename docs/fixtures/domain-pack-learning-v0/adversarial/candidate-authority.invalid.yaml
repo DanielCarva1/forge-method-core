@@ -1,0 +1,20 @@
+schema_version: "0.3"
+domain_pack_local_learning_candidate:
+  candidate_id: "learning.invalid"
+  authority: "reviewed_authority"
+  target:
+    pack: { publisher: "p", name: "n" }
+    base_version: null
+    contribution_ref: null
+    proposed_namespace: "domain.x"
+  assertion: "invented authority"
+  provenance:
+    source_kind: "user_report"
+    source_ref: "chat"
+    source_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    captured_by: "agent"
+    capture_run_id: "run"
+    chat_transcript_ref: null
+  evidence: []
+  observed_at_unix: 1
+  candidate_digest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

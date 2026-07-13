@@ -1,4 +1,4 @@
-schema_version: '0.2'
+schema_version: '0.3'
 domain_pack_active_pointer:
   project_id: project.domain-pack.fixture
   generation: 1

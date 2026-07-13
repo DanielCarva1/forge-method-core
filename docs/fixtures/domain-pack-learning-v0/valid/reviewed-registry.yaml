@@ -1,0 +1,52 @@
+schema_version: "0.3"
+domain_pack_reviewed_registry:
+  registry_id: "registry.reviewed-domain-packs"
+  audience: "forge.domain-pack-resolution"
+  generation: 0
+  previous_registry_digest: null
+  entries:
+    - pack:
+        publisher: "forge.reference"
+        name: "game-production"
+        version: "1.0.0"
+      package_digest: "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      supply_chain_record_digest: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      manifest_digest: "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+      content_digest: "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+      license_digest: "sha256:1212121212121212121212121212121212121212121212121212121212121212"
+      fixture_digests:
+        - "sha256:1313131313131313131313131313131313131313131313131313131313131313"
+      stage: "reviewed"
+      eligibility: "eligible_reviewed"
+      promotion_decision_digest: "9999999999999999999999999999999999999999999999999999999999999999"
+      authorization_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      independent_review_digests:
+        - "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        - "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      compatibility:
+        forge_core_requirement: ">=0.7.0, <0.8.0"
+        pack_schema_requirement: "=0.1"
+        evaluator_protocol_versions: ["1"]
+        predecessor_content_digests: []
+        breaking_change: false
+        migration_evidence_refs: []
+      deprecation: null
+      revocation: null
+      supersession: null
+      entry_digest: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  snapshot_signatures:
+    - reviewer_id: "reviewer.domain"
+      credential_id: "credential.reviewer.domain.1"
+      role: "domain_expert"
+      algorithm: "ed25519"
+      payload_digest: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      signature: "snapshot-semantic"
+      signed_at_unix: 1783900200
+    - reviewer_id: "reviewer.registry"
+      credential_id: "credential.reviewer.registry.1"
+      role: "registry_authorizer"
+      algorithm: "ed25519"
+      payload_digest: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      signature: "snapshot-registry"
+      signed_at_unix: 1783900200
+  registry_digest: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
