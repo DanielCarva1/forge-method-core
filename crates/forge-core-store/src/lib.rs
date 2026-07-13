@@ -30,6 +30,7 @@ pub mod crash_replace;
 pub mod derive_state;
 pub mod replay_anchor;
 pub mod replay_wal;
+pub mod workflow_action_replay;
 
 /// The sole authority constructor for claim state. Replays the append-only
 /// claims WAL into a typed projection. See [`fn@derive_state`] for the contract.

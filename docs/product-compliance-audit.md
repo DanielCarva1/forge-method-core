@@ -1,7 +1,7 @@
 # Product promise compliance audit
 
-Status: audited against source checkpoint `0.10.0` after P6d and the first P7 productization slice.
-Decision: the protocol checkpoint is strong; the complete public product journey is not yet proven.
+Status: audited against source checkpoint `0.11.0` after P7a.2 implementation; cumulative release gates remain pending.
+Decision: the public authority-bridge protocol is implemented; the complete real-host product journey is not yet proven.
 
 ## Executive finding
 
@@ -10,27 +10,28 @@ content-addressed Domain Pack composition, reviewed learning, immutable lifecycl
 generations, crash recovery, representative-evidence rules, and replacement-agent
 ledger continuity.
 
-It does **not** yet prove that an ordinary user and host agent can perform the
-complete journey through the shipped public surface. P7a.1 removes private key
-and registry construction from the public credential lifecycle, but exact
-request/action-packet generation, one-call authorization, pack acquisition, and
-representative real-host proof remain open. The local signer is also only a
-cooperative same-principal proxy; it does not prove human presence or reviewer
-independence without a host/operator broker.
+It does **not** yet prove that an ordinary user and production host can perform
+the complete journey through a tagged release. P7a.2 adds deterministic action
+packets, closed-input request preparation, operator-managed external broker
+trust, and one-call application of a host-signed origin event. The local signer
+remains only a cooperative same-principal proxy. Forge verifies that a
+configured broker signed the bound event; the host deployment, not Forge,
+establishes physical presence, actor independence, and runtime integrity.
+Pack acquisition and representative real-host proof remain open.
 
 ## Promise matrix
 
 | Promise | Current evidence | Verdict |
 |---|---|---|
 | One idempotent bootstrap entry | `start` E2E covers empty, existing, damaged, and resumed projects | Proven for bootstrap |
-| Human works only in chat | Cooperative credential lifecycle/signing exists, but request/action-packet generation, high-level authorize, and a human-presence broker remain separate | Not yet operational |
+| Human works only in chat | Action packets and one-call broker-origin apply remove human request/attestation editing, but no representative production-host journey is published | Protocol implemented; product proof pending P7f |
 | Unknown unknowns become visible | Eight universal lenses exist in the read-only Obligation Engine | Proven in isolation, not integrated into the durable workflow loop |
 | Domain Packs cannot silently rewrite core | Generic composition, trust, lifecycle, degradation, and deletion tests | Proven inside the cooperative same-user threat model |
 | Reference pack helps an ignorant user discover the needed method | The game pack is a source fixture; no intent-to-pack discovery or coordinate install exists | Not yet operational |
 | Replacement agent resumes durable truth | Workflow ledger/effective epoch resume is strong | Partial: unified intent and Assurance Case are not in that authority |
 | Core can update after pack adoption | Release upgrade blocks whenever an active generation exists and no rebase command is public | Missing |
-| Prebuilt installation contains current P6/P7a.1 | Source is `0.10.0`; latest published prebuilt is older | Missing until a correct release is published |
-| Release identity is supply-chain coherent | The hardened source workflow now checks out the exact tag, requires matching workspace/binary version and prior CI, builds a manifested adoption archive, signs it, and requires an SBOM | Implemented in source; no `0.10.0` release published yet |
+| Prebuilt installation contains current P6/P7a.2 | Source is `0.11.0`; latest published prebuilt is older | Missing until a correct release is published |
+| Release identity is supply-chain coherent | The hardened source workflow checks out the exact tag, requires matching workspace/binary version and prior CI, builds a manifested adoption archive, signs it, and requires an SBOM | Implemented in source; no `0.11.0` release published yet |
 | Forge governs all product writes | Claims/gates protect Forge-mediated mutations | Limited: direct editor/shell writes remain outside Forge and must not be described as governed |
 | Idea-to-operated-product method | Runtime phase advancement ends at BuildVerify | Not yet complete |
 
@@ -46,7 +47,7 @@ can reproduce it without private Rust helpers or hand-authored authority files.
 The authoritative sequence and exit criteria are maintained in
 [`contracts/plan/agent-native-guidance-plan.yaml`](../contracts/plan/agent-native-guidance-plan.yaml):
 
-1. P7a workflow authority bridge.
+1. Finish the P7a.2 cumulative gate and publish the coherent source checkpoint.
 2. P7b unified durable Assurance Case.
 3. P7c domain-demand discovery and pack acquisition.
 4. P7d coordinated core/pack rebase.

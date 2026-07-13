@@ -18,7 +18,8 @@ The host agent must have the `forge-core` executable and canonical
 ### Prebuilt release
 
 At this documentation checkpoint, the latest tagged prebuilt is `v0.4.0` and
-does not contain the source-only P5/P6 and early P7 `0.10.0` feature level. Download the archive for the host platform from GitHub Releases and place both
+does not contain the source-only P5/P6 and P7a `0.11.0` feature level. Download
+the archive for the host platform from GitHub Releases and place both
 `forge-core` and its `forge` wrapper on `PATH`. Verify the checksum and Sigstore
 bundle as described in the [root README](../README.md#install).
 

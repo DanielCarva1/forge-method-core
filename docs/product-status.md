@@ -2,11 +2,11 @@
 
 ## Current checkpoint
 
-The source workspace is package version `0.10.0`. P5 and P6a–P6d are marked
-complete as protocol/architecture checkpoints in the typed product plan and
-covered by workflow-release, Domain Pack, lifecycle, learning, effective-epoch,
-replacement-resume, and cross-platform workspace evidence. This is not yet a
-clean public chat-only journey proof.
+The source workspace is package version `0.11.0`. P5 and P6a through P6d are complete
+protocol/architecture checkpoints; P7a.2 is implemented pending its cumulative
+gate. The source includes workflow-release, Domain Pack, lifecycle, learning,
+effective-epoch, replacement-resume, and external origin-broker authority
+surfaces. This is not yet a clean production-host chat-only journey proof.
 
 This does not mean every ecosystem feature is complete or every GitHub Release
 contains the current source checkpoint. Verify commit/tag, binary version,
@@ -37,15 +37,28 @@ archive contents, and CI independently.
 
 ## Adoption gaps that must remain honest
 
-The source checkpoint now exposes `workflow credential
-provision|rotate|revoke|status|sign`. It derives the fixed operator registry and
-secret directory from the Project Link, uses closed role/grant profiles, and
-signs only a typed request kind without exposing private keys. P7a remains open:
-`workflow next` does not yet generate the exact request/action packet, and the
-host must still pass the signed output to the existing `*-authorize` command.
-The local command is a cooperative signing proxy, not proof of human presence
-or independent review; a host/operator approval broker remains required before
-those high-authority product claims can close.
+The `0.11.0` P7a.2 source checkpoint adds deterministic, state-bound workflow
+action packets; minimal closed-input request preparation; an external broker
+registry that stores public keys only; host-origin event verification; and
+durable reserve/commit replay state. `workflow action apply` is the one-call
+high-level lane; the old request-file plus attestation-file commands remain
+expert compatibility surfaces. The local credential signer remains a
+cooperative same-principal proxy and is not proof of human presence or
+independent review.
+The local `workflow action authorize` convenience is therefore restricted to
+`operator_credential_broker` packets; high-authority packet classes require the
+external broker.
+
+Replay safety is a bounded, fail-closed recovery saga across the action replay
+WAL and governance ledger. Exact retries reconcile durable provenance; Forge
+does not claim cross-filesystem atomicity or safety after an attacker rewrites
+both the state root and its external trust anchors.
+
+This checkpoint proves a host-neutral broker protocol, not a production host's
+identity assurance. A configured broker vouches for the signed origin subject
+and separation domain. Physical presence, OS-principal isolation, and a
+representative Codex/OpenClaw/other-host journey remain P7f evidence rather
+than hidden P7a assumptions.
 
 Release tags and packaging may lag source checkpoints. Source installation is
 authoritative for unreleased commits; prebuilt users must use only assets

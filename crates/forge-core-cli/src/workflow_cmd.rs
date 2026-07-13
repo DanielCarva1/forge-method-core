@@ -41,6 +41,32 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
+    if args.get(1).is_some_and(|value| value == "action") {
+        let want_json = wants_json(args);
+        return match crate::workflow_action_cmd::run(&args[2..]) {
+            Ok(()) => Ok(()),
+            Err(error) if want_json => emit_failure(
+                "workflow.action",
+                credential_exit_reason(&error),
+                error.message().to_owned(),
+                true,
+            ),
+            Err(error) => Err(error),
+        };
+    }
+    if args.get(1).is_some_and(|value| value == "broker") {
+        let want_json = wants_json(args);
+        return match crate::workflow_broker_cmd::run(&args[2..]) {
+            Ok(()) => Ok(()),
+            Err(error) if want_json => emit_failure(
+                "workflow.broker",
+                credential_exit_reason(&error),
+                error.message().to_owned(),
+                true,
+            ),
+            Err(error) => Err(error),
+        };
+    }
     if args.get(1).is_some_and(|value| value == "credential") {
         let want_json = wants_json(args);
         return match crate::workflow_credential_cmd::run(&args[2..]) {
@@ -107,6 +133,9 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         "next" => adapter
             .next()
             .map(|value| serde_json::to_value(value).expect("serializable guidance")),
+        "action-packets" => adapter.action_packets().map(|value| {
+            serde_json::to_value(value).expect("serializable workflow action packets")
+        }),
         "resume" => adapter
             .resume()
             .map(|value| serde_json::to_value(value).expect("serializable guidance")),
@@ -521,10 +550,12 @@ fn invalid_observation(message: String) -> forge_core_kernel::WorkflowGovernance
 
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
     match args.subcommand.as_str() {
-        "release-status" | "retirement-status" if !args.flags.is_empty() => Err(format!(
-            "workflow {} accepts only --root and the JSON output switch",
-            args.subcommand
-        )),
+        "action-packets" | "release-status" | "retirement-status" if !args.flags.is_empty() => {
+            Err(format!(
+                "workflow {} accepts only --root and the JSON output switch",
+                args.subcommand
+            ))
+        }
         "release-upgrade" => {
             let expected = [
                 "target-release-id",

@@ -49,10 +49,24 @@ factual correctness.
 - Treat public audit projections as evidence only.
 - The P7a.1 workflow credential command is a cooperative local signing proxy,
   not human-presence authentication. High-authority human/reviewer/runtime keys
-  require a host/operator boundary outside the agent process.
+  require a host/operator boundary outside the agent process. The one-call
+  local `workflow action authorize` command accepts only packets marked
+  `operator_credential_broker`; the other broker boundaries fail before local
+  signing.
+- The P7a.2 origin broker stores public keys only and signs outside Forge. Its
+  envelope binds project, packet, minimal input, authenticated origin subject,
+  separation domain, profile/kind, freshness, and nonce. Forge still relies on
+  the configured host to authenticate that subject honestly.
+- Broker verification alone never consumes replay state. The kernel commits
+  the action and origin companion under the ledger lock before it appends the
+  reserve/commit replay index; a durable companion can repair that index after
+  response loss or crash. This is a fail-closed recoverable saga,
+  not a claim that separate filesystem stores commit atomically. Rollback
+  resistance still depends on protecting the state root and external trust
+  anchors from joint rewrite.
 - On Windows, credential files inherit the ACL of the derived operator
-  directory; operators must protect that directory until a keystore-backed
-  broker is implemented.
+  directory; operators must protect that directory and the broker trust
+  registry even when private broker keys live in a host keystore.
 
 ## Reporting a vulnerability
 

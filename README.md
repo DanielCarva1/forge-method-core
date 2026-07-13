@@ -64,9 +64,20 @@ Once bootstrapped, the agent follows the governed loop:
    never changes the pin.
 4. **`forge-core workflow next --root <repo> --json`** — derives the current
    policy, obligations, evidence/capability gaps, decisions, and ranked next
-   actions without caller-selected workflow or phase.
-5. The host agent performs the returned action, records only authorized
-   observations, and asks `workflow next` again. When an action needs a trusted
+   actions without caller-selected workflow or phase. Its `authorization`
+   projection includes exact state-bound action packets, closed input contracts,
+   and typed broker setup gaps. **`workflow action-packets`** exposes the same
+   packet set and registry status as a standalone read-only diagnostic.
+5. The host performs the evidence work or asks the irreducible chat question.
+   A packet marked `operator_credential_broker` may use **`workflow action
+   authorize`** for cooperative local one-call authorization; Forge rejects
+   that lane for human, independent-reviewer, and trusted-runtime packets.
+6. For those high-authority packets, the external host signs the inbound
+   origin event and calls **`forge-core workflow action apply`** with `--root
+   <repo> --origin-envelope-file ... --json`. Forge derives the request and
+   records it without a request/attestation file handoff, then the agent asks
+   `workflow next` again. Exact retries use a durable recovery saga; this is
+   not a claim of cross-filesystem atomicity. When an action needs a trusted
    repository mutation, `execute-operation` independently applies its existing
    Claim Coverage and Phase gates before any WAL append.
 
@@ -391,8 +402,8 @@ loop and the fast+quality lane:
 ## Install
 
 Choose by required feature level, not convenience alone. The source workspace
-currently declares `0.10.0` and contains P5/P6 plus the first P7 productization
-slice. The latest published prebuilt
+currently declares `0.11.0` and contains P5/P6 plus the P7a workflow-authority
+bridge. The latest published prebuilt
 release can lag source; at this documentation checkpoint it is `v0.4.0`. Verify
 the selected tag/commit and `forge-core --version`. Use the source path when you
 need a checkpoint that has not been tagged.

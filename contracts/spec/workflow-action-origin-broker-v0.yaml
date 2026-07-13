@@ -1,0 +1,112 @@
+schema_version: "0.1"
+workflow_action_origin_broker:
+  id: "spec.workflow-action-origin-broker.v0"
+  status: "implementation_checkpoint"
+  purpose: >-
+    Let a chat host carry an authenticated inbound human, reviewer, or runtime
+    event into Forge without allowing the agent to manufacture the governed
+    request, choose stale authority bindings, or receive a reusable signature.
+
+  threat_model:
+    protects_against:
+      - "caller-authored workflow request fields"
+      - "cross-project, cross-policy, cross-head, and cross-snapshot replay"
+      - "expired, future-dated, wrong-profile, wrong-kind, and duplicate origin events"
+      - "a cooperative agent presenting a local profile label as proof of human presence"
+    does_not_protect_against:
+      - "a compromised host approval broker or broker signing key"
+      - "an attacker who can rewrite the operator trust store and its external anchors"
+      - "direct project writes performed outside Forge-mediated mutation surfaces"
+      - "false evidence whose content cannot be independently evaluated"
+
+  action_packet:
+    authority: "derived_only_by_the_admitted_workflow_kernel"
+    canonical_digest_domain: "forge-method:workflow-action-packet:v1"
+    binds:
+      - "project_id"
+      - "effective_bundle_id_and_digest"
+      - "active_core_release"
+      - "policy_ref_and_action_subject"
+      - "state_version_and_current_phase"
+      - "snapshot_digest_and_ledger_head_digest"
+      - "readiness_target"
+      - "trusted_principal_registry_digest_when_present"
+      - "closed_action_kind_required_profile_and_authority_grant"
+      - "closed_semantic_input_contract"
+    excludes:
+      - "caller timestamps"
+      - "caller-selected policy, phase, bundle, grant, evaluator, or provider"
+      - "generic request or attestation JSON"
+    invalidation: >-
+      Any change to a bound value requires a newly derived packet. An apply
+      path must regenerate and compare the current packet under the mutation
+      lock; a stale digest never receives a fresh authorization.
+
+  origin_broker:
+    trust_bootstrap: >-
+      A host/operator performs an explicit out-of-agent trust ceremony that
+      installs only the broker public key, broker identity, allowed origin
+      profiles, and validity policy. Forge never provisions or stores the
+      broker private key.
+    signed_envelope:
+      binds:
+        - "broker_id_and_key_id"
+        - "origin_event_id_and_nonce"
+        - "project_id"
+        - "action_packet_digest"
+        - "authenticated_origin_subject"
+        - "origin_profile_and_separation_domain"
+        - "closed_semantic_input"
+        - "issued_at_and_expires_at"
+      rules:
+        - "unknown fields and unsupported profile/action combinations fail closed"
+        - "the broker signature is verified before semantic materialization"
+        - "host-provided labels alone never establish human, reviewer, or runtime independence"
+        - "no standalone workflow attestation or reusable Forge signature is emitted"
+
+  one_call_apply:
+    command_shape: >-
+      workflow action apply consumes one current packet digest and either one
+      host-origin envelope or a deliberately cooperative local credential for
+      actions whose packet permits that weaker mode.
+    transaction:
+      - "resolve the canonical Project Link and fixed authority stores"
+      - "derive the current action packet from admitted state"
+      - "verify packet equality, broker registry, signature, profile, freshness, and ledger/replay reconciliation"
+      - "materialize the exact kind-specific authorization request in the kernel"
+      - "verify authority and perform the kernel late-binding recheck"
+      - "append the action and origin companion atomically in the governed ledger"
+      - "index the durable receipt in the replay WAL with reserve plus commit records"
+      - "return the receipt plus newly derived workflow guidance"
+    recovery:
+      before_ledger_commit: "no replay reservation exists; the ledger lock serializes a still-current exact retry"
+      after_ledger_before_replay_commit: "the origin companion is authoritative and an exact retry repairs a missing or reserved replay index"
+      after_commit: "an exact retry returns the prior receipt and never appends twice"
+      response_lost: "a replacement process reconstructs the outcome from durable state"
+
+  setup_guidance:
+    rules:
+      - "workflow next reports missing authority before a mutation attempt"
+      - "guidance is typed and includes structured argv, never manual request JSON"
+      - "broker unavailability never falls back silently to a local human, reviewer, or runtime profile"
+
+  completion_evidence:
+    required_public_journeys:
+      - "human decision from authenticated host event"
+      - "independent reviewer observation with a distinct separation domain"
+      - "runtime capability observation from an authenticated runtime origin"
+    required_adversarial_cases:
+      - "stale head, snapshot, state version, effective epoch, or registry"
+      - "wrong project, packet, broker, key, profile, kind, or semantic choice"
+      - "expired and future-dated envelope"
+      - "missing, reserved, and committed post-ledger replay index across process restart"
+      - "broker rotation or revocation"
+      - "request-file and attestation-file bypass attempts"
+      - "symlink, junction, reparse-point, and physical-root alias attempts"
+
+  product_claim_boundary: >-
+    This protocol can prove that Forge accepted an event signed by a configured
+    external broker and bound it to one exact current action. Physical human
+    presence, actor independence, and runtime integrity are properties of the
+    selected host broker and its deployment; Forge must not infer them from a
+    local credential label.

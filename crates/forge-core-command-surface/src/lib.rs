@@ -294,6 +294,9 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
     usage_lines: &[
         "       forge-core workflow init [--root <path>] [--json|--no-json]",
         "       forge-core workflow next [--root <path>] [--json|--no-json]",
+        "       forge-core workflow action-packets [--root <path>] [--json|--no-json]",
+        "       forge-core workflow action authorize --root <path> --packet-digest <sha256> --input-file <closed-input.json> --credential-id <id> [--json|--no-json]",
+        "       forge-core workflow action apply --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
         "       forge-core workflow release-status [--root <path>] [--json|--no-json]",
         "       forge-core workflow retirement-status [--root <path>] [--json|--no-json]",
@@ -311,6 +314,10 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow credential revoke --root <path> --credential-id <id> [--json|--no-json]",
         "       forge-core workflow credential status --root <path> [--json|--no-json]",
         "       forge-core workflow credential sign --root <path> --credential-id <id> --kind <applicability|capability|decision|evidence|signal|waiver> --request-file <json> [--output-file <json>] [--json|--no-json]",
+        "       forge-core workflow broker trust --root <path> --issuer-id <id> --profile <human|reviewer|runtime> --public-key-file <hex> --ceremony-ref <ref> --ceremony-file <artifact> [--json|--no-json]",
+        "       forge-core workflow broker rotate --root <path> --replaces <old-id> --issuer-id <new-id> --profile <human|reviewer|runtime> --public-key-file <hex> --ceremony-ref <ref> --ceremony-file <artifact> [--json|--no-json]",
+        "       forge-core workflow broker revoke --root <path> --issuer-id <id> [--json|--no-json]",
+        "       forge-core workflow broker status --root <path> [--json|--no-json]",
     ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -1031,6 +1038,8 @@ mod tests {
             vec![
                 "init",
                 "next",
+                "action-packets",
+                "action",
                 "resume",
                 "release-status",
                 "retirement-status",
@@ -1042,7 +1051,9 @@ mod tests {
                 "decision-resolve",
                 "evidence-authorize",
                 "signal-authorize",
-                "waiver-authorize"
+                "waiver-authorize",
+                "credential",
+                "broker"
             ]
         );
     }

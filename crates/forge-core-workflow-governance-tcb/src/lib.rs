@@ -213,6 +213,84 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         Ok(record)
     }
 
+    /// Prepare one broker-origin action with a deterministic envelope while
+    /// retaining the existing random-id API unchanged for every other lane.
+    /// The event kind is derived from the typed event and cannot be supplied
+    /// as serialized input by a host.
+    #[doc(hidden)]
+    pub fn push_verified_broker_action_unchecked_tcb(
+        &mut self,
+        state_version: u64,
+        event: WorkflowGovernanceEvent,
+        action_packet_digest: &str,
+        broker_event_digest: &str,
+        recorded_at_unix: u64,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        let event_kind = broker_action_event_kind(&event).ok_or(
+            WorkflowGovernanceLedgerError::InvalidBrokerActionBinding {
+                reason: "event is not a broker-applicable workflow action",
+            },
+        )?;
+        if !is_lower_sha256(action_packet_digest)
+            || !is_lower_sha256(broker_event_digest)
+            || recorded_at_unix == 0
+        {
+            return Err(WorkflowGovernanceLedgerError::InvalidBrokerActionBinding {
+                reason: "packet/event digests and verified broker clock are required",
+            });
+        }
+        let previous_state_version = self
+            .projection
+            .current_state_version()
+            .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
+        if state_version < previous_state_version {
+            return Err(WorkflowGovernanceLedgerError::StateVersionRegression {
+                previous: previous_state_version,
+                found: state_version,
+            });
+        }
+        let (record, line) = build_deterministic_broker_record_line(
+            &self.projection,
+            &self.identity,
+            state_version,
+            event,
+            &DeterministicBrokerRecordBinding {
+                action_packet_digest,
+                broker_event_digest,
+                event_kind,
+                recorded_at_unix,
+            },
+        )?;
+        if self
+            .projection
+            .records
+            .iter()
+            .any(|existing| existing.record_id == record.record_id)
+        {
+            return Err(WorkflowGovernanceLedgerError::DuplicateRecordId {
+                line: self.projection.records.len() + 1,
+                record_id: record.record_id,
+            });
+        }
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        let next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        let next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = next_sequence;
+        self.projection.next_state_version = next_state_version;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
     fn push_release_transition_tcb(
         &mut self,
         target_identity: &WorkflowGovernanceLedgerIdentity,
@@ -590,6 +668,9 @@ pub enum WorkflowGovernanceLedgerError {
     },
     ReleaseUpgradeRequiresDedicatedAuthority,
     DomainPackTransitionRequiresDedicatedAuthority,
+    InvalidBrokerActionBinding {
+        reason: &'static str,
+    },
     ReleaseTransitionStateVersionMismatch {
         expected: u64,
         found: u64,
@@ -702,6 +783,9 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
                 formatter,
                 "domain_pack_generation_transitioned requires the dedicated TCB transition API"
             ),
+            Self::InvalidBrokerActionBinding { reason } => {
+                write!(formatter, "verified broker action binding is invalid: {reason}")
+            }
             Self::ReleaseTransitionStateVersionMismatch { expected, found } => write!(
                 formatter,
                 "release transition state version mismatch: expected {expected}, found {found}"
@@ -1238,6 +1322,88 @@ fn build_record_line(
     })?;
     line.push(b'\n');
     Ok((record, line))
+}
+
+struct DeterministicBrokerRecordBinding<'a> {
+    action_packet_digest: &'a str,
+    broker_event_digest: &'a str,
+    event_kind: &'static str,
+    recorded_at_unix: u64,
+}
+
+fn build_deterministic_broker_record_line(
+    projection: &WorkflowGovernanceLedgerProjection,
+    identity: &WorkflowGovernanceLedgerIdentity,
+    state_version: u64,
+    event: WorkflowGovernanceEvent,
+    binding: &DeterministicBrokerRecordBinding<'_>,
+) -> Result<(WorkflowGovernanceLedgerRecord, Vec<u8>), WorkflowGovernanceLedgerError> {
+    let identity_basis = serde_json::json!({
+        "domain": "forge-method:workflow-broker-action-record:v1",
+        "action_packet_digest": binding.action_packet_digest,
+        "broker_event_digest": binding.broker_event_digest,
+        "event_kind": binding.event_kind,
+        "current_head_digest": projection.head_digest,
+        "project_id": identity.project_id,
+        "state_version": state_version,
+    });
+    let canonical = to_canonical_json(&identity_basis).map_err(|error| {
+        WorkflowGovernanceLedgerError::Canonicalization {
+            source: error.to_string(),
+        }
+    })?;
+    let record_id = StableId(format!("wglr-broker-{:x}", Sha256::digest(canonical)));
+    let mut record = WorkflowGovernanceLedgerRecord {
+        record_id,
+        sequence: projection.next_sequence,
+        project_id: identity.project_id.clone(),
+        bundle_id: identity.bundle_id.clone(),
+        bundle_digest: identity.bundle_digest.clone(),
+        state_version,
+        previous_record_digest: projection.head_digest.clone(),
+        record_digest: String::new(),
+        recorded_at_unix: binding.recorded_at_unix,
+        event,
+    };
+    record.record_digest = workflow_governance_record_digest(&record)?;
+    let effective_wire = projection.active_effective_bundle_identity().is_some();
+    let document = WorkflowGovernanceReceiptDocument {
+        schema_version: if effective_wire {
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+        } else {
+            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+        }
+        .to_owned(),
+        workflow_governance_receipt: record.clone(),
+    };
+    let mut line = serde_json::to_vec(&document).map_err(|error| {
+        WorkflowGovernanceLedgerError::Canonicalization {
+            source: error.to_string(),
+        }
+    })?;
+    line.push(b'\n');
+    Ok((record, line))
+}
+
+const fn broker_action_event_kind(event: &WorkflowGovernanceEvent) -> Option<&'static str> {
+    match event {
+        WorkflowGovernanceEvent::ApplicabilityAssessed(_) => Some("applicability"),
+        WorkflowGovernanceEvent::CapabilityProbed(_) => Some("capability"),
+        WorkflowGovernanceEvent::DecisionResolved(_) => Some("decision"),
+        WorkflowGovernanceEvent::EvaluatorObserved(_) => Some("evidence"),
+        WorkflowGovernanceEvent::SignalChanged(_) => Some("signal"),
+        WorkflowGovernanceEvent::WaiverAuthorized(_) => Some("waiver"),
+        _ => None,
+    }
+}
+
+fn is_lower_sha256(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    })
 }
 
 fn ensure_append_capacity(
@@ -2416,8 +2582,9 @@ fn io_error(path: &Path, source: std::io::Error) -> WorkflowGovernanceLedgerErro
 mod replacement_protocol_tests {
     use super::*;
     use forge_core_contracts::{
-        PhaseAdvancedEvent, ProjectImportedEvent, WorkflowReceiptCarryover,
-        WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryProvenance,
+        PhaseAdvancedEvent, PrincipalId, ProjectImportedEvent, SignalChangedEvent,
+        WorkflowGovernanceSignal, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
+        WorkflowReleaseRegistryProvenance,
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -2616,6 +2783,119 @@ mod replacement_protocol_tests {
         drop(batch);
         drop(ledger);
         assert_eq!(fs::read(target_path).expect("source WAL"), old);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn broker_signal_event(head: &str) -> WorkflowGovernanceEvent {
+        WorkflowGovernanceEvent::SignalChanged(SignalChangedEvent {
+            signal: WorkflowGovernanceSignal::ReadinessRequested,
+            active: true,
+            episode_id: StableId("episode.test".to_owned()),
+            generation: 1,
+            changed_by: PrincipalId("origin.test".to_owned()),
+            credential_id: StableId("issuer.test".to_owned()),
+            public_key_fingerprint: sha256_digest(b"key"),
+            authorization_registry_digest: sha256_digest(b"registry"),
+            basis: Vec::new(),
+            basis_digest: sha256_digest(b"basis"),
+            snapshot_digest: sha256_digest(b"snapshot"),
+            ledger_head_digest: head.to_owned(),
+            observed_at_unix: 100,
+            expires_at_unix: 200,
+        })
+    }
+
+    #[test]
+    fn broker_action_record_is_exactly_retryable_while_legacy_api_remains_random() {
+        let root = test_root("deterministic-broker-record");
+        let (_, _, _) = valid_wal_versions(&root);
+        let identity = test_identity();
+        let projection = recover_under_lock(&root).expect("projection");
+        let head = projection.head_digest.clone().expect("head");
+        let packet = sha256_digest(b"packet");
+        let origin = sha256_digest(b"origin-event");
+
+        let first = {
+            let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("ledger");
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(&head, &identity)
+                .expect("batch");
+            batch
+                .push_verified_broker_action_unchecked_tcb(
+                    0,
+                    broker_signal_event(&head),
+                    &packet,
+                    &origin,
+                    100,
+                )
+                .expect("first deterministic record")
+        };
+        let retry = {
+            let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("ledger retry");
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(&head, &identity)
+                .expect("retry batch");
+            batch
+                .push_verified_broker_action_unchecked_tcb(
+                    0,
+                    broker_signal_event(&head),
+                    &packet,
+                    &origin,
+                    100,
+                )
+                .expect("exact deterministic retry")
+        };
+        assert_eq!(first, retry);
+
+        let (legacy_one, legacy_two) = {
+            let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("legacy ledger");
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(&head, &identity)
+                .expect("legacy batch");
+            let one = batch
+                .push_event(0, broker_signal_event(&head))
+                .expect("legacy random record");
+            drop(batch);
+            let mut batch = ledger
+                .begin_unchecked_tcb_batch(&head, &identity)
+                .expect("legacy retry batch");
+            let two = batch
+                .push_event(0, broker_signal_event(&head))
+                .expect("legacy second random record");
+            (one, two)
+        };
+        assert_ne!(legacy_one.record_id, legacy_two.record_id);
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("wrong-head ledger")
+                .begin_unchecked_tcb_batch(&sha256_digest(b"wrong-head"), &identity),
+            Err(WorkflowGovernanceLedgerError::HeadMismatch { .. })
+        ));
+
+        let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("state ledger");
+        let mut batch = ledger
+            .begin_unchecked_tcb_batch(&head, &identity)
+            .expect("state batch");
+        batch
+            .push_event(
+                1,
+                WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+                    from_phase: Some(StableId("discover".to_owned())),
+                    to_phase: StableId("define".to_owned()),
+                    snapshot_digest: sha256_digest(b"snapshot-next"),
+                }),
+            )
+            .expect("advance prepared state");
+        assert!(matches!(
+            batch.push_verified_broker_action_unchecked_tcb(
+                0,
+                broker_signal_event(&head),
+                &packet,
+                &origin,
+                100,
+            ),
+            Err(WorkflowGovernanceLedgerError::StateVersionRegression { .. })
+        ));
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

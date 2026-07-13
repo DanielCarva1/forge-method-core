@@ -81,10 +81,52 @@ in-progress project into agent-native workflow governance.
    over an error, reconstruct argv from the display command, or fall back to
    caller-selected routing.
 
-   Read obligations, evidence/capability gaps, Decision Requests, and ranked
-   next actions from the workflow response. The host agent performs that action
-   and asks `workflow next` again. The human stays in chat and never operates
-   Forge commands or edits Forge artifacts.
+   Read obligations, evidence/capability gaps, Decision Requests, ranked next
+   actions, and `data.authorization` from the workflow response. Its action
+   packets are read-only, current-state authority offers; they are not
+   permission to act. `forge-core workflow action-packets --root
+   "<project-root>" --json` exposes the packet set and registry status as an
+   optional standalone diagnostic. Select only the packet that matches the
+   governed next action, satisfy its evidence work, and provide only the
+   packet's closed semantic input. Never supply policy, phase, evaluator,
+   target, registry, request, attestation, or digest fields yourself. The host
+   agent performs the action and asks `workflow next` again. The human stays in
+   chat and never operates Forge commands or edits Forge artifacts.
+
+   A packet whose approval boundary is exactly `operator_credential_broker`
+   may use the cooperative local one-call lane. The host materializes the
+   packet's closed input without asking the human to edit JSON, then runs:
+
+   ```bash
+   forge-core workflow action authorize --root "<project-root>" \
+     --packet-digest "<packet-sha256>" --input-file "<closed-input.json>" \
+     --credential-id "<operator-credential-id>" --json
+   ```
+
+   Never use that lane for a human, independent-reviewer, or trusted-runtime
+   packet; Forge rejects those boundaries before local signing.
+
+   For a human Decision Request, ask the irreducible question in chat after its
+   prerequisites are verified. For human/reviewer/runtime authority, the host
+   must authenticate the inbound subject outside the governed agent process,
+   sign an origin envelope for that exact packet, and invoke:
+
+   ```bash
+   forge-core workflow action apply --root "<project-root>" \
+     --origin-envelope-file "<host-created-signed-event.json>" --json
+   ```
+
+   The host, not the model, creates that signed event. Never self-assert a
+   human/reviewer/runtime identity, obtain the broker private key, or silently
+   fall back to a cooperative local credential. A missing or revoked broker is
+   a typed setup gap: report its registry setup status and stop. Do not run
+   `workflow broker trust|rotate|revoke` unless the operator explicitly asks
+   and performs the out-of-agent trust decision.
+
+   After authorize/apply, run `workflow next` again. An exact broker-event retry
+   can recover a reserved or already-recorded event, but any stale packet or
+   changed state requires fresh guidance; do not edit and resubmit an old
+   envelope.
 
 5. **Fallback for an older binary without the `workflow` command.** Use this
    only when command discovery proves the installed binary does not implement
@@ -120,6 +162,9 @@ in-progress project into agent-native workflow governance.
   bundle, or release-path selectors to agent-native workflow commands. A
   release id is permitted only inside the exact CAS-bound `upgrade_argv`
   returned by `release-status`.
+- Treat broker enrollment as operator-owned trust configuration. Do not create
+  enrollment records, public-key files, or origin envelopes by hand; do not
+  read, request, copy, or store an external broker private key.
 - Do not initialize inside system folders, package caches, or temporary folders
   unless the user explicitly selected that root.
 

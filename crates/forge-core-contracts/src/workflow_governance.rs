@@ -351,9 +351,40 @@ pub enum WorkflowGovernanceEvent {
     DecisionResolved(DecisionResolvedEvent),
     EvaluatorObserved(EvaluatorObservedEvent),
     WaiverAuthorized(WaiverAuthorizedEvent),
+    BrokerOriginApplied(BrokerOriginAppliedEvent),
     PolicyCompleted(PolicyCompletedEvent),
     ReceiptRevoked(ReceiptRevokedEvent),
     ContinuityRecorded(ContinuityRecordedEvent),
+}
+
+/// Durable provenance companion for one action produced from a separately
+/// verified external broker event. This is audit data only; deserializing it
+/// never grants broker, principal, or workflow mutation authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BrokerOriginAppliedEvent {
+    pub action_packet_digest: String,
+    pub broker_event_digest: String,
+    pub action_record_digest: String,
+    pub origin_principal_id: PrincipalId,
+    pub separation_domain: StableId,
+    pub nonce_fingerprint: String,
+    pub issuer_id: StableId,
+    pub issuer_profile: WorkflowBrokerOriginProfile,
+    pub public_key_fingerprint: String,
+    pub signature_fingerprint: String,
+    pub enrollment_ceremony_digest: String,
+    pub broker_registry_digest: String,
+    pub issued_at_unix: u64,
+    pub expires_at_unix: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowBrokerOriginProfile {
+    Human,
+    Reviewer,
+    Runtime,
 }
 
 /// Exact, project-local Domain Pack generation bound into one workflow

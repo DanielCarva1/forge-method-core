@@ -31,18 +31,26 @@ The canonical bootstrap procedure is
 - Do not cache guidance across mutation; ask Forge again.
 - Redact private keys and secret material; audit projections are not authority.
 
-Authority-bearing observations use the public `workflow credential`
-lifecycle/signing bridge described in the [operator guide](operator-guide.md).
-Never manufacture registry YAML or signatures in the host. Until P7a adds
-request/action-packet generation, bind the typed request to the current
-snapshot/head, sign it by semantic `--kind`, then call the matching
-`*-authorize` command with the emitted attestation.
+The normal `workflow next` response embeds `authorization.action_packets`,
+registry setup state, and typed setup gaps. The standalone
+`workflow action-packets` command exposes the same packets and registry status
+for read-only diagnostics. Authority-bearing observations use those
+Forge-derived packets and the external origin-broker bridge described in the
+[operator guide](operator-guide.md). The host signs a minimal closed answer
+bound to the returned packet; `workflow action apply` derives, verifies, and
+records the exact request without exposing an intermediate attestation. Never
+manufacture request, registry, ledger, or receipt documents in the host.
+
+`workflow action authorize` is a cooperative local one-call lane only for a
+packet marked `operator_credential_broker`. Forge rejects that lane before
+signing for human, independent-reviewer, and trusted-runtime broker packets.
 
 The local signing bridge proves key possession only inside Forge's cooperative
 same-OS-principal model. It does not prove human presence or reviewer
 independence. An agent must never self-provision or use a `human`, `reviewer`, or
-`runtime` profile as evidence of a distinct actor; require a host/operator
-approval boundary until the P7a.2 broker exists.
+`runtime` local profile as evidence of a distinct actor. The external broker
+vouches for the signed origin subject and separation domain; Forge does not
+infer physical presence from those labels.
 
 ## Human attention
 
@@ -79,6 +87,8 @@ not select authoritative P5/P6 workflow. New integrations use
 - Fresh and existing projects bootstrap idempotently.
 - Paths with spaces remain one argv element.
 - A stale snapshot/head is rejected and retried from new guidance.
+- A consumed host event is idempotent and cannot authorize another packet.
+- Broker absence/revocation blocks without falling back to a local human label.
 - Missing evidence cannot complete a policy.
 - Human questions appear only after prerequisite claims are verified.
 - Replacement process returns the same durable epoch and next action.

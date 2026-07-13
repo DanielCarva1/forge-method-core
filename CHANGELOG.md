@@ -17,6 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P7a.2 workflow action and external-origin authority bridge.** Added
+  deterministic action packets bound to the current project, effective bundle,
+  policy, subject, phase, state version, snapshot, ledger head, principal
+  registry, broker registry, and readiness target. Minimal closed answers are
+  materialized into exact kind-specific requests by the kernel; callers cannot
+  select evaluator, provider, authority scope, policy, target, or request
+  digests. An operator lifecycle stores only external broker public keys and
+  content-addressed enrollment declarations. Signed origin events bind the
+  authenticated subject and separation domain. One-call action apply uses a
+  bounded fail-closed reserve/commit WAL plus ledger provenance as a
+  crash-recoverable saga: exact retries recover or return the durable result,
+  but Forge does not claim cross-filesystem atomicity. This proves a
+  host-neutral broker protocol, not physical human presence or the identity
+  assurance of any particular host. A separate one-call local authorize lane
+  is restricted to packets marked `operator_credential_broker`; human,
+  independent-reviewer, and trusted-runtime packets fail before local signing.
 - **P7 productization foundation (`0.10.0`).** Added Project Link-derived workflow
   credential provision, rotation, revocation, redacted status, and exact typed
   request signing for closed human/agent/runtime profiles without private-key
@@ -24,12 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registries in test code. Signing now rejects semantically invalid or
   out-of-profile requests, credential lifecycle writes are serialized, and
   existing path aliases fail closed. This remains a cooperative configured-
-  identity proxy, not proof of human presence; the external host/operator
-  approval broker remains P7a.2. Release packaging now checks exact tag/workspace/CLI
-  identity and prior CI, creates deterministic self-describing adoption
-  archives, preserves Sigstore signing, and requires a validated release-level
-  CycloneDX SBOM. CI isolates the expensive P6d reference protocol journey to
-  one Linux job while Windows still compiles it, and linked preflight profiles
+  identity proxy, not proof of human presence. Release packaging now checks
+  exact tag/workspace/CLI identity and prior CI, creates deterministic
+  self-describing adoption archives, preserves Sigstore signing, and requires a
+  validated release-level CycloneDX SBOM. CI isolates the expensive P6d
+  reference protocol journey to one Linux job while Windows still compiles it,
+  and linked preflight profiles
   now live only in resolved sidecar state with invalid links/configuration
   failing closed. Release/CI actions, the release toolchain, and `cross` are
   pinned; publish jobs revalidate the immutable commit, exact tag, archive

@@ -127,6 +127,14 @@ struct CredentialStatusRow {
     public_key_fingerprint: String,
 }
 
+/// In-process result for a high-level workflow action. Keeping this helper
+/// crate-private lets the public action surface sign and authorize one exact
+/// kernel-prepared request without serializing an intermediate attestation.
+pub(crate) struct SignedWorkflowRequest {
+    pub(crate) registry: AuthorizedPrincipalRegistry,
+    pub(crate) attestation: AttestationInput,
+}
+
 #[derive(Debug)]
 enum NormalizedWorkflowRequest {
     Applicability(WorkflowApplicabilityAuthorizationRequest),
@@ -388,6 +396,63 @@ fn sign(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), Ex
     let kind = parse_kind(required(flags, "--kind")?)?;
     let request_path = required_path(flags, "--request-file")?;
     let request = normalized_request(kind, &request_path)?;
+    let (_document, attestation) = sign_normalized_request(&paths, credential_id, kind, &request)?;
+    let public_key_fingerprint = fingerprint(&attestation.public_key_hex);
+    let output_file = optional(flags, "--output-file")
+        .map(PathBuf::from)
+        .map(|path| safe_output_path(&paths, path))
+        .transpose()?;
+    if let Some(path) = output_file.as_ref() {
+        let serialized = serde_json::to_string_pretty(&attestation)
+            .map_err(|error| ExitError::env_config(format!("serialize attestation: {error}")))?;
+        crate::io_util::atomic_write(path, &serialized)
+            .map_err(|error| ExitError::env_config(format!("write {}: {error}", path.display())))?;
+    }
+    emit_result(
+        CredentialResult {
+            action: format!("signed_{}", kind.canonical_action()),
+            credential_id: Some(credential_id.to_owned()),
+            profile: None,
+            registry_path: display(&paths.registry),
+            public_key_fingerprint: Some(public_key_fingerprint),
+            secret_deleted: None,
+            principals: None,
+            attestation: Some(attestation),
+            output_file: output_file.as_deref().map(display),
+            storage_boundary:
+                "exact typed request signed in process; private key bytes were not emitted"
+                    .to_owned(),
+        },
+        want_json,
+    )
+}
+
+/// Sign one already-prepared typed request without exposing an intermediate
+/// file. The caller must still pass the result through the matching authority
+/// verifier and kernel late-binding check in the same command invocation.
+pub(crate) fn sign_typed_request(
+    root: &Path,
+    credential_id: &str,
+    kind: WorkflowAuthorizationKind,
+    request_value: Value,
+) -> Result<SignedWorkflowRequest, ExitError> {
+    let paths = authority_paths(root.to_path_buf())?;
+    let request = normalized_request_value(kind, request_value)?;
+    let (document, attestation) = sign_normalized_request(&paths, credential_id, kind, &request)?;
+    let registry = AuthorizedPrincipalRegistry::from_document(document)
+        .map_err(|error| ExitError::env_config(format!("invalid workflow registry: {error}")))?;
+    Ok(SignedWorkflowRequest {
+        registry,
+        attestation,
+    })
+}
+
+fn sign_normalized_request(
+    paths: &AuthorityPaths,
+    credential_id: &str,
+    kind: WorkflowAuthorizationKind,
+    request: &NormalizedWorkflowRequest,
+) -> Result<(PrincipalRegistryDocument, AttestationInput), ExitError> {
     let document = load_registry(&paths.registry)?;
     let entry = document
         .principal_registry
@@ -436,33 +501,7 @@ fn sign(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), Ex
         )
         .to_bytes());
     request.validate_authorization(&document, &attestation)?;
-    let output_file = optional(flags, "--output-file")
-        .map(PathBuf::from)
-        .map(|path| safe_output_path(&paths, path))
-        .transpose()?;
-    if let Some(path) = output_file.as_ref() {
-        let serialized = serde_json::to_string_pretty(&attestation)
-            .map_err(|error| ExitError::env_config(format!("serialize attestation: {error}")))?;
-        crate::io_util::atomic_write(path, &serialized)
-            .map_err(|error| ExitError::env_config(format!("write {}: {error}", path.display())))?;
-    }
-    emit_result(
-        CredentialResult {
-            action: format!("signed_{}", kind.canonical_action()),
-            credential_id: Some(credential_id.to_owned()),
-            profile: None,
-            registry_path: display(&paths.registry),
-            public_key_fingerprint: Some(fingerprint(&entry.public_key_hex)),
-            secret_deleted: None,
-            principals: None,
-            attestation: Some(attestation),
-            output_file: output_file.as_deref().map(display),
-            storage_boundary:
-                "exact typed request signed in process; private key bytes were not emitted"
-                    .to_owned(),
-        },
-        want_json,
-    )
+    Ok((document, attestation))
 }
 
 fn normalized_request(
@@ -473,6 +512,13 @@ fn normalized_request(
         .map_err(|error| ExitError::env_config(format!("read {}: {error}", path.display())))?;
     let raw_value: Value = serde_json::from_str(&raw)
         .map_err(|error| ExitError::env_config(format!("parse {}: {error}", path.display())))?;
+    normalized_request_value(kind, raw_value)
+}
+
+fn normalized_request_value(
+    kind: WorkflowAuthorizationKind,
+    raw_value: Value,
+) -> Result<NormalizedWorkflowRequest, ExitError> {
     match kind {
         WorkflowAuthorizationKind::Applicability => {
             serde_json::from_value(raw_value).map(NormalizedWorkflowRequest::Applicability)

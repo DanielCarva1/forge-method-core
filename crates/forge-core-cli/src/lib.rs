@@ -71,6 +71,8 @@ pub mod start_cmd;
 pub mod telemetry_cmd;
 pub mod tracing_init;
 pub mod validate;
+mod workflow_action_cmd;
+mod workflow_broker_cmd;
 pub mod workflow_cmd;
 mod workflow_credential_cmd;
 

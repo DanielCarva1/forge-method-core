@@ -266,6 +266,36 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         "artifact-free fluent progress must not appear complete"
     );
 
+    let action_packets = assert_ok(&consumer.run(&["action-packets"]));
+    assert_eq!(
+        action_packets["data"]["project_id"],
+        next["data"]["project_id"]
+    );
+    assert_eq!(
+        action_packets["data"]["snapshot_digest"],
+        next["data"]["snapshot_digest"]
+    );
+    assert_eq!(
+        action_packets["data"]["ledger_head_digest"],
+        next["data"]["ledger_head_digest"]
+    );
+    let packets = action_packets["data"]["packets"]
+        .as_array()
+        .expect("typed workflow action packet list");
+    assert!(
+        !packets.is_empty(),
+        "current guidance must expose its actions"
+    );
+    assert!(packets.iter().all(|packet| {
+        packet["packet_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.starts_with("sha256:") && digest.len() == 71)
+            && packet["binding"]["ledger_head_digest"] == next["data"]["ledger_head_digest"]
+            && packet["required_authority"]["approval_boundary"]
+                .as_str()
+                .is_some_and(|value| value.ends_with("_broker"))
+    }));
+
     let resumed = assert_ok(&consumer.run(&["resume"]));
     for field in [
         "selected_policy_ref",
@@ -329,6 +359,156 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         .is_some_and(|message| {
             message.contains("unrecognized workflow argument '--principal-registry'")
         }));
+}
+
+#[test]
+fn local_action_authorize_prepares_signs_and_commits_without_intermediate_authority_files() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let root = consumer.app.display().to_string();
+    let provisioned = bin()
+        .args([
+            "workflow",
+            "credential",
+            "provision",
+            "--root",
+            &root,
+            "--credential-id",
+            "credential.workflow.one-call-operator",
+            "--principal-id",
+            "principal.workflow.one-call-operator",
+            "--agent-id",
+            "agent.workflow.one-call-console",
+            "--profile",
+            "reviewer",
+            "--json",
+        ])
+        .output()
+        .expect("provision one-call credential");
+    assert_ok(&provisioned);
+
+    let packet_set = assert_ok(&consumer.run(&["action-packets"]));
+    let human_packet = packet_set["data"]["packets"]
+        .as_array()
+        .expect("action packet list")
+        .iter()
+        .find(|packet| packet["required_authority"]["approval_boundary"] == "human_approval_broker")
+        .expect("fresh discovery exposes a human broker packet");
+    let human_packet_digest = human_packet["packet_digest"]
+        .as_str()
+        .expect("human packet digest");
+    let human_input_value = match human_packet["authorization_kind"]
+        .as_str()
+        .expect("human authorization kind")
+    {
+        "applicability" => serde_json::json!({
+            "kind": "applicability",
+            "applicable": true,
+            "basis_refs": ["README.md"]
+        }),
+        "decision" => serde_json::json!({
+            "kind": "decision",
+            "selected_alternative_ref": human_packet["input_contract"]["alternatives"][0]["id"]
+        }),
+        "evidence" => {
+            let subject_kind = human_packet["input_contract"]["subject_kinds"][0]
+                .as_str()
+                .expect("human evidence subject kind");
+            let subject_ref = match subject_kind {
+                "artifact" => "README.md",
+                "repository_state" | "project_snapshot" => human_packet["binding"]["project_id"]
+                    .as_str()
+                    .expect("packet project id"),
+                _ => "subject.workflow.one-call-human",
+            };
+            serde_json::json!({
+                "kind": "evidence",
+                "outcome": "pass",
+                "subject_kind": subject_kind,
+                "subject_ref": subject_ref,
+                "scenario_ref": "README.md"
+            })
+        }
+        "waiver" => serde_json::json!({
+            "kind": "waiver",
+            "reason": "negative boundary test only"
+        }),
+        other => panic!("unexpected human packet kind: {other}"),
+    };
+    let human_input = consumer.write_json("human-closed-input.json", &human_input_value);
+    let human_input_arg = human_input.display().to_string();
+    let rejected_local_human = bin()
+        .args([
+            "workflow",
+            "action",
+            "authorize",
+            "--root",
+            &root,
+            "--packet-digest",
+            human_packet_digest,
+            "--input-file",
+            &human_input_arg,
+            "--credential-id",
+            "credential.workflow.one-call-operator",
+            "--json",
+        ])
+        .output()
+        .expect("reject local human-boundary action");
+    assert!(!rejected_local_human.status.success());
+    assert!(String::from_utf8_lossy(&rejected_local_human.stdout).contains("external human"));
+
+    let packet = packet_set["data"]["packets"]
+        .as_array()
+        .expect("action packet list")
+        .iter()
+        .find(|packet| {
+            packet["authorization_kind"] == "signal"
+                && packet["required_authority"]["approval_boundary"] == "operator_credential_broker"
+        })
+        .expect("fresh discovery exposes cooperative operator signal packet");
+    let packet_digest = packet["packet_digest"]
+        .as_str()
+        .expect("packet digest")
+        .to_owned();
+    let signal_active = match packet["input_contract"]["transition"].as_str() {
+        Some("activate") => true,
+        Some("deactivate") => false,
+        other => panic!("unexpected signal transition: {other:?}"),
+    };
+    let input = consumer.write_json(
+        "closed-input.json",
+        &serde_json::json!({
+            "kind": "signal",
+            "active": signal_active,
+            "basis_refs": ["README.md"]
+        }),
+    );
+    let input_arg = input.display().to_string();
+    let applied = bin()
+        .args([
+            "workflow",
+            "action",
+            "authorize",
+            "--root",
+            &root,
+            "--packet-digest",
+            &packet_digest,
+            "--input-file",
+            &input_arg,
+            "--credential-id",
+            "credential.workflow.one-call-operator",
+            "--json",
+        ])
+        .output()
+        .expect("apply local one-call action");
+    let receipt = assert_ok(&applied);
+    assert_eq!(receipt["command"], "workflow.action.authorize");
+    assert_eq!(receipt["data"]["event"]["type"], "signal_changed");
+    assert!(
+        !consumer.parent.join("request.json").exists()
+            && !consumer.parent.join("attestation.json").exists(),
+        "one-call action must not materialize request or attestation intermediates"
+    );
 }
 
 #[test]

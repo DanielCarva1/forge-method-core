@@ -56,8 +56,8 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.10.0"
-    publication_state: "source_pullable"
+    version: "0.11.0"
+    publication_state: "source_checkpoint_pending_cumulative_gate"
     minimum_consumer_version: "0.6.0"
     guide_payload_schema: "0.2"
     domain_pack_schema: "0.1"
@@ -812,10 +812,10 @@ phases:
       fixtures, hand-authored authority JSON, or prior domain expertise.
     audit_basis:
       - "P6d proves kernel, authority, lifecycle, recovery, and fail-closed composition, but its harness privately creates six keys, registries, requests, attestations, and evidence."
-      - "A fresh public installation can now provision and use typed workflow credentials, but workflow next still does not generate the exact request/action packet or perform one-call sign-and-authorize."
+      - "Source 0.11.0 derives state-bound action packets and applies a host-signed closed origin event in one call; cumulative release and representative real-host proof remain pending."
       - "The reference Domain Pack is a source fixture rather than a discoverable reviewed package in a released registry."
       - "A core release upgrade is intentionally blocked by an active Domain Pack generation, but no public rebase transaction exists."
-      - "Package 0.10.0 is source-pullable while the latest prebuilt release remains 0.4.0."
+      - "Package 0.11.0 is the source checkpoint under cumulative validation while the latest prebuilt release remains 0.4.0."
     delivery_cadence:
       slice_size: "medium_to_large"
       focused_gate_rule: >-
@@ -828,7 +828,7 @@ phases:
         smoke evidence all identify the same version.
     slices:
       - id: "P7a-workflow-authority-bridge"
-        status: "in_progress"
+        status: "implemented_pending_cumulative_gate"
         size: "large"
         outcome: >-
           A public binary can provision, rotate, revoke, inspect, and use
@@ -854,6 +854,21 @@ phases:
               local signer is a cooperative configured-identity proxy, not
               proof of human presence or reviewer/runtime independence; a
               host/operator approval broker also remains P7a.2.
+          - id: "P7a.2-state-bound-action-packets-and-origin-broker"
+            delivers:
+              - "deterministic action packets bound to effective policy, subject, state, snapshot, ledger head, principal registry, broker registry, and readiness target"
+              - "closed semantic input contracts from which the kernel materializes the exact kind-specific request"
+              - "operator-owned broker trust, rotation, revocation, and redacted status with public keys only"
+              - "one-call host-origin application with ledger provenance and bounded replay reserve/commit recovery"
+              - "cooperative local one-call authorization restricted to operator-credential packets, with high-authority boundaries rejected before signing"
+              - "typed principal/broker registry setup status without fallback to a local human, reviewer, or runtime label"
+            boundary: >-
+              The replay WAL and governance ledger form a fail-closed,
+              crash-recoverable saga rather than a cross-filesystem atomic
+              transaction. The host-neutral protocol proves acceptance of an
+              event signed by a configured broker; physical presence, actor
+              independence, runtime integrity, and representative production-
+              host operation remain P7f evidence.
       - id: "P7b-unified-durable-assurance-case"
         status: "planned"
         size: "large"
@@ -967,6 +982,7 @@ phases:
 
 current_executable_slice:
   name: "P7a.2-request-packets-and-one-call-authorize"
+  status: "implemented_pending_cumulative_gate"
   completed_foundation:
     - "agent-native constitution documented"
     - "universal assurance and competence-acquisition proposal documented"
@@ -1027,11 +1043,10 @@ current_executable_slice:
     - "P6c nine closed learning families, inert local capture, evidence-backed ablation or strong-judge promotion, independent semantic and registry authority, monotonic reviewed registry, dual-anchor lifecycle admission, and 173 aggregate clean checks"
     - "P6d governed game-development reference pack, generic effective workflow epoch, lifecycle auto-detection, complete representative-evidence workflow journey, verified-claim human decision, replacement resume, four-operation lifecycle persistence E2E, typed degraded empty generations, rebase-required core upgrade, no reference-domain Rust logic, and 174 aggregate clean checks"
   next_action: >-
-    Complete P7a.2 exact request/action-packet generation, one-call
-    sign-and-authorize, and workflow-next setup guidance. Preserve the
-    universal-core/effective-epoch boundary, explicit gaps, and durable
-    replacement-agent continuity; run the cumulative expensive journey only
-    after the coherent checkpoint is integrated.
+    Run the focused public broker/action checks and the single cumulative
+    workspace checkpoint. If green, publish the coherent 0.11.0 source commit
+    and begin P7b unified durable Assurance Case work. Do not repeat the
+    expensive reference journey per edit.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

@@ -8,8 +8,8 @@ The normal project user stays in chat and does not operate these commands.
 
 Forge currently has two different distribution facts:
 
-- the source workspace declares package version `0.10.0` and contains the
-  completed P5/P6 implementation;
+- the source workspace declares package version `0.11.0` and contains the
+  completed P5/P6 implementation plus the P7a authority bridge;
 - the latest published prebuilt GitHub Release may lag the source checkpoint.
   At the time this guide was written, the latest prebuilt tag was `v0.4.0`.
 
@@ -100,18 +100,67 @@ forge-core workflow credential sign --root <repo> \
 
 Closed profiles are `human`, `agent` (alias `reviewer`), and `runtime`; each
 receives only its role-compatible grants. Use `rotate --replaces <old-id>` or
-`revoke --credential-id <id>` for lifecycle changes. P7a is not yet a one-call
-broker: the agent still supplies the exact typed request and passes the emitted
-attestation to the corresponding existing `workflow *-authorize` command.
+`revoke --credential-id <id>` for lifecycle changes. The low-level `sign` plus
+`*-authorize` lane remains an expert compatibility surface, not the normal
+agent-native path.
+
+For a packet whose returned approval boundary is exactly
+`operator_credential_broker`, the cooperative local lane can avoid intermediate
+request and attestation files:
+
+```bash
+forge-core workflow action authorize --root <repo> \
+  --packet-digest <sha256> --input-file <closed-input.json> \
+  --credential-id <operator-credential-id> --json
+```
+
+Forge rejects this command for `human_approval_broker`,
+`independent_reviewer_broker`, and `trusted_runtime_broker` packets before
+signing. Those boundaries require `workflow action apply` with a signed event
+from the external broker described below.
 
 This command is a **cooperative local signing proxy**, not proof that a physical
 human, independent reviewer, or runtime was present. A process running as the
 same OS principal can invoke it. Do not treat a configured `human` role as
 human-presence evidence; high-authority profiles require an operator/host
-approval boundary outside the agent process. That broker remains a P7a.2 exit
-condition. The current command validates request semantics and profile grants,
-serializes lifecycle mutation with a lock, and rejects existing path aliases,
-but Windows files still inherit the operator directory's ACL.
+approval boundary outside the agent process.
+
+### Enroll an external origin broker
+
+The P7a.2 source surface stores only a broker public key and a content digest
+of the operator's out-of-agent enrollment record. The host retains the private
+key and authenticates the inbound human, reviewer, or runtime subject:
+
+```bash
+forge-core workflow broker trust --root <repo> \
+  --issuer-id broker.host.human.v1 --profile human \
+  --public-key-file <ed25519-public-key-hex> \
+  --ceremony-ref operator://enrollment/human/v1 \
+  --ceremony-file <operator-enrollment-record> --json
+
+forge-core workflow action-packets --root <repo> --json
+forge-core workflow action apply --root <repo> \
+  --origin-envelope-file <host-signed-origin-event.json> --json
+```
+
+Use `workflow broker rotate|revoke|status` for lifecycle changes. The broker
+event carries only a closed semantic answer. Forge regenerates the current
+packet and derives policy, phase, evaluator, target, digests, clock fields, and
+the exact authority request. A stale packet, wrong project/profile/kind,
+expired event, changed registry, or replay fails closed. The apply command
+does not emit a reusable workflow signature. Its bounded replay WAL and ledger
+provenance form a crash-recoverable saga: an exact retry can finish a reserved
+post-ledger replay index or return its prior durable result. Forge writes no
+pre-ledger reservation that could strand a current packet after expiry; the
+ledger lock serializes the mutation, and its origin companion is the recovery
+authority. The two stores are not presented as one cross-filesystem atomic
+transaction.
+
+Enrollment metadata is a trust declaration, not proof that Forge observed the
+ceremony. A configured broker proves only that a configured external key
+signed an event containing an authenticated-origin claim; physical presence
+and identity assurance remain properties of the host deployment. Windows
+operator files inherit the operator directory's ACL.
 
 ## Operate the agent-native loop
 
@@ -133,8 +182,11 @@ start
   -> workflow release-status
   -> exact upgrade_argv, when returned and approved by policy
   -> workflow next
-  -> perform and verify the governed action
-  -> record through an authorized surface
+     (includes authorization.action_packets and typed setup_gaps)
+  -> workflow action-packets (optional standalone read-only packet projection)
+  -> perform and verify the governed action or request the irreducible choice
+  -> workflow action authorize (operator-credential packets only)
+     OR host signs the inbound origin event and workflow action apply
   -> workflow next
 ```
 
