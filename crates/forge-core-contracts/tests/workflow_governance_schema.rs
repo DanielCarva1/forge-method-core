@@ -89,6 +89,18 @@ fn bundle_and_evaluation_reject_unknown_fields_and_enum_values() {
     let unsafe_activation =
         bundle.replace("activation: observed_need", "activation: agent_decides");
     assert!(yaml_serde::from_str::<WorkflowGovernanceBundleDocument>(&unsafe_activation).is_err());
+    let verified_activation: WorkflowDecisionActivation =
+        yaml_serde::from_str("claim_verified\n").expect("claim-verified wire value");
+    assert_eq!(
+        verified_activation,
+        WorkflowDecisionActivation::ClaimVerified
+    );
+    let all_verified_activation: WorkflowDecisionActivation =
+        yaml_serde::from_str("all_claims_verified\n").expect("all-claims-verified wire value");
+    assert_eq!(
+        all_verified_activation,
+        WorkflowDecisionActivation::AllClaimsVerified
+    );
 
     let evaluation = read("docs/fixtures/workflow-governance-kernel-v0/complete.yaml");
     let unknown_evaluation_field = evaluation.replace(

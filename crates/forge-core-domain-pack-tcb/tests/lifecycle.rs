@@ -609,11 +609,29 @@ fn integrated_install_preflight(
         .domain_pack_composition_request
         .candidates
         .truncate(1);
+    let manifest: DomainPackManifestDocument = yaml_serde::from_str(
+        std::str::from_utf8(material.manifest_raw).expect("integrated manifest is UTF-8 YAML"),
+    )
+    .expect("typed integrated manifest");
+    let candidate = &mut composition_request
+        .domain_pack_composition_request
+        .candidates[0];
+    candidate.manifest = manifest;
+    candidate.manifest_binding = fixture.resolved.package.manifest.clone();
+    candidate.content = yaml_serde::from_str(
+        std::str::from_utf8(material.content_raw).expect("integrated content is UTF-8 YAML"),
+    )
+    .expect("typed integrated content");
     composition_request
         .domain_pack_composition_request
         .requirements
         .required_domains
         .truncate(1);
+    composition_request
+        .domain_pack_composition_request
+        .requirements
+        .required_domains[0]
+        .pack_version_requirement = ">=1,<3".to_owned();
     composition_request
         .domain_pack_composition_request
         .requirements
@@ -623,8 +641,9 @@ fn integrated_install_preflight(
     assert_eq!(
         composition.domain_pack_composition_projection.status,
         DomainPackCompositionStatus::Composable,
-        "{:?}",
-        composition.domain_pack_composition_projection.issues
+        "issues={:?} gaps={:?}",
+        composition.domain_pack_composition_projection.issues,
+        composition.domain_pack_composition_projection.gaps
     );
 
     let now = SystemTime::now()
@@ -645,7 +664,7 @@ fn integrated_install_preflight(
     };
     let root = DomainPackResolutionRoot {
         pack: coordinate(fixture),
-        version_requirement: "^1.0".to_owned(),
+        version_requirement: format!("={}", fixture.resolved.identity.version),
         required_content_digest: Some(fixture.resolved.package.content.canonical_sha256.clone()),
         reason: DomainPackResolutionRootReason::InstallIntent,
     };
@@ -939,6 +958,109 @@ fn integrated_install_preflight(
     )
 }
 
+fn integrated_upgrade_preflight(
+    source: &Fixture,
+    target: &Fixture,
+    expected: DomainPackExpectedLifecycleState,
+    previous_lock: DomainPackExactLockDocument,
+    material: &DomainPackCandidateMaterial<'_>,
+) -> (
+    DomainPackLifecyclePreflightDocument,
+    IntegratedInstallInputs,
+) {
+    let (mut document, mut inputs) =
+        integrated_install_preflight(target, expected.clone(), material);
+    let target_requirement = format!("={}", target.resolved.identity.version);
+    let required_content_digest = Some(target.resolved.package.content.canonical_sha256.clone());
+    let operation = DomainPackLifecycleOperation::Upgrade {
+        pack: coordinate(target),
+        expected_from: source.resolved.identity.version.clone(),
+        target_requirement: target_requirement.clone(),
+        required_content_digest: required_content_digest.clone(),
+    };
+
+    let resolution_request = &mut inputs.resolution_request.domain_pack_resolution_request;
+    resolution_request.request_id = id("resolution.integrated-upgrade");
+    resolution_request.current_lock = Some(previous_lock.clone());
+    resolution_request.roots[0].version_requirement = target_requirement;
+    resolution_request.roots[0].required_content_digest = required_content_digest;
+    resolution_request.roots[0].reason = DomainPackResolutionRootReason::UpgradeIntent;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_secs();
+    let verified =
+        verify_domain_pack_supply_chain_snapshot(&inputs.trust_policy, &target.snapshot, now)
+            .expect("versioned upgrade supply-chain proof");
+    let mut resolution = resolve_domain_packs(&inputs.resolution_request, &target.snapshot);
+    assert_eq!(
+        resolution.domain_pack_resolution_projection.status,
+        DomainPackResolutionStatus::Resolved,
+        "{:?}",
+        resolution.domain_pack_resolution_projection.issues
+    );
+    for selected in &mut resolution.domain_pack_resolution_projection.selected {
+        selected.source_assurance = DomainPackSourceAssurance::SupplyChainVerified;
+        selected.semantic_assurance = DomainPackSemanticAssurance::Reviewed;
+        selected.reviewed_entry_digest = target.resolved.reviewed_entry_digest.clone();
+        selected.promotion_authorization_digest =
+            target.resolved.promotion_authorization_digest.clone();
+    }
+    resolution
+        .domain_pack_resolution_projection
+        .resolution_digest = domain_pack_resolution_projection_digest(
+        &inputs.resolution_request,
+        verified.snapshot_digest(),
+        &resolution.domain_pack_resolution_projection,
+    );
+
+    let body = &mut document.domain_pack_lifecycle_preflight;
+    body.preflight_id = id("preflight.integrated-upgrade");
+    body.observed_state = expected.clone();
+    body.resolution = resolution;
+    let payload = &mut body.proposed_lock.domain_pack_exact_lock.payload;
+    payload.roots = inputs
+        .resolution_request
+        .domain_pack_resolution_request
+        .roots
+        .clone();
+    payload.resolution_digest.clone_from(
+        &body
+            .resolution
+            .domain_pack_resolution_projection
+            .resolution_digest,
+    );
+    body.proposed_lock.domain_pack_exact_lock.lock_digest = canonical_digest(payload);
+    body.compatibility_report = evaluate_domain_pack_compatibility(&DomainPackCompatibilityInput {
+        report_id: id("compatibility.integrated-upgrade"),
+        operation: operation.clone(),
+        sealed_core: payload.core.clone(),
+        from_lock: Some(previous_lock),
+        to_lock: body.proposed_lock.clone(),
+    });
+    assert_eq!(
+        body.compatibility_report
+            .domain_pack_compatibility_report
+            .status,
+        DomainPackCompatibilityStatus::Compatible,
+        "{:?}",
+        body.compatibility_report
+            .domain_pack_compatibility_report
+            .issues
+    );
+    body.request.domain_pack_lifecycle_request.request_id = id("lifecycle.integrated-upgrade");
+    body.request.domain_pack_lifecycle_request.operation = operation;
+    body.request.domain_pack_lifecycle_request.expected_state = expected;
+    body.request
+        .domain_pack_lifecycle_request
+        .resolution_request_digest = canonical_digest(&inputs.resolution_request);
+    body.request_digest = canonical_digest(&body.request);
+    body.preflight_digest.clear();
+    let preflight_digest = canonical_digest(&document);
+    document.domain_pack_lifecycle_preflight.preflight_digest = preflight_digest;
+    (document, inputs)
+}
+
 fn coordinate(fixture: &Fixture) -> DomainPackCoordinate {
     DomainPackCoordinate {
         publisher: fixture.resolved.identity.publisher.clone(),
@@ -1198,6 +1320,166 @@ impl RawArtifactFixture {
     }
 }
 
+/// Derive a second, independently content-addressed and fully signed version
+/// from the repository fixture. Only the package version identity changes;
+/// every derived content/manifest/package/registry/review binding is recomputed so the
+/// upgrade exercises real admission rather than editing a version label in an
+/// already trusted lock.
+fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArtifactFixture) {
+    let mut fixture = base.clone();
+    let mut raw = RawArtifactFixture::new(base);
+    let mut content: DomainPackContentDocument = yaml_serde::from_str(
+        std::str::from_utf8(&raw.content).expect("base content is UTF-8 YAML"),
+    )
+    .expect("typed base content");
+    content.domain_pack_content.pack.version = version.to_owned();
+    raw.content = yaml_serde::to_string(&content)
+        .expect("serialize versioned content")
+        .into_bytes();
+    let content_raw_sha256 = format!("sha256:{:x}", Sha256::digest(&raw.content));
+    let content_canonical_sha256 = canonical_digest(&content);
+    let mut manifest: DomainPackManifestDocument = yaml_serde::from_str(
+        std::str::from_utf8(&raw.manifest).expect("base manifest is UTF-8 YAML"),
+    )
+    .expect("typed base manifest");
+    manifest.domain_pack_manifest.identity.version = version.to_owned();
+    manifest.domain_pack_manifest.content.raw_sha256 = content_raw_sha256.clone();
+    manifest.domain_pack_manifest.content.canonical_sha256 = content_canonical_sha256.clone();
+    raw.manifest = yaml_serde::to_string(&manifest)
+        .expect("serialize versioned manifest")
+        .into_bytes();
+    let manifest_binding = DomainPackArtifactBinding {
+        artifact_ref: fixture.resolved.package.manifest.artifact_ref.clone(),
+        raw_sha256: format!("sha256:{:x}", Sha256::digest(&raw.manifest)),
+        canonical_sha256: canonical_digest(&manifest),
+    };
+    let package_digest = format!(
+        "sha256:{:x}",
+        Sha256::digest(
+            [
+                raw.manifest.as_slice(),
+                raw.content.as_slice(),
+                raw.license.as_slice(),
+                raw.representative.as_slice(),
+            ]
+            .concat()
+        )
+    );
+
+    fixture.policy.domain_pack_trust_policy.rules[0].package_digest = Some(package_digest.clone());
+    fixture.policy.domain_pack_trust_policy.rules[0].content_digest =
+        Some(content_canonical_sha256.clone());
+    fixture.resolved.identity.version = version.to_owned();
+    fixture.resolved.package.package_digest = package_digest.clone();
+    fixture.resolved.package.manifest = manifest_binding.clone();
+    fixture.resolved.package.content.raw_sha256 = content_raw_sha256.clone();
+    fixture.resolved.package.content.canonical_sha256 = content_canonical_sha256.clone();
+    raw.content_binding.raw_sha256 = content_raw_sha256;
+    raw.content_binding.canonical_sha256 = content_canonical_sha256.clone();
+
+    let registry = &mut fixture.snapshot.domain_pack_supply_chain_registry;
+    let registry_id = registry.registry_id.clone();
+    let audience = registry.audience.clone();
+    let record = &mut registry.packages[0];
+    record.identity.version = version.to_owned();
+    record.package_digest = package_digest.clone();
+    record.manifest_digest = manifest_binding.canonical_sha256.clone();
+    record.content_digest = content_canonical_sha256.clone();
+    record.publisher_signature_hex = "00".repeat(64);
+    record.record_digest = digest('0');
+    record.record_digest =
+        domain_pack_package_record_digest(record).expect("versioned package record digest");
+    let publisher_key = SigningKey::from_bytes(&[3_u8; 32]);
+    let publisher_bytes = domain_pack_publisher_signing_bytes(&registry_id, &audience, record)
+        .expect("versioned publisher signing bytes");
+    record.publisher_signature_hex = hex(&publisher_key.sign(&publisher_bytes).to_bytes());
+    let record_digest = record.record_digest.clone();
+
+    registry.registry_version = version.to_owned();
+    registry.snapshot_digest = digest('0');
+    registry.signatures.clear();
+    let snapshot_digest =
+        domain_pack_registry_snapshot_digest(&fixture.snapshot).expect("versioned snapshot digest");
+    fixture
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .snapshot_digest = snapshot_digest;
+    for (key_id, key) in [
+        (id("registry.key.a"), SigningKey::from_bytes(&[1_u8; 32])),
+        (id("registry.key.b"), SigningKey::from_bytes(&[2_u8; 32])),
+    ] {
+        let bytes = domain_pack_registry_signing_bytes(
+            &fixture.snapshot,
+            &key_id,
+            DomainPackRegistryTrustRole::RegistrySigner,
+        )
+        .expect("versioned registry signing bytes");
+        fixture
+            .snapshot
+            .domain_pack_supply_chain_registry
+            .signatures
+            .push(DomainPackRegistrySignature {
+                signer_key_id: key_id,
+                role: DomainPackRegistryTrustRole::RegistrySigner,
+                signature_hex: hex(&key.sign(&bytes).to_bytes()),
+            });
+    }
+
+    let reviewed = &mut fixture
+        .reviewed_registry
+        .domain_pack_reviewed_registry
+        .entries[0];
+    reviewed.pack.version = version.to_owned();
+    reviewed.package_digest = package_digest.clone();
+    reviewed.supply_chain_record_digest = record_digest.clone();
+    reviewed.manifest_digest = manifest_binding.canonical_sha256.clone();
+    reviewed.content_digest = content_canonical_sha256;
+    reviewed.promotion_decision_digest = learning_digest("promotion-decision-v2");
+    reviewed.authorization_digest = learning_digest("promotion-authorization-v2");
+    reviewed.independent_review_digests = vec![
+        learning_digest("review-semantic-v2"),
+        learning_digest("review-authorizer-v2"),
+    ];
+    reviewed.compatibility.predecessor_content_digests =
+        vec![base.resolved.package.content.canonical_sha256.clone()];
+    reviewed.entry_digest = domain_pack_reviewed_registry_entry_digest(reviewed)
+        .expect("versioned reviewed entry digest");
+    resign_reviewed_registry(&mut fixture.reviewed_registry);
+    assert_eq!(
+        domain_pack_reviewed_registry_entry_digest(
+            &fixture
+                .reviewed_registry
+                .domain_pack_reviewed_registry
+                .entries[0]
+        )
+        .expect("recheck versioned reviewed entry"),
+        fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .entries[0]
+            .entry_digest
+    );
+
+    fixture.resolved.registry_record_digest = record_digest;
+    fixture.resolved.reviewed_entry_digest = Some(
+        fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .entries[0]
+            .entry_digest
+            .clone(),
+    );
+    fixture.resolved.promotion_authorization_digest = Some(
+        fixture
+            .reviewed_registry
+            .domain_pack_reviewed_registry
+            .entries[0]
+            .authorization_digest
+            .clone(),
+    );
+    (fixture, raw)
+}
+
 fn authorize_integrated(
     project_root: &Path,
     fixture: &Fixture,
@@ -1298,6 +1580,39 @@ fn commit_integrated_install(
     let receipt = locked
         .commit(prepared, authority)
         .expect("commit integrated install");
+    (receipt, document, inputs)
+}
+
+fn commit_integrated_upgrade(
+    state_root: &Path,
+    source: &Fixture,
+    target: &Fixture,
+    raw: &RawArtifactFixture,
+) -> (
+    DomainPackLifecycleReceiptDocument,
+    DomainPackLifecyclePreflightDocument,
+    IntegratedInstallInputs,
+) {
+    let project_root = state_root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let mut locked = lock_domain_pack_lifecycle(state_root).expect("lock installed lifecycle");
+    let expected = expected_from_projection(locked.projection(), &project_digest);
+    let previous_lock = locked
+        .projection()
+        .active_lock
+        .clone()
+        .expect("active source lock");
+    let material = raw.material(target);
+    let (document, inputs) =
+        integrated_upgrade_preflight(source, target, expected, previous_lock, &material);
+    let prepared = locked
+        .prepare_candidate(document.clone())
+        .expect("prepare integrated upgrade");
+    let authority = authorize_integrated(project_root, target, raw, &inputs, &prepared)
+        .expect("authorize integrated upgrade");
+    let receipt = locked
+        .commit(prepared, authority)
+        .expect("commit integrated upgrade");
     (receipt, document, inputs)
 }
 
@@ -1626,6 +1941,257 @@ fn install_upgrade_remove_and_rollback_reject_semantically_incompatible_intent()
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One persisted history covers all four successful lifecycle operations.
+fn install_upgrade_rollback_and_remove_persist_exact_recoverable_history() {
+    let v1 = Fixture::new();
+    let raw_v1 = RawArtifactFixture::new(&v1);
+    let (v2, raw_v2) = versioned_upgrade_fixture(&v1, "2.0.0");
+    let root = temp_state_root("successful-operation-history");
+
+    let (install, install_preflight, install_inputs) =
+        commit_integrated_install(&root, &v1, &raw_v1);
+    let install_state = install.domain_pack_lifecycle_receipt.to_state.clone();
+    assert_eq!(install_state.generation, 0);
+    let install_receipt_path = root.join("domain-packs/receipts").join(format!(
+        "{}.yaml",
+        install
+            .domain_pack_lifecycle_receipt
+            .receipt_digest
+            .trim_start_matches("sha256:")
+    ));
+    let install_receipt_bytes = fs::read(&install_receipt_path).expect("persisted install receipt");
+    let install_generation = generation_directories(&root)
+        .into_iter()
+        .next()
+        .expect("install generation");
+    let install_lock_bytes =
+        fs::read(install_generation.join("lock.yaml")).expect("persisted install lock");
+    let install_preflight_bytes =
+        fs::read(install_generation.join("preflight.yaml")).expect("persisted install preflight");
+    {
+        let recovered = lock_domain_pack_lifecycle(&root).expect("recover install");
+        assert_eq!(recovered.projection().ledger_records.len(), 1);
+        assert_eq!(
+            recovered
+                .projection()
+                .active_pointer
+                .as_ref()
+                .map(|pointer| &pointer.domain_pack_active_pointer),
+            Some(&install_state)
+        );
+        assert_eq!(
+            recovered
+                .projection()
+                .active_lock
+                .as_ref()
+                .unwrap()
+                .domain_pack_exact_lock
+                .payload
+                .packages[0]
+                .identity
+                .version,
+            "1.0.0"
+        );
+        assert!(matches!(
+            recovered.projection().ledger_records[0].operation,
+            DomainPackLifecycleOperation::Install { .. }
+        ));
+    }
+
+    let (upgrade, _, _) = commit_integrated_upgrade(&root, &v1, &v2, &raw_v2);
+    let upgrade_state = upgrade.domain_pack_lifecycle_receipt.to_state.clone();
+    assert_eq!(upgrade_state.generation, 1);
+    let upgrade_receipt_path = root.join("domain-packs/receipts").join(format!(
+        "{}.yaml",
+        upgrade
+            .domain_pack_lifecycle_receipt
+            .receipt_digest
+            .trim_start_matches("sha256:")
+    ));
+    let upgrade_receipt_bytes = fs::read(&upgrade_receipt_path).expect("persisted upgrade receipt");
+    let upgrade_generation = generation_directories(&root)[1].clone();
+    let upgrade_lock_bytes =
+        fs::read(upgrade_generation.join("lock.yaml")).expect("persisted upgrade lock");
+    let upgrade_preflight_bytes =
+        fs::read(upgrade_generation.join("preflight.yaml")).expect("persisted upgrade preflight");
+    {
+        let recovered = lock_domain_pack_lifecycle(&root).expect("recover upgrade");
+        assert_eq!(recovered.projection().ledger_records.len(), 2);
+        assert_eq!(
+            recovered
+                .projection()
+                .active_pointer
+                .as_ref()
+                .map(|pointer| &pointer.domain_pack_active_pointer),
+            Some(&upgrade_state)
+        );
+        assert_eq!(
+            recovered
+                .projection()
+                .active_lock
+                .as_ref()
+                .unwrap()
+                .domain_pack_exact_lock
+                .payload
+                .packages[0]
+                .identity
+                .version,
+            "2.0.0"
+        );
+        assert!(matches!(
+            recovered.projection().ledger_records[1].operation,
+            DomainPackLifecycleOperation::Upgrade { .. }
+        ));
+    }
+
+    let rollback = attempt_variant(
+        &root,
+        &v1,
+        &raw_v1,
+        &install_preflight,
+        &install_inputs,
+        DomainPackLifecycleOperation::Rollback {
+            target_receipt_digest: install.domain_pack_lifecycle_receipt.receipt_digest.clone(),
+            target_lock_digest: install_state.active_lock_digest.clone(),
+        },
+        "rollback-after-upgrade",
+    )
+    .expect("rollback exact v1 generation");
+    let rollback_state = rollback.domain_pack_lifecycle_receipt.to_state.clone();
+    assert_eq!(rollback_state.generation, 2);
+    let rollback_receipt_path = root.join("domain-packs/receipts").join(format!(
+        "{}.yaml",
+        rollback
+            .domain_pack_lifecycle_receipt
+            .receipt_digest
+            .trim_start_matches("sha256:")
+    ));
+    let rollback_receipt_bytes =
+        fs::read(&rollback_receipt_path).expect("persisted rollback receipt");
+    let rollback_generation = generation_directories(&root)[2].clone();
+    let rollback_lock_bytes =
+        fs::read(rollback_generation.join("lock.yaml")).expect("persisted rollback lock");
+    let rollback_preflight_bytes =
+        fs::read(rollback_generation.join("preflight.yaml")).expect("persisted rollback preflight");
+    {
+        let recovered = lock_domain_pack_lifecycle(&root).expect("recover rollback");
+        assert_eq!(recovered.projection().ledger_records.len(), 3);
+        assert_eq!(
+            recovered
+                .projection()
+                .active_pointer
+                .as_ref()
+                .map(|pointer| &pointer.domain_pack_active_pointer),
+            Some(&rollback_state)
+        );
+        assert_eq!(
+            recovered
+                .projection()
+                .active_lock
+                .as_ref()
+                .unwrap()
+                .domain_pack_exact_lock
+                .payload
+                .packages[0]
+                .identity
+                .version,
+            "1.0.0"
+        );
+        assert!(matches!(
+            recovered.projection().ledger_records[2].operation,
+            DomainPackLifecycleOperation::Rollback { .. }
+        ));
+    }
+
+    let remove = commit_integrated_remove(&root, &v1, &install_inputs);
+    let remove_state = remove.domain_pack_lifecycle_receipt.to_state.clone();
+    assert_eq!(remove_state.generation, 3);
+    let remove_receipt_path = root.join("domain-packs/receipts").join(format!(
+        "{}.yaml",
+        remove
+            .domain_pack_lifecycle_receipt
+            .receipt_digest
+            .trim_start_matches("sha256:")
+    ));
+    let remove_receipt_bytes = fs::read(&remove_receipt_path).expect("persisted remove receipt");
+
+    assert_eq!(generation_directories(&root).len(), 4);
+    assert_eq!(
+        fs::read(&install_receipt_path).unwrap(),
+        install_receipt_bytes
+    );
+    assert_eq!(
+        fs::read(&upgrade_receipt_path).unwrap(),
+        upgrade_receipt_bytes
+    );
+    assert_eq!(
+        fs::read(&rollback_receipt_path).unwrap(),
+        rollback_receipt_bytes
+    );
+    assert_eq!(
+        fs::read(&remove_receipt_path).unwrap(),
+        remove_receipt_bytes
+    );
+    assert_eq!(
+        fs::read(install_generation.join("lock.yaml")).unwrap(),
+        install_lock_bytes
+    );
+    assert_eq!(
+        fs::read(install_generation.join("preflight.yaml")).unwrap(),
+        install_preflight_bytes
+    );
+    assert_eq!(
+        fs::read(upgrade_generation.join("lock.yaml")).unwrap(),
+        upgrade_lock_bytes
+    );
+    assert_eq!(
+        fs::read(upgrade_generation.join("preflight.yaml")).unwrap(),
+        upgrade_preflight_bytes
+    );
+    assert_eq!(
+        fs::read(rollback_generation.join("lock.yaml")).unwrap(),
+        rollback_lock_bytes
+    );
+    assert_eq!(
+        fs::read(rollback_generation.join("preflight.yaml")).unwrap(),
+        rollback_preflight_bytes
+    );
+
+    let recovered = lock_domain_pack_lifecycle(&root).expect("recover final remove");
+    assert_eq!(recovered.projection().ledger_records.len(), 4);
+    assert_eq!(
+        recovered
+            .projection()
+            .active_pointer
+            .as_ref()
+            .map(|pointer| &pointer.domain_pack_active_pointer),
+        Some(&remove_state)
+    );
+    assert!(matches!(
+        recovered.projection().ledger_records[3].operation,
+        DomainPackLifecycleOperation::Remove { .. }
+    ));
+    assert!(recovered
+        .projection()
+        .active_lock
+        .as_ref()
+        .unwrap()
+        .domain_pack_exact_lock
+        .payload
+        .packages
+        .is_empty());
+    let admitted = recovered
+        .admit_active_generation()
+        .expect("admit final degraded remove generation");
+    let view = admitted.verified_view().expect("revalidate final remove");
+    assert!(view.is_degraded_empty());
+    assert!(!view.degraded_gaps().is_empty());
+    drop(admitted);
+
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
 #[allow(clippy::too_many_lines)] // One cohesive adversarial history/rollback scenario.
 fn rollback_replays_exact_history_without_generation_collision_and_rejects_orphan_receipt() {
     let fixture = Fixture::new();
@@ -1811,7 +2377,13 @@ fn rollback_to_exact_historical_empty_lock_is_vacuously_reviewed() {
         .payload
         .packages
         .is_empty());
-    drop(locked);
+    let admitted = locked
+        .admit_active_generation()
+        .expect("historical empty rollback is an admitted degraded generation");
+    let view = admitted.verified_view().expect("revalidate empty rollback");
+    assert!(view.is_degraded_empty());
+    assert!(!view.degraded_gaps().is_empty());
+    drop(admitted);
 
     fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
 }
@@ -2203,4 +2775,196 @@ fn non_empty_raw_sidecar_install_recomputes_every_boundary_and_blocks_tamper() {
     }
     drop(locked);
     fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn active_generation_admission_exposes_only_exact_composed_inputs_under_retained_lock() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("admitted-active-generation");
+    let (_, preflight, _) = commit_integrated_install(&root, &fixture, &raw);
+    let expected = &preflight.domain_pack_lifecycle_preflight;
+    let expected_lock = &expected.proposed_lock.domain_pack_exact_lock;
+    let expected_composition = &expected.composition.domain_pack_composition_projection;
+
+    let admitted = lock_domain_pack_lifecycle(&root)
+        .expect("lock committed lifecycle")
+        .admit_active_generation()
+        .expect("admit exact active generation");
+    {
+        let view = admitted
+            .verified_view()
+            .expect("freshly revalidate admitted generation");
+        assert_eq!(view.generation_id(), 0);
+        assert_eq!(view.lock_digest(), expected_lock.lock_digest);
+        assert_eq!(
+            view.base_core_bundle_digest(),
+            expected_composition.core_bundle_digest
+        );
+        assert_eq!(
+            view.composition_digest(),
+            expected_composition.composition_digest
+        );
+        assert_eq!(
+            view.supply_chain_registry_digest(),
+            expected_lock.payload.registry_snapshot_digest
+        );
+        assert_eq!(
+            view.reviewer_registry_digest(),
+            expected_lock.payload.reviewer_registry_digest
+        );
+        assert_eq!(
+            view.reviewed_registry_digest(),
+            expected_lock.payload.reviewed_registry_digest
+        );
+        assert_eq!(
+            view.active_package_identities(),
+            expected_composition.ordered_packs
+        );
+        assert_eq!(
+            view.effective_bundle(),
+            expected_composition
+                .composed_bundle
+                .as_ref()
+                .expect("committed composition bundle")
+        );
+    }
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("admitted generation must retain the lifecycle OS lock");
+
+    drop(admitted);
+    lock_domain_pack_lifecycle(&root).expect("dropping admission releases lifecycle lock");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn governed_remove_to_empty_is_typed_degraded_and_retains_blocking_gaps() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("admitted-degraded-empty-generation");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    let (_, remove_preflight, _) =
+        commit_integrated_remove_with_preflight(&root, &fixture, &install_inputs);
+    let expected = &remove_preflight
+        .domain_pack_lifecycle_preflight
+        .composition
+        .domain_pack_composition_projection;
+    assert_eq!(expected.status, DomainPackCompositionStatus::Blocked);
+    assert!(!expected.gaps.is_empty());
+    assert!(expected.ordered_packs.is_empty());
+
+    let admitted = lock_domain_pack_lifecycle(&root)
+        .expect("lock governed empty generation")
+        .admit_active_generation()
+        .expect("admit exact degraded empty generation");
+    let view = admitted
+        .verified_view()
+        .expect("revalidate degraded empty generation");
+    assert!(matches!(
+        &view,
+        forge_core_domain_pack_tcb::AdmittedActiveDomainPackGenerationView::DegradedEmpty(_)
+    ));
+    assert!(view.is_degraded_empty());
+    assert_eq!(view.degraded_gaps(), expected.gaps);
+    assert!(view.active_package_identities().is_empty());
+    assert_eq!(
+        view.effective_bundle(),
+        expected
+            .composed_bundle
+            .as_ref()
+            .expect("blocked remove preserves core-only composed bundle")
+    );
+    lock_domain_pack_lifecycle(&root).expect_err("degraded admission retains lifecycle lock");
+
+    drop(admitted);
+    lock_domain_pack_lifecycle(&root).expect("dropping degraded admission releases lock");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn tampered_pointer_generation_and_preflight_cannot_mint_active_admission() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+
+    let pointer_root = temp_state_root("admission-tampered-pointer");
+    commit_integrated_install(&pointer_root, &fixture, &raw);
+    let pointer_path = pointer_root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH);
+    let mut pointer_raw = fs::read(&pointer_path).expect("active pointer");
+    pointer_raw.extend_from_slice(b"forged_field: true\n");
+    fs::write(&pointer_path, pointer_raw).expect("tamper active pointer");
+    lock_domain_pack_lifecycle(&pointer_root)
+        .expect_err("caller-authored pointer cannot mint active admission");
+    fs::remove_dir_all(pointer_root.parent().expect("project root")).expect("cleanup");
+
+    let generation_root = temp_state_root("admission-tampered-generation");
+    commit_integrated_install(&generation_root, &fixture, &raw);
+    let generation_path = generation_directories(&generation_root)[0].join("generation.yaml");
+    let mut generation_raw = fs::read(&generation_path).expect("generation manifest");
+    generation_raw.extend_from_slice(b"forged_field: true\n");
+    fs::write(&generation_path, generation_raw).expect("tamper generation manifest");
+    lock_domain_pack_lifecycle(&generation_root)
+        .expect_err("caller-authored generation cannot mint active admission");
+    fs::remove_dir_all(generation_root.parent().expect("project root")).expect("cleanup");
+
+    let preflight_root = temp_state_root("admission-tampered-preflight");
+    commit_integrated_install(&preflight_root, &fixture, &raw);
+    let preflight_path = generation_directories(&preflight_root)[0].join("preflight.yaml");
+    let mut preflight_raw = fs::read(&preflight_path).expect("generation preflight");
+    preflight_raw.extend_from_slice(b"forged_field: true\n");
+    fs::write(&preflight_path, preflight_raw).expect("tamper generation preflight");
+    lock_domain_pack_lifecycle(&preflight_root)
+        .expect_err("caller-authored preflight cannot mint active admission");
+    fs::remove_dir_all(preflight_root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn admitted_generation_revalidation_blocks_stale_state_and_uninitialized_state() {
+    let empty_root = temp_state_root("admission-no-active-generation");
+    let error = lock_domain_pack_lifecycle(&empty_root)
+        .expect("lock empty lifecycle")
+        .admit_active_generation()
+        .expect_err("uninitialized lifecycle has no active generation");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+    fs::remove_dir_all(empty_root.parent().expect("project root")).expect("cleanup");
+
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("admission-stale-after-mint");
+    commit_integrated_install(&root, &fixture, &raw);
+    let admitted = lock_domain_pack_lifecycle(&root)
+        .expect("lock committed lifecycle")
+        .admit_active_generation()
+        .expect("mint active admission");
+    admitted
+        .verified_view()
+        .expect("active generation starts fresh");
+
+    let preflight_path = generation_directories(&root)[0].join("preflight.yaml");
+    let mut preflight_raw = fs::read(&preflight_path).expect("generation preflight");
+    preflight_raw.extend_from_slice(b"forged_field: true\n");
+    fs::write(&preflight_path, preflight_raw).expect("simulate non-cooperative state change");
+    admitted
+        .verified_view()
+        .expect_err("stale admitted capability must fail closed before consumer join");
+
+    drop(admitted);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn verified_core_only_view_borrows_the_retained_lifecycle_lock() {
+    let root = temp_state_root("verified-core-only-lifecycle");
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock empty lifecycle");
+    let view = lifecycle
+        .verified_core_only_view()
+        .expect("admit exact core-only observation");
+    assert!(format!("{view:?}").contains("AdmittedCoreOnlyDomainPackLifecycleView"));
+    lock_domain_pack_lifecycle(&root).expect_err("core-only view owner retains lifecycle lock");
+
+    drop(lifecycle);
+    lock_domain_pack_lifecycle(&root).expect("dropping core-only owner releases lock");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
 }

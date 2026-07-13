@@ -1,0 +1,12 @@
+schema_version: '0.1'
+ablation_case:
+  id: reference.game-development.case.ablation-without-first-use
+  removed_contribution_refs:
+  - reference.game-development.policy.first-use-playtest
+  - reference.game-development.claim.first-use-playtest.representative-session
+  - reference.game-development.claim.first-use-playtest.independent-review
+  - reference.game-development.hazard.untested-first-use
+  expected_regression: A build can appear complete while onboarding, feedback, recovery, and packaging
+    fail for a real first-time player.
+  comparison_rule: The full pack must require both representative execution and independent review; a
+    partial or self-reported lane must not be accepted as equivalent.

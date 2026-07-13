@@ -15,7 +15,8 @@ use forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance;
 use forge_core_contracts::{
     DomainPackActivePointer, DomainPackActivePointerDocument, DomainPackArtifactBinding,
     DomainPackCandidateAuthority, DomainPackCapabilitySandboxPolicyDocument,
-    DomainPackCompatibilityStatus, DomainPackCompositionRequestDocument,
+    DomainPackCompatibilityStatus, DomainPackComposedIdentity, DomainPackCompositionGap,
+    DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
     DomainPackCompositionStatus, DomainPackExactLockDocument, DomainPackExpectedLifecycleState,
     DomainPackLifecycleLedgerRecord, DomainPackLifecycleOperation,
     DomainPackLifecyclePreflightDocument, DomainPackLifecyclePreflightStatus,
@@ -24,7 +25,7 @@ use forge_core_contracts::{
     DomainPackResolutionRequestDocument, DomainPackResolutionStatus,
     DomainPackRuntimeCapabilityRegistryDocument, DomainPackSourceAssurance,
     DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, StableId,
-    DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
+    WorkflowGovernanceBundle, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     compose_domain_packs, domain_pack_resolution_projection_digest,
@@ -208,6 +209,266 @@ pub struct LockedDomainPackLifecycle {
     recovery: CrashReplaceRecovery,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct ActiveDomainPackGenerationMaterial {
+    pointer: DomainPackActivePointerDocument,
+    lock: DomainPackExactLockDocument,
+    composition: DomainPackCompositionProjectionDocument,
+    effective_bundle: WorkflowGovernanceBundle,
+    pointer_raw_digest: String,
+    generation_manifest_raw_digest: String,
+    lock_raw_digest: String,
+    preflight_raw_digest: String,
+    admission_kind: ActiveDomainPackGenerationAdmissionKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ActiveDomainPackGenerationAdmissionKind {
+    Ready,
+    DegradedEmpty,
+}
+
+/// Move-only admission of the exact durable Domain Pack generation currently
+/// active under the retained lifecycle OS lock.
+///
+/// There is deliberately no public constructor, `Clone`, or serde surface.
+/// Callers cannot turn a serialized pointer, lock, preflight, composition, or
+/// audit into execution authority. A consumer must keep this value alive for
+/// its transaction and obtain a freshly revalidated borrowed view.
+pub struct AdmittedActiveDomainPackGeneration {
+    state_root: PathBuf,
+    _lifecycle_lock: EffectStoreLock,
+    material: ActiveDomainPackGenerationMaterial,
+}
+
+impl fmt::Debug for AdmittedActiveDomainPackGeneration {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdmittedActiveDomainPackGeneration")
+            .finish_non_exhaustive()
+    }
+}
+
+/// Borrowed execution inputs from a freshly revalidated admitted generation.
+///
+/// This view cannot outlive the admitted value that retains the lifecycle OS
+/// lock. It exposes only the effective bundle and exact identity bindings a
+/// later kernel join needs; it is not independently constructible authority.
+pub struct AdmittedReadyDomainPackGenerationView<'a> {
+    material: &'a ActiveDomainPackGenerationMaterial,
+}
+
+impl fmt::Debug for AdmittedReadyDomainPackGenerationView<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdmittedReadyDomainPackGenerationView")
+            .finish_non_exhaustive()
+    }
+}
+
+/// Typed admission of a legitimate empty-package generation produced by a
+/// governed remove or rollback-to-empty operation. Its composition gaps remain
+/// blocking data and must never be silently treated as normal core-only
+/// readiness.
+pub struct AdmittedDegradedEmptyDomainPackGenerationView<'a> {
+    material: &'a ActiveDomainPackGenerationMaterial,
+}
+
+impl fmt::Debug for AdmittedDegradedEmptyDomainPackGenerationView<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdmittedDegradedEmptyDomainPackGenerationView")
+            .field(
+                "gaps",
+                &self
+                    .material
+                    .composition
+                    .domain_pack_composition_projection
+                    .gaps,
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+/// Freshly revalidated active generation. The variant is authoritative: only
+/// an exactly composable generation is `Ready`; a clean, empty-package
+/// remove/rollback generation is explicitly `DegradedEmpty` with typed gaps.
+pub enum AdmittedActiveDomainPackGenerationView<'a> {
+    Ready(AdmittedReadyDomainPackGenerationView<'a>),
+    DegradedEmpty(AdmittedDegradedEmptyDomainPackGenerationView<'a>),
+}
+
+impl fmt::Debug for AdmittedActiveDomainPackGenerationView<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ready(_) => formatter.write_str("AdmittedActiveDomainPackGenerationView::Ready"),
+            Self::DegradedEmpty(view) => formatter
+                .debug_tuple("AdmittedActiveDomainPackGenerationView::DegradedEmpty")
+                .field(view)
+                .finish(),
+        }
+    }
+}
+
+/// Borrowed proof that no Domain Pack generation is active while the
+/// lifecycle OS lock remains retained by [`LockedDomainPackLifecycle`].
+pub struct AdmittedCoreOnlyDomainPackLifecycleView<'a> {
+    _lifecycle: &'a LockedDomainPackLifecycle,
+}
+
+impl fmt::Debug for AdmittedCoreOnlyDomainPackLifecycleView<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdmittedCoreOnlyDomainPackLifecycleView")
+            .finish_non_exhaustive()
+    }
+}
+
+impl AdmittedActiveDomainPackGeneration {
+    /// Re-read and cross-link the complete active generation before exposing a
+    /// borrowed consumer view. The lifecycle OS lock remains retained by
+    /// `self` for the lifetime of the returned view and the consumer's join.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed if any pointer, ledger, generation, lock, preflight,
+    /// composition, receipt, or immutable object changed since admission.
+    pub fn verified_view(
+        &self,
+    ) -> Result<AdmittedActiveDomainPackGenerationView<'_>, DomainPackLifecycleStoreError> {
+        let current = load_active_generation_material(&self.state_root)?;
+        if current != self.material {
+            return Err(DomainPackLifecycleStoreError::StaleExpectedState {
+                expected: active_generation_material_digest(&self.material)?,
+                actual: active_generation_material_digest(&current)?,
+            });
+        }
+        Ok(match self.material.admission_kind {
+            ActiveDomainPackGenerationAdmissionKind::Ready => {
+                AdmittedActiveDomainPackGenerationView::Ready(
+                    AdmittedReadyDomainPackGenerationView {
+                        material: &self.material,
+                    },
+                )
+            }
+            ActiveDomainPackGenerationAdmissionKind::DegradedEmpty => {
+                AdmittedActiveDomainPackGenerationView::DegradedEmpty(
+                    AdmittedDegradedEmptyDomainPackGenerationView {
+                        material: &self.material,
+                    },
+                )
+            }
+        })
+    }
+}
+
+impl AdmittedActiveDomainPackGenerationView<'_> {
+    fn material(&self) -> &ActiveDomainPackGenerationMaterial {
+        match self {
+            Self::Ready(view) => view.material,
+            Self::DegradedEmpty(view) => view.material,
+        }
+    }
+
+    /// Exact effective core-plus-packs bundle from the committed composition.
+    #[must_use]
+    pub fn effective_bundle(&self) -> &WorkflowGovernanceBundle {
+        &self.material().effective_bundle
+    }
+
+    /// Blocking composition gaps for a governed empty-package generation.
+    /// Ready generations always return an empty slice.
+    #[must_use]
+    pub fn degraded_gaps(&self) -> &[DomainPackCompositionGap] {
+        match self {
+            Self::Ready(_) => &[],
+            Self::DegradedEmpty(view) => {
+                &view
+                    .material
+                    .composition
+                    .domain_pack_composition_projection
+                    .gaps
+            }
+        }
+    }
+
+    #[must_use]
+    pub const fn is_degraded_empty(&self) -> bool {
+        matches!(self, Self::DegradedEmpty(_))
+    }
+
+    #[must_use]
+    pub fn base_core_bundle_digest(&self) -> &str {
+        &self
+            .material()
+            .composition
+            .domain_pack_composition_projection
+            .core_bundle_digest
+    }
+
+    #[must_use]
+    pub fn generation_id(&self) -> u64 {
+        self.material()
+            .pointer
+            .domain_pack_active_pointer
+            .generation
+    }
+
+    #[must_use]
+    pub fn lock_digest(&self) -> &str {
+        &self.material().lock.domain_pack_exact_lock.lock_digest
+    }
+
+    #[must_use]
+    pub fn composition_digest(&self) -> &str {
+        &self
+            .material()
+            .composition
+            .domain_pack_composition_projection
+            .composition_digest
+    }
+
+    #[must_use]
+    pub fn supply_chain_registry_digest(&self) -> &str {
+        &self
+            .material()
+            .lock
+            .domain_pack_exact_lock
+            .payload
+            .registry_snapshot_digest
+    }
+
+    #[must_use]
+    pub fn reviewer_registry_digest(&self) -> &str {
+        &self
+            .material()
+            .lock
+            .domain_pack_exact_lock
+            .payload
+            .reviewer_registry_digest
+    }
+
+    #[must_use]
+    pub fn reviewed_registry_digest(&self) -> &str {
+        &self
+            .material()
+            .lock
+            .domain_pack_exact_lock
+            .payload
+            .reviewed_registry_digest
+    }
+
+    #[must_use]
+    pub fn active_package_identities(&self) -> &[DomainPackComposedIdentity] {
+        &self
+            .material()
+            .composition
+            .domain_pack_composition_projection
+            .ordered_packs
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DomainPackLifecycleStoreError {
@@ -345,6 +606,64 @@ impl LockedDomainPackLifecycle {
     #[must_use]
     pub fn projection(&self) -> &DomainPackLifecycleStateProjection {
         &self.state
+    }
+
+    /// Revalidate that the lifecycle remains uninitialized while retaining
+    /// this handle's OS lock. The returned proof borrows the lock-owning
+    /// handle, so a core-only effective workflow admission cannot outlive it.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed if a generation is active or durable lifecycle state
+    /// differs from the state recovered when this lock was acquired.
+    pub fn verified_core_only_view(
+        &self,
+    ) -> Result<AdmittedCoreOnlyDomainPackLifecycleView<'_>, DomainPackLifecycleStoreError> {
+        let current = load_state_under_lock(&self.state_root)?;
+        if current != self.state
+            || current.active_pointer.is_some()
+            || current.active_lock.is_some()
+            || !current.ledger_records.is_empty()
+        {
+            return Err(stale(
+                "Domain Pack lifecycle is not a stable core-only state",
+                &current,
+            ));
+        }
+        Ok(AdmittedCoreOnlyDomainPackLifecycleView { _lifecycle: self })
+    }
+
+    /// Consume the lifecycle handle and admit the exact durable active
+    /// generation while transferring its retained OS lock to the opaque
+    /// execution seam.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed when no generation is active, the state changed after lock
+    /// acquisition, or any durable generation cross-link is invalid.
+    pub fn admit_active_generation(
+        self,
+    ) -> Result<AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError> {
+        let Self {
+            state_root,
+            lock,
+            state,
+            recovery: _,
+        } = self;
+        let material = load_active_generation_material(&state_root)?;
+        if state.active_pointer.as_ref() != Some(&material.pointer)
+            || state.active_lock.as_ref() != Some(&material.lock)
+        {
+            return Err(stale(
+                "active generation changed after lifecycle lock acquisition",
+                &state,
+            ));
+        }
+        Ok(AdmittedActiveDomainPackGeneration {
+            state_root,
+            _lifecycle_lock: lock,
+            material,
+        })
     }
 
     /// Typed non-authoritative account of the pointer recovery performed while
@@ -1471,6 +1790,133 @@ fn load_state_under_lock(
         active_lock: Some(lock),
         ledger_records: records,
     })
+}
+
+#[allow(clippy::too_many_lines)] // Keep the durable execution boundary explicit and auditable.
+fn load_active_generation_material(
+    state_root: &Path,
+) -> Result<ActiveDomainPackGenerationMaterial, DomainPackLifecycleStoreError> {
+    let state = load_state_under_lock(state_root)?;
+    let pointer = state
+        .active_pointer
+        .ok_or_else(|| blocked("no Domain Pack generation is active"))?;
+    let lock = state
+        .active_lock
+        .ok_or_else(|| blocked("active pointer has no exact lock"))?;
+    let head = state
+        .ledger_records
+        .last()
+        .ok_or_else(|| blocked("active pointer has no lifecycle ledger head"))?;
+    let generation_root = generation_root(
+        state_root,
+        pointer.domain_pack_active_pointer.generation,
+        &head.record_digest,
+    )?;
+
+    let pointer_path = state_root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH);
+    let pointer_raw =
+        read_required_state_bytes(state_root, &pointer_path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
+    let generation_manifest_path = generation_root.join("generation.yaml");
+    let generation_manifest_raw = read_required_state_bytes(
+        state_root,
+        &generation_manifest_path,
+        DOMAIN_PACK_MAX_DOCUMENT_BYTES,
+    )?;
+    let lock_path = generation_root.join("lock.yaml");
+    let lock_raw = read_required_state_bytes(state_root, &lock_path, DOMAIN_PACK_MAX_LOCK_BYTES)?;
+    let preflight_path = generation_root.join("preflight.yaml");
+    let preflight_raw =
+        read_required_state_bytes(state_root, &preflight_path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
+    let preflight: DomainPackLifecyclePreflightDocument =
+        parse_yaml(&preflight_path, &preflight_raw)?;
+    let composition = preflight
+        .domain_pack_lifecycle_preflight
+        .composition
+        .clone();
+    let composition_value = &composition.domain_pack_composition_projection;
+    let lock_value = &lock.domain_pack_exact_lock;
+    let operation = &preflight
+        .domain_pack_lifecycle_preflight
+        .request
+        .domain_pack_lifecycle_request
+        .operation;
+    let admission_kind = classify_active_generation(composition_value, lock_value, operation)?;
+    let effective_bundle = composition_value
+        .composed_bundle
+        .clone()
+        .ok_or_else(|| blocked("active generation has no effective composed bundle"))?;
+    if composition_value.core_bundle_digest != lock_value.payload.core.bundle_digest
+        || composition_value.composition_digest != lock_value.payload.composition_digest
+        || composition_value.ordered_packs.len() != lock_value.payload.packages.len()
+    {
+        return Err(blocked(
+            "active composition differs from its exact durable lock",
+        ));
+    }
+    for (composed, locked) in composition_value
+        .ordered_packs
+        .iter()
+        .zip(&lock_value.payload.packages)
+    {
+        if composed.identity != locked.identity
+            || composed.content_digest != locked.content_binding.canonical_sha256
+            || composed.manifest_digest != locked.manifest_binding.canonical_sha256
+            || composed.deterministic_order != locked.deterministic_order
+        {
+            return Err(blocked(
+                "active package identity differs from its exact durable lock",
+            ));
+        }
+    }
+
+    Ok(ActiveDomainPackGenerationMaterial {
+        pointer,
+        lock,
+        composition,
+        effective_bundle,
+        pointer_raw_digest: sha256_content_hash(&pointer_raw),
+        generation_manifest_raw_digest: sha256_content_hash(&generation_manifest_raw),
+        lock_raw_digest: sha256_content_hash(&lock_raw),
+        preflight_raw_digest: sha256_content_hash(&preflight_raw),
+        admission_kind,
+    })
+}
+
+fn classify_active_generation(
+    composition: &forge_core_contracts::DomainPackCompositionProjection,
+    lock: &forge_core_contracts::DomainPackExactLock,
+    operation: &DomainPackLifecycleOperation,
+) -> Result<ActiveDomainPackGenerationAdmissionKind, DomainPackLifecycleStoreError> {
+    if composition.status == DomainPackCompositionStatus::Composable
+        && composition.gaps.is_empty()
+        && composition.issues.is_empty()
+    {
+        return Ok(ActiveDomainPackGenerationAdmissionKind::Ready);
+    }
+    let legitimate_empty_operation = matches!(
+        operation,
+        DomainPackLifecycleOperation::Remove { .. } | DomainPackLifecycleOperation::Rollback { .. }
+    );
+    let legitimate_degraded_empty = legitimate_empty_operation
+        && composition.status == DomainPackCompositionStatus::Blocked
+        && composition.issues.is_empty()
+        && !composition.gaps.is_empty()
+        && lock.payload.packages.is_empty()
+        && composition.ordered_packs.is_empty()
+        && composition.gaps == lock.payload.unresolved_composition_gaps
+        && composition.composed_bundle.is_some();
+    if legitimate_degraded_empty {
+        return Ok(ActiveDomainPackGenerationAdmissionKind::DegradedEmpty);
+    }
+    Err(blocked(
+        "active generation is neither ready nor a governed degraded empty-package remove/rollback",
+    ))
+}
+
+fn active_generation_material_digest(
+    material: &ActiveDomainPackGenerationMaterial,
+) -> Result<String, DomainPackLifecycleStoreError> {
+    canonical_digest(material)
 }
 
 fn load_ledger_chain(

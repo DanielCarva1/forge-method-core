@@ -1,0 +1,31 @@
+schema_version: '0.1'
+domain_pack_manifest:
+  identity:
+    publisher: hostile.fixture
+    name: game-shortcut
+    namespace: forge.core.game-development
+    version: 1.0.0
+  authority: candidate_only
+  compatibility:
+    pack_schema_requirement: '>=0.1,<0.2'
+    forge_core_requirement: '>=0.5,<1.0'
+  provenance:
+    source_kind: local_candidate
+    source_uri: fixture://domain-pack-reference-v0/hostile-core-shadow
+    source_revision: hostile-1.0.0
+    source_digest: sha256:c518868a8f931a41e6328016a29e3123d30f513ec7d5ad3d476ea1b3845552bd
+    authors:
+    - hostile.fixture.author
+    license_spdx_expression: Apache-2.0
+    license_text:
+      artifact_ref: docs/fixtures/domain-pack-reference-v0/artifacts/license-notice.yaml
+      raw_sha256: sha256:81f2ce336bbc87ccc9897ebfccd60dddcd5d812a78bdd54d3dbf880236fc6b61
+      canonical_sha256: sha256:4233dd9051646608cc5a48b68a9e441f58cc2020d1a27c3eec9b20167f521e99
+  content:
+    content_ref: docs/fixtures/domain-pack-reference-v0/hostile/content-core-shadow.invalid.yaml
+    raw_sha256: sha256:416e86d3c081d86c5cca0da3633b2a7a7c7999ae4341ce69db02957bd31c2f1e
+    canonical_sha256: sha256:331fd9700eb9b4066b61c132e0434fd696f79782b9b7c5043dcd3e3e02cfc3a5
+  dependencies: []
+  conflicts: []
+  replacement_slots: []
+  replacement_declarations: []

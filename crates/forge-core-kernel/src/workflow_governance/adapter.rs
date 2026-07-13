@@ -9,11 +9,14 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use super::{
-    evaluate_verified_workflow_governance,
-    load_admitted_workflow_governance_reviewed_release_registry, AdmittedWorkflowGovernanceRelease,
+    admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
+    domain_pack_generation_transition_event, evaluate_verified_workflow_governance,
+    load_admitted_workflow_governance_reviewed_release_registry,
+    AdmittedEffectiveWorkflowGovernanceBundle, AdmittedWorkflowGovernanceRelease,
     AdmittedWorkflowGovernanceReleaseError, AdmittedWorkflowGovernanceReleaseRegistry,
-    TrustedWorkflowGovernanceSnapshot, TrustedWorkflowGovernanceSnapshotError,
-    VerifiedWorkflowGovernanceCompletion, VerifiedWorkflowGovernanceDecision,
+    EffectiveWorkflowGovernanceBundleError, TrustedWorkflowGovernanceSnapshot,
+    TrustedWorkflowGovernanceSnapshotError, VerifiedWorkflowGovernanceCompletion,
+    VerifiedWorkflowGovernanceDecision, WorkflowDomainPackContextView,
 };
 use forge_core_authority::workflow_authority::{
     WORKFLOW_APPLICABILITY_AUTHORITY_SCOPE, WORKFLOW_APPLICABILITY_EVALUATOR_REF,
@@ -28,27 +31,34 @@ use forge_core_authority::{
 };
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ContinuityRecordedEvent,
-    DecisionResolvedEvent, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent, PolicyCompletedEvent,
-    PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent,
-    SignalChangedEvent, StableId, WaiverAuthorizedEvent, WorkflowClaimWaiverObservation,
-    WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowContentAddressedReference,
-    WorkflowEvidenceFreshness, WorkflowEvidenceObservation, WorkflowEvidenceProvenance,
-    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluation, WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
-    WorkflowGovernanceSignal, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
-    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity,
-    PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    DecisionResolvedEvent, DomainPackCompositionGap, EvaluatorObservedEvent, Phase,
+    PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent,
+    ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent, SignalChangedEvent, StableId,
+    WaiverAuthorizedEvent, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
+    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
+    WorkflowEffectiveBundleIdentity, WorkflowEvidenceFreshness, WorkflowEvidenceObservation,
+    WorkflowEvidenceProvenance, WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
+    WorkflowPolicyActivation, WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover,
+    WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity, PROJECT_LINK_FILE_NAME,
+    PROJECT_LINK_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     find_entry, load_embedded_frozen_legacy_catalog, project_legacy_workflow_compatibility,
     simulate_workflow_governance, LegacyWorkflowGovernanceProjection, WorkflowGovernanceRejection,
     WorkflowGovernanceSimulation, WorkflowGovernanceStatus,
 };
+use forge_core_domain_pack_tcb::{
+    lock_domain_pack_lifecycle, AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
+    LockedDomainPackLifecycle,
+};
 use forge_core_store::sha256_content_hash;
 use forge_core_workflow_governance_tcb::{
-    lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerError,
-    WorkflowGovernanceLedgerIdentity, WorkflowGovernanceLedgerProjection,
+    lock_workflow_governance_ledger_tcb, LockedWorkflowGovernanceLedger,
+    WorkflowGovernanceLedgerError, WorkflowGovernanceLedgerIdentity,
+    WorkflowGovernanceLedgerProjection,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -79,6 +89,65 @@ pub struct WorkflowGovernanceProjectBinding {
 #[derive(Debug, Clone)]
 pub struct WorkflowGovernanceProjectAdapter {
     binding: WorkflowGovernanceProjectBinding,
+}
+
+/// Retains the Domain Pack lifecycle lock until the complete workflow
+/// transaction ends. This enforces the global lifecycle -> workflow-ledger
+/// lock order even for projects that currently have no active generation.
+enum LockedWorkflowDomainPackContext {
+    CoreOnly(Box<LockedDomainPackLifecycle>),
+    Active(Box<AdmittedActiveDomainPackGeneration>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DomainPackTransitionRecovery {
+    TargetCommitted,
+    SourceUnchanged,
+    Indeterminate,
+}
+
+impl LockedWorkflowDomainPackContext {
+    fn acquire(state_root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let lifecycle = lock_domain_pack_lifecycle(state_root)?;
+        if lifecycle.projection().active_pointer.is_some() {
+            Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
+        } else {
+            Ok(Self::CoreOnly(Box::new(lifecycle)))
+        }
+    }
+
+    fn has_active_generation(&self) -> bool {
+        match self {
+            Self::CoreOnly(lifecycle) => {
+                debug_assert!(lifecycle.projection().active_pointer.is_none());
+                false
+            }
+            Self::Active(_) => true,
+        }
+    }
+
+    fn admit_effective(
+        &self,
+        core: &AdmittedWorkflowGovernanceRelease,
+    ) -> Result<AdmittedEffectiveWorkflowGovernanceBundle<'_>, WorkflowGovernanceAdapterError> {
+        match self {
+            Self::CoreOnly(lifecycle) => {
+                debug_assert!(lifecycle.projection().active_pointer.is_none());
+                let view = lifecycle.verified_core_only_view()?;
+                Ok(admit_effective_workflow_governance_bundle(
+                    core,
+                    WorkflowDomainPackContextView::CoreOnly(view),
+                )?)
+            }
+            Self::Active(active) => {
+                let view = active.verified_view()?;
+                Ok(admit_effective_workflow_governance_bundle(
+                    core,
+                    WorkflowDomainPackContextView::Active(view),
+                )?)
+            }
+        }
+    }
 }
 
 impl WorkflowGovernanceProjectAdapter {
@@ -125,21 +194,35 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let genesis = registry.genesis();
-        let identity = self.identity(genesis);
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         if !projection.records.is_empty() {
             let admitted = self.resolve_active_release(&registry, &projection)?;
+            let effective = domain.admit_effective(admitted)?;
+            projection =
+                self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
             let active_identity = self.identity(admitted);
             validate_identity(&projection, &active_identity, &self.binding.project_root)?;
             return Ok(WorkflowGovernanceInitialization {
                 status: WorkflowGovernanceInitializationStatus::AlreadyInitialized,
                 project_id: self.binding.project_id.clone(),
-                bundle_id: active_identity.bundle_id,
-                bundle_digest: active_identity.bundle_digest,
+                bundle_id: effective
+                    .identity()
+                    .effective_runtime_bundle
+                    .bundle_id
+                    .clone(),
+                bundle_digest: effective
+                    .identity()
+                    .effective_runtime_bundle
+                    .bundle_digest
+                    .clone(),
                 release: Self::release_audit(&registry, admitted, &projection),
+                effective: effective.identity().clone(),
+                domain_pack_degraded: effective.is_domain_pack_degraded(),
+                domain_pack_gaps: effective.domain_pack_gaps().to_vec(),
                 snapshot_digest,
                 head_digest: projection
                     .head_digest
@@ -155,16 +238,37 @@ impl WorkflowGovernanceProjectAdapter {
             snapshot_digest: snapshot_digest.clone(),
             initial_phase: StableId(INITIAL_PHASE.to_owned()),
         });
+        let identity = self.identity(genesis);
         let record = ledger.initialize_unchecked_tcb(&identity, 0, event)?;
+        projection = ledger.recover()?;
+        let effective = domain.admit_effective(genesis)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, genesis, &effective, projection)?;
         Ok(WorkflowGovernanceInitialization {
             status: WorkflowGovernanceInitializationStatus::Initialized,
             project_id: self.binding.project_id.clone(),
-            bundle_id: identity.bundle_id,
-            bundle_digest: identity.bundle_digest,
-            release: Self::release_audit(&registry, genesis, &ledger.recover()?),
+            bundle_id: effective
+                .identity()
+                .effective_runtime_bundle
+                .bundle_id
+                .clone(),
+            bundle_digest: effective
+                .identity()
+                .effective_runtime_bundle
+                .bundle_digest
+                .clone(),
+            release: Self::release_audit(&registry, genesis, &projection),
+            effective: effective.identity().clone(),
+            domain_pack_degraded: effective.is_domain_pack_degraded(),
+            domain_pack_gaps: effective.domain_pack_gaps().to_vec(),
             snapshot_digest: snapshot_digest.clone(),
-            head_digest: record.record_digest,
-            state_version: record.state_version,
+            head_digest: projection
+                .head_digest
+                .clone()
+                .unwrap_or(record.record_digest),
+            state_version: projection
+                .current_state_version()
+                .unwrap_or(record.state_version),
             current_phase: INITIAL_PHASE.to_owned(),
         })
     }
@@ -177,10 +281,14 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn next(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
-        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
-        self.guidance_from_projection(&registry, admitted, &projection, now)
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        self.guidance_from_projection(&registry, admitted, &effective, &projection, now)
     }
 
     /// Replacement-agent view. This is intentionally the same deterministic
@@ -202,9 +310,12 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<WorkflowGovernanceReleaseStatus, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
-        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
         let active = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(active)?;
+        projection = self.reconcile_effective_epoch(&mut ledger, active, &effective, projection)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         let head_digest = projection
             .head_digest
@@ -213,30 +324,38 @@ impl WorkflowGovernanceProjectAdapter {
         let available = registry
             .adjacent_successor(active)
             .map(|successor| successor.release().clone());
-        let upgrade_argv = available.as_ref().map(|target| {
-            vec![
-                "forge-core".to_owned(),
-                "workflow".to_owned(),
-                "release-upgrade".to_owned(),
-                "--root".to_owned(),
-                self.binding.project_root.display().to_string(),
-                "--target-release-id".to_owned(),
-                target.release_id.0.clone(),
-                "--expected-current-release-digest".to_owned(),
-                active.release().release_digest.clone(),
-                "--expected-head-digest".to_owned(),
-                head_digest.clone(),
-                "--expected-snapshot-digest".to_owned(),
-                snapshot_digest.clone(),
-            ]
-        });
+        let domain_pack_rebase_required = domain.has_active_generation();
+        let upgrade_argv = (!domain_pack_rebase_required)
+            .then_some(available.as_ref())
+            .flatten()
+            .map(|target| {
+                vec![
+                    "forge-core".to_owned(),
+                    "workflow".to_owned(),
+                    "release-upgrade".to_owned(),
+                    "--root".to_owned(),
+                    self.binding.project_root.display().to_string(),
+                    "--target-release-id".to_owned(),
+                    target.release_id.0.clone(),
+                    "--expected-current-release-digest".to_owned(),
+                    active.release().release_digest.clone(),
+                    "--expected-head-digest".to_owned(),
+                    head_digest.clone(),
+                    "--expected-snapshot-digest".to_owned(),
+                    snapshot_digest.clone(),
+                ]
+            });
         Ok(WorkflowGovernanceReleaseStatus {
             active: Self::release_audit(&registry, active, &projection),
+            effective: effective.identity().clone(),
+            domain_pack_degraded: effective.is_domain_pack_degraded(),
+            domain_pack_gaps: effective.domain_pack_gaps().to_vec(),
             ledger_head_digest: head_digest,
             snapshot_digest,
             state_version: projection.current_state_version().unwrap_or_default(),
             available_successor: available,
             upgrade_argv,
+            domain_pack_rebase_required,
         })
     }
 
@@ -254,6 +373,10 @@ impl WorkflowGovernanceProjectAdapter {
         expected_snapshot_digest: &str,
     ) -> Result<WorkflowGovernanceReleaseUpgradeReceipt, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        if domain.has_active_generation() {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseRequired);
+        }
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let source = self.resolve_active_release(&registry, &projection)?;
@@ -425,9 +548,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowApplicabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -438,7 +566,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -448,8 +577,14 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let policy = policy_by_id(admitted.document(), &request.policy_ref)?;
-        self.require_active_policy(&registry, admitted, &projection, &request.policy_ref)?;
+        let policy = policy_by_id(effective.document(), &request.policy_ref)?;
+        self.require_active_policy(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            &request.policy_ref,
+        )?;
         if policy.routing.activation != WorkflowPolicyActivation::WhenApplicable {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
@@ -478,7 +613,7 @@ impl WorkflowGovernanceProjectAdapter {
         let mut batch = ledger.begin_unchecked_tcb_batch(head, &identity)?;
         let record = batch.push_event(request.state_version, event)?;
         if let Some((state_version, event)) =
-            self.plan_phase_advance(admitted, batch.projection(), unix_time()?)?
+            self.plan_phase_advance(&effective, batch.projection(), unix_time()?)?
         {
             batch.push_event(state_version, event)?;
         }
@@ -499,9 +634,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowCapabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -512,7 +652,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -521,8 +662,14 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let policy = policy_by_id(admitted.document(), &request.policy_ref)?;
-        self.require_active_policy(&registry, admitted, &projection, &request.policy_ref)?;
+        let policy = policy_by_id(effective.document(), &request.policy_ref)?;
+        self.require_active_policy(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            &request.policy_ref,
+        )?;
         let requirement = policy
             .capability_requirements
             .iter()
@@ -574,9 +721,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowEvidenceAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -587,7 +739,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -595,9 +748,14 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let policy = policy_by_id(admitted.document(), &request.policy_ref)?;
-        let active_target =
-            self.require_active_policy(&registry, admitted, &projection, &request.policy_ref)?;
+        let policy = policy_by_id(effective.document(), &request.policy_ref)?;
+        let active_target = self.require_active_policy(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            &request.policy_ref,
+        )?;
         if request.readiness_target != active_target
             || request.readiness_target.rank() < policy.routing.readiness_target.rank()
         {
@@ -704,9 +862,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowDecisionAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -717,7 +880,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -725,8 +889,14 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let policy = policy_by_id(admitted.document(), &request.policy_ref)?;
-        self.require_active_policy(&registry, admitted, &projection, &request.policy_ref)?;
+        let policy = policy_by_id(effective.document(), &request.policy_ref)?;
+        self.require_active_policy(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            &request.policy_ref,
+        )?;
         let rule = policy
             .decision_rules
             .iter()
@@ -779,9 +949,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowWaiverAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -792,7 +967,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -808,8 +984,14 @@ impl WorkflowGovernanceProjectAdapter {
                 ));
             }
         };
-        let policy = policy_by_id(admitted.document(), &request.policy_ref)?;
-        self.require_active_policy(&registry, admitted, &projection, &request.policy_ref)?;
+        let policy = policy_by_id(effective.document(), &request.policy_ref)?;
+        self.require_active_policy(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            &request.policy_ref,
+        )?;
         let claim = policy
             .claims
             .iter()
@@ -873,9 +1055,14 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowSignalAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         validate_identity(&projection, &identity, &self.binding.project_root)?;
         let request = authorization.request();
@@ -886,7 +1073,8 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         if request.project_id != self.binding.project_id
-            || request.policy_bundle_digest != admitted.digest()
+            || request.policy_bundle_digest
+                != effective.identity().effective_runtime_bundle.bundle_digest
             || request.state_version != projection.current_state_version().unwrap_or_default()
             || request.current_phase != phase
             || request.snapshot_digest != snapshot_digest
@@ -943,7 +1131,7 @@ impl WorkflowGovernanceProjectAdapter {
         let mut batch = ledger.begin_unchecked_tcb_batch(head, &identity)?;
         let record = batch.push_event(request.state_version, event)?;
         if let Some((state_version, event)) =
-            self.plan_phase_advance(admitted, batch.projection(), unix_time()?)?
+            self.plan_phase_advance(&effective, batch.projection(), unix_time()?)?
         {
             batch.push_event(state_version, event)?;
         }
@@ -963,11 +1151,16 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
-        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let (guidance, verified) =
-            self.verified_from_projection(&registry, admitted, &projection, now)?;
+            self.verified_from_projection(&registry, admitted, &effective, &projection, now)?;
         if guidance.status == WorkflowGovernanceGuidanceStatus::PhaseComplete {
             return Err(WorkflowGovernanceAdapterError::PolicyAlreadyCompleted);
         }
@@ -987,6 +1180,7 @@ impl WorkflowGovernanceProjectAdapter {
             state_version: guidance.state_version,
             current_phase: guidance.current_phase,
             target: guidance.target,
+            effective_bundle_identity: effective.identity().clone(),
         })
     }
 
@@ -1008,12 +1202,17 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_reviewed_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let projection = ledger.recover()?;
+        let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
         let (fresh, verified) =
-            self.verified_from_projection(&registry, admitted, &projection, now)?;
+            self.verified_from_projection(&registry, admitted, &effective, &projection, now)?;
         if fresh.status != WorkflowGovernanceGuidanceStatus::ReadyToComplete {
             return Err(WorkflowGovernanceAdapterError::CompletionDrift);
         }
@@ -1029,6 +1228,7 @@ impl WorkflowGovernanceProjectAdapter {
             || prepared.current_phase != fresh.current_phase
             || prepared.target != fresh.target
             || prepared.completion.target() != fresh.target
+            || prepared.effective_bundle_identity != *effective.identity()
         {
             return Err(WorkflowGovernanceAdapterError::CompletionDrift);
         }
@@ -1036,7 +1236,7 @@ impl WorkflowGovernanceProjectAdapter {
             .state_version
             .checked_add(1)
             .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
-        let completed_policy = policy_by_id(admitted.document(), &fresh.selected_policy_ref)?;
+        let completed_policy = policy_by_id(effective.document(), &fresh.selected_policy_ref)?;
         let prerequisite_refs = completed_policy
             .prerequisites
             .iter()
@@ -1057,7 +1257,7 @@ impl WorkflowGovernanceProjectAdapter {
         if completed_policy.routing.activation == WorkflowPolicyActivation::OnSignal {
             let registry_digest = self.current_trusted_registry_digest()?;
             let current_receipts = derive_receipts(
-                admitted.document(),
+                effective.document(),
                 &projection,
                 &self.binding.project_root,
                 &fresh.snapshot_digest,
@@ -1125,14 +1325,19 @@ impl WorkflowGovernanceProjectAdapter {
         let mut batch = ledger.begin_unchecked_tcb_batch(&fresh.ledger_head_digest, &identity)?;
         let completed = batch.push_event(completed_state_version, event)?;
         let phase_advanced = if let Some((state_version, event)) =
-            self.plan_phase_advance(admitted, batch.projection(), now)?
+            self.plan_phase_advance(&effective, batch.projection(), now)?
         {
             Some(batch.push_event(state_version, event)?)
         } else {
             None
         };
-        let next_guidance =
-            self.guidance_from_projection(&registry, admitted, batch.projection(), now)?;
+        let next_guidance = self.guidance_from_projection(
+            &registry,
+            admitted,
+            &effective,
+            batch.projection(),
+            now,
+        )?;
         let continuity_event =
             WorkflowGovernanceEvent::ContinuityRecorded(ContinuityRecordedEvent {
                 from_principal: None,
@@ -1159,7 +1364,13 @@ impl WorkflowGovernanceProjectAdapter {
             .current_state_version()
             .unwrap_or(completed_state_version);
         let continuity = batch.push_event(continuity_state, continuity_event)?;
-        let next = self.guidance_from_projection(&registry, admitted, batch.projection(), now)?;
+        let next = self.guidance_from_projection(
+            &registry,
+            admitted,
+            &effective,
+            batch.projection(),
+            now,
+        )?;
         batch.commit()?;
         Ok(WorkflowGovernanceCompletionReceipt {
             authority: WorkflowGovernanceCompletionAuthority::ConsumedAfterLateRecheck,
@@ -1278,6 +1489,118 @@ impl WorkflowGovernanceProjectAdapter {
             bundle_id: admitted.runtime_bundle().bundle_id.clone(),
             bundle_digest: admitted.digest().to_owned(),
         }
+    }
+
+    /// Reconcile the independently committed lifecycle generation into the
+    /// workflow ledger before any guidance or mutation is derived. The caller
+    /// already retains the lifecycle lock, so this never inverts lock order.
+    fn reconcile_effective_epoch(
+        &self,
+        ledger: &mut LockedWorkflowGovernanceLedger,
+        core: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        mut projection: WorkflowGovernanceLedgerProjection,
+    ) -> Result<WorkflowGovernanceLedgerProjection, WorkflowGovernanceAdapterError> {
+        if projection.records.is_empty() {
+            return Ok(projection);
+        }
+        let core_identity = self.identity(core);
+        validate_identity(&projection, &core_identity, &self.binding.project_root)?;
+
+        let target = effective.identity();
+        let active = match projection.active_effective_bundle_identity() {
+            Some(active) => active,
+            None => derive_core_only_workflow_effective_identity(core)?,
+        };
+        if active == *target {
+            return Ok(projection);
+        }
+        if active.core_runtime_bundle != target.core_runtime_bundle {
+            return Err(WorkflowGovernanceAdapterError::DomainPackCoreMismatch);
+        }
+        let Some(target_generation) = target.domain_pack_generation.as_ref() else {
+            return Err(WorkflowGovernanceAdapterError::DomainPackGenerationMissing);
+        };
+        if let Some(active_generation) = active.domain_pack_generation.as_ref() {
+            if target_generation.generation < active_generation.generation {
+                return Err(
+                    WorkflowGovernanceAdapterError::DomainPackGenerationRegression {
+                        active: active_generation.generation,
+                        found: target_generation.generation,
+                    },
+                );
+            }
+            if target_generation.generation == active_generation.generation {
+                return Err(WorkflowGovernanceAdapterError::DomainPackGenerationFork {
+                    generation: target_generation.generation,
+                });
+            }
+        }
+        let prior_head = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection
+            .current_state_version()
+            .unwrap_or_default()
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
+        let event = domain_pack_generation_transition_event(&active, effective, prior_head.clone());
+        let transition = ledger.transition_domain_pack_generation_unchecked_tcb(
+            &prior_head,
+            &core_identity,
+            state_version,
+            event,
+        );
+        match transition {
+            Ok(_) => {
+                projection = ledger.recover()?;
+                if classify_domain_pack_transition_recovery(
+                    &projection,
+                    &active,
+                    target,
+                    &prior_head,
+                    state_version,
+                ) != DomainPackTransitionRecovery::TargetCommitted
+                {
+                    return Err(WorkflowGovernanceAdapterError::DomainPackCommitIndeterminate);
+                }
+            }
+            Err(commit_error) => {
+                // Atomic replacement can become durable before a directory
+                // sync reports failure. Reconcile under the still-retained
+                // lifecycle and workflow locks rather than falsely reporting
+                // failure for a committed target epoch.
+                let recovered = ledger.recover()?;
+                match classify_domain_pack_transition_recovery(
+                    &recovered,
+                    &active,
+                    target,
+                    &prior_head,
+                    state_version,
+                ) {
+                    DomainPackTransitionRecovery::TargetCommitted => projection = recovered,
+                    DomainPackTransitionRecovery::SourceUnchanged => {
+                        return Err(WorkflowGovernanceAdapterError::Ledger(commit_error));
+                    }
+                    DomainPackTransitionRecovery::Indeterminate => {
+                        return Err(WorkflowGovernanceAdapterError::DomainPackCommitIndeterminate);
+                    }
+                }
+            }
+        }
+        Ok(projection)
+    }
+
+    fn ensure_domain_pack_ready_for_mutation(
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle<'_>,
+    ) -> Result<(), WorkflowGovernanceAdapterError> {
+        if effective.is_domain_pack_degraded() {
+            return Err(WorkflowGovernanceAdapterError::DomainPackGapsBlocking(
+                effective.domain_pack_gaps().to_vec(),
+            ));
+        }
+        Ok(())
     }
 
     /// Fixed operator registry path used by every workflow authorization.
@@ -1422,10 +1745,11 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         registry: &AdmittedWorkflowGovernanceReleaseRegistry,
         admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
     ) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
-        self.verified_from_projection(registry, admitted, projection, now)
+        self.verified_from_projection(registry, admitted, effective, projection, now)
             .map(|(guidance, _)| guidance)
     }
 
@@ -1433,6 +1757,7 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         registry: &AdmittedWorkflowGovernanceReleaseRegistry,
         admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
     ) -> Result<
@@ -1447,7 +1772,7 @@ impl WorkflowGovernanceProjectAdapter {
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
         let derived = derive_receipts(
-            admitted.document(),
+            effective.document(),
             projection,
             &self.binding.project_root,
             &snapshot_digest,
@@ -1455,7 +1780,7 @@ impl WorkflowGovernanceProjectAdapter {
             trusted_registry_digest.as_deref(),
         )?;
         let phase = current_phase(projection)?;
-        let selected = select_policy(admitted.document(), &derived, &phase)?;
+        let selected = select_policy(effective.document(), &derived, &phase)?;
         let evaluation_phase =
             if selected.eligible_phases.iter().any(|tag| {
                 Phase::tag_eligible(&tag.0, Phase::parse(&phase.0).expect("parsed phase"))
@@ -1471,7 +1796,7 @@ impl WorkflowGovernanceProjectAdapter {
             };
         let selected_already_completed = derived.completed_policy_refs.contains(&selected.id);
         let boundary_rechecks = boundary_rechecks(
-            admitted.document(),
+            effective.document(),
             &derived,
             projection.current_state_version().unwrap_or_default(),
             now,
@@ -1486,7 +1811,11 @@ impl WorkflowGovernanceProjectAdapter {
                 )),
                 state_version: projection.current_state_version().unwrap_or_default(),
                 observed_at_unix: now,
-                bundle_id: identity.bundle_id.clone(),
+                bundle_id: effective
+                    .identity()
+                    .effective_runtime_bundle
+                    .bundle_id
+                    .clone(),
                 policy_id: selected.id.clone(),
                 current_phase: evaluation_phase,
                 target: selected.routing.readiness_target,
@@ -1553,7 +1882,7 @@ impl WorkflowGovernanceProjectAdapter {
             },
         };
         let trusted = TrustedWorkflowGovernanceSnapshot::from_trusted_parts(
-            admitted.document().clone(),
+            effective.document().clone(),
             evaluation,
             snapshot_digest.clone(),
             self.binding.project_id.0.clone(),
@@ -1561,32 +1890,44 @@ impl WorkflowGovernanceProjectAdapter {
         )?;
         let verified = evaluate_verified_workflow_governance(trusted)?;
         let applicability = derived.applicability.get(&selected.id).copied();
-        let guidance_status = if !boundary_rechecks.is_empty() {
-            WorkflowGovernanceGuidanceStatus::Blocked
-        } else if selected_already_completed {
-            WorkflowGovernanceGuidanceStatus::PhaseComplete
-        } else if selected.routing.activation == WorkflowPolicyActivation::WhenApplicable
-            && applicability.is_none()
-        {
-            WorkflowGovernanceGuidanceStatus::ApplicabilityRequired
-        } else {
-            match verified.status() {
-                WorkflowGovernanceStatus::Ineligible | WorkflowGovernanceStatus::Blocked => {
-                    WorkflowGovernanceGuidanceStatus::Blocked
+        let guidance_status =
+            if effective.is_domain_pack_degraded() || !boundary_rechecks.is_empty() {
+                WorkflowGovernanceGuidanceStatus::Blocked
+            } else if selected_already_completed {
+                WorkflowGovernanceGuidanceStatus::PhaseComplete
+            } else if selected.routing.activation == WorkflowPolicyActivation::WhenApplicable
+                && applicability.is_none()
+            {
+                WorkflowGovernanceGuidanceStatus::ApplicabilityRequired
+            } else {
+                match verified.status() {
+                    WorkflowGovernanceStatus::Ineligible | WorkflowGovernanceStatus::Blocked => {
+                        WorkflowGovernanceGuidanceStatus::Blocked
+                    }
+                    WorkflowGovernanceStatus::Active => WorkflowGovernanceGuidanceStatus::Active,
+                    WorkflowGovernanceStatus::Complete => {
+                        WorkflowGovernanceGuidanceStatus::ReadyToComplete
+                    }
                 }
-                WorkflowGovernanceStatus::Active => WorkflowGovernanceGuidanceStatus::Active,
-                WorkflowGovernanceStatus::Complete => {
-                    WorkflowGovernanceGuidanceStatus::ReadyToComplete
-                }
-            }
-        };
+            };
         let guidance = WorkflowGovernanceGuidance {
             authority: WorkflowGovernanceGuidanceAuthority::VerifiedProjectSnapshot,
             status: guidance_status,
             project_id: self.binding.project_id.clone(),
-            bundle_id: identity.bundle_id,
-            bundle_digest: identity.bundle_digest,
+            bundle_id: effective
+                .identity()
+                .effective_runtime_bundle
+                .bundle_id
+                .clone(),
+            bundle_digest: effective
+                .identity()
+                .effective_runtime_bundle
+                .bundle_digest
+                .clone(),
             release: Self::release_audit(registry, admitted, projection),
+            effective: effective.identity().clone(),
+            domain_pack_degraded: effective.is_domain_pack_degraded(),
+            domain_pack_gaps: effective.domain_pack_gaps().to_vec(),
             snapshot_digest,
             ledger_head_digest: projection
                 .head_digest
@@ -1608,11 +1949,12 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         registry: &AdmittedWorkflowGovernanceReleaseRegistry,
         admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         requested_policy_ref: &StableId,
     ) -> Result<ReadinessTarget, WorkflowGovernanceAdapterError> {
         let guidance =
-            self.guidance_from_projection(registry, admitted, projection, unix_time()?)?;
+            self.guidance_from_projection(registry, admitted, effective, projection, unix_time()?)?;
         if &guidance.selected_policy_ref == requested_policy_ref {
             return Ok(guidance.target);
         }
@@ -1626,7 +1968,7 @@ impl WorkflowGovernanceProjectAdapter {
 
     fn plan_phase_advance(
         &self,
-        admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
     ) -> Result<Option<(u64, WorkflowGovernanceEvent)>, WorkflowGovernanceAdapterError> {
@@ -1637,14 +1979,14 @@ impl WorkflowGovernanceProjectAdapter {
         let snapshot = project_snapshot_digest(&self.binding.project_root)?;
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
         let derived = derive_receipts(
-            admitted.document(),
+            effective.document(),
             projection,
             &self.binding.project_root,
             &snapshot,
             now,
             trusted_registry_digest.as_deref(),
         )?;
-        let phase_done = admitted
+        let phase_done = effective
             .document()
             .workflow_governance_bundle
             .policies
@@ -1706,6 +2048,7 @@ pub struct PreparedWorkflowGovernanceCompletion {
     state_version: u64,
     current_phase: String,
     target: ReadinessTarget,
+    effective_bundle_identity: WorkflowEffectiveBundleIdentity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1741,6 +2084,13 @@ pub struct WorkflowGovernanceInitialization {
     pub bundle_id: StableId,
     pub bundle_digest: String,
     pub release: WorkflowGovernanceReleaseAudit,
+    /// Project-local effective core-plus-packs identity, kept separate from
+    /// the universal reviewed core release audit above.
+    pub effective: WorkflowEffectiveBundleIdentity,
+    /// True only for a governed remove/rollback generation with no active
+    /// packages. The typed gaps below are the actionable recovery surface.
+    pub domain_pack_degraded: bool,
+    pub domain_pack_gaps: Vec<DomainPackCompositionGap>,
     pub snapshot_digest: String,
     pub head_digest: String,
     pub state_version: u64,
@@ -1772,6 +2122,9 @@ pub struct WorkflowGovernanceGuidance {
     pub bundle_id: StableId,
     pub bundle_digest: String,
     pub release: WorkflowGovernanceReleaseAudit,
+    pub effective: WorkflowEffectiveBundleIdentity,
+    pub domain_pack_degraded: bool,
+    pub domain_pack_gaps: Vec<DomainPackCompositionGap>,
     pub snapshot_digest: String,
     pub ledger_head_digest: String,
     pub state_version: u64,
@@ -1788,11 +2141,15 @@ pub struct WorkflowGovernanceGuidance {
 #[serde(deny_unknown_fields)]
 pub struct WorkflowGovernanceReleaseStatus {
     pub active: WorkflowGovernanceReleaseAudit,
+    pub effective: WorkflowEffectiveBundleIdentity,
+    pub domain_pack_degraded: bool,
+    pub domain_pack_gaps: Vec<DomainPackCompositionGap>,
     pub ledger_head_digest: String,
     pub snapshot_digest: String,
     pub state_version: u64,
     pub available_successor: Option<WorkflowGovernanceReleaseIdentity>,
     pub upgrade_argv: Option<Vec<String>>,
+    pub domain_pack_rebase_required: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1883,6 +2240,8 @@ pub enum WorkflowGovernanceAdapterError {
         path: PathBuf,
     },
     ReleaseAdmission(AdmittedWorkflowGovernanceReleaseError),
+    DomainPackLifecycle(DomainPackLifecycleStoreError),
+    EffectiveBundle(EffectiveWorkflowGovernanceBundleError),
     Ledger(WorkflowGovernanceLedgerError),
     TrustedSnapshot(TrustedWorkflowGovernanceSnapshotError),
     Evaluation(WorkflowGovernanceRejection),
@@ -1894,6 +2253,18 @@ pub enum WorkflowGovernanceAdapterError {
     ReleaseCasMismatch,
     ReleaseChainInvalid,
     ReleaseCommitIndeterminate,
+    DomainPackRebaseRequired,
+    DomainPackCoreMismatch,
+    DomainPackGenerationMissing,
+    DomainPackGenerationRegression {
+        active: u64,
+        found: u64,
+    },
+    DomainPackGenerationFork {
+        generation: u64,
+    },
+    DomainPackCommitIndeterminate,
+    DomainPackGapsBlocking(Vec<DomainPackCompositionGap>),
     InvalidPhase(String),
     NoEligiblePolicy,
     UnknownPolicy(String),
@@ -1935,6 +2306,12 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::ReleaseAdmission(error) => {
                 write!(f, "workflow release admission failed: {error:?}")
             }
+            Self::DomainPackLifecycle(error) => {
+                write!(f, "Domain Pack lifecycle admission failed: {error}")
+            }
+            Self::EffectiveBundle(error) => {
+                write!(f, "effective workflow bundle admission failed: {error}")
+            }
             Self::Ledger(error) => write!(f, "governance ledger failed: {error}"),
             Self::TrustedSnapshot(error) => write!(f, "trusted snapshot failed: {error:?}"),
             Self::Evaluation(error) => write!(f, "governance evaluation rejected: {:?}", error.issues),
@@ -1946,6 +2323,20 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::ReleaseCasMismatch => f.write_str("workflow release upgrade CAS failed; refresh release status"),
             Self::ReleaseChainInvalid => f.write_str("durable workflow release transition chain is not admitted"),
             Self::ReleaseCommitIndeterminate => f.write_str("workflow release commit recovery did not resolve to source or requested target"),
+            Self::DomainPackRebaseRequired => f.write_str("DomainPackRebaseRequired: an active Domain Pack generation must be explicitly rebased before workflow release upgrade"),
+            Self::DomainPackCoreMismatch => f.write_str("active Domain Pack generation is bound to a different universal workflow core runtime"),
+            Self::DomainPackGenerationMissing => f.write_str("workflow ledger has an effective Domain Pack epoch but the lifecycle has no active generation"),
+            Self::DomainPackGenerationRegression { active, found } => write!(f, "Domain Pack generation regressed from workflow-ledger generation {active} to lifecycle generation {found}"),
+            Self::DomainPackGenerationFork { generation } => write!(f, "Domain Pack generation {generation} conflicts with the effective identity already adopted by the workflow ledger"),
+            Self::DomainPackCommitIndeterminate => f.write_str("Domain Pack generation transition recovery did not resolve to the admitted lifecycle identity"),
+            Self::DomainPackGapsBlocking(gaps) => {
+                let actionable = gaps
+                    .iter()
+                    .map(|gap| format!("{}: {}", gap.subject_ref.0, gap.message))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                write!(f, "Domain Pack gaps block workflow mutation: {actionable}")
+            }
             Self::InvalidPhase(phase) => write!(f, "invalid durable phase {phase}"),
             Self::NoEligiblePolicy => f.write_str("no incomplete governed policy is eligible for the durable phase"),
             Self::UnknownPolicy(id) => write!(f, "unknown workflow policy {id}"),
@@ -1981,6 +2372,16 @@ impl From<AdmittedWorkflowGovernanceReleaseError> for WorkflowGovernanceAdapterE
         Self::ReleaseAdmission(value)
     }
 }
+impl From<DomainPackLifecycleStoreError> for WorkflowGovernanceAdapterError {
+    fn from(value: DomainPackLifecycleStoreError) -> Self {
+        Self::DomainPackLifecycle(value)
+    }
+}
+impl From<EffectiveWorkflowGovernanceBundleError> for WorkflowGovernanceAdapterError {
+    fn from(value: EffectiveWorkflowGovernanceBundleError) -> Self {
+        Self::EffectiveBundle(value)
+    }
+}
 impl From<WorkflowGovernanceLedgerError> for WorkflowGovernanceAdapterError {
     fn from(value: WorkflowGovernanceLedgerError) -> Self {
         Self::Ledger(value)
@@ -2009,6 +2410,55 @@ struct DerivedReceipts {
     resolved_decision_refs: BTreeSet<StableId>,
     evidence: Vec<WorkflowEvidenceObservation>,
     waivers: Vec<WorkflowClaimWaiverObservation>,
+}
+
+fn classify_domain_pack_transition_recovery(
+    projection: &WorkflowGovernanceLedgerProjection,
+    source: &WorkflowEffectiveBundleIdentity,
+    target: &WorkflowEffectiveBundleIdentity,
+    prior_head: &str,
+    transition_state_version: u64,
+) -> DomainPackTransitionRecovery {
+    if projection.active_effective_bundle_identity().as_ref() == Some(target) {
+        let exact_transition = projection.records.last().is_some_and(|record| {
+            record.state_version == transition_state_version
+                && record.previous_record_digest.as_deref() == Some(prior_head)
+                && projection.head_digest.as_deref() == Some(record.record_digest.as_str())
+                && matches!(
+                    &record.event,
+                    WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event)
+                        if event.from_effective_bundle == *source
+                            && event.to_effective_bundle == *target
+                            && event.prior_ledger_head_digest == prior_head
+                )
+        });
+        return if exact_transition {
+            DomainPackTransitionRecovery::TargetCommitted
+        } else {
+            DomainPackTransitionRecovery::Indeterminate
+        };
+    }
+
+    let source_is_active = projection
+        .active_effective_bundle_identity()
+        .as_ref()
+        .map_or_else(
+            || {
+                source.domain_pack_generation.is_none()
+                    && source.core_runtime_bundle == source.effective_runtime_bundle
+            },
+            |active| active == source,
+        );
+    let source_state_unchanged = projection.head_digest.as_deref() == Some(prior_head)
+        && projection
+            .current_state_version()
+            .and_then(|version| version.checked_add(1))
+            == Some(transition_state_version);
+    if source_is_active && source_state_unchanged {
+        DomainPackTransitionRecovery::SourceUnchanged
+    } else {
+        DomainPackTransitionRecovery::Indeterminate
+    }
 }
 
 fn derive_receipts(
@@ -2262,11 +2712,26 @@ fn derive_receipts(
 fn receipt_window_start(projection: &WorkflowGovernanceLedgerProjection) -> usize {
     let mut start = 0;
     for (index, record) in projection.records.iter().enumerate() {
-        if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
-            match event.receipt_carryover {
-                WorkflowReceiptCarryover::PreservePolicyEquivalent
-                    if event.from_runtime_bundle.policy_set_digest
-                        == event.to_runtime_bundle.policy_set_digest => {}
+        let carryover = match &record.event {
+            WorkflowGovernanceEvent::ReleaseUpgraded(event) => Some((
+                event.receipt_carryover,
+                event.from_runtime_bundle.policy_set_digest
+                    == event.to_runtime_bundle.policy_set_digest,
+            )),
+            WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event) => Some((
+                event.receipt_carryover,
+                event.from_effective_bundle.core_runtime_bundle
+                    == event.to_effective_bundle.core_runtime_bundle
+                    && event.from_effective_bundle.effective_runtime_bundle
+                        == event.to_effective_bundle.effective_runtime_bundle
+                    && event.from_effective_bundle.receipt_context_digest
+                        == event.to_effective_bundle.receipt_context_digest,
+            )),
+            _ => None,
+        };
+        if let Some((carryover, exactly_equivalent)) = carryover {
+            match carryover {
+                WorkflowReceiptCarryover::PreservePolicyEquivalent if exactly_equivalent => {}
                 WorkflowReceiptCarryover::InvalidateAll
                 | WorkflowReceiptCarryover::NotApplicable
                 | WorkflowReceiptCarryover::PreservePolicyEquivalent => start = index + 1,
@@ -2965,6 +3430,133 @@ mod tests {
     }
 
     #[test]
+    fn domain_epoch_invalidates_receipts_unless_runtime_and_context_are_exact() {
+        let runtime = WorkflowRuntimeBundleIdentity {
+            bundle_id: StableId("bundle.test".to_owned()),
+            bundle_digest: format!("sha256:{}", "1".repeat(64)),
+            policy_set_digest: format!("sha256:{}", "2".repeat(64)),
+        };
+        let from = WorkflowEffectiveBundleIdentity {
+            core_runtime_bundle: runtime.clone(),
+            effective_runtime_bundle: runtime.clone(),
+            domain_pack_generation: None,
+            receipt_context_digest: format!("sha256:{}", "3".repeat(64)),
+        };
+        let mut to = from.clone();
+        to.domain_pack_generation =
+            Some(forge_core_contracts::WorkflowDomainPackGenerationIdentity {
+                generation: 1,
+                active_lock_digest: format!("sha256:{}", "4".repeat(64)),
+                composition_digest: format!("sha256:{}", "5".repeat(64)),
+                base_core_bundle_digest: format!("sha256:{}", "6".repeat(64)),
+                supply_chain_registry_digest: format!("sha256:{}", "7".repeat(64)),
+                reviewer_registry_digest: format!("sha256:{}", "8".repeat(64)),
+                reviewed_registry_digest: format!("sha256:{}", "9".repeat(64)),
+            });
+        to.receipt_context_digest = format!("sha256:{}", "a".repeat(64));
+        let transition = WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.domain-transition".to_owned()),
+            sequence: 2,
+            project_id: StableId("project.test".to_owned()),
+            bundle_id: runtime.bundle_id.clone(),
+            bundle_digest: runtime.bundle_digest.clone(),
+            state_version: 1,
+            previous_record_digest: Some(format!("sha256:{}", "b".repeat(64))),
+            record_digest: format!("sha256:{}", "c".repeat(64)),
+            recorded_at_unix: 10,
+            event: WorkflowGovernanceEvent::DomainPackGenerationTransitioned(
+                forge_core_contracts::DomainPackGenerationTransitionedEvent {
+                    from_effective_bundle: from.clone(),
+                    to_effective_bundle: to.clone(),
+                    receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+                    prior_ledger_head_digest: format!("sha256:{}", "b".repeat(64)),
+                },
+            ),
+        };
+        let projection = WorkflowGovernanceLedgerProjection {
+            records: vec![transition],
+            head_digest: Some(format!("sha256:{}", "c".repeat(64))),
+            next_sequence: 3,
+            next_state_version: 2,
+        };
+        assert_eq!(receipt_window_start(&projection), 1);
+        assert_eq!(
+            classify_domain_pack_transition_recovery(
+                &projection,
+                &from,
+                &to,
+                &format!("sha256:{}", "b".repeat(64)),
+                1,
+            ),
+            DomainPackTransitionRecovery::TargetCommitted
+        );
+
+        let mut forked_envelope = projection.clone();
+        forked_envelope.records[0].previous_record_digest =
+            Some(format!("sha256:{}", "d".repeat(64)));
+        assert_eq!(
+            classify_domain_pack_transition_recovery(
+                &forked_envelope,
+                &from,
+                &to,
+                &format!("sha256:{}", "b".repeat(64)),
+                1,
+            ),
+            DomainPackTransitionRecovery::Indeterminate,
+            "a target identity under the wrong envelope must never hide a fork"
+        );
+
+        let source_projection = WorkflowGovernanceLedgerProjection {
+            records: vec![WorkflowGovernanceLedgerRecord {
+                record_id: StableId("record.project-import".to_owned()),
+                sequence: 0,
+                project_id: StableId("project.test".to_owned()),
+                bundle_id: runtime.bundle_id,
+                bundle_digest: runtime.bundle_digest,
+                state_version: 0,
+                previous_record_digest: None,
+                record_digest: format!("sha256:{}", "b".repeat(64)),
+                recorded_at_unix: 9,
+                event: WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                    source_ref: "project.test".to_owned(),
+                    source_digest: format!("sha256:{}", "e".repeat(64)),
+                    snapshot_digest: format!("sha256:{}", "e".repeat(64)),
+                    initial_phase: StableId("1-discovery".to_owned()),
+                }),
+            }],
+            head_digest: Some(format!("sha256:{}", "b".repeat(64))),
+            next_sequence: 1,
+            next_state_version: 1,
+        };
+        assert_eq!(
+            classify_domain_pack_transition_recovery(
+                &source_projection,
+                &from,
+                &to,
+                &format!("sha256:{}", "b".repeat(64)),
+                1,
+            ),
+            DomainPackTransitionRecovery::SourceUnchanged
+        );
+    }
+
+    #[test]
+    fn degraded_domain_pack_gap_error_preserves_actionable_subject_and_message() {
+        let error = WorkflowGovernanceAdapterError::DomainPackGapsBlocking(vec![
+            DomainPackCompositionGap {
+                code: forge_core_contracts::DomainPackCompositionGapCode::MissingDomain,
+                requirement_ref: StableId("requirement.domain.required".to_owned()),
+                subject_ref: StableId("domain.removed.required".to_owned()),
+                message: "install or restore an eligible reviewed Domain Pack".to_owned(),
+                authority: forge_core_contracts::DomainPackCandidateAuthority::CandidateOnly,
+            },
+        ]);
+        let rendered = error.to_string();
+        assert!(rendered.contains("domain.removed.required"));
+        assert!(rendered.contains("install or restore"));
+    }
+
+    #[test]
     fn initializes_and_derives_first_policy_without_state_yaml() {
         let (root, state) = temp_project("init-next");
         fs::write(state.join("state.yaml"), "current_phase: 4-build-verify\n")
@@ -2977,6 +3569,13 @@ mod tests {
         .expect("adapter");
         let initialized = adapter.initialize().expect("initialize");
         assert_eq!(initialized.current_phase, "1-discovery");
+        assert_eq!(
+            initialized.effective.core_runtime_bundle,
+            initialized.effective.effective_runtime_bundle
+        );
+        assert!(initialized.effective.domain_pack_generation.is_none());
+        assert!(!initialized.domain_pack_degraded);
+        assert!(initialized.domain_pack_gaps.is_empty());
         let next = adapter.next().expect("next");
         assert_eq!(
             next.selected_policy_ref.0,
@@ -2987,6 +3586,16 @@ mod tests {
             next.authority,
             WorkflowGovernanceGuidanceAuthority::VerifiedProjectSnapshot
         );
+        assert_eq!(
+            next.release.runtime_bundle,
+            next.effective.core_runtime_bundle
+        );
+        assert_eq!(
+            next.bundle_digest,
+            next.effective.effective_runtime_bundle.bundle_digest
+        );
+        assert!(!next.domain_pack_degraded);
+        assert!(next.domain_pack_gaps.is_empty());
     }
 
     #[test]

@@ -24,7 +24,7 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Pullable compatibility checkpoint: the Rust workspace package version is
-`0.8.0`. Guide `describe`/`status` retirement diagnostics use payload schema
+`0.9.0`. Guide `describe`/`status` retirement diagnostics use payload schema
 `0.2`, and consumers of that extended surface must be at least `0.5.0`.
 Workflow governance release identity remains the frozen `0.4.0` five-release
 chain; package SemVer and governed release identity are separate axes.
@@ -79,6 +79,18 @@ chain; package SemVer and governed release identity are separate axes.
   semantic review, and separate registry authorization. Deprecated, revoked,
   and superseded entries remain auditable but are ineligible for new
   activation.
+- **Reference Domain Pack**: the governed
+  `forge.reference/game-development` pack that proves discovery, playable-loop,
+  representative first-use, and packaging governance without game-specific
+  Rust logic. It remains pack data and cannot mutate the universal registry.
+- **Effective Workflow Epoch**: the project-local identity joining one admitted
+  universal core runtime with one auto-detected Domain Pack lifecycle
+  generation. It is durable and auditable but distinct from the frozen core
+  release identity.
+- **Degraded Empty Generation**: an exact remove-last or rollback-to-empty
+  lifecycle generation whose retained requirements produce explicit typed
+  gaps. It is admitted under the lifecycle lock only to guide remediation and
+  must never be interpreted as ordinary core-only readiness.
 - **Workflow Migration Manifest**: a deterministic, content-bound inventory
   that classifies every legacy workflow and links it to candidate governance
   targets. In P5a it is compatibility evidence only, never execution or
@@ -259,6 +271,22 @@ chain; package SemVer and governed release identity are separate axes.
   reviewed registry. The lifecycle TCB requires opaque fresh anchors for both
   the P6b supply chain and the exact P6c reviewed registry; neither source can
   substitute for the other, and a raw audit document is never authority.
+  P6d adds the real game-development reference pack and a generic runtime join:
+  normal workflow commands auto-detect the lifecycle state, retain its lock,
+  and derive a separate effective core-plus-pack epoch without extending the
+  universal five-release 42-policy registry. Research and representative
+  evidence remain agent responsibilities; the human receives the single
+  product-direction choice only after its prerequisite claims are verified.
+  The real-process proof then reaches playable-loop, first-use, and packaging
+  readiness while rejecting partial, artifact-only, stale-CAS, and degraded
+  mutations. A separate persistence proof recovers install, upgrade, exact
+  rollback, and remove as four immutable generations. Replacement processes
+  replay the same durable epoch. Valid remove-last and
+  rollback-to-empty operations become typed degraded generations whose gaps
+  remain explicit and blocking. A core release upgrade while a generation is
+  active requires an explicit rebase rather than an unsafe partial cross-store
+  transition. P6a through P6d are complete; the next product phase is outside
+  P6.
   Static links, junctions, traversal,
   special files, and non-concurrent tamper fail closed. A malicious process
   running as the same OS principal can still race-replace a node after

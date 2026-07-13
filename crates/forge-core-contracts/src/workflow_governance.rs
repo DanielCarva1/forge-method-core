@@ -19,6 +19,10 @@ use serde::{Deserialize, Serialize};
 
 pub const WORKFLOW_GOVERNANCE_SCHEMA_VERSION: &str = "0.1";
 pub const WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION: &str = "0.1";
+/// Ledger records written after a Domain Pack effective-bundle epoch exists.
+/// Readers continue to accept the frozen `0.1` history; `0.2` makes the new
+/// transition impossible to smuggle into the historical wire version.
+pub const WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION: &str = "0.2";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -267,6 +271,14 @@ pub enum WorkflowDecisionActivation {
     ObservedNeed,
     ClaimUnresolved,
     ClaimDisproven,
+    /// The agent has verified the referenced claim and the remaining choice is
+    /// genuinely a human judgment. Rules using this activation must carry a
+    /// `claim_ref`; runtime admission enforces that binding.
+    ClaimVerified,
+    /// Every claim in the selected policy is freshly verified. This supports
+    /// a human product/value choice only after the agent-owned evidence work
+    /// is complete, without a caller-authored decision-need shortcut.
+    AllClaimsVerified,
 }
 
 /// Non-authoritative strategy projection. No eligibility, completion, or
@@ -330,6 +342,7 @@ pub struct WorkflowGovernanceLedgerRecord {
 pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
+    DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     PhaseAdvanced(PhaseAdvancedEvent),
     ApplicabilityAssessed(ApplicabilityAssessedEvent),
     SignalChanged(SignalChangedEvent),
@@ -341,6 +354,51 @@ pub enum WorkflowGovernanceEvent {
     PolicyCompleted(PolicyCompletedEvent),
     ReceiptRevoked(ReceiptRevokedEvent),
     ContinuityRecorded(ContinuityRecordedEvent),
+}
+
+/// Exact, project-local Domain Pack generation bound into one workflow
+/// effective-bundle epoch. This is durable identity/audit data, not admission
+/// authority; only the Domain Pack TCB can admit the active generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowDomainPackGenerationIdentity {
+    pub generation: u64,
+    pub active_lock_digest: String,
+    pub composition_digest: String,
+    /// JCS digest of the sealed inner core `WorkflowGovernanceBundle`. The
+    /// core release's runtime digest separately identifies the enclosing
+    /// `WorkflowGovernanceBundleDocument`.
+    pub base_core_bundle_digest: String,
+    pub supply_chain_registry_digest: String,
+    pub reviewer_registry_digest: String,
+    pub reviewed_registry_digest: String,
+}
+
+/// Runtime identity used for policy evaluation without mutating the universal
+/// core release registry. `core_runtime_bundle` remains the exact P5 release
+/// pin; `effective_runtime_bundle` identifies core plus admitted pack policies.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowEffectiveBundleIdentity {
+    pub core_runtime_bundle: WorkflowRuntimeBundleIdentity,
+    pub effective_runtime_bundle: WorkflowRuntimeBundleIdentity,
+    #[serde(default)]
+    pub domain_pack_generation: Option<WorkflowDomainPackGenerationIdentity>,
+    /// Canonical digest of all receipt-relevant effective semantics. The
+    /// kernel, never a caller-authored event, derives this value.
+    pub receipt_context_digest: String,
+}
+
+/// Dedicated effective-bundle epoch transition. Raw event DTOs cannot be
+/// appended through the generic ledger API; the workflow TCB validates source,
+/// target, monotonic generation, prior head, and deterministic carryover.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackGenerationTransitionedEvent {
+    pub from_effective_bundle: WorkflowEffectiveBundleIdentity,
+    pub to_effective_bundle: WorkflowEffectiveBundleIdentity,
+    pub receipt_carryover: WorkflowReceiptCarryover,
+    pub prior_ledger_head_digest: String,
 }
 
 /// Auditable result proposed for one atomic release upgrade. Raw event DTOs

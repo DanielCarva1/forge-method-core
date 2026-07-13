@@ -214,6 +214,16 @@ fn merged_validation_root(label: &str) -> PathBuf {
             .join("fixtures")
             .join("domain-pack-learning-v0"),
     );
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-reference-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("domain-pack-reference-v0"),
+    );
     // The ledger lives in the core repo's sibling sidecar via the Project Link;
     // fall back to a repo-local copy for repos that still ship it themselves.
     let ledger_source = [
@@ -1632,6 +1642,13 @@ fn validate_library_passes_current_repo() {
         .expect("P6c aggregate Domain Pack learning check");
     assert_eq!(learning_check.status, ValidationStatus::Passed);
     assert_eq!(learning_check.diagnostics, 0);
+    let reference_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "domain_pack_reference_foundation")
+        .expect("P6d aggregate reference Domain Pack check");
+    assert_eq!(reference_check.status, ValidationStatus::Passed);
+    assert_eq!(reference_check.diagnostics, 0);
 }
 
 fn assert_domain_pack_lifecycle_check_failed(

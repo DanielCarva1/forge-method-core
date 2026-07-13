@@ -9,9 +9,11 @@
 //! protocol artifacts can still present an older, internally valid ledger.
 
 use forge_core_contracts::{
-    ReleaseUpgradedEvent, StableId, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity,
-    WorkflowRuntimeBundleIdentity, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+    DomainPackGenerationTransitionedEvent, ReleaseUpgradedEvent, StableId,
+    WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
+    WorkflowRuntimeBundleIdentity, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_store::{acquire_effect_store_lock, EffectStoreLock, EffectStoreLockError};
 use serde_json_canonicalizer::to_vec as to_canonical_json;
@@ -94,6 +96,20 @@ impl WorkflowGovernanceLedgerProjection {
         })
     }
 
+    /// Last effective core-plus-Domain-Pack epoch durably adopted by the
+    /// workflow ledger. `None` is the backward-compatible core-only state.
+    #[must_use]
+    pub fn active_effective_bundle_identity(&self) -> Option<WorkflowEffectiveBundleIdentity> {
+        self.records.iter().rev().find_map(|record| {
+            if let WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event) = &record.event
+            {
+                Some(event.to_effective_bundle.clone())
+            } else {
+                None
+            }
+        })
+    }
+
     #[must_use]
     pub fn current_state_version(&self) -> Option<u64> {
         self.records.last().map(|record| record.state_version)
@@ -152,6 +168,14 @@ impl WorkflowGovernanceLedgerBatch<'_> {
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
         if matches!(event, WorkflowGovernanceEvent::ReleaseUpgraded(_)) {
             return Err(WorkflowGovernanceLedgerError::ReleaseUpgradeRequiresDedicatedAuthority);
+        }
+        if matches!(
+            event,
+            WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+        ) {
+            return Err(
+                WorkflowGovernanceLedgerError::DomainPackTransitionRequiresDedicatedAuthority,
+            );
         }
         if matches!(event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
@@ -215,6 +239,11 @@ impl WorkflowGovernanceLedgerBatch<'_> {
                 },
             );
         }
+        if self.projection.active_effective_bundle_identity().is_some() {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "active Domain Pack generation requires an explicit core rebase",
+            });
+        }
         let active_release = active_release_identity(&self.projection);
         let active_runtime = self.projection.active_runtime_bundle_identity();
         validate_release_transition(
@@ -231,6 +260,61 @@ impl WorkflowGovernanceLedgerBatch<'_> {
             &self.identity,
             state_version,
             WorkflowGovernanceEvent::ReleaseUpgraded(event),
+        )?;
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        self.projection.next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
+    fn push_domain_pack_transition_tcb(
+        &mut self,
+        state_version: u64,
+        event: DomainPackGenerationTransitionedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        if self.projection.records.len() != self.original_record_count {
+            return Err(WorkflowGovernanceLedgerError::DuplicateDomainPackTransition);
+        }
+        let previous_state_version = self
+            .projection
+            .current_state_version()
+            .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
+        let expected_state_version = previous_state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: previous_state_version,
+            },
+        )?;
+        if state_version != expected_state_version {
+            return Err(
+                WorkflowGovernanceLedgerError::DomainPackTransitionStateVersionMismatch {
+                    expected: expected_state_version,
+                    found: state_version,
+                },
+            );
+        }
+        validate_domain_pack_transition(
+            &event,
+            self.projection.active_identity().as_ref(),
+            self.projection.active_runtime_bundle_identity().as_ref(),
+            self.projection.active_effective_bundle_identity().as_ref(),
+            self.projection.head_digest.as_deref(),
+        )?;
+        let (record, line) = build_record_line(
+            &self.projection,
+            &self.identity,
+            state_version,
+            WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event),
         )?;
         ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
         self.prepared_wal.extend_from_slice(&line);
@@ -371,6 +455,22 @@ impl LockedWorkflowGovernanceLedger {
         Ok(record)
     }
 
+    /// Append exactly one structurally validated Domain Pack effective-bundle
+    /// epoch transition under this retained workflow lock.
+    #[doc(hidden)]
+    pub fn transition_domain_pack_generation_unchecked_tcb(
+        &mut self,
+        expected_head_digest: &str,
+        identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: DomainPackGenerationTransitionedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, identity)?;
+        let record = batch.push_domain_pack_transition_tcb(state_version, event)?;
+        batch.commit()?;
+        Ok(record)
+    }
+
     /// Begin a transactional multi-event append after a head-digest CAS.
     ///
     /// The returned builder borrows this ledger, retaining the same exclusive
@@ -489,6 +589,7 @@ pub enum WorkflowGovernanceLedgerError {
         found: u64,
     },
     ReleaseUpgradeRequiresDedicatedAuthority,
+    DomainPackTransitionRequiresDedicatedAuthority,
     ReleaseTransitionStateVersionMismatch {
         expected: u64,
         found: u64,
@@ -497,6 +598,14 @@ pub enum WorkflowGovernanceLedgerError {
         reason: &'static str,
     },
     DuplicateReleaseTransition,
+    DomainPackTransitionStateVersionMismatch {
+        expected: u64,
+        found: u64,
+    },
+    DomainPackTransitionInvalid {
+        reason: &'static str,
+    },
+    DuplicateDomainPackTransition,
     FirstEventNotProjectImported,
     ProjectImportedAfterInitialization,
     AlreadyInitialized,
@@ -586,6 +695,10 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
                 formatter,
                 "release_upgraded requires the dedicated TCB transition API"
             ),
+            Self::DomainPackTransitionRequiresDedicatedAuthority => write!(
+                formatter,
+                "domain_pack_generation_transitioned requires the dedicated TCB transition API"
+            ),
             Self::ReleaseTransitionStateVersionMismatch { expected, found } => write!(
                 formatter,
                 "release transition state version mismatch: expected {expected}, found {found}"
@@ -596,6 +709,18 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
             Self::DuplicateReleaseTransition => write!(
                 formatter,
                 "a release transition batch must contain exactly one transition"
+            ),
+            Self::DomainPackTransitionStateVersionMismatch { expected, found } => write!(
+                formatter,
+                "Domain Pack transition state version mismatch: expected {expected}, found {found}"
+            ),
+            Self::DomainPackTransitionInvalid { reason } => write!(
+                formatter,
+                "Domain Pack transition is structurally invalid: {reason}"
+            ),
+            Self::DuplicateDomainPackTransition => write!(
+                formatter,
+                "a Domain Pack transition batch must contain exactly one transition"
             ),
             Self::FirstEventNotProjectImported => write!(formatter, "first ledger event must be project_imported"),
             Self::ProjectImportedAfterInitialization => write!(formatter, "project_imported may only be the first ledger event"),
@@ -725,6 +850,29 @@ pub fn transition_workflow_governance_release_tcb(
     )
 }
 
+/// Transition the active Domain Pack effective-bundle epoch with expected-head
+/// CAS in one workflow-ledger lock scope.
+///
+/// The kernel remains responsible for consuming the opaque active-generation
+/// admission and deriving both effective identities before this structural
+/// boundary is called.
+#[doc(hidden)]
+pub fn transition_workflow_domain_pack_generation_tcb(
+    state_root: impl AsRef<Path>,
+    expected_head_digest: &str,
+    identity: &WorkflowGovernanceLedgerIdentity,
+    state_version: u64,
+    event: DomainPackGenerationTransitionedEvent,
+) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+    lock_workflow_governance_ledger_tcb(state_root)?
+        .transition_domain_pack_generation_unchecked_tcb(
+            expected_head_digest,
+            identity,
+            state_version,
+            event,
+        )
+}
+
 /// Compute the canonical JCS digest of a record with `record_digest` blanked.
 ///
 /// # Errors
@@ -801,13 +949,31 @@ fn recover_under_lock(
                 line: line_number,
                 source: error.to_string(),
             })?;
-        if document.schema_version != WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION {
+        if document.schema_version != WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+        {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
                 found: document.schema_version,
             });
         }
+        let effective_wire =
+            document.schema_version == WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION;
         let record = document.workflow_governance_receipt;
+        let is_domain_transition = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+        );
+        if effective_wire != (is_domain_transition || identity_state.active_effective.is_some()) {
+            return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
+                line: line_number,
+                found: if effective_wire {
+                    "0.2 before a Domain Pack effective epoch".to_owned()
+                } else {
+                    "0.1 after a Domain Pack effective epoch".to_owned()
+                },
+            });
+        }
         validate_record_fields(&record, Some(line_number))?;
 
         let expected_sequence = u64::try_from(line_number).unwrap_or(u64::MAX);
@@ -873,6 +1039,7 @@ struct RecoveredIdentityState {
     active: Option<WorkflowGovernanceLedgerIdentity>,
     active_release: Option<WorkflowGovernanceReleaseIdentity>,
     active_runtime: Option<WorkflowRuntimeBundleIdentity>,
+    active_effective: Option<WorkflowEffectiveBundleIdentity>,
 }
 
 fn validate_recovered_semantics(
@@ -918,6 +1085,11 @@ fn validate_recovered_semantics(
         });
     }
     if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
+        if identity.active_effective.is_some() {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "active Domain Pack generation requires an explicit core rebase",
+            });
+        }
         let previous = previous_state_version.ok_or(
             WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
                 reason: "release transition cannot be the genesis record",
@@ -955,6 +1127,31 @@ fn validate_recovered_semantics(
         identity.active = Some(target);
         identity.active_release = Some(event.to_release.clone());
         identity.active_runtime = Some(event.to_runtime_bundle.clone());
+    } else if let WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event) = &record.event {
+        let previous = previous_state_version.ok_or(
+            WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "Domain Pack transition cannot be the genesis record",
+            },
+        )?;
+        let expected = previous
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceLedgerError::StateVersionOverflow { current: previous })?;
+        if record.state_version != expected {
+            return Err(
+                WorkflowGovernanceLedgerError::DomainPackTransitionStateVersionMismatch {
+                    expected,
+                    found: record.state_version,
+                },
+            );
+        }
+        validate_domain_pack_transition(
+            event,
+            identity.active.as_ref(),
+            identity.active_runtime.as_ref(),
+            identity.active_effective.as_ref(),
+            record.previous_record_digest.as_deref(),
+        )?;
+        identity.active_effective = Some(event.to_effective_bundle.clone());
     }
     Ok(())
 }
@@ -1009,8 +1206,17 @@ fn build_record_line(
         event,
     };
     record.record_digest = workflow_governance_record_digest(&record)?;
+    let effective_wire = matches!(
+        &record.event,
+        WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+    ) || projection.active_effective_bundle_identity().is_some();
     let document = WorkflowGovernanceReceiptDocument {
-        schema_version: WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION.to_owned(),
+        schema_version: if effective_wire {
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+        } else {
+            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+        }
+        .to_owned(),
         workflow_governance_receipt: record.clone(),
     };
     let mut line = serde_json::to_vec(&document).map_err(|error| {
@@ -1113,6 +1319,191 @@ fn active_release_identity(
             None
         }
     })
+}
+
+/// Deterministic receipt migration for one Domain Pack epoch transition.
+/// Preservation is allowed only when the complete core runtime, effective
+/// runtime, and kernel-derived receipt context remain byte-identical.
+#[must_use]
+pub fn domain_pack_receipt_carryover(
+    from: &WorkflowEffectiveBundleIdentity,
+    to: &WorkflowEffectiveBundleIdentity,
+) -> WorkflowReceiptCarryover {
+    if from.core_runtime_bundle == to.core_runtime_bundle
+        && from.effective_runtime_bundle == to.effective_runtime_bundle
+        && from.receipt_context_digest == to.receipt_context_digest
+    {
+        WorkflowReceiptCarryover::PreservePolicyEquivalent
+    } else {
+        WorkflowReceiptCarryover::InvalidateAll
+    }
+}
+
+fn validate_domain_pack_transition(
+    event: &DomainPackGenerationTransitionedEvent,
+    active_core_envelope: Option<&WorkflowGovernanceLedgerIdentity>,
+    active_core_runtime: Option<&WorkflowRuntimeBundleIdentity>,
+    active_effective: Option<&WorkflowEffectiveBundleIdentity>,
+    previous_head_digest: Option<&str>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    let active_core_envelope =
+        active_core_envelope.ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "Domain Pack transition has no active core identity",
+        })?;
+    let previous_head_digest =
+        previous_head_digest.ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "Domain Pack transition has no previous ledger head",
+        })?;
+    if !is_sha256_digest(&event.prior_ledger_head_digest) {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "prior ledger head digest is invalid",
+        });
+    }
+    if event.prior_ledger_head_digest != previous_head_digest {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "prior ledger head does not match the transition envelope",
+        });
+    }
+    validate_effective_identity(&event.from_effective_bundle)?;
+    validate_effective_identity(&event.to_effective_bundle)?;
+    for effective in [&event.from_effective_bundle, &event.to_effective_bundle] {
+        if effective.core_runtime_bundle.bundle_id != active_core_envelope.bundle_id
+            || effective.core_runtime_bundle.bundle_digest != active_core_envelope.bundle_digest
+        {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "effective identity does not bind the active core ledger envelope",
+            });
+        }
+        if active_core_runtime.is_some_and(|active| active != &effective.core_runtime_bundle) {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "effective identity does not bind the active core runtime",
+            });
+        }
+    }
+    match active_effective {
+        Some(active) if active != &event.from_effective_bundle => {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "from effective identity is not the active ledger epoch",
+            });
+        }
+        None => {
+            if event.from_effective_bundle.domain_pack_generation.is_some()
+                || event.from_effective_bundle.core_runtime_bundle
+                    != event.from_effective_bundle.effective_runtime_bundle
+            {
+                return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                    reason: "first Domain Pack transition must start from core-only identity",
+                });
+            }
+        }
+        Some(_) => {}
+    }
+    let to_generation = event
+        .to_effective_bundle
+        .domain_pack_generation
+        .as_ref()
+        .ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "target effective identity has no Domain Pack generation",
+        })?;
+    if let Some(from_generation) = event.from_effective_bundle.domain_pack_generation.as_ref() {
+        if to_generation.generation <= from_generation.generation {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "Domain Pack generation must advance monotonically",
+            });
+        }
+    }
+    if event.receipt_carryover
+        != domain_pack_receipt_carryover(&event.from_effective_bundle, &event.to_effective_bundle)
+    {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "receipt carryover is not the deterministic exact-equivalence result",
+        });
+    }
+    Ok(())
+}
+
+fn validate_effective_identity(
+    identity: &WorkflowEffectiveBundleIdentity,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    for (value, reason) in [
+        (
+            identity.core_runtime_bundle.bundle_id.0.as_str(),
+            "core runtime bundle id is blank",
+        ),
+        (
+            identity.effective_runtime_bundle.bundle_id.0.as_str(),
+            "effective runtime bundle id is blank",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid { reason });
+        }
+    }
+    for (value, reason) in [
+        (
+            identity.core_runtime_bundle.bundle_digest.as_str(),
+            "core runtime bundle digest is invalid",
+        ),
+        (
+            identity.core_runtime_bundle.policy_set_digest.as_str(),
+            "core policy-set digest is invalid",
+        ),
+        (
+            identity.effective_runtime_bundle.bundle_digest.as_str(),
+            "effective runtime bundle digest is invalid",
+        ),
+        (
+            identity.effective_runtime_bundle.policy_set_digest.as_str(),
+            "effective policy-set digest is invalid",
+        ),
+        (
+            identity.receipt_context_digest.as_str(),
+            "receipt context digest is invalid",
+        ),
+    ] {
+        if !is_sha256_digest(value) {
+            return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid { reason });
+        }
+    }
+    if let Some(generation) = &identity.domain_pack_generation {
+        for (value, reason) in [
+            (
+                generation.active_lock_digest.as_str(),
+                "active lock digest is invalid",
+            ),
+            (
+                generation.composition_digest.as_str(),
+                "composition digest is invalid",
+            ),
+            (
+                generation.base_core_bundle_digest.as_str(),
+                "base core bundle digest is invalid",
+            ),
+            (
+                generation.supply_chain_registry_digest.as_str(),
+                "supply-chain registry digest is invalid",
+            ),
+        ] {
+            if !is_sha256_digest(value) {
+                return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid { reason });
+            }
+        }
+        for (value, reason) in [
+            (
+                generation.reviewer_registry_digest.as_str(),
+                "reviewer registry digest is not bare lowercase sha256 hex",
+            ),
+            (
+                generation.reviewed_registry_digest.as_str(),
+                "reviewed registry digest is not bare lowercase sha256 hex",
+            ),
+        ] {
+            if !is_bare_sha256_hex(value) {
+                return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid { reason });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_release_transition(
@@ -1309,6 +1700,13 @@ fn is_sha256_digest(value: &str) -> bool {
                 .bytes()
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     })
+}
+
+fn is_bare_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn validate_identity(

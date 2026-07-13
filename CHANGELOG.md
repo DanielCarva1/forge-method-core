@@ -17,6 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P6d governed reference pack and effective workflow epochs (`0.9.0`).** The
+  real `forge.reference/game-development` pack now proves that novel-domain
+  governance can remain typed pack data with no game-specific Rust branch. Its
+  discovery, playable-loop, first-use, packaging, hazards, evaluators,
+  fixtures, capabilities, and Adapter declarations require agent-owned
+  research and representative evidence rather than artifact presence. The
+  product-direction Decision Request activates only after its prerequisite
+  claims are verified, preserving one irreducible human choice without turning
+  research gaps into human homework. Normal `workflow init|next|resume`
+  auto-detects the retained Domain Pack lifecycle generation and joins it to a
+  project-local effective epoch while preserving the frozen universal
+  five-release, 42-policy core identity. Fresh replacement processes replay the
+  same epoch and guidance. Remove-last and rollback-to-empty remain typed
+  degraded generations with explicit missing-domain/capability gaps instead of
+  fabricated core-only readiness. One persistence E2E proves the complete
+  install-v1, upgrade-v2, exact-rollback-v1, and remove-to-empty history with
+  immutable generations and recovery after every transition. A core release upgrade with any active
+  generation fails closed until an explicit Domain Pack rebase is performed;
+  Forge does not claim unsafe cross-store atomicity. P6a through P6d are now
+  complete, and subsequent product work begins outside the P6 program.
 - **P6c reviewed Domain Pack learning and promotion (`0.8.0`).** Local
   observations are captured as immutable, content-addressed candidates but
   remain inert. Nine closed schema-0.3 families bind promotion dossiers,
@@ -36,10 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remains available for recovery. The agent CLI adds capture, evaluation,
   conflict, review-trust, reviewer-rotation, registry inspection, and promotion
   journeys while keeping mutations out of the default MCP projection. The real
-  reference pack and novel-domain proof remain P6d. The cumulative local
-  workspace gate is intentionally deferred until P6 completion; focused crate,
-  adversarial, schema, CLI, lint, and aggregate repository gates cover this
-  pullable checkpoint.
+  reference pack and novel-domain proof were deferred to P6d. The cumulative
+  local workspace gate was intentionally deferred until P6 completion;
+  focused crate, adversarial, schema, CLI, lint, and aggregate repository gates
+  cover this pullable checkpoint.
   Because exact locks, resolutions, and receipts now carry required semantic
   assurance and reviewed-registry bindings, the lifecycle wire schema advances
   from 0.2 to 0.3 rather than pretending the change is additive.

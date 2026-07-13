@@ -26,10 +26,11 @@ use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
     AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
-    DecisionCloseContractDocument, DomainPackActivePointerDocument,
+    DecisionCloseContractDocument, DomainPackActivePointerDocument, DomainPackCandidateInput,
     DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
+    DomainPackCompositionGapCode, DomainPackCompositionIssueCode,
     DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
-    DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
+    DomainPackCompositionStatus, DomainPackExactLockDocument, DomainPackLifecycleLedgerDocument,
     DomainPackLifecycleReceiptDocument, DomainPackLocalLearningCandidateDocument,
     DomainPackRecoveryReportDocument, DomainPackResolutionProjectionDocument,
     DomainPackResolutionRequestDocument, DomainPackReviewedRegistryDocument,
@@ -57,10 +58,11 @@ use forge_core_contracts::{
 use forge_core_decisions::{
     compose_domain_packs, evaluate_workflow_behavior, evaluate_workflow_migration,
     evaluate_workflow_release, evaluate_workflow_release_registry, evaluate_workflow_retirement,
-    load_catalog, load_workflow_documents, validate_workflow_governance_bundle,
-    workflow_runtime_bundle_digest, DomainPackCandidateMaterial, WorkflowBehavioralBundleInput,
-    WorkflowBehavioralCorpusInput, WorkflowBehavioralReportIdentity, WorkflowGovernanceIssue,
-    WorkflowReleaseEvaluation, WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
+    load_catalog, load_workflow_documents, validate_domain_pack_candidate,
+    validate_workflow_governance_bundle, workflow_runtime_bundle_digest,
+    DomainPackCandidateMaterial, WorkflowBehavioralBundleInput, WorkflowBehavioralCorpusInput,
+    WorkflowBehavioralReportIdentity, WorkflowGovernanceIssue, WorkflowReleaseEvaluation,
+    WorkflowReleaseEvaluationAuthority, WorkflowReleaseEvaluationStatus,
     WorkflowReleaseEvidenceAssurance, WorkflowReleaseRegistryEvaluationAuthority,
     WorkflowReleaseRegistryEvaluationStatus, WorkflowRetirementCandidateInput,
 };
@@ -358,6 +360,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_domain_pack_foundation(root, &mut summary);
         validate_domain_pack_lifecycle_foundation(root, &mut summary);
         validate_domain_pack_learning_foundation(root, &mut summary);
+        validate_domain_pack_reference_foundation(root, &mut summary);
     }
 
     summary.finish();
@@ -455,6 +458,186 @@ fn validate_domain_pack_foundation(root: &Path, summary: &mut ValidateSummary) {
         }
     }
     summary.add_report("domain_pack_foundation", report);
+}
+
+/// Recompute the P6d reference pack and its hostile comparison through only
+/// generic Domain Pack decisions. This remains a single bounded aggregate and
+/// intentionally does not grant review, lifecycle, or workflow authority.
+fn validate_domain_pack_reference_foundation(root: &Path, summary: &mut ValidateSummary) {
+    const REQUEST_REF: &str =
+        "docs/fixtures/domain-pack-reference-v0/requests/agent-built-game.yaml";
+    const EXPECTED_REF: &str =
+        "docs/fixtures/domain-pack-reference-v0/projections/agent-built-game.expected.yaml";
+    const HOSTILE_REF: &str =
+        "docs/fixtures/domain-pack-reference-v0/hostile/candidate-core-shadow.invalid.yaml";
+    let mut report = ValidationReport::new();
+
+    if let Some(request) = read_domain_pack_yaml::<DomainPackCompositionRequestDocument>(
+        root,
+        REQUEST_REF,
+        &mut report,
+    ) {
+        let expected = read_domain_pack_yaml::<DomainPackCompositionProjectionDocument>(
+            root,
+            EXPECTED_REF,
+            &mut report,
+        );
+        let owned = load_domain_pack_materials(root, &request, &mut report);
+        if owned.len() == request.domain_pack_composition_request.candidates.len() {
+            let materials = domain_pack_material_views(&request, &owned);
+            let composed = compose_domain_packs(&request, &materials);
+            let projection = &composed.domain_pack_composition_projection;
+            if projection.status != DomainPackCompositionStatus::Composable
+                || !projection.issues.is_empty()
+                || !projection.gaps.is_empty()
+                || projection.composed_bundle.is_none()
+            {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    REQUEST_REF,
+                    "P6d reference pack no longer composes through the generic candidate lane",
+                ));
+            }
+            if expected
+                .as_ref()
+                .is_some_and(|expected| expected != &composed)
+            {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    EXPECTED_REF,
+                    "P6d expected projection does not equal deterministic recomputation",
+                ));
+            }
+
+            let mut absent = request.clone();
+            absent.domain_pack_composition_request.candidates.clear();
+            let missing = compose_domain_packs(&absent, &[]);
+            let missing = &missing.domain_pack_composition_projection;
+            if missing.status != DomainPackCompositionStatus::Blocked
+                || !missing.issues.is_empty()
+                || !missing
+                    .gaps
+                    .iter()
+                    .any(|gap| gap.code == DomainPackCompositionGapCode::MissingDomain)
+                || !missing
+                    .gaps
+                    .iter()
+                    .any(|gap| gap.code == DomainPackCompositionGapCode::MissingCapability)
+            {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    REQUEST_REF,
+                    "removing the P6d reference pack must preserve explicit domain and capability gaps",
+                ));
+            }
+        }
+    }
+
+    if let Some(hostile) =
+        read_domain_pack_yaml::<DomainPackCandidateInput>(root, HOSTILE_REF, &mut report)
+    {
+        let manifest = &hostile.manifest.domain_pack_manifest;
+        let paths = [
+            hostile.manifest_binding.artifact_ref.0.as_str(),
+            manifest.content.content_ref.0.as_str(),
+            manifest.provenance.license_text.artifact_ref.0.as_str(),
+        ];
+        let bytes = paths
+            .iter()
+            .map(|reference| {
+                fs::read(root.join(reference)).map_err(|error| {
+                    report.push(Diagnostic::error(
+                        DiagnosticCode::ReadFileFailed,
+                        *reference,
+                        error.to_string(),
+                    ));
+                })
+            })
+            .collect::<Result<Vec<_>, _>>();
+        if let Ok(bytes) = bytes {
+            let material = DomainPackCandidateMaterial {
+                publisher: &manifest.identity.publisher.0,
+                name: &manifest.identity.name.0,
+                version: &manifest.identity.version,
+                manifest_raw: &bytes[0],
+                content_raw: &bytes[1],
+                license_raw: &bytes[2],
+            };
+            let issues =
+                validate_domain_pack_candidate(&hostile, &material, env!("CARGO_PKG_VERSION"));
+            if !issues
+                .iter()
+                .any(|issue| issue.code == DomainPackCompositionIssueCode::CoreShadow)
+            {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::WorkflowGovernanceInvalid,
+                    HOSTILE_REF,
+                    "P6d hostile core-shadow pack no longer fails closed generically",
+                ));
+            }
+        }
+    }
+
+    summary.add_report("domain_pack_reference_foundation", report);
+}
+
+fn load_domain_pack_materials(
+    root: &Path,
+    request: &DomainPackCompositionRequestDocument,
+    report: &mut ValidationReport,
+) -> Vec<DomainPackOwnedMaterial> {
+    let mut owned = Vec::new();
+    for candidate in &request.domain_pack_composition_request.candidates {
+        let manifest = &candidate.manifest.domain_pack_manifest;
+        let paths = [
+            candidate.manifest_binding.artifact_ref.0.as_str(),
+            manifest.content.content_ref.0.as_str(),
+            manifest.provenance.license_text.artifact_ref.0.as_str(),
+        ];
+        let bytes = paths
+            .iter()
+            .map(|reference| {
+                fs::read(root.join(reference)).map_err(|error| {
+                    report.push(Diagnostic::error(
+                        DiagnosticCode::ReadFileFailed,
+                        *reference,
+                        error.to_string(),
+                    ));
+                })
+            })
+            .collect::<Result<Vec<_>, _>>();
+        if let Ok(bytes) = bytes {
+            owned.push(DomainPackOwnedMaterial {
+                manifest: bytes[0].clone(),
+                content: bytes[1].clone(),
+                license: bytes[2].clone(),
+            });
+        }
+    }
+    owned
+}
+
+fn domain_pack_material_views<'a>(
+    request: &'a DomainPackCompositionRequestDocument,
+    owned: &'a [DomainPackOwnedMaterial],
+) -> Vec<DomainPackCandidateMaterial<'a>> {
+    request
+        .domain_pack_composition_request
+        .candidates
+        .iter()
+        .zip(owned)
+        .map(|(candidate, owned)| {
+            let identity = &candidate.manifest.domain_pack_manifest.identity;
+            DomainPackCandidateMaterial {
+                publisher: &identity.publisher.0,
+                name: &identity.name.0,
+                version: &identity.version,
+                manifest_raw: &owned.manifest,
+                content_raw: &owned.content,
+                license_raw: &owned.license,
+            }
+        })
+        .collect()
 }
 
 /// Validate the repository-owned P6b schema/corpus as one bounded aggregate.

@@ -783,8 +783,10 @@ fn validate_decision_rule(
 ) {
     let path = format!("{policy_path}.decision_rules.{}", decision.id.0);
     let claim_shape_valid = match decision.activation {
-        WorkflowDecisionActivation::ObservedNeed => decision.claim_ref.is_none(),
-        WorkflowDecisionActivation::ClaimUnresolved
+        WorkflowDecisionActivation::ObservedNeed
+        | WorkflowDecisionActivation::AllClaimsVerified => decision.claim_ref.is_none(),
+        WorkflowDecisionActivation::ClaimVerified
+        | WorkflowDecisionActivation::ClaimUnresolved
         | WorkflowDecisionActivation::ClaimDisproven => decision.claim_ref.is_some(),
     };
     let alternatives = decision
@@ -1439,6 +1441,20 @@ fn decision_requests(
         .filter(|decision| match decision.activation {
             WorkflowDecisionActivation::ObservedNeed => {
                 observed_needs.contains(decision.id.0.as_str())
+            }
+            WorkflowDecisionActivation::ClaimVerified => {
+                decision.claim_ref.as_ref().is_some_and(|claim_ref| {
+                    matches!(
+                        claim_statuses[claim_ref.0.as_str()],
+                        WorkflowClaimResultStatus::Verified
+                    )
+                })
+            }
+            WorkflowDecisionActivation::AllClaimsVerified => {
+                !claim_statuses.is_empty()
+                    && claim_statuses
+                        .values()
+                        .all(|status| matches!(status, WorkflowClaimResultStatus::Verified))
             }
             WorkflowDecisionActivation::ClaimUnresolved => {
                 decision.claim_ref.as_ref().is_some_and(|claim_ref| {

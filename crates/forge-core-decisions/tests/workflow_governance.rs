@@ -231,6 +231,106 @@ fn claim_activated_decisions_cannot_be_bypassed_by_omitting_observed_needs() {
 }
 
 #[test]
+fn verified_claim_can_trigger_an_irreducible_follow_up_without_caller_need_injection() {
+    let mut governed_bundle = bundle();
+    let policy = governed_bundle
+        .workflow_governance_bundle
+        .policies
+        .iter_mut()
+        .find(|policy| policy.id.0 == "policy.workflow.build-story")
+        .expect("build policy");
+    let rule = policy.decision_rules.first_mut().expect("decision rule");
+    rule.activation = WorkflowDecisionActivation::ClaimVerified;
+    rule.claim_ref = Some(StableId("claim.representative-execution".to_owned()));
+
+    let mut complete = evaluation("complete");
+    complete
+        .workflow_governance_evaluation
+        .decision_need_refs
+        .clear();
+    complete
+        .workflow_governance_evaluation
+        .resolved_decision_refs
+        .clear();
+    let verified = simulate_workflow_governance(&governed_bundle, &complete)
+        .expect("verified claim activates the decision");
+    assert_eq!(verified.candidate_decision_requests.len(), 1);
+    assert_eq!(
+        verified.candidate_decision_requests[0].id.0,
+        "decision.product-direction"
+    );
+    assert!(verified
+        .candidate_next_actions
+        .iter()
+        .any(|action| action.kind == NextActionKind::AskHuman));
+
+    let mut missing = evaluation("missing-evidence");
+    missing
+        .workflow_governance_evaluation
+        .decision_need_refs
+        .clear();
+    missing
+        .workflow_governance_evaluation
+        .resolved_decision_refs
+        .clear();
+    let unresolved = simulate_workflow_governance(&governed_bundle, &missing)
+        .expect("unresolved claim remains agent work");
+    assert!(unresolved.candidate_decision_requests.is_empty());
+    assert!(unresolved
+        .candidate_next_actions
+        .iter()
+        .all(|action| action.kind != NextActionKind::AskHuman));
+}
+
+#[test]
+fn all_claims_verified_waits_for_complete_agent_evidence_before_human_contact() {
+    let mut governed_bundle = bundle();
+    let policy = governed_bundle
+        .workflow_governance_bundle
+        .policies
+        .iter_mut()
+        .find(|policy| policy.id.0 == "policy.workflow.build-story")
+        .expect("build policy");
+    let rule = policy.decision_rules.first_mut().expect("decision rule");
+    rule.activation = WorkflowDecisionActivation::AllClaimsVerified;
+    rule.claim_ref = None;
+
+    let mut complete = evaluation("complete");
+    complete
+        .workflow_governance_evaluation
+        .decision_need_refs
+        .clear();
+    complete
+        .workflow_governance_evaluation
+        .resolved_decision_refs
+        .clear();
+    let ready_for_human = simulate_workflow_governance(&governed_bundle, &complete)
+        .expect("all verified claims activate the decision");
+    assert_eq!(ready_for_human.candidate_decision_requests.len(), 1);
+    assert!(ready_for_human
+        .candidate_next_actions
+        .iter()
+        .any(|action| action.kind == NextActionKind::AskHuman));
+
+    let mut partial = evaluation("active");
+    partial
+        .workflow_governance_evaluation
+        .decision_need_refs
+        .clear();
+    partial
+        .workflow_governance_evaluation
+        .resolved_decision_refs
+        .clear();
+    let agent_work = simulate_workflow_governance(&governed_bundle, &partial)
+        .expect("partially supported claims remain agent work");
+    assert!(agent_work.candidate_decision_requests.is_empty());
+    assert!(agent_work
+        .candidate_next_actions
+        .iter()
+        .all(|action| action.kind != NextActionKind::AskHuman));
+}
+
+#[test]
 fn blockers_apply_only_when_due_for_the_selected_target() {
     let mut governed_bundle = bundle();
     let policy = governed_bundle

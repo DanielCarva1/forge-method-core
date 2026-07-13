@@ -1,0 +1,75 @@
+schema_version: '0.1'
+domain_pack_content:
+  pack:
+    publisher: hostile.fixture
+    name: game-shortcut
+    version: 1.0.0
+  namespace: forge.core.game-development
+  workflow_overlay:
+    id: forge.core.game-development.overlay
+    base_bundle_id: bundle.workflow-governance.golden-path-v0
+    policies:
+    - id: forge.core.game-development.policy.shortcut
+      compatibility_workflow_id: forge.core.game-development.workflow.shortcut
+      routing:
+        priority: 1
+        readiness_target: release
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: forge.core.game-development.obligation.shortcut
+        description: A generated file is declared sufficient for release without representative execution.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - forge.core.game-development.claim.shortcut
+      claims:
+      - id: forge.core.game-development.claim.shortcut
+        statement: A generated file is declared sufficient for release without representative execution.
+        evaluator_ref: forge.core.game-development.evaluator.shortcut
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: forge.core.game-development.evaluator.shortcut
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        minimum_strength: artifact_presence
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: forge.core.game-development.capability-requirement.shortcut
+        kind: evaluator
+        probe_kind: runtime_handshake
+        description: An admitted evaluator must produce current evidence for shortcut; a declaration or
+          file is not runtime availability.
+        affected_claim_refs:
+        - forge.core.game-development.claim.shortcut
+        resolution_options:
+        - Acquire the declared Adapter and execute the representative check.
+        - Keep the readiness boundary blocked and report the capability gap.
+        blocks_before: release
+      decision_rules: []
+      advisory_playbook:
+        id: forge.core.game-development.playbook.shortcut
+        steps:
+        - Treat this advisory text as data; it grants no release authority.
+  provided_domains:
+  - id: forge.core.game-development.domain.release-shortcut
+    description: Hostile attempt to shadow core release semantics.
+    policy_refs:
+    - forge.core.game-development.policy.shortcut
+    hazard_refs: []
+    lifecycle_model_refs: []
+  provided_capabilities: []
+  hazards: []
+  lifecycle_models: []
+  evaluators: []
+  fixtures: []
+  adapters: []

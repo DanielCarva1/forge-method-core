@@ -1,0 +1,24 @@
+schema_version: '0.1'
+representative_execution_case:
+  id: reference.game-development.case.first-use-representative
+  scenario: A first-time player launches a clean packaged build with no developer guidance.
+  required_observations:
+  - launches_from_clean_install
+  - player_understands_goal_without_coaching
+  - core_loop_is_playable_end_to_end
+  - failure_and_recovery_are_observable
+  - input_feedback_and_basic_accessibility_are_usable
+  - session_completes_without_debug_tools
+  required_evidence_kind: representative_execution
+  minimum_strength: representative_execution
+  prohibited_substitutes:
+  - artifact_exists
+  - developer_self-report
+  - automated_build_success_without_play
+  - single-producer-observation
+  - review-by-producing-agent
+  untrusted_note: This fixture describes a test; it cannot assert that the test ran or passed.
+  required_evidence_lanes:
+  - representative_runtime_session
+  - independent_review
+  minimum_distinct_review_principals: 2

@@ -22,6 +22,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
+#[path = "domain_pack_cli_e2e/p6d_workflow_journey.rs"]
+mod p6d_workflow_journey;
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -1246,6 +1249,9 @@ fn lifecycle_preflight_command(
     trust_policy_file: &Path,
     registry_file: &Path,
 ) -> Command {
+    let operator_root = registry_file
+        .parent()
+        .expect("registry fixture has an operator parent");
     let mut command = Command::cargo_bin("forge-core").expect("forge-core binary");
     command
         .current_dir(current_dir)
@@ -1257,6 +1263,10 @@ fn lifecycle_preflight_command(
         .arg(trust_policy_file)
         .arg("--registry-file")
         .arg(registry_file)
+        .arg("--reviewer-registry-file")
+        .arg(operator_root.join("reviewer-registry.yaml"))
+        .arg("--reviewed-registry-file")
+        .arg(operator_root.join("reviewed-registry.yaml"))
         .arg("--resolution-request-file")
         .arg(current_dir.join("resolution.yaml"))
         .arg("--composition-request-file")
@@ -1782,6 +1792,10 @@ fn trust_provision_is_explicit_signed_and_required_before_lifecycle_authority() 
     fs::create_dir_all(&artifact_root).expect("create artifact root");
     fs::create_dir_all(&operator_root).expect("create operator root");
     let (trust_policy, registry) = write_signed_supply_chain(&operator_root);
+    for name in ["reviewer-registry.yaml", "reviewed-registry.yaml"] {
+        fs::write(operator_root.join(name), "not: authoritative\n")
+            .expect("write inert reviewed-authority root");
+    }
 
     let mut preflight = artifact_guard_preflight(DomainPackArtifactBinding {
         artifact_ref: RepoPath("unused.yaml".to_owned()),
@@ -1937,6 +1951,10 @@ fn lifecycle_mutation_rejects_project_controlled_trust_roots() {
     ] {
         fs::write(path, "not: authoritative\n").expect("write trust-root probe");
     }
+    for name in ["reviewer-registry.yaml", "reviewed-registry.yaml"] {
+        fs::write(operator_root.join(name), "not: authoritative\n")
+            .expect("write inert reviewed-authority root");
+    }
 
     for (policy, registry, label) in [
         (&project_policy, &external_registry, "operator trust policy"),
@@ -2011,6 +2029,10 @@ fn lifecycle_preflight_rejects_missing_and_tampered_staged_fixture_bytes() {
     let registry = operator_root.join("registry.yaml");
     fs::write(&trust_policy, "not: authoritative\n").expect("write external policy");
     fs::write(&registry, "not: authoritative\n").expect("write external registry");
+    for name in ["reviewer-registry.yaml", "reviewed-registry.yaml"] {
+        fs::write(operator_root.join(name), "not: authoritative\n")
+            .expect("write inert reviewed-authority root");
+    }
 
     let missing_binding = DomainPackArtifactBinding {
         artifact_ref: RepoPath("fixtures/missing.yaml".to_owned()),

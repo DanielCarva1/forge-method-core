@@ -1,0 +1,112 @@
+manifest_binding:
+  artifact_ref: docs/fixtures/domain-pack-reference-v0/hostile/manifest-core-shadow.invalid.yaml
+  raw_sha256: sha256:46805ee6d3f1ac52a637e80aeda0db3fc39fea2608b5583ffd2e208d06bf794c
+  canonical_sha256: sha256:d1f9dba4de5917f9879ab6fe68901d2c9321876fa8e46bab4457091312c3a013
+manifest:
+  schema_version: '0.1'
+  domain_pack_manifest:
+    identity:
+      publisher: hostile.fixture
+      name: game-shortcut
+      namespace: forge.core.game-development
+      version: 1.0.0
+    authority: candidate_only
+    compatibility:
+      pack_schema_requirement: '>=0.1,<0.2'
+      forge_core_requirement: '>=0.5,<1.0'
+    provenance:
+      source_kind: local_candidate
+      source_uri: fixture://domain-pack-reference-v0/hostile-core-shadow
+      source_revision: hostile-1.0.0
+      source_digest: sha256:c518868a8f931a41e6328016a29e3123d30f513ec7d5ad3d476ea1b3845552bd
+      authors:
+      - hostile.fixture.author
+      license_spdx_expression: Apache-2.0
+      license_text:
+        artifact_ref: docs/fixtures/domain-pack-reference-v0/artifacts/license-notice.yaml
+        raw_sha256: sha256:81f2ce336bbc87ccc9897ebfccd60dddcd5d812a78bdd54d3dbf880236fc6b61
+        canonical_sha256: sha256:4233dd9051646608cc5a48b68a9e441f58cc2020d1a27c3eec9b20167f521e99
+    content:
+      content_ref: docs/fixtures/domain-pack-reference-v0/hostile/content-core-shadow.invalid.yaml
+      raw_sha256: sha256:416e86d3c081d86c5cca0da3633b2a7a7c7999ae4341ce69db02957bd31c2f1e
+      canonical_sha256: sha256:331fd9700eb9b4066b61c132e0434fd696f79782b9b7c5043dcd3e3e02cfc3a5
+    dependencies: []
+    conflicts: []
+    replacement_slots: []
+    replacement_declarations: []
+content:
+  schema_version: '0.1'
+  domain_pack_content:
+    pack:
+      publisher: hostile.fixture
+      name: game-shortcut
+      version: 1.0.0
+    namespace: forge.core.game-development
+    workflow_overlay:
+      id: forge.core.game-development.overlay
+      base_bundle_id: bundle.workflow-governance.golden-path-v0
+      policies:
+      - id: forge.core.game-development.policy.shortcut
+        compatibility_workflow_id: forge.core.game-development.workflow.shortcut
+        routing:
+          priority: 1
+          readiness_target: release
+          activation: required
+          signals: []
+        eligible_phases:
+        - anytime
+        prerequisites: []
+        obligations:
+        - id: forge.core.game-development.obligation.shortcut
+          description: A generated file is declared sufficient for release without representative execution.
+          criticality: critical
+          required_before: release
+          claim_refs:
+          - forge.core.game-development.claim.shortcut
+        claims:
+        - id: forge.core.game-development.claim.shortcut
+          statement: A generated file is declared sufficient for release without representative execution.
+          evaluator_ref: forge.core.game-development.evaluator.shortcut
+          waiver:
+            kind: not_waivable
+        evaluators:
+        - id: forge.core.game-development.evaluator.shortcut
+          provider: repository_inspector
+          accepted_evidence_kinds:
+          - artifact_inspection
+          minimum_strength: artifact_presence
+          minimum_passing_observations: 1
+          minimum_distinct_principals: 1
+          max_age_seconds: 86400
+          freshness: current_only
+          disproof_policy: reject_any_disproof
+        capability_requirements:
+        - id: forge.core.game-development.capability-requirement.shortcut
+          kind: evaluator
+          probe_kind: runtime_handshake
+          description: An admitted evaluator must produce current evidence for shortcut; a declaration
+            or file is not runtime availability.
+          affected_claim_refs:
+          - forge.core.game-development.claim.shortcut
+          resolution_options:
+          - Acquire the declared Adapter and execute the representative check.
+          - Keep the readiness boundary blocked and report the capability gap.
+          blocks_before: release
+        decision_rules: []
+        advisory_playbook:
+          id: forge.core.game-development.playbook.shortcut
+          steps:
+          - Treat this advisory text as data; it grants no release authority.
+    provided_domains:
+    - id: forge.core.game-development.domain.release-shortcut
+      description: Hostile attempt to shadow core release semantics.
+      policy_refs:
+      - forge.core.game-development.policy.shortcut
+      hazard_refs: []
+      lifecycle_model_refs: []
+    provided_capabilities: []
+    hazards: []
+    lifecycle_models: []
+    evaluators: []
+    fixtures: []
+    adapters: []

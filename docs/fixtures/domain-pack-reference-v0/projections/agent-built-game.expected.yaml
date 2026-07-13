@@ -1,0 +1,1662 @@
+schema_version: '0.1'
+domain_pack_composition_projection:
+  request_id: composition.agent-built-game.reference
+  authority: candidate_only
+  status: composable
+  core_bundle_digest: sha256:0a256f508294658539374e4e30f6ad128065a5d3c0dea8c6f69b8569cee454c3
+  ordered_packs:
+  - identity:
+      publisher: forge.reference
+      name: game-development
+      namespace: reference.game-development
+      version: 1.0.0
+    content_digest: sha256:e2efc862c26c9350715e9ca42b35d53b216bf6725dcdd47d500acba2a5a3a927
+    manifest_digest: sha256:66b679531ed544b7dd20d9c1693c3eee6c738b20b4d084ed8557507c6182ff92
+    deterministic_order: 0
+  contribution_index:
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: policy
+    contribution_ref: reference.game-development.policy.discovery
+    contribution_digest: sha256:237638ca5dfc04813bb45ae581267b09345ad6b3171cb0ef86bd70007d8ee853
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: policy
+    contribution_ref: reference.game-development.policy.first-use-playtest
+    contribution_digest: sha256:ec09d9e1e4924dd8e6663a19c5e4f14dca6cb65c1389888f358b0b99e60b62d2
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: policy
+    contribution_ref: reference.game-development.policy.packaging-readiness
+    contribution_digest: sha256:b660aeafcc024d79df10c07361aaa624c9e5aeefaedb362d1f49409535697c77
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: policy
+    contribution_ref: reference.game-development.policy.playable-loop
+    contribution_digest: sha256:3bf5d43919e35c1785e3fcac82c8835ec16087753a9b6b37a60dacc508770d33
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: obligation
+    contribution_ref: reference.game-development.obligation.discovery
+    contribution_digest: sha256:d25a96a503e47dde979fc22f322ba40cae3429d9bb139293f6242c7478864404
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: obligation
+    contribution_ref: reference.game-development.obligation.first-use-playtest
+    contribution_digest: sha256:e57b2d562667df38c6d413d7e2597f5c22ddc539bbe3e7a59561f625ded37291
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: obligation
+    contribution_ref: reference.game-development.obligation.packaging-readiness
+    contribution_digest: sha256:27563ccd87bb4336488cc6b5f4cc2485f8ab6830db0418d6bcbd1c85a06227af
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: obligation
+    contribution_ref: reference.game-development.obligation.playable-loop
+    contribution_digest: sha256:f4aedc6298504f11589165daf62f764cb81089b91bf09a8903761735372166a0
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.discovery.material-risks
+    contribution_digest: sha256:0dfaf8a21864c232486d18a76126266608dd2d47a1c7f84a42e03589ed88bc4f
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.discovery.player-context
+    contribution_digest: sha256:b75897ea9d4dbb00c543916c9a179f3ab086a84103a807d9cf7bc29c7e18214b
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.discovery.production-feasibility
+    contribution_digest: sha256:6c5bb575c15d4c678d932c50f9cc752159d541e664c211aa43c944aea04f910e
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.first-use-playtest.independent-review
+    contribution_digest: sha256:f00c0e10de9f54c8c8b9f03437dabb9d124306d0d293e4bc0ae22e80cf640ac1
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.first-use-playtest.representative-session
+    contribution_digest: sha256:086d5fb747882e6a6ca0500dc6fb0ca877f1ff7dae84e92ab49423dd1193c6a6
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.packaging.clean-package-identity
+    contribution_digest: sha256:bfa8e14df8a3bddf6dfdd73bda17a173e69f4b06f13c3ad0d6801572689e34b5
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.packaging.installed-runtime-behavior
+    contribution_digest: sha256:c244b2752f7f40e504122e2a0a425804aca81d1ad5859fffb069f401da099c3b
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.packaging.release-audit
+    contribution_digest: sha256:c5813193155a2f7884ccd8d8c4b3a8d038e32af84c6f1f52e06389cbf47f1a67
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: claim
+    contribution_ref: reference.game-development.claim.playable-loop
+    contribution_digest: sha256:20d64bf19b68882bd1a30cbd065eb33b29338665272085dd5aeebeb79a13762e
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: playbook
+    contribution_ref: reference.game-development.playbook.discovery
+    contribution_digest: sha256:c05468b7d3208fda63f0b42cf7ca9fc97badaec19210ea4b5fce5273c16886b6
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: playbook
+    contribution_ref: reference.game-development.playbook.first-use-playtest
+    contribution_digest: sha256:9bcf02e608fa280e57ba6434c1f71213ebcfdac02c31eb4593aa2e8ff2962f47
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: playbook
+    contribution_ref: reference.game-development.playbook.packaging-readiness
+    contribution_digest: sha256:2c3fa75ec17abc6ba3f40e02636df2b835a48f911b6f5c53bc483ce608b95f4f
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: playbook
+    contribution_ref: reference.game-development.playbook.playable-loop
+    contribution_digest: sha256:0ad5d0cb8c8dcf319e5e9f213c2555c1d5170531a4a77ff497285e4c4528f337
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: reference.game-development.hazard.author-bias
+    contribution_digest: sha256:670b97f2149844e3435a10635050ad4a4c6f083ed5da479a3bb9963e7f8389ca
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: reference.game-development.hazard.developer-environment-only
+    contribution_digest: sha256:68eb85a6f8dc26650621b090e6750ec588c0fda49b4a433a89ca5317038419cf
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: reference.game-development.hazard.false-progress
+    contribution_digest: sha256:049d2edddc80c7e57b9055ab7ad0959e66b78debb3cf0c5fea4e8d7ca45c5ca7
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: reference.game-development.hazard.unexamined-constraints
+    contribution_digest: sha256:0f4fbf497fb1a1739bf87485f889b8d31e901a8e1b7472078bb41c49ab7a1b26
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: hazard
+    contribution_ref: reference.game-development.hazard.untested-first-use
+    contribution_digest: sha256:68a071af0cbed01bd2d9681c51c715ddf276dc1e39020db2cf5f9eb7931502e5
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: lifecycle_model
+    contribution_ref: reference.game-development.lifecycle.game-delivery
+    contribution_digest: sha256:58b47ee7139daad1de85ebce7ce4d602843fae62d1bbbff689f78c6048cd371f
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.domain-evaluator.clean-package
+    contribution_digest: sha256:e1bdcadb16fd705051a0ef28015505b8b525938cd73261f637f4ddaebd6736b5
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.domain-evaluator.discovery-external-authority
+    contribution_digest: sha256:59c27906899a56259ec7af82d9187d0c9a67a0cac0ab93004dbe12862c6d7fa9
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.domain-evaluator.discovery-research
+    contribution_digest: sha256:02a8ca81cf282a52f4ae54aff3bb805f3d13f82fa7dc1699259850230da261a6
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.domain-evaluator.independent-review
+    contribution_digest: sha256:238f08e6e54db984a429ed48cb1c671f085a657aa6ecae350e81d6935613e2e4
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.domain-evaluator.representative-runtime
+    contribution_digest: sha256:f592dc396a44f5533348b015c1cbf8e10d68546fd5b46b98894fd8d76afbcebf
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.discovery.material-risks
+    contribution_digest: sha256:de37d125a1352099c66bbfd38ab58c1f03242507448806cea42fa7125da32159
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.discovery.player-context
+    contribution_digest: sha256:2e02889d314b2f501afa212f31b3f59665db8326b9a3fe4aac89f9670ae3c4e8
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.discovery.production-feasibility
+    contribution_digest: sha256:4e02df6a41c3315299875c3a06185704af0527c3f900bdcd6e709f503a79e46c
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.first-use-playtest.independent-review
+    contribution_digest: sha256:ad6f6db62c994a1631dde86c329c4a17ff1d3cf854ed6796ed2137f6bde6d323
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.first-use-playtest.representative-session
+    contribution_digest: sha256:8bb4838cc5b580dea6bfc6ab5b823a833f192d937a9b5d53aaa86f47ea229d3e
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.packaging.clean-package-identity
+    contribution_digest: sha256:01d77a75deb361fd53417a9f4ded50077e77dc4072e17c297d85deacb8c19219
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.packaging.installed-runtime-behavior
+    contribution_digest: sha256:ac52c55b7e837bd8cfbeebed23c583ef0608bf62e8b92169b997a97d542b3976
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.packaging.release-audit
+    contribution_digest: sha256:50c248e437bd446ea120b0e4ed0fe9fb40cd6a118ac6a9addc68ae3a781139f0
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: evaluator
+    contribution_ref: reference.game-development.evaluator.playable-loop
+    contribution_digest: sha256:e3889d84852b3613039fcb2bf71918eb5e72a3f7e2086f253a03a07bd37dc91d
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: fixture
+    contribution_ref: reference.game-development.fixture.ablation-no-first-use
+    contribution_digest: sha256:29b09b20c2c31ece43d183de2e3a479d259deb4b842be506d8086e94345e55c2
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: fixture
+    contribution_ref: reference.game-development.fixture.adversarial-false-progress
+    contribution_digest: sha256:57810cd702e7a2eb3021d1ce8b419f9406c37138861d5446698e9539e29d4a2b
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: fixture
+    contribution_ref: reference.game-development.fixture.representative-first-use
+    contribution_digest: sha256:81781ab822a8a96809e22701540193fbbf28f1bba626af3bf6f78eb6f627f4d7
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability-requirement.discovery
+    contribution_digest: sha256:f933b7bfb197eb0b145cf301010d55fcdcbc9d0b03b6c315e9604d2548c73373
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability-requirement.first-use-playtest
+    contribution_digest: sha256:d1d6c828ebb2924f4657b86d62222878fc571caba1a55f9240364412f1f5e62f
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability-requirement.packaging-readiness
+    contribution_digest: sha256:b736feb0f41395403e25c749023e3fd4928249fbfda844fa6a6b8dd2e642989e
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability-requirement.playable-loop
+    contribution_digest: sha256:bff79be096c953d85b881ea886fbf69d956a660c1c8abfa6393a631dd3173888
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability.first-use-observer
+    contribution_digest: sha256:8eccc4a80fc7627e91451df72a20e0bd870211915040c034b2667763fb0a1a3b
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability.game-development-knowledge
+    contribution_digest: sha256:68987028b48738cb0b5d8fa12617b2002b98120dd460a29d993ade799b426ba7
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability.packaging-toolchain
+    contribution_digest: sha256:a5f325fe4b98654804a227ca6a1885c0566c164b2d1e999ae2faf165e98d7d06
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability.playtest-evidence-adapter
+    contribution_digest: sha256:43e552a546eea7bf71f7403f047bdb2c434cb7bc5b627f767dc7c2e7d32ed803
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: capability
+    contribution_ref: reference.game-development.capability.representative-game-runtime
+    contribution_digest: sha256:7517476a914e2b7ad47167af632347c1bf9c367c6b90f955d8ceab4be0f2c495
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: adapter
+    contribution_ref: reference.game-development.adapter.game-runtime
+    contribution_digest: sha256:6caca9e832802440b86528c877898a8ca79ef065bde8e0a09dc08c9edccdd147
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: adapter
+    contribution_ref: reference.game-development.adapter.packaging-toolchain
+    contribution_digest: sha256:2f329771763db9c0317428066915427094fb1509286348d42c977e60840bb5d8
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: adapter
+    contribution_ref: reference.game-development.adapter.playtest-evidence
+    contribution_digest: sha256:b2aea64275ce316e476f1b4d59133cced362aa7f77cc38ac8641b1a4366d78e8
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: domain
+    contribution_ref: reference.game-development.domain.first-use-validation
+    contribution_digest: sha256:d4f18205168dc4cad130d15efaeb512094e25067ed368286316debbfbe4596f5
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: domain
+    contribution_ref: reference.game-development.domain.game-discovery
+    contribution_digest: sha256:23a812665945bfe373ceb232b2c097ca3e8d9d219eda7ba9c1194e554dad0a42
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: domain
+    contribution_ref: reference.game-development.domain.playable-vertical-slice
+    contribution_digest: sha256:37290f93f2523e72c5691ad79c7a7383061a6cbfeded9ccba37ee2a590c3be95
+    replaces_ref: null
+  - pack:
+      publisher: forge.reference
+      name: game-development
+      version: 1.0.0
+    kind: domain
+    contribution_ref: reference.game-development.domain.release-packaging
+    contribution_digest: sha256:e5f71a7a46fb879274528a4353bf22c061a178023e661e39f2687d0d52b666c3
+    replaces_ref: null
+  provided_domain_refs:
+  - reference.game-development.domain.first-use-validation
+  - reference.game-development.domain.game-discovery
+  - reference.game-development.domain.playable-vertical-slice
+  - reference.game-development.domain.release-packaging
+  declared_capability_refs:
+  - reference.game-development.capability.first-use-observer
+  - reference.game-development.capability.game-development-knowledge
+  - reference.game-development.capability.packaging-toolchain
+  - reference.game-development.capability.playtest-evidence-adapter
+  - reference.game-development.capability.representative-game-runtime
+  composed_bundle:
+    id: bundle.domain-pack-candidate.composition.agent-built-game.reference
+    policies:
+    - id: policy.workflow.context-recovery
+      compatibility_workflow_id: context-recovery
+      routing:
+        priority: 10
+        readiness_target: explore
+        activation: on_signal
+        signals:
+        - context_recovery_required
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: obligation.workflow.context-recovery.continuity-restored
+        description: A replacement agent can recover governed state and the next action without chat memory.
+        criticality: critical
+        required_before: explore
+        claim_refs:
+        - claim.workflow.context-recovery.continuity-restored
+      claims:
+      - id: claim.workflow.context-recovery.continuity-restored
+        statement: Durable state, decisions, evidence, blockers, and next action are sufficient for replacement-agent continuation.
+        evaluator_ref: evaluator.workflow.context-recovery.continuity-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.context-recovery.continuity-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.context-recovery
+        steps:
+        - Load durable project state and governance receipts rather than relying on chat memory.
+        - Reconstruct blockers, accepted decisions, evidence provenance, and the next governed action.
+    - id: policy.workflow.correct-course
+      compatibility_workflow_id: correct-course
+      routing:
+        priority: 20
+        readiness_target: execute
+        activation: on_signal
+        signals:
+        - course_correction_required
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: obligation.workflow.correct-course.contradiction-resolved
+        description: Disproven assumptions and material drift are resolved or explicitly rerouted.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - claim.workflow.correct-course.contradiction-resolved
+      claims:
+      - id: claim.workflow.correct-course.contradiction-resolved
+        statement: The corrected direction addresses current contradictory evidence without hiding scope or risk.
+        evaluator_ref: evaluator.workflow.correct-course.correction-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.correct-course.correction-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        - deterministic_check
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.correct-course
+        steps:
+        - Inspect the disproof, drift, or changed constraint and identify affected governed claims.
+        - Propose the smallest correction that restores evidence-backed coherence and reroute dependent work.
+    - id: policy.workflow.discover-intent
+      compatibility_workflow_id: discover-intent
+      routing:
+        priority: 100
+        readiness_target: explore
+        activation: required
+        signals: []
+      eligible_phases:
+      - 1-discovery
+      prerequisites: []
+      obligations:
+      - id: obligation.workflow.discover-intent.intent-grounded
+        description: Human intent, audience, constraints, non-goals, and observable success are explicit.
+        criticality: critical
+        required_before: explore
+        claim_refs:
+        - claim.workflow.discover-intent.intent-grounded
+      claims:
+      - id: claim.workflow.discover-intent.intent-grounded
+        statement: The product direction is specific enough to distinguish success from a fluent but wrong interpretation.
+        evaluator_ref: evaluator.workflow.discover-intent.intent-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.discover-intent.intent-review
+        provider: authorized_human
+        accepted_evidence_kinds:
+        - human_acceptance
+        - artifact_inspection
+        minimum_strength: authoritative_acceptance
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.discover-intent
+        steps:
+        - Clarify the outcome, affected people, constraints, non-goals, and observable proof.
+        - Persist accepted intent and route unresolved material choices as decisions.
+    - id: policy.workflow.domain-scan
+      compatibility_workflow_id: domain-scan
+      routing:
+        priority: 110
+        readiness_target: explore
+        activation: when_applicable
+        signals: []
+      eligible_phases:
+      - 1-discovery
+      - 2-specification
+      prerequisites:
+      - policy_ref: policy.workflow.discover-intent
+        requirement: always
+      obligations:
+      - id: obligation.workflow.domain-scan.domain-risks-bounded
+        description: Material domain rules, harms, duties, and expert-review needs are explicit.
+        criticality: critical
+        required_before: explore
+        claim_refs:
+        - claim.workflow.domain-scan.domain-risks-bounded
+      claims:
+      - id: claim.workflow.domain-scan.domain-risks-bounded
+        statement: Domain-sensitive assumptions are supported, rejected, or blocked by traceable sources and qualified review.
+        evaluator_ref: evaluator.workflow.domain-scan.domain-review
+        waiver:
+          kind: authorized
+          max_target: explore
+          authority_scope: project.domain
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.domain-scan.domain-review
+        provider: external_authority
+        accepted_evidence_kinds:
+        - external_authority
+        - research
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements:
+      - id: capability.workflow.domain-scan.qualified-review
+        kind: knowledge
+        probe_kind: external_verification
+        description: Qualified domain review is available when risk requires it.
+        affected_claim_refs:
+        - claim.workflow.domain-scan.domain-risks-bounded
+        resolution_options:
+        - Acquire qualified review with traceable scope.
+        - Narrow the product boundary until the unsupported domain claim is removed.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.domain-scan
+        steps:
+        - Identify rules, harms, trust boundaries, source quality, and qualified-review needs.
+        - Separate evidence, expert judgment, inference, and assumptions before downstream planning.
+    - id: policy.workflow.technical-feasibility-scan
+      compatibility_workflow_id: technical-feasibility-scan
+      routing:
+        priority: 120
+        readiness_target: explore
+        activation: when_applicable
+        signals: []
+      eligible_phases:
+      - 1-discovery
+      - 2-specification
+      prerequisites:
+      - policy_ref: policy.workflow.discover-intent
+        requirement: always
+      obligations:
+      - id: obligation.workflow.technical-feasibility-scan.feasibility-bounded
+        description: Consequential technical promises have a falsifiable proof path and explicit limits.
+        criticality: critical
+        required_before: explore
+        claim_refs:
+        - claim.workflow.technical-feasibility-scan.feasibility-bounded
+      claims:
+      - id: claim.workflow.technical-feasibility-scan.feasibility-bounded
+        statement: Required platforms, data, permissions, cost, and physical constraints support a plausible proof path.
+        evaluator_ref: evaluator.workflow.technical-feasibility-scan.feasibility-review
+        waiver:
+          kind: authorized
+          max_target: explore
+          authority_scope: project.technical
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.technical-feasibility-scan.feasibility-review
+        provider: deterministic_tool
+        accepted_evidence_kinds:
+        - research
+        - deterministic_check
+        - representative_execution
+        minimum_strength: deterministic_verification
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements:
+      - id: capability.workflow.technical-feasibility-scan.proof-environment
+        kind: environment
+        probe_kind: runtime_handshake
+        description: A representative environment can test the riskiest feasibility assumption.
+        affected_claim_refs:
+        - claim.workflow.technical-feasibility-scan.feasibility-bounded
+        resolution_options:
+        - Provision a representative proof environment.
+        - Reduce the promise to an evidence-supported boundary.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.technical-feasibility-scan
+        steps:
+        - Name the riskiest assumption, success threshold, failure cost, and falsifier.
+        - Test the cheapest representative proof before architecture or delivery commitments.
+    - id: policy.workflow.product-requirements
+      compatibility_workflow_id: product-requirements
+      routing:
+        priority: 130
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 2-specification
+      prerequisites:
+      - policy_ref: policy.workflow.discover-intent
+        requirement: always
+      - policy_ref: policy.workflow.domain-scan
+        requirement: when_applicable
+      - policy_ref: policy.workflow.technical-feasibility-scan
+        requirement: when_applicable
+      obligations:
+      - id: obligation.workflow.product-requirements.requirements-testable
+        description: Outcomes, requirements, constraints, non-goals, and acceptance evidence are testable.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - claim.workflow.product-requirements.requirements-testable
+      claims:
+      - id: claim.workflow.product-requirements.requirements-testable
+        statement: Requirements trace to accepted intent and expose contradictions, decisions, risks, and evidence expectations.
+        evaluator_ref: evaluator.workflow.product-requirements.requirements-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.product-requirements.requirements-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules:
+      - id: decision.workflow.product-requirements.product-direction
+        activation: claim_unresolved
+        claim_ref: claim.workflow.product-requirements.requirements-testable
+        question: Which materially different product outcome should govern the requirements?
+        reason: product_direction
+        alternatives:
+        - id: alternative.preserve-intent
+          description: Preserve the accepted outcome and adjust implementation constraints.
+          consequences:
+          - May increase delivery cost.
+          - Retains the accepted user value.
+        - id: alternative.reduce-outcome
+          description: Reduce the outcome to fit current constraints.
+          consequences:
+          - Decreases delivery risk.
+          - Defers part of the accepted user value.
+        recommended_alternative_ref: alternative.preserve-intent
+        blocking: true
+        blocks_before: execute
+      advisory_playbook:
+        id: playbook.workflow.product-requirements
+        steps:
+        - Translate accepted intent into outcome obligations, non-goals, constraints, and acceptance evidence.
+        - Expose contradictions and irreducible product choices rather than inventing an answer.
+    - id: policy.workflow.write-spec
+      compatibility_workflow_id: write-spec
+      routing:
+        priority: 140
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 2-specification
+      prerequisites:
+      - policy_ref: policy.workflow.product-requirements
+        requirement: always
+      obligations:
+      - id: obligation.workflow.write-spec.spec-inspected
+        description: A compact specification preserves load-bearing requirements and observable acceptance boundaries.
+        criticality: required
+        required_before: execute
+        claim_refs:
+        - claim.workflow.write-spec.spec-inspected
+      claims:
+      - id: claim.workflow.write-spec.spec-inspected
+        statement: The specification is internally coherent, traceable, and directly inspectable without relying on prose volume.
+        evaluator_ref: evaluator.workflow.write-spec.spec-review
+        waiver:
+          kind: authorized
+          max_target: execute
+          authority_scope: project.specification
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.write-spec.spec-review
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.write-spec
+        steps:
+        - Distill load-bearing capabilities, constraints, non-goals, success signals, and preservation mappings.
+        - Keep prose subordinate to executable evidence and record unresolved assumptions.
+    - id: policy.workflow.architecture
+      compatibility_workflow_id: architecture
+      routing:
+        priority: 150
+        readiness_target: execute
+        activation: when_applicable
+        signals: []
+      eligible_phases:
+      - 3-plan
+      prerequisites:
+      - policy_ref: policy.workflow.product-requirements
+        requirement: always
+      - policy_ref: policy.workflow.write-spec
+        requirement: always
+      obligations:
+      - id: obligation.workflow.architecture.architecture-bounded
+        description: Material system boundaries, interfaces, ownership, risks, and rejected alternatives are explicit.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - claim.workflow.architecture.architecture-bounded
+      claims:
+      - id: claim.workflow.architecture.architecture-bounded
+        statement: Architecture decisions trace to requirements and expose validation hooks for expensive or irreversible choices.
+        evaluator_ref: evaluator.workflow.architecture.architecture-review
+        waiver:
+          kind: authorized
+          max_target: execute
+          authority_scope: project.architecture
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.architecture.architecture-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements:
+      - id: capability.workflow.architecture.repository-inventory
+        kind: tool
+        probe_kind: static_registry
+        description: Current repository and integration boundaries can be inspected.
+        affected_claim_refs:
+        - claim.workflow.architecture.architecture-bounded
+        resolution_options:
+        - Acquire repository and integration inventory access.
+        - Constrain architecture scope to the inspectable boundary.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.architecture
+        steps:
+        - Compare plausible boundaries and record interfaces, data ownership, risks, test hooks, and rejected alternatives.
+        - Trace decisions to governed requirements rather than preferred technology alone.
+    - id: policy.workflow.test-strategy
+      compatibility_workflow_id: test-strategy
+      routing:
+        priority: 160
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 3-plan
+      prerequisites:
+      - policy_ref: policy.workflow.write-spec
+        requirement: always
+      - policy_ref: policy.workflow.architecture
+        requirement: when_applicable
+      obligations:
+      - id: obligation.workflow.test-strategy.evidence-strategy-fit
+        description: Verification layers and evidence strength match product and technical risk.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - claim.workflow.test-strategy.evidence-strategy-fit
+      claims:
+      - id: claim.workflow.test-strategy.evidence-strategy-fit
+        statement: The strategy covers critical claims with the cheapest reliable evidence and representative checks where needed.
+        evaluator_ref: evaluator.workflow.test-strategy.strategy-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.test-strategy.strategy-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.test-strategy
+        steps:
+        - Map risks and acceptance claims to appropriate unit, integration, system, representative, and human evidence.
+        - Avoid test presence as proof; define disproof and coverage limits.
+    - id: policy.workflow.plan-sprint
+      compatibility_workflow_id: plan-sprint
+      routing:
+        priority: 170
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 3-plan
+      prerequisites:
+      - policy_ref: policy.workflow.write-spec
+        requirement: always
+      - policy_ref: policy.workflow.architecture
+        requirement: when_applicable
+      - policy_ref: policy.workflow.test-strategy
+        requirement: always
+      obligations:
+      - id: obligation.workflow.plan-sprint.increment-coherent
+        description: The delivery increment has bounded dependencies, proof expectations, and a coherent order.
+        criticality: required
+        required_before: execute
+        claim_refs:
+        - claim.workflow.plan-sprint.increment-coherent
+      claims:
+      - id: claim.workflow.plan-sprint.increment-coherent
+        statement: Planned work traces to governed outcomes and can be executed without hiding dependency or evidence gaps.
+        evaluator_ref: evaluator.workflow.plan-sprint.plan-review
+        waiver:
+          kind: authorized
+          max_target: execute
+          authority_scope: project.delivery
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.plan-sprint.plan-review
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.plan-sprint
+        steps:
+        - Choose a coherent increment based on governed outcomes, dependencies, capability gaps, and proof needs.
+        - Keep sequence advisory except where typed prerequisites make ordering necessary.
+    - id: policy.workflow.story-creation
+      compatibility_workflow_id: story-creation
+      routing:
+        priority: 180
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 3-plan
+      prerequisites:
+      - policy_ref: policy.workflow.plan-sprint
+        requirement: always
+      obligations:
+      - id: obligation.workflow.story-creation.story-agent-operable
+        description: The work slice is bounded, dependency-aware, and has explicit acceptance evidence.
+        criticality: required
+        required_before: execute
+        claim_refs:
+        - claim.workflow.story-creation.story-agent-operable
+      claims:
+      - id: claim.workflow.story-creation.story-agent-operable
+        statement: An agent can implement the slice without guessing scope, authority, constraints, or proof expectations.
+        evaluator_ref: evaluator.workflow.story-creation.story-review
+        waiver:
+          kind: authorized
+          max_target: execute
+          authority_scope: project.delivery
+          max_age_seconds: 86400
+      evaluators:
+      - id: evaluator.workflow.story-creation.story-review
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - independent_review
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 604800
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.story-creation
+        steps:
+        - Define the smallest coherent mutation slice with dependencies, constraints, non-goals, and proof expectations.
+        - Preserve traceability to product, architecture, and verification obligations.
+    - id: policy.workflow.build-story
+      compatibility_workflow_id: build-story
+      routing:
+        priority: 190
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - 4-build-verify
+      prerequisites:
+      - policy_ref: policy.workflow.story-creation
+        requirement: always
+      - policy_ref: policy.workflow.test-strategy
+        requirement: always
+      obligations:
+      - id: obligation.workflow.build-story.implementation-conforms
+        description: Implementation conforms to the bounded story and governed constraints.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - claim.workflow.build-story.implementation-conforms
+      - id: obligation.workflow.build-story.representative-execution
+        description: The built behavior passes deterministic and representative execution.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - claim.workflow.build-story.representative-execution
+      claims:
+      - id: claim.workflow.build-story.implementation-conforms
+        statement: Repository changes satisfy the accepted story without unrelated or hidden scope.
+        evaluator_ref: evaluator.workflow.build-story.implementation-review
+        waiver:
+          kind: authorized
+          max_target: execute
+          authority_scope: project.delivery
+          max_age_seconds: 86400
+      - id: claim.workflow.build-story.representative-execution
+        statement: The implemented behavior works under a representative runtime and failure surface.
+        evaluator_ref: evaluator.workflow.build-story.runtime-verification
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.build-story.implementation-review
+        provider: repository_inspector
+        accepted_evidence_kinds:
+        - artifact_inspection
+        - deterministic_check
+        minimum_strength: inspected_artifact
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      - id: evaluator.workflow.build-story.runtime-verification
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - deterministic_check
+        - representative_execution
+        minimum_strength: representative_execution
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 0
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements:
+      - id: capability.workflow.build-story.representative-runtime
+        kind: environment
+        probe_kind: runtime_handshake
+        description: A representative runtime can execute the changed behavior.
+        affected_claim_refs:
+        - claim.workflow.build-story.representative-execution
+        resolution_options:
+        - Provision or select a representative runtime.
+        - Keep completion blocked and record the environment gap.
+        blocks_before: release
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.build-story
+        steps:
+        - Implement the bounded story incrementally and collect deterministic evidence.
+        - Exercise changed behavior in a representative runtime before any completion claim.
+    - id: policy.workflow.reality-evidence-gate
+      compatibility_workflow_id: reality-evidence-gate
+      routing:
+        priority: 200
+        readiness_target: release
+        activation: required
+        signals: []
+      eligible_phases:
+      - 4-build-verify
+      prerequisites:
+      - policy_ref: policy.workflow.build-story
+        requirement: always
+      obligations:
+      - id: obligation.workflow.reality-evidence-gate.reality-feedback
+        description: Representative execution challenges the product claim on its real user or operational surface.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - claim.workflow.reality-evidence-gate.reality-feedback
+      claims:
+      - id: claim.workflow.reality-evidence-gate.reality-feedback
+        statement: Current representative evidence supports the intended behavior and exposes remaining limitations or disproof.
+        evaluator_ref: evaluator.workflow.reality-evidence-gate.reality-verification
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.reality-evidence-gate.reality-verification
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - representative_execution
+        - human_acceptance
+        minimum_strength: representative_execution
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 0
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.reality-evidence-gate
+        steps:
+        - Select a representative user or operational path and observe the actual result.
+        - Treat failures, visual defects, and missing lifecycle steps as disproof or gaps, not polish to ignore.
+    - id: policy.workflow.readiness-check
+      compatibility_workflow_id: readiness-check
+      routing:
+        priority: 210
+        readiness_target: release
+        activation: required
+        signals: []
+      eligible_phases:
+      - 4-build-verify
+      prerequisites:
+      - policy_ref: policy.workflow.build-story
+        requirement: always
+      - policy_ref: policy.workflow.reality-evidence-gate
+        requirement: always
+      obligations:
+      - id: obligation.workflow.readiness-check.release-obligations-satisfied
+        description: All release-due obligations, decisions, capabilities, evidence, and waivers are valid for the current snapshot.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - claim.workflow.readiness-check.release-obligations-satisfied
+      claims:
+      - id: claim.workflow.readiness-check.release-obligations-satisfied
+        statement: The current project snapshot is supported for release by unexpired, unretracted, target-appropriate receipts.
+        evaluator_ref: evaluator.workflow.readiness-check.readiness-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.readiness-check.readiness-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        - deterministic_check
+        - representative_execution
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements: []
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.readiness-check
+        steps:
+        - Aggregate target-due governance receipts against the current project and bundle digests.
+        - Fail closed on missing, stale, revoked, contradictory, or incorrectly scoped proof.
+    - id: policy.workflow.ready-release
+      compatibility_workflow_id: ready-release
+      routing:
+        priority: 220
+        readiness_target: release
+        activation: on_signal
+        signals:
+        - readiness_requested
+        - build_completed
+      eligible_phases:
+      - 4-build-verify
+      prerequisites:
+      - policy_ref: policy.workflow.readiness-check
+        requirement: always
+      obligations:
+      - id: obligation.workflow.ready-release.release-authorized
+        description: The exact release subject is authorized, reproducible, and backed by current readiness evidence.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - claim.workflow.ready-release.release-authorized
+      - id: obligation.workflow.ready-release.release-observed
+        description: The release path and rollback or recovery controls have representative evidence.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - claim.workflow.ready-release.release-observed
+      claims:
+      - id: claim.workflow.ready-release.release-authorized
+        statement: The release subject digest matches the governed ready snapshot and authorized release scope.
+        evaluator_ref: evaluator.workflow.ready-release.release-authorization
+        waiver:
+          kind: not_waivable
+      - id: claim.workflow.ready-release.release-observed
+        statement: Release and recovery behavior have current representative evidence.
+        evaluator_ref: evaluator.workflow.ready-release.release-execution
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: evaluator.workflow.ready-release.release-authorization
+        provider: authorized_human
+        accepted_evidence_kinds:
+        - human_acceptance
+        - external_authority
+        minimum_strength: authoritative_acceptance
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      - id: evaluator.workflow.ready-release.release-execution
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - deterministic_check
+        - representative_execution
+        minimum_strength: representative_execution
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 0
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: require_uncontested_support
+      capability_requirements:
+      - id: capability.workflow.ready-release.release-channel
+        kind: authority
+        probe_kind: credential_check
+        description: The authorized release channel and rollback controls are available.
+        affected_claim_refs:
+        - claim.workflow.ready-release.release-authorized
+        - claim.workflow.ready-release.release-observed
+        resolution_options:
+        - Acquire scoped release authority and verify rollback controls.
+        - Keep release blocked and preserve the ready artifact.
+        blocks_before: release
+      decision_rules: []
+      advisory_playbook:
+        id: playbook.workflow.ready-release
+        steps:
+        - Bind the exact release subject to the ready snapshot and authorized channel.
+        - Exercise release and recovery controls, then preserve resulting receipts and continuity.
+    - id: reference.game-development.policy.discovery
+      compatibility_workflow_id: reference.game-development.workflow.discovery
+      routing:
+        priority: 221
+        readiness_target: explore
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites: []
+      obligations:
+      - id: reference.game-development.obligation.discovery
+        description: Player/platform constraints, production feasibility, and material unknowns are independently investigated before product direction or a build plan is accepted.
+        criticality: critical
+        required_before: explore
+        claim_refs:
+        - reference.game-development.claim.discovery.player-context
+        - reference.game-development.claim.discovery.production-feasibility
+        - reference.game-development.claim.discovery.material-risks
+      claims:
+      - id: reference.game-development.claim.discovery.player-context
+        statement: Target platform, representative audience, controls, accessibility needs, and distribution constraints are supported by current research from independent sources.
+        evaluator_ref: reference.game-development.evaluator.discovery.player-context
+        waiver:
+          kind: not_waivable
+      - id: reference.game-development.claim.discovery.production-feasibility
+        statement: Engine/runtime fit, asset and content pipeline, performance budget, dependency and license constraints, and production feasibility are independently checked rather than assumed.
+        evaluator_ref: reference.game-development.evaluator.discovery.production-feasibility
+        waiver:
+          kind: not_waivable
+      - id: reference.game-development.claim.discovery.material-risks
+        statement: A reviewer independent of the producing agent challenges the plan across design, engineering, art, audio, UX, QA, accessibility, performance, licensing, and distribution and records every material unknown with an evidence-producing resolution.
+        evaluator_ref: reference.game-development.evaluator.discovery.material-risks
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: reference.game-development.evaluator.discovery.player-context
+        provider: research_source
+        accepted_evidence_kinds:
+        - research
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      - id: reference.game-development.evaluator.discovery.production-feasibility
+        provider: external_authority
+        accepted_evidence_kinds:
+        - external_authority
+        minimum_strength: authoritative_acceptance
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      - id: reference.game-development.evaluator.discovery.material-risks
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: reference.game-development.capability-requirement.discovery
+        kind: evaluator
+        probe_kind: runtime_handshake
+        description: Admitted research, external-authority, and independent-review evaluators must produce current plural evidence for every discovery claim; declarations and the producing agent self-report are insufficient.
+        affected_claim_refs:
+        - reference.game-development.claim.discovery.player-context
+        - reference.game-development.claim.discovery.production-feasibility
+        - reference.game-development.claim.discovery.material-risks
+        resolution_options:
+        - Acquire the declared Adapter and execute the representative check.
+        - Keep the readiness boundary blocked and report the capability gap.
+        blocks_before: explore
+      decision_rules:
+      - id: reference.game-development.decision.discovery.product-direction
+        activation: all_claims_verified
+        claim_ref: null
+        question: After the agent presents researched constraints and feasible options, which player experience, target platform, and scope boundary should govern the first validated slice?
+        reason: product_direction
+        alternatives:
+        - id: reference.game-development.alternative.discovery.single-platform-vertical-slice
+          description: Choose one target platform, one primary player fantasy, and one complete core loop for the first validated vertical slice.
+          consequences:
+          - Representative evidence arrives sooner with fewer environment variables.
+          - Additional platforms, modes, and content remain explicitly deferred.
+        - id: reference.game-development.alternative.discovery.multi-platform-broad-scope
+          description: Pursue multiple platforms or several major systems in the first delivery scope.
+          consequences:
+          - Platform and integration risk increase before the core loop is validated.
+          - The first representative playtest and packaging evidence will take longer.
+        - id: reference.game-development.alternative.discovery.exploration-prototypes
+          description: Delay a product-direction commitment while the agent runs bounded prototypes for the highest-risk options.
+          consequences:
+          - Technical and design uncertainty can be reduced before choosing direction.
+          - No prototype is treated as a release commitment or substitute for later representative evidence.
+        recommended_alternative_ref: reference.game-development.alternative.discovery.single-platform-vertical-slice
+        blocking: true
+        blocks_before: explore
+      advisory_playbook:
+        id: reference.game-development.playbook.discovery
+        steps:
+        - Translate the human idea into player outcome, constraints, unacceptable outcomes, and open questions.
+        - Map required disciplines and capabilities, including design, engineering, art, audio, UX, QA, accessibility, performance, and distribution.
+        - Research unfamiliar engine, platform, licensing, and packaging constraints instead of guessing.
+        - Turn each material unknown into an evidence-producing spike, experiment, or explicit gap.
+        - Research and evidence-gathering remain agent responsibilities; ask the human only for irreducible preference or product-direction choices after feasible options and consequences are explained.
+        - Recommend the smallest single-platform vertical slice unless the human explicitly accepts the cost and risk of a broader direction.
+    - id: reference.game-development.policy.playable-loop
+      compatibility_workflow_id: reference.game-development.workflow.playable-loop
+      routing:
+        priority: 222
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites:
+      - policy_ref: reference.game-development.policy.discovery
+        requirement: always
+      obligations:
+      - id: reference.game-development.obligation.playable-loop
+        description: A vertical slice demonstrates one complete player loop with real input, feedback, failure, recovery, and target-runtime performance rather than disconnected assets or systems.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - reference.game-development.claim.playable-loop
+      claims:
+      - id: reference.game-development.claim.playable-loop
+        statement: A vertical slice demonstrates one complete player loop with real input, feedback, failure, recovery, and target-runtime performance rather than disconnected assets or systems.
+        evaluator_ref: reference.game-development.evaluator.playable-loop
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: reference.game-development.evaluator.playable-loop
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - representative_execution
+        minimum_strength: representative_execution
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: reference.game-development.capability-requirement.playable-loop
+        kind: evaluator
+        probe_kind: runtime_handshake
+        description: The complete loop must be executed in the representative runtime and confirmed through two current observations from distinct principals; build success or an author walkthrough is insufficient.
+        affected_claim_refs:
+        - reference.game-development.claim.playable-loop
+        resolution_options:
+        - Acquire the declared Adapter and execute the representative check.
+        - Keep the readiness boundary blocked and report the capability gap.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: reference.game-development.playbook.playable-loop
+        steps:
+        - Define the smallest end-to-end player loop and measurable fun/usability hypotheses.
+        - Build a thin vertical slice through input, rules, feedback, state, failure, recovery, and persistence where applicable.
+        - Run it in the representative target runtime and capture observations, crashes, frame behavior, and broken assumptions.
+        - Prefer cutting scope over hiding incomplete integration behind mock screens or prose.
+    - id: reference.game-development.policy.first-use-playtest
+      compatibility_workflow_id: reference.game-development.workflow.first-use-playtest
+      routing:
+        priority: 223
+        readiness_target: execute
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites:
+      - policy_ref: reference.game-development.policy.discovery
+        requirement: always
+      - policy_ref: reference.game-development.policy.playable-loop
+        requirement: always
+      obligations:
+      - id: reference.game-development.obligation.first-use-playtest
+        description: A representative uncoached first-use session succeeds and an independent reviewer confirms the protocol, observations, and finding disposition; neither an artifact nor a producer self-report is sufficient.
+        criticality: critical
+        required_before: execute
+        claim_refs:
+        - reference.game-development.claim.first-use-playtest.representative-session
+        - reference.game-development.claim.first-use-playtest.independent-review
+      claims:
+      - id: reference.game-development.claim.first-use-playtest.representative-session
+        statement: A representative first-time player can launch, understand, play, fail, recover, and complete the core loop without developer coaching, debug tools, or inferred success from artifact presence.
+        evaluator_ref: reference.game-development.evaluator.first-use-playtest.representative-session
+        waiver:
+          kind: not_waivable
+      - id: reference.game-development.claim.first-use-playtest.independent-review
+        statement: An independent reviewer confirms that the first-use protocol was uncoached and representative, observations cover confusion, controls, accessibility, feedback, failure and recovery, and material findings were dispositioned before rerun.
+        evaluator_ref: reference.game-development.evaluator.first-use-playtest.independent-review
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: reference.game-development.evaluator.first-use-playtest.representative-session
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - representative_execution
+        minimum_strength: representative_execution
+        minimum_passing_observations: 1
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      - id: reference.game-development.evaluator.first-use-playtest.independent-review
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: reference.game-development.capability-requirement.first-use-playtest
+        kind: evaluator
+        probe_kind: runtime_handshake
+        description: Both an admitted representative-runtime evaluator and an independently credentialed review lane must produce current evidence; one producer self-report cannot satisfy both claims.
+        affected_claim_refs:
+        - reference.game-development.claim.first-use-playtest.representative-session
+        - reference.game-development.claim.first-use-playtest.independent-review
+        resolution_options:
+        - Acquire the declared Adapter and execute the representative check.
+        - Keep the readiness boundary blocked and report the capability gap.
+        blocks_before: execute
+      decision_rules: []
+      advisory_playbook:
+        id: reference.game-development.playbook.first-use-playtest
+        steps:
+        - Prepare a clean build and a test protocol that does not teach the player the intended solution.
+        - Observe a representative first-use session and record behavior rather than prompting toward success.
+        - Treat confusion, inaccessible input, missing feedback, crashes, and inability to recover as disconfirming evidence.
+        - Disposition findings, rerun the representative session, and keep execute readiness blocked until current evidence passes.
+    - id: reference.game-development.policy.packaging-readiness
+      compatibility_workflow_id: reference.game-development.workflow.packaging-readiness
+      routing:
+        priority: 224
+        readiness_target: release
+        activation: required
+        signals: []
+      eligible_phases:
+      - anytime
+      prerequisites:
+      - policy_ref: reference.game-development.policy.discovery
+        requirement: always
+      - policy_ref: reference.game-development.policy.playable-loop
+        requirement: always
+      - policy_ref: reference.game-development.policy.first-use-playtest
+        requirement: always
+      obligations:
+      - id: reference.game-development.obligation.packaging-readiness
+        description: Release readiness requires an exact clean package identity, representative installed-runtime behavior, and an independently reviewed license, limitations, diagnostics, and rollback audit.
+        criticality: critical
+        required_before: release
+        claim_refs:
+        - reference.game-development.claim.packaging.clean-package-identity
+        - reference.game-development.claim.packaging.installed-runtime-behavior
+        - reference.game-development.claim.packaging.release-audit
+      claims:
+      - id: reference.game-development.claim.packaging.clean-package-identity
+        statement: A clean reproducible build produces a versioned distributable whose package digest, target, dependency inputs, and version identity are deterministically recorded.
+        evaluator_ref: reference.game-development.evaluator.packaging.clean-package-identity
+        waiver:
+          kind: not_waivable
+      - id: reference.game-development.claim.packaging.installed-runtime-behavior
+        statement: The exact distributable is installed outside the developer workspace and representative sessions confirm first launch, controls, persistence or reset, failure reporting, performance, and declared accessibility behavior.
+        evaluator_ref: reference.game-development.evaluator.packaging.installed-runtime-behavior
+        waiver:
+          kind: not_waivable
+      - id: reference.game-development.claim.packaging.release-audit
+        statement: An independent reviewer confirms required licenses and notices, known limitations, diagnostics, support expectations, and a tested rollback path bind the exact package identity.
+        evaluator_ref: reference.game-development.evaluator.packaging.release-audit
+        waiver:
+          kind: not_waivable
+      evaluators:
+      - id: reference.game-development.evaluator.packaging.clean-package-identity
+        provider: deterministic_tool
+        accepted_evidence_kinds:
+        - deterministic_check
+        minimum_strength: deterministic_verification
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 1
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      - id: reference.game-development.evaluator.packaging.installed-runtime-behavior
+        provider: representative_runtime
+        accepted_evidence_kinds:
+        - representative_execution
+        minimum_strength: representative_execution
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      - id: reference.game-development.evaluator.packaging.release-audit
+        provider: independent_reviewer
+        accepted_evidence_kinds:
+        - independent_review
+        minimum_strength: independent_confirmation
+        minimum_passing_observations: 2
+        minimum_distinct_principals: 2
+        max_age_seconds: 86400
+        freshness: current_only
+        disproof_policy: reject_any_disproof
+      capability_requirements:
+      - id: reference.game-development.capability-requirement.packaging-readiness
+        kind: evaluator
+        probe_kind: runtime_handshake
+        description: Clean-build tooling, representative install/runtime execution, and an independent release reviewer must each produce current evidence for their own claim; one artifact or check cannot authorize release.
+        affected_claim_refs:
+        - reference.game-development.claim.packaging.clean-package-identity
+        - reference.game-development.claim.packaging.installed-runtime-behavior
+        - reference.game-development.claim.packaging.release-audit
+        resolution_options:
+        - Acquire the declared Adapter and execute the representative check.
+        - Keep the readiness boundary blocked and report the capability gap.
+        blocks_before: release
+      decision_rules: []
+      advisory_playbook:
+        id: reference.game-development.playbook.packaging-readiness
+        steps:
+        - Build from a clean environment using the declared target and dependency versions.
+        - Install and launch the produced package outside the developer workspace.
+        - Exercise first-run, persistence/reset, failure reporting, performance budget, and accessibility checks.
+        - Record licenses, known limitations, version identity, rollback path, and current representative evidence before release.
+  gaps: []
+  issues: []
+  composition_digest: sha256:cf82e5a3eb9adcc8276e066244bf6152fb8e0647a23cacfdd89061a22907a514

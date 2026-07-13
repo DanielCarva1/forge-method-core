@@ -23,10 +23,17 @@ use forge_core_store::sha256_content_hash;
 use serde::Serialize;
 
 mod adapter;
+mod domain_pack;
 mod policy;
 mod retirement;
 
 pub use adapter::*;
+pub use domain_pack::{
+    admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
+    domain_pack_generation_transition_event, evaluate_domain_pack_release_rebase,
+    AdmittedEffectiveWorkflowGovernanceBundle, EffectiveWorkflowGovernanceBundleError,
+    WorkflowDomainPackContextView, WorkflowDomainPackReleaseRebaseDecision,
+};
 pub use policy::{
     load_admitted_workflow_governance_bundle, load_admitted_workflow_governance_release_registry,
     load_admitted_workflow_governance_reviewed_release_registry, AdmittedWorkflowGovernanceBundle,

@@ -15,6 +15,7 @@ dangerous-bypass = []
 forge-core-authority = { path = "../forge-core-authority" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-decisions = { path = "../forge-core-decisions" }
+forge-core-domain-pack-tcb = { path = "../forge-core-domain-pack-tcb" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-workflow-governance-tcb = { path = "../forge-core-workflow-governance-tcb" }
 forge-core-trace = { path = "../forge-core-trace" }

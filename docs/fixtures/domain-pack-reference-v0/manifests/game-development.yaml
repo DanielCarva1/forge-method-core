@@ -1,0 +1,31 @@
+schema_version: '0.1'
+domain_pack_manifest:
+  identity:
+    publisher: forge.reference
+    name: game-development
+    namespace: reference.game-development
+    version: 1.0.0
+  authority: candidate_only
+  compatibility:
+    pack_schema_requirement: '>=0.1,<0.2'
+    forge_core_requirement: '>=0.9,<1.0'
+  provenance:
+    source_kind: local_candidate
+    source_uri: fixture://domain-pack-reference-v0/game-development
+    source_revision: reference-1.0.0
+    source_digest: sha256:93b3649511c2a728be075358ece57d7be4b91ae60a337974a9e5733aa94e4d1f
+    authors:
+    - forge.reference.author
+    license_spdx_expression: Apache-2.0
+    license_text:
+      artifact_ref: docs/fixtures/domain-pack-reference-v0/artifacts/license-notice.yaml
+      raw_sha256: sha256:81f2ce336bbc87ccc9897ebfccd60dddcd5d812a78bdd54d3dbf880236fc6b61
+      canonical_sha256: sha256:4233dd9051646608cc5a48b68a9e441f58cc2020d1a27c3eec9b20167f521e99
+  content:
+    content_ref: docs/fixtures/domain-pack-reference-v0/content/game-development.yaml
+    raw_sha256: sha256:ede89f565b885e5520273f81cd0af0006325728553fecb38caca8fe6d5e488b5
+    canonical_sha256: sha256:e2efc862c26c9350715e9ca42b35d53b216bf6725dcdd47d500acba2a5a3a927
+  dependencies: []
+  conflicts: []
+  replacement_slots: []
+  replacement_declarations: []

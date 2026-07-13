@@ -1,0 +1,26 @@
+schema_version: '0.1'
+domain_pack_project_requirements:
+  project_id: project.agent-built-game
+  requirement_set_id: requirements.agent-built-game-safe-delivery
+  required_domains:
+  - id: requirement.game.discovery
+    domain_id: reference.game-development.domain.game-discovery
+    pack_version_requirement: ^1.0
+    required_capability_refs:
+    - reference.game-development.capability.game-development-knowledge
+  - id: requirement.game.playable-slice
+    domain_id: reference.game-development.domain.playable-vertical-slice
+    pack_version_requirement: ^1.0
+    required_capability_refs:
+    - reference.game-development.capability.representative-game-runtime
+  - id: requirement.game.first-use
+    domain_id: reference.game-development.domain.first-use-validation
+    pack_version_requirement: ^1.0
+    required_capability_refs:
+    - reference.game-development.capability.first-use-observer
+    - reference.game-development.capability.playtest-evidence-adapter
+  - id: requirement.game.release
+    domain_id: reference.game-development.domain.release-packaging
+    pack_version_requirement: ^1.0
+    required_capability_refs:
+    - reference.game-development.capability.packaging-toolchain

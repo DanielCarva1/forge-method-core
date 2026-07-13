@@ -110,8 +110,11 @@ reachable receipt and byte-identical historical lock. Project domain requirement
 live independently of packs, so removal may activate a deliberately degraded
 lock that preserves explicit `missing_domain` / `missing_capability` gaps. See
 `forge-core domain-pack --help` for the machine-oriented argument surface. The
-reviewed real reference pack remains P6d rather than special-case Rust core
-logic.
+normal `workflow init|next|resume` path auto-detects the lifecycle generation;
+the human and host agent do not pass a pack or effective-bundle selector.
+Remove-last and rollback-to-empty generations remain explicitly degraded and
+surface their typed gaps instead of silently reverting to fabricated core-only
+readiness.
 
 P6c keeps local learning deliberately inert. `domain-pack learning capture`
 stores an exact candidate and provenance, but capture alone never changes a
@@ -134,6 +137,28 @@ so revocation cannot trap a project in the state it is intended to leave. Use
 `forge-core domain-pack learning --help` for the agent-oriented capture,
 evaluation, conflict, trust, reviewer-rotation, registry-check, and promotion
 surface.
+
+P6d completes the `0.9.0` ecosystem checkpoint with the governed
+`forge.reference/game-development` reference pack. It contributes discovery,
+playable-loop, first-use, packaging, hazards, evaluators, fixtures, and Adapter
+requirements as data; no game-development branch or policy is compiled into
+Rust core. Research and capability acquisition remain agent work,
+representative execution is required instead of artifact presence, and the
+single product-direction question reaches the human only after its prerequisite
+claims are verified. A fresh replacement process reconstructs the same active
+generation and effective workflow epoch from durable state. The real-process
+journey carries the reference pack from discovery through playable-loop,
+representative first-use, and packaging readiness; partial or artifact-only
+evidence remains non-completing. A separate lifecycle persistence E2E proves
+install v1, upgrade v2, exact rollback v1, and remove-to-empty with immutable
+generation recovery after every transition.
+
+The universal five-release, 42-policy core identity remains separate from each
+project's effective core-plus-pack epoch. Domain lifecycle transitions append a
+distinct effective identity without mutating the core registry. A core release
+upgrade while any Domain Pack generation is active fails closed with an
+explicit rebase requirement; Forge does not pretend that two independently
+durable stores can be upgraded through an unsafe partial transaction.
 
 The first trust anchor requires an explicit operator provisioning ceremony;
 `preflight` and `apply` never silently trust a registry on first use. The
@@ -1531,6 +1556,14 @@ gates.
   68-workflow operational catalog, exact all-42 signed retirement, policy-derived
   five-surface deletion proof, repository consumer fixtures, typed tombstones,
   opaque kernel admission, and the final 42/47/3/18 plus 42/68 scorecard.
+- P6a-P6d complete the governed Domain Pack ecosystem: closed candidate
+  contracts and deterministic composition, signed lifecycle and exact locks,
+  reviewed learning promotion, and the real game-development reference pack.
+  Workflow commands auto-detect the active lifecycle generation, bind it to a
+  separate effective epoch, preserve replacement-agent resume, require
+  representative evidence, expose degraded removal/rollback gaps, and require
+  explicit rebase before a core release upgrade. Reference-domain behavior
+  remains pack data rather than special-case Rust logic.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
@@ -1587,10 +1620,6 @@ gates.
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
 **Not yet (roadmap)**
-- **P6 Domain Pack ecosystem** -- P5 is complete. The 18 domain candidates
-  remain outside core authority until closed pack contracts, deterministic
-  composition, provenance, compatibility, lifecycle, and conflict handling are
-  implemented and independently reviewed.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
