@@ -764,6 +764,7 @@ impl WorkflowGovernanceProjectAdapter {
             &guidance.snapshot_digest,
             current_now,
             principal_registry_digest.as_deref(),
+            Some(&broker_registry_digest),
         )?;
         let packet = authorization_action_packets(
             effective.document(),
@@ -1906,6 +1907,7 @@ impl WorkflowGovernanceProjectAdapter {
             .collect::<Vec<_>>();
         if completed_policy.routing.activation == WorkflowPolicyActivation::OnSignal {
             let registry_digest = self.current_trusted_registry_digest()?;
+            let broker_registry_digest = self.current_trusted_broker_registry_state()?.digest;
             let current_receipts = derive_receipts(
                 effective.document(),
                 &projection,
@@ -1913,6 +1915,7 @@ impl WorkflowGovernanceProjectAdapter {
                 &fresh.snapshot_digest,
                 now,
                 registry_digest.as_deref(),
+                broker_registry_digest.as_deref(),
             )?;
             for signal in &completed_policy.routing.signals {
                 if let Some(digest) = current_receipts.active_signal_receipt_digests.get(signal) {
@@ -2529,6 +2532,7 @@ impl WorkflowGovernanceProjectAdapter {
             &snapshot_digest,
             now,
             trusted_registry_digest.as_deref(),
+            trusted_broker_registry.digest.as_deref(),
         )?;
         let phase = current_phase(projection)?;
         let selected = select_policy(effective.document(), &derived, &phase)?;
@@ -2752,6 +2756,7 @@ impl WorkflowGovernanceProjectAdapter {
         };
         let snapshot = project_snapshot_digest(&self.binding.project_root)?;
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
+        let trusted_broker_registry_digest = self.current_trusted_broker_registry_state()?.digest;
         let derived = derive_receipts(
             effective.document(),
             projection,
@@ -2759,6 +2764,7 @@ impl WorkflowGovernanceProjectAdapter {
             &snapshot,
             now,
             trusted_registry_digest.as_deref(),
+            trusted_broker_registry_digest.as_deref(),
         )?;
         let phase_done = effective
             .document()
@@ -3243,6 +3249,75 @@ fn classify_domain_pack_transition_recovery(
     }
 }
 
+/// Trust root retained while deriving a receipt. Broker provenance remains
+/// structured so later Assurance projection can consume profile/separation
+/// metadata without re-inferring it from free-form evidence fields.
+#[derive(Debug, Clone, Copy)]
+enum DerivedReceiptTrustRoot<'a> {
+    LocalPrincipalRegistry,
+    ExternalBroker(&'a BrokerOriginAppliedEvent),
+}
+
+fn receipt_trust_root<'a>(
+    records: &'a [WorkflowGovernanceLedgerRecord],
+    index: usize,
+    action_record: &WorkflowGovernanceLedgerRecord,
+    action_registry_digest: &str,
+    trusted_principal_registry_digest: Option<&str>,
+    trusted_broker_registry_digest: Option<&str>,
+) -> Option<DerivedReceiptTrustRoot<'a>> {
+    if let Some(origin_record) = records.get(index + 1) {
+        if let WorkflowGovernanceEvent::BrokerOriginApplied(origin) = &origin_record.event {
+            let exact = origin.action_record_digest == action_record.record_digest
+                && origin_record.previous_record_digest.as_deref()
+                    == Some(action_record.record_digest.as_str())
+                && origin_record.project_id == action_record.project_id
+                && origin_record.bundle_id == action_record.bundle_id
+                && origin_record.bundle_digest == action_record.bundle_digest
+                && origin_record.state_version == action_record.state_version
+                && origin.broker_registry_digest == action_registry_digest
+                && trusted_broker_registry_digest == Some(origin.broker_registry_digest.as_str())
+                && origin.issued_at_unix < origin.expires_at_unix;
+            return exact.then_some(DerivedReceiptTrustRoot::ExternalBroker(origin));
+        }
+    }
+    (trusted_principal_registry_digest == Some(action_registry_digest))
+        .then_some(DerivedReceiptTrustRoot::LocalPrincipalRegistry)
+}
+
+fn broker_common_binding(
+    origin: &BrokerOriginAppliedEvent,
+    credential_id: &StableId,
+    public_key_fingerprint: &str,
+    action_time: u64,
+) -> bool {
+    origin.issuer_id == *credential_id
+        && origin.public_key_fingerprint == public_key_fingerprint
+        && origin.issued_at_unix == action_time
+}
+
+fn broker_evidence_profile_allowed(
+    provider: WorkflowEvaluatorProvider,
+    profile: WorkflowBrokerOriginProfile,
+) -> bool {
+    match provider {
+        WorkflowEvaluatorProvider::AuthorizedHuman => profile == WorkflowBrokerOriginProfile::Human,
+        WorkflowEvaluatorProvider::IndependentReviewer => {
+            profile == WorkflowBrokerOriginProfile::Reviewer
+        }
+        WorkflowEvaluatorProvider::RepositoryInspector
+        | WorkflowEvaluatorProvider::DeterministicTool
+        | WorkflowEvaluatorProvider::RepresentativeRuntime => {
+            profile == WorkflowBrokerOriginProfile::Runtime
+        }
+        WorkflowEvaluatorProvider::ExternalAuthority
+        | WorkflowEvaluatorProvider::ResearchSource => matches!(
+            profile,
+            WorkflowBrokerOriginProfile::Reviewer | WorkflowBrokerOriginProfile::Runtime
+        ),
+    }
+}
+
 fn derive_receipts(
     bundle: &WorkflowGovernanceBundleDocument,
     projection: &WorkflowGovernanceLedgerProjection,
@@ -3250,6 +3325,7 @@ fn derive_receipts(
     snapshot_digest: &str,
     now: u64,
     trusted_registry_digest: Option<&str>,
+    trusted_broker_registry_digest: Option<&str>,
 ) -> Result<DerivedReceipts, WorkflowGovernanceAdapterError> {
     let receipt_records = &projection.records[receipt_window_start(projection)..];
     let revoked = receipt_records
@@ -3270,16 +3346,40 @@ fn derive_receipts(
         .map(|record| record.record_digest.clone())
         .collect::<BTreeSet<_>>();
     let mut derived = DerivedReceipts::default();
+    let mut current_evidence_receipt_digests = BTreeSet::new();
     let mut signal_states =
         BTreeMap::<WorkflowGovernanceSignal, (bool, StableId, u64, String, bool)>::new();
-    for record in receipt_records {
+    for (index, record) in receipt_records.iter().enumerate() {
         if revoked.contains(&(record.record_id.clone(), record.record_digest.clone())) {
             continue;
         }
         if let WorkflowGovernanceEvent::SignalChanged(event) = &record.event {
+            let authority = receipt_trust_root(
+                receipt_records,
+                index,
+                record,
+                &event.authorization_registry_digest,
+                trusted_registry_digest,
+                trusted_broker_registry_digest,
+            );
+            let authority_current = match authority {
+                Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                    origin.issuer_profile == WorkflowBrokerOriginProfile::Runtime
+                        && origin.origin_principal_id == event.changed_by
+                        && broker_common_binding(
+                            origin,
+                            &event.credential_id,
+                            &event.public_key_fingerprint,
+                            event.observed_at_unix,
+                        )
+                        && event.expires_at_unix <= origin.expires_at_unix
+                }
+                None => false,
+            };
             let trusted = event.observed_at_unix <= now
                 && now <= event.expires_at_unix
-                && trusted_registry_digest == Some(event.authorization_registry_digest.as_str())
+                && authority_current
                 && record.previous_record_digest.as_deref()
                     == Some(event.ledger_head_digest.as_str())
                 && event.snapshot_digest == snapshot_digest
@@ -3316,7 +3416,7 @@ fn derive_receipts(
             derived.active_signal_receipt_digests.insert(signal, digest);
         }
     }
-    for record in receipt_records {
+    for (index, record) in receipt_records.iter().enumerate() {
         if revoked.contains(&(record.record_id.clone(), record.record_digest.clone())) {
             continue;
         }
@@ -3333,7 +3433,7 @@ fn derive_receipts(
                     && event
                         .evidence_receipt_digests
                         .iter()
-                        .all(|digest| valid_record_digests.contains(digest)) =>
+                        .all(|digest| current_evidence_receipt_digests.contains(digest)) =>
             {
                 let signal_bound = bundle
                     .workflow_governance_bundle
@@ -3357,37 +3457,84 @@ fn derive_receipts(
                         .insert(event.policy_ref.clone());
                 }
             }
-            WorkflowGovernanceEvent::ApplicabilityAssessed(event)
+            WorkflowGovernanceEvent::ApplicabilityAssessed(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        origin.issuer_profile == WorkflowBrokerOriginProfile::Human
+                            && origin.origin_principal_id == event.assessed_by
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.observed_at_unix,
+                            )
+                            && event.expires_at_unix <= origin.expires_at_unix
+                    }
+                    None => false,
+                };
                 if event.observed_at_unix <= now
                     && now <= event.expires_at_unix
-                    && trusted_registry_digest
-                        == Some(event.authorization_registry_digest.as_str())
+                    && authority_current
                     && event.evaluator_ref.0 == WORKFLOW_APPLICABILITY_EVALUATOR_REF
                     && event.snapshot_digest == snapshot_digest
                     && record.previous_record_digest.as_deref()
                         == Some(event.ledger_head_digest.as_str())
                     && content_addressed_basis_current(project_root, &event.basis)?
-                    && content_addressed_basis_digest(&event.basis)? == event.basis_digest =>
-            {
-                derived
-                    .applicability
-                    .insert(event.policy_ref.clone(), event.applicable);
+                    && content_addressed_basis_digest(&event.basis)? == event.basis_digest
+                {
+                    derived
+                        .applicability
+                        .insert(event.policy_ref.clone(), event.applicable);
+                }
             }
-            WorkflowGovernanceEvent::CapabilityProbed(event)
-                if event.available
-                    && event.observed_at_unix <= now
-                    && event.expires_at_unix.is_none_or(|expires| now <= expires)
-                    && trusted_registry_digest
-                        == Some(event.authorization_registry_digest.as_str())
-                    && record.previous_record_digest.as_deref()
-                        == Some(event.ledger_head_digest.as_str()) =>
-            {
+            WorkflowGovernanceEvent::CapabilityProbed(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        origin.issuer_profile == WorkflowBrokerOriginProfile::Runtime
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.observed_at_unix,
+                            )
+                            && event
+                                .expires_at_unix
+                                .is_none_or(|expires| expires <= origin.expires_at_unix)
+                    }
+                    None => false,
+                };
                 let subject_is_current =
                     subject_current(project_root, snapshot_digest, &event.subject)?;
                 let snapshot_is_current = event.subject.kind
                     == WorkflowEvidenceSubjectKind::Artifact
                     || event.snapshot_digest == snapshot_digest;
-                if subject_is_current && snapshot_is_current {
+                if event.available
+                    && event.observed_at_unix <= now
+                    && event.expires_at_unix.is_none_or(|expires| now <= expires)
+                    && authority_current
+                    && record.previous_record_digest.as_deref()
+                        == Some(event.ledger_head_digest.as_str())
+                    && subject_is_current
+                    && snapshot_is_current
+                {
                     derived
                         .available_capability_refs
                         .insert(event.capability_ref.clone());
@@ -3398,25 +3545,82 @@ fn derive_receipts(
                     .decision_need_refs
                     .insert(event.decision_ref.clone());
             }
-            WorkflowGovernanceEvent::DecisionResolved(event)
+            WorkflowGovernanceEvent::DecisionResolved(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        origin.issuer_profile == WorkflowBrokerOriginProfile::Human
+                            && origin.origin_principal_id == event.principal
+                            && origin.broker_event_digest == event.authorization_intent_digest
+                            && origin.signature_fingerprint == event.signature_fingerprint
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.resolved_at_unix,
+                            )
+                    }
+                    None => false,
+                };
                 if event.resolved_at_unix <= now
-                    && trusted_registry_digest
-                        == Some(event.authorization_registry_digest.as_str())
+                    && authority_current
                     && event.snapshot_digest == snapshot_digest
                     && record.previous_record_digest.as_deref()
-                        == Some(event.ledger_head_digest.as_str()) =>
-            {
-                derived
-                    .resolved_decision_refs
-                    .insert(event.decision_ref.clone());
+                        == Some(event.ledger_head_digest.as_str())
+                {
+                    derived
+                        .resolved_decision_refs
+                        .insert(event.decision_ref.clone());
+                }
             }
-            WorkflowGovernanceEvent::EvaluatorObserved(event)
-                if event.observed_at_unix <= now
-                    && trusted_registry_digest
-                        == Some(event.authorization_registry_digest.as_str())
-                    && record.previous_record_digest.as_deref()
-                        == Some(event.ledger_head_digest.as_str()) =>
-            {
+            WorkflowGovernanceEvent::EvaluatorObserved(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        broker_evidence_profile_allowed(event.provider, origin.issuer_profile)
+                            && event.provenance.principal.as_ref()
+                                == Some(&origin.origin_principal_id)
+                            && event.provenance.producer_ref == origin.issuer_id
+                            && event.provenance.method
+                                == format!(
+                                    "verified_workflow_broker:{}",
+                                    origin.broker_event_digest
+                                )
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.observed_at_unix,
+                            )
+                            && event
+                                .expires_at_unix
+                                .is_none_or(|expires| expires <= origin.expires_at_unix)
+                    }
+                    None => false,
+                };
+                if event.observed_at_unix > now
+                    || !authority_current
+                    || record.previous_record_digest.as_deref()
+                        != Some(event.ledger_head_digest.as_str())
+                {
+                    continue;
+                }
                 let Some(policy) = bundle
                     .workflow_governance_bundle
                     .policies
@@ -3432,6 +3636,12 @@ fn derive_receipts(
                 else {
                     continue;
                 };
+                if evaluator.provider != event.provider
+                    || !evaluator.accepted_evidence_kinds.contains(&event.kind)
+                    || event.strength < evaluator.minimum_strength
+                {
+                    continue;
+                }
                 let age_current =
                     now.saturating_sub(event.observed_at_unix) <= evaluator.max_age_seconds;
                 let expiry_current = event.expires_at_unix.is_none_or(|expires| now <= expires);
@@ -3439,6 +3649,15 @@ fn derive_receipts(
                     subject_current(project_root, snapshot_digest, &event.subject)?;
                 let snapshot_current = event.subject.kind == WorkflowEvidenceSubjectKind::Artifact
                     || event.snapshot_digest == snapshot_digest;
+                let freshness =
+                    if age_current && expiry_current && subject_current && snapshot_current {
+                        WorkflowEvidenceFreshness::Current
+                    } else {
+                        WorkflowEvidenceFreshness::Stale
+                    };
+                if freshness == WorkflowEvidenceFreshness::Current {
+                    current_evidence_receipt_digests.insert(record.record_digest.clone());
+                }
                 derived.evidence.push(WorkflowEvidenceObservation {
                     evidence_ref: event.provenance.semantic_identity.0.clone(),
                     claim_ref: event.claim_ref.clone(),
@@ -3446,37 +3665,55 @@ fn derive_receipts(
                     principal: event.provenance.principal.clone(),
                     kind: event.kind,
                     strength: event.strength,
-                    freshness: if age_current
-                        && expiry_current
-                        && subject_current
-                        && snapshot_current
-                    {
-                        WorkflowEvidenceFreshness::Current
-                    } else {
-                        WorkflowEvidenceFreshness::Stale
-                    },
+                    freshness,
                     outcome: event.outcome,
                 });
             }
-            WorkflowGovernanceEvent::WaiverAuthorized(event)
+            WorkflowGovernanceEvent::WaiverAuthorized(event) => {
+                let authority = receipt_trust_root(
+                    receipt_records,
+                    index,
+                    record,
+                    &event.authorization_registry_digest,
+                    trusted_registry_digest,
+                    trusted_broker_registry_digest,
+                );
+                let authority_current = match authority {
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
+                        origin.issuer_profile == WorkflowBrokerOriginProfile::Human
+                            && origin.origin_principal_id == event.principal
+                            && origin.broker_event_digest == event.authorization_intent_digest
+                            && origin.signature_fingerprint == event.signature_fingerprint
+                            && broker_common_binding(
+                                origin,
+                                &event.credential_id,
+                                &event.public_key_fingerprint,
+                                event.authorized_at_unix,
+                            )
+                            && event.expires_at_unix <= origin.expires_at_unix
+                    }
+                    None => false,
+                };
                 if event.authorized_at_unix <= now
                     && now <= event.expires_at_unix
-                    && trusted_registry_digest
-                        == Some(event.authorization_registry_digest.as_str())
+                    && authority_current
                     && event.snapshot_digest == snapshot_digest
                     && record.previous_record_digest.as_deref()
                         == Some(event.ledger_head_digest.as_str())
-                    && subject_current(project_root, snapshot_digest, &event.subject)? =>
-            {
-                derived.waivers.push(WorkflowClaimWaiverObservation {
-                    claim_ref: event.claim_ref.clone(),
-                    principal: event.principal.clone(),
-                    authority_scope: event.authority_scope.clone(),
-                    max_target: event.max_target,
-                    authorization_intent_digest: event.authorization_intent_digest.clone(),
-                    authorized_at_unix: event.authorized_at_unix,
-                    expires_at_unix: event.expires_at_unix,
-                });
+                    && subject_current(project_root, snapshot_digest, &event.subject)?
+                {
+                    current_evidence_receipt_digests.insert(record.record_digest.clone());
+                    derived.waivers.push(WorkflowClaimWaiverObservation {
+                        claim_ref: event.claim_ref.clone(),
+                        principal: event.principal.clone(),
+                        authority_scope: event.authority_scope.clone(),
+                        max_target: event.max_target,
+                        authorization_intent_digest: event.authorization_intent_digest.clone(),
+                        authorized_at_unix: event.authorized_at_unix,
+                        expires_at_unix: event.expires_at_unix,
+                    });
+                }
             }
             _ => {}
         }
@@ -6463,6 +6700,258 @@ mod tests {
     }
 
     #[test]
+    fn broker_capability_receipt_requires_exact_current_origin_companion() {
+        let (root, _) = temp_project("broker-capability-receipt-provenance");
+        let snapshot = project_snapshot_digest(&root).expect("snapshot");
+        let broker_registry_digest = format!("sha256:{}", "a".repeat(64));
+        let prior_head = format!("sha256:{}", "b".repeat(64));
+        let action_record_digest = format!("sha256:{}", "c".repeat(64));
+        let capability_ref = StableId("capability.broker.runtime".to_owned());
+        let issuer_id = StableId("broker.runtime.receipts".to_owned());
+        let public_key_fingerprint = format!("sha256:{}", "d".repeat(64));
+        let origin_principal = PrincipalId("principal.runtime.receipts".to_owned());
+        let separation_domain = StableId("runtime.receipts.session".to_owned());
+        let readme_digest = sha256_content_hash(&fs::read(root.join("README.md")).expect("README"));
+        let action = WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.broker.capability".to_owned()),
+            sequence: 1,
+            project_id: StableId("project.receipts".to_owned()),
+            bundle_id: StableId("bundle.receipts".to_owned()),
+            bundle_digest: format!("sha256:{}", "e".repeat(64)),
+            state_version: 3,
+            previous_record_digest: Some(prior_head.clone()),
+            record_digest: action_record_digest.clone(),
+            recorded_at_unix: 10,
+            event: WorkflowGovernanceEvent::CapabilityProbed(CapabilityProbedEvent {
+                policy_ref: StableId("policy.workflow.receipts".to_owned()),
+                capability_ref: capability_ref.clone(),
+                probe_kind: WorkflowCapabilityProbeKind::ExternalVerification,
+                credential_id: issuer_id.clone(),
+                public_key_fingerprint: public_key_fingerprint.clone(),
+                authorization_registry_digest: broker_registry_digest.clone(),
+                available: true,
+                probe_ref: "README.md".to_owned(),
+                probe_digest: readme_digest.clone(),
+                subject: WorkflowEvidenceSubject {
+                    kind: WorkflowEvidenceSubjectKind::Artifact,
+                    subject_ref: "README.md".to_owned(),
+                    subject_digest: readme_digest,
+                },
+                snapshot_digest: snapshot.clone(),
+                ledger_head_digest: prior_head,
+                observed_at_unix: 10,
+                expires_at_unix: Some(100),
+            }),
+        };
+        let origin = WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.broker.capability.origin".to_owned()),
+            sequence: 2,
+            project_id: action.project_id.clone(),
+            bundle_id: action.bundle_id.clone(),
+            bundle_digest: action.bundle_digest.clone(),
+            state_version: action.state_version,
+            previous_record_digest: Some(action_record_digest.clone()),
+            record_digest: format!("sha256:{}", "f".repeat(64)),
+            recorded_at_unix: 11,
+            event: WorkflowGovernanceEvent::BrokerOriginApplied(BrokerOriginAppliedEvent {
+                action_packet_digest: format!("sha256:{}", "1".repeat(64)),
+                broker_event_digest: format!("sha256:{}", "2".repeat(64)),
+                action_record_digest,
+                origin_principal_id: origin_principal,
+                separation_domain: separation_domain.clone(),
+                nonce_fingerprint: format!("sha256:{}", "3".repeat(64)),
+                issuer_id,
+                issuer_profile: WorkflowBrokerOriginProfile::Runtime,
+                public_key_fingerprint,
+                signature_fingerprint: format!("sha256:{}", "4".repeat(64)),
+                enrollment_ceremony_digest: format!("sha256:{}", "5".repeat(64)),
+                broker_registry_digest: broker_registry_digest.clone(),
+                issued_at_unix: 10,
+                expires_at_unix: 120,
+            }),
+        };
+        let projection =
+            |records: Vec<WorkflowGovernanceLedgerRecord>| WorkflowGovernanceLedgerProjection {
+                next_sequence: u64::try_from(records.len()).expect("record count") + 1,
+                next_state_version: 4,
+                head_digest: records.last().map(|record| record.record_digest.clone()),
+                records,
+            };
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+            .expect("admitted registry");
+        let derive = |projection: &WorkflowGovernanceLedgerProjection, current_broker: &str| {
+            derive_receipts(
+                registry.genesis().document(),
+                projection,
+                &root,
+                &snapshot,
+                20,
+                None,
+                Some(current_broker),
+            )
+            .expect("derive broker receipts")
+        };
+
+        let valid = projection(vec![action.clone(), origin.clone()]);
+        let Some(DerivedReceiptTrustRoot::ExternalBroker(provenance)) = receipt_trust_root(
+            &valid.records,
+            0,
+            &valid.records[0],
+            &broker_registry_digest,
+            None,
+            Some(&broker_registry_digest),
+        ) else {
+            panic!("structured broker provenance");
+        };
+        assert_eq!(provenance.separation_domain, separation_domain);
+        assert_eq!(
+            provenance.issuer_profile,
+            WorkflowBrokerOriginProfile::Runtime
+        );
+        assert!(derive(&valid, &broker_registry_digest)
+            .available_capability_refs
+            .contains(&capability_ref));
+
+        let missing = projection(vec![action.clone()]);
+        assert!(!derive(&missing, &broker_registry_digest)
+            .available_capability_refs
+            .contains(&capability_ref));
+
+        let mut mismatched_origin = origin.clone();
+        let WorkflowGovernanceEvent::BrokerOriginApplied(mismatch) = &mut mismatched_origin.event
+        else {
+            unreachable!();
+        };
+        mismatch.action_record_digest = format!("sha256:{}", "0".repeat(64));
+        let mismatch = projection(vec![action.clone(), mismatched_origin]);
+        assert!(!derive(&mismatch, &broker_registry_digest)
+            .available_capability_refs
+            .contains(&capability_ref));
+
+        let mut wrong_profile_origin = origin.clone();
+        let WorkflowGovernanceEvent::BrokerOriginApplied(wrong_profile) =
+            &mut wrong_profile_origin.event
+        else {
+            unreachable!();
+        };
+        wrong_profile.issuer_profile = WorkflowBrokerOriginProfile::Human;
+        let wrong_profile = projection(vec![action.clone(), wrong_profile_origin]);
+        assert!(!derive(&wrong_profile, &broker_registry_digest)
+            .available_capability_refs
+            .contains(&capability_ref));
+
+        let wrong_registry = format!("sha256:{}", "9".repeat(64));
+        assert!(!derive(&valid, &wrong_registry)
+            .available_capability_refs
+            .contains(&capability_ref));
+    }
+
+    #[test]
+    fn current_legacy_local_evidence_keeps_its_admitted_provider_semantics() {
+        let (root, _) = temp_project("legacy-local-evidence-receipt");
+        let snapshot = project_snapshot_digest(&root).expect("snapshot");
+        let registry = load_admitted_workflow_governance_reviewed_release_registry()
+            .expect("admitted registry");
+        let bundle = registry.genesis().document();
+        let (policy_ref, claim_ref, evaluator) = bundle
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .find_map(|policy| {
+                policy.evaluators.iter().find_map(|evaluator| {
+                    (evaluator.provider == WorkflowEvaluatorProvider::RepositoryInspector)
+                        .then(|| {
+                            policy
+                                .claims
+                                .iter()
+                                .find(|claim| claim.evaluator_ref == evaluator.id)
+                                .map(|claim| {
+                                    (policy.id.clone(), claim.id.clone(), evaluator.clone())
+                                })
+                        })
+                        .flatten()
+                })
+            })
+            .expect("repository-inspector evaluator with a bound claim");
+        let kind = *evaluator
+            .accepted_evidence_kinds
+            .first()
+            .expect("accepted evidence kind");
+        let principal_registry_digest = format!("sha256:{}", "6".repeat(64));
+        let prior_head = format!("sha256:{}", "7".repeat(64));
+        let readme_digest = sha256_content_hash(&fs::read(root.join("README.md")).expect("README"));
+        let local = WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.local.repository-inspection".to_owned()),
+            sequence: 1,
+            project_id: StableId("project.local.receipts".to_owned()),
+            bundle_id: StableId("bundle.local.receipts".to_owned()),
+            bundle_digest: format!("sha256:{}", "8".repeat(64)),
+            state_version: 2,
+            previous_record_digest: Some(prior_head.clone()),
+            record_digest: format!("sha256:{}", "9".repeat(64)),
+            recorded_at_unix: 10,
+            event: WorkflowGovernanceEvent::EvaluatorObserved(EvaluatorObservedEvent {
+                policy_ref,
+                claim_ref,
+                evaluator_ref: evaluator.id,
+                provider: evaluator.provider,
+                credential_id: StableId("credential.local.runtime".to_owned()),
+                public_key_fingerprint: format!("sha256:{}", "a".repeat(64)),
+                authorization_registry_digest: principal_registry_digest.clone(),
+                kind,
+                strength: evaluator.minimum_strength,
+                outcome: WorkflowEvidenceOutcome::Pass,
+                provenance: WorkflowEvidenceProvenance {
+                    source_ref: "README.md".to_owned(),
+                    source_digest: readme_digest.clone(),
+                    scenario_digest: format!("sha256:{}", "b".repeat(64)),
+                    semantic_identity: StableId("evidence.local.repository".to_owned()),
+                    producer_ref: StableId("agent.local.runtime".to_owned()),
+                    principal: Some(PrincipalId("principal.local.runtime".to_owned())),
+                    method: "registry_authorized_evidence:test".to_owned(),
+                },
+                subject: WorkflowEvidenceSubject {
+                    kind: WorkflowEvidenceSubjectKind::Artifact,
+                    subject_ref: "README.md".to_owned(),
+                    subject_digest: readme_digest,
+                },
+                snapshot_digest: snapshot.clone(),
+                ledger_head_digest: prior_head,
+                observed_at_unix: 10,
+                expires_at_unix: Some(100),
+            }),
+        };
+        let projection =
+            |record: WorkflowGovernanceLedgerRecord| WorkflowGovernanceLedgerProjection {
+                head_digest: Some(record.record_digest.clone()),
+                records: vec![record],
+                next_sequence: 2,
+                next_state_version: 3,
+            };
+        let derive = |projection: &WorkflowGovernanceLedgerProjection| {
+            derive_receipts(
+                bundle,
+                projection,
+                &root,
+                &snapshot,
+                20,
+                Some(&principal_registry_digest),
+                None,
+            )
+            .expect("derive local receipts")
+        };
+
+        assert_eq!(derive(&projection(local.clone())).evidence.len(), 1);
+
+        let mut wrong_provider = local;
+        let WorkflowGovernanceEvent::EvaluatorObserved(event) = &mut wrong_provider.event else {
+            unreachable!();
+        };
+        event.provider = WorkflowEvaluatorProvider::ExternalAuthority;
+        assert!(derive(&projection(wrong_provider)).evidence.is_empty());
+    }
+
+    #[test]
     fn applicability_receipt_is_stale_after_project_snapshot_drift() {
         let (root, _) = temp_project("applicability-snapshot-drift");
         let captured_snapshot = project_snapshot_digest(&root).expect("captured snapshot");
@@ -6517,6 +7006,7 @@ mod tests {
             &current_snapshot,
             20,
             Some(&registry_digest),
+            None,
         )
         .expect("derive receipts");
         assert!(!derived
@@ -6575,6 +7065,7 @@ mod tests {
             &root,
             &current_snapshot,
             20,
+            None,
             None,
         )
         .expect("derive receipts");
