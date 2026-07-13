@@ -1875,6 +1875,69 @@ fn close_boundary_rechecks(
     panic!("boundary rechecks did not converge within the policy bound")
 }
 
+fn current_decision_packet_digest(
+    guidance: &Value,
+    policy: &WorkflowGovernancePolicy,
+    rule: &WorkflowDecisionRule,
+) -> String {
+    let data = &guidance["data"];
+    if let Some(packet_digest) = data["authorization"]["action_packets"]
+        .as_array()
+        .and_then(|packets| {
+            packets.iter().find(|packet| {
+                packet["authorization_kind"] == "decision"
+                    && packet["binding"]["policy_ref"] == policy.id.0
+                    && packet["binding"]["subject_ref"] == rule.id.0
+                    && packet["binding"]["state_version"] == data["state_version"]
+                    && packet["binding"]["ledger_head_digest"] == data["ledger_head_digest"]
+            })
+        })
+        .and_then(|packet| packet["packet_digest"].as_str())
+    {
+        return packet_digest.to_owned();
+    }
+    // P7a binds a decision acknowledgement to the exact current action
+    // packet, not only to the consequence strings. Reconstruct that packet
+    // from the latest CAS coordinates immediately before signing. Boundary
+    // recheck views are synthetic policy projections, so their decision
+    // packet is not necessarily present in the selected-policy packet list.
+    let packet_template = data["authorization"]["action_packets"]
+        .as_array()
+        .and_then(|packets| packets.first())
+        .expect("current authorization packet template");
+    let packet_digest_basis = serde_json::json!({
+        "schema_version": "workflow_authorization_action_packets_v1",
+        "packet_id": format!("packet.workflow.decision.{}", rule.id.0),
+        "authorization_kind": "decision",
+        "binding": {
+            "project_id": data["project_id"].clone(),
+            "effective_bundle_id": data["effective"]["effective_runtime_bundle"]["bundle_id"].clone(),
+            "effective_bundle_digest": data["bundle_digest"].clone(),
+            "policy_ref": policy.id.clone(),
+            "subject_ref": rule.id.clone(),
+            "state_version": data["state_version"].clone(),
+            "current_phase": data["current_phase"].clone(),
+            "snapshot_digest": data["snapshot_digest"].clone(),
+            "ledger_head_digest": data["ledger_head_digest"].clone(),
+            "trusted_principal_registry_digest": packet_template["binding"]["trusted_principal_registry_digest"].clone(),
+            "trusted_broker_registry_digest": packet_template["binding"]["trusted_broker_registry_digest"].clone(),
+            "readiness_target": policy.routing.readiness_target,
+        },
+        "required_authority": {
+            "accepted_roles": ["human"],
+            "required_grant": "workflow.decision.resolve",
+            "approval_boundary": "human_approval_broker",
+        },
+        "input_contract": {
+            "kind": "decision",
+            "decision_ref": rule.id.clone(),
+            "alternatives": rule.alternatives.clone(),
+            "recommended_alternative_ref": rule.recommended_alternative_ref.clone(),
+        },
+    });
+    canonical_digest(&packet_digest_basis)
+}
+
 fn authorize_decision(
     project: &ReferenceProject,
     authority: &WorkflowAuthority,
@@ -1896,6 +1959,14 @@ fn authorize_decision(
         .find(|alternative| alternative.id == rule.recommended_alternative_ref)
         .expect("recommended decision alternative");
     let data = &guidance["data"];
+    let packet_digest = current_decision_packet_digest(guidance, policy, rule);
+    let consequences_ack_digest = canonical_digest(&serde_json::json!({
+        "schema_version": "workflow_decision_consequence_ack_v1",
+        "packet_digest": packet_digest,
+        "decision_ref": rule.id,
+        "selected_alternative_ref": alternative.id,
+        "consequences": alternative.consequences,
+    }));
     let request = forge_core_authority::WorkflowDecisionAuthorizationRequest {
         project_id: StableId(required_str(data, "/project_id").to_owned()),
         policy_bundle_digest: required_str(data, "/bundle_digest").to_owned(),
@@ -1907,7 +1978,7 @@ fn authorize_decision(
         snapshot_digest: required_str(data, "/snapshot_digest").to_owned(),
         ledger_head_digest: required_str(data, "/ledger_head_digest").to_owned(),
         readiness_target: required_str(data, "/target").to_owned(),
-        consequences_ack_digest: canonical_digest(&alternative.consequences),
+        consequences_ack_digest,
     };
     let (request_path, attestation_path) = authority.write_authorization(
         project,
