@@ -72,7 +72,7 @@ pub use workflow_authority::{
     VerifiedWorkflowSignalAuthorization, VerifiedWorkflowSignalAuthorizationAudit,
     VerifiedWorkflowWaiverAuthorization, VerifiedWorkflowWaiverAuthorizationAudit,
     WorkflowApplicabilityAuthorization, WorkflowApplicabilityAuthorizationRequest,
-    WorkflowAuthorityError, WorkflowCapabilityAuthorization,
+    WorkflowAuthorityError, WorkflowAuthorizationKind, WorkflowCapabilityAuthorization,
     WorkflowCapabilityAuthorizationRequest, WorkflowDecisionAuthorizationRequest,
     WorkflowEvidenceAuthorizationRequest, WorkflowSignalAuthorization,
     WorkflowSignalAuthorizationRequest, WorkflowWaiverAuthorizationRequest, WorkflowWaiverSubject,

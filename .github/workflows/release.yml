@@ -1,23 +1,19 @@
 name: Release
 
-# Produces cross-compiled `forge-core` binaries for Linux, macOS (Intel +
-# Apple Silicon), and Windows on every tag push `v*`, then attaches them to a
-# GitHub Release. This is what makes "Option B — prebuilt binary" in the
-# README real: users download the asset for their platform and put it on PATH.
+# A tag push publishes a release. A manual dispatch rebuilds and validates an
+# existing tag, but deliberately cannot publish it.
 #
-# Why cross-compile on linux runners (not native): cheaper, faster, single
-# job matrix. The `cross` tool handles the glibc/musl/linux-gnu split; for
-# macOS we use the native macOS runner because cross-compiling from linux to
-# darwin requires non-free SDKs. Windows MSVC likewise runs natively.
+# Every platform archive is a self-describing Forge adoption kit: the native
+# binary, its wrapper, the start-forge skill, selected operator/adoption docs,
+# and an embedded, content-addressed RELEASE-MANIFEST.json.
 #
-# Supply chain (R-SCM, 2026-07-01):
-# - Each archive is signed with cosign keyless (sigstore via GitHub OIDC).
-#   The signature + certificate + Rekor entry are bundled into a `.sigstore`
-#   file uploaded alongside the asset. Users verify identity via
-#   `cosign verify-blob --certificate-identity <runner> ...`.
-# - An SBOM (CycloneDX) is generated from Cargo.lock in the release job and
-#   uploaded as `forge-core-<version>.cdx.json`. Enables CVE auditing of the
-#   crypto-heavy transitive deps (ed25519-dalek, p256, sigstore-tsa, ...).
+# Supply-chain controls:
+# - the requested tag, workspace version, checked-out commit, and CLI version
+#   must agree before an archive can be created;
+# - archives are assembled deterministically from an explicit payload allowlist
+#   and verified before upload and again before publication;
+# - every archive is signed keylessly with Sigstore/cosign via GitHub OIDC;
+# - a valid CycloneDX SBOM is mandatory for publication.
 
 on:
   push:
@@ -26,17 +22,118 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (must already exist)"
+        description: "Existing tag to rebuild and validate (manual runs never publish)"
         required: true
+        type: string
 
-permissions:
-  contents: write
-  id-token: write # required for cosign keyless signing via GitHub OIDC
+permissions: {}
 
 jobs:
+  metadata:
+    name: Validate release identity and packaging contract
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      version: ${{ steps.identity.outputs.version }}
+      commit_sha: ${{ steps.identity.outputs.commit_sha }}
+      source_date_epoch: ${{ steps.identity.outputs.source_date_epoch }}
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+
+    steps:
+      - name: Checkout the exact requested tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require tag, workspace version, and commit identity to agree
+        id: identity
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          tag = os.environ["REQUESTED_TAG"]
+          if re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?", tag) is None:
+              raise SystemExit(f"release tag must be an exact v-prefixed SemVer, got {tag!r}")
+
+          cargo = tomllib.loads(Path("Cargo.toml").read_text(encoding="utf-8"))
+          version = cargo["workspace"]["package"]["version"]
+          if tag != f"v{version}":
+              raise SystemExit(
+                  f"release identity mismatch: tag={tag!r}, workspace version={version!r}"
+              )
+
+          tag_ref = f"refs/tags/{tag}"
+          try:
+              tag_commit = subprocess.check_output(
+                  ["git", "rev-parse", f"{tag_ref}^{{commit}}"],
+                  text=True,
+                  stderr=subprocess.STDOUT,
+              ).strip()
+          except subprocess.CalledProcessError as error:
+              raise SystemExit(
+                  f"release identity must name an existing tag {tag_ref}: {error.output.strip()}"
+              ) from error
+          head_commit = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if tag_commit != head_commit:
+              raise SystemExit(
+                  f"checkout mismatch: {tag} resolves to {tag_commit}, HEAD is {head_commit}"
+              )
+
+          source_date_epoch = subprocess.check_output(
+              ["git", "show", "-s", "--format=%ct", "HEAD"], text=True
+          ).strip()
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as stream:
+              stream.write(f"tag={tag}\n")
+              stream.write(f"version={version}\n")
+              stream.write(f"commit_sha={head_commit}\n")
+              stream.write(f"source_date_epoch={source_date_epoch}\n")
+          PY
+
+      - name: Test deterministic archive tooling
+        run: python scripts/test-release-archive.py
+
+      - name: Require successful CI for the exact release commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          success_count="$(
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "pull_request")] | length'
+          )"
+          test "$success_count" -gt 0 || {
+            echo "release rejected: no successful CI run exists for exact commit $sha" >&2
+            exit 1
+          }
+
   build:
     name: Build ${{ matrix.target }}
+    needs: metadata
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write # required for cosign keyless signing via GitHub OIDC
     strategy:
       fail-fast: false
       matrix:
@@ -44,59 +141,64 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact: forge-core
+            wrapper: distribution/forge
+            wrapper_name: forge
             archive: forge-core-x86_64-linux.tar.gz
             can_smoke: true
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact: forge-core
+            wrapper: distribution/forge
+            wrapper_name: forge
             archive: forge-core-aarch64-linux.tar.gz
-            can_smoke: false # cross-compiled aarch64 binary cannot run on x86_64 runner
-          # Run on macos-14 (Apple Silicon) and cross-compile to x86_64.
-          # The macos-13 (Intel) runner is being phased out and is extremely
-          # slow for crypto-heavy release builds. Apple Silicon runners are
-          # 3-5x faster, and x86_64 binaries run via Rosetta 2 for smoke tests.
+            can_smoke: false # foreign binary cannot execute on the x86_64 runner
           - target: x86_64-apple-darwin
-            runner: macos-14
+            runner: macos-15
             artifact: forge-core
+            wrapper: distribution/forge
+            wrapper_name: forge
             archive: forge-core-x86_64-macos.tar.gz
-            can_smoke: true
+            can_smoke: true # runs under Rosetta 2
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
             artifact: forge-core
+            wrapper: distribution/forge
+            wrapper_name: forge
             archive: forge-core-aarch64-macos.tar.gz
             can_smoke: true
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             artifact: forge-core.exe
+            wrapper: distribution/forge.cmd
+            wrapper_name: forge.cmd
             archive: forge-core-x86_64-windows.zip
             can_smoke: true
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout the validated immutable commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.commit_sha }}
+          persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
         with:
+          toolchain: 1.97.0
           targets: ${{ matrix.target }}
 
       - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           key: release-${{ matrix.target }}
 
       - name: Install cross
         if: runner.os == 'Linux'
-        run: cargo install cross --locked --quiet || true
+        run: cargo install cross --version 0.2.5 --locked --quiet
 
-      # R-SCM.2: cosign is used to sign each archive keyless via GitHub OIDC.
-      # Installed once per job; the signing step runs after packaging.
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
-      # Linux targets are cross-compiled from the linux runner to keep the
-      # matrix uniform; cross handles the sysroot differences between
-      # x86_64 (host) and aarch64 (foreign).
       - name: Build (Linux cross)
         if: runner.os == 'Linux'
         run: cross build --release --target ${{ matrix.target }} -p forge-core-cli
@@ -105,73 +207,72 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo build --release --target ${{ matrix.target }} -p forge-core-cli
 
-      - name: Smoke test the freshly built binary (POSIX)
-        # Only smoke-test when the binary can actually run on the runner.
-        # Cross-compiled targets (e.g. aarch64-linux built on an x86_64 runner)
-        # cannot execute without QEMU, which is out of scope for the release
-        # pipeline. The build itself succeeding is sufficient evidence for
-        # those targets.
+      - name: Smoke test version and core commands (POSIX)
         if: runner.os != 'Windows' && matrix.can_smoke
+        shell: bash
+        env:
+          EXPECTED_VERSION: forge-core ${{ needs.metadata.outputs.version }}
         run: |
-          ./target/${{ matrix.target }}/release/${{ matrix.artifact }} --help > /dev/null
-          ./target/${{ matrix.target }}/release/${{ matrix.artifact }} validate --root .
+          set -euo pipefail
+          binary="./target/${{ matrix.target }}/release/${{ matrix.artifact }}"
+          actual="$("$binary" --version)"
+          test "$actual" = "$EXPECTED_VERSION" || {
+            echo "CLI version mismatch: expected '$EXPECTED_VERSION', got '$actual'" >&2
+            exit 1
+          }
+          "$binary" --help >/dev/null
+          "$binary" validate --root .
 
-      - name: Smoke test the freshly built binary (Windows)
+      - name: Smoke test version and core commands (Windows)
         if: runner.os == 'Windows' && matrix.can_smoke
-        run: |
-          .\target\${{ matrix.target }}\release\${{ matrix.artifact }} --help | Out-Null
-          .\target\${{ matrix.target }}\release\${{ matrix.artifact }} validate --root .
-
-      - name: Package (POSIX)
-        if: runner.os != 'Windows'
-        working-directory: target/${{ matrix.target }}/release
-        run: |
-          # Copy the `forge` wrapper alongside the binary so a single archive
-          # exposes both names. The skill `start-forge` looks for `forge`
-          # first; shipping it removes the need for users to alias anything.
-          cp ../../../distribution/forge ./forge
-          chmod 0755 ./forge
-          tar czf ../../../${{ matrix.archive }} ${{ matrix.artifact }} forge
-          cd ../../..
-          # sha256sum is GNU coreutils (Linux); macOS ships shasum instead.
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
-          else
-            shasum -a 256 ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
-          fi
-
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          EXPECTED_VERSION: forge-core ${{ needs.metadata.outputs.version }}
         run: |
-          # Copy the `forge.cmd` wrapper alongside the binary so a single
-          # archive exposes both names (see POSIX packaging comment above).
-          Copy-Item "distribution\forge.cmd" "target\${{ matrix.target }}\release\forge.cmd" -Force
-          Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.artifact }}", "target\${{ matrix.target }}\release\forge.cmd" -DestinationPath "${{ matrix.archive }}"
-          $hash = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${{ matrix.archive }}" | Out-File -Encoding ascii "${{ matrix.archive }}.sha256"
+          $binary = ".\target\${{ matrix.target }}\release\${{ matrix.artifact }}"
+          $actual = (& $binary --version).Trim()
+          if ($actual -ne $env:EXPECTED_VERSION) {
+            throw "CLI version mismatch: expected '$env:EXPECTED_VERSION', got '$actual'"
+          }
+          & $binary --help | Out-Null
+          & $binary validate --root .
 
-      # R-SCM.2: sign each archive with cosign keyless via GitHub OIDC.
-      # Produces a .sigstore bundle (signature + cert + Rekor entry) that
-      # users verify offline with `cosign verify-blob --bundle ...`.
-      #
-      # `shell: bash` is mandatory here: the command uses backslash line
-      # continuations (bash syntax), and the Windows runner default shell is
-      # PowerShell, which parses `--\` as a dangling unary operator and fails.
-      # Bash ships on all GitHub runners including windows-latest (via Git Bash).
-      - name: Sign archive (sigstore keyless)
+      - name: Build and verify deterministic release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/build-release-archive.py \
+            --repo-root . \
+            --binary "target/${{ matrix.target }}/release/${{ matrix.artifact }}" \
+            --binary-name "${{ matrix.artifact }}" \
+            --wrapper "${{ matrix.wrapper }}" \
+            --wrapper-name "${{ matrix.wrapper_name }}" \
+            --archive "${{ matrix.archive }}" \
+            --version "${{ needs.metadata.outputs.version }}" \
+            --source-date-epoch "${{ needs.metadata.outputs.source_date_epoch }}"
+          python scripts/check-release-archive.py \
+            --archive "${{ matrix.archive }}" \
+            --version "${{ needs.metadata.outputs.version }}" \
+            --binary-name "${{ matrix.artifact }}" \
+            --wrapper-name "${{ matrix.wrapper_name }}" \
+            --payload-manifest distribution/release-payload.txt \
+            --require-checksum
+
+      - name: Sign archive (Sigstore keyless)
         env:
           COSIGN_EXPERIMENTAL: "1"
         shell: bash
         run: |
+          set -euo pipefail
           cosign sign-blob --yes \
-            --bundle ${{ matrix.archive }}.sigstore \
-            ${{ matrix.archive }}
+            --bundle "${{ matrix.archive }}.sigstore" \
+            "${{ matrix.archive }}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload validated artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.archive }}
+          if-no-files-found: error
           path: |
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
@@ -179,70 +280,169 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    if: github.event_name == 'push'
+    needs: [metadata, build]
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve tag
-        id: tag
-        run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Checkout the validated immutable commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.metadata.outputs.commit_sha }}
+          persist-credentials: false
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: List release assets
-        run: ls -la release-assets/
-
-      # R-SCM.1: generate a CycloneDX SBOM from Cargo.lock. cargo-cyclonedx
-      # resolves the transitive dependency tree and emits a JSON BOM that
-      # downstream auditors can feed to dependency/vulnerability scanners
-      # (e.g. OWASP Dep-Check, Trivy, grype). One BOM covers all targets
-      # because all share the same Cargo.lock dependency set.
-      #
-      # `continue-on-error: true` on BOTH steps: the SBOM is supply-chain
-      # enrichment, not a release blocker. cargo-cyclonedx is a third-party
-      # tool whose CLI has broken across versions, and a metadata-generation
-      # failure must never prevent the signed binaries from shipping. The
-      # release publish step below globs `*.cdx.json` only if it exists, so a
-      # missing SBOM degrades gracefully.
-      #
-      # Version pin: cargo-cyclonedx 0.5.x removed the legacy `-p <pkg>` and
-      # `--output-pattern` flags (0.5.0, Mar 2024). The invocation below uses
-      # the 0.5.x surface: package discovery is automatic via `cargo metadata`,
-      # and `--override-filename` controls the output name. Pinning to 0.5.9
-      # (the release current as of 2026-03-19, MSRV 1.85) keeps this stable.
-      - name: Install cargo-cyclonedx
-        continue-on-error: true
-        run: cargo install cargo-cyclonedx --version 0.5.9 --locked --quiet || true
-
-      - name: Generate CycloneDX SBOM
-        continue-on-error: true
+      - name: Require the exact signed asset set
+        shell: bash
         run: |
-          # cargo-cyclonedx emits one BOM beside every workspace member's
-          # Cargo.toml. `--override-filename` is a stem and the selected format
-          # extension is appended, so use the CLI package BOM: it describes
-          # the actual released binary and its complete dependency graph.
-          cargo cyclonedx --format json --override-filename forge-core-${{ steps.tag.outputs.name }}.cdx
-          cp crates/forge-core-cli/forge-core-${{ steps.tag.outputs.name }}.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          archives = {
+              "forge-core-x86_64-linux.tar.gz",
+              "forge-core-aarch64-linux.tar.gz",
+              "forge-core-x86_64-macos.tar.gz",
+              "forge-core-aarch64-macos.tar.gz",
+              "forge-core-x86_64-windows.zip",
+          }
+          expected = archives | {f"{name}.sha256" for name in archives} | {
+              f"{name}.sigstore" for name in archives
+          }
+          root = Path("release-assets")
+          actual = {path.name for path in root.iterdir() if path.is_file()}
+          if actual != expected:
+              raise SystemExit(
+                  "release asset set mismatch\n"
+                  f"missing: {sorted(expected - actual)}\n"
+                  f"unexpected: {sorted(actual - expected)}"
+              )
+          empty = sorted(name for name in expected if (root / name).stat().st_size == 0)
+          if empty:
+              raise SystemExit(f"empty release assets: {empty}")
+          PY
+
+      - name: Re-verify archive manifests and checksums
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          for archive in \
+            forge-core-x86_64-linux.tar.gz \
+            forge-core-aarch64-linux.tar.gz \
+            forge-core-x86_64-macos.tar.gz \
+            forge-core-aarch64-macos.tar.gz
+          do
+            python scripts/check-release-archive.py \
+              --archive "release-assets/$archive" \
+              --version "$VERSION" \
+              --binary-name forge-core \
+              --wrapper-name forge \
+              --payload-manifest distribution/release-payload.txt \
+              --require-checksum
+          done
+          python scripts/check-release-archive.py \
+            --archive release-assets/forge-core-x86_64-windows.zip \
+            --version "$VERSION" \
+            --binary-name forge-core.exe \
+            --wrapper-name forge.cmd \
+            --payload-manifest distribution/release-payload.txt \
+            --require-checksum
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Verify every signature against this release workflow and tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}"
+          for archive in release-assets/*.tar.gz release-assets/*.zip
+          do
+            cosign verify-blob \
+              --bundle "${archive}.sigstore" \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "$archive"
+          done
+
+      - name: Reconfirm the tag still resolves to the validated commit
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          EXPECTED_SHA: ${{ needs.metadata.outputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          remote_refs="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"
+          resolved="$(printf '%s\n' "$remote_refs" | awk '$2 ~ /\^\{\}$/ {print $1; found=1} END {if (!found && NR == 1) print $1}')"
+          test -n "$resolved" && test "$resolved" = "$EXPECTED_SHA" || {
+            echo "release rejected: $RELEASE_TAG no longer resolves to $EXPECTED_SHA (got ${resolved:-missing})" >&2
+            exit 1
+          }
+
+      - name: Install pinned release Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+        with:
+          toolchain: 1.97.0
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked --quiet
+
+      - name: Generate and validate mandatory CycloneDX SBOM
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo cyclonedx \
+            --format json \
+            --manifest-path crates/forge-core-cli/Cargo.toml \
+            --override-filename "forge-core-$VERSION.cdx"
+          sbom="crates/forge-core-cli/forge-core-$VERSION.cdx.json"
+          test -s "$sbom" || {
+            echo "mandatory CycloneDX SBOM was not generated at $sbom" >&2
+            exit 1
+          }
+          python - "$sbom" "$VERSION" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          expected_version = sys.argv[2]
+          document = json.loads(path.read_text(encoding="utf-8"))
+          if document.get("bomFormat") != "CycloneDX":
+              raise SystemExit(f"{path}: bomFormat is not CycloneDX")
+          component = document.get("metadata", {}).get("component")
+          if not isinstance(component, dict):
+              raise SystemExit(f"{path}: metadata.component is missing")
+          if component.get("name") != "forge-core-cli":
+              raise SystemExit(
+                  f"{path}: expected forge-core-cli component, got {component.get('name')!r}"
+              )
+          if component.get("version") != expected_version:
+              raise SystemExit(
+                  f"{path}: expected version {expected_version!r}, got {component.get('version')!r}"
+              )
+          PY
+          cp "$sbom" "release-assets/forge-core-$VERSION.cdx.json"
 
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ steps.tag.outputs.name }}
-          name: ${{ steps.tag.outputs.name }}
+          tag_name: ${{ needs.metadata.outputs.tag }}
+          name: ${{ needs.metadata.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -250,80 +450,38 @@ jobs:
             release-assets/*.zip
             release-assets/*.sha256
             release-assets/*.sigstore
+            release-assets/*.cdx.json
           body: |
-            ## Forge Method Core ${{ steps.tag.outputs.name }}
+            ## Forge Method Core ${{ needs.metadata.outputs.tag }}
 
             ### Install
 
-            Download the asset for your platform, extract, and put the binary
-            on your `PATH`:
+            Download the asset for your platform, extract it, and put the
+            binary and wrapper on your `PATH`. Each archive also contains the
+            `start-forge` skill, selected adoption/operator documentation,
+            and an embedded `RELEASE-MANIFEST.json` with the SHA-256, size,
+            and mode of every payload file.
+
+            Verify the installed CLI:
 
             ```bash
-            # Linux / macOS
-            tar xzf forge-core-<arch>-<os>.tar.gz
-            install -m 0755 forge-core ~/.local/bin/
-
-            # Windows (PowerShell)
-            Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
-            # then add $env:LOCALAPPDATA\Programs\forge-core to your PATH
-            ```
-
-            Verify it landed on your PATH:
-
-            ```bash
+            forge-core --version
             forge-core validate --root .
             ```
 
-            See the [Quick Start](https://github.com/DanielCarva1/forge-method-core#quick-start)
-            section of the README for the first project init.
-
-            ### Supported hosts
-
-            `codex`, `cursor`, `claude`, `opencode`, `vscode`, `pidev`,
-            `forge_standalone`, `custom`. Run
-            `forge-core host-adapter-manifest --json` for the full per-command
-            authority boundary.
-
             ### Verification
 
-            Each asset ships with three siblings:
-
-            - `.sha256` — SHA-256 checksum (integrity)
-            - `.sigstore` — sigstore bundle (signature + certificate + Rekor entry)
-            - `forge-core-<version>.cdx.json` — CycloneDX SBOM (dependency inventory)
-
-            **Verify integrity** (proves the bytes were not tampered in transit):
+            Each platform asset has a checksum and Sigstore bundle. The
+            release also includes a mandatory CycloneDX SBOM.
 
             ```bash
             sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
-            ```
 
-            **Verify identity** (proves the asset was built by the release CI
-            and recorded in the public Rekor transparency log):
-
-            ```bash
             cosign verify-blob \
               --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
-              --certificate-identity-regexp 'https://github.com/DanielCarva1/forge-method-core/.github/' \
+              --certificate-identity 'https://github.com/DanielCarva1/forge-method-core/.github/workflows/release.yml@refs/tags/<tag>' \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               forge-core-<arch>-<os>.tar.gz
-            ```
 
-            **Audit dependencies** (CVE scan via grype/Trivy against the SBOM):
-
-            ```bash
             grype sbom:./forge-core-<version>.cdx.json
             ```
-
-      # Attach the SBOM separately, ONLY if cargo-cyclonedx produced one.
-      # The install + generate steps above are continue-on-error
-      # (cargo-cyclonedx is a third-party tool whose CLI has broken across
-      # versions), so this glob may match nothing. action-gh-release without
-      # fail_on_unmatched_files treats a no-match as "upload nothing", not an
-      # error — so the release ships without an SBOM rather than not shipping
-      # at all. The signed binaries are the product; the SBOM is enrichment.
-      - name: Attach SBOM if present
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.name }}
-          files: release-assets/*.cdx.json

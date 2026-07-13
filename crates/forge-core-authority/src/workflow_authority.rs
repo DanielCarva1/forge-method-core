@@ -25,12 +25,51 @@ use crate::principal_registry::{
 };
 
 const WORKFLOW_TOOL: &str = "workflow";
-const DECISION_ACTION: &str = "decision_resolve";
-const WAIVER_ACTION: &str = "waiver_authorize";
-const EVIDENCE_ACTION: &str = "evidence_authorize";
-const APPLICABILITY_ACTION: &str = "applicability_assess";
-const CAPABILITY_ACTION: &str = "capability_authorize";
-const SIGNAL_ACTION: &str = "signal_authorize";
+
+/// Closed workflow observation kinds that may be signed by an operator-owned
+/// credential bridge.
+///
+/// The serialized labels are intentionally shorter than the canonical action
+/// strings. Hosts select a semantic kind; Forge alone maps it to the exact
+/// action that the authority verifier binds into [`CanonicalIntent`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowAuthorizationKind {
+    Applicability,
+    Capability,
+    Decision,
+    Evidence,
+    Signal,
+    Waiver,
+}
+
+impl WorkflowAuthorizationKind {
+    /// Canonical action bound into the signed `workflow` intent.
+    #[must_use]
+    pub const fn canonical_action(self) -> &'static str {
+        match self {
+            Self::Applicability => "applicability_assess",
+            Self::Capability => "capability_authorize",
+            Self::Decision => "decision_resolve",
+            Self::Evidence => "evidence_authorize",
+            Self::Signal => "signal_authorize",
+            Self::Waiver => "waiver_authorize",
+        }
+    }
+}
+
+#[cfg(test)]
+const DECISION_ACTION: &str = WorkflowAuthorizationKind::Decision.canonical_action();
+#[cfg(test)]
+const WAIVER_ACTION: &str = WorkflowAuthorizationKind::Waiver.canonical_action();
+#[cfg(test)]
+const EVIDENCE_ACTION: &str = WorkflowAuthorizationKind::Evidence.canonical_action();
+#[cfg(test)]
+const APPLICABILITY_ACTION: &str = WorkflowAuthorizationKind::Applicability.canonical_action();
+#[cfg(test)]
+const CAPABILITY_ACTION: &str = WorkflowAuthorizationKind::Capability.canonical_action();
+#[cfg(test)]
+const SIGNAL_ACTION: &str = WorkflowAuthorizationKind::Signal.canonical_action();
 const DECISION_GRANT: &str = "workflow.decision.resolve";
 const WAIVER_GRANT: &str = "workflow.waiver.authorize";
 const EVIDENCE_HUMAN_GRANT: &str = "workflow.evidence.authorize_human";
@@ -769,7 +808,11 @@ impl AuthorizedPrincipalRegistry {
         now_unix: i64,
     ) -> Result<VerifiedWorkflowDecisionAuthorization, WorkflowAuthorityError> {
         validate_decision_request(&request)?;
-        let intent = workflow_intent(DECISION_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Decision.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(
@@ -817,7 +860,11 @@ impl AuthorizedPrincipalRegistry {
         now_unix: i64,
     ) -> Result<VerifiedWorkflowWaiverAuthorization, WorkflowAuthorityError> {
         validate_waiver_request(&request, now_unix)?;
-        let intent = workflow_intent(WAIVER_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Waiver.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(&principal, &[CallerRole::Human], "human role", WAIVER_GRANT)?;
@@ -867,7 +914,11 @@ impl AuthorizedPrincipalRegistry {
             crate::principal_registry::DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         )?;
         let (roles, role_description, grant) = evidence_authority(&request)?;
-        let intent = workflow_intent(EVIDENCE_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Evidence.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(&principal, roles, role_description, grant)?;
@@ -915,7 +966,11 @@ impl AuthorizedPrincipalRegistry {
             now_unix,
             crate::principal_registry::DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         )?;
-        let intent = workflow_intent(APPLICABILITY_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Applicability.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(
@@ -988,7 +1043,11 @@ impl AuthorizedPrincipalRegistry {
             now_unix,
             crate::principal_registry::DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         )?;
-        let intent = workflow_intent(SIGNAL_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Signal.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(
@@ -1020,7 +1079,11 @@ impl AuthorizedPrincipalRegistry {
             now_unix,
             crate::principal_registry::DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         )?;
-        let intent = workflow_intent(CAPABILITY_ACTION, &request, attestation)?;
+        let intent = workflow_intent(
+            WorkflowAuthorizationKind::Capability.canonical_action(),
+            &request,
+            attestation,
+        )?;
         let principal =
             authorize_with_default_policy(self, verifier, &intent, attestation, now_unix)?;
         require_role_grant(

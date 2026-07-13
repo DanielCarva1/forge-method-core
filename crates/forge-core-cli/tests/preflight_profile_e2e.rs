@@ -12,8 +12,11 @@
 //! Contract under test:
 //! - On a non-Rust project, cargo gates are `Skipped`, never `Failed`.
 //! - `--profile <name>` overrides detection.
-//! - A `.forge-method/preflight.yaml` document supplies the gate list.
-//! - `preflight init` writes the document for a freshly-detected profile.
+//! - A resolved sidecar profile (or standalone `.forge-preflight.yaml`)
+//!   supplies the gate list.
+//! - `preflight init` writes to resolved sidecar state for a linked consumer.
+//! - Standalone repositories use `.forge-preflight.yaml` without creating a
+//!   bootstrap-conflicting state directory.
 
 use forge_core_cli::preflight_cmd::{
     execute_builtin_gate, resolve_gate_specs, resolve_profile, GateOutcome, GateStatus,
@@ -136,11 +139,10 @@ fn profile_override_forces_rust_gates_even_without_cargo_toml() {
 
 #[test]
 fn profile_document_pinned_in_preflight_yaml_supplies_gate_list() {
-    // A pinned `.forge-method/preflight.yaml` with a custom gate list
+    // A pinned standalone `.forge-preflight.yaml` with a custom gate list
     // overrides the default gate set for the detected profile.
     let dir = tmp_project_dir("pinned");
-    let sidecar = dir.join(".forge-method");
-    std::fs::create_dir_all(&sidecar).unwrap();
+    let profile_file = dir.join(".forge-preflight.yaml");
 
     let doc = PreflightProfileDocument {
         schema_version: PREFLIGHT_PROFILE_SCHEMA_VERSION.to_string(),
@@ -152,7 +154,7 @@ fn profile_document_pinned_in_preflight_yaml_supplies_gate_list() {
         )],
     };
     let yaml = yaml_serde::to_string(&doc).unwrap();
-    std::fs::write(sidecar.join(PREFLIGHT_PROFILE_FILE_NAME), yaml).unwrap();
+    std::fs::write(profile_file, yaml).unwrap();
 
     let specs = resolve_gate_specs(&input_for(&dir), ProjectProfile::Generic);
     assert_eq!(specs.len(), 1);
@@ -175,12 +177,12 @@ fn preflight_init_writes_profile_document_for_detected_profile() {
     ];
     forge_core_cli::preflight_cmd::run_preflight_command(&args).expect("init should succeed");
 
-    let written =
-        std::fs::read_to_string(dir.join(".forge-method").join(PREFLIGHT_PROFILE_FILE_NAME))
-            .expect("preflight.yaml should exist after init");
+    let written = std::fs::read_to_string(dir.join(".forge-preflight.yaml"))
+        .expect(".forge-preflight.yaml should exist after init");
     let doc: PreflightProfileDocument = yaml_serde::from_str(&written).unwrap();
     assert_eq!(doc.profile, ProjectProfile::Rust);
     assert_eq!(doc.schema_version, PREFLIGHT_PROFILE_SCHEMA_VERSION);
+    assert!(!dir.join(".forge-method").exists());
     let names: Vec<&str> = doc.gates.iter().map(|g| g.name.as_str()).collect();
     assert_eq!(
         names,
@@ -193,6 +195,97 @@ fn preflight_init_writes_profile_document_for_detected_profile() {
             "regression_anchor"
         ]
     );
+}
+
+#[test]
+fn linked_consumer_preflight_init_writes_only_to_resolved_sidecar() {
+    let parent = tmp_project_dir("linked-init");
+    let app = parent.join("app");
+    let sidecar = parent.join("forge-app");
+    let state = sidecar.join(".forge-method");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(app.join("Cargo.toml"), "").unwrap();
+    std::fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .unwrap();
+
+    let args = vec![
+        "preflight".to_string(),
+        "init".to_string(),
+        "--root".to_string(),
+        app.to_string_lossy().into_owned(),
+    ];
+    forge_core_cli::preflight_cmd::run_preflight_command(&args).expect("init should succeed");
+
+    assert!(state.join(PREFLIGHT_PROFILE_FILE_NAME).is_file());
+    assert!(
+        !app.join(".forge-method").exists(),
+        "linked consumer must never receive local Forge state"
+    );
+    assert_eq!(resolve_profile(&input_for(&app)), ProjectProfile::Rust);
+    let specs = resolve_gate_specs(&input_for(&app), ProjectProfile::Rust);
+    assert_eq!(
+        specs.first().map(|gate| gate.name.as_str()),
+        Some("type_check")
+    );
+}
+
+#[test]
+fn invalid_project_link_never_falls_back_to_consumer_local_state() {
+    let app = tmp_project_dir("invalid-link");
+    std::fs::write(app.join(".forge-method.yaml"), "not: [valid").unwrap();
+    let args = vec![
+        "preflight".to_string(),
+        "init".to_string(),
+        "--root".to_string(),
+        app.to_string_lossy().into_owned(),
+    ];
+    let error = forge_core_cli::preflight_cmd::run_preflight_command(&args)
+        .expect_err("invalid Project Link must fail closed");
+    assert!(error.to_string().contains("invalid Project Link"));
+    assert!(!app.join(".forge-method").exists());
+    assert!(!app.join(".forge-preflight.yaml").exists());
+}
+
+#[test]
+fn missing_linked_sidecar_requires_complete_start_repair() {
+    let parent = tmp_project_dir("missing-sidecar");
+    let app = parent.join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .unwrap();
+    let args = vec![
+        "preflight".to_string(),
+        "init".to_string(),
+        "--root".to_string(),
+        app.to_string_lossy().into_owned(),
+    ];
+    let error = forge_core_cli::preflight_cmd::run_preflight_command(&args)
+        .expect_err("missing linked state must require start repair");
+    assert!(error.to_string().contains("forge-core start"));
+    assert!(!parent.join("forge-app").exists());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn malformed_existing_profile_fails_before_any_gate_runs() {
+    let app = tmp_project_dir("malformed-profile");
+    std::fs::write(app.join(".forge-preflight.yaml"), "schema_version: [").unwrap();
+    let args = vec![
+        "preflight".to_string(),
+        "--root".to_string(),
+        app.to_string_lossy().into_owned(),
+        "--json".to_string(),
+    ];
+    let error = forge_core_cli::preflight_cmd::run_preflight_command(&args)
+        .expect_err("malformed profile must fail closed");
+    assert!(error.to_string().contains("invalid profile document"));
 }
 
 #[test]

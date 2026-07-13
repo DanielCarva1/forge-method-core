@@ -1,6 +1,6 @@
-﻿# Domain Pack v0 neutral fixture corpus
+# Domain Pack v0 neutral fixture corpus
 
-This corpus demonstrates P6a's **read-only, candidate-only** composition contract. It is generic on purpose; the real game-development pack remains P6d work.
+This corpus demonstrates P6a's **read-only, candidate-only** composition contract. It remains generic on purpose. The later P6d game-development reference corpus lives at `docs/fixtures/domain-pack-reference-v0/`; neither corpus is automatically trusted or installed.
 
 ## Scenarios
 

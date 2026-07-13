@@ -1,0 +1,36 @@
+# Canonical non-binary payload for every Forge Method Core release archive.
+#
+# Paths are repository-relative and are preserved inside the archive. The
+# release builder rejects duplicates, symlinks, missing files, absolute paths,
+# and traversal. Keep this list intentionally small: these are the files a
+# user or host agent needs to adopt, operate, inspect, or fork Forge.
+
+skill/start-forge/SKILL.md
+README.md
+CONTEXT.md
+CHANGELOG.md
+LICENSE
+contracts/plan/agent-native-guidance-plan.yaml
+contracts/spec/operation-wide-transaction-v0.yaml
+contracts/spec/replay-protection-wal-v0.yaml
+contracts/spec/replay-external-anchor-v0.yaml
+contracts/spec/execution-trust-boundary-v0.yaml
+contracts/spec/execution-authority-handoff-v0.yaml
+contracts/spec/prepared-execution-transaction-v0.yaml
+contracts/spec/execution-provenance-commit-v0.yaml
+docs/README.md
+docs/getting-started.md
+docs/agent-integration.md
+docs/operator-guide.md
+docs/product-status.md
+docs/security-model.md
+docs/domain-packs.md
+docs/verification.md
+docs/architecture.md
+docs/forking.md
+docs/contributing.md
+docs/product-compliance-audit.md
+docs/generated/command-surface.md
+docs/generated/workspace-layout.md
+CONTRIBUTING.md
+SECURITY.md

@@ -3,7 +3,10 @@
 //! Runs every required gate for the project's profile and reports the combined
 //! status. The profile is auto-detected from the project root (Cargo.toml →
 //! rust, package.json → node, …) unless overridden by `--profile` or pinned by
-//! a `.forge-method/preflight.yaml` document written by `preflight init`.
+//! a sidecar `.forge-method/preflight.yaml` document written by
+//! `preflight init`. Linked consumer projects never receive a local state
+//! directory; standalone repositories use `.forge-preflight.yaml` without
+//! creating a directory that could later collide with Forge bootstrap.
 //!
 //! Built-in gates:
 //! - **Rust profile** runs the four cargo gates (`type_check`, `format`,
@@ -209,8 +212,8 @@ pub struct PreflightInput {
     /// Override the anchor count (default 122 for the forge repo).
     pub expected_anchor: usize,
     /// Force a profile instead of auto-detecting. `None` means auto-detect
-    /// from the project root (and read `.forge-method/preflight.yaml` if
-    /// present).
+    /// from the project root (and read the Project Link-resolved sidecar
+    /// profile, or `.forge-preflight.yaml` for standalone use, if present).
     pub profile_override: Option<crate::project_profile::ProjectProfile>,
 }
 
@@ -253,6 +256,7 @@ pub fn run_preflight_command(args: &[String]) -> Result<(), ExitError> {
     let tail = args.iter().skip(1).cloned().collect::<Vec<_>>();
     let input = parse_preflight_args(&tail)
         .map_err(|error| ExitError::usage(format!("{}: {error}", preflight_usage())))?;
+    validate_profile_configuration(&input.root)?;
     let report = run_preflight(&input);
     if input.json {
         let serialized =
@@ -362,8 +366,9 @@ pub fn run_preflight(input: &PreflightInput) -> PreflightReport {
         .unwrap_or_default();
 
     // Resolve the effective profile: explicit `--profile` flag wins, then the
-    // pinned `.forge-method/preflight.yaml`, then auto-detection from the
-    // project root. The resolved profile plus its gate set drive the run.
+    // pinned Project Link-resolved sidecar preflight document, then
+    // auto-detection from the project root. The resolved profile plus its gate
+    // set drive the run.
     let profile = resolve_profile(input);
     let specs = resolve_gate_specs(input, profile);
 
@@ -421,6 +426,12 @@ pub fn resolve_gate_specs(
             .map(|kind| crate::project_profile::GateSpec::builtin(*kind, GateRequirement::Required))
             .collect();
     }
+    // A forced profile is a complete operator override. Combining it with a
+    // persisted gate list authored for another profile would create a hybrid
+    // policy the caller did not request.
+    if input.profile_override.is_some() {
+        return profile.default_gates();
+    }
     if let Some(doc) = read_profile_document(&input.root) {
         if !doc.gates.is_empty() {
             return doc.gates;
@@ -429,12 +440,13 @@ pub fn resolve_gate_specs(
     profile.default_gates()
 }
 
-/// Read the profile document from `<root>/.forge-method/preflight.yaml`, if
-/// it exists. Returns `None` silently when the file is absent (the common
-/// case). A malformed file is also treated as `None` so that a bad profile
-/// degrades to auto-detection rather than failing the whole preflight.
+/// Read the profile document from the Project Link-resolved state root. A
+/// standalone repository without a Project Link uses
+/// `<root>/.forge-preflight.yaml`. Returns `None` silently when the file is
+/// absent. The public CLI validates an existing document first and fails closed
+/// on malformed content; this helper stays optional for pure profile selection.
 fn read_profile_document(root: &Path) -> Option<PreflightProfileDocument> {
-    let path = root.join(".forge-method").join(PREFLIGHT_PROFILE_FILE_NAME);
+    let path = preflight_profile_path(root).ok()?;
     let raw = std::fs::read_to_string(&path).ok()?;
     let raw = raw.strip_prefix('\u{feff}').unwrap_or(&raw);
     let doc: PreflightProfileDocument = yaml_serde::from_str(raw).ok()?;
@@ -443,6 +455,58 @@ fn read_profile_document(root: &Path) -> Option<PreflightProfileDocument> {
         return None;
     }
     Some(doc)
+}
+
+/// Resolve the durable preflight profile location without creating anything.
+/// A valid Project Link is authoritative. The local fallback exists only for
+/// standalone preflight use before Forge project bootstrap.
+fn preflight_profile_path(root: &Path) -> Result<PathBuf, ExitError> {
+    match crate::project_cmd::resolve_project(root) {
+        Ok(project) if project.state_exists => {
+            Ok(PathBuf::from(project.state_root).join(PREFLIGHT_PROFILE_FILE_NAME))
+        }
+        Ok(project) => Err(ExitError::env_config(format!(
+            "preflight: Project Link state root {} is missing; run forge-core start to repair the complete sidecar before preflight",
+            project.state_root
+        ))),
+        Err(crate::project_cmd::ProjectResolveError::MissingProjectLink { .. }) => {
+            Ok(root.join(".forge-preflight.yaml"))
+        }
+        Err(error) => Err(ExitError::env_config(format!(
+            "preflight: invalid Project Link; refusing local state fallback: {error}"
+        ))),
+    }
+}
+
+/// Fail closed at the CLI boundary when an existing persisted profile is not
+/// the exact current closed document. Programmatic profile helpers remain pure
+/// and are called only after this validation by the public command.
+fn validate_profile_configuration(root: &Path) -> Result<(), ExitError> {
+    let path = preflight_profile_path(root)?;
+    if !path.exists() {
+        return Ok(());
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        ExitError::env_config(format!(
+            "preflight: cannot read {}: {error}",
+            path.display()
+        ))
+    })?;
+    let raw = raw.strip_prefix('\u{feff}').unwrap_or(&raw);
+    let document: PreflightProfileDocument = yaml_serde::from_str(raw).map_err(|error| {
+        ExitError::env_config(format!(
+            "preflight: invalid profile document {}: {error}",
+            path.display()
+        ))
+    })?;
+    if document.schema_version != PREFLIGHT_PROFILE_SCHEMA_VERSION {
+        return Err(ExitError::env_config(format!(
+            "preflight: unsupported profile schema '{}' in {}",
+            document.schema_version,
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 /// Run a single [`GateSpec`] (built-in or custom) and produce a result.
@@ -684,11 +748,11 @@ fn print_human_summary(report: &PreflightReport) {
     }
 }
 
-/// Entry point for `forge-core preflight init`. Detects the project profile
-/// and writes `.forge-method/preflight.yaml` with the default gate set for
-/// that profile. The agent calls this during onboarding so subsequent
-/// `preflight` runs are deterministic; a human never needs to edit anything
-/// by hand for the common case.
+/// Entry point for `forge-core preflight init`. Detects the project profile and
+/// writes the default gate set to the Project Link-resolved sidecar. A
+/// standalone repository without a Project Link uses `.forge-preflight.yaml`.
+/// The agent calls this during onboarding so subsequent `preflight`
+/// runs are deterministic; a human never needs to edit anything by hand.
 ///
 /// # Errors
 ///
@@ -744,14 +808,19 @@ pub fn run_preflight_init_command(args: &[String]) -> Result<(), ExitError> {
     let profile = profile_override
         .unwrap_or_else(|| crate::project_profile::ProjectProfile::detect(&canonical));
     let doc = PreflightProfileDocument::for_detected_profile(profile);
-    let sidecar = canonical.join(".forge-method");
-    std::fs::create_dir_all(&sidecar).map_err(|e| {
+    let path = preflight_profile_path(&canonical)?;
+    let profile_root = path.parent().ok_or_else(|| {
         ExitError::failed(format!(
-            "preflight init: cannot create {}: {e}",
-            sidecar.display()
+            "preflight init: resolved profile path {} has no parent",
+            path.display()
         ))
     })?;
-    let path = sidecar.join(PREFLIGHT_PROFILE_FILE_NAME);
+    std::fs::create_dir_all(profile_root).map_err(|e| {
+        ExitError::failed(format!(
+            "preflight init: cannot create {}: {e}",
+            profile_root.display()
+        ))
+    })?;
     let yaml = yaml_serde::to_string(&doc)
         .map_err(|e| ExitError::failed(format!("preflight init: cannot serialize profile: {e}")))?;
     std::fs::write(&path, yaml).map_err(|e| {

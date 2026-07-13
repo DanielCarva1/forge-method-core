@@ -41,6 +41,19 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
+    if args.get(1).is_some_and(|value| value == "credential") {
+        let want_json = wants_json(args);
+        return match crate::workflow_credential_cmd::run(&args[2..]) {
+            Ok(()) => Ok(()),
+            Err(error) if want_json => emit_failure(
+                "workflow.credential",
+                credential_exit_reason(&error),
+                error.message().to_owned(),
+                true,
+            ),
+            Err(error) => Err(error),
+        };
+    }
     if args
         .get(1)
         .is_some_and(|value| matches!(value.as_str(), "--help" | "-h"))
@@ -131,6 +144,17 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             error.to_string(),
             parsed.want_json,
         ),
+    }
+}
+
+fn credential_exit_reason(error: &ExitError) -> ExitReason {
+    match error {
+        ExitError::Usage { .. } | ExitError::InvalidValue { .. } => {
+            ExitReason::InvalidDecisionShape
+        }
+        ExitError::Conflict { .. } => ExitReason::Conflict,
+        ExitError::EnvConfig { .. } => ExitReason::EnvConfig,
+        ExitError::Failed { .. } | ExitError::WithCode { .. } => ExitReason::RejectedByGate,
     }
 }
 
@@ -354,10 +378,18 @@ fn authorization_material(
 ) -> Result<(AuthorizedPrincipalRegistry, AttestationInput), String> {
     let registry_path = adapter.trusted_principal_registry_path();
     let registry_raw = fs::read_to_string(&registry_path).map_err(|error| {
-        format!(
-            "read principal registry {}: {error}",
-            registry_path.display()
-        )
+        if error.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "workflow authority is not provisioned at {}; use `forge-core workflow credential provision --root {} --credential-id <id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> --json` before recording an authority-bearing observation",
+                registry_path.display(),
+                adapter.binding().project_root.display()
+            )
+        } else {
+            format!(
+                "read principal registry {}: {error}",
+                registry_path.display()
+            )
+        }
     })?;
     let registry = AuthorizedPrincipalRegistry::from_yaml_str(&registry_raw)
         .map_err(|error| format!("invalid principal registry: {error}"))?;

@@ -10,6 +10,17 @@ any host agent (Codex, Cursor, Claude, OpenCode, pi.dev, VS Code, or the future
 Forge app) calls through its shell. Bring your own model — or several models, run
 by several different people. Forge keeps them coordinated.
 
+## Documentation paths
+
+- **Human staying in chat:** [Getting started](docs/getting-started.md)
+- **Agent or host integration:** [Agent integration](docs/agent-integration.md)
+- **Installation and runtime operations:** [Operator guide](docs/operator-guide.md)
+- **Domain Pack author/operator:** [Domain Packs](docs/domain-packs.md)
+- **Contributor:** [Contributing](CONTRIBUTING.md) and [verification](docs/verification.md)
+- **Fork maintainer:** [Forking Forge](docs/forking.md)
+- **Security:** [Security policy](SECURITY.md) and [security model](docs/security-model.md)
+- **Complete index and current distribution status:** [Documentation index](docs/README.md)
+
 ### How to start (and when to start again)
 
 The single entry point is `forge-core start`. Run it once per chat/session on
@@ -379,14 +390,23 @@ loop and the fast+quality lane:
 
 ## Install
 
-Pick one option. The download path needs no Rust toolchain; the build path is
-for contributors and anyone who wants to compile from source.
+Choose by required feature level, not convenience alone. The source workspace
+currently declares `0.10.0` and contains P5/P6 plus the first P7 productization
+slice. The latest published prebuilt
+release can lag source; at this documentation checkpoint it is `v0.4.0`. Verify
+the selected tag/commit and `forge-core --version`. Use the source path when you
+need a checkpoint that has not been tagged.
 
-### Option 1 — download a prebuilt binary (recommended)
+### Option 1 — download a tagged prebuilt binary
 
 Prebuilt binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon),
-and Windows are published on every tagged release at
-<https://github.com/DanielCarva1/forge-method-core/releases>.
+and Windows are published for tagged releases at
+<https://github.com/DanielCarva1/forge-method-core/releases>. The published
+`v0.4.0` archives contain only the executable and platform wrapper. The current
+source release design adds a checked `RELEASE-MANIFEST.json`, the canonical
+`start-forge` skill, and adoption/fork/security guides to future archives; verify
+the manifest of the selected release rather than assuming old assets contain
+them. Source `contracts/` and fixture corpora remain source-checkout material.
 
 ```bash
 # Linux / macOS
@@ -399,10 +419,10 @@ Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-co
 ```
 
 Each archive contains **both** `forge-core` (the binary) and `forge` (a thin
-wrapper that delegates to `forge-core` in the same directory). The `forge`
-wrapper exists so the `start-forge` skill and other tooling that look up
-`forge` on PATH find it without any manual aliasing. You can use either name
-interchangeably; `forge-core` is always the real binary.
+wrapper that delegates to `forge-core` in the same directory). The wrapper is
+a convenience alias for hosts or tooling that invoke `forge`; the canonical
+`start-forge` skill calls the real `forge-core` binary. You can use either name
+interchangeably; `forge-core` remains the authority-bearing executable.
 
 Verify it landed on your PATH:
 
@@ -414,14 +434,16 @@ forge validate --root .
 # same result — `forge` just delegates to `forge-core`
 ```
 
-Every release asset ships with three siblings so the supply chain is auditable
-end-to-end:
+Each binary archive ships with two verification siblings:
 
-- `.sha256` — SHA-256 checksum (integrity)
-- `.sigstore` — sigstore bundle: signature + Fulcio certificate + Rekor
-  transparency-log entry (proves the asset was built by the release CI)
-- `forge-core-<version>.cdx.json` — CycloneDX SBOM (transitive dependency
-  inventory for CVE scanning)
+- `.sha256` — SHA-256 checksum (integrity);
+- `.sigstore` — Sigstore bundle with signature, Fulcio certificate, and Rekor
+  transparency-log entry.
+
+Historical releases may omit an SBOM. The hardened source release workflow
+requires one validated release-level `forge-core-<version>.cdx.json` CycloneDX
+SBOM before publication; it is shared by the platform archives rather than a
+separate sibling generated for each binary.
 
 **Verify integrity** (proves the bytes were not tampered in transit):
 
@@ -440,8 +462,9 @@ cosign verify-blob \
   forge-core-<arch>-<os>.tar.gz
 ```
 
-**Audit dependencies** (CVE scan via [grype](https://github.com/anchore/grype)
-or Trivy against the SBOM):
+**Audit dependencies** when the selected release includes its SBOM (the
+hardened source workflow requires it; older releases may not) with, for example,
+[grype](https://github.com/anchore/grype) or Trivy:
 
 ```bash
 grype sbom:./forge-core-<version>.cdx.json
@@ -488,23 +511,34 @@ release versions.
 
 ### What you get
 
-A single binary, `forge-core`, plus the `contracts/` tree (the catalog, schemas,
-and example claims). The binary is self-contained — no runtime, no daemon, no
-network.
+Every tagged archive contains the `forge-core` executable plus its thin
+platform wrapper. Starting with the current source release design, new archives
+also carry a checked `RELEASE-MANIFEST.json`, the canonical `start-forge` skill,
+and the adoption/operation/fork/security guides listed by
+`distribution/release-payload.txt`; older releases such as `v0.4.0` do not. A
+source checkout additionally contains the full `contracts/` and fixture trees.
+Ordinary consumers do not need copied contracts because shared catalog/contract
+material is embedded in the binary. Forge ships no model, daemon, or hosted
+runtime.
 
 ---
 
 ## Quick start
 
-### Initialize a consumer project
+### Start a consumer project
 
-From the repo that should be governed by Forge, run:
+The normal entry point is run by the host agent once per chat:
 
 ```bash
-forge-core project init --root <repo>
+forge-core start --root <repo> --json
 ```
 
-The command creates the consumer pointer and sibling sidecar state root:
+On a fresh repo, `start` creates the consumer pointer and sibling sidecar state
+root, seeds bootstrap compatibility state, and returns structured argv for
+workflow initialization. `project init` remains an advanced, idempotent
+initialization/migration surface; it is not a second required onboarding step.
+
+The resulting layout is:
 
 ```txt
 <parent>/
@@ -565,10 +599,10 @@ state_root: ../forge-my-project/.forge-method
 
 Acceptance rules for consumer project links:
 
-- Prefer `forge-core project init --root <repo>` for first use; hand-written
+- Prefer `forge-core start --root <repo> --json` for first use; hand-written
   links are for review, fixtures, and migrations.
-- `project init` is idempotent for an existing link that resolves to the same
-  sidecar/state root.
+- `project init` is an advanced surface and remains idempotent for an existing
+  link that resolves to the same sidecar/state root.
 - `project init` fails closed on a conflicting existing link or an unsafe
   consumer-local state root such as `<consumer>/.forge-method`.
 - `state_root` must resolve under `sidecar_root` and end in `.forge-method`;
@@ -1465,37 +1499,17 @@ forge-core preflight --profile generic  # force a profile
 forge-core preflight --json             # machine-readable report
 ```
 
-**Custom gates.** To encode project-specific checks (API contract test, QA
-package validator, report linter, secret scan, fixture/data-safety validator,
-suite dry-run, …), run `forge-core preflight init` once — it writes
-`.forge-method/preflight.yaml` for the detected profile — then add shell-command
-gates. A gate's verdict is its exit code (0 = pass, non-zero = fail), mirroring
-how `pre-commit`'s `language: system` hooks and CI runners work:
+**Custom profile storage.** For a valid linked consumer, `preflight init`
+resolves the Project Link and writes `preflight.yaml` inside the sibling state
+root; it must not create `<consumer>/.forge-method/`. A standalone repository
+without a Project Link uses `<repo>/.forge-preflight.yaml`, avoiding a directory
+that would later collide with normal Forge bootstrap.
+`preflight` can also auto-detect and run without a profile document.
 
-```yaml
-# .forge-method/preflight.yaml
-schema_version: forge_preflight_profile_v1
-profile: generic
-gates:
-  - name: validate
-    command: []
-    requirement: required
-  - name: api_contract_test
-    command: ["npx", "my-api-cli", "test", "--suite", "contracts"]
-    requirement: required
-  - name: qa_package_validate
-    command: ["python", "scripts/qa_validate.py"]
-    requirement: required
-  - name: secret_scan
-    command: ["trufflehog", "filesystem", "."]
-    requirement: optional
-```
-
-`forge-core preflight init [--root <path>] [--profile <name>]` writes this
-file for the detected (or forced) profile with the built-in defaults; the
-agent calls it during onboarding. A human never needs to edit anything by
-hand for the common case — the file exists so projects can add their own
-gates.
+This sidecar behavior is newer than the last tagged prebuilt release. Operators
+must verify `forge-core --version` and must not use an older binary's
+consumer-local output as evidence that local runtime state is supported. See the
+[operator guide](docs/operator-guide.md#preflight-profile-storage).
 
 ---
 
@@ -1619,7 +1633,7 @@ gates.
   exact signing, readiness, generated config, and an official `rmcp` two-effect
   atomic sidecar proof. Saga and hostile-user isolation remain intentionally absent.
 
-**Not yet (roadmap)**
+**Additional shipped foundations and boundaries**
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
@@ -1632,7 +1646,7 @@ gates.
   correctness spine for rotation landed with the v1.1 self-healing batch.)
 - **Product-ready bootstrap proof** — ✅ Proven end-to-end. A fresh consumer
   repo (`git init` + README, no `contracts/` tree) runs the full flow:
-  `forge-core start` → `project init` → `project resolve` → `claim acquire` →
+  `forge-core start` (creates the link/sidecar) → `project resolve` → `claim acquire` →
   `claim check-write` (owner allowed, intruder blocked) → `claim release` →
   `validate` (passes clean, 0 diagnostics) → `execute-operation` (resolves).
   Shared contract definitions are served from the binary (embedded), so a
@@ -1706,13 +1720,14 @@ Other top-level authority surfaces:
   and delivery artifacts.
 - `contracts/claims/` — claim fixtures and schemas.
 - `skill/start-forge/` — single-command bootstrap skill (run once per chat).
-- `docs/` — test fixtures and generated layout/command references.
+- `docs/` — audience guides, security/architecture documentation, test fixtures,
+  and generated layout/command references.
 
-The authority is always the `contracts/` tree plus the running `forge-core`
-binary. Historical research digests, agent session journals, milestone plans,
-and the legacy forensic reference that motivated the Rust migration live in the
-sibling **[Forge-method-archive](../Forge-method-archive)** repository — they
-are not runtime authority.
+Executable authority comes from the running `forge-core`, its admitted embedded
+release material, and valid project/operator state—not from explanatory prose.
+The source `contracts/` tree defines and tests accepted wire material. Historical
+research digests and the predecessor Python archive are not part of this checkout
+and are never a runtime fallback.
 
 ## License
 
@@ -1720,9 +1735,10 @@ Forge Method Core is licensed under the [Apache License, Version 2.0](LICENSE).
 
 This license was chosen (over MIT) for its explicit patent grant
 (Section 3), which protects both contributors and users from patent
-litigation. See [NOTICE](NOTICE) for any third-party notices, and the
+litigation. See the
 [Apache 2.0 summary](https://choosealicense.com/licenses/apache-2.0/)
-for a plain-language overview.
+for a plain-language overview. This checkout does not currently contain a
+separate `NOTICE` file.
 
 ---
 

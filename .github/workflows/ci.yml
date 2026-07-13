@@ -11,18 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
         with:
           components: rustfmt, clippy
 
       - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Check generated workspace layout
         run: python scripts/generate-workspace-layout.py --check
+
+      - name: Check local documentation links
+        run: python scripts/check-doc-links.py
 
       - name: Check generated command surface docs
         run: cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
@@ -72,8 +75,8 @@ jobs:
       # clippy pedantic runs as `-D` (deny). Adding new pedantic warnings will
       # fail CI, which is intentional: each new lint must be either fixed or
       # accompanied by a documented #[allow] with a justification comment.
-      - name: Clippy (pedantic, deny)
-        run: cargo clippy --workspace --all-targets -- -D clippy::pedantic
+      - name: Clippy (pedantic, deny, including expensive-journey code)
+        run: cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic
 
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
@@ -118,7 +121,7 @@ jobs:
           PY
 
   platform:
-    name: ${{ matrix.os }} cargo all-targets
+    name: ${{ matrix.os }} platform gate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -126,16 +129,41 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
 
       - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Type-check workspace all targets
         run: cargo check --workspace --all-targets
 
+      - name: Type-check expensive journey on Windows
+        if: runner.os == 'Windows'
+        run: cargo check -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e
+
       - name: Test workspace
         run: cargo test --workspace
+
+  expensive-journey:
+    name: Linux P6d reference journey
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # This single test is the protocol-level reference journey. It is kept
+      # out of the Linux/Windows platform matrix because duplicating it added
+      # roughly an hour to every checkpoint without adding platform-specific
+      # evidence. Platform jobs still compile every target and run every
+      # non-expensive workspace test on both operating systems.
+      - name: Run expensive P6d reference journey once
+        run: cargo test -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e p6d_workflow_journey::p6d_reference_pack_real_journey -- --exact

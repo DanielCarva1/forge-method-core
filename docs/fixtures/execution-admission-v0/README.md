@@ -13,6 +13,7 @@ read-only/offline commands, a complete and current claim/gate snapshot, an
 Assurance Case ready for execution, an authorized principal registry result, a
 fresh reserved nonce, and verified WAL lock/recovery/commit guarantees.
 
-P4a is a read-only policy decision point. These fixtures do not claim that the
-MCP Adapter already produces trusted observations or that the kernel already
-enforces the verdict. That enforcement is the next checkpoint.
+P4a is a read-only policy decision point. These fixtures prove only that
+decision boundary; they do not by themselves prove runtime enforcement. Later
+P4b trusted MCP/kernel suites provide the separate observation, preparation,
+commit, replay, and recovery evidence.

@@ -23,6 +23,7 @@ use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
 #[path = "domain_pack_cli_e2e/p6d_workflow_journey.rs"]
+#[cfg(feature = "expensive-p6d-e2e")]
 mod p6d_workflow_journey;
 
 fn repo_root() -> PathBuf {

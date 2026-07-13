@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Note on version history: the Rust core is a clean rebuild of an earlier
 > Python runtime that lived in a sibling archive repo. The legacy `v1.x`–`v2.x`
 > git tags belong to that abandoned Python Forge and are **not** ancestors of
-> this repo's history. Only `v0.1.0` and `v0.2.0` are reachable from `master`
+> this repo's history. Rust tags `v0.1.0` through `v0.4.0` are reachable from `master`
 > here. This CHANGELOG tracks the Rust core only.
 
 ---
@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P7 productization foundation (`0.10.0`).** Added Project Link-derived workflow
+  credential provision, rotation, revocation, redacted status, and exact typed
+  request signing for closed human/agent/runtime profiles without private-key
+  output; a public-CLI E2E proves the lifecycle without constructing keys or
+  registries in test code. Signing now rejects semantically invalid or
+  out-of-profile requests, credential lifecycle writes are serialized, and
+  existing path aliases fail closed. This remains a cooperative configured-
+  identity proxy, not proof of human presence; the external host/operator
+  approval broker remains P7a.2. Release packaging now checks exact tag/workspace/CLI
+  identity and prior CI, creates deterministic self-describing adoption
+  archives, preserves Sigstore signing, and requires a validated release-level
+  CycloneDX SBOM. CI isolates the expensive P6d reference protocol journey to
+  one Linux job while Windows still compiles it, and linked preflight profiles
+  now live only in resolved sidecar state with invalid links/configuration
+  failing closed. Release/CI actions, the release toolchain, and `cross` are
+  pinned; publish jobs revalidate the immutable commit, exact tag, archive
+  signatures, checksums, payload manifest, and SBOM component/version.
 - **P6d governed reference pack and effective workflow epochs (`0.9.0`).** The
   real `forge.reference/game-development` pack now proves that novel-domain
   governance can remain typed pack data with no game-specific Rust branch. Its
@@ -453,5 +470,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Versioning & release artifact policy
 
 - Workspace version lives in `Cargo.toml`; git tags `v0.x.y` mark releases.
-- Each release publishes provenance artifacts: `.sha256`, `.sigstore`, `.cdx.json` (SBOM) per binary asset, verifiable through the host-adapter supply-chain surface (sigstore / Rekor / Fulcio / SCT / OCSP / CRL / TUF).
+- Each binary archive publishes `.sha256` and `.sigstore` verification artifacts. The hardened source release workflow now blocks publication unless one validated release-level `.cdx.json` SBOM is produced; historical releases may omit it. These artifacts are verifiable through the host-adapter supply-chain surface (Sigstore / Rekor / Fulcio / SCT / OCSP / CRL / TUF).
 - Legacy `v1.x`–`v2.x` tags are **out of scope** — they belong to the predecessor Python runtime in the sibling archive repo and are not ancestors of this history.

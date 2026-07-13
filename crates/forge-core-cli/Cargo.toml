@@ -11,6 +11,12 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = []
+# The P6d public-journey protocol proof takes tens of minutes and is intentionally
+# scheduled once in CI instead of being duplicated in every platform matrix job.
+expensive-p6d-e2e = []
+
 [[bin]]
 name = "forge-core"
 path = "src/main.rs"

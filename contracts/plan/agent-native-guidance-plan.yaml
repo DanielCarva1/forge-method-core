@@ -56,7 +56,7 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.9.0"
+    version: "0.10.0"
     publication_state: "source_pullable"
     minimum_consumer_version: "0.6.0"
     guide_payload_schema: "0.2"
@@ -65,7 +65,8 @@ delivery_strategy:
     domain_pack_learning_schema: "0.3"
     workflow_release_identity: "0.4.0"
     boundary: >-
-      Package SemVer identifies the pullable P6d Domain Pack ecosystem checkpoint.
+      Package SemVer identifies the pullable P7 productization checkpoint built
+      on the P6d Domain Pack ecosystem.
       It does not rewrite the frozen five-release workflow-governance history;
       lifecycle, reviewed-learning, and effective-epoch authority remain opaque,
       monotonic, project-bound, and operator-rooted. The universal core release
@@ -673,6 +674,7 @@ phases:
 
   - id: "P6-domain-pack-ecosystem"
     status: "completed"
+    product_claim_status: "protocol_proven_public_journey_not_yet_proven"
     outcome: "Novel domains extend Forge through governed knowledge and evaluators rather than core-specific scripts."
     scope:
       - "pack manifest, version, provenance, conflicts, and compatibility"
@@ -774,6 +776,7 @@ phases:
       - id: "P6d-reference-pack-and-novel-domain-proof"
         size: "large"
         status: "completed"
+        product_claim_status: "architecture_e2e_only"
         depends_on: ["P6c-learning-promotion-and-reviewed-registry"]
         outcome: >-
           A real reference pack proves that Forge can guide an initially ignorant
@@ -801,9 +804,170 @@ phases:
           - "remove-last and rollback-to-empty remain typed degraded generations with exact explicit gaps; core release upgrade requires an explicit Domain Pack rebase"
         publication: "one pullable P6 ecosystem completion checkpoint after full workspace gates"
 
-first_executable_slice:
-  name: "unknown-unknowns-assurance-foundation"
-  current_done:
+  - id: "P7-agent-native-productization"
+    status: "in_progress"
+    outcome: >-
+      Close the gap between the proven P6 protocol and a public, chat-only
+      product journey that a fallible agent can operate without private Rust
+      fixtures, hand-authored authority JSON, or prior domain expertise.
+    audit_basis:
+      - "P6d proves kernel, authority, lifecycle, recovery, and fail-closed composition, but its harness privately creates six keys, registries, requests, attestations, and evidence."
+      - "A fresh public installation can now provision and use typed workflow credentials, but workflow next still does not generate the exact request/action packet or perform one-call sign-and-authorize."
+      - "The reference Domain Pack is a source fixture rather than a discoverable reviewed package in a released registry."
+      - "A core release upgrade is intentionally blocked by an active Domain Pack generation, but no public rebase transaction exists."
+      - "Package 0.10.0 is source-pullable while the latest prebuilt release remains 0.4.0."
+    delivery_cadence:
+      slice_size: "medium_to_large"
+      focused_gate_rule: >-
+        During a slice run formatting, compilation, and only directly affected
+        unit/integration tests. Run the expensive full workspace and public
+        consumer journey once at the cumulative checkpoint, not after every edit.
+      publication_rule: >-
+        Land coherent pullable commits. Publish a prebuilt release only after
+        tag, source, binary, archive manifest, signatures, SBOM, and clean-install
+        smoke evidence all identify the same version.
+    slices:
+      - id: "P7a-workflow-authority-bridge"
+        status: "in_progress"
+        size: "large"
+        outcome: >-
+          A public binary can provision, rotate, revoke, inspect, and use
+          operator-owned workflow credentials without emitting private keys or
+          requiring a test harness to manufacture attestations.
+        exit:
+          - "credential paths are derived from the Project Link and remain outside project and Forge state roots"
+          - "closed human, agent/reviewer, and runtime profiles receive only their role-compatible workflow grants"
+          - "human, independent-reviewer, and runtime authority crosses a host/operator approval boundary outside the governed agent process"
+          - "request kind selects the canonical action; callers cannot sign a mismatched generic payload"
+          - "a clean-project E2E uses only public CLI commands and no SigningKey or registry file writes in test code"
+          - "missing authority produces an actionable setup response rather than an opaque file-not-found error"
+        completed_subslices:
+          - id: "P7a.1-public-credential-lifecycle-and-typed-signing"
+            delivers:
+              - "Project Link-derived fixed registry and secret paths outside project/state roots"
+              - "closed human, agent/reviewer, and runtime profiles with role-compatible grants"
+              - "OS-random provision, rotation, revocation, redacted status, and exact typed-kind signing"
+              - "public CLI E2E with no SigningKey construction or registry writes in test code"
+            boundary: >-
+              Exact request generation, one-call sign-and-authorize, and
+              authority-setup guidance from workflow next remain P7a.2. The
+              local signer is a cooperative configured-identity proxy, not
+              proof of human presence or reviewer/runtime independence; a
+              host/operator approval broker also remains P7a.2.
+      - id: "P7b-unified-durable-assurance-case"
+        status: "planned"
+        size: "large"
+        depends_on: ["P7a-workflow-authority-bridge"]
+        outcome: >-
+          Conversation intent, universal assurance lenses, epistemic gaps,
+          competence acquisition, claims, and representative-slice requirements
+          become one durable governed state that workflow next and replacement
+          agents can reconstruct.
+        exit:
+          - "a fresh project records the human intent through a public high-level action without human YAML or JSON work"
+          - "unknown universal lenses block optimistic progress and generate bounded research or evaluator actions"
+          - "host/model proposals remain non-authoritative until admitted through typed observations"
+          - "replacement agents recover the exact intent, assurance gaps, evidence bindings, and next action"
+      - id: "P7c-domain-demand-and-pack-acquisition"
+        status: "planned"
+        size: "large"
+        depends_on: ["P7b-unified-durable-assurance-case"]
+        outcome: >-
+          Material domain requirements derived from intent can be matched to a
+          signed registry and resolved through agent-facing search, explain, and
+          coordinate-based lifecycle commands without prior pack-name knowledge.
+        exit:
+          - "an intent to build a game yields an explicit uncovered-domain gap before generic progress can hide it"
+          - "the reviewed reference pack is a real versioned package available to a clean release binary"
+          - "trust remains an explicit human/operator decision in chat and is never inferred from recommendation"
+          - "install, upgrade, rollback, and remove reuse the P6 TCB without caller-authored lifecycle internals"
+          - "no game-specific identifier or branch exists in production Rust"
+      - id: "P7d-core-domain-pack-rebase"
+        status: "planned"
+        size: "large"
+        depends_on: ["P7c-domain-demand-and-pack-acquisition"]
+        outcome: >-
+          Projects with active or degraded Domain Pack generations can move to
+          an adjacent admitted core release through an explicit compatible,
+          crash-recoverable, CAS-bound rebase transaction.
+        exit:
+          - "preflight explains exact compatibility and semantic changes before mutation"
+          - "active, upgraded, rolled-back, and degraded-empty generations can rebase or fail with actionable gaps"
+          - "recovery resolves to the exact old or new core/pack pair and never a mixed authority epoch"
+          - "release-status returns the exact rebase argv when rebase is required"
+      - id: "P7e-release-and-distribution-correctness"
+        status: "implemented_pending_cumulative_gate_and_tag"
+        size: "medium_to_large"
+        outcome: >-
+          Source, tag, binary, archive contents, signatures, SBOM, skill, docs,
+          and adoption claims are one reproducible release identity.
+        exit:
+          - "workflow_dispatch checks out and verifies the requested tag instead of relabeling branch bytes"
+          - "tag, Cargo workspace version, and binary version must match"
+          - "the archive has a tested manifest containing the executable, wrapper, start skill, and adoption documentation"
+          - "SBOM guarantees and documentation describe exactly the enforced release behavior"
+          - "a clean install reaches workflow next using only release assets"
+      - id: "P7f-real-host-and-mediated-mutation-proof"
+        status: "planned"
+        size: "large"
+        depends_on: ["P7a-workflow-authority-bridge", "P7c-domain-demand-and-pack-acquisition"]
+        outcome: >-
+          At least one real host uses the same public interface as users, and
+          every mutation described as governed is visibly mediated by Forge
+          claims, gates, verified principal, and receipts.
+        exit:
+          - "a real host transcript starts from one human message and uses no private test helpers"
+          - "direct editor or shell writes are never represented as governed Forge mutations"
+          - "concurrent sessions conflict before mediated writes and share the same verified principal model"
+          - "a replacement chat session resumes and completes through public interfaces"
+      - id: "P7g-fast-evidence-preserving-delivery"
+        status: "in_progress"
+        size: "medium_to_large"
+        outcome: >-
+          Test topology preserves adversarial and platform evidence while making
+          normal slices fast enough to deliver in coherent checkpoints.
+        exit:
+          - "documented fast, focused, platform-smoke, and expensive-journey tiers have explicit time budgets"
+          - "the expensive reference journey runs once per cumulative checkpoint rather than once per platform job"
+          - "Windows retains compile, contract-parity, and representative smoke evidence"
+          - "the final cumulative workspace gate runs once after all slice work is integrated"
+        time_budgets:
+          format_and_static_docs: "under_2_minutes"
+          focused_package_or_integration: "target_under_15_minutes"
+          linux_windows_platform_gate: "target_under_30_minutes_each"
+          expensive_reference_protocol_journey: "run_once_target_under_30_minutes"
+          cumulative_checkpoint: "single_run_no_per_edit_repetition"
+      - id: "P7h-promise-hardening-docs-and-forks"
+        status: "in_progress"
+        size: "medium_to_large"
+        outcome: >-
+          Users, agents, operators, contributors, security reviewers, and forks
+          receive concise documentation whose claims match executable evidence.
+        exit:
+          - "README is a short honest landing path with audience-specific guides"
+          - "source checkpoint and prebuilt release availability are unmistakably separate"
+          - "state locations, release contents, SBOM behavior, and mediated-mutation boundaries have no contradictions"
+          - "contributors know focused versus cumulative gates; forks know extension versus core-fork invariants"
+
+  - id: "P8-ready-operate-and-evolve"
+    status: "planned"
+    outcome: >-
+      Governed delivery continues beyond build verification through release,
+      operation, feedback, rollback, and repeated evolution episodes.
+    exit:
+      - "BuildVerify can advance to ReadyOperate and Evolve under admitted policies"
+      - "a real release, rollback baseline, operational evidence, and feedback episode have durable receipts"
+      - "a post-release bug opens the correct evolution episode and replacement agents resume it"
+
+  - id: "P9-domain-pack-sdk-and-ecosystem"
+    status: "planned"
+    outcome: >-
+      External authors can create, test, package, sign, publish, review, revoke,
+      and evolve Domain Packs without modifying the domain-agnostic Rust core.
+
+current_executable_slice:
+  name: "P7a.2-request-packets-and-one-call-authorize"
+  completed_foundation:
     - "agent-native constitution documented"
     - "universal assurance and competence-acquisition proposal documented"
     - "implementation phases and release blockers documented"
@@ -863,10 +1027,11 @@ first_executable_slice:
     - "P6c nine closed learning families, inert local capture, evidence-backed ablation or strong-judge promotion, independent semantic and registry authority, monotonic reviewed registry, dual-anchor lifecycle admission, and 173 aggregate clean checks"
     - "P6d governed game-development reference pack, generic effective workflow epoch, lifecycle auto-detection, complete representative-evidence workflow journey, verified-claim human decision, replacement resume, four-operation lifecycle persistence E2E, typed degraded empty generations, rebase-required core upgrade, no reference-domain Rust logic, and 174 aggregate clean checks"
   next_action: >-
-    P5 and P6a-P6d are complete. Select and approve the next product program
-    outside P6 while preserving the universal-core/effective-epoch boundary,
-    agent-owned research and verification, explicit gaps, and durable
-    replacement-agent continuity.
+    Complete P7a.2 exact request/action-packet generation, one-call
+    sign-and-authorize, and workflow-next setup guidance. Preserve the
+    universal-core/effective-epoch boundary, explicit gaps, and durable
+    replacement-agent continuity; run the cumulative expensive journey only
+    after the coherent checkpoint is integrated.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"
