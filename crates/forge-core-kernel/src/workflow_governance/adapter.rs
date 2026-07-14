@@ -1701,7 +1701,17 @@ impl WorkflowGovernanceProjectAdapter {
             .iter()
             .find(|candidate| candidate.id == request.selected_alternative_ref)
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
-        let expected_consequences_digest = if durable_assurance_is_enforced(effective.document()) {
+        let historical_consequences_digest = sha256_content_hash(
+            &serde_json_canonicalizer::to_vec(&selected_alternative.consequences).map_err(
+                |error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()),
+            )?,
+        );
+        let historical_authority = !durable_assurance_is_enforced(effective.document());
+        let consequences_current = if historical_authority
+            && request.consequences_ack_digest == historical_consequences_digest
+        {
+            true
+        } else {
             let decision_packet = make_authorization_action_packet(
                 WorkflowAuthorizationKind::Decision,
                 StableId(format!("packet.workflow.decision.{}", rule.id.0)),
@@ -1735,21 +1745,16 @@ impl WorkflowGovernanceProjectAdapter {
                     recommended_alternative_ref: rule.recommended_alternative_ref.clone(),
                 },
             )?;
-            decision_consequences_ack_digest(
-                &decision_packet.packet_digest,
-                &rule.id,
-                &selected_alternative.id,
-                &selected_alternative.consequences,
-            )?
-        } else {
-            sha256_content_hash(
-                &serde_json_canonicalizer::to_vec(&selected_alternative.consequences).map_err(
-                    |error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()),
-                )?,
-            )
+            request.consequences_ack_digest
+                == decision_consequences_ack_digest(
+                    &decision_packet.packet_digest,
+                    &rule.id,
+                    &selected_alternative.id,
+                    &selected_alternative.consequences,
+                )?
         };
         if request.readiness_target != readiness_name(policy.routing.readiness_target)
-            || request.consequences_ack_digest != expected_consequences_digest
+            || !consequences_current
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
