@@ -1254,11 +1254,15 @@ fn agent_native_continuity_upgrade_is_sequential_cas_bound_and_resumable() {
     .expect("replacement adapter");
     let resumed = replacement.resume().expect("replacement-agent resume");
     assert_eq!(resumed.release.release, target);
-    assert!(replacement
+    let universal_successor = replacement
         .release_status()
         .expect("continuity status")
         .available_successor
-        .is_none());
+        .expect("universal-assurance successor");
+    assert_eq!(
+        universal_successor.release_id.0,
+        "workflow-governance.release.universal-assurance-v0"
+    );
     let invalidated = replacement.next().expect("invalidated continuity guidance");
     assert_ne!(
         invalidated.status,

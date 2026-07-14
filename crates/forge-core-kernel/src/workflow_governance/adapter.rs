@@ -1701,44 +1701,53 @@ impl WorkflowGovernanceProjectAdapter {
             .iter()
             .find(|candidate| candidate.id == request.selected_alternative_ref)
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
-        let decision_packet = make_authorization_action_packet(
-            WorkflowAuthorizationKind::Decision,
-            StableId(format!("packet.workflow.decision.{}", rule.id.0)),
-            WorkflowAuthorizationPacketBinding {
-                project_id: self.binding.project_id.clone(),
-                effective_bundle_id: effective
-                    .identity()
-                    .effective_runtime_bundle
-                    .bundle_id
-                    .clone(),
-                effective_bundle_digest: effective
-                    .identity()
-                    .effective_runtime_bundle
-                    .bundle_digest
-                    .clone(),
-                policy_ref: policy.id.clone(),
-                subject_ref: rule.id.clone(),
-                state_version: request.state_version,
-                current_phase: phase.clone(),
-                snapshot_digest: snapshot_digest.clone(),
-                ledger_head_digest: head.to_owned(),
-                trusted_principal_registry_digest: self.current_trusted_registry_digest()?,
-                trusted_broker_registry_digest: self.current_trusted_broker_registry_digest()?,
-                readiness_target: policy.routing.readiness_target,
-            },
-            human_authority("workflow.decision.resolve"),
-            WorkflowAuthorizationInputContract::Decision {
-                decision_ref: rule.id.clone(),
-                alternatives: rule.alternatives.clone(),
-                recommended_alternative_ref: rule.recommended_alternative_ref.clone(),
-            },
-        )?;
-        let expected_consequences_digest = decision_consequences_ack_digest(
-            &decision_packet.packet_digest,
-            &rule.id,
-            &selected_alternative.id,
-            &selected_alternative.consequences,
-        )?;
+        let expected_consequences_digest = if durable_assurance_is_enforced(effective.document()) {
+            let decision_packet = make_authorization_action_packet(
+                WorkflowAuthorizationKind::Decision,
+                StableId(format!("packet.workflow.decision.{}", rule.id.0)),
+                WorkflowAuthorizationPacketBinding {
+                    project_id: self.binding.project_id.clone(),
+                    effective_bundle_id: effective
+                        .identity()
+                        .effective_runtime_bundle
+                        .bundle_id
+                        .clone(),
+                    effective_bundle_digest: effective
+                        .identity()
+                        .effective_runtime_bundle
+                        .bundle_digest
+                        .clone(),
+                    policy_ref: policy.id.clone(),
+                    subject_ref: rule.id.clone(),
+                    state_version: request.state_version,
+                    current_phase: phase.clone(),
+                    snapshot_digest: snapshot_digest.clone(),
+                    ledger_head_digest: head.to_owned(),
+                    trusted_principal_registry_digest: self.current_trusted_registry_digest()?,
+                    trusted_broker_registry_digest: self
+                        .current_trusted_broker_registry_digest()?,
+                    readiness_target: policy.routing.readiness_target,
+                },
+                human_authority("workflow.decision.resolve"),
+                WorkflowAuthorizationInputContract::Decision {
+                    decision_ref: rule.id.clone(),
+                    alternatives: rule.alternatives.clone(),
+                    recommended_alternative_ref: rule.recommended_alternative_ref.clone(),
+                },
+            )?;
+            decision_consequences_ack_digest(
+                &decision_packet.packet_digest,
+                &rule.id,
+                &selected_alternative.id,
+                &selected_alternative.consequences,
+            )?
+        } else {
+            sha256_content_hash(
+                &serde_json_canonicalizer::to_vec(&selected_alternative.consequences).map_err(
+                    |error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()),
+                )?,
+            )
+        };
         if request.readiness_target != readiness_name(policy.routing.readiness_target)
             || request.consequences_ack_digest != expected_consequences_digest
         {
