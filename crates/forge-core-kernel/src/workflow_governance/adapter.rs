@@ -4161,7 +4161,8 @@ fn derive_governed_assurance_facts(
                     origin_record.record_digest.clone(),
                 )) || event.observed_at_unix > now
                     || event.expires_at_unix.is_some_and(|expires| now > expires)
-                    || event.snapshot_digest != snapshot_digest
+                    || (event.subject.kind != WorkflowEvidenceSubjectKind::Artifact
+                        && event.snapshot_digest != snapshot_digest)
                     || record.previous_record_digest.as_deref()
                         != Some(event.ledger_head_digest.as_str())
                     || !subject_current(project_root, snapshot_digest, &event.subject)?
