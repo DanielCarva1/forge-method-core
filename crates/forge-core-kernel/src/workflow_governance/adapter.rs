@@ -3655,6 +3655,18 @@ fn broker_common_binding(
         && origin.issued_at_unix == action_time
 }
 
+fn evidence_time_is_current(
+    observed_at_unix: u64,
+    expires_at_unix: Option<u64>,
+    evaluator_max_age_seconds: u64,
+    now: u64,
+    admitted_by_external_broker: bool,
+) -> bool {
+    observed_at_unix <= now
+        && now.saturating_sub(observed_at_unix) <= evaluator_max_age_seconds
+        && (admitted_by_external_broker || expires_at_unix.is_none_or(|expires| now <= expires))
+}
+
 fn broker_evidence_profile_allowed(
     provider: WorkflowEvaluatorProvider,
     profile: WorkflowBrokerOriginProfile,
@@ -3967,9 +3979,6 @@ fn derive_receipts(
                                 &event.public_key_fingerprint,
                                 event.observed_at_unix,
                             )
-                            && event
-                                .expires_at_unix
-                                .is_none_or(|expires| expires <= origin.expires_at_unix)
                     }
                     None => false,
                 };
@@ -4001,19 +4010,26 @@ fn derive_receipts(
                 {
                     continue;
                 }
-                let age_current =
-                    now.saturating_sub(event.observed_at_unix) <= evaluator.max_age_seconds;
-                let expiry_current = event.expires_at_unix.is_none_or(|expires| now <= expires);
+                // A broker envelope's short expiry bounds when Forge may admit
+                // the signed observation. After admission, evaluator policy owns
+                // evidence freshness; otherwise a five-minute broker envelope
+                // silently overrides a multi-day evaluator max age.
+                let time_current = evidence_time_is_current(
+                    event.observed_at_unix,
+                    event.expires_at_unix,
+                    evaluator.max_age_seconds,
+                    now,
+                    matches!(authority, Some(DerivedReceiptTrustRoot::ExternalBroker(_))),
+                );
                 let subject_current =
                     subject_current(project_root, snapshot_digest, &event.subject)?;
                 let snapshot_current = event.subject.kind == WorkflowEvidenceSubjectKind::Artifact
                     || event.snapshot_digest == snapshot_digest;
-                let freshness =
-                    if age_current && expiry_current && subject_current && snapshot_current {
-                        WorkflowEvidenceFreshness::Current
-                    } else {
-                        WorkflowEvidenceFreshness::Stale
-                    };
+                let freshness = if time_current && subject_current && snapshot_current {
+                    WorkflowEvidenceFreshness::Current
+                } else {
+                    WorkflowEvidenceFreshness::Stale
+                };
                 if freshness == WorkflowEvidenceFreshness::Current {
                     current_evidence_receipt_digests.insert(record.record_digest.clone());
                 }
@@ -4160,7 +4176,6 @@ fn derive_governed_assurance_facts(
                     origin_record.record_id.clone(),
                     origin_record.record_digest.clone(),
                 )) || event.observed_at_unix > now
-                    || event.expires_at_unix.is_some_and(|expires| now > expires)
                     || (event.subject.kind != WorkflowEvidenceSubjectKind::Artifact
                         && event.snapshot_digest != snapshot_digest)
                     || record.previous_record_digest.as_deref()
@@ -4207,6 +4222,13 @@ fn derive_governed_assurance_facts(
                 if evaluator.provider != event.provider
                     || !evaluator.accepted_evidence_kinds.contains(&event.kind)
                     || event.strength < evaluator.minimum_strength
+                    || !evidence_time_is_current(
+                        event.observed_at_unix,
+                        event.expires_at_unix,
+                        evaluator.max_age_seconds,
+                        now,
+                        true,
+                    )
                 {
                     continue;
                 }
@@ -6817,9 +6839,10 @@ mod tests {
     use std::fmt::Write as _;
 
     fn temp_project(label: &str) -> (PathBuf, PathBuf) {
-        let root =
+        let fixture_root =
             std::env::temp_dir().join(format!("forge-p5c-adapter-{label}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&fixture_root);
+        let root = fixture_root.join("project");
         fs::create_dir_all(root.join(".forge-method")).expect("state root");
         fs::write(root.join("README.md"), b"project\n").expect("project file");
         let root = root.canonicalize().expect("canonical temp");
@@ -7378,8 +7401,8 @@ mod tests {
         }));
         assert_eq!(
             first.next.status,
-            WorkflowGovernanceGuidanceStatus::Blocked,
-            "unknown universal lenses must remain honest blockers"
+            WorkflowGovernanceGuidanceStatus::Active,
+            "a historical bundle projects unknown lenses without retroactively enforcing them"
         );
         assert_eq!(first.next.durable_assurance.blockers.len(), 8);
         assert!(first.next.durable_assurance.blockers.iter().all(|blocker| {
@@ -8219,6 +8242,19 @@ mod tests {
         assert_ne!(first, second);
         assert!(!first.contains(&root.to_string_lossy().to_string()));
         assert!(state.ends_with(".forge-method"));
+    }
+
+    #[test]
+    fn admitted_broker_evidence_uses_evaluator_freshness_not_envelope_expiry() {
+        assert!(evidence_time_is_current(100, Some(400), 1_000, 500, true));
+        assert!(
+            !evidence_time_is_current(100, Some(400), 1_000, 500, false),
+            "a local receipt retains its explicit evidence expiry"
+        );
+        assert!(
+            !evidence_time_is_current(100, Some(400), 399, 500, true),
+            "broker admission cannot outrank evaluator max age"
+        );
     }
 
     #[test]

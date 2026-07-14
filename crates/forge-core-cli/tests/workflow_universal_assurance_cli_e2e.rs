@@ -631,7 +631,10 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
     let durable = &resumed["data"]["durable_assurance"];
     assert_eq!(durable["status"], "intent_accepted");
     let projection = &durable["projection"];
-    assert_eq!(projection["readiness"], "ready");
+    assert_eq!(
+        projection["readiness"], "ready",
+        "universal assurance remained blocked: {projection:#}"
+    );
     assert_eq!(projection["blocker_lenses"], serde_json::json!([]));
     assert_eq!(
         claim_state(
