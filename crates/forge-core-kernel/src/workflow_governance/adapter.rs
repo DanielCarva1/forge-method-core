@@ -5909,22 +5909,26 @@ fn authorization_action_packets(
         )?);
     }
 
-    for claim in &selected.claims {
-        let result = guidance
-            .simulation
-            .candidate_claim_results
-            .iter()
-            .find(|candidate| candidate.claim_id == claim.id.0)
-            .ok_or_else(|| WorkflowGovernanceAdapterError::UnknownClaim(claim.id.0.clone()))?;
-        let governed_role_complete =
-            guidance
+    let mut actionable_policies = vec![selected];
+    if let Some(assurance_policy) = bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .find(|policy| policy.id.0 == UNIVERSAL_ASSURANCE_POLICY_ID)
+        .filter(|policy| policy.id != selected.id)
+    {
+        actionable_policies.push(assurance_policy);
+    }
+    for action_policy in actionable_policies {
+        for claim in &action_policy.claims {
+            let governed_role_complete = guidance
                 .durable_assurance
                 .projection
                 .as_ref()
                 .is_some_and(|projection| {
                     projection.lenses.iter().any(|lens| {
                         lens.claims.iter().any(|binding| {
-                            binding.policy_ref == selected.id
+                            binding.policy_ref == action_policy.id
                                 && binding.claim_ref == claim.id
                                 && matches!(
                                     binding.state,
@@ -5934,162 +5938,171 @@ fn authorization_action_packets(
                         })
                     })
                 });
-        let claim_complete = if claim.assurance_role.is_some() {
-            governed_role_complete
-        } else {
-            matches!(
-                result.status,
-                WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
-            )
-        };
-        if claim_complete {
-            continue;
-        }
-        let evaluator = selected
-            .evaluators
-            .iter()
-            .find(|candidate| candidate.id == claim.evaluator_ref)
-            .ok_or_else(|| {
-                WorkflowGovernanceAdapterError::UnknownEvaluator(claim.evaluator_ref.0.clone())
-            })?;
-        let (required_authority, evidence_kind, strength, subject_kinds) =
-            evidence_action_contract(evaluator.provider);
-        if !evaluator.accepted_evidence_kinds.contains(&evidence_kind)
-            || strength < evaluator.minimum_strength
-        {
-            return Err(WorkflowGovernanceAdapterError::InvalidObservation(format!(
-                "evaluator {} is incompatible with the closed {:?} authority contract",
-                evaluator.id.0, evaluator.provider
-            )));
-        }
-        let representative_slice = match claim.assurance_role {
-            Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
-                let intent_digest = guidance
-                    .durable_assurance
-                    .projection
-                    .as_ref()
-                    .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?
-                    .binding
-                    .intent_digest
-                    .clone();
-                Some(WorkflowRepresentativeSliceActionBinding::Definition {
-                    schema_version: WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION.to_owned(),
-                    current_intent_digest: intent_digest,
-                    text_max_bytes: MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
-                    list_max_items: MAX_REPRESENTATIVE_SLICE_ITEMS,
-                    item_max_bytes: MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
-                    total_max_bytes: MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
-                })
-            }
-            Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
-                let Some(definition) = assurance_facts
-                    .and_then(|facts| latest_representative_definition(bundle, facts))
-                else {
-                    continue;
-                };
-                let manifest = definition
-                    .representative_slice
-                    .as_ref()
-                    .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
-                Some(WorkflowRepresentativeSliceActionBinding::Execution {
-                    definition_digest: definition.subject_digest.clone(),
-                    definition_receipt_digest: definition.evidence_record_digest.clone(),
-                    runtime_subject_ref: manifest
-                        .representative_slice
-                        .representative_environment
-                        .runtime_subject_ref
-                        .clone(),
-                    runtime_subject_digest: manifest
-                        .representative_slice
-                        .representative_environment
-                        .runtime_subject_digest
-                        .clone(),
-                    allowed_scenario_digests: manifest
-                        .representative_slice
-                        .scenarios
-                        .iter()
-                        .map(|scenario| scenario.declared_scenario_digest.clone())
-                        .collect(),
-                })
-            }
-            Some(WorkflowAssuranceClaimRole::LensEvidence) | None => None,
-        };
-        let subject_kinds = match claim.assurance_role {
-            Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
-                vec![WorkflowEvidenceSubjectKind::Artifact]
-            }
-            Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
-                vec![WorkflowEvidenceSubjectKind::Runtime]
-            }
-            _ => subject_kinds,
-        };
-        packets.push(make_authorization_action_packet(
-            WorkflowAuthorizationKind::Evidence,
-            StableId(format!("packet.workflow.evidence.{}", claim.id.0)),
-            binding_for(selected, claim.id.clone()),
-            required_authority,
-            WorkflowAuthorizationInputContract::Evidence {
-                claim_ref: claim.id.clone(),
-                evaluator_ref: evaluator.id.clone(),
-                provider: evaluator.provider,
-                evidence_kind,
-                strength,
-                allowed_outcomes: vec![
-                    WorkflowEvidenceOutcome::Pass,
-                    WorkflowEvidenceOutcome::Fail,
-                    WorkflowEvidenceOutcome::Inconclusive,
-                ],
-                subject_kinds,
-                scenario_reference_required: true,
-                representative_slice,
-            },
-        )?);
-
-        if let WorkflowClaimWaiverPolicy::Authorized {
-            max_target,
-            max_age_seconds,
-            ..
-        } = &claim.waiver
-        {
-            let maximum_readiness_target =
-                if max_target.rank() < selected.routing.readiness_target.rank() {
-                    *max_target
-                } else {
-                    selected.routing.readiness_target
-                };
-            let mut consequence_statements = vec![format!(
-                "Claim {} will be treated as waived without verified evidence: {}",
-                claim.id.0, claim.statement
-            )];
-            let mut obligations = selected
-                .obligations
-                .iter()
-                .filter(|obligation| obligation.claim_refs.contains(&claim.id))
-                .collect::<Vec<_>>();
-            obligations.sort_by(|left, right| left.id.cmp(&right.id));
-            consequence_statements.extend(obligations.into_iter().map(|obligation| {
-                format!(
-                    "Obligation {} will rely on this waiver: {}",
-                    obligation.id.0, obligation.description
+            let claim_complete = if claim.assurance_role.is_some() {
+                governed_role_complete
+            } else {
+                let result = guidance
+                    .simulation
+                    .candidate_claim_results
+                    .iter()
+                    .find(|candidate| candidate.claim_id == claim.id.0)
+                    .ok_or_else(|| {
+                        WorkflowGovernanceAdapterError::UnknownClaim(claim.id.0.clone())
+                    })?;
+                matches!(
+                    result.status,
+                    WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
                 )
-            }));
-            consequence_statements.push(format!(
-                "The waiver cannot authorize readiness beyond {}.",
-                readiness_target_label(maximum_readiness_target)
-            ));
+            };
+            if claim_complete {
+                continue;
+            }
+            let evaluator = action_policy
+                .evaluators
+                .iter()
+                .find(|candidate| candidate.id == claim.evaluator_ref)
+                .ok_or_else(|| {
+                    WorkflowGovernanceAdapterError::UnknownEvaluator(claim.evaluator_ref.0.clone())
+                })?;
+            let (required_authority, evidence_kind, strength, subject_kinds) =
+                evidence_action_contract(evaluator.provider);
+            if !evaluator.accepted_evidence_kinds.contains(&evidence_kind)
+                || strength < evaluator.minimum_strength
+            {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(format!(
+                    "evaluator {} is incompatible with the closed {:?} authority contract",
+                    evaluator.id.0, evaluator.provider
+                )));
+            }
+            let representative_slice = match claim.assurance_role {
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                    let intent_digest = guidance
+                        .durable_assurance
+                        .projection
+                        .as_ref()
+                        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?
+                        .binding
+                        .intent_digest
+                        .clone();
+                    Some(WorkflowRepresentativeSliceActionBinding::Definition {
+                        schema_version: WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION.to_owned(),
+                        current_intent_digest: intent_digest,
+                        text_max_bytes: MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
+                        list_max_items: MAX_REPRESENTATIVE_SLICE_ITEMS,
+                        item_max_bytes: MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
+                        total_max_bytes: MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
+                    })
+                }
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                    let Some(definition) = assurance_facts
+                        .and_then(|facts| latest_representative_definition(bundle, facts))
+                    else {
+                        continue;
+                    };
+                    let manifest = definition
+                        .representative_slice
+                        .as_ref()
+                        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+                    Some(WorkflowRepresentativeSliceActionBinding::Execution {
+                        definition_digest: definition.subject_digest.clone(),
+                        definition_receipt_digest: definition.evidence_record_digest.clone(),
+                        runtime_subject_ref: manifest
+                            .representative_slice
+                            .representative_environment
+                            .runtime_subject_ref
+                            .clone(),
+                        runtime_subject_digest: manifest
+                            .representative_slice
+                            .representative_environment
+                            .runtime_subject_digest
+                            .clone(),
+                        allowed_scenario_digests: manifest
+                            .representative_slice
+                            .scenarios
+                            .iter()
+                            .map(|scenario| scenario.declared_scenario_digest.clone())
+                            .collect(),
+                    })
+                }
+                Some(WorkflowAssuranceClaimRole::LensEvidence) | None => None,
+            };
+            let subject_kinds = match claim.assurance_role {
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceDefinition) => {
+                    vec![WorkflowEvidenceSubjectKind::Artifact]
+                }
+                Some(WorkflowAssuranceClaimRole::RepresentativeSliceExecution) => {
+                    vec![WorkflowEvidenceSubjectKind::Runtime]
+                }
+                _ => subject_kinds,
+            };
             packets.push(make_authorization_action_packet(
-                WorkflowAuthorizationKind::Waiver,
-                StableId(format!("packet.workflow.waiver.{}", claim.id.0)),
-                binding_for(selected, claim.id.clone()),
-                human_authority("workflow.waiver.authorize"),
-                WorkflowAuthorizationInputContract::Waiver {
+                WorkflowAuthorizationKind::Evidence,
+                StableId(format!("packet.workflow.evidence.{}", claim.id.0)),
+                binding_for(action_policy, claim.id.clone()),
+                required_authority,
+                WorkflowAuthorizationInputContract::Evidence {
                     claim_ref: claim.id.clone(),
-                    maximum_readiness_target,
-                    max_age_seconds: *max_age_seconds,
-                    reason_required: true,
-                    consequence_statements,
+                    evaluator_ref: evaluator.id.clone(),
+                    provider: evaluator.provider,
+                    evidence_kind,
+                    strength,
+                    allowed_outcomes: vec![
+                        WorkflowEvidenceOutcome::Pass,
+                        WorkflowEvidenceOutcome::Fail,
+                        WorkflowEvidenceOutcome::Inconclusive,
+                    ],
+                    subject_kinds,
+                    scenario_reference_required: true,
+                    representative_slice,
                 },
             )?);
+
+            if let WorkflowClaimWaiverPolicy::Authorized {
+                max_target,
+                max_age_seconds,
+                ..
+            } = &claim.waiver
+            {
+                let maximum_readiness_target =
+                    if max_target.rank() < action_policy.routing.readiness_target.rank() {
+                        *max_target
+                    } else {
+                        action_policy.routing.readiness_target
+                    };
+                let mut consequence_statements = vec![format!(
+                    "Claim {} will be treated as waived without verified evidence: {}",
+                    claim.id.0, claim.statement
+                )];
+                let mut obligations = action_policy
+                    .obligations
+                    .iter()
+                    .filter(|obligation| obligation.claim_refs.contains(&claim.id))
+                    .collect::<Vec<_>>();
+                obligations.sort_by(|left, right| left.id.cmp(&right.id));
+                consequence_statements.extend(obligations.into_iter().map(|obligation| {
+                    format!(
+                        "Obligation {} will rely on this waiver: {}",
+                        obligation.id.0, obligation.description
+                    )
+                }));
+                consequence_statements.push(format!(
+                    "The waiver cannot authorize readiness beyond {}.",
+                    readiness_target_label(maximum_readiness_target)
+                ));
+                packets.push(make_authorization_action_packet(
+                    WorkflowAuthorizationKind::Waiver,
+                    StableId(format!("packet.workflow.waiver.{}", claim.id.0)),
+                    binding_for(action_policy, claim.id.clone()),
+                    human_authority("workflow.waiver.authorize"),
+                    WorkflowAuthorizationInputContract::Waiver {
+                        claim_ref: claim.id.clone(),
+                        maximum_readiness_target,
+                        max_age_seconds: *max_age_seconds,
+                        reason_required: true,
+                        consequence_statements,
+                    },
+                )?);
+            }
         }
     }
 

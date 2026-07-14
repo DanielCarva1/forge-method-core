@@ -81,7 +81,7 @@ jobs:
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
 
-      - name: Regression anchors (139 historical, 156 Batch A, 169 pre-retirement, 174 aggregate)
+      - name: Regression anchors (139 historical, 156 Batch A, 174 pre-P7, 178 aggregate)
         run: |
           cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json
           python - <<'PY'
@@ -89,10 +89,14 @@ jobs:
           with open("target/validate-summary.json", encoding="utf-8") as stream:
               summary = json.load(stream)
           checks = summary["checks"]
+          def is_universal_assurance(check):
+              name = check["name"]
+              return "universal-assurance" in name or "universal_assurance" in name
           batch_a = [
               check for check in checks
               if "agent-native-continuity" not in check["name"]
               and "agent_native_continuity" not in check["name"]
+              and not is_universal_assurance(check)
               and not check["name"].startswith("domain_pack_")
               and check["name"] != "workflow_retirement_checkpoint"
           ]
@@ -105,17 +109,20 @@ jobs:
           assert summary["status"] == "passed", summary["diagnostics"]
           assert len(historical) == 139, len(historical)
           assert len(batch_a) == 156, len(batch_a)
+          pre_p7 = [check for check in checks if not is_universal_assurance(check)]
+          assert len(pre_p7) == 174, len(pre_p7)
           pre_retirement = [
               check for check in checks
               if check["name"] != "workflow_retirement_checkpoint"
               and not check["name"].startswith("domain_pack_")
           ]
-          assert len(pre_retirement) == 169, len(pre_retirement)
-          assert len(checks) == 174, len(checks)
+          assert len(pre_retirement) == 173, len(pre_retirement)
+          assert len(checks) == 178, len(checks)
           assert all(check["diagnostics"] == 0 for check in checks), checks
           print(
               f"Historical anchor: {len(historical)}; "
               f"Batch A anchor: {len(batch_a)}; "
+              f"pre-P7: {len(pre_p7)}; "
               f"pre-retirement: {len(pre_retirement)}; aggregate: {len(checks)}"
           )
           PY
