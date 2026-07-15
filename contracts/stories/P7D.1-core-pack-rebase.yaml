@@ -1,0 +1,36 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7D.1"
+status: "implemented_local_cumulative_gate_passed_hosted_evidence_pending"
+slice: "P7d-core-domain-pack-rebase"
+title: "Rebase an active Domain Pack generation onto an adjacent core release"
+
+intent: >-
+  Replace the current rebase-required dead end with one explicit preflighted,
+  CAS-bound, crash-recoverable transition that moves core release and effective
+  Domain Pack generation together or leaves the exact old pair authoritative.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7d-core-domain-pack-rebase"
+  - "crates/forge-core-kernel/src/workflow_governance/domain_pack.rs"
+
+constraints:
+  - "Never expose a mixed old-core/new-pack or new-core/old-pack authority epoch."
+  - "Reuse opaque release admission and Domain Pack lifecycle authority; audit outputs remain non-authoritative."
+  - "Recovery must be deterministic after every durable boundary."
+
+acceptance_criteria:
+  - "release-status returns exact rebase argv when an active or degraded generation blocks upgrade."
+  - "Preflight explains compatibility, policy, capability, requirement, receipt-carryover, and semantic changes."
+  - "Active, upgraded, rolled-back, remove-last, and degraded-empty generations can rebase or return typed actionable gaps."
+  - "Stale core head, lifecycle pointer, generation, snapshot, registry anchor, or reviewed head fails with zero authoritative mutation."
+  - "Crash injection proves recovery to exactly the old or new joined pair."
+  - "Replacement agents reconstruct the same joined epoch."
+
+checks:
+  - "pure rebase decision matrix"
+  - "kernel/TCB stale-CAS and crash-recovery tests"
+  - "real CLI active/degraded/replacement-process E2E"
+
+blocks: ["P7C.2"]
+next_workflow: "P7E.1 release correctness"

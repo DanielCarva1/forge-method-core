@@ -1,9 +1,7 @@
 {
   "timeoutMs": 600000,
   "checks": [
-    { "name": "check",  "kind": "typecheck", "command": "cargo check --workspace" },
-    { "name": "clippy", "kind": "lint",      "command": "cargo clippy --workspace --all-targets -- -W clippy::pedantic" },
-    { "name": "test",   "kind": "test",      "command": "cargo test --workspace" },
-    { "name": "fmt",    "kind": "lint",      "command": "cargo fmt --all -- --check" }
+    { "name": "fmt",   "kind": "lint",      "command": "cargo fmt --all -- --check" },
+    { "name": "check", "kind": "typecheck", "command": "cargo check --workspace" }
   ]
 }

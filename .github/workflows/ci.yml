@@ -5,10 +5,22 @@ on:
     branches: [master, main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
 jobs:
-  quality:
-    name: Linux quality gate
+  static_docs:
+    name: Tier 0 static and docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -16,75 +28,148 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
         with:
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Check generated workspace layout
-        run: python scripts/generate-workspace-layout.py --check
+        timeout-minutes: 3
+        run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- python scripts/generate-workspace-layout.py --check
 
       - name: Check local documentation links
-        run: python scripts/check-doc-links.py
+        timeout-minutes: 3
+        run: python scripts/run-ci-tier.py --tier tier-0-documentation-links --budget-seconds 120 --report target/ci-timing/documentation-links.json -- python scripts/check-doc-links.py
 
-      - name: Check generated command surface docs
-        run: cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
+      - name: Audit public promises and release payload
+        timeout-minutes: 3
+        run: python scripts/run-ci-tier.py --tier tier-0-public-promises --budget-seconds 120 --report target/ci-timing/public-promises.json -- python scripts/check-public-promises.py
 
-      - name: Check generated workflow release foundation
-        run: cargo run -p forge-core-decisions --example generate_workflow_release_foundation -- --check
-
-      - name: Check generated workflow release registry
-        run: cargo run -p forge-core-decisions --example generate_workflow_release_registry -- --check
-
-      - name: Check generated core assurance behavioral evidence
-        run: cargo run -p forge-core-decisions --example generate_workflow_core_assurance_evidence -- --check
-
-      - name: Check generated core assurance candidate release
-        run: cargo run -p forge-core-decisions --example generate_workflow_core_assurance_candidate -- --check
-
-      - name: Check generated independently reviewed admission
-        run: cargo run -p forge-core-decisions --example generate_workflow_core_assurance_admission -- --check
-
-      - name: Check generated assurance operations behavioral evidence
-        run: cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_evidence -- --check
-
-      - name: Check generated assurance operations candidate release
-        run: cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_candidate -- --check
-
-      - name: Check generated assurance operations reviewed admission
-        run: cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_admission -- --check
-
-      - name: Check generated agent-native continuity behavioral evidence
-        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_evidence -- --check
-
-      - name: Check generated agent-native continuity candidate release
-        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_candidate -- --check
-
-      - name: Check generated agent-native continuity reviewed admission
-        run: cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_admission -- --check
-
-      - name: Check generated signed workflow retirement checkpoint
-        run: cargo run -p forge-core-decisions --example generate_workflow_retirement_checkpoint -- --check
-
-      - name: Verify trusted workflow retirement runtime evidence
-        run: cargo test -p forge-core-kernel --test workflow_retirement_runtime_evidence
+      - name: Test CI and evidence tooling failure semantics
+        timeout-minutes: 3
+        shell: bash
+        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python scripts/test-check-test-inventory.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-archive.py'
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        timeout-minutes: 3
+        run: python scripts/run-ci-tier.py --tier tier-0-format --budget-seconds 120 --report target/ci-timing/format.json -- cargo fmt --all -- --check
+
+      - name: Upload Tier 0 timing reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-timing-static-docs
+          path: target/ci-timing
+          if-no-files-found: warn
+
+  focused:
+    name: Focused package and integration evidence
+    needs: static_docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+        with:
+          components: clippy
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: forge-linux-stable
+
+      - name: Check generated command surface docs
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-command-surface --budget-seconds 900 --report target/ci-timing/command-surface.json -- cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
+
+      - name: Check generated workflow release foundation
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-release-foundation --budget-seconds 900 --report target/ci-timing/release-foundation.json -- cargo run -p forge-core-decisions --example generate_workflow_release_foundation -- --check
+
+      - name: Check generated workflow release registry
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-release-registry --budget-seconds 900 --report target/ci-timing/release-registry.json -- cargo run -p forge-core-decisions --example generate_workflow_release_registry -- --check
+
+      - name: Check generated core assurance behavioral evidence
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-core-assurance-evidence --budget-seconds 900 --report target/ci-timing/core-assurance-evidence.json -- cargo run -p forge-core-decisions --example generate_workflow_core_assurance_evidence -- --check
+
+      - name: Check generated core assurance candidate release
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-core-assurance-candidate --budget-seconds 900 --report target/ci-timing/core-assurance-candidate.json -- cargo run -p forge-core-decisions --example generate_workflow_core_assurance_candidate -- --check
+
+      - name: Check generated independently reviewed admission
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-core-assurance-admission --budget-seconds 900 --report target/ci-timing/core-assurance-admission.json -- cargo run -p forge-core-decisions --example generate_workflow_core_assurance_admission -- --check
+
+      - name: Check generated assurance operations behavioral evidence
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-assurance-operations-evidence --budget-seconds 900 --report target/ci-timing/assurance-operations-evidence.json -- cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_evidence -- --check
+
+      - name: Check generated assurance operations candidate release
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-assurance-operations-candidate --budget-seconds 900 --report target/ci-timing/assurance-operations-candidate.json -- cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_candidate -- --check
+
+      - name: Check generated assurance operations reviewed admission
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-assurance-operations-admission --budget-seconds 900 --report target/ci-timing/assurance-operations-admission.json -- cargo run -p forge-core-decisions --example generate_workflow_assurance_operations_admission -- --check
+
+      - name: Check generated agent-native continuity behavioral evidence
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-agent-native-evidence --budget-seconds 900 --report target/ci-timing/agent-native-evidence.json -- cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_evidence -- --check
+
+      - name: Check generated agent-native continuity candidate release
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-agent-native-candidate --budget-seconds 900 --report target/ci-timing/agent-native-candidate.json -- cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_candidate -- --check
+
+      - name: Check generated agent-native continuity reviewed admission
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-agent-native-admission --budget-seconds 900 --report target/ci-timing/agent-native-admission.json -- cargo run -p forge-core-decisions --example generate_workflow_agent_native_continuity_admission -- --check
+
+      - name: Check generated signed workflow retirement checkpoint
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-retirement-checkpoint --budget-seconds 900 --report target/ci-timing/retirement-checkpoint.json -- cargo run -p forge-core-decisions --example generate_workflow_retirement_checkpoint -- --check
+
+      - name: Verify trusted workflow retirement runtime evidence
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-retirement-runtime --budget-seconds 900 --report target/ci-timing/retirement-runtime.json -- cargo test -p forge-core-kernel --test workflow_retirement_runtime_evidence
 
       # clippy pedantic runs as `-D` (deny). Adding new pedantic warnings will
       # fail CI, which is intentional: each new lint must be either fixed or
       # accompanied by a documented #[allow] with a justification comment.
+      # All features keeps the expensive-journey target compiling on Linux even
+      # when the journey itself is reserved for the checkpoint trigger.
       - name: Clippy (pedantic, deny, including expensive-journey code)
-        run: cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-clippy --budget-seconds 900 --report target/ci-timing/clippy.json -- cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic
+
+      - name: Verify default workspace test inventory
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-workspace-inventory --budget-seconds 900 --report target/ci-timing/workspace-inventory-timing.json -- python scripts/check-test-inventory.py --baseline contracts/test-inventory/workspace.json --label workspace-default --report target/ci-timing/workspace-test-inventory.json -- cargo test --workspace -- --list
+
+      - name: Verify expensive journey test inventory
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-expensive-inventory --budget-seconds 900 --report target/ci-timing/expensive-inventory-timing.json -- python scripts/check-test-inventory.py --baseline contracts/test-inventory/expensive-p6d.json --label expensive-p6d --report target/ci-timing/expensive-test-inventory.json -- cargo test -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e -- --list
 
       - name: Validate contracts
-        run: cargo run -p forge-core-cli -- validate --root .
+        timeout-minutes: 16
+        run: python scripts/run-ci-tier.py --tier focused-contract-validation --budget-seconds 900 --report target/ci-timing/contract-validation.json -- cargo run -p forge-core-cli -- validate --root .
+
+      - name: Generate regression anchor summary
+        timeout-minutes: 16
+        shell: bash
+        run: python scripts/run-ci-tier.py --tier focused-regression-summary --budget-seconds 900 --report target/ci-timing/regression-summary.json -- bash -o pipefail -c 'cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json'
 
       - name: Regression anchors (139 historical, 156 Batch A, 174 pre-P7, 178 aggregate)
+        timeout-minutes: 16
+        shell: bash
         run: |
-          cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json
-          python - <<'PY'
+          python scripts/run-ci-tier.py --tier focused-regression-anchors --budget-seconds 900 --report target/ci-timing/regression-anchors.json -- python - <<'PY'
           import json
           with open("target/validate-summary.json", encoding="utf-8") as stream:
               summary = json.load(stream)
@@ -127,36 +212,100 @@ jobs:
           )
           PY
 
+      - name: Upload focused timing reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-timing-focused
+          path: target/ci-timing
+          if-no-files-found: warn
+
   platform:
-    name: ${{ matrix.os }} platform gate
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }} platform gate
+    needs: static_docs
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - name: Linux
+            id: linux
+            runner: ubuntu-latest
+            expected-arch: x86_64
+            cache-key: forge-linux-stable
+          - name: Windows
+            id: windows
+            runner: windows-latest
+            expected-arch: amd64
+            cache-key: forge-windows-stable
+          - name: macOS Intel
+            id: macos-intel
+            runner: macos-15-intel
+            expected-arch: x86_64
+            cache-key: forge-macos-15-intel-stable
+          - name: macOS Apple Silicon
+            id: macos-arm64
+            runner: macos-15
+            expected-arch: arm64
+            cache-key: forge-macos-15-arm64-stable
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify native runner architecture
+        env:
+          EXPECTED_RUNNER_ARCH: ${{ matrix.expected-arch }}
+        run: python -c "import os,platform; actual=platform.machine().casefold(); expected=os.environ['EXPECTED_RUNNER_ARCH']; print(f'native runner architecture={actual}'); raise SystemExit(0 if actual == expected else f'expected native {expected}, got {actual}')"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: ${{ matrix.cache-key }}
+          # Focused is the sole Linux saver so the downstream P6d job restores
+          # the all-features compilation instead of racing the platform cache.
+          save-if: ${{ matrix.name != 'Linux' }}
 
       - name: Type-check workspace all targets
-        run: cargo check --workspace --all-targets
+        timeout-minutes: 31
+        run: python scripts/run-ci-tier.py --tier platform-all-targets-${{ matrix.id }} --budget-seconds 1800 --report target/ci-timing/all-targets.json -- cargo check --workspace --all-targets
 
-      - name: Type-check expensive journey on Windows
-        if: runner.os == 'Windows'
-        run: cargo check -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e
+      - name: Type-check expensive journey outside focused Linux job
+        if: matrix.name != 'Linux'
+        timeout-minutes: 31
+        run: python scripts/run-ci-tier.py --tier platform-expensive-compile-${{ matrix.id }} --budget-seconds 1800 --report target/ci-timing/expensive-compile.json -- cargo check -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e
 
       - name: Test workspace
-        run: cargo test --workspace
+        timeout-minutes: 31
+        run: python scripts/run-ci-tier.py --tier platform-workspace-tests-${{ matrix.id }} --budget-seconds 1800 --report target/ci-timing/workspace-tests.json -- cargo test --workspace
+
+      - name: Upload platform timing reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-timing-platform-${{ matrix.id }}
+          path: target/ci-timing
+          if-no-files-found: warn
 
   expensive-journey:
     name: Linux P6d reference journey
+    needs: [static_docs, focused, platform]
+    # A push to a declared cumulative branch is the sole execution trigger.
+    # Pull requests compile this target on Linux, Windows, and both macOS architectures.
+    if: >-
+      github.event_name == 'push' &&
+      needs.static_docs.result == 'success' &&
+      needs.focused.result == 'success' &&
+      needs.platform.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -166,11 +315,21 @@ jobs:
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: forge-linux-stable
 
       # This single test is the protocol-level reference journey. It is kept
-      # out of the Linux/Windows platform matrix because duplicating it added
-      # roughly an hour to every checkpoint without adding platform-specific
-      # evidence. Platform jobs still compile every target and run every
-      # non-expensive workspace test on both operating systems.
+      # out of the cross-platform matrix because duplicating it adds substantial
+      # latency without platform-specific behavioral evidence. Platform jobs
+      # compile it and run all non-expensive workspace tests natively.
       - name: Run expensive P6d reference journey once
-        run: cargo test -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e p6d_workflow_journey::p6d_reference_pack_real_journey -- --exact
+        timeout-minutes: 31
+        run: python scripts/run-ci-tier.py --tier expensive-p6d-reference --budget-seconds 1800 --report target/ci-timing/p6d-reference.json -- cargo test -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e p6d_workflow_journey::p6d_reference_pack_real_journey -- --exact --nocapture
+
+      - name: Upload expensive-journey timing report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-timing-expensive-journey
+          path: target/ci-timing
+          if-no-files-found: warn

@@ -15,13 +15,14 @@ use forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance;
 use forge_core_contracts::{
     DomainPackActivePointer, DomainPackActivePointerDocument, DomainPackArtifactBinding,
     DomainPackCandidateAuthority, DomainPackCapabilitySandboxPolicyDocument,
-    DomainPackCompatibilityStatus, DomainPackComposedIdentity, DomainPackCompositionGap,
-    DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
-    DomainPackCompositionStatus, DomainPackExactLockDocument, DomainPackExpectedLifecycleState,
-    DomainPackLifecycleLedgerRecord, DomainPackLifecycleOperation,
-    DomainPackLifecyclePreflightDocument, DomainPackLifecyclePreflightStatus,
-    DomainPackLifecycleReceipt, DomainPackLifecycleReceiptDocument, DomainPackLockedPackage,
-    DomainPackRecoveryReport, DomainPackRecoveryReportDocument, DomainPackRecoveryStatus,
+    DomainPackCompatibilityReport, DomainPackCompatibilityStatus, DomainPackComposedIdentity,
+    DomainPackCompositionGap, DomainPackCompositionProjectionDocument,
+    DomainPackCompositionRequestDocument, DomainPackCompositionStatus, DomainPackExactLockDocument,
+    DomainPackExpectedLifecycleState, DomainPackLifecycleLedgerRecord,
+    DomainPackLifecycleOperation, DomainPackLifecyclePreflightDocument,
+    DomainPackLifecyclePreflightStatus, DomainPackLifecycleReceipt,
+    DomainPackLifecycleReceiptDocument, DomainPackLockedPackage, DomainPackRecoveryReport,
+    DomainPackRecoveryReportDocument, DomainPackRecoveryStatus,
     DomainPackResolutionRequestDocument, DomainPackResolutionStatus,
     DomainPackRuntimeCapabilityRegistryDocument, DomainPackSourceAssurance,
     DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, StableId,
@@ -69,6 +70,18 @@ pub struct DomainPackLifecycleStateProjection {
     pub ledger_records: Vec<DomainPackLifecycleLedgerRecord>,
 }
 
+/// Non-authoritative, integrity-checked source material for deriving a Core
+/// rebase candidate while the lifecycle lock remains held by the caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DomainPackActiveRebaseSource {
+    pub pointer: DomainPackActivePointerDocument,
+    pub exact_lock: DomainPackExactLockDocument,
+    pub resolution_request: DomainPackResolutionRequestDocument,
+    pub composition_request: DomainPackCompositionRequestDocument,
+    pub trust_input: DomainPackTrustEvaluationInput,
+    pub lifecycle_operation: DomainPackLifecycleOperation,
+}
+
 /// Move-only token required by the mechanical commit path.
 ///
 /// Its constructor is intentionally private. A later integration function in
@@ -82,6 +95,9 @@ pub struct DomainPackLifecycleCommitAuthority {
     supply_chain_verified_at_unix: u64,
     supply_chain_expires_at_unix: u64,
     verified_artifacts: Vec<OwnedDomainPackImmutableArtifact>,
+    resolution_request: DomainPackResolutionRequestDocument,
+    composition_request: DomainPackCompositionRequestDocument,
+    trust_input: DomainPackTrustEvaluationInput,
 }
 
 /// Exact immutable bytes admitted by the TCB for the lifecycle object store.
@@ -179,6 +195,23 @@ struct DomainPackGenerationManifest {
 ///
 /// Fails closed when the root is invalid, the tree escapes or exceeds bounds,
 /// a file changes while hashing, or the resulting digest differs.
+pub fn domain_pack_project_snapshot_digest(
+    project_root: impl AsRef<Path>,
+) -> Result<String, DomainPackLifecycleStoreError> {
+    let project_root = fs::canonicalize(project_root.as_ref())
+        .map_err(|error| io_error(project_root.as_ref(), error))?;
+    if !project_root.is_dir() {
+        return Err(invalid("project_root", "must be an existing directory"));
+    }
+    project_snapshot_digest(&project_root)
+}
+
+/// Recompute and retain an opaque proof of an exact project-tree snapshot.
+///
+/// # Errors
+///
+/// Fails closed when the project root is invalid, unbounded, unstable, or the
+/// computed digest differs from `expected_digest`.
 pub fn verify_domain_pack_project_snapshot(
     project_root: impl AsRef<Path>,
     expected_digest: &str,
@@ -214,12 +247,21 @@ struct ActiveDomainPackGenerationMaterial {
     pointer: DomainPackActivePointerDocument,
     lock: DomainPackExactLockDocument,
     composition: DomainPackCompositionProjectionDocument,
+    lifecycle_operation: DomainPackLifecycleOperation,
     effective_bundle: WorkflowGovernanceBundle,
     pointer_raw_digest: String,
     generation_manifest_raw_digest: String,
     lock_raw_digest: String,
     preflight_raw_digest: String,
+    rebase_inputs: Option<ActiveDomainPackRebaseInputs>,
     admission_kind: ActiveDomainPackGenerationAdmissionKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct ActiveDomainPackRebaseInputs {
+    resolution_request: DomainPackResolutionRequestDocument,
+    composition_request: DomainPackCompositionRequestDocument,
+    trust_input: DomainPackTrustEvaluationInput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -418,6 +460,72 @@ impl AdmittedActiveDomainPackGenerationView<'_> {
     #[must_use]
     pub fn lock_digest(&self) -> &str {
         &self.material().lock.domain_pack_exact_lock.lock_digest
+    }
+
+    /// Digest of the crash-recoverable active pointer captured by this generation.
+    #[must_use]
+    pub fn lifecycle_pointer_digest(&self) -> &str {
+        &self
+            .material()
+            .pointer
+            .domain_pack_active_pointer
+            .pointer_digest
+    }
+
+    /// Immutable lifecycle-ledger head selecting this generation.
+    #[must_use]
+    pub fn lifecycle_head_digest(&self) -> &str {
+        &self
+            .material()
+            .pointer
+            .domain_pack_active_pointer
+            .lifecycle_head_digest
+    }
+
+    /// Lifecycle operation that produced this immutable generation.
+    #[must_use]
+    pub fn lifecycle_operation(&self) -> &DomainPackLifecycleOperation {
+        &self.material().lifecycle_operation
+    }
+
+    /// Exact sealed Core binding used to compose the active generation.
+    #[must_use]
+    pub fn core_binding(&self) -> &forge_core_contracts::DomainPackCoreBinding {
+        &self.material().lock.domain_pack_exact_lock.payload.core
+    }
+
+    /// Exact lock retained by the active lifecycle generation.
+    #[must_use]
+    pub fn exact_lock(&self) -> &DomainPackExactLockDocument {
+        &self.material().lock
+    }
+
+    /// Candidate-only resolver input persisted after full lifecycle admission.
+    #[must_use]
+    pub fn rebase_resolution_request(&self) -> Option<&DomainPackResolutionRequestDocument> {
+        self.material()
+            .rebase_inputs
+            .as_ref()
+            .map(|inputs| &inputs.resolution_request)
+    }
+
+    /// Candidate-only composition input persisted after full lifecycle admission.
+    #[must_use]
+    pub fn rebase_composition_request(&self) -> Option<&DomainPackCompositionRequestDocument> {
+        self.material()
+            .rebase_inputs
+            .as_ref()
+            .map(|inputs| &inputs.composition_request)
+    }
+
+    /// Last admitted trust/capability input. Fresh operator roots must still be
+    /// reverified before any rebase authority can be minted.
+    #[must_use]
+    pub fn rebase_trust_input(&self) -> Option<&DomainPackTrustEvaluationInput> {
+        self.material()
+            .rebase_inputs
+            .as_ref()
+            .map(|inputs| &inputs.trust_input)
     }
 
     #[must_use]
@@ -710,6 +818,31 @@ impl LockedDomainPackLifecycle {
         }
     }
 
+    /// Load candidate-only inputs retained by the active generation for an
+    /// explicit Core rebase. Legacy generations without these inputs return a
+    /// typed blocked result and remain authoritative but non-rebasable.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed when the active generation is absent, stale, malformed, or
+    /// predates persisted rebase inputs.
+    pub fn active_rebase_source(
+        &self,
+    ) -> Result<DomainPackActiveRebaseSource, DomainPackLifecycleStoreError> {
+        let material = load_active_generation_material(&self.state_root)?;
+        let inputs = material
+            .rebase_inputs
+            .ok_or_else(|| blocked("active generation predates persisted Core-rebase inputs"))?;
+        Ok(DomainPackActiveRebaseSource {
+            pointer: material.pointer,
+            exact_lock: material.lock,
+            resolution_request: inputs.resolution_request,
+            composition_request: inputs.composition_request,
+            trust_input: inputs.trust_input,
+            lifecycle_operation: material.lifecycle_operation,
+        })
+    }
+
     /// Structurally prepare a transaction while the exact lifecycle lock is
     /// retained. This does not mint commit authority.
     ///
@@ -881,7 +1014,14 @@ impl LockedDomainPackLifecycle {
             ));
         }
 
-        materialize_generation(&self.state_root, &prepared, &authority.verified_artifacts)?;
+        materialize_generation(
+            &self.state_root,
+            &prepared,
+            &authority.verified_artifacts,
+            &authority.resolution_request,
+            &authority.composition_request,
+            &authority.trust_input,
+        )?;
         if project_snapshot_digest(&authority.project_root)? != authority.project_snapshot_digest {
             return Err(stale_project_snapshot(
                 &authority.project_snapshot_digest,
@@ -958,8 +1098,12 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         DomainPackLifecycleOperation::Rollback { .. }
     ) && lock.payload.packages.is_empty()
         && prepared.rollback_target.is_some();
+    let is_empty_core_rebase = matches!(
+        body.request.domain_pack_lifecycle_request.operation,
+        DomainPackLifecycleOperation::RebaseCore { .. }
+    ) && lock.payload.packages.is_empty();
     let composition_allowed = composition.issues.is_empty()
-        && if is_remove || is_historical_empty_rollback {
+        && if is_remove || is_historical_empty_rollback || is_empty_core_rebase {
             matches!(
                 composition.status,
                 DomainPackCompositionStatus::Composable | DomainPackCompositionStatus::Blocked
@@ -1221,10 +1365,18 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         from_lock: prepared.previous_lock.clone(),
         to_lock: body.proposed_lock.clone(),
     };
-    if evaluate_domain_pack_compatibility(&compatibility_input) != body.compatibility_report {
-        return Err(blocked(
-            "fresh compatibility evaluation differs from prepared preflight",
-        ));
+    let fresh_compatibility = evaluate_domain_pack_compatibility(&compatibility_input);
+    if fresh_compatibility != body.compatibility_report {
+        let prepared_report = &body.compatibility_report.domain_pack_compatibility_report;
+        let fresh_report = &fresh_compatibility.domain_pack_compatibility_report;
+        return Err(blocked(&format!(
+            "fresh compatibility evaluation differs from prepared preflight in fields: {}; prepared from lock/composition={:?}/{:?}; fresh={:?}/{:?}",
+            compatibility_drift_fields(prepared_report, fresh_report),
+            prepared_report.from_lock_digest,
+            prepared_report.from_composition_digest,
+            fresh_report.from_lock_digest,
+            fresh_report.from_composition_digest,
+        )));
     }
 
     let mut verified_records = verified_snapshot
@@ -1389,7 +1541,8 @@ pub fn authorize_prepared_domain_pack_lifecycle(
                 "trust input package differs from resolution or verified assessment",
             ));
         }
-        let expected_demands = expected_capability_demands(&selected.package, composition_input)?;
+        let expected_demands =
+            derive_domain_pack_capability_demands(&selected.package, composition_input)?;
         if normalized_capability_demands(&selected.capability_demands)
             != normalized_capability_demands(&expected_demands)
         {
@@ -1421,13 +1574,20 @@ pub fn authorize_prepared_domain_pack_lifecycle(
         supply_chain_verified_at_unix: verified_snapshot.verified_at_unix(),
         supply_chain_expires_at_unix: verified_snapshot.expires_at_unix(),
         verified_artifacts,
+        resolution_request: context.resolution_request.clone(),
+        composition_request: context.composition_request.clone(),
+        trust_input: context.trust_input.clone(),
     })
 }
 
+#[allow(clippy::too_many_lines)] // One staged generation must bind and fsync every authority input together.
 fn materialize_generation(
     state_root: &Path,
     prepared: &PreparedDomainPackLifecycleTransaction,
     artifacts: &[OwnedDomainPackImmutableArtifact],
+    resolution_request: &DomainPackResolutionRequestDocument,
+    composition_request: &DomainPackCompositionRequestDocument,
+    trust_input: &DomainPackTrustEvaluationInput,
 ) -> Result<(), DomainPackLifecycleStoreError> {
     let body = &prepared.preflight.domain_pack_lifecycle_preflight;
     let record_token = digest_token(&prepared.record.record_digest, "record.record_digest")?;
@@ -1473,6 +1633,21 @@ fn materialize_generation(
         state_root,
         &staging_root.join("receipt.yaml"),
         &yaml_bytes(&prepared.receipt)?,
+    )?;
+    write_immutable_under_root(
+        state_root,
+        &staging_root.join("resolution-request.yaml"),
+        &yaml_bytes(resolution_request)?,
+    )?;
+    write_immutable_under_root(
+        state_root,
+        &staging_root.join("composition-request.yaml"),
+        &yaml_bytes(composition_request)?,
+    )?;
+    write_immutable_under_root(
+        state_root,
+        &staging_root.join("trust-input.yaml"),
+        &yaml_bytes(trust_input)?,
     )?;
     let mut object_raw_digests = artifacts
         .iter()
@@ -1531,7 +1706,15 @@ fn materialize_generation(
         .join("ledger")
         .join(format!("{record_token}.yaml"));
     write_immutable_under_root(state_root, &ledger_path, &yaml_bytes(&prepared.record)?)?;
-    validate_prepared_generation(state_root, &generation_root, prepared, &manifest)?;
+    validate_prepared_generation(
+        state_root,
+        &generation_root,
+        prepared,
+        &manifest,
+        resolution_request,
+        composition_request,
+        trust_input,
+    )?;
     Ok(())
 }
 
@@ -1540,6 +1723,9 @@ fn validate_prepared_generation(
     generation_root: &Path,
     prepared: &PreparedDomainPackLifecycleTransaction,
     manifest: &DomainPackGenerationManifest,
+    resolution_request: &DomainPackResolutionRequestDocument,
+    composition_request: &DomainPackCompositionRequestDocument,
+    trust_input: &DomainPackTrustEvaluationInput,
 ) -> Result<(), DomainPackLifecycleStoreError> {
     let body = &prepared.preflight.domain_pack_lifecycle_preflight;
     for (name, expected) in [
@@ -1551,6 +1737,9 @@ fn validate_prepared_generation(
             yaml_bytes(&body.compatibility_report)?,
         ),
         ("receipt.yaml", yaml_bytes(&prepared.receipt)?),
+        ("resolution-request.yaml", yaml_bytes(resolution_request)?),
+        ("composition-request.yaml", yaml_bytes(composition_request)?),
+        ("trust-input.yaml", yaml_bytes(trust_input)?),
     ] {
         let path = generation_root.join(name);
         let actual = read_required_state_bytes(state_root, &path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
@@ -1829,6 +2018,56 @@ fn load_active_generation_material(
         read_required_state_bytes(state_root, &preflight_path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
     let preflight: DomainPackLifecyclePreflightDocument =
         parse_yaml(&preflight_path, &preflight_raw)?;
+    let rebase_input_paths = [
+        generation_root.join("resolution-request.yaml"),
+        generation_root.join("composition-request.yaml"),
+        generation_root.join("trust-input.yaml"),
+    ];
+    let rebase_input_bytes = rebase_input_paths
+        .iter()
+        .map(|path| read_optional_state_bytes(state_root, path, DOMAIN_PACK_MAX_DOCUMENT_BYTES))
+        .collect::<Result<Vec<_>, _>>()?;
+    let rebase_inputs = match rebase_input_bytes.as_slice() {
+        [None, None, None] => None,
+        [Some(resolution), Some(composition), Some(trust)] => {
+            let resolution_request: DomainPackResolutionRequestDocument =
+                parse_yaml(&rebase_input_paths[0], resolution)?;
+            let composition_request: DomainPackCompositionRequestDocument =
+                parse_yaml(&rebase_input_paths[1], composition)?;
+            let trust_input: DomainPackTrustEvaluationInput =
+                parse_yaml(&rebase_input_paths[2], trust)?;
+            let lifecycle_request = &preflight
+                .domain_pack_lifecycle_preflight
+                .request
+                .domain_pack_lifecycle_request;
+            if canonical_digest(&resolution_request)? != lifecycle_request.resolution_request_digest
+                || resolution_request.domain_pack_resolution_request.project_id
+                    != lifecycle_request.project_id
+                || composition_request
+                    .domain_pack_composition_request
+                    .requirements
+                    != resolution_request
+                        .domain_pack_resolution_request
+                        .requirements
+                        .domain_pack_project_requirements
+                || trust_input.project_id != lifecycle_request.project_id
+            {
+                return Err(blocked(
+                    "persisted rebase inputs differ from the admitted lifecycle generation",
+                ));
+            }
+            Some(ActiveDomainPackRebaseInputs {
+                resolution_request,
+                composition_request,
+                trust_input,
+            })
+        }
+        _ => {
+            return Err(blocked(
+                "persisted rebase inputs are incomplete for the active generation",
+            ));
+        }
+    };
     let composition = preflight
         .domain_pack_lifecycle_preflight
         .composition
@@ -1872,12 +2111,14 @@ fn load_active_generation_material(
     Ok(ActiveDomainPackGenerationMaterial {
         pointer,
         lock,
+        lifecycle_operation: operation.clone(),
         composition,
         effective_bundle,
         pointer_raw_digest: sha256_content_hash(&pointer_raw),
         generation_manifest_raw_digest: sha256_content_hash(&generation_manifest_raw),
         lock_raw_digest: sha256_content_hash(&lock_raw),
         preflight_raw_digest: sha256_content_hash(&preflight_raw),
+        rebase_inputs,
         admission_kind,
     })
 }
@@ -1895,7 +2136,9 @@ fn classify_active_generation(
     }
     let legitimate_empty_operation = matches!(
         operation,
-        DomainPackLifecycleOperation::Remove { .. } | DomainPackLifecycleOperation::Rollback { .. }
+        DomainPackLifecycleOperation::Remove { .. }
+            | DomainPackLifecycleOperation::Rollback { .. }
+            | DomainPackLifecycleOperation::RebaseCore { .. }
     );
     let legitimate_degraded_empty = legitimate_empty_operation
         && composition.status == DomainPackCompositionStatus::Blocked
@@ -2002,9 +2245,19 @@ fn validate_preflight(
             DomainPackCompatibilityStatus::Compatible | DomainPackCompatibilityStatus::Degraded
         ),
         DomainPackLifecycleOperation::Rollback { .. } if historical_empty_rollback => true,
+        DomainPackLifecycleOperation::RebaseCore { .. } => matches!(
+            report.status,
+            DomainPackCompatibilityStatus::Compatible | DomainPackCompatibilityStatus::Degraded
+        ),
         _ => report.status == DomainPackCompatibilityStatus::Compatible,
     };
-    if !allowed || !report.universal_core_unchanged {
+    let core_binding_allowed =
+        if matches!(operation, DomainPackLifecycleOperation::RebaseCore { .. }) {
+            !report.universal_core_unchanged
+        } else {
+            report.universal_core_unchanged
+        };
+    if !allowed || !core_binding_allowed {
         return Err(DomainPackLifecycleStoreError::PreflightBlocked {
             reason: "compatibility or sealed-core invariant blocks operation".to_owned(),
         });
@@ -2023,6 +2276,7 @@ fn validate_exact_lock(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // Lifecycle intents are audited together to keep cross-operation prohibitions explicit.
 fn validate_operation_intent(
     operation: &DomainPackLifecycleOperation,
     from_lock: Option<&DomainPackExactLockDocument>,
@@ -2110,6 +2364,33 @@ fn validate_operation_intent(
                 ));
             }
         }
+        DomainPackLifecycleOperation::RebaseCore {
+            target_release_id,
+            expected_from_core_digest,
+            target_core_digest,
+        } => {
+            let Some(previous) = from_lock else {
+                return Err(blocked(
+                    "core rebase requires an initialized lifecycle lock",
+                ));
+            };
+            let previous = &previous.domain_pack_exact_lock.payload;
+            let target = &to_lock.domain_pack_exact_lock.payload;
+            if target_release_id.0.trim().is_empty()
+                || previous.core.bundle_digest != *expected_from_core_digest
+                || target.core.bundle_digest != *target_core_digest
+                || previous.core == target.core
+                || previous.roots != target.roots
+                || previous.requirements_digest != target.requirements_digest
+                || previous.packages != target.packages
+                || resolution.current_lock.is_some()
+                || resolution.roots != previous.roots
+            {
+                return Err(blocked(
+                    "core rebase must bind the initialized source lock, exact target Core, and unchanged package roots/material",
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -2120,8 +2401,11 @@ fn validate_reviewed_operation_transition(
     to_packages: &[DomainPackLockedPackage],
     reviewed_join: &forge_core_decisions::DomainPackReviewedResolutionProjection,
 ) -> Result<(), DomainPackLifecycleStoreError> {
-    if matches!(operation, DomainPackLifecycleOperation::Rollback { .. })
-        && to_packages.is_empty()
+    if matches!(
+        operation,
+        DomainPackLifecycleOperation::Rollback { .. }
+            | DomainPackLifecycleOperation::RebaseCore { .. }
+    ) && to_packages.is_empty()
         && reviewed_join.joins.is_empty()
     {
         // The exact historical remove-last lock contains no package that could
@@ -2139,7 +2423,7 @@ fn validate_reviewed_operation_transition(
                 .any(|join| join.status != DomainPackReviewedResolutionJoinStatus::EligibleReviewed)
         {
             return Err(blocked(
-                "install, upgrade, and rollback require every selected package to be eligible-reviewed",
+                "install, upgrade, rollback, and core rebase require every selected package to be eligible-reviewed",
             ));
         }
         return Ok(());
@@ -2385,7 +2669,15 @@ fn expected_staged_artifact_bindings(
     normalized_artifact_bindings(&bindings)
 }
 
-fn expected_capability_demands(
+/// Derive the exact runtime-capability demands encoded by one resolved raw
+/// package candidate and the project requirements. This is deterministic,
+/// read-only evidence and grants no runtime or lifecycle authority.
+///
+/// # Errors
+///
+/// Fails closed when the composition request lacks the exact selected package
+/// or a semantic contribution references an undeclared capability.
+pub fn derive_domain_pack_capability_demands(
     package: &forge_core_contracts::DomainPackResolvedPackage,
     composition: &forge_core_contracts::DomainPackCompositionRequest,
 ) -> Result<Vec<DomainPackCapabilityDemand>, DomainPackLifecycleStoreError> {
@@ -2909,6 +3201,30 @@ fn invalid(field: &'static str, reason: &str) -> DomainPackLifecycleStoreError {
     DomainPackLifecycleStoreError::InvalidArgument {
         field,
         reason: reason.to_owned(),
+    }
+}
+
+fn compatibility_drift_fields(
+    expected: &DomainPackCompatibilityReport,
+    observed: &DomainPackCompatibilityReport,
+) -> String {
+    let expected = serde_json::to_value(expected).unwrap_or(serde_json::Value::Null);
+    let observed = serde_json::to_value(observed).unwrap_or(serde_json::Value::Null);
+    match (expected.as_object(), observed.as_object()) {
+        (Some(expected), Some(observed)) => {
+            let fields = expected
+                .iter()
+                .filter_map(|(field, value)| {
+                    (observed.get(field) != Some(value)).then_some(field.as_str())
+                })
+                .collect::<Vec<_>>();
+            if fields.is_empty() {
+                "unknown".to_owned()
+            } else {
+                fields.join(",")
+            }
+        }
+        _ => "document-shape".to_owned(),
     }
 }
 

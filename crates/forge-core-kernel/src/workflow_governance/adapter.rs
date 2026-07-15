@@ -10,7 +10,8 @@
 
 use super::{
     admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
-    domain_pack_generation_transition_event, evaluate_verified_workflow_governance,
+    derive_domain_pack_core_binding, domain_pack_generation_transition_event,
+    evaluate_verified_workflow_governance,
     load_admitted_workflow_governance_universal_assurance_release_registry,
     AdmittedEffectiveWorkflowGovernanceBundle, AdmittedWorkflowGovernanceRelease,
     AdmittedWorkflowGovernanceReleaseError, AdmittedWorkflowGovernanceReleaseRegistry,
@@ -41,21 +42,22 @@ use forge_core_contracts::workflow_governance::{
 };
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ContinuityRecordedEvent,
-    DecisionAlternative, DecisionResolvedEvent, DomainPackCompositionGap,
-    DurableAssuranceEpistemicState, DurableAssuranceProjection, EvaluatorObservedEvent, Phase,
-    PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent,
-    ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent, SignalChangedEvent, StableId,
-    UniversalAssuranceLens, WaiverAuthorizedEvent, WorkflowAssuranceClaimRole,
-    WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
-    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
-    WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
-    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
-    WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
-    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
+    CoreDomainPackRebasedEvent, DecisionAlternative, DecisionResolvedEvent,
+    DomainPackCompositionGap, DomainPackCoreBinding, DomainPackLifecycleOperation,
+    DomainPackRebasePlanDocument, DomainPackRebasePlanInput, DurableAssuranceEpistemicState,
+    DurableAssuranceProjection, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent,
+    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget,
+    ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
+    WaiverAuthorizedEvent, WorkflowAssuranceClaimRole, WorkflowCapabilityProbeKind,
+    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
+    WorkflowContentAddressedReference, WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider,
+    WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
+    WorkflowEvidenceOutcome, WorkflowEvidenceProvenance, WorkflowEvidenceStrength,
+    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvaluation, WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
+    WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
+    WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
+    WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
     MAX_REPRESENTATIVE_SLICE_ITEMS, MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
     MAX_REPRESENTATIVE_SLICE_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
@@ -65,14 +67,15 @@ use forge_core_contracts::{
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    find_entry, load_embedded_frozen_legacy_catalog, project_durable_assurance,
-    project_governed_durable_assurance, project_legacy_workflow_compatibility,
-    simulate_workflow_governance, validate_representative_slice_definition,
-    workflow_human_intent_digest, AssuranceProjectionError, GovernedAssuranceActionPacketFact,
-    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
-    GovernedAssuranceFacts, GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
-    WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
-    WorkflowGovernanceStatus,
+    find_entry, load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
+    project_durable_assurance, project_governed_durable_assurance,
+    project_legacy_workflow_compatibility, simulate_workflow_governance,
+    validate_representative_slice_definition, verify_domain_pack_rebase_plan,
+    workflow_human_intent_digest, AssuranceProjectionError, DomainPackRebasePlanError,
+    GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
+    GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
+    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection, WorkflowClaimResultStatus,
+    WorkflowGovernanceRejection, WorkflowGovernanceSimulation, WorkflowGovernanceStatus,
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle, AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
@@ -84,9 +87,9 @@ use forge_core_store::workflow_action_replay::{
     WorkflowActionReplayError,
 };
 use forge_core_workflow_governance_tcb::{
-    lock_workflow_governance_ledger_tcb, LockedWorkflowGovernanceLedger,
-    WorkflowGovernanceLedgerError, WorkflowGovernanceLedgerIdentity,
-    WorkflowGovernanceLedgerProjection,
+    domain_pack_receipt_carryover, lock_workflow_governance_ledger_tcb,
+    LockedWorkflowGovernanceLedger, WorkflowGovernanceLedgerError,
+    WorkflowGovernanceLedgerIdentity, WorkflowGovernanceLedgerProjection,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -108,6 +111,8 @@ const WORKFLOW_AUTHORIZATION_ACTION_PACKET_SCHEMA_VERSION: &str =
     "workflow_authorization_action_packets_v1";
 const WORKFLOW_AUTHORIZATION_PREPARATION_TTL_SECONDS: u64 = 300;
 const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
+const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
+const DOMAIN_PACK_REBASE_PLAN_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Canonical project binding used by every live governance operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -533,6 +538,22 @@ enum LockedWorkflowDomainPackContext {
     Active(Box<AdmittedActiveDomainPackGeneration>),
 }
 
+#[derive(Debug, Clone)]
+struct WorkflowDomainPackRebaseMaterial {
+    source_core: DomainPackCoreBinding,
+    lifecycle_operation: DomainPackLifecycleOperation,
+    generation: u64,
+    lifecycle_pointer_digest: String,
+    lifecycle_head_digest: String,
+    active_lock_digest: String,
+    composition_digest: String,
+    supply_chain_registry_digest: String,
+    reviewer_registry_digest: String,
+    reviewed_registry_digest: String,
+    active_package_count: usize,
+    active_composition_gaps: Vec<DomainPackCompositionGap>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DomainPackTransitionRecovery {
     TargetCommitted,
@@ -558,6 +579,29 @@ impl LockedWorkflowDomainPackContext {
             }
             Self::Active(_) => true,
         }
+    }
+
+    fn rebase_material(
+        &self,
+    ) -> Result<Option<WorkflowDomainPackRebaseMaterial>, WorkflowGovernanceAdapterError> {
+        let Self::Active(active) = self else {
+            return Ok(None);
+        };
+        let view = active.verified_view()?;
+        Ok(Some(WorkflowDomainPackRebaseMaterial {
+            source_core: view.core_binding().clone(),
+            lifecycle_operation: view.lifecycle_operation().clone(),
+            generation: view.generation_id(),
+            lifecycle_pointer_digest: view.lifecycle_pointer_digest().to_owned(),
+            lifecycle_head_digest: view.lifecycle_head_digest().to_owned(),
+            active_lock_digest: view.lock_digest().to_owned(),
+            composition_digest: view.composition_digest().to_owned(),
+            supply_chain_registry_digest: view.supply_chain_registry_digest().to_owned(),
+            reviewer_registry_digest: view.reviewer_registry_digest().to_owned(),
+            reviewed_registry_digest: view.reviewed_registry_digest().to_owned(),
+            active_package_count: view.active_package_identities().len(),
+            active_composition_gaps: view.degraded_gaps().to_vec(),
+        }))
     }
 
     fn admit_effective(
@@ -714,6 +758,7 @@ impl WorkflowGovernanceProjectAdapter {
     /// # Errors
     /// Returns a typed error when binding, recovery, or policy evaluation fails.
     pub fn next(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
@@ -1101,6 +1146,7 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn release_status(
         &self,
     ) -> Result<WorkflowGovernanceReleaseStatus, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -1113,9 +1159,8 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .clone()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
-        let available = registry
-            .adjacent_successor(active)
-            .map(|successor| successor.release().clone());
+        let successor = registry.adjacent_successor(active);
+        let available = successor.map(|target| target.release().clone());
         let domain_pack_rebase_required = domain.has_active_generation();
         let upgrade_argv = (!domain_pack_rebase_required)
             .then_some(available.as_ref())
@@ -1137,6 +1182,42 @@ impl WorkflowGovernanceProjectAdapter {
                     snapshot_digest.clone(),
                 ]
             });
+        let rebase_plan = if domain_pack_rebase_required {
+            successor
+                .map(|target| {
+                    self.derive_domain_pack_rebase_plan(
+                        active,
+                        target,
+                        &effective,
+                        &domain,
+                        &head_digest,
+                        &snapshot_digest,
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        let rebase_plan_digest = rebase_plan
+            .as_ref()
+            .map(|plan| plan.domain_pack_rebase_plan.plan_digest.clone());
+        let rebase_argv = rebase_plan.as_ref().map(|plan| {
+            vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "release-rebase-apply".to_owned(),
+                "--root".to_owned(),
+                self.binding.project_root.display().to_string(),
+                "--target-release-id".to_owned(),
+                plan.domain_pack_rebase_plan
+                    .target_release
+                    .release_id
+                    .0
+                    .clone(),
+                "--expected-rebase-plan-digest".to_owned(),
+                plan.domain_pack_rebase_plan.plan_digest.clone(),
+            ]
+        });
         Ok(WorkflowGovernanceReleaseStatus {
             active: Self::release_audit(&registry, active, &projection),
             effective: effective.identity().clone(),
@@ -1148,7 +1229,320 @@ impl WorkflowGovernanceProjectAdapter {
             available_successor: available,
             upgrade_argv,
             domain_pack_rebase_required,
+            rebase_plan_digest,
+            rebase_argv,
         })
+    }
+
+    /// Recompute and return an exact-CAS, read-only coordinated rebase plan.
+    /// No lifecycle pointer or workflow ledger event is written by this method.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale plan digests, unreconciled joined epochs, non-adjacent
+    /// targets, or any invalid durable authority input without mutation.
+    pub fn release_rebase_plan(
+        &self,
+        target_release_id: &StableId,
+        expected_rebase_plan_digest: &str,
+    ) -> Result<DomainPackRebasePlanDocument, WorkflowGovernanceAdapterError> {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        if !domain.has_active_generation() {
+            return Err(WorkflowGovernanceAdapterError::DomainPackGenerationMissing);
+        }
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let source = self.resolve_active_release(&registry, &projection)?;
+        let target = registry.release_by_id(target_release_id).ok_or_else(|| {
+            WorkflowGovernanceAdapterError::UnknownRelease(target_release_id.0.clone())
+        })?;
+        if !target.is_adjacent_successor_of(source) {
+            return Err(WorkflowGovernanceAdapterError::ReleaseNotAdjacent);
+        }
+        let effective = domain.admit_effective(source)?;
+        if projection.active_effective_bundle_identity().as_ref() != Some(effective.identity()) {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let head_digest = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let plan = self.derive_domain_pack_rebase_plan(
+            source,
+            target,
+            &effective,
+            &domain,
+            &head_digest,
+            &snapshot_digest,
+        )?;
+        if plan.domain_pack_rebase_plan.plan_digest != expected_rebase_plan_digest
+            || project_snapshot_digest(&self.binding.project_root)? != snapshot_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        Ok(plan)
+    }
+
+    /// Complete a joined Core/Domain-Pack rebase after the lifecycle TCB has
+    /// committed exactly one target-Core generation. The lifecycle pointer is
+    /// acquired first; the workflow WAL then advances both effective and core
+    /// identities in one record. A crash before this method is recoverable by
+    /// replaying it with the original plan CAS.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed unless the old workflow head and the new lifecycle
+    /// generation form the exact endpoints committed by `plan`.
+    pub fn complete_release_rebase(
+        &self,
+        plan: &DomainPackRebasePlanDocument,
+    ) -> Result<WorkflowGovernanceReleaseUpgradeReceipt, WorkflowGovernanceAdapterError> {
+        if !verify_domain_pack_rebase_plan(plan) {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let plan = &plan.domain_pack_rebase_plan;
+        if !plan.mutation_allowed || !plan.actionable_gaps.is_empty() {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseApplyUnavailable);
+        }
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let material = domain
+            .rebase_material()?
+            .ok_or(WorkflowGovernanceAdapterError::DomainPackGenerationMissing)?;
+        let DomainPackLifecycleOperation::RebaseCore {
+            target_release_id,
+            expected_from_core_digest,
+            target_core_digest,
+        } = &material.lifecycle_operation
+        else {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        };
+        if target_release_id != &plan.target_release.release_id
+            || expected_from_core_digest != &plan.source_core.bundle_digest
+            || target_core_digest != &plan.target_core.bundle_digest
+            || material.generation != plan.exact_cas.expected_generation.saturating_add(1)
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let source = self.resolve_active_release(&registry, &projection)?;
+        let target = registry
+            .release_by_id(&plan.target_release.release_id)
+            .ok_or_else(|| {
+                WorkflowGovernanceAdapterError::UnknownRelease(
+                    plan.target_release.release_id.0.clone(),
+                )
+            })?;
+        if source.release() != &plan.source_release
+            || target.release() != &plan.target_release
+            || !target.is_adjacent_successor_of(source)
+            || projection.head_digest.as_deref()
+                != Some(plan.exact_cas.expected_workflow_ledger_head_digest.as_str())
+            || project_snapshot_digest(&self.binding.project_root)?
+                != plan.exact_cas.expected_project_snapshot_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let from_effective = projection
+            .active_effective_bundle_identity()
+            .ok_or(WorkflowGovernanceAdapterError::DomainPackGenerationMissing)?;
+        if from_effective.effective_runtime_bundle.bundle_digest
+            != plan.exact_cas.expected_effective_bundle_digest
+            || from_effective.receipt_context_digest
+                != plan.exact_cas.expected_receipt_context_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let target_core = derive_domain_pack_core_binding(target)?;
+        if target_core != plan.target_core || material.source_core != target_core {
+            return Err(WorkflowGovernanceAdapterError::DomainPackCoreMismatch);
+        }
+        let to_effective = domain.admit_effective(target)?;
+        let target_generation = to_effective
+            .identity()
+            .domain_pack_generation
+            .as_ref()
+            .ok_or(WorkflowGovernanceAdapterError::DomainPackGenerationMissing)?;
+        if target_generation.generation != material.generation
+            || target_generation.active_lock_digest != material.active_lock_digest
+            || target_generation.composition_digest != material.composition_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let release_transition = ReleaseUpgradedEvent {
+            from_release: source.release().clone(),
+            to_release: target.release().clone(),
+            from_runtime_bundle: source.runtime_bundle().clone(),
+            to_runtime_bundle: target.runtime_bundle().clone(),
+            registry_provenance: registry.registry_provenance(),
+            admission_proof: registry.admission_proof(
+                source,
+                target,
+                &plan.exact_cas.expected_project_snapshot_digest,
+            )?,
+            receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+            prior_ledger_head_digest: plan.exact_cas.expected_workflow_ledger_head_digest.clone(),
+        };
+        let carryover = domain_pack_receipt_carryover(&from_effective, to_effective.identity());
+        let event = CoreDomainPackRebasedEvent {
+            release_transition,
+            from_effective_bundle: from_effective,
+            to_effective_bundle: to_effective.identity().clone(),
+            receipt_carryover: carryover,
+            prior_ledger_head_digest: plan.exact_cas.expected_workflow_ledger_head_digest.clone(),
+        };
+        let source_identity = self.identity(source);
+        let target_identity = self.identity(target);
+        let state_version = projection
+            .current_state_version()
+            .unwrap_or_default()
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
+        if project_snapshot_digest(&self.binding.project_root)?
+            != plan.exact_cas.expected_project_snapshot_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let record = ledger.transition_core_domain_pack_rebase_unchecked_tcb(
+            &plan.exact_cas.expected_workflow_ledger_head_digest,
+            &source_identity,
+            &target_identity,
+            state_version,
+            event,
+        )?;
+        let committed = ledger.recover()?;
+        let active = self.resolve_active_release(&registry, &committed)?;
+        if active.release() != target.release()
+            || committed.active_effective_bundle_identity().as_ref()
+                != Some(to_effective.identity())
+        {
+            return Err(WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate);
+        }
+        Self::release_upgrade_receipt(
+            WorkflowGovernanceReleaseUpgradeStatus::Upgraded,
+            &registry,
+            active,
+            &committed,
+            Some(record),
+            &plan.exact_cas.expected_project_snapshot_digest,
+        )
+    }
+
+    fn recover_pending_release_rebase(&self) -> Result<bool, WorkflowGovernanceAdapterError> {
+        let path = self
+            .binding
+            .state_root
+            .join(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH);
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => {
+                return Err(WorkflowGovernanceAdapterError::Path {
+                    field: "domain_pack_rebase_plan",
+                    path,
+                    source: error.to_string(),
+                });
+            }
+        };
+        if !metadata.is_file() || metadata.len() > DOMAIN_PACK_REBASE_PLAN_MAX_BYTES {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let bytes = fs::read(&path).map_err(|error| WorkflowGovernanceAdapterError::Path {
+            field: "domain_pack_rebase_plan",
+            path: path.clone(),
+            source: error.to_string(),
+        })?;
+        let plan: DomainPackRebasePlanDocument =
+            yaml_serde::from_slice(&bytes).map_err(|error| {
+                WorkflowGovernanceAdapterError::ProjectBinding {
+                    source: format!(
+                        "invalid persisted rebase plan '{}': {error}",
+                        path.display()
+                    ),
+                }
+            })?;
+        if !verify_domain_pack_rebase_plan(&plan) {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        let lifecycle = lock_domain_pack_lifecycle(&self.binding.state_root)?;
+        let source = lifecycle.active_rebase_source()?;
+        let expected_generation = plan
+            .domain_pack_rebase_plan
+            .exact_cas
+            .expected_generation
+            .saturating_add(1);
+        let lifecycle_is_committed_target = matches!(
+            &source.lifecycle_operation,
+            DomainPackLifecycleOperation::RebaseCore {
+                target_release_id,
+                expected_from_core_digest,
+                target_core_digest,
+            } if target_release_id == &plan.domain_pack_rebase_plan.target_release.release_id
+                && expected_from_core_digest == &plan.domain_pack_rebase_plan.source_core.bundle_digest
+                && target_core_digest == &plan.domain_pack_rebase_plan.target_core.bundle_digest
+                && source.pointer.domain_pack_active_pointer.generation == expected_generation
+        );
+        drop(lifecycle);
+        if !lifecycle_is_committed_target {
+            return Ok(false);
+        }
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        drop(ledger);
+        let active = self.resolve_active_release(&registry, &projection)?;
+        if active.release() == &plan.domain_pack_rebase_plan.target_release {
+            return Ok(false);
+        }
+        if active.release() != &plan.domain_pack_rebase_plan.source_release {
+            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+        }
+        self.complete_release_rebase(&plan)?;
+        Ok(true)
+    }
+
+    fn derive_domain_pack_rebase_plan(
+        &self,
+        source: &AdmittedWorkflowGovernanceRelease,
+        target: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle<'_>,
+        domain: &LockedWorkflowDomainPackContext,
+        workflow_ledger_head_digest: &str,
+        project_snapshot_digest: &str,
+    ) -> Result<DomainPackRebasePlanDocument, WorkflowGovernanceAdapterError> {
+        let material = domain
+            .rebase_material()?
+            .ok_or(WorkflowGovernanceAdapterError::DomainPackGenerationMissing)?;
+        let source_core = derive_domain_pack_core_binding(source)?;
+        if source_core != material.source_core {
+            return Err(WorkflowGovernanceAdapterError::DomainPackCoreMismatch);
+        }
+        let target_core = derive_domain_pack_core_binding(target)?;
+        Ok(plan_domain_pack_rebase(&DomainPackRebasePlanInput {
+            project_id: self.binding.project_id.clone(),
+            source_release: source.release().clone(),
+            target_release: target.release().clone(),
+            source_core,
+            target_core,
+            target_workflow_receipt_carryover: target.receipt_carryover(),
+            effective_identity: effective.identity().clone(),
+            lifecycle_operation: material.lifecycle_operation,
+            generation: material.generation,
+            lifecycle_pointer_digest: material.lifecycle_pointer_digest,
+            lifecycle_head_digest: material.lifecycle_head_digest,
+            active_lock_digest: material.active_lock_digest,
+            composition_digest: material.composition_digest,
+            supply_chain_registry_digest: material.supply_chain_registry_digest,
+            reviewer_registry_digest: material.reviewer_registry_digest,
+            reviewed_registry_digest: material.reviewed_registry_digest,
+            active_package_count: material.active_package_count,
+            active_composition_gaps: material.active_composition_gaps,
+            workflow_ledger_head_digest: workflow_ledger_head_digest.to_owned(),
+            project_snapshot_digest: project_snapshot_digest.to_owned(),
+        })?)
     }
 
     /// Atomically move a project pin to one exact adjacent admitted release.
@@ -2234,8 +2628,12 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let mut active = genesis;
         for record in &projection.records {
-            let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event else {
-                continue;
+            let (event, joined_rebase) = match &record.event {
+                WorkflowGovernanceEvent::ReleaseUpgraded(event) => (event, false),
+                WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                    (&event.release_transition, true)
+                }
+                _ => continue,
             };
             if event.from_release != *active.release()
                 || event.from_runtime_bundle != *active.runtime_bundle()
@@ -2252,7 +2650,11 @@ impl WorkflowGovernanceProjectAdapter {
             if !target.is_adjacent_successor_of(active)
                 || event.to_release != *target.release()
                 || event.to_runtime_bundle != *target.runtime_bundle()
-                || event.receipt_carryover != target.receipt_carryover()
+                || if joined_rebase {
+                    event.receipt_carryover != WorkflowReceiptCarryover::InvalidateAll
+                } else {
+                    event.receipt_carryover != target.receipt_carryover()
+                }
                 || event.admission_proof
                     != AdmittedWorkflowGovernanceReleaseRegistry::admission_proof_with_provenance(
                         &event.registry_provenance,
@@ -2277,22 +2679,25 @@ impl WorkflowGovernanceProjectAdapter {
         projection: &WorkflowGovernanceLedgerProjection,
     ) -> WorkflowGovernanceReleaseAudit {
         let transition_provenance = projection.records.iter().rev().find_map(|record| {
-            if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
-                (event.to_release.release_id == admitted.release().release_id)
-                    .then(|| event.registry_provenance.clone())
-            } else {
-                None
-            }
+            let event = match &record.event {
+                WorkflowGovernanceEvent::ReleaseUpgraded(event) => event,
+                WorkflowGovernanceEvent::CoreDomainPackRebased(event) => &event.release_transition,
+                _ => return None,
+            };
+            (event.to_release.release_id == admitted.release().release_id)
+                .then(|| event.registry_provenance.clone())
         });
         WorkflowGovernanceReleaseAudit {
             release: admitted.release().clone(),
             runtime_bundle: admitted.runtime_bundle().clone(),
             registry: transition_provenance.unwrap_or_else(|| registry.registry_provenance()),
-            pin_origin: if projection
-                .records
-                .iter()
-                .any(|record| matches!(record.event, WorkflowGovernanceEvent::ReleaseUpgraded(_)))
-            {
+            pin_origin: if projection.records.iter().any(|record| {
+                matches!(
+                    record.event,
+                    WorkflowGovernanceEvent::ReleaseUpgraded(_)
+                        | WorkflowGovernanceEvent::CoreDomainPackRebased(_)
+                )
+            }) {
                 WorkflowGovernanceReleasePinOrigin::LedgerTransition
             } else {
                 WorkflowGovernanceReleasePinOrigin::ImplicitP5cGenesis
@@ -3293,6 +3698,8 @@ pub struct WorkflowGovernanceReleaseStatus {
     pub state_version: u64,
     pub available_successor: Option<WorkflowGovernanceReleaseIdentity>,
     pub upgrade_argv: Option<Vec<String>>,
+    pub rebase_plan_digest: Option<String>,
+    pub rebase_argv: Option<Vec<String>>,
     pub domain_pack_rebase_required: bool,
 }
 
@@ -3385,6 +3792,7 @@ pub enum WorkflowGovernanceAdapterError {
     },
     ReleaseAdmission(AdmittedWorkflowGovernanceReleaseError),
     DomainPackLifecycle(DomainPackLifecycleStoreError),
+    DomainPackRebasePlan(DomainPackRebasePlanError),
     EffectiveBundle(EffectiveWorkflowGovernanceBundleError),
     Ledger(WorkflowGovernanceLedgerError),
     ActionReplay(WorkflowActionReplayError),
@@ -3399,6 +3807,9 @@ pub enum WorkflowGovernanceAdapterError {
     ReleaseCasMismatch,
     ReleaseChainInvalid,
     ReleaseCommitIndeterminate,
+    DomainPackRebaseCasMismatch,
+    DomainPackRebaseApplyUnavailable,
+    DomainPackRebaseLifecycle(String),
     DomainPackRebaseRequired,
     DomainPackCoreMismatch,
     DomainPackGenerationMissing,
@@ -3458,6 +3869,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::EffectiveBundle(error) => {
                 write!(f, "effective workflow bundle admission failed: {error}")
             }
+            Self::DomainPackRebasePlan(error) => {
+                write!(f, "Domain Pack rebase planning failed: {error}")
+            }
             Self::Ledger(error) => write!(f, "governance ledger failed: {error}"),
             Self::ActionReplay(error) => write!(f, "workflow action replay failed: {error}"),
             Self::TrustedSnapshot(error) => write!(f, "trusted snapshot failed: {error:?}"),
@@ -3473,6 +3887,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::ReleaseCasMismatch => f.write_str("workflow release upgrade CAS failed; refresh release status"),
             Self::ReleaseChainInvalid => f.write_str("durable workflow release transition chain is not admitted"),
             Self::ReleaseCommitIndeterminate => f.write_str("workflow release commit recovery did not resolve to source or requested target"),
+            Self::DomainPackRebaseCasMismatch => f.write_str("DomainPackRebaseCasMismatch: joined Core/Domain Pack rebase plan is stale; refresh release status"),
+            Self::DomainPackRebaseApplyUnavailable => f.write_str("DomainPackRebaseApplyUnavailable: rebase plan is not ready for TCB revalidation"),
+            Self::DomainPackRebaseLifecycle(reason) => write!(f, "DomainPackRebaseLifecycle: {reason}"),
             Self::DomainPackRebaseRequired => f.write_str("DomainPackRebaseRequired: an active Domain Pack generation must be explicitly rebased before workflow release upgrade"),
             Self::DomainPackCoreMismatch => f.write_str("active Domain Pack generation is bound to a different universal workflow core runtime"),
             Self::DomainPackGenerationMissing => f.write_str("workflow ledger has an effective Domain Pack epoch but the lifecycle has no active generation"),
@@ -3530,6 +3947,11 @@ impl From<DomainPackLifecycleStoreError> for WorkflowGovernanceAdapterError {
 impl From<EffectiveWorkflowGovernanceBundleError> for WorkflowGovernanceAdapterError {
     fn from(value: EffectiveWorkflowGovernanceBundleError) -> Self {
         Self::EffectiveBundle(value)
+    }
+}
+impl From<DomainPackRebasePlanError> for WorkflowGovernanceAdapterError {
+    fn from(value: DomainPackRebasePlanError) -> Self {
+        Self::DomainPackRebasePlan(value)
     }
 }
 impl From<WorkflowGovernanceLedgerError> for WorkflowGovernanceAdapterError {
@@ -4117,6 +4539,7 @@ fn derive_receipts(
     Ok(derived)
 }
 
+#[allow(clippy::too_many_arguments)] // The assurance projection binds all independent authority roots explicitly.
 fn derive_governed_assurance_facts(
     bundle: &WorkflowGovernanceBundleDocument,
     effective_identity: &WorkflowEffectiveBundleIdentity,
@@ -4222,13 +4645,12 @@ fn derive_governed_assurance_facts(
                                 claim.id == event.claim_ref
                                     && claim.evaluator_ref == event.evaluator_ref
                             })
-                            .and_then(|claim| {
+                            .zip(
                                 policy
                                     .evaluators
                                     .iter()
-                                    .find(|evaluator| evaluator.id == event.evaluator_ref)
-                                    .map(|evaluator| (claim, evaluator))
-                            })
+                                    .find(|evaluator| evaluator.id == event.evaluator_ref),
+                            )
                     })
                 else {
                     continue;
@@ -4524,6 +4946,9 @@ fn receipt_window_start(projection: &WorkflowGovernanceLedgerProjection) -> usiz
                     && event.from_effective_bundle.receipt_context_digest
                         == event.to_effective_bundle.receipt_context_digest,
             )),
+            WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                Some((event.receipt_carryover, false))
+            }
             _ => None,
         };
         if let Some((carryover, exactly_equivalent)) = carryover {
@@ -5574,16 +5999,14 @@ fn prepare_authorization_from_packet(
                     runtime_subject_digest,
                     allowed_scenario_digests,
                     ..
-                }) => {
-                    if subject_kind != WorkflowEvidenceSubjectKind::Runtime
-                        || &subject_ref != runtime_subject_ref
-                        || &subject_digest != runtime_subject_digest
-                        || !allowed_scenario_digests.contains(&scenario_digest)
-                    {
-                        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
-                    }
+                }) if subject_kind != WorkflowEvidenceSubjectKind::Runtime
+                    || &subject_ref != runtime_subject_ref
+                    || &subject_digest != runtime_subject_digest
+                    || !allowed_scenario_digests.contains(&scenario_digest) =>
+                {
+                    return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
                 }
-                None => {}
+                Some(WorkflowRepresentativeSliceActionBinding::Execution { .. }) | None => {}
             }
             let request = WorkflowEvidenceAuthorizationRequest {
                 project_id: packet.binding.project_id.clone(),

@@ -213,6 +213,43 @@ fn sealed_core_change_and_invalid_lock_digest_block() {
 }
 
 #[test]
+fn explicit_core_rebase_accepts_only_exact_core_change_and_invalidates_receipts() {
+    let old = lock(vec![locked_package(
+        DomainPackSourceAssurance::SupplyChainVerified,
+    )]);
+    let source_digest = old
+        .domain_pack_exact_lock
+        .payload
+        .core
+        .bundle_digest
+        .clone();
+    let mut new = old.clone();
+    new.domain_pack_exact_lock.payload.core.bundle_id =
+        StableId("bundle.workflow-governance.adjacent".to_owned());
+    new.domain_pack_exact_lock.payload.core.bundle_digest = D.to_owned();
+    new.domain_pack_exact_lock.payload.core.policy_set_digest = B.to_owned();
+    resign(&mut new);
+    let operation = DomainPackLifecycleOperation::RebaseCore {
+        target_release_id: StableId("workflow.release.adjacent".to_owned()),
+        expected_from_core_digest: source_digest,
+        target_core_digest: D.to_owned(),
+    };
+    let report = evaluate_domain_pack_compatibility(&input(operation, Some(old), new))
+        .domain_pack_compatibility_report;
+    assert_eq!(report.status, DomainPackCompatibilityStatus::Compatible);
+    assert!(!report.universal_core_unchanged);
+    assert!(report.issues.is_empty());
+    assert_eq!(
+        report.receipt_policy,
+        DomainPackReceiptMigrationPolicy::InvalidateAll
+    );
+    assert!(report
+        .changes
+        .iter()
+        .any(|change| change.kind == DomainPackSemanticChangeKind::PolicyChanged));
+}
+
+#[test]
 fn install_upgrade_and_rollback_block_on_capability_gap_but_remove_degrades() {
     for kind in ["install", "upgrade", "rollback"] {
         let old = (kind != "install").then(|| lock(vec![]));

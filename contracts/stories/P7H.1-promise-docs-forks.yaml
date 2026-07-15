@@ -1,0 +1,33 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7H.1"
+status: "implemented_pending_P7F_P7G_release_evidence"
+slice: "P7h-promise-hardening-docs-and-forks"
+title: "Align every public promise with executable evidence"
+
+intent: >-
+  Give users, host agents, operators, contributors, security reviewers, and
+  forks short audience-specific guidance whose claims never exceed the shipped
+  release and mediated evidence.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7h-promise-hardening-docs-and-forks"
+  - "docs/product-compliance-audit.md"
+  - "docs/security-model.md"
+
+acceptance_criteria:
+  - "README is a concise landing path and routes each audience to one canonical guide."
+  - "Source checkpoint, latest prebuilt, workflow release identity, and Domain Pack effective epoch are unmistakably separate."
+  - "State, sidecar, operator trust, secret, package, and release-asset locations are consistent across docs."
+  - "Claims about chat-only use, identity, independence, hostile isolation, mediated writes, SBOM, and readiness cite exact evidence or explicit limits."
+  - "Contributor guidance defines focused, platform, expensive, and cumulative gates."
+  - "Fork guidance separates Domain Pack extension, host Adapter integration, and core authority fork obligations."
+  - "Local links, command snippets, generated help, archive payload, and product promise matrix agree."
+
+checks:
+  - "documentation link and generated command checks"
+  - "promise matrix audit against current source and release assets"
+  - "clean-reader walkthrough for user, host integrator, operator, and fork maintainer"
+
+blocks: ["P7F.1", "P7G.1"]
+next_workflow: "P8 ready/operate/evolve planning"

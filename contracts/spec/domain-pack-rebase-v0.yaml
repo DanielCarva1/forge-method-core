@@ -1,0 +1,62 @@
+schema_version: "0.1"
+domain_pack_rebase_spec:
+  id: "spec.domain-pack-rebase-v0"
+  status: "implemented_pending_cumulative_gate"
+  purpose: >-
+    Move one active or degraded Domain Pack generation and its admitted adjacent
+    Core release through an exact-CAS, lifecycle-first, crash-recoverable joined
+    transition without admitting a mixed authority epoch.
+  authority_boundary:
+    plan: "candidate_only_exact_cas_evidence"
+    caller_authored_authority: "forbidden"
+    lifecycle_apply: "existing opaque supply-chain/review/project/lifecycle TCB"
+    workflow_apply: "dedicated joined Core/Domain-Pack ledger transition"
+    ordinary_release_upgrade: "still blocked while any generation is active"
+  public_surface:
+    release_status:
+      fields:
+        - "rebase_plan_digest"
+        - "rebase_argv"
+      argv: >-
+        forge-core workflow release-rebase-apply --root <project>
+        --target-release-id <adjacent-id>
+        --expected-rebase-plan-digest <sha256>
+    preflight: "workflow release-rebase-plan"
+    apply: "workflow release-rebase-apply"
+  exact_cas:
+    - "current Core release digest"
+    - "workflow ledger head"
+    - "project snapshot"
+    - "effective runtime bundle and receipt context"
+    - "Domain Pack generation, lifecycle pointer, and lifecycle head"
+    - "active lock and composition"
+    - "generation-bound supply-chain registry snapshot digest"
+    - "generation-bound reviewer and reviewed registry digests"
+  apply_revalidation:
+    - "persisted resolver/composer/trust inputs came from a previously authorized generation"
+    - "fresh external trust policy and supply-chain snapshot exactly replay the active anchors"
+    - "fresh reviewer and reviewed registries retain exact eligible-reviewed joins"
+    - "target Core is the registry-admitted adjacent successor"
+    - "target resolution, composition, capabilities, requirements, package set, and gaps do not drift"
+    - "project and lifecycle CAS remain exact immediately before commit"
+  transition_protocol:
+    - "persist the exact plan before lifecycle mutation"
+    - "materialize and atomically select the target lifecycle generation"
+    - "append one core_domain_pack_rebased workflow event using ledger wire 0.4"
+    - "the joined event advances Core and effective identities together and invalidates prior receipts"
+    - "if interrupted after lifecycle commit, release-status/next uses the persisted plan to finish the joined event"
+    - "lifecycle and workflow replacement protocols recover each store to an exact old or committed-new version"
+  fail_closed:
+    - "unknown, self, skipped, or reverse Core targets reject"
+    - "stale project, workflow, pointer, generation, lock, composition, or registry bindings reject"
+    - "package, capability, requirement, reviewed eligibility, or degraded-gap drift rejects"
+    - "a target-lifecycle/source-workflow intermediate pair is non-admissible until deterministic recovery completes"
+    - "serialized plans cannot mint lifecycle or workflow commit authority"
+  evidence_status:
+    source_tests:
+      - "pure rebase decision and compatibility tests"
+      - "joined workflow-ledger transition and successor-wire test"
+      - "feature-gated real-process degraded/replacement recovery journey"
+    remaining_before_completion:
+      - "cumulative heavy suite"
+      - "hosted Linux, Windows, Intel macOS, and Apple Silicon macOS CI"

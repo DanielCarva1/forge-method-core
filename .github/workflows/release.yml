@@ -26,6 +26,15 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
 permissions: {}
 
 jobs:
@@ -120,7 +129,7 @@ jobs:
             gh api \
               -H 'Accept: application/vnd.github+json' \
               "/repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=100" \
-              --jq '[.workflow_runs[] | select(.event == "push" or .event == "pull_request")] | length'
+              --jq '[.workflow_runs[] | select(.event == "push")] | length'
           )"
           test "$success_count" -gt 0 || {
             echo "release rejected: no successful CI run exists for exact commit $sha" >&2
@@ -140,39 +149,49 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
+            expected-arch: x86_64
             artifact: forge-core
             wrapper: distribution/forge
             wrapper_name: forge
             archive: forge-core-x86_64-linux.tar.gz
             can_smoke: true
+            native_release: true
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
+            expected-arch: x86_64
             artifact: forge-core
             wrapper: distribution/forge
             wrapper_name: forge
             archive: forge-core-aarch64-linux.tar.gz
             can_smoke: false # foreign binary cannot execute on the x86_64 runner
+            native_release: false
           - target: x86_64-apple-darwin
-            runner: macos-15
+            runner: macos-15-intel
+            expected-arch: x86_64
             artifact: forge-core
             wrapper: distribution/forge
             wrapper_name: forge
             archive: forge-core-x86_64-macos.tar.gz
-            can_smoke: true # runs under Rosetta 2
+            can_smoke: true
+            native_release: true
           - target: aarch64-apple-darwin
             runner: macos-15
+            expected-arch: arm64
             artifact: forge-core
             wrapper: distribution/forge
             wrapper_name: forge
             archive: forge-core-aarch64-macos.tar.gz
             can_smoke: true
+            native_release: true
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
+            expected-arch: amd64
             artifact: forge-core.exe
             wrapper: distribution/forge.cmd
             wrapper_name: forge.cmd
             archive: forge-core-x86_64-windows.zip
             can_smoke: true
+            native_release: true
 
     steps:
       - name: Checkout the validated immutable commit
@@ -180,6 +199,12 @@ jobs:
         with:
           ref: ${{ needs.metadata.outputs.commit_sha }}
           persist-credentials: false
+
+      - name: Verify native release runner architecture
+        if: matrix.native_release
+        env:
+          EXPECTED_RUNNER_ARCH: ${{ matrix.expected-arch }}
+        run: python -c "import os,platform; actual=platform.machine().casefold(); expected=os.environ['EXPECTED_RUNNER_ARCH']; print(f'native release runner architecture={actual}'); raise SystemExit(0 if actual == expected else f'expected native {expected}, got {actual}')"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
@@ -193,18 +218,18 @@ jobs:
           key: release-${{ matrix.target }}
 
       - name: Install cross
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.native_release == false
         run: cargo install cross --version 0.2.5 --locked --quiet
 
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
 
       - name: Build (Linux cross)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.native_release == false
         run: cross build --release --target ${{ matrix.target }} -p forge-core-cli
 
       - name: Build (native)
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' || matrix.native_release == true
         run: cargo build --release --target ${{ matrix.target }} -p forge-core-cli
 
       - name: Smoke test version and core commands (POSIX)
@@ -249,14 +274,29 @@ jobs:
             --wrapper-name "${{ matrix.wrapper_name }}" \
             --archive "${{ matrix.archive }}" \
             --version "${{ needs.metadata.outputs.version }}" \
+            --release-tag "${{ needs.metadata.outputs.tag }}" \
+            --source-commit "${{ needs.metadata.outputs.commit_sha }}" \
             --source-date-epoch "${{ needs.metadata.outputs.source_date_epoch }}"
           python scripts/check-release-archive.py \
             --archive "${{ matrix.archive }}" \
             --version "${{ needs.metadata.outputs.version }}" \
+            --expected-release-tag "${{ needs.metadata.outputs.tag }}" \
+            --expected-source-commit "${{ needs.metadata.outputs.commit_sha }}" \
             --binary-name "${{ matrix.artifact }}" \
             --wrapper-name "${{ matrix.wrapper_name }}" \
             --payload-manifest distribution/release-payload.txt \
             --require-checksum
+
+      - name: Smoke extracted native release install
+        if: matrix.native_release == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/smoke-release-install.py \
+            --archive "${{ matrix.archive }}" \
+            --version "${{ needs.metadata.outputs.version }}" \
+            --binary-name "${{ matrix.artifact }}" \
+            --wrapper-name "${{ matrix.wrapper_name }}"
 
       - name: Sign archive (Sigstore keyless)
         env:
@@ -334,6 +374,8 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.metadata.outputs.commit_sha }}
         run: |
           set -euo pipefail
           for archive in \
@@ -345,6 +387,8 @@ jobs:
             python scripts/check-release-archive.py \
               --archive "release-assets/$archive" \
               --version "$VERSION" \
+              --expected-release-tag "$RELEASE_TAG" \
+              --expected-source-commit "$SOURCE_COMMIT" \
               --binary-name forge-core \
               --wrapper-name forge \
               --payload-manifest distribution/release-payload.txt \
@@ -353,6 +397,8 @@ jobs:
           python scripts/check-release-archive.py \
             --archive release-assets/forge-core-x86_64-windows.zip \
             --version "$VERSION" \
+            --expected-release-tag "$RELEASE_TAG" \
+            --expected-source-commit "$SOURCE_COMMIT" \
             --binary-name forge-core.exe \
             --wrapper-name forge.cmd \
             --payload-manifest distribution/release-payload.txt \
@@ -399,6 +445,9 @@ jobs:
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --version 0.5.9 --locked --quiet
 
+      - name: Install pinned CycloneDX schema validator
+        run: python -m pip install --disable-pip-version-check "cyclonedx-python-lib[json-validation]==9.1.0"
+
       - name: Generate and validate mandatory CycloneDX SBOM
         shell: bash
         env:
@@ -419,9 +468,31 @@ jobs:
           import sys
           from pathlib import Path
 
+          from cyclonedx.schema import SchemaVersion
+          from cyclonedx.validation.json import JsonStrictValidator
+
           path = Path(sys.argv[1])
           expected_version = sys.argv[2]
-          document = json.loads(path.read_text(encoding="utf-8"))
+          source = path.read_text(encoding="utf-8")
+          document = json.loads(source)
+          schema_versions = {
+              "1.3": SchemaVersion.V1_3,
+              "1.4": SchemaVersion.V1_4,
+              "1.5": SchemaVersion.V1_5,
+              "1.6": SchemaVersion.V1_6,
+          }
+          spec_version = document.get("specVersion")
+          schema_version = schema_versions.get(spec_version)
+          if schema_version is None:
+              raise SystemExit(
+                  f"{path}: unsupported CycloneDX specVersion {spec_version!r}"
+              )
+          schema_error = JsonStrictValidator(schema_version).validate_str(source)
+          if schema_error is not None:
+              raise SystemExit(
+                  f"{path}: pinned CycloneDX {spec_version} schema validation failed: "
+                  f"{schema_error}"
+              )
           if document.get("bomFormat") != "CycloneDX":
               raise SystemExit(f"{path}: bomFormat is not CycloneDX")
           component = document.get("metadata", {}).get("component")
@@ -469,6 +540,14 @@ jobs:
             forge-core validate --root .
             ```
 
+            ### Identity boundaries
+
+            This release is package SemVer `${{ needs.metadata.outputs.version }}`
+            from source commit `${{ needs.metadata.outputs.commit_sha }}`. A
+            project's workflow release pin is separate and changes only through
+            exact argv returned by `workflow release-status`; its project-local
+            Domain Pack effective epoch is separate again. Later source-branch
+            work is not part of these assets.
             ### Verification
 
             Each platform asset has a checksum and Sigstore bundle. The

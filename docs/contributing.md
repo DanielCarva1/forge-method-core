@@ -38,6 +38,9 @@ to check the public CLI/MCP projection.
 - Keep domain-specific behavior in Domain Packs rather than universal core.
 - Preserve raw-byte, canonical-document, release, policy-set, generation, and
   effective-epoch identities as distinct concepts.
+- Preserve source checkpoint, published prebuilt, workflow release pin, and
+  Domain Pack effective epoch as the four distinct identities in the
+  [canonical table](../README.md#four-identitiesdo-not-collapse-them).
 - Make additive schema changes inside a compatible minor line or provide an
   explicit migration.
 - Never weaken a test merely to make a new behavior pass.
@@ -56,12 +59,15 @@ cargo clippy -p <affected-package> --all-targets -- -D clippy::pedantic
 ```
 
 Run affected schema, fixture, CLI, and validator tests when a contract crosses
-crate boundaries. When the coherent slice is ready, run the default workspace
-once with `cargo test --workspace`; this deliberately excludes the expensive
-P6d journey. At the integrated publication boundary, add the exact filtered
-P6d command, or run `cargo test --workspace --features expensive-p6d-e2e` once
-as a combined gate when the default workspace was not already run. The exact
-tiers are in [Verification](verification.md).
+crate boundaries. CI ownership is Tier 0 (120-second static/doc steps), focused
+(900-second package/integration steps), native Linux/Windows/Intel macOS/Apple
+Silicon macOS platform gates (1,800-second steps), and one push-only cumulative
+P6d journey (1,800 seconds). Every wrapped step enforces the budget, terminates
+its child process tree on timeout, emits timing JSON, and preserves failures
+that occur before the deadline. Do not delete a test to meet a budget; move it
+only with an explicit owner, trigger, compile path, and inventory rationale.
+Exact commands and artifacts are in
+[Verification](verification.md).
 
 ## Generated material
 
@@ -88,6 +94,9 @@ from a failure message without recomputing the full subject.
   core bootstrap exception, a sidecar, or an operator-owned directory.
 - Keep local Markdown links valid and do not link to private sibling checkouts.
 
+Documentation-only changes run `python scripts/check-doc-links.py` and
+`git diff --check`; do not run unrelated Rust gates merely to inflate evidence.
+
 ## Pull request evidence
 
 A reviewable change should report:
@@ -107,15 +116,20 @@ fixture regeneration, and behavioral changes unless they are inseparable.
 
 Before a tag:
 
-1. reconcile workspace version, changelog section, product-status docs, and tag;
-2. run the complete publication gate;
-3. verify `distribution/release-payload.txt`, `RELEASE-MANIFEST.json`, and
-   archive contents on each supported platform;
-4. verify each checksum and Sigstore bundle;
-5. verify the mandatory release-level SBOM was produced and structurally validated;
-6. smoke-test `--version`, `start`, and validation from the packaged binary;
-7. ensure installation docs point to the released feature level rather than a
-   newer source-only checkpoint.
+1. reconcile source package version, exact commit/tag, changelog/status docs,
+   and release name without confusing the project's workflow pin/effective epoch;
+2. require successful CI for the exact release commit;
+3. verify `distribution/release-payload.txt` and that `RELEASE-MANIFEST.json`
+   binds exact version, `release_tag`, full `source_commit`, and every member;
+4. verify each archive checksum and Sigstore bundle against the fork/repository
+   workflow-and-tag identity;
+5. schema-validate the mandatory release-level CycloneDX SBOM;
+6. extract and smoke native x86_64 Linux/Windows plus Intel and Apple Silicon
+   macOS packages through binary/wrapper version plus `start`, `init`, `resume`,
+   `release-status`, and `next`;
+7. ensure install docs describe the published feature level, not newer source.
+
+Passing source checks does not mean the tag/assets were published.
 
 ## Security-sensitive reports
 

@@ -1,0 +1,27 @@
+{
+  "schema_version": "forge-test-inventory-v1",
+  "label": "expensive-p6d",
+  "tests": [
+    "tests/domain_pack_cli_e2e.rs::agent_cli_validates_and_composes_without_writes",
+    "tests/domain_pack_cli_e2e.rs::compose_rejects_artifact_path_escape",
+    "tests/domain_pack_cli_e2e.rs::compose_rejects_canonical_directory_link_escape",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_inputs_are_bounded_before_parse",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_capture_then_status_remains_non_authoritative",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_help_exposes_governed_journey_without_caller_time",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_promote_blocks_an_incomplete_candidate_graph",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_promote_consumes_the_complete_exact_graph",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_provisions_one_atomic_head_then_freshly_checks_registry",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_reviewer_rotate_rejects_caller_authored_time",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_learning_trust_provision_requires_exact_operator_acknowledgement",
+    "tests/domain_pack_cli_e2e.rs::domain_pack_lifecycle_supply_only_inputs_are_blocked_without_reviewed_authority",
+    "tests/domain_pack_cli_e2e.rs::lifecycle_commands_reject_caller_authored_time_and_hide_it_from_help",
+    "tests/domain_pack_cli_e2e.rs::lifecycle_mutation_rejects_project_controlled_trust_roots",
+    "tests/domain_pack_cli_e2e.rs::lifecycle_preflight_rejects_missing_and_tampered_staged_fixture_bytes",
+    "tests/domain_pack_cli_e2e.rs::lifecycle_preflight_requires_an_explicit_project_snapshot_root",
+    "tests/domain_pack_cli_e2e.rs::lifecycle_status_and_recover_emit_integrity_checked_empty_state",
+    "tests/domain_pack_cli_e2e.rs::p6d_workflow_journey::p6d_reference_pack_real_journey",
+    "tests/domain_pack_cli_e2e.rs::resolve_emits_deterministic_highest_compatible_projection",
+    "tests/domain_pack_cli_e2e.rs::resolve_requires_both_closed_typed_inputs",
+    "tests/domain_pack_cli_e2e.rs::trust_provision_is_explicit_signed_and_required_before_lifecycle_authority"
+  ]
+}

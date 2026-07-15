@@ -1,0 +1,44 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7C.2"
+status: "implemented_local_cumulative_gate_passed_release_evidence_pending"
+slice: "P7c-domain-demand-and-pack-acquisition"
+title: "Acquire a reviewed package through public lifecycle commands"
+
+intent: >-
+  Convert one explicit operator-approved discovery candidate into exact
+  coordinate-based resolution and the existing P6 lifecycle without requiring
+  callers to author resolution, composition, trust-input, or preflight internals.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7c-domain-demand-and-pack-acquisition"
+  - "contracts/stories/P7C.1-domain-demand-discovery.yaml"
+
+owned_files:
+  - "crates/forge-core-contracts/src/domain_pack_acquisition.rs"
+  - "crates/forge-core-decisions/src/domain_pack_acquisition.rs"
+  - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  - "crates/forge-core-cli/tests/domain_pack_acquisition_cli_e2e.rs"
+
+constraints:
+  - "Recommendation never implies trust; initial trust remains an explicit operator ceremony."
+  - "Reuse the P6 resolver, supply-chain verification, reviewed-registry join, compatibility evaluator, and lifecycle TCB."
+  - "No private fixture keys or registry mutation in the public consumer proof."
+
+acceptance_criteria:
+  - "The reference pack is a versioned package reachable from a clean release artifact."
+  - "The agent selects only an exact candidate id returned by current discovery state."
+  - "Forge derives all lifecycle request documents and exact CAS bindings."
+  - "Install, upgrade, rollback, and remove remain intent-specific and crash recoverable."
+  - "Tampered, revoked, superseded, stale, or unreviewed candidates fail before lifecycle mutation."
+  - "A public CLI E2E starts with domain demand and reaches an active effective epoch without hand-authored lifecycle internals."
+
+checks:
+  - "cargo test -p forge-core-decisions domain_pack_acquisition"
+  - "cargo test -p forge-core-cli --test domain_pack_acquisition_cli_e2e"
+  - "focused resolver, trust, reviewed-registry, and lifecycle tests"
+  - "public clean-project acquisition E2E"
+  - "P6d reference journey regression"
+
+blocks: ["P7C.1"]
+next_workflow: "P7D.1 coordinated core/pack rebase"

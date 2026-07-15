@@ -1,0 +1,38 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7F.1"
+status: "local_evidence_tooling_complete_awaiting_release_and_real_host"
+slice: "P7f-real-host-and-mediated-mutation-proof"
+title: "Prove one chat-only real-host mediated product journey"
+
+intent: >-
+  Run one production host from a single human message through intent, domain
+  discovery, explicit trust, pack acquisition, representative evidence,
+  governed mutation, replacement-chat resume, and evidence-backed completion
+  using only public release interfaces.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7f-real-host-and-mediated-mutation-proof"
+  - "docs/product-compliance-audit.md"
+
+constraints:
+  - "No private Rust helpers, fixture keys, hand-authored authority requests, or hidden test state."
+  - "Direct editor/shell writes must be labeled ungoverned and cannot support a governed-mutation claim."
+  - "The host transcript is evidence, not authority; durable receipts remain authoritative."
+
+acceptance_criteria:
+  - "A real host starts from one ordinary human goal and invokes public release commands."
+  - "Human interaction remains in chat; the human edits no Forge artifact and selects no workflow."
+  - "Every claimed governed write has covering claim, gate result, verified principal, Admission, WAL, and receipt evidence."
+  - "Two concurrent sessions conflict before overlapping mediated writes."
+  - "A replacement chat reconstructs exact intent, effective epoch, gaps, evidence, and next action."
+  - "The transcript, command log, receipt digests, release identity, and residual limitations form a reproducible evidence bundle."
+
+checks:
+  - "clean-host journey on one supported production host"
+  - "concurrent conflict scenario"
+  - "replacement-session resume scenario"
+  - "independent evidence review"
+
+blocks: ["P7C.2", "P7E.1"]
+next_workflow: "P7H.1 promise audit"

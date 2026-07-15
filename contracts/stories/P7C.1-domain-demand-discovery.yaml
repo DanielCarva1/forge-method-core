@@ -1,0 +1,49 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7C.1"
+status: "completed"
+slice: "P7c-domain-demand-and-pack-acquisition"
+title: "Derive explicit domain demand and explain matching packs"
+
+intent: >-
+  Turn host-proposed domain requirements, bound to the current accepted human
+  intent, into a deterministic read-only discovery projection. Forge must show
+  uncovered domains and candidate reviewed packages without inferring trust,
+  choosing a package, or hard-coding game-development semantics in Rust.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7c-domain-demand-and-pack-acquisition"
+  - "contracts/policies/agent-native-product-constitution.yaml"
+  - "docs/product-compliance-audit.md"
+
+owned_files:
+  - "crates/forge-core-contracts/src/domain_pack_discovery.rs"
+  - "crates/forge-core-decisions/src/domain_pack_discovery.rs"
+  - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  - "crates/forge-core-cli/tests/domain_pack_discovery_cli_e2e.rs"
+  - "contracts/domain-pack-discovery/"
+  - "docs/generated/command-surface.md"
+
+constraints:
+  - "No model, keyword classifier, game identifier, or domain-specific branch in Rust."
+  - "The host proposes typed domain demand; Forge validates identity, provenance, intent binding, and explicit uncertainty."
+  - "Search is read-only and candidate-only; a match is never install or trust authority."
+  - "Unknown and unmatched domains remain visible and blocking."
+
+acceptance_criteria:
+  - "Closed typed domain-demand and discovery-projection documents reject unknown fields and invalid bounds."
+  - "Demand binds project id, current intent digest, assurance epoch, requested domains, capabilities, provenance, and uncertainty."
+  - "Matching is deterministic across input order and returns exact coordinate/version/digest evidence."
+  - "Only eligible reviewed entries with exact content metadata can appear as candidates."
+  - "No match produces an explicit uncovered-domain gap with an agent-facing next action."
+  - "forge-core domain-pack search/explain is read-only and emits stable CliEnvelope JSON."
+  - "A neutral corpus proves matching; a game fixture proves behavior through data, not Rust literals."
+
+checks:
+  - "cargo test -p forge-core-contracts domain_pack_discovery"
+  - "cargo test -p forge-core-decisions domain_pack_discovery"
+  - "cargo test -p forge-core-cli --test domain_pack_discovery_cli_e2e"
+  - "cargo clippy -p forge-core-contracts -p forge-core-decisions -p forge-core-cli --all-targets -- -D clippy::pedantic"
+
+blocks: []
+next_workflow: "P7C.2 reviewed package acquisition"

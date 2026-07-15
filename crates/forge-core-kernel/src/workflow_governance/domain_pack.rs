@@ -7,7 +7,7 @@
 
 use super::AdmittedWorkflowGovernanceRelease;
 use forge_core_contracts::{
-    DomainPackCompositionGap, DomainPackGenerationTransitionedEvent,
+    DomainPackCompositionGap, DomainPackCoreBinding, DomainPackGenerationTransitionedEvent,
     WorkflowDomainPackGenerationIdentity, WorkflowEffectiveBundleIdentity,
     WorkflowGovernanceBundle, WorkflowGovernanceBundleDocument, WorkflowRuntimeBundleIdentity,
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
@@ -309,6 +309,36 @@ pub fn derive_core_only_workflow_effective_identity(
         domain_pack_generation: None,
         receipt_context_digest,
     })
+}
+/// Reproduce the P6 sealed-Core binding from an opaque admitted workflow release.
+/// The inner bundle digest is intentionally distinct from the enclosing runtime
+/// document digest.
+///
+/// # Errors
+///
+/// Fails when the admitted release's inner bundle cannot be canonically encoded
+/// or no longer matches its admitted runtime identity.
+pub fn derive_domain_pack_core_binding(
+    core: &AdmittedWorkflowGovernanceRelease,
+) -> Result<DomainPackCoreBinding, EffectiveWorkflowGovernanceBundleError> {
+    let document = core.document();
+    let bundle = &document.workflow_governance_bundle;
+    let binding = DomainPackCoreBinding {
+        bundle_id: bundle.id.clone(),
+        bundle_digest: canonical_digest(bundle)?,
+        policy_set_digest: workflow_policy_set_digest(&bundle.policies)
+            .map_err(EffectiveWorkflowGovernanceBundleError::Canonicalization)?,
+        bundle: bundle.clone(),
+    };
+    if binding.bundle_id != core.runtime_bundle().bundle_id
+        || binding.policy_set_digest != core.runtime_bundle().policy_set_digest
+        || workflow_runtime_bundle_digest(document)
+            .map_err(EffectiveWorkflowGovernanceBundleError::Canonicalization)?
+            != core.runtime_bundle().bundle_digest
+    {
+        return Err(EffectiveWorkflowGovernanceBundleError::EffectiveBundleIdentityMismatch);
+    }
+    Ok(binding)
 }
 
 fn validate_domain_core_join(

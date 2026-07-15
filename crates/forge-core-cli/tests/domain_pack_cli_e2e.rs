@@ -107,7 +107,7 @@ fn write_signed_learning_roots(operator_root: &Path) -> (PathBuf, PathBuf, PathB
             "independence_domains": [domain],
             "status": "active",
             "valid_from_unix": now.saturating_sub(60),
-            "valid_until_unix": now + 3_600
+            "valid_until_unix": now + 31_536_000
         })
     };
     let mut reviewers: DomainPackReviewerRegistryDocument = serde_json::from_value(
@@ -260,7 +260,7 @@ fn write_promotable_learning_graph(
         .expect("clock")
         .as_secs();
     let issued = now.saturating_sub(60);
-    let expires = now + 3_600;
+    let expires = now + 31_536_000;
     let semantic_key = SigningKey::from_bytes(&[71_u8; 32]);
     let authorizer_key = SigningKey::from_bytes(&[72_u8; 32]);
     let reviewer_registry: DomainPackReviewerRegistryDocument = yaml_serde::from_str(
@@ -924,7 +924,7 @@ fn write_signed_supply_chain(operator_root: &Path) -> (PathBuf, PathBuf) {
                 public_key_hex: hex(&registry_key.verifying_key().to_bytes()),
                 status: DomainPackCredentialStatus::Active,
                 valid_from_unix: now.saturating_sub(60),
-                valid_until_unix: now + 3_600,
+                valid_until_unix: now + 31_536_000,
             }],
             required_registry_signature_threshold: 1,
             minimum_activation_assurance: DomainPackSourceAssurance::SupplyChainVerified,
@@ -972,21 +972,21 @@ fn write_signed_supply_chain(operator_root: &Path) -> (PathBuf, PathBuf) {
             generation: 1,
             previous_snapshot_digest: None,
             issued_at_unix: now.saturating_sub(30),
-            expires_at_unix: now + 1_800,
+            expires_at_unix: now + 31_536_000,
             publisher_credentials: vec![DomainPackPublisherCredential {
                 credential_id: StableId("credential.cli".to_owned()),
                 publisher: StableId("publisher.cli".to_owned()),
                 public_key_hex: hex(&publisher_key.verifying_key().to_bytes()),
                 status: DomainPackCredentialStatus::Active,
                 valid_from_unix: now.saturating_sub(60),
-                valid_until_unix: now + 3_600,
+                valid_until_unix: now + 31_536_000,
             }],
             namespace_grants: vec![DomainPackNamespaceGrant {
                 grant_id: StableId("grant.cli".to_owned()),
                 publisher: StableId("publisher.cli".to_owned()),
                 namespace_prefix: StableId("sample".to_owned()),
                 valid_from_unix: now.saturating_sub(60),
-                valid_until_unix: now + 3_600,
+                valid_until_unix: now + 31_536_000,
             }],
             packages: vec![record],
             revocations: Vec::new(),

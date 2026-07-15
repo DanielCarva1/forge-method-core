@@ -1,0 +1,90 @@
+schema_version: '0.1'
+domain_pack_discovery_request:
+  request_id: discovery.cli.neutral
+  authority: candidate_only
+  assurance_binding:
+    project_id: project.cli.neutral
+    assurance_epoch: 1
+    intent_id: intent.cli.neutral
+    intent_revision: 1
+    intent_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    accepted_record_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    accepted_sequence: 1
+    accepted_state_version: 1
+    snapshot_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    ledger_head_before_acceptance: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  requirements:
+    project_id: project.cli.neutral
+    requirement_set_id: requirements.cli.neutral
+    required_domains:
+    - id: requirement.cli.neutral
+      domain_id: domain.neutral
+      pack_version_requirement: ^1.0
+      required_capability_refs:
+      - capability.neutral.review
+  provenance:
+    source: host_proposal
+    source_ref: conversation://cli/neutral
+    source_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  uncertainties:
+  - Operator trust is not yet established
+  candidates:
+  - reviewed_entry:
+      pack:
+        publisher: publisher.neutral
+        name: neutral-method
+        version: 1.0.0
+      package_digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      supply_chain_record_digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      manifest_digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+      content_digest: sha256:9a642eb77501671cf6222d66798dcadc08182657af6bd3f78487fea366ce6ba1
+      license_digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
+      fixture_digests:
+      - sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      stage: reviewed
+      eligibility: eligible_reviewed
+      promotion_decision_digest: '6666666666666666666666666666666666666666666666666666666666666666'
+      authorization_digest: '7777777777777777777777777777777777777777777777777777777777777777'
+      independent_review_digests:
+      - '8888888888888888888888888888888888888888888888888888888888888888'
+      - '9999999999999999999999999999999999999999999999999999999999999999'
+      compatibility:
+        forge_core_requirement: '>=0.12.0, <1.0.0'
+        pack_schema_requirement: ^0.1
+        evaluator_protocol_versions: []
+        predecessor_content_digests: []
+        breaking_change: false
+        migration_evidence_refs: []
+      deprecation: null
+      revocation: null
+      supersession: null
+      entry_digest: e3566f9eb0311f204c49f4a7ba7552793afc90e4e75cd4a8a25717def02c7984
+    content:
+      schema_version: '0.1'
+      domain_pack_content:
+        pack:
+          publisher: publisher.neutral
+          name: neutral-method
+          version: 1.0.0
+        namespace: publisher.neutral.method
+        workflow_overlay:
+          id: overlay.neutral
+          base_bundle_id: bundle.core
+          policies: []
+        provided_domains:
+        - id: domain.neutral
+          description: Neutral domain supplied by fixture data
+          policy_refs: []
+          hazard_refs: []
+          lifecycle_model_refs: []
+        provided_capabilities:
+        - id: capability.neutral.review
+          kind: human_review
+          description: Neutral review capability
+          evidence_rule_refs: []
+          authority: declaration_only
+        hazards: []
+        lifecycle_models: []
+        evaluators: []
+        fixtures: []
+        adapters: []

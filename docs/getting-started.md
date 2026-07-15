@@ -17,16 +17,17 @@ The host agent must have the `forge-core` executable and canonical
 
 ### Prebuilt release
 
-At this documentation checkpoint, the latest tagged prebuilt is `v0.4.0` and
-does not contain the source-only P5/P6/P7a/P7b `0.12.0` feature level. Download
-the archive for the host platform from GitHub Releases and place both
-`forge-core` and its `forge` wrapper on `PATH`. Verify the checksum and Sigstore
-bundle as described in the [root README](../README.md#install).
+Download one archive for the host platform from the selected GitHub Release
+and place both `forge-core` and its `forge` wrapper on `PATH`. Verify its
+checksum, Sigstore bundle, embedded version, and `RELEASE-MANIFEST.json` as
+described in the [root README](../README.md#install-and-start). `v0.4.0` is the
+historical prebuilt predecessor to the `0.12.0` candidate, not a source-derived
+availability answer.
 
-Published `v0.4.0` archives contain the executable and wrapper only. The
-current source release design adds a checked manifest, canonical skill, and
-selected adoption documentation to future archives. Inspect
-`RELEASE-MANIFEST.json`; do not assume older assets contain the new payload.
+New-format archives bind package version, exact release tag, exact source
+commit, canonical skill, selected guides, and every payload file. Inspect the
+selected archive itself; never infer its payload from a different source
+checkout or from tag text alone.
 
 ### Source checkout
 
@@ -37,9 +38,10 @@ cargo install --path crates/forge-core-cli --force
 forge-core --version
 ```
 
-The workspace package version and latest published binary tag can differ. For
-an exact checkpoint, use a named commit/tag and verify
-`forge-core --version`.
+The workspace package version and latest published binary tag can differ. The
+workflow release pin and Domain Pack effective epoch differ from both. Use the
+canonical [four-identity table](../README.md#four-identitiesdo-not-collapse-them),
+select an exact source commit/tag, and verify `forge-core --version`.
 
 ## Install the host skill
 
@@ -77,11 +79,13 @@ start
   -> workflow next
 ```
 
-The consumer repository receives only `.forge-method.yaml`. Runtime state is
-kept in the sibling `forge-<project>/.forge-method/` sidecar. Never create a
-consumer-local `.forge-method/` directory manually. Current-source `preflight
-init` follows the Project Link and stores its profile in the sidecar; older
-binaries must not be used to justify local consumer state.
+The consumer repository receives only `.forge-method.yaml`. Default runtime
+state is `<project-parent>/forge-<project-id>/.forge-method/`, inside the sibling
+sidecar `<project-parent>/forge-<project-id>/`. Never create a consumer-local
+`.forge-method/` manually. Current-source `preflight init` follows the Project
+Link and stores its profile as `<state-root>/preflight.yaml`; older binaries
+must not be used to justify local consumer state. Exact trust, secret, package,
+and release locations are in the [Operator guide](operator-guide.md#state-and-ownership).
 
 ## What healthy output means
 
@@ -99,6 +103,11 @@ environment, and failure modes. The human is not expected to know or author
 those development details. Independent review must accept the exact slice
 definition before a separately originated runtime execution can verify it;
 files, plans, research, or partial scenario runs do not silently become proof.
+
+Forge can describe only a write that passed its claim/gate, verified-principal,
+Admission, WAL/recovery, and receipt path as **Forge-mediated**. A host agent's
+editor or shell write is direct/ungoverned unless that transaction covers it.
+A successful bootstrap or transcript does not change this boundary.
 
 ## Updating
 

@@ -56,21 +56,22 @@ delivery_strategy:
       followups: ["109ac22", "a79301c"]
       scope: "P5d.3 reviewed core-assurance candidate, behavioral shadow corpus, quarantine, and historical compatibility"
   current_package_checkpoint:
-    version: "0.11.0"
-    publication_state: "source_checkpoint_pending_cumulative_gate"
+    version: "0.12.0"
+    publication_state: "source_candidate_cumulative_gate_passed_tag_pending"
     minimum_consumer_version: "0.6.0"
     guide_payload_schema: "0.2"
     domain_pack_schema: "0.1"
     domain_pack_lifecycle_schema: "0.3"
     domain_pack_learning_schema: "0.3"
-    workflow_release_identity: "0.4.0"
+    workflow_release_identity: "0.5.0"
     boundary: >-
-      Package SemVer identifies the pullable P7 productization checkpoint built
-      on the P6d Domain Pack ecosystem.
-      It does not rewrite the frozen five-release workflow-governance history;
-      lifecycle, reviewed-learning, and effective-epoch authority remain opaque,
-      monotonic, project-bound, and operator-rooted. The universal core release
-      and project-local effective Domain Pack epoch remain separate identities.
+      Package SemVer identifies the local P7 source candidate built on the P6d
+      Domain Pack ecosystem; it does not establish a pullable commit, tag, or
+      prebuilt release. P7b preserves the frozen five-release history and appends
+      a separately reviewed sixth universal-assurance successor. Lifecycle,
+      reviewed-learning, and effective-epoch authority remain opaque, monotonic,
+      project-bound, and operator-rooted. The universal core release and
+      project-local effective Domain Pack epoch remain separate identities.
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -812,10 +813,10 @@ phases:
       fixtures, hand-authored authority JSON, or prior domain expertise.
     audit_basis:
       - "P6d proves kernel, authority, lifecycle, recovery, and fail-closed composition, but its harness privately creates six keys, registries, requests, attestations, and evidence."
-      - "Source 0.11.0 derives state-bound action packets and applies a host-signed closed origin event in one call; cumulative release and representative real-host proof remain pending."
-      - "The reference Domain Pack is a source fixture rather than a discoverable reviewed package in a released registry."
-      - "A core release upgrade is intentionally blocked by an active Domain Pack generation, but no public rebase transaction exists."
-      - "Package 0.11.0 is the source checkpoint under cumulative validation while the latest prebuilt release remains 0.4.0."
+      - "Source 0.12.0 derives state-bound action packets, applies host-signed closed origin events, and projects the unified durable Assurance Case; tagged release and representative real-host proof remain pending."
+      - "The reference Domain Pack is discoverable and locally acquirable from release-visible bytes, but a public remote signed catalog remains unproved."
+      - "Ordinary core upgrade remains blocked by an active generation; source now provides locally validated exact-CAS joined Core/pack rebase with lifecycle-first crash recovery; hosted evidence remains pending."
+      - "Package 0.12.0 passed the local cumulative source gate; 0.4.0 is the historical prebuilt predecessor and current availability still requires exact-tag release-asset verification."
     delivery_cadence:
       slice_size: "medium_to_large"
       focused_gate_rule: >-
@@ -828,7 +829,7 @@ phases:
         smoke evidence all identify the same version.
     slices:
       - id: "P7a-workflow-authority-bridge"
-        status: "implemented_pending_cumulative_gate"
+        status: "completed"
         size: "large"
         outcome: >-
           A public binary can provision, rotate, revoke, inspect, and use
@@ -870,7 +871,7 @@ phases:
               independence, runtime integrity, and representative production-
               host operation remain P7f evidence.
       - id: "P7b-unified-durable-assurance-case"
-        status: "in_progress"
+        status: "completed"
         size: "large"
         depends_on: ["P7a-workflow-authority-bridge"]
         outcome: >-
@@ -883,23 +884,23 @@ phases:
           - "unknown universal lenses block optimistic progress and generate bounded research or evaluator actions"
           - "host/model proposals remain non-authoritative until admitted through typed observations"
           - "replacement agents recover the exact intent, assurance gaps, evidence bindings, and next action"
-        active_subslices:
+        completed_subslices:
           - id: "P7b.1-durable-human-intent-and-assurance-epoch"
-            status: "implementation_in_progress"
+            status: "completed"
             delivers:
               - "bounded human-broker intent acceptance with kernel-derived id, revision, epoch, and digest"
               - "ledger plus BrokerOriginApplied provenance and exact retry recovery"
               - "workflow next/resume projection bound to current snapshot, head, state, and effective bundle"
               - "all eight universal lenses explicit and unknown rather than silently omitted"
           - id: "P7b.2-governed-lens-observations-and-representative-slice"
-            status: "implementation_in_progress"
+            status: "completed"
             delivers:
               - "adjacent reviewed release with explicit universal-lens claim coverage"
               - "typed epistemic and competence observations that cannot self-declare readiness"
               - "intent-bound representative-slice requirement and scenario-matched evidence"
               - "bounded research, evaluator, capability-acquisition, and challenge actions"
       - id: "P7c-domain-demand-and-pack-acquisition"
-        status: "planned"
+        status: "implemented_local_cumulative_gate_passed_release_evidence_pending"
         size: "large"
         depends_on: ["P7b-unified-durable-assurance-case"]
         outcome: >-
@@ -913,7 +914,7 @@ phases:
           - "install, upgrade, rollback, and remove reuse the P6 TCB without caller-authored lifecycle internals"
           - "no game-specific identifier or branch exists in production Rust"
       - id: "P7d-core-domain-pack-rebase"
-        status: "planned"
+        status: "implemented_local_cumulative_gate_passed_hosted_evidence_pending"
         size: "large"
         depends_on: ["P7c-domain-demand-and-pack-acquisition"]
         outcome: >-
@@ -926,7 +927,7 @@ phases:
           - "recovery resolves to the exact old or new core/pack pair and never a mixed authority epoch"
           - "release-status returns the exact rebase argv when rebase is required"
       - id: "P7e-release-and-distribution-correctness"
-        status: "implemented_pending_cumulative_gate_and_tag"
+        status: "source_controls_local_cumulative_gate_passed_tag_pending"
         size: "medium_to_large"
         outcome: >-
           Source, tag, binary, archive contents, signatures, SBOM, skill, docs,
@@ -938,7 +939,7 @@ phases:
           - "SBOM guarantees and documentation describe exactly the enforced release behavior"
           - "a clean install reaches workflow next using only release assets"
       - id: "P7f-real-host-and-mediated-mutation-proof"
-        status: "planned"
+        status: "local_evidence_tooling_complete_awaiting_release_and_real_host"
         size: "large"
         depends_on: ["P7a-workflow-authority-bridge", "P7c-domain-demand-and-pack-acquisition"]
         outcome: >-
@@ -951,7 +952,7 @@ phases:
           - "concurrent sessions conflict before mediated writes and share the same verified principal model"
           - "a replacement chat session resumes and completes through public interfaces"
       - id: "P7g-fast-evidence-preserving-delivery"
-        status: "in_progress"
+        status: "implemented_pending_hosted_timing_evidence"
         size: "medium_to_large"
         outcome: >-
           Test topology preserves adversarial and platform evidence while making
@@ -959,16 +960,16 @@ phases:
         exit:
           - "documented fast, focused, platform-smoke, and expensive-journey tiers have explicit time budgets"
           - "the expensive reference journey runs once per cumulative checkpoint rather than once per platform job"
-          - "Windows retains compile, contract-parity, and representative smoke evidence"
+          - "native Linux, Windows, Intel macOS, and Apple Silicon macOS retain all-target, workspace-test, and expensive-feature compile evidence"
           - "the final cumulative workspace gate runs once after all slice work is integrated"
         time_budgets:
           format_and_static_docs: "under_2_minutes"
           focused_package_or_integration: "target_under_15_minutes"
-          linux_windows_platform_gate: "target_under_30_minutes_each"
+          native_platform_gates: "target_under_30_minutes_each"
           expensive_reference_protocol_journey: "run_once_target_under_30_minutes"
           cumulative_checkpoint: "single_run_no_per_edit_repetition"
       - id: "P7h-promise-hardening-docs-and-forks"
-        status: "in_progress"
+        status: "implemented_pending_P7F_P7G_release_evidence"
         size: "medium_to_large"
         outcome: >-
           Users, agents, operators, contributors, security reviewers, and forks
@@ -996,8 +997,8 @@ phases:
       and evolve Domain Packs without modifying the domain-agnostic Rust core.
 
 current_executable_slice:
-  name: "P7b-unified-durable-assurance-case"
-  status: "implementation_in_progress"
+  name: "P7-cumulative-productization-gate"
+  status: "local_cumulative_gate_passed_pending_hosted_ci_release_and_field_evidence"
   completed_foundation:
     - "agent-native constitution documented"
     - "universal assurance and competence-acquisition proposal documented"
@@ -1061,12 +1062,16 @@ current_executable_slice:
     - "P7b.1 bounded human-broker intent acceptance with kernel-derived monotonic revision and assurance epoch"
     - "P7b.1 explicit eight-lens unknown projection, canonical case digest, 0.3 assurance ledger wire, and fail-closed phase advancement"
     - "P7b.1 public workflow intent record plus replacement-agent next/resume continuity"
+    - "P7C.1 closed accepted-intent-bound domain demand, exact reviewed-entry matching, deterministic candidate-only search/explain, explicit uncovered gaps, and neutral plus data-driven game corpus"
+    - "P7C.2 exact approved-candidate acquisition with persisted-plan integrity, normalized requirements, fresh snapshot/package joins, derived P6 internals, explicit operator trust, and lifecycle-TCB apply"
+    - "P7D exact-CAS adjacent-Core/Domain-Pack rebase with target-side revalidation, immutable generation transition, joined workflow event, and lifecycle-first crash recovery"
+    - "P7E source release controls for exact identity, deterministic multi-platform archives, clean native install smoke, checksums, Sigstore, and mandatory schema-validated SBOM"
+    - "P7G hard process-tree timeouts, preserved timing evidence, explicit test inventories, native four-platform gates, shared Linux cache, and one cumulative P6d execution"
+    - "P7H concise audience-routed documentation and explicit source/release/workflow/effective-epoch plus governed/direct-write boundaries"
   next_action: >-
-    Complete P7b.2 with an admitted lens-aware successor release, governed
-    epistemic and competence projection, reviewer-admitted representative-slice
-    definition, exact runtime proof binding, and replacement-agent journey.
-    Run the full workspace and expensive reference journey once for the coherent
-    P7b checkpoint rather than per edit.
+    Preserve the passed local cumulative gate. Next obtain hosted CI timing, an
+    exact-tag release, clean-asset installation evidence, and independent real-
+    host evidence before changing any pending P7 product claim to completed.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

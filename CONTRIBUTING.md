@@ -18,11 +18,20 @@ cargo test -p <affected-package>
 cargo clippy -p <affected-package> --all-targets -- -D clippy::pedantic
 ```
 
-Run the default workspace gate once the coherent slice is ready, not after
-every small edit. Reserve
-the exact feature-gated P6d command in `docs/verification.md` for the integrated
-publication checkpoint. Report commands, results, generated artifacts,
-compatibility impact, and residual risks with the change.
+Use the smallest owning command while editing. CI then owns four explicit
+evidence classes: Tier 0 (120-second steps), focused (900-second steps), native
+Linux/Windows/Intel macOS/Apple Silicon macOS platform gates (1,800-second
+steps), and one push-only cumulative P6d journey (1,800 seconds). Do not silently
+remove tests to meet a budget; preserve
+an explicit owner, trigger, timing report, and compile path. Report commands,
+results, generated artifacts, compatibility impact, and residual risks.
+
+For documentation-only changes, the local minimum is:
+
+```bash
+python scripts/check-doc-links.py
+git diff --check
+```
 
 Security vulnerabilities and secrets do not belong in public issues. Follow
 [SECURITY.md](SECURITY.md).

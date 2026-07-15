@@ -6,17 +6,20 @@ The normal project user stays in chat and does not operate these commands.
 
 ## Choose an installation channel
 
-Forge currently has two different distribution facts:
+Forge has four distinct identities. The canonical table is in the
+[root README](../README.md#four-identitiesdo-not-collapse-them). For installation:
 
-- the source workspace declares package version `0.12.0` and contains the
-  completed P5/P6 implementation plus the P7a authority bridge and P7b unified
-  durable assurance;
-- the latest published prebuilt GitHub Release may lag the source checkpoint.
-  At the time this guide was written, the latest prebuilt tag was `v0.4.0`.
+- source workspace `0.12.0` means package SemVer plus exact source commit;
+- selected prebuilt availability is verified from its release assets (`v0.4.0`
+  is only the historical predecessor to this candidate);
+- each project separately pins a workflow-governance release;
+- each active Domain Pack generation produces a project-local effective epoch.
 
-Always check the selected tag/commit and run `forge-core --version`. Do not
-assume that the newest source features exist in an older release archive. See
-[Product status](product-status.md) for the maintained distinction.
+Always inspect the selected commit/tag, run `forge-core --version`, verify the
+archive, and query `workflow release-status`; never substitute one identity for
+another. Release/CI hardening is implemented in source; only a matching
+successful tag run and verified assets establish publication, and neither
+publication nor source alone establishes full P7 completion.
 
 ### Install the current source checkpoint
 
@@ -36,13 +39,14 @@ shared catalog/contract material needed by ordinary consumer projects.
 
 ### Install a tagged prebuilt archive
 
-Download only assets belonging to one selected release. Published `v0.4.0`
+Download only assets belonging to one selected release. Historical `v0.4.0`
 archives contain only the platform executable and thin `forge`/`forge.cmd`
-wrapper. The current source release design adds a checked
-`RELEASE-MANIFEST.json`, canonical skill, and selected adoption/fork/security
-guides to future archives. Inspect that manifest instead of assuming an older
-archive contains the new payload. Full source contracts and fixture corpora are
-not release payload.
+wrapper. A new-format archive places the binary,
+wrapper, and `RELEASE-MANIFEST.json` at archive root; allowlisted skill/docs keep
+their repository-relative paths. The manifest binds product, package version,
+exact `release_tag`, full `source_commit`, source epoch, and each payload file's
+path, SHA-256, size, and mode. Full source contracts are not implied unless
+listed in that archive's manifest.
 
 POSIX:
 
@@ -62,9 +66,13 @@ Expand-Archive .\forge-core-x86_64-windows.zip -DestinationPath $destination -Fo
 ```
 
 Each binary archive is accompanied by its own `.sha256` and `.sigstore` files.
-Older releases may omit an SBOM. The hardened source release workflow requires
-one validated release-level CycloneDX SBOM before publication; it is not a
-separate sibling generated per platform archive.
+Older releases may omit an SBOM. Current source requires one schema-validated
+release-level CycloneDX SBOM before publication. It also extracts native
+x86_64 Linux/Windows and Intel/Apple Silicon macOS archives into clean temporary
+roots and runs binary and wrapper `--version` plus `start`, `workflow init`,
+`workflow resume`, `workflow release-status`, and `workflow next` against a
+consumer path with a space. This packaged-install smoke is a future tag gate, not proof that
+`0.12.0` has been published.
 
 ## Install the host skill
 
@@ -218,24 +226,37 @@ start
 Never split or shell-evaluate a display command string. Never reconstruct a
 CAS-bound upgrade from prose. See [Agent integration](agent-integration.md).
 
+Only writes committed through Forge's admitted claim/gate, principal, Admission,
+WAL/recovery, and receipt path are **Forge-mediated**. Editor, shell, installer,
+or host-plugin writes are direct/ungoverned unless that transaction covers them;
+record them as such in evidence and never infer mediation from a transcript.
 ## State and ownership
 
-```text
-<parent>/
-  <project>/
-    .forge-method.yaml
-  forge-<project>/
-    .forge-method/
-<operator-owned-root>/
-  trust anchors, registries, private material
-```
+For a default Project Link, paths are exact and derived from `project_id`:
 
-- Product source belongs in the consumer repo.
-- Workflow ledgers, receipts, evidence, claims, and Domain Pack generations
-  belong in the sibling sidecar.
-- Private keys, monotonic anchors, and operator registries stay outside both.
-- Do not edit ledgers, receipts, active pointers, registries, or signatures by
-  hand.
+| Material | Canonical/default location | Ownership |
+|---|---|---|
+| Product source | `<project>/` | Consumer |
+| Project Link | `<project>/.forge-method.yaml` | Consumer pointer only |
+| Runtime sidecar | `<project-parent>/forge-<project-id>/` | Forge runtime container |
+| State root | `<sidecar>/.forge-method/` | Ledgers, receipts, evidence, WALs, Domain Pack lifecycle |
+| Workflow principal registry | `<sidecar>/operator/workflow-principal-registry.yaml` | Operator public trust metadata |
+| Workflow broker registry | `<sidecar>/operator/workflow-broker-registry.yaml` | Operator public broker trust metadata |
+| Cooperative local secrets | `<sidecar>/operator/workflow-secrets/<sha256-of-credential-id>.ed25519` | Operator; never printed |
+| Domain Pack candidate package bytes | Host-selected `--artifact-root` | Candidate/untrusted input |
+| Admitted Domain Pack objects | `<state-root>/domain-packs/objects/<digest-token>` | Immutable runtime state |
+| Admitted Domain Pack generations | `<state-root>/domain-packs/generations/<generation>-<record-token>/` | Immutable runtime state |
+| Domain Pack trust/learning files and monotonic anchors | Explicit external `--operator-root`, direct children of that root where required | Operator; outside project/artifact/state controlled roots |
+| External broker private keys | Host keystore/path outside Forge roots | Host/operator; Forge stores only public key + ceremony digest |
+| Replay anchor | Explicit operator-selected path outside state root | Operator-protected monotonic authority |
+| Downloaded release assets | Operator-selected download directory | Keep archive, `.sha256`, `.sigstore`, and release-level SBOM together |
+| Installed release | Operator-selected `PATH` directory | Binary and matching wrapper from one archive |
+
+A custom Project Link may change sidecar/state paths, but returned resolved paths
+are authoritative and the state root must remain a `.forge-method` directory
+inside the sidecar and outside the consumer project. Forge-derived workflow
+registry/secret paths then follow the resolved sidecar parent. Do not edit
+ledgers, receipts, active pointers, registries, anchors, or signatures by hand.
 
 ### Preflight profile storage
 
@@ -244,8 +265,8 @@ Project Link and writes `preflight.yaml` under the sibling state root. It must
 not create `<consumer>/.forge-method/`. A standalone repository without a
 Project Link uses `<repo>/.forge-preflight.yaml` for pre-bootstrap use.
 
-This correction is newer than the latest tagged prebuilt release. Verify the
-binary version and inspect the returned path. If a linked consumer receives a
+Verify that the selected binary contains this correction by checking its
+version, manifest, and returned path. If a linked consumer receives a
 local `.forge-method/`, stop and upgrade or report the mismatch; do not normalize
 that output as an exception to the sidecar invariant.
 

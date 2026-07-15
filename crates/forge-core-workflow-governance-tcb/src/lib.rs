@@ -10,11 +10,12 @@
 
 use forge_core_contracts::workflow_governance::WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION;
 use forge_core_contracts::{
-    DomainPackGenerationTransitionedEvent, ReleaseUpgradedEvent, StableId,
-    WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
-    WorkflowRuntimeBundleIdentity, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
-    WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+    CoreDomainPackRebasedEvent, DomainPackGenerationTransitionedEvent, ReleaseUpgradedEvent,
+    StableId, WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent,
+    WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
+    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
+    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_store::{acquire_effect_store_lock, EffectStoreLock, EffectStoreLockError};
 use serde_json_canonicalizer::to_vec as to_canonical_json;
@@ -72,11 +73,16 @@ impl WorkflowGovernanceLedgerProjection {
     pub fn active_identity(&self) -> Option<WorkflowGovernanceLedgerIdentity> {
         let mut active = self.genesis_identity()?;
         for record in &self.records {
-            if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
-                active.bundle_id = event.to_runtime_bundle.bundle_id.clone();
-                active
-                    .bundle_digest
-                    .clone_from(&event.to_runtime_bundle.bundle_digest);
+            let target = match &record.event {
+                WorkflowGovernanceEvent::ReleaseUpgraded(event) => Some(&event.to_runtime_bundle),
+                WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                    Some(&event.release_transition.to_runtime_bundle)
+                }
+                _ => None,
+            };
+            if let Some(target) = target {
+                active.bundle_id = target.bundle_id.clone();
+                active.bundle_digest.clone_from(&target.bundle_digest);
             }
         }
         Some(active)
@@ -88,32 +94,50 @@ impl WorkflowGovernanceLedgerProjection {
     /// until the first release transition supplies that additional binding.
     #[must_use]
     pub fn active_runtime_bundle_identity(&self) -> Option<WorkflowRuntimeBundleIdentity> {
-        self.records.iter().rev().find_map(|record| {
-            if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
-                Some(event.to_runtime_bundle.clone())
-            } else {
-                None
-            }
-        })
+        self.records
+            .iter()
+            .rev()
+            .find_map(|record| match &record.event {
+                WorkflowGovernanceEvent::ReleaseUpgraded(event) => {
+                    Some(event.to_runtime_bundle.clone())
+                }
+                WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                    Some(event.release_transition.to_runtime_bundle.clone())
+                }
+                _ => None,
+            })
     }
 
     /// Last effective core-plus-Domain-Pack epoch durably adopted by the
     /// workflow ledger. `None` is the backward-compatible core-only state.
     #[must_use]
     pub fn active_effective_bundle_identity(&self) -> Option<WorkflowEffectiveBundleIdentity> {
-        self.records.iter().rev().find_map(|record| {
-            if let WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event) = &record.event
-            {
-                Some(event.to_effective_bundle.clone())
-            } else {
-                None
-            }
-        })
+        self.records
+            .iter()
+            .rev()
+            .find_map(|record| match &record.event {
+                WorkflowGovernanceEvent::DomainPackGenerationTransitioned(event) => {
+                    Some(event.to_effective_bundle.clone())
+                }
+                WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                    Some(event.to_effective_bundle.clone())
+                }
+                _ => None,
+            })
     }
 
     #[must_use]
     pub fn current_state_version(&self) -> Option<u64> {
         self.records.last().map(|record| record.state_version)
+    }
+
+    fn contains_core_domain_pack_rebase(&self) -> bool {
+        self.records.iter().any(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::CoreDomainPackRebased(_)
+            )
+        })
     }
 
     fn contains_human_intent_revision(&self) -> bool {
@@ -182,6 +206,7 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         if matches!(
             event,
             WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+                | WorkflowGovernanceEvent::CoreDomainPackRebased(_)
         ) {
             return Err(
                 WorkflowGovernanceLedgerError::DomainPackTransitionRequiresDedicatedAuthority,
@@ -442,6 +467,64 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         Ok(record)
     }
 
+    fn push_core_domain_pack_rebase_tcb(
+        &mut self,
+        target_identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: CoreDomainPackRebasedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        if self.projection.records.len() != self.original_record_count {
+            return Err(WorkflowGovernanceLedgerError::DuplicateDomainPackTransition);
+        }
+        let previous_state_version = self
+            .projection
+            .current_state_version()
+            .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
+        let expected_state_version = previous_state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: previous_state_version,
+            },
+        )?;
+        if state_version != expected_state_version {
+            return Err(
+                WorkflowGovernanceLedgerError::DomainPackTransitionStateVersionMismatch {
+                    expected: expected_state_version,
+                    found: state_version,
+                },
+            );
+        }
+        validate_core_domain_pack_rebase(
+            &event,
+            &self.identity,
+            target_identity,
+            active_release_identity(&self.projection).as_ref(),
+            self.projection.active_runtime_bundle_identity().as_ref(),
+            self.projection.active_effective_bundle_identity().as_ref(),
+            self.projection.head_digest.as_deref(),
+        )?;
+        let (record, line) = build_record_line(
+            &self.projection,
+            &self.identity,
+            state_version,
+            WorkflowGovernanceEvent::CoreDomainPackRebased(Box::new(event)),
+        )?;
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        self.projection.next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
     /// Return the recovered ledger plus every record prepared so far.
     #[must_use]
     pub fn projection(&self) -> &WorkflowGovernanceLedgerProjection {
@@ -576,6 +659,30 @@ impl LockedWorkflowGovernanceLedger {
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
         let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, identity)?;
         let record = batch.push_domain_pack_transition_tcb(state_version, event)?;
+        batch.commit()?;
+        Ok(record)
+    }
+
+    /// Append one joined core-release and Domain Pack generation transition.
+    /// Both target identities become active in the same workflow WAL record.
+    #[doc(hidden)]
+    pub fn transition_core_domain_pack_rebase_unchecked_tcb(
+        &mut self,
+        expected_head_digest: &str,
+        source_identity: &WorkflowGovernanceLedgerIdentity,
+        target_identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: CoreDomainPackRebasedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        validate_identity(target_identity)?;
+        if source_identity.project_id != target_identity.project_id {
+            return Err(WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "source and target project identities differ",
+            });
+        }
+        let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, source_identity)?;
+        let record =
+            batch.push_core_domain_pack_rebase_tcb(target_identity, state_version, event)?;
         batch.commit()?;
         Ok(record)
     }
@@ -1075,6 +1182,7 @@ fn recover_under_lock(
         if document.schema_version != WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1085,15 +1193,22 @@ fn recover_under_lock(
         let is_domain_transition = matches!(
             &record.event,
             WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+                | WorkflowGovernanceEvent::CoreDomainPackRebased(_)
         );
         let is_intent_revision = matches!(
             &record.event,
             WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
         );
+        let rebase_wire_required = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::CoreDomainPackRebased(_)
+        ) || identity_state.rebase_seen;
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if intent_wire_required {
+        let expected_schema = if rebase_wire_required {
+            WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
+        } else if intent_wire_required {
             WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
         } else if effective_wire_required {
             WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
@@ -1176,6 +1291,7 @@ struct RecoveredIdentityState {
     active_runtime: Option<WorkflowRuntimeBundleIdentity>,
     active_effective: Option<WorkflowEffectiveBundleIdentity>,
     intent_revision_seen: bool,
+    rebase_seen: bool,
 }
 
 fn validate_recovered_semantics(
@@ -1227,9 +1343,16 @@ fn validate_recovered_semantics(
     ) {
         identity.intent_revision_seen = true;
     }
+    if matches!(
+        &record.event,
+        WorkflowGovernanceEvent::CoreDomainPackRebased(_)
+    ) {
+        identity.rebase_seen = true;
+    }
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // Release, pack, and joined replay stay in one linear state transition audit.
 fn validate_recovered_transition_semantics(
     record: &WorkflowGovernanceLedgerRecord,
     identity: &mut RecoveredIdentityState,
@@ -1302,6 +1425,50 @@ fn validate_recovered_transition_semantics(
             identity.active_effective.as_ref(),
             record.previous_record_digest.as_deref(),
         )?;
+        identity.active_effective = Some(event.to_effective_bundle.clone());
+    } else if let WorkflowGovernanceEvent::CoreDomainPackRebased(event) = &record.event {
+        let previous = previous_state_version.ok_or(
+            WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+                reason: "joined rebase cannot be the genesis record",
+            },
+        )?;
+        let expected = previous
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceLedgerError::StateVersionOverflow { current: previous })?;
+        if record.state_version != expected {
+            return Err(
+                WorkflowGovernanceLedgerError::DomainPackTransitionStateVersionMismatch {
+                    expected,
+                    found: record.state_version,
+                },
+            );
+        }
+        let source = identity.active.as_ref().ok_or(
+            WorkflowGovernanceLedgerError::ReleaseTransitionInvalid {
+                reason: "joined rebase has no active source identity",
+            },
+        )?;
+        let target = WorkflowGovernanceLedgerIdentity {
+            project_id: source.project_id.clone(),
+            bundle_id: event.release_transition.to_runtime_bundle.bundle_id.clone(),
+            bundle_digest: event
+                .release_transition
+                .to_runtime_bundle
+                .bundle_digest
+                .clone(),
+        };
+        validate_core_domain_pack_rebase(
+            event,
+            source,
+            &target,
+            identity.active_release.as_ref(),
+            identity.active_runtime.as_ref(),
+            identity.active_effective.as_ref(),
+            record.previous_record_digest.as_deref(),
+        )?;
+        identity.active = Some(target);
+        identity.active_release = Some(event.release_transition.to_release.clone());
+        identity.active_runtime = Some(event.release_transition.to_runtime_bundle.clone());
         identity.active_effective = Some(event.to_effective_bundle.clone());
     }
     Ok(())
@@ -1429,7 +1596,11 @@ fn ledger_wire_schema(
     projection: &WorkflowGovernanceLedgerProjection,
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
-    if matches!(
+    if matches!(event, WorkflowGovernanceEvent::CoreDomainPackRebased(_))
+        || projection.contains_core_domain_pack_rebase()
+    {
+        WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
+    } else if matches!(
         event,
         WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
     ) || projection.contains_human_intent_revision()
@@ -1438,6 +1609,7 @@ fn ledger_wire_schema(
     } else if matches!(
         event,
         WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
+            | WorkflowGovernanceEvent::CoreDomainPackRebased(_)
     ) || projection.active_effective_bundle_identity().is_some()
     {
         WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
@@ -1552,13 +1724,17 @@ fn validate_append_identity(
 fn active_release_identity(
     projection: &WorkflowGovernanceLedgerProjection,
 ) -> Option<WorkflowGovernanceReleaseIdentity> {
-    projection.records.iter().rev().find_map(|record| {
-        if let WorkflowGovernanceEvent::ReleaseUpgraded(event) = &record.event {
-            Some(event.to_release.clone())
-        } else {
-            None
-        }
-    })
+    projection
+        .records
+        .iter()
+        .rev()
+        .find_map(|record| match &record.event {
+            WorkflowGovernanceEvent::ReleaseUpgraded(event) => Some(event.to_release.clone()),
+            WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                Some(event.release_transition.to_release.clone())
+            }
+            _ => None,
+        })
 }
 
 /// Deterministic receipt migration for one Domain Pack epoch transition.
@@ -1657,6 +1833,84 @@ fn validate_domain_pack_transition(
     {
         return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
             reason: "receipt carryover is not the deterministic exact-equivalence result",
+        });
+    }
+    Ok(())
+}
+
+fn validate_core_domain_pack_rebase(
+    event: &CoreDomainPackRebasedEvent,
+    source: &WorkflowGovernanceLedgerIdentity,
+    target: &WorkflowGovernanceLedgerIdentity,
+    active_release: Option<&WorkflowGovernanceReleaseIdentity>,
+    active_runtime: Option<&WorkflowRuntimeBundleIdentity>,
+    active_effective: Option<&WorkflowEffectiveBundleIdentity>,
+    previous_head_digest: Option<&str>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    validate_release_transition(
+        &event.release_transition,
+        source,
+        target,
+        active_release,
+        active_runtime,
+        previous_head_digest,
+    )?;
+    let previous_head_digest =
+        previous_head_digest.ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase has no previous ledger head",
+        })?;
+    if event.prior_ledger_head_digest != previous_head_digest
+        || event.release_transition.prior_ledger_head_digest != previous_head_digest
+    {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase does not bind one exact prior ledger head",
+        });
+    }
+    validate_effective_identity(&event.from_effective_bundle)?;
+    validate_effective_identity(&event.to_effective_bundle)?;
+    if active_effective != Some(&event.from_effective_bundle) {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase source is not the active effective epoch",
+        });
+    }
+    if event.from_effective_bundle.core_runtime_bundle
+        != event.release_transition.from_runtime_bundle
+        || event.to_effective_bundle.core_runtime_bundle
+            != event.release_transition.to_runtime_bundle
+    {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase effective epochs do not bind release runtime endpoints",
+        });
+    }
+    let from_generation = event
+        .from_effective_bundle
+        .domain_pack_generation
+        .as_ref()
+        .ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase source has no Domain Pack generation",
+        })?;
+    let to_generation = event
+        .to_effective_bundle
+        .domain_pack_generation
+        .as_ref()
+        .ok_or(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase target has no Domain Pack generation",
+        })?;
+    if to_generation.generation <= from_generation.generation
+        || to_generation.base_core_bundle_digest == from_generation.base_core_bundle_digest
+    {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase must advance generation and change its sealed Core binding",
+        });
+    }
+    let expected =
+        domain_pack_receipt_carryover(&event.from_effective_bundle, &event.to_effective_bundle);
+    if event.receipt_carryover != expected
+        || event.release_transition.receipt_carryover != expected
+        || expected != WorkflowReceiptCarryover::InvalidateAll
+    {
+        return Err(WorkflowGovernanceLedgerError::DomainPackTransitionInvalid {
+            reason: "joined rebase receipt carryover must be deterministic invalidation",
         });
     }
     Ok(())
@@ -2184,6 +2438,7 @@ struct ReplacementPaths {
     transaction: PathBuf,
 }
 
+#[cfg(any(not(unix), test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReplacementCrashPoint {
     NextSynced,
@@ -2197,6 +2452,7 @@ thread_local! {
     static REPLACEMENT_CRASH_POINT: Cell<Option<ReplacementCrashPoint>> = const { Cell::new(None) };
 }
 
+#[cfg(any(not(unix), test))]
 fn maybe_inject_replacement_crash(point: ReplacementCrashPoint) {
     #[cfg(test)]
     REPLACEMENT_CRASH_POINT.with(|configured| {
@@ -2253,6 +2509,7 @@ fn atomic_replace_file_unix(target: &Path, content: &[u8]) -> io::Result<()> {
     sync_parent_dir(parent)
 }
 
+#[cfg(any(not(unix), test))]
 fn replace_file_with_recovery_protocol(target: &Path, content: &[u8]) -> io::Result<()> {
     let parent = target
         .parent()
@@ -2472,6 +2729,7 @@ fn replacement_paths(target: &Path) -> io::Result<ReplacementPaths> {
     })
 }
 
+#[cfg(any(not(unix), test))]
 fn encode_marker(marker: &ReplacementMarker) -> Vec<u8> {
     let previous = marker.previous_digest.as_deref().unwrap_or("absent");
     format!(
@@ -2564,6 +2822,7 @@ fn read_regular_file_bounded(
     fs::read(path).map(Some)
 }
 
+#[cfg(any(not(unix), test))]
 fn write_new_synced_file(path: &Path, content: &[u8]) -> io::Result<()> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
     if let Err(error) = file.write_all(content).and_then(|()| file.sync_all()) {
@@ -2848,6 +3107,122 @@ mod replacement_protocol_tests {
         fs::remove_dir_all(root).expect("cleanup");
     }
 
+    fn effective_identity(
+        core: WorkflowRuntimeBundleIdentity,
+        generation: Option<u64>,
+        label: &str,
+    ) -> WorkflowEffectiveBundleIdentity {
+        let effective = WorkflowRuntimeBundleIdentity {
+            bundle_id: StableId(format!("bundle-effective-{label}")),
+            bundle_digest: sha256_digest(format!("effective-{label}").as_bytes()),
+            policy_set_digest: sha256_digest(format!("effective-policy-{label}").as_bytes()),
+        };
+        WorkflowEffectiveBundleIdentity {
+            core_runtime_bundle: core.clone(),
+            effective_runtime_bundle: generation.map_or_else(|| core, |_| effective),
+            domain_pack_generation: generation.map(|generation| {
+                forge_core_contracts::WorkflowDomainPackGenerationIdentity {
+                    generation,
+                    active_lock_digest: sha256_digest(format!("lock-{label}").as_bytes()),
+                    composition_digest: sha256_digest(format!("composition-{label}").as_bytes()),
+                    base_core_bundle_digest: sha256_digest(
+                        format!("inner-core-{label}").as_bytes(),
+                    ),
+                    supply_chain_registry_digest: sha256_digest(
+                        format!("supply-{label}").as_bytes(),
+                    ),
+                    reviewer_registry_digest: "a".repeat(64),
+                    reviewed_registry_digest: "b".repeat(64),
+                }
+            }),
+            receipt_context_digest: sha256_digest(format!("receipt-{label}").as_bytes()),
+        }
+    }
+
+    #[test]
+    fn joined_rebase_advances_core_and_effective_epoch_in_one_record() {
+        let root = test_root("joined-core-domain-pack-rebase");
+        let source = test_identity();
+        let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock ledger");
+        let imported = ledger
+            .initialize_unchecked_tcb(
+                &source,
+                0,
+                WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                    source_ref: "project/state.yaml".to_owned(),
+                    source_digest: sha256_digest(b"source"),
+                    snapshot_digest: sha256_digest(b"snapshot"),
+                    initial_phase: StableId("discover".to_owned()),
+                }),
+            )
+            .expect("initialize");
+        let source_runtime = WorkflowRuntimeBundleIdentity {
+            bundle_id: source.bundle_id.clone(),
+            bundle_digest: source.bundle_digest.clone(),
+            policy_set_digest: sha256_digest(b"policy-v1"),
+        };
+        let core_only = effective_identity(source_runtime.clone(), None, "core-only");
+        let active_source = effective_identity(source_runtime, Some(1), "source");
+        let domain_event = DomainPackGenerationTransitionedEvent {
+            from_effective_bundle: core_only,
+            to_effective_bundle: active_source.clone(),
+            receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+            prior_ledger_head_digest: imported.record_digest.clone(),
+        };
+        let domain_record = ledger
+            .transition_domain_pack_generation_unchecked_tcb(
+                &imported.record_digest,
+                &source,
+                1,
+                domain_event,
+            )
+            .expect("activate source generation");
+        let target = WorkflowGovernanceLedgerIdentity {
+            project_id: source.project_id.clone(),
+            bundle_id: StableId("bundle-protocol-next".to_owned()),
+            bundle_digest: sha256_digest(b"bundle-protocol-next"),
+        };
+        let release = test_release_event(&domain_record.record_digest, &source, &target);
+        let target_effective =
+            effective_identity(release.to_runtime_bundle.clone(), Some(2), "target");
+        let event = CoreDomainPackRebasedEvent {
+            release_transition: release,
+            from_effective_bundle: active_source,
+            to_effective_bundle: target_effective.clone(),
+            receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+            prior_ledger_head_digest: domain_record.record_digest.clone(),
+        };
+        ledger
+            .transition_core_domain_pack_rebase_unchecked_tcb(
+                &domain_record.record_digest,
+                &source,
+                &target,
+                2,
+                event,
+            )
+            .expect("joined rebase");
+        let projection = ledger.recover().expect("recover joined epoch");
+        assert_eq!(projection.active_identity(), Some(target));
+        assert_eq!(
+            projection.active_effective_bundle_identity(),
+            Some(target_effective)
+        );
+        let wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("joined WAL bytes");
+        let last = wal
+            .split(|byte| *byte == b'\n')
+            .rfind(|line| !line.is_empty())
+            .expect("joined WAL line");
+        let document: WorkflowGovernanceReceiptDocument =
+            serde_json::from_slice(last).expect("joined receipt wire");
+        assert_eq!(
+            document.schema_version,
+            WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
+        );
+        drop(ledger);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
     fn broker_signal_event(head: &str) -> WorkflowGovernanceEvent {
         WorkflowGovernanceEvent::SignalChanged(SignalChangedEvent {
             signal: WorkflowGovernanceSignal::ReadinessRequested,
@@ -2988,6 +3363,7 @@ mod replacement_protocol_tests {
     fn intent_event_cannot_be_downgraded_and_0_3_cannot_be_used_early() {
         for old_schema in [
             WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+            WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
             WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
         ] {
             let root = test_root(&format!("intent-wire-downgrade-{old_schema}"));

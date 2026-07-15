@@ -1,0 +1,32 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7E.1"
+status: "source_controls_local_cumulative_gate_passed_tag_pending"
+slice: "P7e-release-and-distribution-correctness"
+title: "Publish one reproducible 0.12 release identity"
+
+intent: >-
+  Make source, tag, binary, archives, checksums, signatures, SBOM, start skill,
+  docs, and clean-install behavior describe the same immutable release.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7e-release-and-distribution-correctness"
+  - ".github/workflows/release.yml"
+  - "distribution/release-payload.txt"
+
+acceptance_criteria:
+  - "Requested tag, checked-out commit, Cargo version, CLI version, archive manifest, and release name match exactly."
+  - "Every platform archive contains forge-core, forge wrapper, canonical start skill, manifest, and promised guides."
+  - "Checksums, Sigstore bundles, and mandatory release-level CycloneDX SBOM verify before publication."
+  - "Manual dispatch cannot publish branch bytes as a release tag."
+  - "Clean native Linux, Windows, Intel macOS, and Apple Silicon macOS installs reach start -> workflow init/resume -> release-status -> next using only release assets."
+  - "Release notes distinguish package SemVer, workflow release identity, and source-only future work."
+
+checks:
+  - "release archive unit/integration tests"
+  - "tag identity dry run"
+  - "packaged binary smoke on native Linux/Windows/Intel macOS/Apple Silicon macOS"
+  - "signature, checksum, manifest, and SBOM verification"
+
+blocks: []
+next_workflow: "P7F.1 real-host proof"

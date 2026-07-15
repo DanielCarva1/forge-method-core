@@ -31,8 +31,11 @@ pub mod claim_engine;
 pub mod conflict_detection;
 pub mod coordination_eval;
 pub mod domain_pack;
+pub mod domain_pack_acquisition;
 pub mod domain_pack_compatibility;
+pub mod domain_pack_discovery;
 pub mod domain_pack_learning;
+pub mod domain_pack_rebase;
 pub mod domain_pack_resolution;
 pub mod domain_pack_trust;
 pub mod durable_assurance;
@@ -123,8 +126,21 @@ pub use domain_pack::{
     MAX_DOMAIN_PACK_DEPENDENCIES_PER_PACK, MAX_DOMAIN_PACK_DEPENDENCY_DEPTH,
     MAX_DOMAIN_PACK_DIAGNOSTICS, MAX_DOMAIN_PACK_RAW_DOCUMENT_BYTES,
 };
+pub use domain_pack_acquisition::{
+    derive_domain_pack_acquisition_inputs, plan_domain_pack_acquisition,
+    verify_domain_pack_acquisition_derived_inputs, verify_domain_pack_acquisition_plan,
+    DomainPackAcquisitionIssue, DomainPackAcquisitionIssueCode, DomainPackAcquisitionRejection,
+};
 pub use domain_pack_compatibility::{
     evaluate_domain_pack_compatibility, DomainPackCompatibilityInput,
+};
+pub use domain_pack_discovery::{
+    discover_domain_packs, verify_domain_pack_discovery_projection, DomainPackDiscoveryIssue,
+    DomainPackDiscoveryIssueCode, DomainPackDiscoveryRejection,
+    MAX_DOMAIN_PACK_DISCOVERY_CANDIDATES, MAX_DOMAIN_PACK_DISCOVERY_CAPABILITIES_PER_REQUIREMENT,
+    MAX_DOMAIN_PACK_DISCOVERY_DECLARATIONS_PER_CANDIDATE, MAX_DOMAIN_PACK_DISCOVERY_DIAGNOSTICS,
+    MAX_DOMAIN_PACK_DISCOVERY_MATCHES, MAX_DOMAIN_PACK_DISCOVERY_REQUIREMENTS,
+    MAX_DOMAIN_PACK_DISCOVERY_TEXT_BYTES, MAX_DOMAIN_PACK_DISCOVERY_UNCERTAINTIES,
 };
 pub use domain_pack_learning::{
     evaluate_domain_pack_promotion, evaluate_domain_pack_resolution_reviewed_eligibility,
@@ -136,6 +152,9 @@ pub use domain_pack_learning::{
     DomainPackReviewedRegistryEvolutionInput, DomainPackReviewedRegistryEvolutionStatus,
     DomainPackReviewedResolutionJoin, DomainPackReviewedResolutionJoinStatus,
     DomainPackReviewedResolutionProjection, MAX_DOMAIN_PACK_LEARNING_DIAGNOSTICS,
+};
+pub use domain_pack_rebase::{
+    plan_domain_pack_rebase, verify_domain_pack_rebase_plan, DomainPackRebasePlanError,
 };
 pub use domain_pack_resolution::{
     domain_pack_resolution_projection_digest, resolve_domain_packs,

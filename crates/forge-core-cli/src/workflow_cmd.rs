@@ -155,6 +155,8 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         "release-status" => adapter
             .release_status()
             .map(|value| serde_json::to_value(value).expect("serializable release status")),
+        "release-rebase-plan" => release_rebase_plan(&adapter, &parsed),
+        "release-rebase-apply" => release_rebase_apply(&adapter, &parsed),
         "release-upgrade" => release_upgrade(&adapter, &parsed),
         "shadow" => adapter
             .shadow()
@@ -268,6 +270,67 @@ fn release_upgrade(
             &expected_snapshot_digest,
         )
         .map(|value| serde_json::to_value(value).expect("serializable release upgrade receipt"))
+}
+fn release_rebase_plan(
+    adapter: &WorkflowGovernanceProjectAdapter,
+    args: &WorkflowCliArgs,
+) -> Result<Value, WorkflowGovernanceAdapterError> {
+    let target_release_id =
+        StableId(required(args, "target-release-id").map_err(invalid_observation)?);
+    let expected_plan_digest =
+        required(args, "expected-rebase-plan-digest").map_err(invalid_observation)?;
+    adapter
+        .release_rebase_plan(&target_release_id, &expected_plan_digest)
+        .map(|value| serde_json::to_value(value).expect("serializable Domain Pack rebase plan"))
+}
+
+fn release_rebase_apply(
+    adapter: &WorkflowGovernanceProjectAdapter,
+    args: &WorkflowCliArgs,
+) -> Result<Value, WorkflowGovernanceAdapterError> {
+    let target_release_id =
+        StableId(required(args, "target-release-id").map_err(invalid_observation)?);
+    let expected_plan_digest =
+        required(args, "expected-rebase-plan-digest").map_err(invalid_observation)?;
+    let plan = match adapter.release_rebase_plan(&target_release_id, &expected_plan_digest) {
+        Ok(plan) => {
+            crate::domain_pack_cmd::apply_domain_pack_core_rebase(
+                &adapter.binding().project_root,
+                &adapter.binding().state_root,
+                &plan,
+                &plan.domain_pack_rebase_plan.target_core,
+                StableId("principal.domain-pack-rebase-operator".to_owned()),
+            )
+            .map_err(|error| {
+                WorkflowGovernanceAdapterError::DomainPackRebaseLifecycle(error.to_string())
+            })?;
+            #[cfg(feature = "expensive-p6d-e2e")]
+            if matches!(
+                std::env::var("FORGE_TEST_CRASH_AFTER_REBASE_LIFECYCLE").as_deref(),
+                Ok("1")
+            ) {
+                eprintln!("injected crash after lifecycle commit");
+                // This must bypass unwinding: the E2E proves that a replacement
+                // process recovers the durable lifecycle-first boundary.
+                std::process::exit(86);
+            }
+            plan
+        }
+        Err(fresh_error) => {
+            let persisted = crate::domain_pack_cmd::load_persisted_domain_pack_rebase_plan(
+                &adapter.binding().state_root,
+                &expected_plan_digest,
+            )
+            .map_err(|_| fresh_error)?;
+            if persisted.domain_pack_rebase_plan.target_release.release_id != target_release_id {
+                return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
+            }
+            persisted
+        }
+    };
+    adapter
+        .complete_release_rebase(&plan)
+        .map(|value| serde_json::to_value(value).expect("serializable joined rebase receipt"))
 }
 
 fn complete(
@@ -500,6 +563,7 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             | "--target-release-id"
             | "--expected-current-release-digest"
             | "--expected-head-digest"
+            | "--expected-rebase-plan-digest"
             | "--expected-snapshot-digest" => {
                 index += 1;
                 let value = args
@@ -599,6 +663,28 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             Ok(())
         }
+        "release-rebase-plan" | "release-rebase-apply" => {
+            let expected = ["target-release-id", "expected-rebase-plan-digest"];
+            if let Some(flag) = args
+                .flags
+                .keys()
+                .find(|flag| !expected.contains(&flag.as_str()))
+            {
+                return Err(format!(
+                    "--{flag} is not valid for workflow {}",
+                    args.subcommand
+                ));
+            }
+            let target = required(args, "target-release-id")?;
+            if target.trim().is_empty() {
+                return Err("--target-release-id must not be blank".to_owned());
+            }
+            let digest = required(args, "expected-rebase-plan-digest")?;
+            if !is_lowercase_sha256(&digest) {
+                return Err("--expected-rebase-plan-digest must be a canonical lowercase sha256:<64-hex> digest".to_owned());
+            }
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -619,6 +705,7 @@ fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate
+        | WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch
         | WorkflowGovernanceAdapterError::CompletionDrift => ExitReason::Conflict,
         WorkflowGovernanceAdapterError::InvalidProjectId
         | WorkflowGovernanceAdapterError::Path { .. }
@@ -726,6 +813,36 @@ mod tests {
         ]);
         let parsed = parse_args(&invalid).expect("shape is validated after parsing");
         assert!(validate_release_args(&parsed).is_err());
+    }
+
+    #[test]
+    fn release_rebase_commands_accept_only_exact_plan_cas() {
+        let digest = format!("sha256:{}", "b".repeat(64));
+        for subcommand in ["release-rebase-plan", "release-rebase-apply"] {
+            let parsed = parse_args(&argv(&[
+                "workflow",
+                subcommand,
+                "--target-release-id",
+                "release.next",
+                "--expected-rebase-plan-digest",
+                &digest,
+            ]))
+            .expect("exact rebase arguments");
+            validate_release_args(&parsed).expect("valid exact rebase arguments");
+
+            let with_authority = parse_args(&argv(&[
+                "workflow",
+                subcommand,
+                "--target-release-id",
+                "release.next",
+                "--expected-rebase-plan-digest",
+                &digest,
+                "--expected-head-digest",
+                &digest,
+            ]))
+            .expect("known but forbidden rebase flag");
+            assert!(validate_release_args(&with_authority).is_err());
+        }
     }
 
     #[test]

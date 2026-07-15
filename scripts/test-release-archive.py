@@ -58,18 +58,25 @@ class ReleaseArchiveTests(unittest.TestCase):
         args.wrapper_name = wrapper_name
         args.archive = root / f"forge-core-test{suffix}"
         args.version = "0.9.0"
+        args.release_tag = "v0.9.0"
+        args.source_commit = "0123456789abcdef0123456789abcdef01234567"
         args.source_date_epoch = 1_700_000_000
         return args
 
-    def verify(self, args: Args) -> None:
+    def checker_args(self, args: Args) -> Args:
         check_args = Args()
         check_args.archive = args.archive
         check_args.binary_name = args.binary_name
         check_args.wrapper_name = args.wrapper_name
         check_args.version = args.version
+        check_args.expected_release_tag = args.release_tag
+        check_args.expected_source_commit = args.source_commit
         check_args.payload_manifest = args.repo_root / args.payload_manifest
         check_args.require_checksum = True
-        checker.check(check_args)
+        return check_args
+
+    def verify(self, args: Args) -> None:
+        checker.check(self.checker_args(args))
 
     def test_tar_and_zip_are_reproducible_and_exact(self) -> None:
         for suffix in [".tar.gz", ".zip"]:
@@ -91,6 +98,35 @@ class ReleaseArchiveTests(unittest.TestCase):
             args.version = "0.9.1"
             with self.assertRaises(checker.ArchiveCheckError):
                 self.verify(args)
+
+    def test_checker_rejects_expected_release_tag_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.fixture(Path(directory), ".tar.gz")
+            builder.build(args)
+            check_args = self.checker_args(args)
+            check_args.expected_release_tag = "v0.9.1"
+            with self.assertRaisesRegex(checker.ArchiveCheckError, "!= expected"):
+                checker.check(check_args)
+
+    def test_checker_rejects_expected_source_commit_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.fixture(Path(directory), ".zip")
+            builder.build(args)
+            check_args = self.checker_args(args)
+            check_args.expected_source_commit = "f" * 40
+            with self.assertRaisesRegex(checker.ArchiveCheckError, "!= expected"):
+                checker.check(check_args)
+
+    def test_builder_rejects_release_identity_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            args = self.fixture(Path(directory), ".tar.gz")
+            args.release_tag = "v0.9.1"
+            with self.assertRaisesRegex(builder.ReleaseArchiveError, "release-tag"):
+                builder.build(args)
+            args.release_tag = "v0.9.0"
+            args.source_commit = "not-a-full-commit"
+            with self.assertRaisesRegex(builder.ReleaseArchiveError, "source-commit"):
+                builder.build(args)
 
     def test_payload_rejects_traversal_and_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -110,7 +110,23 @@ pub fn evaluate_domain_pack_compatibility(
     let new_core_matches = new.payload.core == input.sealed_core;
     let old_core_matches = old.is_none_or(|old| old.payload.core == input.sealed_core);
     let universal_core_unchanged = new_core_matches && old_core_matches;
-    if !universal_core_unchanged {
+    let rebase_core_matches = match (&input.operation, old) {
+        (
+            DomainPackLifecycleOperation::RebaseCore {
+                expected_from_core_digest,
+                target_core_digest,
+                ..
+            },
+            Some(old),
+        ) => {
+            old.payload.core.bundle_digest == *expected_from_core_digest
+                && new.payload.core.bundle_digest == *target_core_digest
+                && new.payload.core == input.sealed_core
+                && old.payload.core != new.payload.core
+        }
+        _ => false,
+    };
+    if !universal_core_unchanged && !rebase_core_matches {
         compatibility_issue(
             &mut issues,
             DomainPackCompatibilityIssueCode::CoreChanged,
@@ -118,6 +134,15 @@ pub fn evaluate_domain_pack_compatibility(
             "source or target lock differs from the independently sealed universal Core",
         );
         fatal = true;
+    } else if rebase_core_matches {
+        semantic_change(
+            &mut changes,
+            DomainPackSemanticChangeKind::PolicyChanged,
+            &input.sealed_core.bundle_id.0,
+            old.map(|lock| lock.payload.core.bundle_digest.clone()),
+            Some(new.payload.core.bundle_digest.clone()),
+            "adjacent Core release changed under explicit coordinated rebase intent",
+        );
     }
 
     let old_packages = old.map_or_else(BTreeMap::new, |lock| package_map(&lock.payload.packages));
@@ -270,6 +295,16 @@ pub fn evaluate_domain_pack_compatibility(
     );
 
     let is_remove = matches!(input.operation, DomainPackLifecycleOperation::Remove { .. });
+    let is_rebase = matches!(
+        input.operation,
+        DomainPackLifecycleOperation::RebaseCore { .. }
+    );
+    let rebase_preserves_existing_gaps = is_rebase
+        && old.as_ref().is_some_and(|old| {
+            gap_map(&old.payload.unresolved_capability_gaps) == new_gaps
+                && composition_gap_map(&old.payload.unresolved_composition_gaps)
+                    == new_composition_gaps
+        });
     if !new_composition_gaps.is_empty() {
         for (key, gap) in &new_composition_gaps {
             compatibility_issue(
@@ -286,7 +321,7 @@ pub fn evaluate_domain_pack_compatibility(
                 gap.message.clone(),
             );
         }
-        if !is_remove {
+        if !is_remove && !rebase_preserves_existing_gaps {
             fatal = true;
         }
     }
@@ -311,7 +346,7 @@ pub fn evaluate_domain_pack_compatibility(
                 gap.message.clone(),
             );
         }
-        if !is_remove {
+        if !is_remove && !rebase_preserves_existing_gaps {
             fatal = true;
         }
     }

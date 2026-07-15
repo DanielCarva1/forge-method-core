@@ -19,6 +19,7 @@ import zipfile
 MANIFEST_NAME = "RELEASE-MANIFEST.json"
 SCHEMA_VERSION = "forge_release_manifest_v1"
 SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$")
+SOURCE_COMMIT = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 
 
 class ReleaseArchiveError(ValueError):
@@ -118,6 +119,8 @@ def release_entries(args: argparse.Namespace) -> tuple[list[tuple[str, bytes, in
         "schema_version": SCHEMA_VERSION,
         "product": "forge-method-core",
         "version": args.version,
+        "release_tag": args.release_tag,
+        "source_commit": args.source_commit,
         "source_date_epoch": args.source_date_epoch,
         "coverage": f"all archive members except {MANIFEST_NAME}",
         "files": file_rows,
@@ -181,6 +184,14 @@ def write_checksum(archive: Path) -> None:
 def build(args: argparse.Namespace) -> None:
     if not SEMVER.fullmatch(args.version):
         raise ReleaseArchiveError(f"version must be SemVer without a v prefix: {args.version!r}")
+    if args.release_tag != f"v{args.version}":
+        raise ReleaseArchiveError(
+            f"release-tag must exactly bind version v{args.version}: {args.release_tag!r}"
+        )
+    if not SOURCE_COMMIT.fullmatch(args.source_commit):
+        raise ReleaseArchiveError(
+            "source-commit must be a full lowercase hexadecimal Git object id"
+        )
     if args.source_date_epoch < 0:
         raise ReleaseArchiveError("source-date-epoch must be non-negative")
     args.archive.parent.mkdir(parents=True, exist_ok=True)
@@ -206,6 +217,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--wrapper-name", required=True)
     result.add_argument("--archive", type=Path, required=True)
     result.add_argument("--version", required=True)
+    result.add_argument("--release-tag", required=True)
+    result.add_argument("--source-commit", required=True)
     result.add_argument("--source-date-epoch", type=int, required=True)
     return result
 

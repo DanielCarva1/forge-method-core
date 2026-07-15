@@ -23,11 +23,19 @@ Active architecture direction:
 Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
-Pullable compatibility checkpoint: the Rust workspace package version is
-`0.9.0`. Guide `describe`/`status` retirement diagnostics use payload schema
-`0.2`, and consumers of that extended surface must be at least `0.5.0`.
-Workflow governance release identity remains the frozen `0.4.0` five-release
-chain; package SemVer and governed release identity are separate axes.
+Local source candidate checkpoint: the Rust workspace package version is
+`0.12.0`; this does not establish a pullable commit, tag, or prebuilt. Guide
+The local cumulative source gate passed with formatting, full pedantic Clippy,
+default and expensive test-inventory parity, the exact P6d journey, and
+`cargo test --workspace`; hosted CI, exact tag, and prebuilt evidence remain
+pending.
+`describe`/`status` retirement diagnostics use payload schema `0.2`, and
+consumers of that extended surface must be at least `0.5.0`. The
+compiled workflow-governance chain has six releases and 43 policies; its
+current successor is `workflow-governance.release.universal-assurance-v0` /
+`0.5.0`. Package SemVer, latest published prebuilt, project workflow pin, and
+project-local Domain Pack effective epoch are separate identities; see the
+canonical table in `README.md`.
 
 ## Domain language
 
@@ -273,33 +281,38 @@ chain; package SemVer and governed release identity are separate axes.
   substitute for the other, and a raw audit document is never authority.
   P6d adds the real game-development reference pack and a generic runtime join:
   normal workflow commands auto-detect the lifecycle state, retain its lock,
-  and derive a separate effective core-plus-pack epoch without extending the
-  universal five-release 42-policy registry. Research and representative
-  evidence remain agent responsibilities; the human receives the single
-  product-direction choice only after its prerequisite claims are verified.
-  The real-process proof then reaches playable-loop, first-use, and packaging
-  readiness while rejecting partial, artifact-only, stale-CAS, and degraded
-  mutations. A separate persistence proof recovers install, upgrade, exact
-  rollback, and remove as four immutable generations. Replacement processes
-  replay the same durable epoch. Valid remove-last and
+  and derive a separate effective core-plus-pack epoch. The historical P5
+  prefix remains five releases and 42 policies; P7b appends the separately
+  reviewed universal-assurance successor, making the compiled chain six
+  releases and 43 policies without moving any project's durable pin
+  automatically. Research and representative evidence remain agent
+  responsibilities; the human receives the single product-direction choice
+  only after its prerequisite claims are verified. The real-process protocol
+  proof reaches playable-loop, first-use, and packaging readiness while
+  rejecting partial, artifact-only, stale-CAS, and degraded mutations; it is
+  not the P7F production-host proof. A separate persistence proof recovers
+  install, upgrade, exact rollback, and remove as four immutable generations.
+  Replacement processes replay the same durable epoch. Valid remove-last and
   rollback-to-empty operations become typed degraded generations whose gaps
   remain explicit and blocking. A core release upgrade while a generation is
   active requires an explicit rebase rather than an unsafe partial cross-store
-  transition. P6a through P6d are complete; the next product phase is outside
-  P6.
-  Static links, junctions, traversal,
-  special files, and non-concurrent tamper fail closed. A malicious process
-  running as the same OS principal can still race-replace a node after
-  validation or mutate the project after the final snapshot check; that hostile
-  model requires separate OS-principal permissions and remote CAS for immutable
-  artifacts. `domain-pack
+  transition. P7D derives target authority through the existing lifecycle TCB,
+  commits the target generation first, and appends one joined Core/effective
+  workflow event; a persisted exact plan lets replacement processes finish the
+  joined event after interruption without admitting a mixed pair. P6a through
+  P6d are complete; no statement here claims complete P7 productization.
+  Static links, junctions, traversal, special files, and non-concurrent tamper
+  fail closed. A malicious process running as the same OS principal can still
+  race-replace a node after validation or mutate the project after the final
+  snapshot check; that hostile model requires separate OS-principal permissions
+  and remote CAS for immutable artifacts. `domain-pack
   validate|compose|resolve|trust-provision|status|recover|preflight|apply` plus
   `domain-pack learning` capture/evaluate/conflict/trust/rotation/check/promote
-  operations is the agent surface;
-  only `apply` activates, while status/recovery may finish an interrupted
-  pointer transaction. The universal kernel registry remains the exact
-  five-release 42-policy P5 authority and excludes all 18 deferred domain
-  candidates.
+  operations is the agent surface; only `apply` activates, while
+  status/recovery may finish an interrupted pointer transaction. The active
+  compiled universal registry is the six-release, 43-policy chain; Domain Pack
+  candidates remain outside that core authority and enter only through a
+  project-local effective epoch.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

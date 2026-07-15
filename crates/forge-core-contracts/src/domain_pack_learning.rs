@@ -1984,6 +1984,19 @@ fn validate_registry_entry(
     }
 }
 
+/// Validate one reviewed registry entry without granting registry authority.
+///
+/// This exposes the same closed metadata checks used by the full reviewed
+/// registry validator for read-only consumers such as candidate discovery.
+#[must_use]
+pub fn validate_domain_pack_reviewed_registry_entry(
+    entry: &DomainPackReviewedRegistryEntry,
+) -> Vec<DomainPackLearningContractIssue> {
+    let mut issues = Vec::new();
+    validate_registry_entry(&mut issues, "reviewed_entry", entry);
+    issues
+}
+
 fn validate_registry_head(
     issues: &mut Vec<DomainPackLearningContractIssue>,
     generation: u64,

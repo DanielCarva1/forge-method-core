@@ -1,0 +1,256 @@
+schema_version: "0.1"
+spec: "real_host_evidence_bundle_v0"
+status: "non_authoritative_p7f_evidence_tooling"
+purpose: >-
+  Define a bounded, reproducible evidence-bundle template for independently
+  inspecting a claimed P7F real-host journey. The bundle and checker establish
+  only structural validity and exact local-file content integrity. They do not
+  establish the truth of observations or mint any runtime, release, or plan
+  authority.
+
+authority_boundary:
+  required_bundle_value: "non_authoritative_structural_content_integrity_evidence"
+  checker_may_report:
+    - "the bundle and command logs match this closed structural contract"
+    - "every referenced regular file matches its declared exact byte count and lowercase SHA-256"
+    - "the required scenario, session, governed-write-link, disclosure, release-identity, and review fields are present"
+  checker_must_never_certify:
+    - "that the observed process was a supported production host"
+    - "that the host, run author, principal, or reviewer are independent actors"
+    - "that release assets were published, signed, installed, or obtained from a publication channel"
+    - "that any observation is semantically true"
+    - "that P7F passed, completed, or may update product status"
+  authoritative_sources: >-
+    Durable Forge authority artifacts retain their own authority according to
+    their governing contracts. Referencing and hashing those bytes in this
+    non-authoritative index neither upgrades nor replaces their authority.
+
+serialization:
+  accepted: "UTF-8 YAML 1.2-compatible input or JSON (the JSON subset of YAML)"
+  aliases: "YAML anchors, aliases, merge keys, and explicit tags are rejected before construction"
+  mappings: "duplicate or non-string keys are rejected"
+  fields: "all bundle, command-log, and nested record objects deny unknown fields"
+  paths: >-
+    Artifact paths are canonical relative POSIX paths beneath the bundle
+    directory. Absolute, drive-prefixed, empty-component, dot, dot-dot,
+    backslash, duplicate, special-file, and symlink-component paths reject.
+  bytes:
+    bundle_max: 1048576
+    artifact_max_each: 16777216
+    artifact_max_total: 67108864
+    artifact_count_max: 256
+    nesting_depth_max: 32
+    parsed_container_items_max: 100000
+    scalar_text_max: 65536
+    argv_items_max_each_entry: 128
+    argv_text_bytes_max_each_entry: 65536
+  digest_domain: >-
+    artifact.sha256 is lowercase SHA-256 over the exact referenced file bytes;
+    size_bytes is the exact same byte domain. It is not a canonical semantic
+    digest. Every listed artifact must be referenced and every reference must
+    resolve through exactly one artifact row.
+
+bundle_schema:
+  schema_version:
+    const: "forge_real_host_evidence_bundle_v0"
+  authority:
+    const: "non_authoritative_structural_content_integrity_evidence"
+  bundle_id: "non-empty string"
+  release_identity:
+    required:
+      - "release_id"
+      - "product"
+      - "version"
+      - "platform"
+      - "source_revision"
+      - "archive_ref"
+      - "release_manifest_ref"
+      - "executable_ref"
+    rules:
+      - "product is forge-method-core"
+      - "all identity strings are non-empty"
+      - "archive, release-manifest, and executable refs resolve and are pairwise distinct"
+      - "the checker does not infer publication, signature, provenance, installation, or executable behavior from these fields"
+  artifacts:
+    cardinality: "1..256"
+    row_fields:
+      id: "globally unique non-empty string"
+      path: "globally unique canonical relative POSIX path"
+      sha256: "lowercase 64-hex exact-byte digest"
+      size_bytes: "positive integer not exceeding artifact_max_each"
+      media_type: "non-empty descriptive string"
+  scenarios:
+    exact_order:
+      - ordinal: 1
+        scenario_id: "clean_host_journey"
+        minimum_sessions: 1
+      - ordinal: 2
+        scenario_id: "concurrent_conflict"
+        minimum_sessions: 2
+      - ordinal: 3
+        scenario_id: "replacement_session_resume"
+        minimum_sessions: 2
+    row_fields:
+      - "ordinal"
+      - "scenario_id"
+      - "session_ids"
+      - "transcript_ref"
+      - "command_log_ref"
+      - "evidence_refs"
+      - "observation"
+    rules:
+      - "session_ids are non-empty and globally distinct across all scenarios"
+      - "transcript_ref, command_log_ref, and every evidence_ref resolve through artifacts"
+      - "command_log_ref is distinct per scenario"
+      - "observation is evidence narration, never a checker-issued pass verdict"
+  governed_writes:
+    cardinality: "one or more claimed writes"
+    row_fields:
+      - "write_id"
+      - "scenario_id"
+      - "target"
+      - "claim_ref"
+      - "gate_result_ref"
+      - "verified_principal_ref"
+      - "admission_ref"
+      - "pre_effect_wal_ref"
+      - "effect_ref"
+      - "receipt_ref"
+    rules:
+      - "write_id is unique and scenario_id names one required scenario"
+      - "target is a non-empty claimed write target"
+      - "all seven evidence links resolve through artifacts and are pairwise distinct"
+      - "field presence and byte integrity do not prove semantic coverage, authenticity, or authority"
+  ungoverned_writes:
+    required_fields: ["statement", "observed", "entries"]
+    rules:
+      - "statement is always non-empty, including when no ungoverned writes were observed"
+      - "observed is true exactly when entries is non-empty"
+      - "each entry has scenario_id, target, method, reason, and evidence_ref"
+      - "an ungoverned write cannot appear in governed_writes or support a governed-mutation claim"
+  residual_limitations:
+    cardinality: "one or more"
+    row_fields: ["limitation_id", "statement", "impact"]
+    rule: "ids are unique and all values are non-empty; omission fails closed"
+  independent_review:
+    required_fields:
+      - "reviewer_id"
+      - "reviewed_at_utc"
+      - "disposition"
+      - "independence_statement"
+      - "limitations"
+      - "review_record_ref"
+    dispositions: ["reviewed", "qualified", "changes_requested"]
+    rules:
+      - "limitations is non-empty and review_record_ref resolves through artifacts"
+      - "the field records a reviewer claim; the checker cannot certify reviewer identity or independence"
+
+command_log_schema:
+  schema_version:
+    const: "forge_real_host_command_log_v0"
+  fields: ["schema_version", "scenario_id", "entries"]
+  entry_fields:
+    - "sequence"
+    - "session_id"
+    - "argv"
+    - "working_directory"
+    - "exit_code"
+    - "stdout_ref"
+    - "stderr_ref"
+  invariants:
+    - "entries are non-empty and sequence is exact contiguous 1-based capture order"
+    - "session_id belongs to its scenario and every scenario session has at least one entry"
+    - "argv is a non-empty bounded array of non-empty NUL/newline-free strings, never a shell command string"
+    - "working_directory is the exact captured non-empty string"
+    - "exit_code is an integer"
+    - "stdout_ref and stderr_ref resolve to exact-byte artifacts"
+    - "the log records exact argv bytes but does not prove which process interpreted them or that the command was a public release interface"
+
+template_semantics:
+  instructions:
+    - "copy the skeleton and replace every angle-bracket placeholder"
+    - "create artifact rows only after evidence files are immutable, then calculate exact byte count and SHA-256"
+    - "use separate artifact ids for every governed-write link category"
+    - "write command logs as alias-free YAML/JSON documents matching command_log_schema"
+    - "record zero ungoverned writes with observed false, an empty entries array, and an explicit non-empty statement"
+    - "never use a successful checker result as a completion or publication gate"
+  skeleton:
+    schema_version: "forge_real_host_evidence_bundle_v0"
+    authority: "non_authoritative_structural_content_integrity_evidence"
+    bundle_id: "<bundle-id>"
+    release_identity:
+      release_id: "<release-id>"
+      product: "forge-method-core"
+      version: "<release-version>"
+      platform: "<host-platform>"
+      source_revision: "<source-revision>"
+      archive_ref: "release-archive"
+      release_manifest_ref: "release-manifest"
+      executable_ref: "release-executable"
+    artifacts:
+      - id: "release-archive"
+        path: "artifacts/release-archive.bin"
+        sha256: "<64-lowercase-hex>"
+        size_bytes: 1
+        media_type: "application/octet-stream"
+    scenarios:
+      - ordinal: 1
+        scenario_id: "clean_host_journey"
+        session_ids: ["<clean-session-id>"]
+        transcript_ref: "<artifact-id>"
+        command_log_ref: "<artifact-id>"
+        evidence_refs: ["<artifact-id>"]
+        observation: "<bounded factual observation, not a pass label>"
+      - ordinal: 2
+        scenario_id: "concurrent_conflict"
+        session_ids: ["<conflict-session-a>", "<conflict-session-b>"]
+        transcript_ref: "<artifact-id>"
+        command_log_ref: "<artifact-id>"
+        evidence_refs: ["<artifact-id>"]
+        observation: "<bounded factual observation, not a pass label>"
+      - ordinal: 3
+        scenario_id: "replacement_session_resume"
+        session_ids: ["<original-session-id>", "<replacement-session-id>"]
+        transcript_ref: "<artifact-id>"
+        command_log_ref: "<artifact-id>"
+        evidence_refs: ["<artifact-id>"]
+        observation: "<bounded factual observation, not a pass label>"
+    governed_writes:
+      - write_id: "<write-id>"
+        scenario_id: "clean_host_journey"
+        target: "<claimed-target>"
+        claim_ref: "<artifact-id>"
+        gate_result_ref: "<artifact-id>"
+        verified_principal_ref: "<artifact-id>"
+        admission_ref: "<artifact-id>"
+        pre_effect_wal_ref: "<artifact-id>"
+        effect_ref: "<artifact-id>"
+        receipt_ref: "<artifact-id>"
+    ungoverned_writes:
+      statement: "<explicit disclosure, including none observed>"
+      observed: false
+      entries: []
+    residual_limitations:
+      - limitation_id: "<limitation-id>"
+        statement: "<remaining limitation>"
+        impact: "<effect on interpretation>"
+    independent_review:
+      reviewer_id: "<reviewer-id>"
+      reviewed_at_utc: "<captured timestamp string>"
+      disposition: "qualified"
+      independence_statement: "<reviewer-authored claim>"
+      limitations: ["The checker cannot verify actor or reviewer independence."]
+      review_record_ref: "<artifact-id>"
+
+checker:
+  implementation: "scripts/check-real-host-evidence.py"
+  invocation: "python3 scripts/check-real-host-evidence.py <bundle.yaml-or-json>"
+  successful_wording: "structurally/content-integrity valid"
+  mandatory_disclaimer: >-
+    This result validates only structure and content integrity; it does not
+    certify a production host, actor independence, publication, or P7F passage.
+  failure_behavior: "any parse, bound, schema, ordering, uniqueness, reference, size, or digest error fails closed"
+
+references:
+  - "contracts/stories/P7F.1-real-host-mediated-journey.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7f-real-host-and-mediated-mutation-proof"

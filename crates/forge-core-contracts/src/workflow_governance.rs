@@ -33,6 +33,10 @@ pub const WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION: &str = "0.2";
 /// Readers retain exact `0.1`/`0.2` compatibility but never admit the new
 /// event under either older schema.
 pub const WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION: &str = "0.3";
+/// Ledger records written from the first joined Core/Domain-Pack rebase.
+/// The new event cannot appear under frozen `0.1`/`0.2`/`0.3` wires; readers
+/// preserve all historical bytes and permanently retain `0.4` thereafter.
+pub const WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION: &str = "0.4";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -374,6 +378,7 @@ pub enum WorkflowGovernanceEvent {
     HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
+    CoreDomainPackRebased(Box<CoreDomainPackRebasedEvent>),
     PhaseAdvanced(PhaseAdvancedEvent),
     ApplicabilityAssessed(ApplicabilityAssessedEvent),
     SignalChanged(SignalChangedEvent),
@@ -478,6 +483,20 @@ pub struct WorkflowEffectiveBundleIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DomainPackGenerationTransitionedEvent {
+    pub from_effective_bundle: WorkflowEffectiveBundleIdentity,
+    pub to_effective_bundle: WorkflowEffectiveBundleIdentity,
+    pub receipt_carryover: WorkflowReceiptCarryover,
+    pub prior_ledger_head_digest: String,
+}
+
+/// One joined epoch transition that advances the admitted core release and an
+/// independently committed Domain Pack generation together. The lifecycle TCB
+/// remains the authority for the target generation; this event only makes the
+/// already-admitted pair active in the workflow ledger.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoreDomainPackRebasedEvent {
+    pub release_transition: ReleaseUpgradedEvent,
     pub from_effective_bundle: WorkflowEffectiveBundleIdentity,
     pub to_effective_bundle: WorkflowEffectiveBundleIdentity,
     pub receipt_carryover: WorkflowReceiptCarryover,

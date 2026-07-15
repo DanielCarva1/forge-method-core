@@ -181,6 +181,11 @@ pub enum DomainPackLifecycleOperation {
         target_receipt_digest: String,
         target_lock_digest: String,
     },
+    RebaseCore {
+        target_release_id: StableId,
+        expected_from_core_digest: String,
+        target_core_digest: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

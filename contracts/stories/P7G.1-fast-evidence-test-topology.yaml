@@ -1,0 +1,34 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "P7G.1"
+status: "implemented_pending_hosted_timing_evidence"
+slice: "P7g-fast-evidence-preserving-delivery"
+title: "Meet explicit CI time budgets without deleting evidence"
+
+intent: >-
+  Make coherent delivery fast enough for normal development while retaining
+  native Linux, Windows, Intel macOS, and Apple Silicon macOS platform evidence,
+  cumulative journey.
+
+decision_sources:
+  - "contracts/plan/agent-native-guidance-plan.yaml#P7g-fast-evidence-preserving-delivery"
+  - "docs/verification.md"
+  - ".github/workflows/ci.yml"
+
+acceptance_criteria:
+  - "Tier 0 static/docs target remains under two minutes with warm cache."
+  - "Focused package/integration commands target under fifteen minutes."
+  - "Native Linux, Windows, Intel macOS, and Apple Silicon macOS platform gates each target under thirty minutes."
+  - "The expensive reference journey runs once per cumulative checkpoint."
+  - "Windows retains all-target compilation, contract parity, recovery/authority smoke, and representative CLI evidence."
+  - "Both macOS architectures retain all-target compilation, workspace tests, and expensive-journey compile evidence."
+  - "No test is silently removed; moved tests have an explicit owning tier and trigger."
+  - "CI emits per-tier timing evidence and flags budget regression without hiding test failures."
+
+checks:
+  - "two consecutive CI runs with job/step timing report"
+  - "test inventory before/after parity audit"
+  - "failure injection proves every tier still fails on its owned regression"
+
+blocks: []
+next_workflow: "P7H.1 promise hardening"

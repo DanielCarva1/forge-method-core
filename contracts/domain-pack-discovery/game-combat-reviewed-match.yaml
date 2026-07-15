@@ -1,0 +1,92 @@
+schema_version: '0.1'
+domain_pack_discovery_request:
+  request_id: discovery.fixture.game-combat
+  authority: candidate_only
+  assurance_binding:
+    project_id: project.fixture.game
+    assurance_epoch: 1
+    intent_id: intent.fixture.game-combat
+    intent_revision: 1
+    intent_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    accepted_record_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    accepted_sequence: 1
+    accepted_state_version: 1
+    snapshot_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    ledger_head_before_acceptance: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  requirements:
+    project_id: project.fixture.game
+    requirement_set_id: requirements.fixture.game
+    required_domains:
+    - id: requirement.gameplay.combat
+      domain_id: domain.gameplay.combat
+      pack_version_requirement: ^1.0
+      required_capability_refs:
+      - capability.gameplay.combat-balance-review
+  provenance:
+    source: host_proposal
+    source_ref: conversation://fixture/game-combat
+    source_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  uncertainties:
+  - Combat balance targets require human confirmation
+  - Package selection and trust remain unresolved
+  candidates:
+  - reviewed_entry:
+      pack:
+        publisher: forge.reference
+        name: gameplay-combat
+        version: 1.0.0
+      package_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+      supply_chain_record_digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+      manifest_digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+      content_digest: sha256:8e9be9d9a7ca863458727dce419688bf7acb8678f4bcc91a82680dae19af722e
+      license_digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
+      fixture_digests:
+      - sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+      stage: reviewed
+      eligibility: eligible_reviewed
+      promotion_decision_digest: '6666666666666666666666666666666666666666666666666666666666666666'
+      authorization_digest: '7777777777777777777777777777777777777777777777777777777777777777'
+      independent_review_digests:
+      - '8888888888888888888888888888888888888888888888888888888888888888'
+      - '9999999999999999999999999999999999999999999999999999999999999999'
+      compatibility:
+        forge_core_requirement: '>=0.12.0, <1.0.0'
+        pack_schema_requirement: ^0.1
+        evaluator_protocol_versions: []
+        predecessor_content_digests: []
+        breaking_change: false
+        migration_evidence_refs: []
+      deprecation: null
+      revocation: null
+      supersession: null
+      entry_digest: f200d0612e08dd17c0b46aad18e865d687105a890b695643d85a4dac7b4ee8f3
+    content:
+      schema_version: '0.1'
+      domain_pack_content:
+        pack:
+          publisher: forge.reference
+          name: gameplay-combat
+          version: 1.0.0
+        namespace: forge.reference.gameplay.combat
+        workflow_overlay:
+          id: overlay.gameplay.combat
+          base_bundle_id: bundle.core
+          policies: []
+        provided_domains:
+        - id: domain.gameplay.combat
+          description: Game combat mechanics and balance constraints supplied entirely
+            by fixture data
+          policy_refs: []
+          hazard_refs: []
+          lifecycle_model_refs: []
+        provided_capabilities:
+        - id: capability.gameplay.combat-balance-review
+          kind: human_review
+          description: Human review of combat balance evidence
+          evidence_rule_refs: []
+          authority: declaration_only
+        hazards: []
+        lifecycle_models: []
+        evaluators: []
+        fixtures: []
+        adapters: []

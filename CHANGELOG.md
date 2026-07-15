@@ -17,6 +17,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **P7C reviewed Domain Pack discovery and acquisition.** Added accepted-intent-
+  bound search/explain, exact candidate planning, catalog-backed preparation,
+  explicit operator approval, and high-level lifecycle apply that derives and
+  rechecks resolution, composition, trust, exact lock, and preflight internals.
+- **P7D joined Core/Domain-Pack rebase.** Added exact-CAS adjacent-Core planning,
+  target-side supply/review/capability recomputation, immutable lifecycle
+  generation rebase, one joined workflow ledger event on successor wire `0.4`,
+  and persisted-plan recovery after lifecycle-first interruption.
+- **P7F bounded real-host evidence format.** Added a non-authoritative contract,
+  checker, and collection guide for transcript/argv/artifact/receipt evidence;
+  structural validity does not certify host identity or P7F passage.
+- **P7H promise/documentation alignment (source only).** Replaced the root
+  README with an audience-routed landing page, established the canonical four-
+  identity distinction, documented exact state/trust/secret/package/release
+  locations, separated Forge-mediated from direct writes, split Domain Pack,
+  host Adapter, and core-fork obligations, and limited real-host evidence claims
+  to the structural checker boundary. This does not claim complete P7, a
+  production-host run, or actor independence.
+- **P7G evidence-preserving CI tiers (source only).** CI now runs Tier 0 static/
+  documentation checks with 120-second hard step budgets, focused package/
+  integration evidence with 900-second budgets, native Linux, Windows, Intel
+  macOS, and Apple Silicon macOS gates with 1,800-second budgets, and the exact
+  expensive P6d journey once after prerequisite jobs on cumulative `main`/`master`
+  pushes. Every wrapped command enforces a wall-clock timeout over its process
+  tree, writes JSON timing evidence even on timeout or launch failure, and appends
+  a step summary. These source controls require successful hosted CI runs before
+  their timing targets are evidence.
+- **P7E release correctness hardening (source only).** Release manifests now bind
+  exact `release_tag` and `source_commit`; build and publish jobs recheck those
+  fields with version, payload, and checksum. Native x86_64 Linux/Windows and
+  Intel/Apple Silicon macOS archives are extracted into clean temporary
+  installations and smoked through binary/wrapper version plus `start`,
+  `workflow init`, `resume`, `release-status`, and `next`. CycloneDX validation
+  is schema-pinned before publication. No `0.12.0` release is claimed until a
+  matching tag run publishes and independently verifies the assets.
 - **P7b unified durable Assurance Case (`0.12.0`).** Human intent is now an
   external-human-broker-origin, append-only authority with kernel-derived
   revisions and monotonic assurance epochs. `workflow next` and `resume`

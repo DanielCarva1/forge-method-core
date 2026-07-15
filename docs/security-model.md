@@ -29,6 +29,20 @@ separation, and fail-closed handling of incomplete input.
 - unauthorized overlapping write claims;
 - supply-chain equivocation, revoked credentials and registry forks.
 
+## Storage and mutation boundary
+
+The default Project Link puts state under
+`<project-parent>/forge-<project-id>/.forge-method/`. Derived workflow public
+registries and cooperative local secrets are siblings under `<sidecar>/operator/`,
+not under the state root or consumer project. External broker private keys,
+Domain Pack operator roots, and replay anchors are operator-selected. The exact
+table is in the [Operator guide](operator-guide.md#state-and-ownership).
+
+A write is Forge-mediated only when claims/gates, verified principal, Admission,
+WAL/recovery, and receipt cover it. Direct editor/shell/host writes remain
+ungoverned. Same-principal access can bypass Forge, so mediation is a protocol
+property, not filesystem-wide enforcement.
+
 ## Explicit limitations
 
 Local filesystem confinement is cooperative between processes running as the
@@ -41,9 +55,17 @@ Forge reduces unknown unknowns but cannot eliminate them. Domain Packs and
 representative evidence do not guarantee quality, compliance, safety, or
 factual correctness.
 
+The P7F evidence checker validates bounded structure, safe paths, sizes, and
+digests only. It cannot establish semantic truth, production-host execution,
+chat-only interaction, actor/reviewer independence, publication, or P7F passage.
+
 ## Secret handling
 
-- Keep private keys and anchors outside project and sidecar roots.
+- Keep external broker private keys, Domain Pack trust roots, and replay anchors
+  outside project and state roots. Forge's cooperative local workflow secrets
+  are instead derived at
+  `<sidecar>/operator/workflow-secrets/<sha256-of-credential-id>.ed25519`; protect
+  the entire operator directory.
 - Never paste keys or opaque capabilities into chat, logs, YAML, or issues.
 - Rotate/revoke through typed operator commands where available.
 - Treat public audit projections as evidence only.

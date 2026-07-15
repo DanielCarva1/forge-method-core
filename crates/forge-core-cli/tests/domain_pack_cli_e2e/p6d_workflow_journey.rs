@@ -8,7 +8,7 @@ use forge_core_authority::{
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_decisions::{
-    compose_domain_packs, domain_pack_resolution_projection_digest,
+    compose_domain_packs, discover_domain_packs, domain_pack_resolution_projection_digest,
     evaluate_domain_pack_compatibility, evaluate_domain_pack_trust, resolve_domain_packs,
     DomainPackCandidateMaterial, DomainPackCapabilityDemand, DomainPackCompatibilityInput,
     DomainPackTrustEvaluationInput, DomainPackTrustSelectedPackage,
@@ -17,6 +17,7 @@ use forge_core_store::sha256_content_hash;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::process::Output;
+use std::time::{Duration, Instant};
 
 const REFERENCE_ROOT: &str = "docs/fixtures/domain-pack-reference-v0";
 const WORKFLOW_AUDIENCE: &str = "forge-core:workflow:p6d-reference-e2e";
@@ -26,6 +27,14 @@ const WORKER_CREDENTIAL: &str = "credential.workflow.p6d-worker";
 const WORKER_TWO_CREDENTIAL: &str = "credential.workflow.p6d-worker-two";
 const RUNTIME_CREDENTIAL: &str = "credential.workflow.p6d-runtime";
 const RUNTIME_TWO_CREDENTIAL: &str = "credential.workflow.p6d-runtime-two";
+const CLI_SUBPROCESS_TIMEOUT: Duration = Duration::from_secs(300);
+
+fn heartbeat(started: Instant, phase: &str) {
+    eprintln!(
+        "P6d heartbeat: phase={phase}; elapsed_seconds={:.3}",
+        started.elapsed().as_secs_f64()
+    );
+}
 
 #[derive(Debug)]
 struct ReferenceProject {
@@ -68,6 +77,15 @@ impl ReferenceProject {
     }
 
     fn workflow(&self, subcommand: &str, tail: &[String]) -> Output {
+        self.workflow_with_env(subcommand, tail, None)
+    }
+
+    fn workflow_with_env(
+        &self,
+        subcommand: &str,
+        tail: &[String],
+        env: Option<(&str, &str)>,
+    ) -> Output {
         let mut args = vec![
             "workflow".to_owned(),
             subcommand.to_owned(),
@@ -76,13 +94,22 @@ impl ReferenceProject {
             "--json".to_owned(),
         ];
         args.extend_from_slice(tail);
-        run(&args)
+        let mut command = Command::cargo_bin("forge-core").expect("forge-core binary");
+        command.timeout(CLI_SUBPROCESS_TIMEOUT).args(&args);
+        if let Some((name, value)) = env {
+            command.env(name, value);
+        }
+        command.output().expect("fresh forge-core process")
     }
 }
 
 impl Drop for ReferenceProject {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
+        if std::env::var_os("FORGE_P6D_KEEP_TEMP").is_some() {
+            eprintln!("preserving P6d diagnostic root: {}", self.root.display());
+        } else {
+            let _ = fs::remove_dir_all(&self.root);
+        }
     }
 }
 
@@ -100,6 +127,13 @@ struct LifecycleFiles {
     resolution: PathBuf,
     composition: PathBuf,
     trust_input: PathBuf,
+    acquisition_input: PathBuf,
+    acquisition_intent: PathBuf,
+    discovery_request: PathBuf,
+    discovery_projection: PathBuf,
+    acquisition_catalog: PathBuf,
+    capability_registry: PathBuf,
+    sandbox_policy: PathBuf,
 }
 
 fn typed<T: DeserializeOwned>(path: &Path) -> T {
@@ -805,8 +839,12 @@ fn write_reference_lifecycle(
             .clone(),
         reviewer_registry_digest: reviewer_registry
             .domain_pack_reviewer_registry
-            .registry_digest,
-        reviewed_registry_digest: reviewed.domain_pack_reviewed_registry.registry_digest,
+            .registry_digest
+            .clone(),
+        reviewed_registry_digest: reviewed
+            .domain_pack_reviewed_registry
+            .registry_digest
+            .clone(),
         trust_policy_digest: canonical_digest(&trust_policy),
         capability_registry_digest: canonical_digest(&capability_registry),
         sandbox_policy_digest: canonical_digest(&sandbox_policy),
@@ -861,7 +899,7 @@ fn write_reference_lifecycle(
             operation,
             expected_state: expected.clone(),
             resolution_request_digest: canonical_digest(&resolution_request),
-            project_snapshot_digest: snapshot_digest,
+            project_snapshot_digest: snapshot_digest.clone(),
         },
     };
     let mut staged = vec![
@@ -903,6 +941,80 @@ fn write_reference_lifecycle(
         },
     };
     preflight.domain_pack_lifecycle_preflight.preflight_digest = canonical_digest(&preflight);
+
+    let assurance_binding = DurableAssuranceEpochBinding {
+        project_id: requirements
+            .domain_pack_project_requirements
+            .project_id
+            .clone(),
+        assurance_epoch: 1,
+        intent_id: StableId("intent.agent-built-game.reference".to_owned()),
+        intent_revision: 1,
+        intent_digest: sha256_content_hash(b"agent-built-game-reference-intent"),
+        accepted_record_digest: sha256_content_hash(b"agent-built-game-reference-acceptance"),
+        accepted_sequence: 1,
+        accepted_state_version: 1,
+        snapshot_digest: snapshot_digest.clone(),
+        ledger_head_before_acceptance: sha256_content_hash(b"agent-built-game-reference-head"),
+    };
+    let discovery_request = DomainPackDiscoveryRequestDocument {
+        schema_version: DOMAIN_PACK_DISCOVERY_SCHEMA_VERSION.to_owned(),
+        domain_pack_discovery_request: DomainPackDiscoveryRequest {
+            request_id: StableId("discovery.agent-built-game.reference".to_owned()),
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            assurance_binding: assurance_binding.clone(),
+            requirements: requirements.domain_pack_project_requirements.clone(),
+            provenance: DomainPackDemandProvenance {
+                source: DomainPackDemandSource::HostProposal,
+                source_ref: "host://p6d-reference-journey".to_owned(),
+                source_digest: sha256_content_hash(b"p6d-reference-host-proposal"),
+            },
+            uncertainties: Vec::new(),
+            candidates: vec![DomainPackDiscoveryCandidate {
+                reviewed_entry: reviewed_entry.clone(),
+                content: candidate.content.clone(),
+            }],
+        },
+    };
+    let discovery = discover_domain_packs(&discovery_request).expect("reference discovery");
+    let matched = discovery.domain_pack_discovery_projection.matches[0].clone();
+    let planning_input = DomainPackAcquisitionPlanningInput {
+        intent: DomainPackAcquisitionIntentDocument {
+            schema_version: DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION.to_owned(),
+            domain_pack_acquisition_intent: DomainPackAcquisitionIntent {
+                acquisition_id: StableId("acquisition.agent-built-game.reference".to_owned()),
+                authority: DomainPackCandidateAuthority::CandidateOnly,
+                assurance_binding,
+                discovery_projection_digest: discovery
+                    .domain_pack_discovery_projection
+                    .projection_digest
+                    .clone(),
+                demand_digest: discovery
+                    .domain_pack_discovery_projection
+                    .demand_digest
+                    .clone(),
+                candidate_id: matched.candidate_id,
+                requirement_ref: matched.requirement_ref,
+                operation: DomainPackAcquisitionOperation::Install,
+                expected_project_snapshot_digest: snapshot_digest,
+            },
+        },
+        request: discovery_request,
+        discovery,
+    };
+    let acquisition_catalog = DomainPackAcquisitionCatalogDocument {
+        schema_version: DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION.to_owned(),
+        forge_core_version: request
+            .domain_pack_composition_request
+            .forge_core_version
+            .clone(),
+        core: request.domain_pack_composition_request.core.clone(),
+        registry: registry.clone(),
+        candidates: resolution_request
+            .domain_pack_resolution_request
+            .candidates
+            .clone(),
+    };
     LifecycleFiles {
         preflight: write_typed_yaml(&project.inputs, "lifecycle-preflight.yaml", &preflight),
         resolution: write_typed_yaml(
@@ -912,6 +1024,37 @@ fn write_reference_lifecycle(
         ),
         composition: write_typed_yaml(&project.inputs, "composition-request.yaml", request),
         trust_input: write_typed_yaml(&project.inputs, "trust-input.yaml", &trust_input),
+        acquisition_input: project.inputs.join("acquisition-input.yaml"),
+        acquisition_intent: write_typed_yaml(
+            &project.inputs,
+            "acquisition-intent.yaml",
+            &planning_input.intent,
+        ),
+        discovery_request: write_typed_yaml(
+            &project.inputs,
+            "acquisition-discovery-request.yaml",
+            &planning_input.request,
+        ),
+        discovery_projection: write_typed_yaml(
+            &project.inputs,
+            "acquisition-discovery-projection.yaml",
+            &planning_input.discovery,
+        ),
+        acquisition_catalog: write_typed_yaml(
+            &project.inputs,
+            "acquisition-catalog.yaml",
+            &acquisition_catalog,
+        ),
+        capability_registry: write_typed_yaml(
+            &project.operator,
+            "runtime-capability-registry.yaml",
+            &capability_registry,
+        ),
+        sandbox_policy: write_typed_yaml(
+            &project.operator,
+            "capability-sandbox-policy.yaml",
+            &sandbox_policy,
+        ),
     }
 }
 
@@ -926,10 +1069,22 @@ fn write_reference_remove_lifecycle(
     install_receipt: &DomainPackLifecycleReceiptDocument,
 ) -> LifecycleFiles {
     let install_preflight: DomainPackLifecyclePreflightDocument = typed(&install.preflight);
-    let previous_lock = install_preflight
-        .domain_pack_lifecycle_preflight
-        .proposed_lock
-        .clone();
+    let committed_state = &install_receipt.domain_pack_lifecycle_receipt.to_state;
+    let committed_head = committed_state
+        .lifecycle_head_digest
+        .strip_prefix("sha256:")
+        .expect("committed lifecycle head is canonical SHA-256");
+    let previous_lock: DomainPackExactLockDocument = typed(
+        &project
+            .state
+            .join("domain-packs")
+            .join("generations")
+            .join(format!(
+                "{:020}-{committed_head}",
+                committed_state.generation
+            ))
+            .join("lock.yaml"),
+    );
     let project_snapshot_digest = install_preflight
         .domain_pack_lifecycle_preflight
         .request
@@ -1121,15 +1276,73 @@ fn write_reference_remove_lifecycle(
             &composition_request,
         ),
         trust_input: write_typed_yaml(&project.inputs, "remove-trust-input.yaml", &trust_input),
+        acquisition_input: install.acquisition_input.clone(),
+        acquisition_intent: install.acquisition_intent.clone(),
+        discovery_request: install.discovery_request.clone(),
+        discovery_projection: install.discovery_projection.clone(),
+        acquisition_catalog: install.acquisition_catalog.clone(),
+        capability_registry: install.capability_registry.clone(),
+        sandbox_policy: install.sandbox_policy.clone(),
+    }
+}
+
+fn publish_active_runtime_policy(lifecycle: &LifecycleFiles) {
+    let trust_input: DomainPackTrustEvaluationInput = typed(&lifecycle.trust_input);
+    let capability_registry = DomainPackRuntimeCapabilityRegistryDocument {
+        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
+        domain_pack_runtime_capability_registry: trust_input.capability_registry,
+    };
+    let sandbox_policy = DomainPackCapabilitySandboxPolicyDocument {
+        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
+        domain_pack_capability_sandbox_policy: trust_input.sandbox_policy,
+    };
+    fs::write(
+        &lifecycle.capability_registry,
+        yaml_serde::to_string(&capability_registry).expect("active capability registry YAML"),
+    )
+    .expect("publish active capability registry");
+    fs::write(
+        &lifecycle.sandbox_policy,
+        yaml_serde::to_string(&sandbox_policy).expect("active sandbox policy YAML"),
+    )
+    .expect("publish active sandbox policy");
+}
+
+fn maybe_export_reference_catalog(
+    lifecycle: &LifecycleFiles,
+    supply: &ReferenceSupply,
+    reviewers: &Path,
+    reviewed: &Path,
+) {
+    let Some(root) = std::env::var_os("FORGE_EXPORT_REFERENCE_CATALOG") else {
+        return;
+    };
+    let root = PathBuf::from(root);
+    fs::create_dir_all(&root).expect("reference catalog export root");
+    for (source, name) in [
+        (&supply.trust_policy, "trust-policy.yaml"),
+        (&supply.registry, "supply-chain-registry.yaml"),
+        (&reviewers.to_path_buf(), "reviewer-registry.yaml"),
+        (&reviewed.to_path_buf(), "reviewed-registry.yaml"),
+        (
+            &lifecycle.capability_registry,
+            "runtime-capability-registry.yaml",
+        ),
+        (&lifecycle.sandbox_policy, "capability-sandbox-policy.yaml"),
+        (&lifecycle.acquisition_catalog, "acquisition-catalog.yaml"),
+    ] {
+        fs::copy(source, root.join(name))
+            .unwrap_or_else(|error| panic!("export {} as {name}: {error}", source.display()));
     }
 }
 
 fn run(args: &[String]) -> Output {
     Command::cargo_bin("forge-core")
         .expect("forge-core binary")
+        .timeout(CLI_SUBPROCESS_TIMEOUT)
         .args(args)
         .output()
-        .expect("fresh forge-core process")
+        .expect("fresh bounded forge-core process")
 }
 
 fn envelope(output: &Output) -> Value {
@@ -2157,6 +2370,8 @@ fn complete_selected(project: &ReferenceProject, guidance: &Value) -> Value {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn p6d_reference_pack_real_journey() {
+    let started = Instant::now();
+    heartbeat(started, "fixture-validation");
     let project = ReferenceProject::new();
     let request = reference_request(&project);
     let valid_manifest = project
@@ -2213,6 +2428,7 @@ fn p6d_reference_pack_real_journey() {
         .is_some_and(|issues| issues.iter().any(|issue| issue["code"] == "core_shadow")));
     assert_eq!(snapshot(&project.root), before_hostile);
 
+    heartbeat(started, "learning-and-trust");
     let supply = write_signed_reference_supply(&project, &request);
     let (reviewers, reviewed, _) = write_signed_learning_roots(&project.operator);
     let graph = write_reference_promotion_graph(&project, &reviewers, &reviewed, &request, &supply);
@@ -2326,53 +2542,76 @@ fn p6d_reference_pack_real_journey() {
         ])),
         "domain-pack trust-provision",
     );
+    heartbeat(started, "acquisition-lifecycle");
     let lifecycle = write_reference_lifecycle(&project, &request, &supply, &graph.proposed);
-    let lifecycle_tail = command_args(&[
-        "--preflight-file",
-        &path_arg(&lifecycle.preflight),
-        "--trust-policy-file",
-        &path_arg(&supply.trust_policy),
-        "--registry-file",
-        &path_arg(&supply.registry),
-        "--reviewer-registry-file",
-        &path_arg(&reviewers),
-        "--reviewed-registry-file",
-        &path_arg(&graph.proposed),
-        "--resolution-request-file",
-        &path_arg(&lifecycle.resolution),
-        "--composition-request-file",
-        &path_arg(&lifecycle.composition),
-        "--trust-input-file",
-        &path_arg(&lifecycle.trust_input),
-        "--project-root",
-        &path_arg(&project.app),
-        "--artifact-root",
-        &path_arg(&project.artifacts),
-        "--state-root",
-        &path_arg(&project.state),
-        "--json",
-    ]);
-    let mut install_receipt = None;
-    for (subcommand, command) in [
-        ("preflight", "domain-pack preflight"),
-        ("apply", "domain-pack apply"),
-    ] {
-        let mut args = vec!["domain-pack".to_owned(), subcommand.to_owned()];
-        args.extend(lifecycle_tail.clone());
-        let result = ok(&run(&args), command);
-        if subcommand == "apply" {
-            assert_eq!(
-                result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 0,
-                "{result:#}"
-            );
-            install_receipt = Some(
-                serde_json::from_value(result["data"].clone())
-                    .expect("typed install lifecycle receipt"),
-            );
-        }
-    }
-    let install_receipt = install_receipt.expect("install apply receipt");
+    maybe_export_reference_catalog(&lifecycle, &supply, &reviewers, &graph.proposed);
+    let prepared_acquisition = ok(
+        &run(&command_args(&[
+            "domain-pack",
+            "acquire",
+            "prepare",
+            "--intent-file",
+            &path_arg(&lifecycle.acquisition_intent),
+            "--request-file",
+            &path_arg(&lifecycle.discovery_request),
+            "--projection-file",
+            &path_arg(&lifecycle.discovery_projection),
+            "--catalog-file",
+            &path_arg(&lifecycle.acquisition_catalog),
+            "--json",
+        ])),
+        "domain-pack acquire prepare",
+    );
+    let acquisition: DomainPackAcquisitionDerivationInput =
+        serde_json::from_value(prepared_acquisition["data"].clone())
+            .expect("prepared acquisition input");
+    write_typed_yaml(&project.inputs, "acquisition-input.yaml", &acquisition);
+    let result = ok(
+        &run(&command_args(&[
+            "domain-pack",
+            "acquire",
+            "apply",
+            "--derivation-input-file",
+            &path_arg(&lifecycle.acquisition_input),
+            "--operator-approve-candidate",
+            &acquisition
+                .plan
+                .domain_pack_acquisition_plan
+                .selected
+                .candidate_id
+                .0,
+            "--trust-policy-file",
+            &path_arg(&supply.trust_policy),
+            "--registry-file",
+            &path_arg(&supply.registry),
+            "--reviewer-registry-file",
+            &path_arg(&reviewers),
+            "--reviewed-registry-file",
+            &path_arg(&graph.proposed),
+            "--capability-registry-file",
+            &path_arg(&lifecycle.capability_registry),
+            "--sandbox-policy-file",
+            &path_arg(&lifecycle.sandbox_policy),
+            "--principal-id",
+            "principal.reference-pack-installer",
+            "--project-root",
+            &path_arg(&project.app),
+            "--artifact-root",
+            &path_arg(&project.artifacts),
+            "--state-root",
+            &path_arg(&project.state),
+            "--json",
+        ])),
+        "domain-pack acquire apply",
+    );
+    assert_eq!(
+        result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 0,
+        "{result:#}"
+    );
+    let install_receipt: DomainPackLifecycleReceiptDocument =
+        serde_json::from_value(result["data"].clone()).expect("typed install lifecycle receipt");
 
+    heartbeat(started, "workflow-discovery");
     let authority = WorkflowAuthority::install(&project);
     let initialized = ok(&project.workflow("init", &[]), "workflow.init");
     assert_eq!(
@@ -2503,6 +2742,7 @@ fn p6d_reference_pack_real_journey() {
     // The universal execute/release policies remain ahead of pack policies.
     // Advance them through the same admitted capabilities/evidence/decisions,
     // then exercise every reference policy to its declared readiness target.
+    heartbeat(started, "workflow-execute-and-release");
     let core: WorkflowGovernanceBundleDocument =
         typed(&repo_root().join("contracts/workflow-governance/golden-path-v0.yaml"));
     let playable_policy =
@@ -2650,6 +2890,7 @@ fn p6d_reference_pack_real_journey() {
     assert_fresh_resume(&project, &packaging_ready);
     complete_ready(&project, &packaging_ready);
 
+    heartbeat(started, "core-rebase-plan");
     let release_status = ok(
         &project.workflow("release-status", &[]),
         "workflow.release_status",
@@ -2681,6 +2922,24 @@ fn p6d_reference_pack_real_journey() {
         .as_str()
         .is_some_and(|message| message.contains("rebase")));
     assert_eq!(snapshot(&project.state), state_before_rebase);
+    let active_plan_digest = required_str(&release_status, "/data/rebase_plan_digest");
+    let planned = ok(
+        &project.workflow(
+            "release-rebase-plan",
+            &command_args(&[
+                "--target-release-id",
+                target,
+                "--expected-rebase-plan-digest",
+                active_plan_digest,
+            ]),
+        ),
+        "workflow.release_rebase_plan",
+    );
+    assert_eq!(
+        planned["data"]["domain_pack_rebase_plan"]["mutation_allowed"],
+        true
+    );
+    assert_eq!(snapshot(&project.state), state_before_rebase);
 
     // The agent-facing workflow surface remains zero-config: neither pack nor
     // effective bundle identity can be selected by a caller.
@@ -2692,6 +2951,7 @@ fn p6d_reference_pack_real_journey() {
     // Removing the last pack is governed and reversible, but never silently
     // resumes core-only authority: the empty generation is explicitly degraded
     // and exposes the exact restoration gaps on both next and resume.
+    heartbeat(started, "remove-last-pack");
     let removal = write_reference_remove_lifecycle(&project, &lifecycle, &supply, &install_receipt);
     let removal_tail = command_args(&[
         "--preflight-file",
@@ -2726,6 +2986,9 @@ fn p6d_reference_pack_real_journey() {
         args.extend(removal_tail.clone());
         let result = ok(&run(&args), command);
         if subcommand == "apply" {
+            // Lifecycle state commits first; the operator then publishes the
+            // fresh runtime policies whose digests the new exact lock seals.
+            publish_active_runtime_policy(&removal);
             assert_eq!(
                 result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 1,
                 "{result:#}"
@@ -2814,4 +3077,59 @@ fn p6d_reference_pack_real_journey() {
         &degraded_state,
         "Domain Pack gaps block workflow mutation",
     );
+
+    // The degraded-empty generation rebases with the adjacent Core in one
+    // joined workflow event. A fresh process reconstructs the same target pair
+    // and preserves every explicit restoration gap.
+    heartbeat(started, "crash-recovery");
+    let degraded_release = ok(
+        &project.workflow("release-status", &[]),
+        "workflow.release_status",
+    );
+    let degraded_target = required_str(&degraded_release, "/data/available_successor/release_id");
+    let degraded_plan_digest = required_str(&degraded_release, "/data/rebase_plan_digest");
+    let interrupted = project.workflow_with_env(
+        "release-rebase-apply",
+        &command_args(&[
+            "--target-release-id",
+            degraded_target,
+            "--expected-rebase-plan-digest",
+            degraded_plan_digest,
+        ]),
+        Some(("FORGE_TEST_CRASH_AFTER_REBASE_LIFECYCLE", "1")),
+    );
+    assert!(!interrupted.status.success());
+    let interrupted_stdout = String::from_utf8_lossy(&interrupted.stdout);
+    let interrupted_stderr = String::from_utf8_lossy(&interrupted.stderr);
+    assert_eq!(
+        interrupted.status.code(),
+        Some(86),
+        "crash hook did not terminate at the lifecycle-first boundary; stdout={interrupted_stdout}; stderr={interrupted_stderr}"
+    );
+    assert!(
+        interrupted_stdout.contains("injected crash after lifecycle commit")
+            || interrupted_stderr.contains("injected crash after lifecycle commit"),
+        "unexpected injected-crash response; status={:?}; stdout={interrupted_stdout}; stderr={interrupted_stderr}",
+        interrupted.status.code()
+    );
+    let replacement_status = ok(
+        &project.workflow("release-status", &[]),
+        "workflow.release_status",
+    );
+    assert_eq!(
+        replacement_status["data"]["active"]["release"]["release_id"],
+        degraded_target
+    );
+    assert_eq!(replacement_status["data"]["domain_pack_degraded"], true);
+    assert_eq!(
+        replacement_status["data"]["domain_pack_rebase_required"],
+        true
+    );
+    let replacement_next = ok(&project.workflow("next", &[]), "workflow.next");
+    assert_eq!(replacement_next["data"]["domain_pack_degraded"], true);
+    assert_eq!(
+        replacement_next["data"]["domain_pack_gaps"],
+        degraded_next["data"]["domain_pack_gaps"]
+    );
+    heartbeat(started, "complete");
 }

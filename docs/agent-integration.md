@@ -26,6 +26,12 @@ The canonical bootstrap procedure is
 [`skill/start-forge/SKILL.md`](../skill/start-forge/SKILL.md). The generated
 [command surface](generated/command-surface.md) is the flag-level reference.
 
+Before claiming readiness, report the four identities separately: installed
+binary/source checkpoint, selected prebuilt asset, durable workflow release pin,
+and Domain Pack effective epoch. Use the canonical
+[identity table](../README.md#four-identitiesdo-not-collapse-them); never infer
+one from another.
+
 ## JSON handling
 
 - Treat `CliEnvelope.ok` as the result, not process exit alone.
@@ -54,6 +60,14 @@ independence. An agent must never self-provision or use a `human`, `reviewer`, o
 `runtime` local profile as evidence of a distinct actor. The external broker
 vouches for the signed origin subject and separation domain; Forge does not
 infer physical presence from those labels.
+
+## Mediated versus direct writes
+
+Call a write **Forge-mediated** only when the claimed target is covered by the
+current claim/gate result, verified principal, Admission, pre-effect WAL, effect,
+and durable receipt. Editor, shell, host-plugin, installer, or other filesystem
+writes are direct/ungoverned unless that admitted transaction covers them.
+Log/disclose direct writes rather than laundering them through a transcript.
 
 ## Human attention
 
@@ -85,6 +99,9 @@ choices; ignorance of a development method must not become human homework.
 - Use the existing evidence/action-packet lane. Do not invent a second slice
   store, mutation event, or caller-authored epistemic state.
 
+- P7F bundle-checker success means structural/content-integrity validity only;
+  it cannot prove a production host, chat-only behavior, semantics, actor or
+  reviewer independence, publication, or P7F passage.
 If authority is not provisioned, the correct result is a blocked gap. Never
 hand-author a registry, signature, receipt, or ledger record to advance.
 
@@ -111,4 +128,6 @@ not select authoritative P5/P6 workflow. New integrations use
 - Missing evidence cannot complete a policy.
 - Human questions appear only after prerequisite claims are verified.
 - Replacement process returns the same durable epoch and next action.
+- Every write claimed as governed has the complete mediated evidence chain;
+  direct host/editor/shell writes are explicitly classified ungoverned.
 - No private key, opaque capability, or operator anchor is exposed in chat.

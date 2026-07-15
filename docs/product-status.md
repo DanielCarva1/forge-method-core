@@ -2,16 +2,21 @@
 
 ## Current checkpoint
 
-The source workspace is package version `0.12.0`. P5, P6a through P6d, P7a.2,
-and the P7b unified durable Assurance Case are implemented source checkpoints.
-The source includes workflow-release, Domain Pack, lifecycle, learning,
-effective-epoch, replacement-resume, external origin-broker authority, durable
-human intent, universal-lens projection, and governed representative-slice
-surfaces. This is not yet a clean production-host chat-only journey proof.
+The source workspace is package version `0.12.0`. It includes implemented P5,
+P6a–P6d, P7a.2, P7b, P7C discovery/governed acquisition, a source-level P7D
+joined Core/pack rebase, and controls for P7E release correctness and P7G
+evidence-preserving CI topology.
+This source document does not infer whether the matching `0.12.0` tag has
+published assets; verify the selected GitHub Release and exact sidecars.
+Production-host P7F evidence, actor independence, and full P7 completion remain
+separate claims.
 
-This does not mean every ecosystem feature is complete or every GitHub Release
-contains the current source checkpoint. Verify commit/tag, binary version,
-archive contents, and CI independently.
+Use the canonical [four-identity table](../README.md#four-identitiesdo-not-collapse-them):
+source checkpoint, selected verified prebuilt (`v0.4.0` was the historical
+predecessor to this candidate), project workflow release pin,
+and project-local Domain Pack effective epoch are deliberately distinct.
+Verify commit/tag, binary version, archive manifest/assets, project status, and
+CI evidence independently.
 
 ## Implemented
 
@@ -21,6 +26,21 @@ archive contents, and CI independently.
   successor and pinned release upgrades.
 - Claims, conflict/gate enforcement, transaction/replay/recovery foundations.
 - Domain Pack composition, governed lifecycle, and reviewed-learning promotion.
+- Accepted-intent-bound Domain Pack search/explain with exact reviewed-entry
+  metadata, deterministic candidate-only projections, and explicit gaps.
+- Candidate-only acquisition planning that replays the exact discovery request,
+  binds normalized requirements, rejects stale or tampered selection state,
+  and derives exact P6 resolver/composer inputs from matching package material.
+- Versioned reference-pack manifest, content, evidence, and hostile corpus are
+  included in the deterministic release payload. High-level acquisition takes
+  an exact current candidate plus explicit operator approval, derives P6
+  lifecycle internals, and can activate a clean project's first generation;
+  public remote catalog/download productization remains pending.
+- Adjacent-Core rebase derives exact CAS from release and lifecycle state,
+  revalidates persisted package inputs and external operator roots, commits an
+  immutable target-Core generation, and appends one joined Core/effective epoch
+  event. Persisted-plan recovery handles the lifecycle-to-workflow crash
+  boundary. This remains source-level until cumulative E2E/CI evidence passes.
 - Generic effective epochs and a game-development reference proof without
   game-specific Rust.
 - Durable accepted human intent with kernel-derived revisions and monotonic
@@ -29,17 +49,38 @@ archive contents, and CI independently.
   `unknown`, `supported`, `verified`, `disproven`, and `waived`.
 - Independently reviewed representative-slice definitions and separately
   originated runtime execution using the existing evidence ledger and packets.
-- Linux and Windows default workspace/platform gates plus one Linux reference
-  protocol journey; Windows separately compiles that feature-gated journey.
+- Native Linux, Windows, Intel macOS, and Apple Silicon macOS default
+  workspace/platform gates plus one Linux reference protocol journey; every
+  non-Linux runner separately compiles that feature-gated journey.
+- Source release tooling binds archive version, exact `release_tag`, and full
+  `source_commit`; the workflow re-verifies payload/checksum before publication.
+- Source release CI extracts native x86_64 Linux/Windows and Intel/Apple Silicon
+  macOS packages and smokes binary/wrapper version plus `start`, `workflow init`,
+  `resume`, `release-status`, and `next`; this is not evidence of a published
+  asset.
+- CI source topology enforces 120-second Tier 0, 900-second focused, and
+  1,800-second platform/cumulative hard step timeouts, terminates timed-out
+  process trees, and persists JSON timing evidence. Budget targets become
+  evidence only when the corresponding hosted CI runs complete.
 
 ## Deliberate boundaries
 
 - Forge does not ship a model or hosted agent.
 - It cannot guarantee discovery of every unknown unknown.
 - It does not silently install into host skill/plugin directories.
-- A reference Domain Pack is not an automatically trusted public registry.
+- Release-visible reference-pack bytes are not an automatically trusted public
+  registry and carry no private signing key or operator approval.
+- Discovery and acquisition planning do not download, trust, install, or
+  activate a package. Only explicit `domain-pack acquire apply` may activate a
+  reviewed local artifact set after every trust and lifecycle check.
 - A newer binary does not silently migrate project authority.
 - Same-OS-principal hostile isolation is outside the cooperative threat model.
+
+- The P7F bundle checker proves only structure and content integrity; it cannot
+  prove production-host use, chat-only interaction, semantic coverage, actor or
+  reviewer independence, publication, or P7F passage.
+- Forge governs Forge-mediated writes only. Direct editor, shell, or host writes
+  remain ungoverned unless covered by an admitted Forge transaction and receipt.
 
 ## Adoption gaps that must remain honest
 
@@ -77,8 +118,11 @@ representative Codex/OpenClaw/other-host journey remain P7f evidence rather
 than hidden P7a assumptions.
 
 Release tags and packaging may lag source checkpoints. Source installation is
-authoritative for unreleased commits; prebuilt users must use only assets
-listed on the selected release.
+the only way to run unreleased commits; it does not turn them into a release.
+Prebuilt users must use only assets listed on the selected release and inspect
+the archive's manifest/verification sidecars. The current source release and CI
+hardening remains an implementation claim, not publication or elapsed-time
+evidence.
 
 ## Roadmap rule
 

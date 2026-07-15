@@ -13,9 +13,12 @@ pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
 pub mod domain_pack;
+pub mod domain_pack_acquisition;
+pub mod domain_pack_discovery;
 pub mod domain_pack_learning;
 pub mod domain_pack_lifecycle;
 pub mod domain_pack_policy;
+pub mod domain_pack_rebase;
 pub mod domain_pack_resolution;
 pub mod eval_run;
 pub mod evidence;
@@ -82,9 +85,12 @@ pub use decision::{
     DecisionStatus,
 };
 pub use domain_pack::*;
+pub use domain_pack_acquisition::*;
+pub use domain_pack_discovery::*;
 pub use domain_pack_learning::*;
 pub use domain_pack_lifecycle::*;
 pub use domain_pack_policy::*;
+pub use domain_pack_rebase::*;
 pub use domain_pack_resolution::*;
 pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
@@ -133,20 +139,20 @@ pub use workflow::{Workflow, WorkflowDocument};
 pub use workflow_behavior::*;
 pub use workflow_governance::{
     AdvisoryWorkflowPlaybook, ApplicabilityAssessedEvent, BrokerOriginAppliedEvent,
-    CapabilityProbedEvent, ContinuityRecordedEvent, DecisionNeedRaisedEvent, DecisionResolvedEvent,
-    DomainPackGenerationTransitionedEvent, EvaluatorObservedEvent,
-    HumanIntentRevisionAcceptedEvent, PhaseAdvancedEvent, PolicyCompletedEvent,
-    ProjectImportedEvent, ReceiptRevokedEvent, ReleaseUpgradedEvent, SignalChangedEvent,
-    WaiverAuthorizedEvent, WorkflowAssuranceClaimRole, WorkflowBrokerOriginProfile,
-    WorkflowCapabilityProbeKind, WorkflowCapabilityRequirement, WorkflowClaimPolicy,
-    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
-    WorkflowContentAddressedReference, WorkflowDecisionActivation, WorkflowDecisionRule,
-    WorkflowDisproofPolicy, WorkflowDomainPackGenerationIdentity, WorkflowEffectiveBundleIdentity,
-    WorkflowEvaluatorBinding, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
-    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind, WorkflowFreshnessRequirement, WorkflowGovernanceBundle,
-    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    CapabilityProbedEvent, ContinuityRecordedEvent, CoreDomainPackRebasedEvent,
+    DecisionNeedRaisedEvent, DecisionResolvedEvent, DomainPackGenerationTransitionedEvent,
+    EvaluatorObservedEvent, HumanIntentRevisionAcceptedEvent, PhaseAdvancedEvent,
+    PolicyCompletedEvent, ProjectImportedEvent, ReceiptRevokedEvent, ReleaseUpgradedEvent,
+    SignalChangedEvent, WaiverAuthorizedEvent, WorkflowAssuranceClaimRole,
+    WorkflowBrokerOriginProfile, WorkflowCapabilityProbeKind, WorkflowCapabilityRequirement,
+    WorkflowClaimPolicy, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
+    WorkflowCompletionAssertion, WorkflowContentAddressedReference, WorkflowDecisionActivation,
+    WorkflowDecisionRule, WorkflowDisproofPolicy, WorkflowDomainPackGenerationIdentity,
+    WorkflowEffectiveBundleIdentity, WorkflowEvaluatorBinding, WorkflowEvaluatorProvider,
+    WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
+    WorkflowEvidenceOutcome, WorkflowEvidenceProvenance, WorkflowEvidenceStrength,
+    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind, WorkflowFreshnessRequirement,
+    WorkflowGovernanceBundle, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedger,
     WorkflowGovernanceLedgerDocument, WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy,
     WorkflowGovernancePolicyOverlay, WorkflowGovernancePolicyOverlayDocument,
@@ -155,7 +161,7 @@ pub use workflow_governance::{
     WorkflowPrerequisiteRequirement, WorkflowReleaseAdmissionProof,
     WorkflowReleaseRegistryProvenance, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
-    WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 pub use workflow_migration::{
     LegacyWorkflowField, LegacyWorkflowFieldMapping, LegacyWorkflowFieldRole,

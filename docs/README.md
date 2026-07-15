@@ -1,45 +1,45 @@
 # Forge documentation
 
-Forge is an agent-first governance runtime. Humans are expected to stay in
-chat; host agents operate the `forge-core` binary and persist typed evidence in
-the project sidecar. These documents are for people integrating, auditing, or
-forking Forge—not for day-to-day project operation.
+Forge is a local agent-first governance runtime. Humans normally stay in chat;
+host agents operate `forge-core`; operators own installation and trust.
 
-## Choose a path
+## One guide per audience
 
-| Audience | Start here | Then read |
-|---|---|---|
-| Human using Forge through chat | [Getting started](getting-started.md) | [Product status](product-status.md) |
-| Host-agent or tool integrator | [Agent integration](agent-integration.md) | [Architecture](architecture.md), [Security model](security-model.md) |
-| Domain Pack author/operator | [Domain Packs](domain-packs.md) | [Security model](security-model.md) |
-| Contributor | [Contributing](contributing.md) | [Architecture](architecture.md), [Verification](verification.md) |
-| Fork maintainer | [Forking Forge](forking.md) | [Contributing](contributing.md), [Security model](security-model.md) |
-| Promise/compliance reviewer | [Product compliance audit](product-compliance-audit.md) | [Product status](product-status.md), [Verification](verification.md) |
+| Audience | Canonical guide |
+|---|---|
+| Human using Forge through chat | [Getting started](getting-started.md) |
+| Host-agent or tool integrator | [Agent integration](agent-integration.md) |
+| Installation, trust, state, or recovery operator | [Operator guide](operator-guide.md) |
+| Domain Pack author/operator | [Domain Packs](domain-packs.md) |
+| Contributor | [Contributing](contributing.md) |
+| Security or promise reviewer | [Security model](security-model.md) |
+| Fork/extension maintainer | [Forking and customization](forking.md) |
 
-## Authoritative sources
+## Reference index
 
-Forge deliberately separates product explanation from machine authority:
+- [Product status](product-status.md) and [promise audit](product-compliance-audit.md)
+  state what source proves and what remains open.
+- [Architecture](architecture.md) explains layers and authority flow.
+- [Verification](verification.md) defines Tier 0, focused, platform, and
+  cumulative evidence with budgets, triggers, and timing artifacts.
+- [Real-host proof](real-host-proof.md) defines the structural-only P7F bundle
+  checker boundary.
+- [Generated command surface](generated/command-surface.md) and
+  [workspace layout](generated/workspace-layout.md) are machine-checked references.
+- [Root README](../README.md) contains the canonical four-identity and storage
+  tables; [CONTEXT](../CONTEXT.md) defines domain language; the
+  [Changelog](../CHANGELOG.md) records source checkpoints.
 
-1. Rust code and admitted, compiled release material define executable
-   behavior.
-2. Closed contracts under `contracts/` define accepted wire shapes and
-   invariants.
-3. Generated references under `docs/generated/` describe the current command
-   and workspace surfaces and must remain byte-current in CI.
-4. `README.md`, `CONTEXT.md`, and these guides explain intent and operation but
-   cannot grant authority.
-5. Fixtures under `docs/fixtures/` are executable examples and adversarial
-   proofs, not trusted templates merely because they were copied.
+## Authority order
 
-When prose and a machine-checked surface disagree, fail closed and report the
-documentation drift.
+1. Admitted compiled material and runtime receipts define executable behavior.
+2. Closed contracts under `contracts/` define accepted wire shapes/invariants.
+3. Generated references must remain byte-current with code.
+4. Prose explains use and limits but cannot grant authority.
+5. Fixtures are examples/adversarial evidence, not trusted merely because copied.
 
-## Stable references
-
-- [Root README](../README.md): product overview and complete command examples.
-- [Domain context](../CONTEXT.md): bounded domain language and architecture.
-- [Changelog](../CHANGELOG.md): release/checkpoint history.
-- [Command surface](generated/command-surface.md): generated CLI reference.
-- [Workspace layout](generated/workspace-layout.md): generated crate map.
-- [Product program](../contracts/plan/agent-native-guidance-plan.yaml): typed
-  delivery plan and acceptance evidence through P6.
+When prose and a machine-checked surface disagree, fail closed and report drift.
+The source workspace is `0.12.0`; `v0.4.0` is its historical prebuilt
+predecessor, while current availability must be checked on GitHub Releases. No page
+in this set claims a published `0.12.0`, a completed real-host run, actor
+independence, or full P7 completion.
