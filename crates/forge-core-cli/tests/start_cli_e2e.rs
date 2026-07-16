@@ -301,6 +301,66 @@ fn state_two_link_without_sidecar_fails_closed_without_mutation() {
         "unavailable_untrusted_state"
     );
     assert!(env["data"]["state_loss"]["workflow_release_id"].is_null());
+    assert_eq!(
+        env["data"]["state_loss"]["schema_version"],
+        "forge_bootstrap_state_loss_v1"
+    );
+    let diagnosis_digest = env["data"]["state_loss"]["diagnosis_digest"]
+        .as_str()
+        .expect("state-loss diagnosis has a deterministic digest");
+    assert_eq!(diagnosis_digest.len(), 64);
+    let choices = &env["data"]["state_loss"]["choices"];
+    assert_eq!(choices["inspect"]["availability"], "available_read_only");
+    assert_eq!(choices["inspect"]["mutates_authority"], false);
+    assert_eq!(
+        choices["inspect"]["argv"],
+        serde_json::json!([
+            "forge-core",
+            "project",
+            "resolve",
+            "--root",
+            app.display().to_string(),
+            "--json"
+        ])
+    );
+    assert_eq!(
+        choices["restore_verified_backup"]["authority_effect"],
+        "restores_prior_authority"
+    );
+    assert_eq!(
+        choices["restore_verified_backup"]["availability"],
+        "deferred_pending_verified_restore"
+    );
+    assert_eq!(
+        choices["restore_verified_backup"]["automatic_allowed"],
+        false
+    );
+    assert!(
+        choices["restore_verified_backup"].get("argv").is_none(),
+        "deferred restore must not publish executable argv"
+    );
+    assert_eq!(
+        choices["reinitialize_as_new"]["authority_effect"],
+        "abandons_prior_authority_and_creates_new"
+    );
+    assert_eq!(
+        choices["reinitialize_as_new"]["availability"],
+        "deferred_pending_reinitialize_plan"
+    );
+    assert_eq!(choices["reinitialize_as_new"]["automatic_allowed"], false);
+    assert_eq!(
+        choices["reinitialize_as_new"]["operator_confirmation_required"],
+        true
+    );
+    assert!(choices["reinitialize_as_new"]["requirements"]
+        .as_array()
+        .is_some_and(|requirements| requirements
+            .iter()
+            .any(|requirement| requirement == "new_project_identity_distinct_from_prior")));
+    assert!(
+        choices["reinitialize_as_new"].get("argv").is_none(),
+        "deferred reinitialize-as-new must not publish executable argv"
+    );
     let state_loss_keys = env["data"]["state_loss"]
         .as_object()
         .expect("state_loss is an object")
@@ -329,6 +389,132 @@ fn state_two_link_without_sidecar_fails_closed_without_mutation() {
         before,
         "link, project, operator roots, and sidecar namespace must remain byte-identical"
     );
+}
+
+#[test]
+fn state_loss_inspection_argv_uses_canonical_root_for_relative_input() {
+    let parent = FreshParent::new("relative-root");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+    let output = bin()
+        .current_dir(&parent.path)
+        .args(["start", "--root", "app", "--json"])
+        .output()
+        .expect("run start with relative root");
+    let env: Value = serde_json::from_slice(&output.stdout).expect("parse start envelope");
+
+    assert!(!output.status.success());
+    assert_eq!(
+        env["data"]["state_loss"]["choices"]["inspect"]["argv"],
+        serde_json::json!([
+            "forge-core",
+            "project",
+            "resolve",
+            "--root",
+            app.canonicalize().unwrap().display().to_string(),
+            "--json"
+        ])
+    );
+}
+#[test]
+fn healthy_handoff_argv_uses_canonical_root_for_relative_input() {
+    let parent = FreshParent::new("relative-healthy-root");
+    let app = parent.path.join("app");
+    let state = parent.path.join("forge-app").join(".forge-method");
+    fs::create_dir_all(&app).unwrap();
+    make_state_tree(&state);
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+    let output = bin()
+        .current_dir(&parent.path)
+        .args(["start", "--root", "app", "--json"])
+        .output()
+        .expect("run healthy start with relative root");
+    let env: Value = serde_json::from_slice(&output.stdout).expect("parse start envelope");
+
+    assert!(output.status.success());
+    assert_eq!(
+        env["data"]["next_step"]["argv"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "init",
+            "--root",
+            app.canonicalize().unwrap().display().to_string()
+        ])
+    );
+}
+#[test]
+fn repeated_state_loss_diagnosis_is_stable_and_never_becomes_authorization() {
+    let parent = FreshParent::new("repeated-state-loss");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
+
+    let (first_ok, first) = run_start(&app);
+    let (second_ok, second) = run_start(&app);
+
+    assert!(!first_ok && !second_ok);
+    assert_eq!(
+        first["data"]["state_loss"], second["data"]["state_loss"],
+        "replacement processes must receive the same pending choices for the same observation"
+    );
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+
+#[test]
+fn stale_state_loss_diagnosis_disappears_when_linked_authority_reappears() {
+    let parent = FreshParent::new("stale-state-loss");
+    let app = parent.path.join("app");
+    let state = parent.path.join("forge-app").join(".forge-method");
+    fs::create_dir_all(&app).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+    let (lost_ok, lost) = run_start(&app);
+    assert!(!lost_ok);
+    assert!(lost["data"]["state_loss"]["diagnosis_digest"].is_string());
+
+    make_state_tree(&state);
+    let restored_before = tree_snapshot(&parent.path);
+    let (healthy_ok, healthy) = run_start(&app);
+
+    assert!(healthy_ok);
+    assert_eq!(healthy["data"]["state"], STATE_SIDECAR_READY);
+    assert!(
+        healthy["data"].get("state_loss").is_none(),
+        "a stale state-loss diagnosis must not survive a fresh healthy observation"
+    );
+    assert_eq!(tree_snapshot(&parent.path), restored_before);
+}
+
+#[test]
+fn reinitialize_like_start_flags_are_rejected_without_mutation() {
+    let parent = FreshParent::new("reinitialize-flags");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
+
+    let output = bin()
+        .args(["start", "--root"])
+        .arg(&app)
+        .args([
+            "--json",
+            "--reinitialize-as-new",
+            "--new-project-id",
+            "replacement",
+        ])
+        .output()
+        .expect("run start with forbidden reinitialize-like flags");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("unrecognized argument '--reinitialize-as-new'"));
+    assert_eq!(tree_snapshot(&parent.path), before);
 }
 
 #[test]

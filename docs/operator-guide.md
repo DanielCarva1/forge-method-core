@@ -306,8 +306,29 @@ Preserve together:
 - the exact binary version or source commit.
 
 Restoring an old sidecar or anchor independently can be detected as rollback.
-`start` and `project resolve` diagnose linked state loss but do not restore or
-reinitialize it. Forge does not yet ship a complete-state backup/verify/restore
+`start` emits the independently versioned `forge_bootstrap_state_loss_v1`
+diagnostic when a Project Link exists but its authority is unavailable. Its
+deterministic diagnosis digest is correlation data, never authorization. The
+three choices are intentionally non-conflated:
+
+- `inspect` is available and read-only; its argv resolves Project Link metadata;
+- `restore_verified_backup` restores prior authority but is deferred until the
+  complete-state verified restore protocol ships, so it has no apply argv;
+- `reinitialize_as_new` abandons prior authority and creates unrelated authority.
+  It is deferred, has no apply argv, requires explicit operator confirmation, and
+  requires a new project identity and authority location.
+
+`start`, repeated agent sessions, and `project init` never restore, reinitialize,
+or normalize linked missing/partial state. Fresh initialization also rejects
+symlink-substituted targets and preexisting sidecar state without a Project Link;
+empty target directories are reserved with create-new semantics, then Project Link
+publication is create-if-absent before authority markers are populated. A
+concurrent link is never overwritten or seeded. These guarantees cover static
+substitution and cooperating initializers. As with all local confinement, a
+hostile process under the same OS principal can replace reserved paths after
+validation; isolate hostile tenants as described in the
+[security boundary](#security-boundary). Forge does not yet ship the required
+complete-state backup/verify/restore or durable reinitialize plan/apply
 operation, so preserve the coordinated backup and obtain an explicit recovery
 plan rather than copying individual files. Existing typed recovery commands are
 valid only when their authority state is present and inspectable:

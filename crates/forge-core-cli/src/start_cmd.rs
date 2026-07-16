@@ -45,13 +45,16 @@ use sha2::{Digest as _, Sha256};
 
 use forge_core_command_surface::COMMAND_START;
 use forge_core_contracts::{
-    CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION, PROJECT_LINK_SCHEMA_VERSION,
+    BootstrapRecoveryChoices, BootstrapStateLossDiagnostic, CliEnvelope, ExitReason,
+    BOOTSTRAP_STATE_LOSS_SCHEMA_VERSION, ENVELOPE_SCHEMA_VERSION, PROJECT_LINK_SCHEMA_VERSION,
 };
+pub use forge_core_contracts::{StateLossCause, StateLossKind, StateLossReleaseStatus};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    init_project, resolve_project, write_initial_project_state, ProjectInitError,
-    ProjectInitStatus, ProjectLayoutKind, ProjectResolveError, ProjectResolvePayload,
+    init_project, linked_state_loss_detail, resolve_project, resolve_project_observed,
+    write_initial_project_state, ProjectInitError, ProjectInitStatus, ProjectLayoutKind,
+    ProjectResolveError, ProjectResolvePayload,
 };
 
 /// Usage line for `forge-core start`, projected from the shared Command Surface.
@@ -205,42 +208,9 @@ pub struct StartPayload {
     pub actions_performed: Vec<String>,
 }
 
-/// Machine-routable linked-state-loss status. Release identity is explicitly
-/// unavailable when the state that owns it cannot be read; callers must not
-/// substitute the currently running binary release.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct StateLossStatus {
-    pub kind: StateLossKind,
-    pub cause: StateLossCause,
-    pub project_id: String,
-    pub project_link_schema_version: String,
-    pub project_link_sha256: Option<String>,
-    pub workflow_release_id: Option<String>,
-    pub workflow_release_status: StateLossReleaseStatus,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StateLossKind {
-    LinkedStateUnavailable,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StateLossCause {
-    MissingSidecar,
-    MissingStateRoot,
-    IncompleteState,
-    SymlinkSubstitution,
-    PermissionDenied,
-    Uninspectable,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StateLossReleaseStatus {
-    UnavailableUntrustedState,
-}
+/// Compatibility alias retained for Rust callers of the original `start` API.
+/// The nested wire contract is now independently versioned.
+pub type StateLossStatus = BootstrapStateLossDiagnostic;
 
 /// The five bootstrap states a Consumer Project Repo can be in along the path
 /// `start` diagnoses.
@@ -530,8 +500,8 @@ pub fn run_start(root: &Path) -> CliEnvelope<StartPayload> {
 /// as possible durable-state loss and is never recreated automatically.
 #[must_use]
 pub fn run_start_with_agent(root: &Path, agent_id: Option<String>) -> CliEnvelope<StartPayload> {
-    let resolved = match resolve_project(root) {
-        Ok(payload) => payload,
+    let observation = match resolve_project_observed(root) {
+        Ok(observation) => observation,
         Err(ProjectResolveError::MissingProjectLink { .. }) => {
             // Fresh repo: no durable link claims prior initialization.
             return bootstrap_and_finish(root, agent_id);
@@ -540,192 +510,39 @@ pub fn run_start_with_agent(root: &Path, agent_id: Option<String>) -> CliEnvelop
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
         }
     };
+    let project_link_sha256 = observation.project_link_sha256;
+    let resolved = observation.payload;
 
     if let Some((cause, detail)) = linked_state_loss_detail(&resolved) {
-        return state_loss_envelope(&resolved, root, agent_id, cause, &detail);
+        return state_loss_envelope(&resolved, agent_id, cause, &detail, &project_link_sha256);
     }
 
-    finish_classified(&resolved, root, agent_id, Vec::new())
-}
-
-fn linked_state_loss_detail(resolved: &ProjectResolvePayload) -> Option<(StateLossCause, String)> {
-    if let Some(link_path) = resolved.link_path.as_deref() {
-        if let Some(issue) = linked_entry_issue(
-            Path::new(link_path),
-            "Project Link",
-            false,
-            StateLossCause::Uninspectable,
-        ) {
-            return Some(issue);
-        }
-    }
-    let sidecar_root = Path::new(&resolved.sidecar_root);
-    if let Some(issue) = linked_entry_issue(
-        sidecar_root,
-        "linked sidecar root",
-        true,
-        StateLossCause::MissingSidecar,
-    ) {
-        return Some(issue);
-    }
-
-    let state_root = Path::new(&resolved.state_root);
-    if let Some(issue) = linked_entry_issue(
-        state_root,
-        "linked state root",
-        true,
-        StateLossCause::MissingStateRoot,
-    ) {
-        return Some(issue);
-    }
-    // These are the base markers created by `project init`. Workflow-specific
-    // ledgers are intentionally not required here: before the first
-    // `workflow init` their absence is legitimate and indistinguishable from
-    // later wholesale deletion without an external backup/anchor. C2 backup
-    // stories own that complete-authority detection boundary.
-    for relative in [
-        "artifacts",
-        "claims-active",
-        "evidence",
-        "handoffs/expired-claims",
-        "index",
-        "locks",
-        "traces",
-        "wal",
-    ] {
-        let label = format!("required {relative} state directory");
-        if let Some(issue) = linked_entry_issue(
-            &state_root.join(relative),
-            &label,
-            true,
-            StateLossCause::IncompleteState,
-        ) {
-            return Some(issue);
-        }
-    }
-    for relative in [
-        "ledger.ndjson",
-        "wal/replay.fmr1",
-        "replay-wal.manifest.json",
-    ] {
-        let label = format!("required {relative} authority marker");
-        if let Some(issue) = linked_entry_issue(
-            &state_root.join(relative),
-            &label,
-            false,
-            StateLossCause::IncompleteState,
-        ) {
-            return Some(issue);
-        }
-    }
-    None
-}
-
-fn linked_entry_issue(
-    path: &Path,
-    label: &str,
-    expect_directory: bool,
-    missing_cause: StateLossCause,
-) -> Option<(StateLossCause, String)> {
-    if let Some(issue) = linked_path_component_issue(path, label) {
-        return Some(issue);
-    }
-
-    let metadata = match std::fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-            return Some((missing_cause, format!("the {label} does not exist")));
-        }
-        Err(source) => return Some(linked_inspection_error(label, &source)),
-    };
-    if metadata.file_type().is_symlink() {
-        return Some((
-            StateLossCause::SymlinkSubstitution,
-            format!("the {label} is a symbolic link"),
-        ));
-    }
-    if expect_directory && !metadata.is_dir() {
-        return Some((
-            StateLossCause::IncompleteState,
-            format!("the {label} is not a directory"),
-        ));
-    }
-    if !expect_directory && !metadata.is_file() {
-        return Some((
-            StateLossCause::IncompleteState,
-            format!("the {label} is not a regular file"),
-        ));
-    }
-
-    let access_result = if expect_directory {
-        std::fs::read_dir(path).map(|_| ())
-    } else {
-        std::fs::File::open(path).map(|_| ())
-    };
-    access_result
-        .err()
-        .map(|source| linked_inspection_error(label, &source))
-}
-
-fn linked_path_component_issue(path: &Path, label: &str) -> Option<(StateLossCause, String)> {
-    let mut current = PathBuf::new();
-    for component in path.components() {
-        current.push(component.as_os_str());
-        if matches!(
-            component,
-            std::path::Component::Prefix(_) | std::path::Component::RootDir
-        ) {
-            continue;
-        }
-        match std::fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Some((
-                    StateLossCause::SymlinkSubstitution,
-                    format!("the {label} path contains a symbolic link"),
-                ));
-            }
-            Ok(_) => {}
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return None,
-            Err(source) => return Some(linked_inspection_error(label, &source)),
-        }
-    }
-    None
-}
-
-fn linked_inspection_error(label: &str, source: &std::io::Error) -> (StateLossCause, String) {
-    if source.kind() == std::io::ErrorKind::PermissionDenied {
-        (
-            StateLossCause::PermissionDenied,
-            format!("the {label} cannot be inspected (permission denied)"),
-        )
-    } else {
-        (
-            StateLossCause::Uninspectable,
-            format!("the {label} cannot be inspected ({:?})", source.kind()),
-        )
-    }
+    finish_classified(&resolved, agent_id, Vec::new())
 }
 
 fn state_loss_envelope(
     resolved: &ProjectResolvePayload,
-    project_root: &Path,
     agent_id: Option<String>,
     cause: StateLossCause,
     detail: &str,
+    observed_project_link_sha256: &str,
 ) -> CliEnvelope<StartPayload> {
-    let project_link_sha256 = resolved
-        .link_path
-        .as_deref()
-        .and_then(|path| std::fs::read(path).ok())
-        .map(|bytes| format!("{:x}", Sha256::digest(bytes)));
+    // Never expose a digest for a substituted Project Link. For every other
+    // cause, reuse the exact-byte digest from the same read that produced the
+    // resolved identity rather than reopening a raceable path.
+    let project_link_sha256 = (cause != StateLossCause::SymlinkSubstitution)
+        .then(|| observed_project_link_sha256.to_string());
+    let diagnosis_digest =
+        state_loss_diagnosis_digest(resolved, cause, detail, project_link_sha256.as_deref());
     let reason = format!(
-        "Project Link proves prior initialization, but {detail}; this is possible durable-state loss. Automatic recreation is forbidden. Inspect the link and restore a verified backup before proceeding."
+        "Project Link proves prior initialization, but {detail}; this is possible durable-state loss. Automatic recreation is forbidden. Inspect the link or select a future verified recovery path before proceeding."
     );
     let mut references = Vec::new();
     if let Some(link_path) = resolved.link_path.clone() {
         references.push(link_path);
     }
     references.push(resolved.state_root.clone());
+    let project_root_display = resolved.project_root.clone();
     let payload = StartPayload {
         schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
         agent_id,
@@ -737,13 +554,16 @@ fn state_loss_envelope(
                 "project".to_string(),
                 "resolve".to_string(),
                 "--root".to_string(),
-                project_root.display().to_string(),
+                project_root_display.clone(),
+                "--json".to_string(),
             ],
-            "Inspect the Project Link and linked state without mutating either.",
+            "Inspect Project Link resolution metadata without mutating project authority.",
             references,
         )),
         project: Some(ProjectContext::from(resolved.clone())),
-        state_loss: Some(StateLossStatus {
+        state_loss: Some(BootstrapStateLossDiagnostic {
+            schema_version: BOOTSTRAP_STATE_LOSS_SCHEMA_VERSION.to_string(),
+            diagnosis_digest,
             kind: StateLossKind::LinkedStateUnavailable,
             cause,
             project_id: resolved.project_id.clone(),
@@ -751,10 +571,32 @@ fn state_loss_envelope(
             project_link_sha256,
             workflow_release_id: None,
             workflow_release_status: StateLossReleaseStatus::UnavailableUntrustedState,
+            choices: BootstrapRecoveryChoices::for_project_root(&project_root_display),
         }),
         actions_performed: Vec::new(),
     };
     CliEnvelope::reject("start", ExitReason::EnvConfig, reason, payload)
+}
+
+fn state_loss_diagnosis_digest(
+    resolved: &ProjectResolvePayload,
+    cause: StateLossCause,
+    detail: &str,
+    project_link_sha256: Option<&str>,
+) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"forge-bootstrap-state-loss-diagnosis-v1\0");
+    for field in [
+        resolved.project_id.as_str(),
+        PROJECT_LINK_SCHEMA_VERSION,
+        project_link_sha256.unwrap_or("unavailable"),
+        cause.as_str(),
+        detail,
+    ] {
+        digest.update((field.len() as u64).to_be_bytes());
+        digest.update(field.as_bytes());
+    }
+    format!("{:x}", digest.finalize())
 }
 
 /// Run first initialization, seed the authoritative compatibility state, then
@@ -762,21 +604,24 @@ fn state_loss_envelope(
 fn bootstrap_and_finish(root: &Path, agent_id: Option<String>) -> CliEnvelope<StartPayload> {
     match init_project(root, None, None, None) {
         Ok(init_payload) => {
-            let action = if init_payload.status == ProjectInitStatus::Initialized {
+            let initialized = init_payload.status == ProjectInitStatus::Initialized;
+            let action = if initialized {
                 "initialized"
             } else {
                 "already_initialized"
             };
-            // Best-effort compatibility seed; workflow authority remains in its ledger.
-            if let Err(err) =
-                write_initial_project_state(std::path::Path::new(&init_payload.state_root))
-            {
-                eprintln!("start: failed to seed state.yaml (non-fatal): {err}");
+            // Seed compatibility state only for the initialization this call
+            // just published. A Project Link that won a race is existing
+            // authority and must remain read-only here.
+            if initialized {
+                if let Err(err) =
+                    write_initial_project_state(std::path::Path::new(&init_payload.state_root))
+                {
+                    eprintln!("start: failed to seed state.yaml (non-fatal): {err}");
+                }
             }
             match resolve_project(root) {
-                Ok(resolved) => {
-                    finish_classified(&resolved, root, agent_id, vec![action.to_string()])
-                }
+                Ok(resolved) => finish_classified(&resolved, agent_id, vec![action.to_string()]),
                 Err(err) => {
                     CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string())
                 }
@@ -790,12 +635,12 @@ fn bootstrap_and_finish(root: &Path, agent_id: Option<String>) -> CliEnvelope<St
 /// exists). No further bootstrap action; pure routing via `classify`.
 fn finish_classified(
     resolved: &ProjectResolvePayload,
-    project_root: &Path,
     agent_id: Option<String>,
     actions_performed: Vec<String>,
 ) -> CliEnvelope<StartPayload> {
     let project = ProjectContext::from(resolved.clone());
-    let (state, reason, next_step) = classify(resolved, project_root);
+    let canonical_project_root = Path::new(&resolved.project_root);
+    let (state, reason, next_step) = classify(resolved, canonical_project_root);
     CliEnvelope::ok(
         "start",
         StartPayload {

@@ -127,8 +127,17 @@ newer binary never silently migrates project authority; the agent follows
 
 - Re-run `start` in a new chat. If it reports `data.state_loss`, preserve the
   Project Link, sidecar namespace, and operator roots; do not recreate them.
-- Restore linked state only through an explicit verified recovery plan. A clean
-  repository without a Project Link is the only automatic-bootstrap case.
+- Read the independently versioned `data.state_loss.schema_version`,
+  `diagnosis_digest`, and typed `choices`. Only `inspect` is currently
+  `available_read_only`; execute its argv directly when inspection is needed.
+- `restore_verified_backup` is deferred to a verified restore protocol.
+  `reinitialize_as_new` is separately deferred, explicitly abandons prior
+  authority, requires operator confirmation, and requires a different project
+  identity and authority location. Neither choice publishes executable argv.
+- `start` retries and `project init` are not recovery paths and cannot normalize
+  linked missing or partial state. Automatic bootstrap requires both no Project
+  Link and an unoccupied, symlink-free target state path; preexisting sidecar
+  state is preserved for explicit inspection.
 - Use `workflow resume` after agent/process replacement when state is healthy.
 - Use `domain-pack status` and `domain-pack recover` for lifecycle recovery.
 - Do not delete the sidecar to fix an integrity error; preserve and inspect it.
