@@ -6,8 +6,8 @@ description: Start or resume Forge Method for the current project. Use when the 
 # Start Forge
 
 This is the single entry point for Forge Method in a project. Run it once per
-chat/session — it bootstraps a fresh repo, repairs a broken one, or routes an
-in-progress project into agent-native workflow governance.
+chat/session — it bootstraps a fresh repo, fails closed on linked state loss,
+or routes a healthy project into agent-native workflow governance.
 
 ## Core rules
 
@@ -22,6 +22,9 @@ in-progress project into agent-native workflow governance.
 - Execute structured command arrays as argv. `data.next_step.command` is a
   human-readable display string, not a shell-safe command source. Never split,
   concatenate, or shell-evaluate it.
+- A Project Link proves prior initialization. If `start` reports
+  `data.state_loss`, do not recreate, normalize, or initialize the sidecar.
+  Preserve all roots and execute only its read-only inspection argv.
 
 ## Workflow
 
@@ -40,16 +43,19 @@ in-progress project into agent-native workflow governance.
    If missing, report that Forge is not installed and do not invent a fallback.
 
 3. **Run `forge-core start`.** This is the zero-config bootstrap entry point.
-   On a fresh repo it creates the Project Link + sidecar; on a broken repo it
-   repairs; on a healthy repo it reports the current bootstrap state.
+   On a fresh repo it creates the Project Link + sidecar. If a link exists but
+   linked authority is missing, incomplete, inaccessible, or substituted, it
+   exits nonzero with typed `data.state_loss` and performs no mutation. On a
+   healthy repo it reports the current bootstrap state.
 
    ```bash
    forge-core start --root "<project-root>" --json
    ```
 
-   Read `data.state`, `data.actions_performed`, `data.project`, and
-   `data.next_step` from the response. Use `data.next_step.command` only when
-   explaining the action to a human; agents execute the structured argv.
+   Read `data.state`, `data.state_loss`, `data.actions_performed`,
+   `data.project`, and `data.next_step` from the response. Use
+   `data.next_step.command` only when explaining the action to a human; agents
+   execute the structured argv.
 
 4. **Enter agent-native workflow governance** when the Project Link and sidecar
    are healthy.

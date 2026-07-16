@@ -210,6 +210,14 @@ For a fresh repo, `start` creates the Project Link and sibling sidecar. Do not
 run `project init` as a second required bootstrap step; it is an idempotent
 advanced/migration surface.
 
+If a valid Project Link exists but its sidecar/state authority is missing,
+incomplete, inaccessible, or replaced by a symlink, `start` exits with code 5
+and reports `data.state: link_present_no_sidecar` plus typed `data.state_loss`
+identity. It performs no repair or normalization. Preserve the project, link,
+sidecar namespace, and operator roots byte-for-byte; use the returned read-only
+`project resolve` step to inspect them. A clean repo without a Project Link is
+the only automatic-bootstrap case.
+
 The integration then executes structured argv and follows:
 
 ```text
@@ -298,7 +306,11 @@ Preserve together:
 - the exact binary version or source commit.
 
 Restoring an old sidecar or anchor independently can be detected as rollback.
-Prefer typed recovery commands over restoring individual files:
+`start` and `project resolve` diagnose linked state loss but do not restore or
+reinitialize it. Forge does not yet ship a complete-state backup/verify/restore
+operation, so preserve the coordinated backup and obtain an explicit recovery
+plan rather than copying individual files. Existing typed recovery commands are
+valid only when their authority state is present and inspectable:
 
 ```bash
 forge-core start --root <project> --json
@@ -307,8 +319,9 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
-Preserve evidence before remediation. Never delete the sidecar, truncate a WAL,
-or provision a new trust root merely to make an integrity error disappear.
+Preserve evidence before remediation. Never delete or recreate the sidecar,
+truncate a WAL, or provision a new trust root merely to make an integrity or
+state-loss error disappear.
 
 ## Troubleshooting order
 

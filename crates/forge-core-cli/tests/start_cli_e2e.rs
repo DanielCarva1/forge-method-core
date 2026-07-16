@@ -7,11 +7,11 @@
 //! contract that agents consume.
 //!
 //! What is locked here:
-//! - `start` is read-only: running it never creates files (the temp dirs are
-//!   inspected after the call to prove nothing appeared).
-//! - `start` emits exactly one `CliEnvelope` as JSON on stdout.
-//! - The five states map to the documented exit codes and payload shapes.
-//! - Re-running `start` is idempotent (same state on the second call).
+//! - clean, never-initialized projects bootstrap exactly once;
+//! - linked missing/incomplete state fails closed with byte-identical filesystem state;
+//! - `start` emits exactly one `CliEnvelope` as JSON on stdout;
+//! - state loss is distinct from malformed-link corruption and clean bootstrap;
+//! - healthy-state routing is idempotent and nonmutating.
 
 use assert_cmd::Command;
 use serde_json::Value;
@@ -87,6 +87,15 @@ fn run_start(app: &Path) -> (bool, Value) {
     (exit_ok, json)
 }
 
+fn run_start_text(app: &Path) -> std::process::Output {
+    bin()
+        .args(["start", "--root"])
+        .arg(app)
+        .arg("--text")
+        .output()
+        .expect("run forge-core start in text mode")
+}
+
 /// Write a Project Link pointing at a sidecar/state root relative to `app`.
 fn write_link(app: &Path, sidecar_rel: &str, state_rel: &str) {
     fs::write(
@@ -101,18 +110,67 @@ fn write_link(app: &Path, sidecar_rel: &str, state_rel: &str) {
     .expect("write project link");
 }
 
-/// Create the Forge state tree (the dirs `create_state_tree` would make).
+/// Create the minimum authoritative Forge state shape used by `start`.
 fn make_state_tree(state: &Path) {
     for d in [
         "",
         "artifacts",
         "claims-active",
         "evidence",
+        "handoffs/expired-claims",
+        "index",
+        "locks",
         "traces",
         "wal",
     ] {
         fs::create_dir_all(state.join(d)).expect("create state dir");
     }
+    for f in [
+        "ledger.ndjson",
+        "wal/replay.fmr1",
+        "replay-wal.manifest.json",
+    ] {
+        fs::write(state.join(f), b"").expect("create authority marker");
+    }
+}
+
+fn tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
+    fn visit(base: &Path, path: &Path, entries: &mut Vec<(String, String, Vec<u8>)>) {
+        let mut children = fs::read_dir(path)
+            .expect("read snapshot directory")
+            .map(|entry| entry.expect("read snapshot entry").path())
+            .collect::<Vec<_>>();
+        children.sort();
+        for child in children {
+            let relative = child
+                .strip_prefix(base)
+                .expect("snapshot path below base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let metadata = fs::symlink_metadata(&child).expect("snapshot metadata");
+            if metadata.file_type().is_symlink() {
+                let target = fs::read_link(&child)
+                    .expect("snapshot symlink target")
+                    .to_string_lossy()
+                    .into_owned()
+                    .into_bytes();
+                entries.push((relative, "symlink".to_string(), target));
+            } else if metadata.is_dir() {
+                entries.push((relative, "dir".to_string(), Vec::new()));
+                visit(base, &child, entries);
+            } else {
+                entries.push((
+                    relative,
+                    "file".to_string(),
+                    fs::read(&child).expect("snapshot file bytes"),
+                ));
+            }
+        }
+    }
+
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries);
+    entries
 }
 
 fn assert_agent_native_workflow_handoff(env: &Value, app: &Path, state: &str) {
@@ -163,6 +221,10 @@ fn state_one_no_link_bootstraps_the_project_in_one_command() {
         env["data"]["state"], "sidecar_ready_no_contract",
         "start should bootstrap and advance to sidecar_ready_no_contract"
     );
+    assert!(
+        env["data"].get("state_loss").is_none(),
+        "clean bootstrap must not carry state-loss status"
+    );
     assert_eq!(
         env["data"]["actions_performed"],
         serde_json::json!(["initialized"]),
@@ -202,70 +264,294 @@ fn state_one_no_link_bootstraps_project_with_space_in_path() {
 }
 
 #[test]
-fn state_two_link_without_sidecar_repairs_the_sidecar() {
-    // Scenario B: link parses and points at the canonical default sidecar,
-    // but the sidecar/state root does not exist. `start` repairs the sidecar
-    // (idempotent `init_project` re-creates the state tree), then reports the
-    // post-repair state. The dir name matches the link's project_id ("app")
-    // so the canonical-default reconciliation succeeds.
+fn state_two_link_without_sidecar_fails_closed_without_mutation() {
     let parent = FreshParent::new("no-sidecar");
     let app = parent.path.join("app");
     fs::create_dir_all(&app).unwrap();
-    // sidecar/state intentionally NOT created.
+    let operator_root = parent.path.join("operator-anchors");
+    fs::create_dir_all(&operator_root).unwrap();
+    fs::write(operator_root.join("anchor.json"), b"{\"generation\":7}\n").unwrap();
     write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
 
     let (exit_ok, env) = run_start(&app);
 
-    assert!(exit_ok, "sidecar repair must exit zero");
-    assert_eq!(env["ok"], true);
+    assert!(!exit_ok, "linked missing state must fail closed");
+    assert_eq!(env["ok"], false);
+    assert_eq!(env["exit_reason"], "env_config");
+    assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+    assert_eq!(env["data"]["project"]["project_id"], "app");
     assert_eq!(
-        env["data"]["state"], "sidecar_ready_no_contract",
-        "state 2 should repair the sidecar and advance to sidecar_ready_no_contract"
+        env["data"]["state_loss"]["kind"],
+        "linked_state_unavailable"
     );
+    assert_eq!(env["data"]["state_loss"]["cause"], "missing_sidecar");
+    assert_eq!(env["data"]["state_loss"]["project_id"], "app");
     assert_eq!(
-        env["data"]["actions_performed"],
-        serde_json::json!(["repaired_sidecar"]),
-        "state 2 should report it repaired the sidecar"
+        env["data"]["state_loss"]["project_link_schema_version"],
+        PROJECT_LINK_SCHEMA_VERSION
     );
-    // The sidecar state root was actually (re)created.
+    let link_digest = env["data"]["state_loss"]["project_link_sha256"]
+        .as_str()
+        .expect("valid Project Link has an exact byte digest");
+    assert_eq!(link_digest.len(), 64);
+    assert!(link_digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(
+        env["data"]["state_loss"]["workflow_release_status"],
+        "unavailable_untrusted_state"
+    );
+    assert!(env["data"]["state_loss"]["workflow_release_id"].is_null());
+    let state_loss_keys = env["data"]["state_loss"]
+        .as_object()
+        .expect("state_loss is an object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
     assert!(
-        app.parent()
-            .unwrap()
-            .join("forge-app")
-            .join(".forge-method")
-            .is_dir(),
-        "start should (re)create the sidecar state root on state 2"
+        state_loss_keys
+            .iter()
+            .all(|key| !key.contains("path") && !key.contains("root") && !key.contains("secret")),
+        "typed state-loss identity must not expose secret paths: {state_loss_keys:?}"
+    );
+    assert!(
+        env["data"].get("actions_performed").is_none(),
+        "state-loss rejection must report no mutation actions"
+    );
+    assert!(
+        env["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("possible durable-state loss")
+                && message.contains("Automatic recreation is forbidden")),
+        "state loss must have a distinct actionable diagnostic"
+    );
+    assert_eq!(
+        tree_snapshot(&parent.path),
+        before,
+        "link, project, operator roots, and sidecar namespace must remain byte-identical"
     );
 }
 
 #[test]
-fn state_two_link_mismatch_fails_closed_not_silent_overwrite() {
-    // Scenario B-fail: link parses and points at a canonical default sidecar,
-    // but the dir name yields a different default project_id than the link
-    // declares. `init_project` returns `ExistingProjectLinkMismatch` and
-    // `start` surfaces it as an error rather than silently overwriting the
-    // link. This protects against an operator hand-editing the link to a
-    // non-default location and then losing it to an idempotent repair.
-    let parent = FreshParent::new("no-sidecar-mismatch");
-    // Dir name "app-with-spaces" slugifies differently than the link's
-    // declared project_id ("app"), so the canonical-default reconciliation
-    // cannot proceed.
-    let app = parent.path.join("app with spaces");
+fn state_two_human_output_names_state_loss_and_forbidden_recreation() {
+    let parent = FreshParent::new("no-sidecar-text");
+    let app = parent.path.join("app");
     fs::create_dir_all(&app).unwrap();
     write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+    let output = run_start_text(&app);
+
+    assert_eq!(output.status.code(), Some(5));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("possible durable-state loss"));
+    assert!(stderr.contains("Automatic recreation is forbidden"));
+}
+
+#[test]
+fn linked_empty_and_partial_state_fail_closed_without_normalization() {
+    for label in ["empty", "partial"] {
+        let parent = FreshParent::new(label);
+        let app = parent.path.join("app");
+        let state = parent.path.join("forge-app").join(".forge-method");
+        fs::create_dir_all(&app).unwrap();
+        if label == "empty" {
+            fs::create_dir_all(&state).unwrap();
+        } else {
+            make_state_tree(&state);
+            fs::remove_dir(state.join("evidence")).unwrap();
+        }
+        write_link(&app, "../forge-app", "../forge-app/.forge-method");
+        let before = tree_snapshot(&parent.path);
+
+        let (exit_ok, env) = run_start(&app);
+
+        assert!(!exit_ok, "{label} linked state must fail closed");
+        assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+        assert_eq!(env["data"]["state_loss"]["cause"], "incomplete_state");
+        assert_eq!(tree_snapshot(&parent.path), before);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_sidecar_symlink_substitution_fails_closed_without_mutation() {
+    use std::os::unix::fs::symlink;
+
+    let parent = FreshParent::new("sidecar-symlink");
+    let app = parent.path.join("app");
+    let foreign_sidecar = parent.path.join("foreign-sidecar");
+    make_state_tree(&foreign_sidecar.join(".forge-method"));
+    fs::create_dir_all(&app).unwrap();
+    symlink(&foreign_sidecar, parent.path.join("forge-app")).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(!exit_ok);
+    assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+    assert!(env["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("symbolic link")));
+    assert_eq!(env["data"]["state_loss"]["cause"], "symlink_substitution");
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+#[cfg(unix)]
+#[test]
+fn linked_ancestor_symlink_substitution_fails_closed_without_mutation() {
+    use std::os::unix::fs::symlink;
+
+    let parent = FreshParent::new("ancestor-symlink");
+    let app = parent.path.join("app");
+    let real_sidecar = parent.path.join("real").join("forge-app");
+    make_state_tree(&real_sidecar.join(".forge-method"));
+    fs::create_dir_all(&app).unwrap();
+    symlink(parent.path.join("real"), parent.path.join("alias")).unwrap();
+    write_link(
+        &app,
+        "../alias/forge-app",
+        "../alias/forge-app/.forge-method",
+    );
+    let before = tree_snapshot(&parent.path);
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(!exit_ok);
+    assert_eq!(env["data"]["state_loss"]["cause"], "symlink_substitution");
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_ledger_symlink_substitution_fails_closed_without_mutation() {
+    use std::os::unix::fs::symlink;
+
+    let parent = FreshParent::new("ledger-symlink");
+    let app = parent.path.join("app");
+    let state = parent.path.join("forge-app").join(".forge-method");
+    make_state_tree(&state);
+    fs::create_dir_all(&app).unwrap();
+    fs::remove_file(state.join("ledger.ndjson")).unwrap();
+    fs::write(parent.path.join("foreign-ledger.ndjson"), b"").unwrap();
+    symlink(
+        parent.path.join("foreign-ledger.ndjson"),
+        state.join("ledger.ndjson"),
+    )
+    .unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(!exit_ok);
+    assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+    assert!(env["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("symbolic link")));
+    assert_eq!(env["data"]["state_loss"]["cause"], "symlink_substitution");
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+#[cfg(unix)]
+#[test]
+fn linked_permission_denial_fails_closed_without_normalization() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let parent = FreshParent::new("permission-denied");
+    let app = parent.path.join("app");
+    let state = parent.path.join("forge-app").join(".forge-method");
+    let ledger = state.join("ledger.ndjson");
+    fs::create_dir_all(&app).unwrap();
+    make_state_tree(&state);
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+    let before = tree_snapshot(&parent.path);
+    fs::set_permissions(&ledger, fs::Permissions::from_mode(0o000)).unwrap();
+    if fs::File::open(&ledger).is_ok() {
+        // Elevated principals can bypass mode bits, so no denial exists to test.
+        fs::set_permissions(&ledger, fs::Permissions::from_mode(0o644)).unwrap();
+        return;
+    }
+
+    let (exit_ok, env) = run_start(&app);
+
+    fs::set_permissions(&ledger, fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(!exit_ok);
+    assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+    assert_eq!(env["data"]["state_loss"]["cause"], "permission_denied");
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+
+#[test]
+fn malformed_link_corruption_is_distinct_from_state_loss() {
+    let parent = FreshParent::new("malformed-link");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+    fs::write(app.join(PROJECT_LINK_FILE_NAME), "schema_version: [\n").unwrap();
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(!exit_ok);
+    assert_eq!(env["ok"], false);
+    assert!(
+        env.get("data").is_none(),
+        "corruption has no state-loss data"
+    );
+    assert!(!env["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("possible durable-state loss"));
+}
+#[test]
+fn human_output_distinguishes_corruption_and_clean_bootstrap() {
+    let clean_parent = FreshParent::new("clean-text");
+    let clean_app = clean_parent.path.join("app");
+    fs::create_dir_all(&clean_app).unwrap();
+    let clean = run_start_text(&clean_app);
+    assert!(clean.status.success());
+    assert_eq!(String::from_utf8_lossy(&clean.stdout).trim(), "start: ok");
+    assert!(clean.stderr.is_empty());
+
+    let corrupt_parent = FreshParent::new("corrupt-text");
+    let corrupt_app = corrupt_parent.path.join("app");
+    fs::create_dir_all(&corrupt_app).unwrap();
+    fs::write(
+        corrupt_app.join(PROJECT_LINK_FILE_NAME),
+        "schema_version: [\n",
+    )
+    .unwrap();
+    let corrupt = run_start_text(&corrupt_app);
+    assert!(!corrupt.status.success());
+    assert!(corrupt.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&corrupt.stderr);
+    assert!(stderr.contains("failed"));
+    assert!(!stderr.contains("possible durable-state loss"));
+}
+
+#[test]
+fn state_two_cross_project_link_fails_closed_not_silent_overwrite() {
+    let parent = FreshParent::new("no-sidecar-cross-project");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+    fs::write(
+        app.join(PROJECT_LINK_FILE_NAME),
+        "schema_version: forge_project_link_v1\n\
+         project_id: other-project\n\
+         sidecar_root: ../forge-other-project\n\
+         state_root: ../forge-other-project/.forge-method\n",
+    )
+    .unwrap();
+    let before = tree_snapshot(&parent.path);
 
     let (exit_ok, env) = run_start(&app);
 
     assert!(
         !exit_ok,
-        "mismatched link + missing sidecar must fail closed, not overwrite"
+        "cross-project link plus missing state must fail closed"
     );
     assert_eq!(env["ok"], false);
-    assert_eq!(
-        env["exit_reason"], "invalid_decision_shape",
-        "mismatch should surface as invalid_decision_shape, got {:?}",
-        env["exit_reason"]
-    );
+    assert_eq!(env["exit_reason"], "env_config");
+    assert_eq!(env["data"]["state"], "link_present_no_sidecar");
+    assert_eq!(env["data"]["state_loss"]["project_id"], "other-project");
+    assert_eq!(tree_snapshot(&parent.path), before);
 }
 
 #[test]
@@ -361,6 +647,27 @@ fn state_five_preview_run_keeps_workflow_authority() {
         }),
         "state 5 should retain preview evidence only as compatibility material"
     );
+}
+
+#[test]
+fn clean_bootstrap_second_start_is_idempotent_and_nonmutating() {
+    let parent = FreshParent::new("clean-bootstrap-twice");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).unwrap();
+
+    let (first_ok, first) = run_start(&app);
+    let after_bootstrap = tree_snapshot(&parent.path);
+    let (second_ok, second) = run_start(&app);
+
+    assert!(first_ok && second_ok);
+    assert_eq!(first["data"]["state"], second["data"]["state"]);
+    assert_eq!(
+        first["data"]["actions_performed"],
+        serde_json::json!(["initialized"])
+    );
+    assert!(second["data"].get("actions_performed").is_none());
+    assert!(second["data"].get("state_loss").is_none());
+    assert_eq!(tree_snapshot(&parent.path), after_bootstrap);
 }
 
 #[test]

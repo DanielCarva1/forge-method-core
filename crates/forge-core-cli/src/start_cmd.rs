@@ -2,34 +2,32 @@
 //!
 //! `start` advances a Consumer Project Repo from an empty state to the point
 //! where agent-native workflow governance can take over. It inspects the real
-//! project state, creates or repairs the canonical Project Link/sidecar when
-//! required, preserves one of five compatibility [`BootstrapState`] wire
-//! values, and emits a structured next step. Every healthy sidecar hands off
-//! to idempotent `workflow init`, followed by `workflow next`; legacy operation
-//! material is secondary compatibility context only.
+//! project state, creates the canonical Project Link/sidecar only when no link
+//! exists, preserves one of five compatibility [`BootstrapState`] wire values,
+//! and emits a structured next step. A linked missing or incomplete sidecar is
+//! possible durable-state loss and fails closed without mutation.
 //!
 //! ## Authority boundary
 //!
-//! Bootstrap mutation is confined to the canonical Project Link and sibling
-//! sidecar lifecycle implemented by `project init`. `start` does not choose a
-//! workflow, phase, bundle, target, evidence result, or completion. Those are
-//! derived later by the workflow kernel and its ledger.
+//! Bootstrap mutation is confined to first initialization through `project init`.
+//! Once a Project Link exists, `start` never recreates linked state. It does not
+//! choose a workflow, phase, bundle, target, evidence result, or completion.
 //!
 //! ## State machine
 //!
-//! The five states are documented as domain terms. Each maps to one concrete
-//! next step:
+//! The five states are documented as domain terms. Each maps to one outcome:
 //!
-//! | state                         | next step                                  |
+//! | state                         | outcome                                    |
 //! |-------------------------------|--------------------------------------------|
 //! | `no_link`                     | bootstrap, then `workflow init --root …`   |
-//! | `link_present_no_sidecar`     | repair, then `workflow init --root …`      |
+//! | `link_present_no_sidecar`     | fail closed; inspect/restore durable state |
 //! | `sidecar_ready_no_contract`   | `workflow init --root …`                   |
 //! | `contract_present`            | `workflow init --root …`                   |
 //! | `preview_run`                 | `workflow init --root …`                   |
 //!
-//! `start` recomputes from the real project on every call, so re-running
-//! after an advance jumps to the correct state.
+//! `start` recomputes from the real project on every call. Re-running after a
+//! successful advance jumps to the correct state; re-running after state loss
+//! remains nonmutating until an explicit recovery flow exists.
 //!
 //! ## Anti-script-de-novela (G1)
 //!
@@ -43,8 +41,12 @@
 
 use std::path::{Path, PathBuf};
 
+use sha2::{Digest as _, Sha256};
+
 use forge_core_command_surface::COMMAND_START;
-use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
+use forge_core_contracts::{
+    CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION, PROJECT_LINK_SCHEMA_VERSION,
+};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
@@ -163,9 +165,9 @@ fn start_parse_error_with_usage(error: &StartParseError) -> String {
     format!("{}\n\nusage:\n  {}", error, start_usage_line())
 }
 
-/// The `start` success payload. Carries the diagnosed state, the resolved
-/// project context (when present), and the concrete next step for the agent
-/// to act on or surface to the human.
+/// The structured `start` payload. Successful bootstrap/routing carries it as
+/// normal data; linked state loss carries it as rejection data so agents can
+/// branch on [`BootstrapState`] without parsing diagnostics.
 ///
 /// Only `Serialize` is derived: this is an output payload emitted to stdout,
 /// never deserialized back (mirrors `ProjectResolvePayload` / `StatusPayload`).
@@ -193,11 +195,51 @@ pub struct StartPayload {
     /// nothing valid to resolve yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<ProjectContext>,
-    /// Bootstrap actions `start` performed on this call (e.g.
-    /// `["initialized"]`, `["repaired_sidecar"]`). Empty when the call only
-    /// routed (no write). Forward-compatible: omitted from JSON when empty.
+    /// Typed identity/status projection present only for linked state loss.
+    /// It intentionally carries no secret or host-keystore paths.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_loss: Option<StateLossStatus>,
+    /// Bootstrap actions `start` performed on this call (currently only
+    /// `["initialized"]`). Empty when the call is read-only or rejected.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions_performed: Vec<String>,
+}
+
+/// Machine-routable linked-state-loss status. Release identity is explicitly
+/// unavailable when the state that owns it cannot be read; callers must not
+/// substitute the currently running binary release.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct StateLossStatus {
+    pub kind: StateLossKind,
+    pub cause: StateLossCause,
+    pub project_id: String,
+    pub project_link_schema_version: String,
+    pub project_link_sha256: Option<String>,
+    pub workflow_release_id: Option<String>,
+    pub workflow_release_status: StateLossReleaseStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateLossKind {
+    LinkedStateUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateLossCause {
+    MissingSidecar,
+    MissingStateRoot,
+    IncompleteState,
+    SymlinkSubstitution,
+    PermissionDenied,
+    Uninspectable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateLossReleaseStatus {
+    UnavailableUntrustedState,
 }
 
 /// The five bootstrap states a Consumer Project Repo can be in along the path
@@ -209,7 +251,7 @@ pub struct StartPayload {
 pub enum BootstrapState {
     /// No Project Link present.
     NoLink,
-    /// Link exists but the sidecar/state tree does not.
+    /// Link exists but linked sidecar/state authority is unavailable or incomplete.
     LinkPresentNoSidecar,
     /// State tree is healthy but no operation spec exists yet.
     SidecarReadyNoContract,
@@ -483,59 +525,249 @@ pub fn run_start(root: &Path) -> CliEnvelope<StartPayload> {
 }
 
 /// Variant of [`run_start`] that preserves an optional host-supplied agent id
-/// in the bootstrap payload. `start` is the single-command bootstrap entry
-/// point: on a fresh repo it creates the Project Link + sidecar; on a repo
-/// with a broken/missing sidecar it repairs it; on a healthy in-progress repo
-/// it routes to discovery/guide.
+/// in the bootstrap payload. On a fresh repo it creates the Project Link and
+/// sidecar. Once a link exists, missing or incomplete linked state fails closed
+/// as possible durable-state loss and is never recreated automatically.
 #[must_use]
 pub fn run_start_with_agent(root: &Path, agent_id: Option<String>) -> CliEnvelope<StartPayload> {
     let resolved = match resolve_project(root) {
         Ok(payload) => payload,
         Err(ProjectResolveError::MissingProjectLink { .. }) => {
-            // Fresh repo: no `.forge-method.yaml`. `start` bootstraps it now
-            // rather than recommending a separate `project init` step, so the
-            // agent gets a ready project in one command.
-            return bootstrap_and_finish(root, agent_id, false);
+            // Fresh repo: no durable link claims prior initialization.
+            return bootstrap_and_finish(root, agent_id);
         }
         Err(err) => {
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
         }
     };
 
-    // Link present. If the sidecar is missing, `start` repairs it (idempotent
-    // `init_project` re-creates the state tree when the link points at the
-    // canonical default). A link pointing elsewhere + missing sidecar yields
-    // `ExistingProjectLinkMismatch`, surfaced as an error rather than silently
-    // overwritten.
-    if !resolved.state_exists {
-        return bootstrap_and_finish(root, agent_id, true);
+    if let Some((cause, detail)) = linked_state_loss_detail(&resolved) {
+        return state_loss_envelope(&resolved, root, agent_id, cause, &detail);
     }
 
     finish_classified(&resolved, root, agent_id, Vec::new())
 }
 
-/// Run `init_project` (fresh or repair), seed the authoritative `state.yaml`
-/// with the funnel entry-point phase when newly initialized, then re-resolve
-/// and classify the post-action state. `is_repair` distinguishes the
-/// `repaired_sidecar` action label from `initialized`.
-fn bootstrap_and_finish(
-    root: &Path,
+fn linked_state_loss_detail(resolved: &ProjectResolvePayload) -> Option<(StateLossCause, String)> {
+    if let Some(link_path) = resolved.link_path.as_deref() {
+        if let Some(issue) = linked_entry_issue(
+            Path::new(link_path),
+            "Project Link",
+            false,
+            StateLossCause::Uninspectable,
+        ) {
+            return Some(issue);
+        }
+    }
+    let sidecar_root = Path::new(&resolved.sidecar_root);
+    if let Some(issue) = linked_entry_issue(
+        sidecar_root,
+        "linked sidecar root",
+        true,
+        StateLossCause::MissingSidecar,
+    ) {
+        return Some(issue);
+    }
+
+    let state_root = Path::new(&resolved.state_root);
+    if let Some(issue) = linked_entry_issue(
+        state_root,
+        "linked state root",
+        true,
+        StateLossCause::MissingStateRoot,
+    ) {
+        return Some(issue);
+    }
+    // These are the base markers created by `project init`. Workflow-specific
+    // ledgers are intentionally not required here: before the first
+    // `workflow init` their absence is legitimate and indistinguishable from
+    // later wholesale deletion without an external backup/anchor. C2 backup
+    // stories own that complete-authority detection boundary.
+    for relative in [
+        "artifacts",
+        "claims-active",
+        "evidence",
+        "handoffs/expired-claims",
+        "index",
+        "locks",
+        "traces",
+        "wal",
+    ] {
+        let label = format!("required {relative} state directory");
+        if let Some(issue) = linked_entry_issue(
+            &state_root.join(relative),
+            &label,
+            true,
+            StateLossCause::IncompleteState,
+        ) {
+            return Some(issue);
+        }
+    }
+    for relative in [
+        "ledger.ndjson",
+        "wal/replay.fmr1",
+        "replay-wal.manifest.json",
+    ] {
+        let label = format!("required {relative} authority marker");
+        if let Some(issue) = linked_entry_issue(
+            &state_root.join(relative),
+            &label,
+            false,
+            StateLossCause::IncompleteState,
+        ) {
+            return Some(issue);
+        }
+    }
+    None
+}
+
+fn linked_entry_issue(
+    path: &Path,
+    label: &str,
+    expect_directory: bool,
+    missing_cause: StateLossCause,
+) -> Option<(StateLossCause, String)> {
+    if let Some(issue) = linked_path_component_issue(path, label) {
+        return Some(issue);
+    }
+
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+            return Some((missing_cause, format!("the {label} does not exist")));
+        }
+        Err(source) => return Some(linked_inspection_error(label, &source)),
+    };
+    if metadata.file_type().is_symlink() {
+        return Some((
+            StateLossCause::SymlinkSubstitution,
+            format!("the {label} is a symbolic link"),
+        ));
+    }
+    if expect_directory && !metadata.is_dir() {
+        return Some((
+            StateLossCause::IncompleteState,
+            format!("the {label} is not a directory"),
+        ));
+    }
+    if !expect_directory && !metadata.is_file() {
+        return Some((
+            StateLossCause::IncompleteState,
+            format!("the {label} is not a regular file"),
+        ));
+    }
+
+    let access_result = if expect_directory {
+        std::fs::read_dir(path).map(|_| ())
+    } else {
+        std::fs::File::open(path).map(|_| ())
+    };
+    access_result
+        .err()
+        .map(|source| linked_inspection_error(label, &source))
+}
+
+fn linked_path_component_issue(path: &Path, label: &str) -> Option<(StateLossCause, String)> {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if matches!(
+            component,
+            std::path::Component::Prefix(_) | std::path::Component::RootDir
+        ) {
+            continue;
+        }
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Some((
+                    StateLossCause::SymlinkSubstitution,
+                    format!("the {label} path contains a symbolic link"),
+                ));
+            }
+            Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(source) => return Some(linked_inspection_error(label, &source)),
+        }
+    }
+    None
+}
+
+fn linked_inspection_error(label: &str, source: &std::io::Error) -> (StateLossCause, String) {
+    if source.kind() == std::io::ErrorKind::PermissionDenied {
+        (
+            StateLossCause::PermissionDenied,
+            format!("the {label} cannot be inspected (permission denied)"),
+        )
+    } else {
+        (
+            StateLossCause::Uninspectable,
+            format!("the {label} cannot be inspected ({:?})", source.kind()),
+        )
+    }
+}
+
+fn state_loss_envelope(
+    resolved: &ProjectResolvePayload,
+    project_root: &Path,
     agent_id: Option<String>,
-    is_repair: bool,
+    cause: StateLossCause,
+    detail: &str,
 ) -> CliEnvelope<StartPayload> {
+    let project_link_sha256 = resolved
+        .link_path
+        .as_deref()
+        .and_then(|path| std::fs::read(path).ok())
+        .map(|bytes| format!("{:x}", Sha256::digest(bytes)));
+    let reason = format!(
+        "Project Link proves prior initialization, but {detail}; this is possible durable-state loss. Automatic recreation is forbidden. Inspect the link and restore a verified backup before proceeding."
+    );
+    let mut references = Vec::new();
+    if let Some(link_path) = resolved.link_path.clone() {
+        references.push(link_path);
+    }
+    references.push(resolved.state_root.clone());
+    let payload = StartPayload {
+        schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+        agent_id,
+        state: BootstrapState::LinkPresentNoSidecar,
+        reason: reason.clone(),
+        next_step: Some(command_next_step_with_references(
+            vec![
+                "forge-core".to_string(),
+                "project".to_string(),
+                "resolve".to_string(),
+                "--root".to_string(),
+                project_root.display().to_string(),
+            ],
+            "Inspect the Project Link and linked state without mutating either.",
+            references,
+        )),
+        project: Some(ProjectContext::from(resolved.clone())),
+        state_loss: Some(StateLossStatus {
+            kind: StateLossKind::LinkedStateUnavailable,
+            cause,
+            project_id: resolved.project_id.clone(),
+            project_link_schema_version: PROJECT_LINK_SCHEMA_VERSION.to_string(),
+            project_link_sha256,
+            workflow_release_id: None,
+            workflow_release_status: StateLossReleaseStatus::UnavailableUntrustedState,
+        }),
+        actions_performed: Vec::new(),
+    };
+    CliEnvelope::reject("start", ExitReason::EnvConfig, reason, payload)
+}
+
+/// Run first initialization, seed the authoritative compatibility state, then
+/// re-resolve and classify the post-action state.
+fn bootstrap_and_finish(root: &Path, agent_id: Option<String>) -> CliEnvelope<StartPayload> {
     match init_project(root, None, None, None) {
         Ok(init_payload) => {
-            let action = if is_repair {
-                "repaired_sidecar"
-            } else if init_payload.status == ProjectInitStatus::Initialized {
+            let action = if init_payload.status == ProjectInitStatus::Initialized {
                 "initialized"
             } else {
                 "already_initialized"
             };
-            // Seed the authoritative phase record so the runtime (guide,
-            // PhaseGate) does not have to trust the host's --phase string.
-            // Best-effort: a failure to seed does not block bootstrap; the
-            // phase stays None and callers fall back to 1-discovery.
+            // Best-effort compatibility seed; workflow authority remains in its ledger.
             if let Err(err) =
                 write_initial_project_state(std::path::Path::new(&init_payload.state_root))
             {
@@ -573,48 +805,18 @@ fn finish_classified(
             reason,
             next_step,
             project: Some(project),
+            state_loss: None,
             actions_performed,
         },
     )
 }
 
-/// Classify the bootstrap state from the resolved project. The ordering is
-/// significant: we walk from the most-progressed signal downwards, so a
-/// project that has both a state tree and a preview is reported as
-/// `preview_run`, not `contract_present`.
-///
-/// `no_link` is handled by the caller (`resolve_project` fails before we get
-/// here, so the only reachable states in this function assume a link
-/// resolves). `link_present_no_sidecar` is reachable when the link parses
-/// but `state_exists == false`.
+/// Classify a resolved healthy project. State-loss classification is handled
+/// before this function so healthy routing cannot recreate or normalize it.
 fn classify(
     resolved: &ProjectResolvePayload,
     project_root: &Path,
 ) -> (BootstrapState, String, Option<NextStep>) {
-    // State tree missing despite a (parseable) link: diagnose before progressing.
-    if !resolved.state_exists {
-        return (
-            BootstrapState::LinkPresentNoSidecar,
-            format!(
-                "Project Link exists at {} but the state root {} does not; \
-                 the sidecar tree is missing or has been removed.",
-                resolved.link_path.as_deref().unwrap_or("<unresolved link>"),
-                resolved.state_root
-            ),
-            Some(command_next_step_with_references(
-                vec![
-                    "forge-core".to_string(),
-                    "project".to_string(),
-                    "resolve".to_string(),
-                    "--root".to_string(),
-                    project_root.display().to_string(),
-                ],
-                "Diagnose the broken Project Link / sidecar before proceeding.",
-                vec![resolved.state_root.clone()],
-            )),
-        );
-    }
-
     // State tree healthy: look for compatibility evidence of progress on top
     // of it while keeping the same agent-native workflow handoff in every
     // healthy state. Preview and operation-contract signals affect only the
@@ -781,10 +983,20 @@ mod tests {
             "artifacts",
             "claims-active",
             "evidence",
+            "handoffs/expired-claims",
+            "index",
+            "locks",
             "traces",
             "wal",
         ] {
             fs::create_dir_all(state.join(d)).unwrap();
+        }
+        for f in [
+            "ledger.ndjson",
+            "wal/replay.fmr1",
+            "replay-wal.manifest.json",
+        ] {
+            fs::write(state.join(f), b"").unwrap();
         }
     }
 
@@ -1098,34 +1310,52 @@ mod tests {
     }
 
     #[test]
-    fn link_present_no_sidecar_repairs_the_sidecar() {
-        // State 2: link parses but state root does not exist. `start` now
-        // repairs the sidecar (idempotent `init_project` re-creates the state
-        // tree when the link points at the canonical default), then reports
-        // the post-repair state.
+    fn link_present_no_sidecar_fails_closed_without_recreating_state() {
         let parent = temp_root("no-sidecar-parent");
         let app = parent.join("app");
+        let sidecar = parent.join("forge-app");
         fs::create_dir_all(&app).unwrap();
-        // sidecar dir intentionally NOT created.
         write_link(&app, "../forge-app", "../forge-app/.forge-method");
+        let link_path = app.join(PROJECT_LINK_FILE_NAME);
+        let link_before = fs::read(&link_path).unwrap();
 
         let env = run_start(&app);
-        let payload = env.data.as_ref().expect("payload on ok");
-        assert!(env.ok, "state 2 should repair and return ok");
-        assert_eq!(
-            payload.state,
-            BootstrapState::SidecarReadyNoContract,
-            "state 2 should repair the sidecar and advance to sidecar_ready_no_contract"
+        let payload = env.data.as_ref().expect("typed state-loss payload");
+        assert!(!env.ok, "linked missing state must fail closed");
+        assert_eq!(env.exit_reason.0, ExitReason::EnvConfig.as_str());
+        assert_eq!(payload.state, BootstrapState::LinkPresentNoSidecar);
+        assert!(payload.actions_performed.is_empty());
+        assert!(payload.reason.contains("possible durable-state loss"));
+        assert!(payload.reason.contains("Automatic recreation is forbidden"));
+        assert_eq!(fs::read(&link_path).unwrap(), link_before);
+        assert!(
+            !sidecar.exists(),
+            "start must not recreate linked sidecar state"
         );
-        assert_eq!(
-            payload.actions_performed,
-            vec!["repaired_sidecar".to_string()],
-            "state 2 should report it repaired the sidecar"
-        );
-        assert_agent_native_healthy_next_step(
-            payload.next_step.as_ref().expect("workflow handoff"),
-            &app,
-        );
+    }
+
+    #[test]
+    fn linked_empty_or_partial_state_fails_closed_without_repair() {
+        for label in ["empty", "partial"] {
+            let parent = temp_root(&format!("{label}-sidecar-parent"));
+            let app = parent.join("app");
+            let state = parent.join("forge-app").join(".forge-method");
+            fs::create_dir_all(&app).unwrap();
+            if label == "empty" {
+                fs::create_dir_all(&state).unwrap();
+            } else {
+                make_state_tree(&state);
+                fs::remove_dir(state.join("evidence")).unwrap();
+            }
+            write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+            let env = run_start(&app);
+            let payload = env.data.as_ref().expect("typed state-loss payload");
+            assert!(!env.ok, "{label} linked state must fail closed");
+            assert_eq!(payload.state, BootstrapState::LinkPresentNoSidecar);
+            assert!(payload.actions_performed.is_empty());
+            assert!(!state.join("evidence").exists());
+        }
     }
 
     #[test]
