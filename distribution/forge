@@ -9,17 +9,81 @@
 #     tar xzf forge-core-<arch>-<os>.tar.gz
 #     install -m 0755 forge forge-core ~/.local/bin/
 #
-# The wrapper resolves the directory of the real binary (handles symlinks via
-# `readlink` when available, falls back to `$0` dirname) so it keeps working
-# whether invoked directly, through a symlink, or via PATH lookup.
+# The wrapper follows invocation symlinks without relying on non-POSIX
+# `readlink` extensions.  The resolved wrapper directory is made physical
+# with `cd -P`, and the packaged binary must be a non-symlink regular file in
+# that directory.  Thus a PATH entry, relocation, or wrapper symlink cannot
+# redirect execution to a different `forge-core`.
 set -eu
 
-# Resolve the directory containing this script, following one level of symlink.
-self="$0"
-if command -v readlink >/dev/null 2>&1; then
-    link=$(readlink -f "$self" 2>/dev/null || true)
-    [ -n "$link" ] && self="$link"
-fi
-bin_dir=$(cd "$(dirname "$self")" && pwd)
+fail() {
+    printf '%s\n' "forge wrapper: $*" >&2
+    exit 127
+}
 
-exec "$bin_dir/forge-core" "$@"
+# A shell may pass only the command name in $0 when PATH lookup was used.
+# Locate that name with IFS set to colon so spaces and embedded newlines stay
+# in one pathname; disabling globbing prevents PATH characters from expanding.
+self=$0
+case $self in
+    */*) ;;
+    *)
+        old_ifs=$IFS
+        IFS=:
+        set -f
+        found=
+        for entry in $PATH; do
+            [ -n "$entry" ] || entry=.
+            candidate=$entry/$self
+            if [ -f "$candidate" ] || [ -L "$candidate" ]; then
+                self=$candidate
+                found=1
+                break
+            fi
+        done
+        IFS=$old_ifs
+        [ -n "$found" ] || fail "cannot locate wrapper $self through PATH"
+        ;;
+esac
+
+# Resolve every invocation symlink, including relative targets.  The bound is
+# deliberate: a loop fails closed instead of hanging.  A sentinel preserves
+# trailing newlines; the two suffix removals discard only output delimiters.
+symlink_count=0
+while [ -L "$self" ]; do
+    symlink_count=$((symlink_count + 1))
+    [ "$symlink_count" -le 40 ] || fail "symlink loop while resolving $0"
+    if ! target=$(readlink "$self" && printf '\001'); then
+        fail "cannot read invocation symlink $self"
+    fi
+    target=${target%?}
+    target=${target%?}
+    case $target in
+        /*) self=$target ;;
+        *)
+            case $self in
+                */*) base=${self%/*}; [ -n "$base" ] || base=/ ;;
+                *) base=. ;;
+            esac
+            self=$base/$target
+            ;;
+    esac
+done
+
+[ -f "$self" ] && [ ! -L "$self" ] || fail "wrapper target is not a regular file: $self"
+case $self in
+    */*) bin_dir=${self%/*}; [ -n "$bin_dir" ] || bin_dir=/ ;;
+    *) bin_dir=. ;;
+esac
+if ! bin_dir=$(CDPATH= cd -P "$bin_dir" 2>/dev/null && pwd -P && printf '\001'); then
+    fail "cannot resolve package directory for $self"
+fi
+bin_dir=${bin_dir%?}
+bin_dir=${bin_dir%?}
+
+binary=$bin_dir/forge-core
+if [ ! -f "$binary" ] || [ -L "$binary" ] || [ ! -x "$binary" ]; then
+    fail "missing or unsafe packaged binary: $binary"
+fi
+
+exec "$binary" "$@"

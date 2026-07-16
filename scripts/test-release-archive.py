@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib.util
+import os
+import shutil
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -164,6 +168,122 @@ class ReleaseArchiveTests(unittest.TestCase):
             ):
                 self.verify(args)
 
+
+    def wrapper_fixture(self, root: Path) -> tuple[Path, Path]:
+        package = root / "relocated package\nwith spaces\n"
+        package.mkdir()
+        wrapper = package / "forge"
+        shutil.copyfile(SCRIPTS.parent / "distribution/forge", wrapper)
+        wrapper.chmod(0o755)
+        binary = package / "forge-core"
+        binary.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' real-core\n"
+            "printf '%s\\n' \"$@\"\n",
+            encoding="utf-8",
+        )
+        binary.chmod(0o755)
+        return package, wrapper
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_resolves_relocated_relative_newline_path_and_path_shadow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            shadow = root / "path shadow"
+            shadow.mkdir()
+            shadow_binary = shadow / "forge-core"
+            shadow_binary.write_text(
+                "#!/bin/sh\n" "printf '%s\\n' shadow-core\n", encoding="utf-8"
+            )
+            shadow_binary.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join(
+                [str(shadow), environment.get("PATH", "")]
+            )
+            relative_wrapper = os.path.relpath(wrapper, package.parent)
+            completed = subprocess.run(
+                [relative_wrapper, "argument with spaces"],
+                cwd=package.parent,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "real-core\nargument with spaces\n")
+            self.assertEqual(completed.stderr, "")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_follows_relative_symlink_but_rejects_binary_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            aliases = root / "aliases\nwith spaces"
+            aliases.mkdir()
+            alias = aliases / "forge"
+            alias.symlink_to(os.path.relpath(wrapper, aliases))
+            followed = subprocess.run(
+                [str(alias), "via-symlink"],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(followed.returncode, 0, followed.stderr)
+            self.assertEqual(followed.stdout, "real-core\nvia-symlink\n")
+
+            outside = root / "outside-core"
+            outside.write_text("#!/bin/sh\nprintf '%s\\n' escaped\n", encoding="utf-8")
+            outside.chmod(0o755)
+            binary = package / "forge-core"
+            binary.unlink()
+            binary.symlink_to(outside)
+            rejected = subprocess.run(
+                [str(wrapper)], text=True, capture_output=True, check=False, timeout=5
+            )
+            self.assertEqual(rejected.returncode, 127)
+            self.assertIn("missing or unsafe packaged binary", rejected.stderr)
+            self.assertNotIn("escaped", rejected.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_fails_closed_for_missing_binary_and_symlink_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, wrapper = self.wrapper_fixture(root)
+            (wrapper.parent / "forge-core").unlink()
+            missing = subprocess.run(
+                [str(wrapper)], text=True, capture_output=True, check=False, timeout=5
+            )
+            self.assertEqual(missing.returncode, 127)
+            self.assertIn("missing or unsafe packaged binary", missing.stderr)
+
+            loop_dir = root / "symlink loop"
+            loop_dir.mkdir()
+            first = loop_dir / "first"
+            second = loop_dir / "second"
+            first.symlink_to(second.name)
+            second.symlink_to(first.name)
+            try:
+                loop = subprocess.run(
+                    [str(first)],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=5,
+                )
+            except OSError as error:
+                # The kernel may reject a top-level symlink loop before /bin/sh
+                # can enter the wrapper; that is also a fail-closed result.
+                self.assertEqual(error.errno, errno.ELOOP)
+            else:
+                self.assertEqual(loop.returncode, 127)
+                self.assertIn("symlink loop", loop.stderr)
+
+    def test_wrapper_does_not_use_gnu_readlink_f(self) -> None:
+        source = (SCRIPTS.parent / "distribution/forge").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"readlink\s+-f")
 
 if __name__ == "__main__":
     unittest.main()
