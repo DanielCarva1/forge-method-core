@@ -250,7 +250,8 @@ pub(crate) fn apply_origin_envelope(
         Ok(verified) => adapter.apply_verified_broker_action(verified, now),
         Err(
             current_error @ (WorkflowBrokerError::FreshnessOutOfBounds
-            | WorkflowBrokerError::IssuerRevoked(_)),
+            | WorkflowBrokerError::IssuerRevoked(_)
+            | WorkflowBrokerError::HistoricalEventNotAdmissible),
         ) => {
             let historical = registry
                 .verify_event_for_recovery(envelope, &adapter.binding().project_id)

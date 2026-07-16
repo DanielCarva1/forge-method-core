@@ -3,10 +3,14 @@
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    workflow_broker_event_signing_bytes, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
-    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION,
 };
-use forge_core_contracts::{PrincipalId, StableId, WorkflowHumanIntentRevision};
+use forge_core_contracts::{
+    PrincipalId, RuntimeKind, StableId, WorkflowBrokerHostInteractionKind,
+    WorkflowBrokerNativeHostProvenance, WorkflowHumanIntentRevision,
+};
 use forge_core_decisions::workflow_human_intent_digest;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -88,11 +92,34 @@ fn signed_envelope(
         project_id: StableId(project_id.to_owned()),
         action_packet_digest: packet_digest.to_owned(),
         semantic_input,
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.cli-e2e".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+            host_event_ref: format!("host-event-{nonce}"),
+            host_session_ref: "host-session-cli-e2e-0001".to_owned(),
+            host_interaction_ref: format!("host-interaction-{nonce}"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }),
         issued_at_unix,
         expires_at_unix,
         nonce: nonce.to_owned(),
         signature: String::new(),
     };
+    let provenance = envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
     let bytes = workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
     envelope.signature = hex(&key.sign(&bytes).to_bytes());
     envelope
@@ -362,7 +389,7 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
         audience,
         project_id,
         next_packet_digest,
-        semantic_input,
+        semantic_input.clone(),
         stale_now - 1_000,
         stale_now - 900,
         "human-intent-e2e-stale-event-0003",
@@ -382,6 +409,49 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
         .as_str()
         .expect("stale error")
         .contains("workflow action rejected"));
+
+    let legacy_now = now();
+    let mut legacy = signed_envelope(
+        &key,
+        audience,
+        project_id,
+        next_packet_digest,
+        semantic_input,
+        legacy_now,
+        legacy_now + 120,
+        "human-intent-e2e-legacy-event-0004",
+    );
+    legacy.schema_version = WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION.to_owned();
+    legacy.native_host_provenance = None;
+    legacy.signature.clear();
+    legacy.signature = hex(&key
+        .sign(&workflow_broker_event_signing_bytes(&legacy).expect("legacy broker signing bytes"))
+        .to_bytes());
+    let legacy_path = write_envelope(&parent, "legacy-intent.json", &legacy);
+    let before_legacy = file_snapshot(&state_root);
+    let legacy_failure = failed(&run(
+        &app_arg,
+        &[
+            "intent",
+            "record",
+            "--origin-envelope-file",
+            &legacy_path.display().to_string(),
+        ],
+    ));
+    let legacy_message = legacy_failure["error"]["message"]
+        .as_str()
+        .expect("legacy recovery error");
+    assert!(
+        legacy_message.contains("workflow action rejected"),
+        "the public CLI must route a valid v0.1 envelope only through historical reconciliation: {legacy_message}"
+    );
+    assert!(!legacy_message
+        .contains("legacy broker events are recovery-only and cannot authorize a new mutation"));
+    assert_eq!(
+        file_snapshot(&state_root),
+        before_legacy,
+        "historical reconciliation without an exact durable companion cannot append"
+    );
     assert_eq!(file_snapshot(&state_root), before_stale);
 
     let _ = fs::remove_dir_all(parent);

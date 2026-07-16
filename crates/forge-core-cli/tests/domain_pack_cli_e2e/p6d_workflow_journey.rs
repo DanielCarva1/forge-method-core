@@ -3,8 +3,10 @@
 
 use super::*;
 use forge_core_authority::{
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
     AttestationInput, CanonicalIntent, PrincipalCredentialStatus, PrincipalRegistryContract,
-    PrincipalRegistryDocument, PrincipalRegistryEntry,
+    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowBrokerEventEnvelope,
+    WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_decisions::{
@@ -13,7 +15,10 @@ use forge_core_decisions::{
     DomainPackCandidateMaterial, DomainPackCapabilityDemand, DomainPackCompatibilityInput,
     DomainPackTrustEvaluationInput, DomainPackTrustSelectedPackage,
 };
-use forge_core_store::sha256_content_hash;
+use forge_core_store::{
+    sha256_content_hash, workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+};
+use forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::process::Output;
@@ -27,6 +32,9 @@ const WORKER_CREDENTIAL: &str = "credential.workflow.p6d-worker";
 const WORKER_TWO_CREDENTIAL: &str = "credential.workflow.p6d-worker-two";
 const RUNTIME_CREDENTIAL: &str = "credential.workflow.p6d-runtime";
 const RUNTIME_TWO_CREDENTIAL: &str = "credential.workflow.p6d-runtime-two";
+const C1_BROKER_ISSUER_ID: &str = "broker.host.human.p6d-c1";
+const C1_BROKER_PRINCIPAL_ID: &str = "principal.human.p6d-c1";
+const C1_BROKER_SEPARATION_DOMAIN: &str = "human-session.p6d-c1";
 const CLI_SUBPROCESS_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn heartbeat(started: Instant, phase: &str) {
@@ -78,6 +86,23 @@ impl ReferenceProject {
 
     fn workflow(&self, subcommand: &str, tail: &[String]) -> Output {
         self.workflow_with_env(subcommand, tail, None)
+    }
+    fn workflow_nested(&self, group: &str, action: &str, tail: &[String]) -> Output {
+        let mut args = vec![
+            "workflow".to_owned(),
+            group.to_owned(),
+            action.to_owned(),
+            "--root".to_owned(),
+            self.app.display().to_string(),
+            "--json".to_owned(),
+        ];
+        args.extend_from_slice(tail);
+        Command::cargo_bin("forge-core")
+            .expect("forge-core binary")
+            .timeout(CLI_SUBPROCESS_TIMEOUT)
+            .args(&args)
+            .output()
+            .expect("fresh nested forge-core process")
     }
 
     fn workflow_with_env(
@@ -1614,6 +1639,94 @@ fn now() -> u64 {
         .as_secs()
 }
 
+// Synthetic key custody exercises only the public protocol and lifecycle ordering;
+// it is not selected-host or human-presence evidence.
+fn install_c1_human_broker(project: &ReferenceProject) -> (SigningKey, String) {
+    let key = SigningKey::from_bytes(&[97_u8; 32]);
+    let public_key = project.inputs.join("c1-human-broker.pub");
+    let ceremony = project.inputs.join("c1-human-broker-ceremony.md");
+    fs::write(&public_key, hex(key.verifying_key().as_bytes())).expect("broker public key");
+    fs::write(
+        &ceremony,
+        "operator enrolled the synthetic P6d C1 protocol-test broker\n",
+    )
+    .expect("broker ceremony");
+    let trusted = ok(
+        &project.workflow_nested(
+            "broker",
+            "trust",
+            &command_args(&[
+                "--issuer-id",
+                C1_BROKER_ISSUER_ID,
+                "--profile",
+                "human",
+                "--public-key-file",
+                &path_arg(&public_key),
+                "--ceremony-ref",
+                "operator://ceremony/p6d-c1",
+                "--ceremony-file",
+                &path_arg(&ceremony),
+            ]),
+        ),
+        "workflow.broker",
+    );
+    (key, required_str(&trusted, "/data/audience").to_owned())
+}
+
+fn signed_c1_broker_envelope(
+    key: &SigningKey,
+    audience: &str,
+    guidance: &Value,
+    packet_digest: String,
+    semantic_input: WorkflowBrokerSemanticInput,
+    nonce: &str,
+) -> WorkflowBrokerEventEnvelope {
+    let issued_at_unix = now();
+    let mut envelope = WorkflowBrokerEventEnvelope {
+        schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+        audience: audience.to_owned(),
+        issuer_id: StableId(C1_BROKER_ISSUER_ID.to_owned()),
+        issuer_profile: WorkflowBrokerIssuerProfile::Human,
+        origin_principal_id: PrincipalId(C1_BROKER_PRINCIPAL_ID.to_owned()),
+        separation_domain: StableId(C1_BROKER_SEPARATION_DOMAIN.to_owned()),
+        event_kind: semantic_input.kind(),
+        project_id: StableId(required_str(guidance, "/data/project_id").to_owned()),
+        action_packet_digest: packet_digest,
+        semantic_input,
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.p6d-c1".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+            host_event_ref: format!("host-event-{nonce}"),
+            host_session_ref: "host-session-p6d-c1-0001".to_owned(),
+            host_interaction_ref: format!("host-interaction-{nonce}"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }),
+        issued_at_unix,
+        expires_at_unix: issued_at_unix + 300,
+        nonce: nonce.to_owned(),
+        signature: String::new(),
+    };
+    let provenance = envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
+    let signing_bytes =
+        workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
+    envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
+    envelope
+}
+
 fn guidance_after_record(guidance: &Value, record: &Value) -> Value {
     let mut current = guidance.clone();
     current["data"]["ledger_head_digest"] = record["data"]["record_digest"].clone();
@@ -2619,6 +2732,7 @@ fn p6d_reference_pack_real_journey() {
         0
     );
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
+    let (c1_broker_key, c1_broker_audience) = install_c1_human_broker(&project);
 
     // Core ordering remains sealed. Progress its three discovery policies
     // honestly before the appended reference discovery policy can run.
@@ -2706,6 +2820,48 @@ fn p6d_reference_pack_real_journey() {
     assert!(reference["data"]["simulation"]["candidate_next_actions"]
         .as_array()
         .is_some_and(|actions| actions.iter().all(|action| action["kind"] != "ask_human")));
+    let c1_intent_packet_digest = reference["data"]["authorization"]["action_packets"]
+        .as_array()
+        .and_then(|packets| {
+            packets.iter().find(|packet| {
+                packet["authorization_kind"] == "intent_revision"
+                    && packet["binding"]["state_version"] == reference["data"]["state_version"]
+                    && packet["binding"]["ledger_head_digest"]
+                        == reference["data"]["ledger_head_digest"]
+            })
+        })
+        .map(|packet| required_str(packet, "/packet_digest").to_owned())
+        .expect("current C1 intent-revision packet");
+    let c1_envelope = signed_c1_broker_envelope(
+        &c1_broker_key,
+        &c1_broker_audience,
+        &reference,
+        c1_intent_packet_digest,
+        WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome: "Deliver a trustworthy single-platform vertical slice".to_owned(),
+            constraints: vec!["Keep authority and replay state fail-closed".to_owned()],
+            preferences: vec!["Prefer the smallest reviewable playable slice".to_owned()],
+            unacceptable_outcomes: vec!["Do not claim unsupported host assurance".to_owned()],
+            uncertainties: vec!["Selected host conformance remains pending".to_owned()],
+            conversation_ref: "conversation://p6d-c1/intent-0001".to_owned(),
+            conversation_digest: sha256_content_hash(b"p6d-c1-intent-conversation-0001"),
+        },
+        "p6d-c1-intent-0001",
+    );
+    let c1_envelope_path = write_typed_json(
+        &project.inputs,
+        "c1-broker-intent-envelope.json",
+        &c1_envelope,
+    );
+    ok(
+        &project.workflow_nested(
+            "action",
+            "apply",
+            &command_args(&["--origin-envelope-file", &path_arg(&c1_envelope_path)]),
+        ),
+        "workflow.action.apply",
+    );
+    let reference = ok(&project.workflow("next", &[]), "workflow.next");
     let discovery_policy =
         reference_policy(&request, "reference.game-development.policy.discovery");
     let reference =
@@ -2733,8 +2889,7 @@ fn p6d_reference_pack_real_journey() {
     assert!(decision["data"]["simulation"]["candidate_next_actions"]
         .as_array()
         .is_some_and(|actions| actions.iter().any(|action| action["kind"] == "ask_human")));
-    assert_fresh_resume(&project, &decision);
-    let _decision_record = authorize_decision(&project, &authority, &decision, discovery_policy);
+    let _decision = authorize_decision(&project, &authority, &decision, discovery_policy);
     let discovery_ready = ok(&project.workflow("next", &[]), "workflow.next");
     assert_fresh_resume(&project, &discovery_ready);
     complete_ready(&project, &discovery_ready);
@@ -2978,6 +3133,12 @@ fn p6d_reference_pack_real_journey() {
         &path_arg(&project.state),
         "--json",
     ]);
+    let workflow_wal = project.state.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+    let replay_wal = project.state.join(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
+    let workflow_before_external_lifecycle =
+        fs::read(&workflow_wal).expect("workflow WAL before external lifecycle advance");
+    let replay_before_external_lifecycle =
+        fs::read(&replay_wal).expect("replay WAL before external lifecycle advance");
     for (subcommand, command) in [
         ("preflight", "domain-pack preflight"),
         ("apply", "domain-pack apply"),
@@ -2995,6 +3156,52 @@ fn p6d_reference_pack_real_journey() {
             );
         }
     }
+    assert_eq!(
+        fs::read(&workflow_wal).expect("workflow WAL after external lifecycle advance"),
+        workflow_before_external_lifecycle,
+        "external Domain Pack lifecycle commit must leave the workflow ledger on its prior effective epoch"
+    );
+    assert_eq!(
+        fs::read(&replay_wal).expect("replay WAL after external lifecycle advance"),
+        replay_before_external_lifecycle,
+        "external Domain Pack lifecycle commit must not touch broker replay state"
+    );
+    ok(
+        &project.workflow_nested(
+            "broker",
+            "revoke",
+            &command_args(&["--issuer-id", C1_BROKER_ISSUER_ID]),
+        ),
+        "workflow.broker",
+    );
+    let historical_retry = project.workflow_nested(
+        "action",
+        "apply",
+        &command_args(&["--origin-envelope-file", &path_arg(&c1_envelope_path)]),
+    );
+    assert!(
+        !historical_retry.status.success(),
+        "historical broker retry must refuse lifecycle/ledger effective-epoch drift"
+    );
+    let historical_retry = envelope(&historical_retry);
+    assert_eq!(historical_retry["ok"], false, "{historical_retry:#}");
+    assert!(
+        historical_retry["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message
+                .contains("verified human authorization does not match current governance state")),
+        "unexpected lifecycle-ahead refusal: {historical_retry:#}"
+    );
+    assert_eq!(
+        fs::read(&workflow_wal).expect("workflow WAL after historical refusal"),
+        workflow_before_external_lifecycle,
+        "historical recovery must not reconcile the lifecycle by appending governance state"
+    );
+    assert_eq!(
+        fs::read(&replay_wal).expect("replay WAL after historical refusal"),
+        replay_before_external_lifecycle,
+        "historical recovery must refuse before replay repair"
+    );
     let degraded_next = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(degraded_next["data"]["status"], "blocked");
     assert_eq!(degraded_next["data"]["domain_pack_degraded"], true);

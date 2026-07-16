@@ -2,16 +2,22 @@
 
 ## System boundary
 
-Forge separates three durable locations:
+Forge separates consumer content, runtime state, cooperative operator material,
+and external trust authority:
 
 ```text
 consumer project/              product source + .forge-method.yaml pointer
 forge-<project>/.forge-method/ runtime ledger, receipts, evidence, generations
-operator-owned location/       trust anchors, principal registries, private keys
+forge-<project>/operator/      cooperative registries and local credential secrets
+external operator/host roots   replay/trust anchors and external broker private keys
 ```
 
-The project is not the authority store. The sidecar is not a secret store.
-Operator material must remain outside both.
+The project is not the authority store. The sidecar contains runtime state and
+cooperative same-principal operator material, so it must be protected and
+backed up as sensitive data. External broker private keys, Domain Pack trust
+roots, and replay anchors remain outside project and state roots. A local
+credential secret in the sidecar is only a cooperative operator proxy; its
+location cannot prove human presence or independent review.
 
 ## Layering
 

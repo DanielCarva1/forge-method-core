@@ -11,6 +11,7 @@ use crate::assurance::{
     ReadinessTarget, UniversalAssuranceLens, WorkflowHumanIntentRevision,
 };
 use crate::common::{PrincipalId, StableId};
+use crate::runtime::RuntimeKind;
 use crate::workflow_release::{
     WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
 };
@@ -37,6 +38,10 @@ pub const WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION: &str = "0.3";
 /// The new event cannot appear under frozen `0.1`/`0.2`/`0.3` wires; readers
 /// preserve all historical bytes and permanently retain `0.4` thereafter.
 pub const WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION: &str = "0.4";
+/// Ledger records written from the first provenance-bearing broker companion.
+/// Readers preserve frozen `0.1` through `0.4` bytes; `0.5` is permanent once
+/// native host provenance enters the append-only history.
+pub const WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION: &str = "0.5";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -414,6 +419,32 @@ pub struct HumanIntentRevisionAcceptedEvent {
     pub accepted_at_unix: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowBrokerHostInteractionKind {
+    NativeHumanMessage,
+    NativeHumanConfirmation,
+    NativeReviewerConfirmation,
+    AttestedRuntimeObservation,
+}
+
+/// Signed, content-free native-host provenance. Handles are opaque host-local
+/// identifiers; the descriptor digest never commits raw transcript bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowBrokerNativeHostProvenance {
+    pub host_kind: RuntimeKind,
+    pub host_version: String,
+    pub adapter_id: StableId,
+    pub adapter_version: String,
+    pub interaction_kind: WorkflowBrokerHostInteractionKind,
+    pub host_event_ref: String,
+    pub host_session_ref: String,
+    pub host_interaction_ref: String,
+    pub host_event_descriptor_digest: String,
+    pub host_observed_at_unix: u64,
+}
+
 /// Durable provenance companion for one action produced from a separately
 /// verified external broker event. This is audit data only; deserializing it
 /// never grants broker, principal, or workflow mutation authority.
@@ -434,6 +465,8 @@ pub struct BrokerOriginAppliedEvent {
     pub broker_registry_digest: String,
     pub issued_at_unix: u64,
     pub expires_at_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_host_provenance: Option<WorkflowBrokerNativeHostProvenance>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

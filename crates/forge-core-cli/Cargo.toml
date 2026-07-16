@@ -65,5 +65,6 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 rcgen.workspace = true
 proptest.workspace = true
+forge-core-workflow-governance-tcb = { path = "../forge-core-workflow-governance-tcb" }
 assert_cmd.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-child-process"] }

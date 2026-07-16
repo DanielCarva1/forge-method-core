@@ -144,6 +144,7 @@ pub use workflow_governance::{
     EvaluatorObservedEvent, HumanIntentRevisionAcceptedEvent, PhaseAdvancedEvent,
     PolicyCompletedEvent, ProjectImportedEvent, ReceiptRevokedEvent, ReleaseUpgradedEvent,
     SignalChangedEvent, WaiverAuthorizedEvent, WorkflowAssuranceClaimRole,
+    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
     WorkflowBrokerOriginProfile, WorkflowCapabilityProbeKind, WorkflowCapabilityRequirement,
     WorkflowClaimPolicy, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
     WorkflowCompletionAssertion, WorkflowContentAddressedReference, WorkflowDecisionActivation,
@@ -160,6 +161,7 @@ pub use workflow_governance::{
     WorkflowPolicyActivation, WorkflowPolicyRouting, WorkflowPrerequisite,
     WorkflowPrerequisiteRequirement, WorkflowReleaseAdmissionProof,
     WorkflowReleaseRegistryProvenance, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };

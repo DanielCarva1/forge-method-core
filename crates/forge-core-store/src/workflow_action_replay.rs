@@ -110,6 +110,29 @@ pub struct WorkflowActionReplayMutation {
     pub entry: WorkflowActionReplayEntry,
 }
 
+/// Lock-held replay reservation prepared without changing durable bytes.
+///
+/// Callers must acquire this guard while holding the authoritative workflow
+/// ledger lock, commit the ledger, and only then call
+/// [`Self::commit_after_authoritative_ledger`]. Dropping the guard before the
+/// ledger commit leaves the replay WAL byte-identical, so a failed or crashed
+/// pre-commit attempt cannot strand an orphan durable reservation.
+#[must_use = "dropping the reservation releases the replay lock without changing replay state"]
+pub struct WorkflowActionReplayReservation {
+    wal_path: PathBuf,
+    _lock: WorkflowActionReplayLock,
+    prepared: PreparedReplayCommit,
+}
+
+enum PreparedReplayCommit {
+    Existing(WorkflowActionReplayEntry),
+    Append {
+        reserve_line: Option<Vec<u8>>,
+        commit_line: Vec<u8>,
+        entry: WorkflowActionReplayEntry,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 #[non_exhaustive]
@@ -311,6 +334,136 @@ pub fn recover_workflow_action_replay(
     recover_under_lock(&wal_path(&state_root))
 }
 
+/// Return the domain-separated fingerprint used to compare an opaque replay
+/// origin against already durable governance companions.
+///
+/// # Errors
+///
+/// Rejects blank, control-character, or overlong origin identifiers.
+pub fn workflow_action_replay_origin_fingerprint(
+    origin_event_id: &str,
+) -> Result<String, WorkflowActionReplayError> {
+    validate_origin(origin_event_id)?;
+    Ok(origin_hash(origin_event_id))
+}
+/// Acquire an exclusive replay reservation for an exact packet/origin/ledger
+/// tuple without appending to the replay WAL.
+///
+/// Conflict and capacity checks complete while the replay lock is held. The
+/// returned guard retains that lock across the caller's authoritative ledger
+/// commit. If the ledger commit fails, dropping the guard leaves no orphan
+/// reservation. After a successful ledger commit, call
+/// [`WorkflowActionReplayReservation::commit_after_authoritative_ledger`].
+///
+/// # Errors
+///
+/// Returns [`WorkflowActionReplayError`] for invalid input, corrupt state,
+/// binding conflicts, capacity exhaustion, locking, or initialization errors.
+pub fn begin_workflow_action_replay_reservation(
+    state_root: impl AsRef<Path>,
+    action_packet_digest: &str,
+    origin_event_id: &str,
+    planned_ledger_record_digest: &str,
+) -> Result<WorkflowActionReplayReservation, WorkflowActionReplayError> {
+    validate_digest("action_packet_digest", action_packet_digest)?;
+    validate_origin(origin_event_id)?;
+    validate_digest("planned_ledger_record_digest", planned_ledger_record_digest)?;
+    let origin_event_id_hash = origin_hash(origin_event_id);
+    let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
+    let state_root = trusted_state_root(state_root.as_ref())?;
+    let wal_path = wal_path(&state_root);
+    let replay_lock = acquire_lock(&state_root)?;
+    ensure_initialized_under_lock(&state_root, false)?;
+    let recovery = recover_under_lock(&wal_path)?;
+
+    let prepared = if let Some(existing) = recovery.entries.get(&key_hash) {
+        validate_binding(
+            existing,
+            action_packet_digest,
+            &origin_event_id_hash,
+            planned_ledger_record_digest,
+        )?;
+        if existing.state == WorkflowActionReplayState::Committed {
+            PreparedReplayCommit::Existing(existing.clone())
+        } else {
+            let sequence = next_sequence(recovery.last_sequence)?;
+            let unsigned = UnsignedRecord {
+                schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+                sequence,
+                operation: WorkflowActionReplayOperation::Commit,
+                key_hash: key_hash.clone(),
+                action_packet_digest: action_packet_digest.to_owned(),
+                origin_event_id_hash: origin_event_id_hash.clone(),
+                planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+                prior_record_digest: recovery.last_record_digest.clone(),
+            };
+            let commit_line = encode_line(unsigned)?;
+            ensure_capacity(&recovery, commit_line.len())?;
+            let mut entry = existing.clone();
+            entry.state = WorkflowActionReplayState::Committed;
+            entry.committed_sequence = Some(sequence);
+            PreparedReplayCommit::Append {
+                reserve_line: None,
+                commit_line,
+                entry,
+            }
+        }
+    } else {
+        reject_cross_key_replay(&recovery, action_packet_digest, &origin_event_id_hash)?;
+        let reserved_sequence = next_sequence(recovery.last_sequence)?;
+        let reserve_unsigned = UnsignedRecord {
+            schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+            sequence: reserved_sequence,
+            operation: WorkflowActionReplayOperation::Reserve,
+            key_hash: key_hash.clone(),
+            action_packet_digest: action_packet_digest.to_owned(),
+            origin_event_id_hash: origin_event_id_hash.clone(),
+            planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+            prior_record_digest: recovery.last_record_digest.clone(),
+        };
+        let reserve_record_digest = digest_canonical(&reserve_unsigned)?;
+        let reserve_line = encode_line(reserve_unsigned)?;
+        ensure_capacity(&recovery, reserve_line.len())?;
+        let committed_sequence = next_sequence(reserved_sequence)?;
+        let commit_unsigned = UnsignedRecord {
+            schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+            sequence: committed_sequence,
+            operation: WorkflowActionReplayOperation::Commit,
+            key_hash: key_hash.clone(),
+            action_packet_digest: action_packet_digest.to_owned(),
+            origin_event_id_hash: origin_event_id_hash.clone(),
+            planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+            prior_record_digest: reserve_record_digest,
+        };
+        let commit_line = encode_line(commit_unsigned)?;
+        let mut after_reserve = recovery.clone();
+        after_reserve.valid_record_count = after_reserve.valid_record_count.saturating_add(1);
+        after_reserve.wal_bytes = after_reserve
+            .wal_bytes
+            .saturating_add(u64::try_from(reserve_line.len()).unwrap_or(u64::MAX));
+        ensure_capacity(&after_reserve, commit_line.len())?;
+        PreparedReplayCommit::Append {
+            reserve_line: Some(reserve_line),
+            commit_line,
+            entry: WorkflowActionReplayEntry {
+                key_hash,
+                action_packet_digest: action_packet_digest.to_owned(),
+                origin_event_id_hash,
+                planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+                state: WorkflowActionReplayState::Committed,
+                reserved_sequence,
+                committed_sequence: Some(committed_sequence),
+            },
+        }
+    };
+
+    Ok(WorkflowActionReplayReservation {
+        wal_path,
+        _lock: replay_lock,
+        prepared,
+    })
+}
+
 /// Durably reserve one action packet/origin pair for an exact planned ledger
 /// record. Exact retries return the existing reserved or committed entry
 /// without appending. Rebinding either packet or origin, or changing the
@@ -441,6 +594,48 @@ pub fn commit_workflow_action(
         bytes_appended: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
         entry,
     })
+}
+
+impl WorkflowActionReplayReservation {
+    /// Persist the prepared replay state after the authoritative workflow
+    /// ledger batch has committed.
+    ///
+    /// A new tuple appends a reserve record and then a commit record while the
+    /// original replay lock remains held. A previously reserved exact tuple
+    /// appends only its commit; an exact committed retry appends nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowActionReplayError`] if either durable append fails.
+    pub fn commit_after_authoritative_ledger(
+        self,
+    ) -> Result<WorkflowActionReplayMutation, WorkflowActionReplayError> {
+        match self.prepared {
+            PreparedReplayCommit::Existing(entry) => Ok(existing_mutation(self.wal_path, &entry)),
+            PreparedReplayCommit::Append {
+                reserve_line,
+                commit_line,
+                entry,
+            } => {
+                let reserve_bytes = if let Some(bytes) = reserve_line {
+                    let len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+                    append_and_sync(&self.wal_path, &bytes)?;
+                    len
+                } else {
+                    0
+                };
+                let commit_bytes = u64::try_from(commit_line.len()).unwrap_or(u64::MAX);
+                append_and_sync(&self.wal_path, &commit_line)?;
+                Ok(WorkflowActionReplayMutation {
+                    wal_path: self.wal_path.clone(),
+                    appended: true,
+                    sequence: entry.committed_sequence.unwrap_or(entry.reserved_sequence),
+                    bytes_appended: reserve_bytes.saturating_add(commit_bytes),
+                    entry,
+                })
+            }
+        }
+    }
 }
 
 fn existing_mutation(
@@ -1197,6 +1392,90 @@ mod tests {
         assert_eq!(reserve_after_commit.entry, committed.entry);
         let recovery = recover_workflow_action_replay(&root.0).expect("recover");
         assert_eq!(recovery.valid_record_count, 2);
+    }
+
+    #[test]
+    fn lock_held_reservation_is_nonmutating_until_authoritative_commit() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize");
+        let packet = digest('a');
+        let ledger = digest('b');
+        let path = wal_path(&root.0);
+        let before = fs::read(&path).expect("read empty WAL");
+
+        let reservation =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin reservation");
+        assert_eq!(
+            fs::read(&path).expect("read guarded WAL"),
+            before,
+            "pre-ledger reservation must not create orphan durable state"
+        );
+        drop(reservation);
+        assert_eq!(fs::read(&path).expect("read dropped WAL"), before);
+        assert!(recover_workflow_action_replay(&root.0)
+            .expect("recover after drop")
+            .entries
+            .is_empty());
+
+        let committed =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin committed reservation")
+                .commit_after_authoritative_ledger()
+                .expect("commit replay after authoritative ledger");
+        assert!(committed.appended);
+        assert_eq!(committed.entry.state, WorkflowActionReplayState::Committed);
+        let recovery = recover_workflow_action_replay(&root.0).expect("recover committed replay");
+        assert_eq!(recovery.valid_record_count, 2);
+
+        let committed_bytes = fs::read(&path).expect("read committed WAL");
+        let retry =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin exact committed retry")
+                .commit_after_authoritative_ledger()
+                .expect("finish exact committed retry");
+        assert!(!retry.appended);
+        assert_eq!(fs::read(&path).expect("read retry WAL"), committed_bytes);
+    }
+
+    #[test]
+    fn lock_held_reservation_commits_legacy_reserved_tuple_and_rejects_conflict() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize");
+        let packet = digest('a');
+        let ledger = digest('b');
+        reserve_workflow_action(&root.0, &packet, "host:event:1", &ledger)
+            .expect("legacy durable reserve");
+        let path = wal_path(&root.0);
+        let reserved_bytes = fs::read(&path).expect("read reserved WAL");
+
+        assert!(matches!(
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:2", &ledger,),
+            Err(WorkflowActionReplayError::PacketReplayConflict { .. })
+        ));
+        assert_eq!(
+            fs::read(&path).expect("read conflict WAL"),
+            reserved_bytes,
+            "conflict detection must not mutate replay authority"
+        );
+
+        let committed =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin exact reserved retry")
+                .commit_after_authoritative_ledger()
+                .expect("commit exact reserved retry");
+        assert!(committed.appended);
+        let recovery = recover_workflow_action_replay(&root.0).expect("recover committed tuple");
+        assert_eq!(recovery.valid_record_count, 2);
+        assert_eq!(
+            recovery
+                .entries
+                .values()
+                .next()
+                .expect("replay entry")
+                .state,
+            WorkflowActionReplayState::Committed
+        );
     }
 
     #[test]

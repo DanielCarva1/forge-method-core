@@ -75,17 +75,22 @@ chat-only interaction, actor/reviewer independence, publication, or P7F passage.
   local `workflow action authorize` command accepts only packets marked
   `operator_credential_broker`; the other broker boundaries fail before local
   signing.
-- The P7a.2 origin broker stores public keys only and signs outside Forge. Its
-  envelope binds project, packet, minimal input, authenticated origin subject,
-  separation domain, profile/kind, freshness, and nonce. Forge still relies on
-  the configured host to authenticate that subject honestly.
+- The P7a.2 origin broker stores public keys only and signs outside Forge. New
+  event `0.2` binds project, packet, closed input, authenticated origin subject,
+  separation domain, profile/kind, freshness, nonce, and opaque native host
+  event/session/interaction provenance; it carries no raw transcript. Frozen
+  event `0.1` is recovery-only. Forge still relies on the configured host to
+  authenticate that subject honestly.
 - Broker verification alone never consumes replay state. The kernel commits
   the action and origin companion under the ledger lock before it appends the
-  reserve/commit replay index; a durable companion can repair that index after
-  response loss or crash. This is a fail-closed recoverable saga,
-  not a claim that separate filesystem stores commit atomically. Rollback
-  resistance still depends on protecting the state root and external trust
-  anchors from joint rewrite.
+  reserve/commit replay index. During that gap, the durable companion itself
+  rejects any changed event that reuses the same native host tuple. If the replay
+  WAL remains hash-chain-valid, the companion can repair a missing entry or
+  complete a reserve after response loss or crash. Torn/corrupt replay bytes fail
+  closed and require restoration; Forge never silently truncates authority state.
+  This is not a claim that separate filesystem stores commit atomically. Rollback
+  resistance still depends on protecting the state root and external trust anchors
+  from joint rewrite.
 - On Windows, credential files inherit the ACL of the derived operator
   directory; operators must protect that directory and the broker trust
   registry even when private broker keys live in a host keystore.

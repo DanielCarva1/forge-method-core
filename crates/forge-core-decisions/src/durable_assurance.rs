@@ -1341,6 +1341,7 @@ mod tests {
                 broker_registry_digest: hash('e'),
                 issued_at_unix: action.accepted_at_unix,
                 expires_at_unix: action.accepted_at_unix + 300,
+                native_host_provenance: None,
             }),
         }
     }

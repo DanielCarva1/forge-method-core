@@ -4,15 +4,17 @@
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    workflow_broker_event_signing_bytes, AttestationInput, CanonicalIntent,
-    PrincipalCredentialStatus, PrincipalRegistryContract, PrincipalRegistryDocument,
-    PrincipalRegistryEntry, WorkflowApplicabilityAuthorizationRequest, WorkflowBrokerEventEnvelope,
-    WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput, WorkflowEvidenceAuthorizationRequest,
-    PRINCIPAL_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+    AttestationInput, CanonicalIntent, PrincipalCredentialStatus, PrincipalRegistryContract,
+    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowApplicabilityAuthorizationRequest,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
+    WorkflowEvidenceAuthorizationRequest, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_contracts::{
-    PrincipalId, ReadinessTarget, StableId, WorkflowContentAddressedReference,
+    PrincipalId, ReadinessTarget, RuntimeKind, StableId, WorkflowBrokerHostInteractionKind,
+    WorkflowBrokerNativeHostProvenance, WorkflowContentAddressedReference,
     WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceOutcome,
     WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
 };
@@ -480,11 +482,34 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
             conversation_ref: "conversation://workflow/one-call".to_owned(),
             conversation_digest: format!("sha256:{}", "7".repeat(64)),
         },
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.integration-e2e".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+            host_event_ref: "host-event-workflow-one-call-0001".to_owned(),
+            host_session_ref: "host-session-workflow-one-call-0001".to_owned(),
+            host_interaction_ref: "host-interaction-workflow-one-call-0001".to_owned(),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued,
+        }),
         issued_at_unix: issued,
         expires_at_unix: issued + 120,
         nonce: "workflow-one-call-human-intent-0001".to_owned(),
         signature: String::new(),
     };
+    let provenance = intent_envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &intent_envelope.project_id,
+        &intent_envelope.action_packet_digest,
+        &intent_envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
     intent_envelope.signature = hex(&broker_key
         .sign(
             &workflow_broker_event_signing_bytes(&intent_envelope)

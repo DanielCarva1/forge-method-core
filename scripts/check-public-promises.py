@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import html
 import re
 import sys
@@ -75,11 +76,41 @@ def check_payload() -> None:
         "docs/real-host-proof.md",
         "contracts/spec/real-host-evidence-bundle-v0.yaml",
         "contracts/spec/domain-pack-rebase-v0.yaml",
+        "docs/product-gap-register.md",
+        "contracts/spec/C1.1-codex-host-capability-decision.yaml",
+        "contracts/spec/C1.1-pi-host-capability-decision.yaml",
+        "contracts/spec/C1.1-opencode-host-capability-decision.yaml",
+        "contracts/spec/host-origin-broker-conformance-v0.yaml",
+        "contracts/spec/workflow-host-origin-adapter-v0.yaml",
+        "contracts/spec/workflow-action-origin-broker-v0.yaml",
+        "contracts/plan/product-gap-closure-plan.yaml",
         "scripts/check-real-host-evidence.py",
     }
     missing = required - set(entries)
     if missing:
         fail(f"release payload omits promised files: {sorted(missing)}")
+
+
+def check_gap_plan_coverage() -> None:
+    register = (ROOT / "docs/product-gap-register.md").read_text(encoding="utf-8")
+    plan = (ROOT / "contracts/plan/product-gap-closure-plan.yaml").read_text(
+        encoding="utf-8"
+    )
+    registered = set(re.findall(r"\*\*(GAP-\d{3})\*\*", register))
+    planned_refs = re.findall(r'"(GAP-\d{3})"', plan)
+    if not registered:
+        fail("product gap register contains no canonical gap ids")
+    counts = Counter(planned_refs)
+    duplicate_refs = sorted(gap_id for gap_id, count in counts.items() if count != 1)
+    if duplicate_refs:
+        fail(f"closure plan must own every gap exactly once: {duplicate_refs}")
+    planned = set(planned_refs)
+    if registered != planned:
+        fail(
+            "gap register/closure plan mismatch; "
+            f"unplanned={sorted(registered - planned)}, "
+            f"unknown={sorted(planned - registered)}"
+        )
 
 
 def main() -> int:
@@ -114,6 +145,7 @@ def main() -> int:
             relative = path.relative_to(ROOT)
             fail(f"{relative}:{line} documents unknown command path {' '.join(key)!r}")
 
+    check_gap_plan_coverage()
     check_payload()
     print("Public promise audit: clean")
     return 0

@@ -152,18 +152,21 @@ forge-core workflow action apply --root <repo> \
   --origin-envelope-file <host-signed-origin-event.json> --json
 ```
 
-Use `workflow broker rotate|revoke|status` for lifecycle changes. The broker
-event carries only a closed semantic answer. Forge regenerates the current
-packet and derives policy, phase, evaluator, target, digests, clock fields, and
-the exact authority request. A stale packet, wrong project/profile/kind,
+Use `workflow broker rotate|revoke|status` for lifecycle changes. Broker event
+`0.2` carries a closed semantic answer plus signed opaque host event/session/
+interaction provenance, never raw transcript content; frozen `0.1` is recovery-
+only. Forge regenerates the current packet and derives policy, phase, evaluator,
+target, digests, clock fields, and the exact authority request. A stale packet,
+wrong project/profile/kind,
 expired event, changed registry, or replay fails closed. The apply command
 does not emit a reusable workflow signature. Its bounded replay WAL and ledger
-provenance form a crash-recoverable saga: an exact retry can finish a reserved
-post-ledger replay index or return its prior durable result. Forge writes no
-pre-ledger reservation that could strand a current packet after expiry; the
-ledger lock serializes the mutation, and its origin companion is the recovery
-authority. The two stores are not presented as one cross-filesystem atomic
-transaction.
+provenance form a fail-closed saga. When the replay WAL remains hash-chain-valid,
+an exact retry can finish a complete reserved post-ledger entry or reconstruct a
+missing replay entry from the durable origin companion. A torn or corrupt replay
+append is never truncated automatically and requires operator restoration. Forge
+writes no pre-ledger durable reservation that could strand a current packet after
+expiry; a retained replay lock preflights and serializes the tuple across the ledger
+commit, and the origin companion becomes bounded recovery authority.
 
 Enrollment metadata is a trust declaration, not proof that Forge observed the
 ceremony. A configured broker proves only that a configured external key

@@ -47,8 +47,9 @@ CI evidence independently.
   assurance epochs; callers cannot choose identifiers, epochs, or status.
 - Exactly eight explicit universal lenses with five closed epistemic states:
   `unknown`, `supported`, `verified`, `disproven`, and `waived`.
-- Independently reviewed representative-slice definitions and separately
-  originated runtime execution using the existing evidence ledger and packets.
+- Reviewer-origin representative-slice definitions and separately originated
+  runtime execution using configured broker and separation-domain checks. This
+  is protocol-level separation, not proof of physical reviewer independence.
 - Native Linux, Windows, Intel macOS, and Apple Silicon macOS default
   workspace/platform gates plus one Linux reference protocol journey; every
   non-Linux runner separately compiles that feature-gated journey.
@@ -95,6 +96,17 @@ independent review.
 The local `workflow action authorize` convenience is therefore restricted to
 `operator_credential_broker` packets; high-authority packet classes require the
 external broker.
+The in-progress C1 source slice adds broker event `0.2`, signed opaque native-host
+event/session/interaction provenance, permanent workflow-ledger wire epoch `0.5`,
+and recovery-only handling for frozen broker event `0.1`. These are Rust-core
+security primitives, not selected-host evidence. The exact Codex CLI `0.143.0`
+spike found protocol-shaped hooks, approvals, and app-server messages but no
+unforgeable signer boundary. Pi `0.80.7` exposes unauthenticated in-process input
+and confirmation hooks under shared OS authority. OpenCode `1.14.33`, with the
+locally loaded `1.14.25` plugin/SDK surface, exposes client-callable prompts,
+permission replies, TUI callbacks, and shell-capable plugins rather than a trusted
+human-origin path. None is selected for C1 on current evidence, and no reference
+host is supported yet.
 
 P7b accepts human outcomes and constraints, not caller-authored methodology or
 quality status. The agent drafts scenarios, falsifiers, representative
@@ -107,9 +119,13 @@ becomes verified. P7b reuses the existing evidence receipts and action packets;
 there is no second evidence store.
 
 Replay safety is a bounded, fail-closed recovery saga across the action replay
-WAL and governance ledger. Exact retries reconcile durable provenance; Forge
-does not claim cross-filesystem atomicity or safety after an attacker rewrites
-both the state root and its external trust anchors.
+WAL and governance ledger. A lock-held replay reservation preflights conflicts
+and capacity without appending before the authoritative ledger commit, avoiding
+orphan pre-commit tombstones. When the replay WAL remains hash-chain-valid, exact
+retries reconcile a missing entry or complete reserve after a post-ledger replay
+interruption. Torn/corrupt replay bytes fail closed and are not automatically
+truncated. Forge does not claim cross-filesystem atomicity or safety after an
+attacker rewrites both the state root and its external trust anchors.
 
 This checkpoint proves a host-neutral broker protocol, not a production host's
 identity assurance. A configured broker vouches for the signed origin subject
@@ -126,6 +142,9 @@ evidence.
 
 ## Roadmap rule
 
-Post-P6 work is selected by promise-audit evidence. Priority goes to gaps that
-prevent a normal chat-only journey, then distribution/fork operability, then
-ecosystem breadth. Domain methods belong in reviewed packs, not core.
+Post-P6 work is selected by promise-audit evidence. The canonical
+[product gap register](product-gap-register.md) records accepted gaps, and the
+[typed closure plan](../contracts/plan/product-gap-closure-plan.yaml) owns their
+sequence and exit evidence. Priority goes to gaps that prevent a normal
+chat-only journey, then distribution/fork operability, then ecosystem breadth.
+Domain methods belong in reviewed packs, not core.

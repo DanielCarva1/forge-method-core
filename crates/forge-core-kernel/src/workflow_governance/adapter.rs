@@ -83,8 +83,8 @@ use forge_core_domain_pack_tcb::{
 };
 use forge_core_store::sha256_content_hash;
 use forge_core_store::workflow_action_replay::{
-    commit_workflow_action, initialize_workflow_action_replay, reserve_workflow_action,
-    WorkflowActionReplayError,
+    begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
+    workflow_action_replay_origin_fingerprint, WorkflowActionReplayError,
 };
 use forge_core_workflow_governance_tcb::{
     domain_pack_receipt_carryover, lock_workflow_governance_ledger_tcb,
@@ -112,6 +112,12 @@ const WORKFLOW_AUTHORIZATION_ACTION_PACKET_SCHEMA_VERSION: &str =
 const WORKFLOW_AUTHORIZATION_PREPARATION_TTL_SECONDS: u64 = 300;
 const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
 const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
+#[cfg(test)]
+const TEST_REPLAY_APPEND_FAILURE_MARKER: &str = ".test-fail-replay-append-after-ledger";
+#[cfg(test)]
+const TEST_REPLAY_APPEND_FAILURE_BACKUP: &str = ".test-replay-wal-before-append-failure";
+#[cfg(test)]
+const TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER: &str = ".test-expire-after-replay-reservation";
 const DOMAIN_PACK_REBASE_PLAN_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Canonical project binding used by every live governance operation.
@@ -1052,18 +1058,35 @@ impl WorkflowGovernanceProjectAdapter {
         let final_commit_now = unix_time()?;
         if audit.issued_at_unix > final_commit_now
             || audit.expires_at_unix <= final_commit_now
-            || self.current_trusted_broker_registry_digest()?.as_deref()
-                != Some(broker_registry_digest.as_str())
+            || self.current_trusted_registry_digest()?
+                != packet.binding.trusted_principal_registry_digest
+            || self.current_trusted_broker_registry_digest()?
+                != packet.binding.trusted_broker_registry_digest
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        batch.commit()?;
-        ensure_broker_replay_committed(
+        let replay_reservation = begin_workflow_action_replay_reservation(
             &self.binding.state_root,
             &packet.packet_digest,
             &replay_origin_id,
             &action_record.record_digest,
         )?;
+        let locked_commit_now = replay_locked_commit_time(&self.binding.state_root)?;
+        if audit.issued_at_unix > locked_commit_now
+            || audit.expires_at_unix <= locked_commit_now
+            || project_snapshot_digest(&self.binding.project_root)?
+                != packet.binding.snapshot_digest
+            || self.current_trusted_registry_digest()?
+                != packet.binding.trusted_principal_registry_digest
+            || self.current_trusted_broker_registry_digest()?
+                != packet.binding.trusted_broker_registry_digest
+        {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        batch.commit()?;
+        #[cfg(test)]
+        inject_replay_append_failure_after_ledger(&self.binding.state_root);
+        replay_reservation.commit_after_authoritative_ledger()?;
         let committed = ledger.recover()?;
         let next = self.guidance_from_projection(
             &registry,
@@ -1098,12 +1121,17 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
-        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
-        let mut projection = ledger.recover()?;
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
-        projection =
-            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        let active_effective = match projection.active_effective_bundle_identity() {
+            Some(active) => active,
+            None => derive_core_only_workflow_effective_identity(admitted)?,
+        };
+        if active_effective != *effective.identity() {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         let (action_record, origin_record) = matching_broker_origin_retry(&projection, &audit)?
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
         let replay_repaired = ensure_broker_replay_committed(
@@ -5672,9 +5700,29 @@ fn broker_origin_applied_event(
         broker_registry_digest: broker_registry_digest.to_owned(),
         issued_at_unix: audit.issued_at_unix,
         expires_at_unix: audit.expires_at_unix,
+        native_host_provenance: audit.native_host_provenance.clone(),
     }
 }
 
+fn broker_native_replay_tuple_matches(
+    origin: &BrokerOriginAppliedEvent,
+    audit: &VerifiedWorkflowBrokerEventAudit,
+) -> bool {
+    match (
+        origin.native_host_provenance.as_ref(),
+        audit.native_host_provenance.as_ref(),
+    ) {
+        (Some(origin_provenance), Some(audit_provenance)) => {
+            origin.issuer_id == audit.issuer_id
+                && origin_provenance.host_kind == audit_provenance.host_kind
+                && origin_provenance.adapter_id == audit_provenance.adapter_id
+                && origin_provenance.host_event_ref == audit_provenance.host_event_ref
+                && origin_provenance.host_session_ref == audit_provenance.host_session_ref
+                && origin_provenance.host_interaction_ref == audit_provenance.host_interaction_ref
+        }
+        _ => false,
+    }
+}
 fn matching_broker_origin_retry(
     projection: &WorkflowGovernanceLedgerProjection,
     audit: &VerifiedWorkflowBrokerEventAudit,
@@ -5695,7 +5743,8 @@ fn matching_broker_origin_retry(
             && origin.nonce_fingerprint == audit.replay_key.nonce_fingerprint
             && origin.origin_principal_id == audit.origin_principal_id
             && origin.separation_domain == audit.separation_domain;
-        if !packet_matches && !event_matches && !origin_identity_matches {
+        let native_tuple_matches = broker_native_replay_tuple_matches(origin, audit);
+        if !packet_matches && !event_matches && !origin_identity_matches && !native_tuple_matches {
             continue;
         }
         let profile = match audit.issuer_profile {
@@ -5703,7 +5752,7 @@ fn matching_broker_origin_retry(
             WorkflowBrokerIssuerProfile::Reviewer => WorkflowBrokerOriginProfile::Reviewer,
             WorkflowBrokerIssuerProfile::Runtime => WorkflowBrokerOriginProfile::Runtime,
         };
-        if !(packet_matches
+        let exact_match = packet_matches
             && event_matches
             && origin.origin_principal_id == audit.origin_principal_id
             && origin.separation_domain == audit.separation_domain
@@ -5713,9 +5762,20 @@ fn matching_broker_origin_retry(
             && origin.public_key_fingerprint == audit.public_key_fingerprint
             && origin.signature_fingerprint == audit.signature_fingerprint
             && origin.enrollment_ceremony_digest == audit.enrollment_ceremony_digest
+            && origin.native_host_provenance == audit.native_host_provenance
             && origin.issued_at_unix == audit.issued_at_unix
-            && origin.expires_at_unix == audit.expires_at_unix)
-        {
+            && origin.expires_at_unix == audit.expires_at_unix;
+        if !exact_match {
+            if native_tuple_matches {
+                let replay_origin_id = broker_replay_origin_id(audit)?;
+                return Err(WorkflowGovernanceAdapterError::ActionReplay(
+                    WorkflowActionReplayError::OriginReplayConflict {
+                        origin_event_id_hash: workflow_action_replay_origin_fingerprint(
+                            &replay_origin_id,
+                        )?,
+                    },
+                ));
+            }
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
         let action_record = projection
@@ -5736,13 +5796,25 @@ fn matching_broker_origin_retry(
 fn broker_replay_origin_id(
     audit: &VerifiedWorkflowBrokerEventAudit,
 ) -> Result<String, WorkflowGovernanceAdapterError> {
-    let identity = serde_json::json!({
-        "schema_version": "workflow_broker_replay_origin_v1",
-        "issuer_id": audit.issuer_id,
-        "nonce_fingerprint": audit.replay_key.nonce_fingerprint,
-        "origin_principal_id": audit.origin_principal_id,
-        "separation_domain": audit.separation_domain,
-    });
+    let identity = if let Some(provenance) = audit.native_host_provenance.as_ref() {
+        serde_json::json!({
+            "schema_version": "workflow_broker_replay_origin_v2",
+            "issuer_id": audit.issuer_id,
+            "host_kind": provenance.host_kind,
+            "adapter_id": provenance.adapter_id,
+            "host_event_ref": provenance.host_event_ref,
+            "host_session_ref": provenance.host_session_ref,
+            "host_interaction_ref": provenance.host_interaction_ref,
+        })
+    } else {
+        serde_json::json!({
+            "schema_version": "workflow_broker_replay_origin_v1",
+            "issuer_id": audit.issuer_id,
+            "nonce_fingerprint": audit.replay_key.nonce_fingerprint,
+            "origin_principal_id": audit.origin_principal_id,
+            "separation_domain": audit.separation_domain,
+        })
+    };
     let canonical = serde_json_canonicalizer::to_vec(&identity)
         .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
     Ok(format!(
@@ -5757,19 +5829,14 @@ fn ensure_broker_replay_committed(
     replay_origin_id: &str,
     action_record_digest: &str,
 ) -> Result<bool, WorkflowGovernanceAdapterError> {
-    let reservation = reserve_workflow_action(
+    let mutation = begin_workflow_action_replay_reservation(
         state_root,
         packet_digest,
         replay_origin_id,
         action_record_digest,
-    )?;
-    let commit = commit_workflow_action(
-        state_root,
-        packet_digest,
-        replay_origin_id,
-        action_record_digest,
-    )?;
-    Ok(reservation.appended || commit.appended)
+    )?
+    .commit_after_authoritative_ledger()?;
+    Ok(mutation.appended)
 }
 
 fn prepare_authorization_from_packet(
@@ -7148,6 +7215,35 @@ fn content_addressed_basis_digest(
     Ok(sha256_content_hash(&canonical))
 }
 
+fn replay_locked_commit_time(_state_root: &Path) -> Result<u64, WorkflowGovernanceAdapterError> {
+    let now = unix_time()?;
+    #[cfg(test)]
+    {
+        let marker = _state_root.join(TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER);
+        if marker.is_file() {
+            fs::remove_file(&marker)
+                .expect("test expiry marker must be consumed after replay lock acquisition");
+            return now
+                .checked_add(3_600)
+                .ok_or(WorkflowGovernanceAdapterError::ClockOverflow);
+        }
+    }
+    Ok(now)
+}
+#[cfg(test)]
+fn inject_replay_append_failure_after_ledger(state_root: &Path) {
+    let marker = state_root.join(TEST_REPLAY_APPEND_FAILURE_MARKER);
+    if !marker.is_file() {
+        return;
+    }
+    let wal_path = state_root
+        .join(forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
+    let backup_path = state_root.join(TEST_REPLAY_APPEND_FAILURE_BACKUP);
+    fs::rename(&wal_path, &backup_path)
+        .expect("test failpoint must move the replay WAL after ledger commit");
+    fs::create_dir(&wal_path)
+        .expect("test failpoint must replace the replay WAL path with a directory");
+}
 fn project_snapshot_digest(root: &Path) -> Result<String, WorkflowGovernanceAdapterError> {
     let mut stack = vec![root.to_path_buf()];
     let mut entries = Vec::new();
@@ -7268,9 +7364,13 @@ mod tests {
     use super::*;
     use ed25519_dalek::{Signer as _, SigningKey};
     use forge_core_authority::{
-        workflow_broker_event_signing_bytes, WorkflowBrokerEnrollmentDeclaration,
-        WorkflowBrokerEventEnvelope, WorkflowBrokerFreshnessPolicy, WorkflowBrokerIssuerEntry,
+        workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+        WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerEventEnvelope,
+        WorkflowBrokerFreshnessPolicy, WorkflowBrokerIssuerEntry, WorkflowBrokerReplayKey,
         WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION,
+    };
+    use forge_core_contracts::{
+        RuntimeKind, WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
     };
     use forge_core_store::workflow_action_replay::WorkflowActionReplayState;
     use std::fmt::Write as _;
@@ -7295,6 +7395,121 @@ mod tests {
                 output
             },
         )
+    }
+
+    fn test_native_host_provenance(
+        host_kind: RuntimeKind,
+        interaction_kind: WorkflowBrokerHostInteractionKind,
+        adapter_id: &str,
+        issued_at_unix: u64,
+        nonce: &str,
+    ) -> WorkflowBrokerNativeHostProvenance {
+        WorkflowBrokerNativeHostProvenance {
+            host_kind,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId(adapter_id.to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind,
+            host_event_ref: format!("host-event-{nonce}"),
+            host_session_ref: format!("host-session-{nonce}"),
+            host_interaction_ref: format!("host-interaction-{nonce}"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }
+    }
+
+    fn seal_test_host_descriptor(envelope: &mut WorkflowBrokerEventEnvelope) {
+        let provenance = envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("native host provenance");
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &envelope.project_id,
+            &envelope.action_packet_digest,
+            &envelope.semantic_input,
+        )
+        .expect("host descriptor digest");
+    }
+
+    #[test]
+    fn native_host_replay_origin_is_stable_across_packet_and_nonce_changes() {
+        let provenance = test_native_host_provenance(
+            RuntimeKind::ForgeStandalone,
+            WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+            "adapter.forge-standalone.replay-test",
+            100,
+            "fixed-native-interaction-0001",
+        );
+        let audit = VerifiedWorkflowBrokerEventAudit {
+            issuer_id: StableId("broker.human.test".to_owned()),
+            issuer_profile: WorkflowBrokerIssuerProfile::Human,
+            origin_principal_id: PrincipalId("principal.human.origin".to_owned()),
+            separation_domain: StableId("human.test.session".to_owned()),
+            event_kind: WorkflowBrokerEventKind::Decision,
+            project_id: StableId("project.test".to_owned()),
+            action_packet_digest: format!("sha256:{}", "1".repeat(64)),
+            event_digest: format!("sha256:{}", "2".repeat(64)),
+            public_key_fingerprint: format!("sha256:{}", "3".repeat(64)),
+            signature_fingerprint: format!("sha256:{}", "4".repeat(64)),
+            enrollment_ceremony_digest: format!("sha256:{}", "5".repeat(64)),
+            replay_key: WorkflowBrokerReplayKey {
+                issuer_id: StableId("broker.human.test".to_owned()),
+                origin_principal_id: PrincipalId("principal.human.origin".to_owned()),
+                separation_domain: StableId("human.test.session".to_owned()),
+                project_id: StableId("project.test".to_owned()),
+                nonce_fingerprint: format!("sha256:{}", "6".repeat(64)),
+                event_digest: format!("sha256:{}", "2".repeat(64)),
+            },
+            native_host_provenance: Some(provenance),
+            issued_at_unix: 100,
+            expires_at_unix: 200,
+        };
+        let first_origin = broker_replay_origin_id(&audit).expect("v2 replay origin");
+        let mut changed = audit.clone();
+        changed.action_packet_digest = format!("sha256:{}", "7".repeat(64));
+        changed.event_digest = format!("sha256:{}", "8".repeat(64));
+        changed.replay_key.nonce_fingerprint = format!("sha256:{}", "9".repeat(64));
+        changed.replay_key.event_digest = changed.event_digest.clone();
+        let changed_origin =
+            broker_replay_origin_id(&changed).expect("v2 replay origin after agent changes");
+        assert_eq!(
+            first_origin, changed_origin,
+            "one native interaction must not authorize another packet by changing the nonce"
+        );
+
+        let (root, state) = temp_project("native-host-replay-origin");
+        forge_core_store::workflow_action_replay::initialize_workflow_action_replay(&state)
+            .expect("initialize replay store");
+        forge_core_store::workflow_action_replay::reserve_workflow_action(
+            &state,
+            &audit.action_packet_digest,
+            &first_origin,
+            &format!("sha256:{}", "b".repeat(64)),
+        )
+        .expect("reserve native interaction for its first packet");
+        assert!(matches!(
+            forge_core_store::workflow_action_replay::reserve_workflow_action(
+                &state,
+                &changed.action_packet_digest,
+                &changed_origin,
+                &format!("sha256:{}", "c".repeat(64)),
+            ),
+            Err(
+                forge_core_store::workflow_action_replay::WorkflowActionReplayError::OriginReplayConflict { .. }
+            )
+        ));
+
+        let mut legacy = audit;
+        legacy.native_host_provenance = None;
+        let mut legacy_changed = legacy.clone();
+        legacy_changed.replay_key.nonce_fingerprint = format!("sha256:{}", "a".repeat(64));
+        assert_ne!(
+            broker_replay_origin_id(&legacy).expect("v1 replay origin"),
+            broker_replay_origin_id(&legacy_changed).expect("changed v1 replay origin"),
+            "frozen v1 replay identity remains nonce-based"
+        );
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup fixture");
     }
 
     fn install_runtime_broker_registry(
@@ -7388,11 +7603,19 @@ mod tests {
                 conversation_ref: "conversation://test/intent".to_owned(),
                 conversation_digest: format!("sha256:{}", "c".repeat(64)),
             },
+            native_host_provenance: Some(test_native_host_provenance(
+                RuntimeKind::ForgeStandalone,
+                WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+                "adapter.forge-standalone.kernel-test",
+                issued_at_unix,
+                nonce,
+            )),
             issued_at_unix,
             expires_at_unix: issued_at_unix + 120,
             nonce: nonce.to_owned(),
             signature: String::new(),
         };
+        seal_test_host_descriptor(&mut envelope);
         let signing_bytes =
             workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
         envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
@@ -7454,11 +7677,19 @@ mod tests {
                 active: transition == WorkflowSignalInputTransition::Activate,
                 basis_refs: vec!["README.md".to_owned()],
             },
+            native_host_provenance: Some(test_native_host_provenance(
+                RuntimeKind::ForgeStandalone,
+                WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation,
+                "adapter.forge-standalone.kernel-test",
+                issued_at_unix,
+                nonce,
+            )),
             issued_at_unix,
             expires_at_unix: issued_at_unix + 120,
             nonce: nonce.to_owned(),
             signature: String::new(),
         };
+        seal_test_host_descriptor(&mut envelope);
         let signing_bytes =
             workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
         envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
@@ -8488,20 +8719,66 @@ mod tests {
                 )
             })
             .expect("deactivation signal packet");
-        let nonce_replay = signed_signal_envelope(
+        let mut native_tuple_replay = signed_signal_envelope(
             &next_packets.project_id,
             next_signal,
             &key,
             now,
-            "broker-response-loss-nonce-0001",
+            "broker-response-loss-nonce-0002",
         );
+        let original_provenance = envelope
+            .native_host_provenance
+            .as_ref()
+            .expect("original native provenance");
+        let replay_provenance = native_tuple_replay
+            .native_host_provenance
+            .as_mut()
+            .expect("replay native provenance");
+        replay_provenance.host_event_ref = original_provenance.host_event_ref.clone();
+        replay_provenance.host_session_ref = original_provenance.host_session_ref.clone();
+        replay_provenance.host_interaction_ref = original_provenance.host_interaction_ref.clone();
+        seal_test_host_descriptor(&mut native_tuple_replay);
+        let signing_bytes = workflow_broker_event_signing_bytes(&native_tuple_replay)
+            .expect("native tuple replay signing bytes");
+        native_tuple_replay.signature = hex(&key.sign(&signing_bytes).to_bytes());
+        assert_ne!(native_tuple_replay.nonce, envelope.nonce);
+        assert_ne!(
+            native_tuple_replay
+                .native_host_provenance
+                .as_ref()
+                .expect("replay provenance")
+                .host_event_descriptor_digest,
+            original_provenance.host_event_descriptor_digest
+        );
+
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let replay_wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let workflow_before_conflict =
+            fs::read(&workflow_wal).expect("workflow WAL before native tuple conflict");
+        let replay_before_conflict =
+            fs::read(&replay_wal).expect("replay WAL before native tuple conflict");
         assert!(matches!(
             adapter.apply_verified_broker_action(
-                verify_broker_envelope(&broker_document, nonce_replay, now),
+                verify_broker_envelope(&broker_document, native_tuple_replay, now),
                 now,
             ),
-            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+            Err(WorkflowGovernanceAdapterError::ActionReplay(
+                WorkflowActionReplayError::OriginReplayConflict { .. }
+            ))
         ));
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after native tuple conflict"),
+            workflow_before_conflict,
+            "native tuple reuse must fail before governance append"
+        );
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after native tuple conflict"),
+            replay_before_conflict,
+            "native tuple conflict must leave replay WAL byte-identical"
+        );
 
         let replay =
             forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
@@ -8519,9 +8796,9 @@ mod tests {
 
         let mut revoked_document = broker_document.clone();
         revoked_document.issuers[0].status = WorkflowBrokerIssuerStatus::Revoked;
-        let historical = AuthorizedWorkflowBrokerRegistry::from_document(revoked_document)
+        let historical = AuthorizedWorkflowBrokerRegistry::from_document(revoked_document.clone())
             .expect("retained revoked broker key")
-            .verify_event_for_recovery(envelope, &packets.project_id)
+            .verify_event_for_recovery(envelope.clone(), &packets.project_id)
             .expect("historically verified response-loss event");
         fs::remove_file(adapter.trusted_broker_registry_path())
             .expect("simulate registry rotation/removal");
@@ -8538,8 +8815,322 @@ mod tests {
             .entries
             .values()
             .all(|entry| { entry.state == WorkflowActionReplayState::Committed }));
+
+        let release_registry =
+            load_admitted_workflow_governance_universal_assurance_release_registry()
+                .expect("release registry");
+        let mut ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger for drift");
+        let projection = ledger.recover().expect("projection before drift");
+        let admitted = adapter
+            .resolve_active_release(&release_registry, &projection)
+            .expect("active release");
+        let from_effective = projection.active_effective_bundle_identity().unwrap_or(
+            derive_core_only_workflow_effective_identity(admitted).expect("core identity"),
+        );
+        let mut to_effective = from_effective.clone();
+        to_effective.domain_pack_generation =
+            Some(forge_core_contracts::WorkflowDomainPackGenerationIdentity {
+                generation: 1,
+                active_lock_digest: sha256_content_hash(b"historical-drift-active-lock"),
+                composition_digest: sha256_content_hash(b"historical-drift-composition"),
+                base_core_bundle_digest: from_effective.core_runtime_bundle.bundle_digest.clone(),
+                supply_chain_registry_digest: sha256_content_hash(b"historical-drift-supply-chain"),
+                reviewer_registry_digest: "1".repeat(64),
+                reviewed_registry_digest: "2".repeat(64),
+            });
+        to_effective.receipt_context_digest =
+            sha256_content_hash(b"historical-drift-receipt-context");
+        let head = projection.head_digest.clone().expect("head before drift");
+        let identity = adapter.identity(admitted);
+        ledger
+            .transition_domain_pack_generation_unchecked_tcb(
+                &head,
+                &identity,
+                projection.next_state_version,
+                forge_core_contracts::DomainPackGenerationTransitionedEvent {
+                    from_effective_bundle: from_effective,
+                    to_effective_bundle: to_effective,
+                    receipt_carryover: WorkflowReceiptCarryover::InvalidateAll,
+                    prior_ledger_head_digest: head.clone(),
+                },
+            )
+            .expect("advance ledger effective epoch");
+        drop(ledger);
+
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let workflow_before = fs::read(&workflow_wal).expect("workflow WAL before drift refusal");
+        let replay_before = fs::read(&replay.wal_path).expect("replay WAL before drift refusal");
+        let historical_after_drift =
+            AuthorizedWorkflowBrokerRegistry::from_document(revoked_document)
+                .expect("historical registry after drift")
+                .verify_event_for_recovery(envelope, &packets.project_id)
+                .expect("historical event after drift");
+        assert!(matches!(
+            adapter.recover_historically_verified_broker_action(historical_after_drift),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after drift refusal"),
+            workflow_before,
+            "historical recovery must never append an effective-epoch reconciliation"
+        );
+        assert_eq!(
+            fs::read(&replay.wal_path).expect("replay WAL after drift refusal"),
+            replay_before,
+            "effective-epoch drift must refuse before replay repair"
+        );
     }
 
+    #[test]
+    fn broker_action_repairs_replay_append_failure_after_authoritative_ledger() {
+        let (root, state) = temp_project("broker-replay-append-failure");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.broker-apply".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize with replay");
+        accept_test_intent(&adapter);
+        let key = SigningKey::from_bytes(&[31_u8; 32]);
+        let broker_document = install_runtime_broker_registry(&adapter, &key);
+        let now = unix_time().expect("clock");
+        let packets = adapter.action_packets_at(now).expect("packets");
+        let packet = packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Activate,
+                        ..
+                    }
+                )
+            })
+            .expect("runtime signal packet");
+        let envelope = signed_signal_envelope(
+            &packets.project_id,
+            packet,
+            &key,
+            now,
+            "broker-replay-append-failure-nonce-0001",
+        );
+        let verified = verify_broker_envelope(&broker_document, envelope.clone(), now);
+        let audit = verified.audit().clone();
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let replay_wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let workflow_before = fs::read(&workflow_wal).expect("workflow WAL before failure");
+        let replay_before = fs::read(&replay_wal).expect("replay WAL before failure");
+        fs::write(state.join(TEST_REPLAY_APPEND_FAILURE_MARKER), b"fail\n")
+            .expect("arm replay append failpoint");
+
+        assert!(matches!(
+            adapter.apply_verified_broker_action(verified, now),
+            Err(WorkflowGovernanceAdapterError::ActionReplay(
+                WorkflowActionReplayError::WriteWal { .. }
+            ))
+        ));
+        assert_ne!(
+            fs::read(&workflow_wal).expect("workflow WAL after failure"),
+            workflow_before,
+            "authoritative action and origin companion must be durable before replay append"
+        );
+        assert!(
+            replay_wal.is_dir(),
+            "failpoint must reach the actual replay append with the WAL path blocked"
+        );
+
+        let replay_backup = state.join(TEST_REPLAY_APPEND_FAILURE_BACKUP);
+        fs::remove_dir(&replay_wal).expect("remove blocking replay directory");
+        fs::rename(&replay_backup, &replay_wal).expect("restore original replay WAL");
+        fs::remove_file(state.join(TEST_REPLAY_APPEND_FAILURE_MARKER))
+            .expect("disarm replay append failpoint");
+        assert_eq!(
+            fs::read(&replay_wal).expect("restored replay WAL"),
+            replay_before,
+            "failed first replay append must preserve the prior replay WAL bytes"
+        );
+        let next_packets = adapter
+            .action_packets_at(now)
+            .expect("packets after durable action");
+        let next_packet = next_packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Deactivate,
+                        ..
+                    }
+                )
+            })
+            .expect("deactivation signal packet");
+        let mut conflicting_envelope = signed_signal_envelope(
+            &next_packets.project_id,
+            next_packet,
+            &key,
+            now,
+            "broker-replay-append-failure-nonce-0002",
+        );
+        let durable_provenance = envelope
+            .native_host_provenance
+            .as_ref()
+            .expect("durable native provenance");
+        let conflicting_provenance = conflicting_envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("conflicting native provenance");
+        conflicting_provenance.host_event_ref = durable_provenance.host_event_ref.clone();
+        conflicting_provenance.host_session_ref = durable_provenance.host_session_ref.clone();
+        conflicting_provenance.host_interaction_ref =
+            durable_provenance.host_interaction_ref.clone();
+        seal_test_host_descriptor(&mut conflicting_envelope);
+        let signing_bytes = workflow_broker_event_signing_bytes(&conflicting_envelope)
+            .expect("conflicting envelope signing bytes");
+        conflicting_envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
+        assert_ne!(conflicting_envelope.nonce, envelope.nonce);
+        assert_ne!(
+            conflicting_envelope.action_packet_digest,
+            envelope.action_packet_digest
+        );
+        let workflow_before_conflict =
+            fs::read(&workflow_wal).expect("workflow WAL before ledger-native conflict");
+        let replay_before_conflict =
+            fs::read(&replay_wal).expect("replay WAL before ledger-native conflict");
+        assert!(matches!(
+            adapter.apply_verified_broker_action(
+                verify_broker_envelope(&broker_document, conflicting_envelope, now),
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::ActionReplay(
+                WorkflowActionReplayError::OriginReplayConflict { .. }
+            ))
+        ));
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after ledger-native conflict"),
+            workflow_before_conflict,
+            "durable native tuple conflict must fail before another governance append"
+        );
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after ledger-native conflict"),
+            replay_before_conflict,
+            "ledger companion conflict detection must not fabricate replay state"
+        );
+
+        let ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger after failure");
+        let projection = ledger.recover().expect("recover durable companions");
+        let (durable_action, durable_origin) = matching_broker_origin_retry(&projection, &audit)
+            .expect("match durable broker origin")
+            .expect("ledger commit must survive replay failure");
+        drop(ledger);
+        let historical = AuthorizedWorkflowBrokerRegistry::from_document(broker_document.clone())
+            .expect("historical registry")
+            .verify_event_for_recovery(envelope.clone(), &packets.project_id)
+            .expect("historically verified event");
+        let repaired = adapter
+            .recover_historically_verified_broker_action(historical)
+            .expect("repair replay from durable companion truth");
+        assert_eq!(repaired.action_record, durable_action);
+        assert_eq!(repaired.origin_record, durable_origin);
+        assert!(repaired.replay_commit_repaired);
+        let replay_after_repair = fs::read(&replay_wal).expect("repaired replay WAL");
+        assert_ne!(replay_after_repair, replay_before);
+        let recovered_replay =
+            forge_core_store::workflow_action_replay::recover_workflow_action_replay(&state)
+                .expect("replay recovery after repair");
+        assert!(recovered_replay
+            .entries
+            .values()
+            .all(|entry| entry.state == WorkflowActionReplayState::Committed));
+
+        let exact_retry = AuthorizedWorkflowBrokerRegistry::from_document(broker_document)
+            .expect("retry registry")
+            .verify_event_for_recovery(envelope, &packets.project_id)
+            .expect("exact historical retry");
+        let retried = adapter
+            .recover_historically_verified_broker_action(exact_retry)
+            .expect("idempotent exact retry");
+        assert_eq!(retried.action_record, durable_action);
+        assert_eq!(retried.origin_record, durable_origin);
+        assert!(!retried.replay_commit_repaired);
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after exact retry"),
+            replay_after_repair,
+            "exact retry after repair must not append again"
+        );
+    }
+
+    #[test]
+    fn broker_action_rechecks_expiry_after_replay_lock_acquisition() {
+        let (root, state) = temp_project("broker-expiry-after-replay-lock");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.broker-apply".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize with replay");
+        accept_test_intent(&adapter);
+        let key = SigningKey::from_bytes(&[37_u8; 32]);
+        let broker_document = install_runtime_broker_registry(&adapter, &key);
+        let now = unix_time().expect("clock");
+        let packets = adapter.action_packets_at(now).expect("packets");
+        let packet = packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Activate,
+                        ..
+                    }
+                )
+            })
+            .expect("runtime signal packet");
+        let envelope = signed_signal_envelope(
+            &packets.project_id,
+            packet,
+            &key,
+            now,
+            "broker-expiry-after-replay-lock-nonce-0001",
+        );
+        let verified = verify_broker_envelope(&broker_document, envelope, now);
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let replay_wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let workflow_before = fs::read(&workflow_wal).expect("workflow WAL before expiry");
+        let replay_before = fs::read(&replay_wal).expect("replay WAL before expiry");
+        let marker = state.join(TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER);
+        fs::write(&marker, b"expire\n").expect("arm post-replay-lock expiry hook");
+
+        assert!(matches!(
+            adapter.apply_verified_broker_action(verified, now),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        assert!(
+            !marker.exists(),
+            "expiry hook must be consumed only after replay lock acquisition"
+        );
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after expiry"),
+            workflow_before,
+            "expiry while waiting for replay authority must fail before ledger commit"
+        );
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after expiry"),
+            replay_before,
+            "expired lock-held reservation must be dropped without a replay tombstone"
+        );
+    }
     #[test]
     fn broker_action_retry_after_dropped_precommit_batch_has_no_replay_tombstone() {
         let (root, state) = temp_project("broker-before-ledger");
@@ -8633,7 +9224,16 @@ mod tests {
                 audit.issued_at_unix,
             )
             .expect("planned action");
+        let replay_origin = broker_replay_origin_id(&audit).expect("replay origin");
+        let replay_reservation = begin_workflow_action_replay_reservation(
+            &state,
+            &packet.packet_digest,
+            &replay_origin,
+            &planned.record_digest,
+        )
+        .expect("lock-held replay reservation");
         drop(batch);
+        drop(replay_reservation);
         drop(ledger);
         drop(effective);
         drop(domain);
@@ -8763,6 +9363,7 @@ mod tests {
                 broker_registry_digest: broker_registry_digest.clone(),
                 issued_at_unix: 10,
                 expires_at_unix: 120,
+                native_host_provenance: None,
             }),
         };
         let projection =

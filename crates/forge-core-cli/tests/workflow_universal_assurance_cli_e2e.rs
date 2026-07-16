@@ -8,11 +8,13 @@
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    workflow_broker_event_signing_bytes, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
-    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    PrincipalId, StableId, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    PrincipalId, RuntimeKind, StableId, WorkflowBrokerHostInteractionKind,
+    WorkflowBrokerNativeHostProvenance, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
     WorkflowRepresentativeEnvironment, WorkflowRepresentativeFailureMode,
     WorkflowRepresentativeScenarioReference, WorkflowRepresentativeSliceDefinition,
     WorkflowRepresentativeSliceDefinitionDocument, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
@@ -179,11 +181,44 @@ fn envelope(
         project_id: StableId(project_id.to_owned()),
         action_packet_digest: packet_digest.to_owned(),
         semantic_input,
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.universal-e2e".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: match broker.profile {
+                WorkflowBrokerIssuerProfile::Human => {
+                    WorkflowBrokerHostInteractionKind::NativeHumanConfirmation
+                }
+                WorkflowBrokerIssuerProfile::Reviewer => {
+                    WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation
+                }
+                WorkflowBrokerIssuerProfile::Runtime => {
+                    WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation
+                }
+            },
+            host_event_ref: format!("host-event-{nonce}-0001"),
+            host_session_ref: format!("host-session-{nonce}-0001"),
+            host_interaction_ref: format!("host-interaction-{nonce}-0001"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }),
         issued_at_unix,
         expires_at_unix: issued_at_unix + 300,
         nonce: format!("p7b2-{nonce}-nonce"),
         signature: String::new(),
     };
+    let provenance = envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
     let bytes = workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
     envelope.signature = hex(&broker.key.sign(&bytes).to_bytes());
     envelope

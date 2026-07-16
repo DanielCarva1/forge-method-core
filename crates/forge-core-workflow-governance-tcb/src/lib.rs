@@ -14,8 +14,9 @@ use forge_core_contracts::{
     StableId, WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent,
     WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
     WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
-    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
-    WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_store::{acquire_effect_store_lock, EffectStoreLock, EffectStoreLockError};
 use serde_json_canonicalizer::to_vec as to_canonical_json;
@@ -145,6 +146,15 @@ impl WorkflowGovernanceLedgerProjection {
             matches!(
                 &record.event,
                 WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+            )
+        })
+    }
+    fn contains_native_host_provenance(&self) -> bool {
+        self.records.iter().any(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::BrokerOriginApplied(event)
+                    if event.native_host_provenance.is_some()
             )
         })
     }
@@ -1183,6 +1193,7 @@ fn recover_under_lock(
             && document.schema_version != WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1199,6 +1210,11 @@ fn recover_under_lock(
             &record.event,
             WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
         );
+        let is_native_host_origin = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::BrokerOriginApplied(event)
+                if event.native_host_provenance.is_some()
+        );
         let rebase_wire_required = matches!(
             &record.event,
             WorkflowGovernanceEvent::CoreDomainPackRebased(_)
@@ -1206,7 +1222,9 @@ fn recover_under_lock(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if rebase_wire_required {
+        let expected_schema = if is_native_host_origin || identity_state.native_host_origin_seen {
+            WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION
+        } else if rebase_wire_required {
             WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
         } else if intent_wire_required {
             WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION
@@ -1292,6 +1310,7 @@ struct RecoveredIdentityState {
     active_effective: Option<WorkflowEffectiveBundleIdentity>,
     intent_revision_seen: bool,
     rebase_seen: bool,
+    native_host_origin_seen: bool,
 }
 
 fn validate_recovered_semantics(
@@ -1348,6 +1367,13 @@ fn validate_recovered_semantics(
         WorkflowGovernanceEvent::CoreDomainPackRebased(_)
     ) {
         identity.rebase_seen = true;
+    }
+    if matches!(
+        &record.event,
+        WorkflowGovernanceEvent::BrokerOriginApplied(event)
+            if event.native_host_provenance.is_some()
+    ) {
+        identity.native_host_origin_seen = true;
     }
     Ok(())
 }
@@ -1596,7 +1622,14 @@ fn ledger_wire_schema(
     projection: &WorkflowGovernanceLedgerProjection,
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
-    if matches!(event, WorkflowGovernanceEvent::CoreDomainPackRebased(_))
+    if matches!(
+        event,
+        WorkflowGovernanceEvent::BrokerOriginApplied(origin)
+            if origin.native_host_provenance.is_some()
+    ) || projection.contains_native_host_provenance()
+    {
+        WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION
+    } else if matches!(event, WorkflowGovernanceEvent::CoreDomainPackRebased(_))
         || projection.contains_core_domain_pack_rebase()
     {
         WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION
@@ -3177,6 +3210,23 @@ mod replacement_protocol_tests {
                 domain_event,
             )
             .expect("activate source generation");
+        let effective_wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("0.2 WAL bytes");
+        let effective_line = effective_wal
+            .split(|byte| *byte == b'\n')
+            .rfind(|line| !line.is_empty())
+            .expect("0.2 WAL line");
+        assert_eq!(
+            schema_from_line(effective_line),
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION
+        );
+        ledger.recover().expect("recover exact 0.2 epoch");
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
+                .expect("0.2 WAL after recovery"),
+            effective_wal,
+            "0.2 recovery must preserve every historical byte"
+        );
         let target = WorkflowGovernanceLedgerIdentity {
             project_id: source.project_id.clone(),
             bundle_id: StableId("bundle-protocol-next".to_owned()),
@@ -3201,7 +3251,15 @@ mod replacement_protocol_tests {
                 event,
             )
             .expect("joined rebase");
+        let rebase_wal_before_recovery =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("0.4 WAL bytes");
         let projection = ledger.recover().expect("recover joined epoch");
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
+                .expect("0.4 WAL after recovery"),
+            rebase_wal_before_recovery,
+            "0.4 recovery must preserve the 0.1/0.2 prefix and 0.4 record bytes"
+        );
         assert_eq!(projection.active_identity(), Some(target));
         assert_eq!(
             projection.active_effective_bundle_identity(),
@@ -3266,6 +3324,43 @@ mod replacement_protocol_tests {
         })
     }
 
+    fn native_host_origin_event(action_record_digest: &str) -> WorkflowGovernanceEvent {
+        WorkflowGovernanceEvent::BrokerOriginApplied(
+            forge_core_contracts::BrokerOriginAppliedEvent {
+                action_packet_digest: sha256_digest(b"native-host-packet"),
+                broker_event_digest: sha256_digest(b"native-host-event"),
+                action_record_digest: action_record_digest.to_owned(),
+                origin_principal_id: forge_core_contracts::PrincipalId(
+                    "principal.human.native-host".to_owned(),
+                ),
+                separation_domain: StableId("native-host.session".to_owned()),
+                nonce_fingerprint: sha256_digest(b"native-host-nonce"),
+                issuer_id: StableId("broker.native-host".to_owned()),
+                issuer_profile: forge_core_contracts::WorkflowBrokerOriginProfile::Human,
+                public_key_fingerprint: sha256_digest(b"native-host-key"),
+                signature_fingerprint: sha256_digest(b"native-host-signature"),
+                enrollment_ceremony_digest: sha256_digest(b"native-host-enrollment"),
+                broker_registry_digest: sha256_digest(b"native-host-registry"),
+                issued_at_unix: 100,
+                expires_at_unix: 200,
+                native_host_provenance: Some(
+                    forge_core_contracts::WorkflowBrokerNativeHostProvenance {
+                        host_kind: forge_core_contracts::RuntimeKind::ForgeStandalone,
+                        host_version: "0.12.0".to_owned(),
+                        adapter_id: StableId("adapter.forge-standalone.tcb-test".to_owned()),
+                        adapter_version: "0.1.0".to_owned(),
+                        interaction_kind:
+                            forge_core_contracts::WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+                        host_event_ref: "host-event-tcb-test-0001".to_owned(),
+                        host_session_ref: "host-session-tcb-test-0001".to_owned(),
+                        host_interaction_ref: "host-interaction-tcb-test-0001".to_owned(),
+                        host_event_descriptor_digest: sha256_digest(b"native-host-descriptor"),
+                        host_observed_at_unix: 100,
+                    },
+                ),
+            },
+        )
+    }
     fn schema_from_line(line: &[u8]) -> String {
         let document: WorkflowGovernanceReceiptDocument =
             serde_json::from_slice(line.strip_suffix(b"\n").unwrap_or(line))
@@ -3273,6 +3368,100 @@ mod replacement_protocol_tests {
         document.schema_version
     }
 
+    #[test]
+    fn native_host_provenance_advances_wire_to_0_5_without_rewriting_history() {
+        let root = test_root("native-host-origin-wire-successor");
+        let (target, _, historical_wal) = valid_wal_versions(&root);
+        fs::write(&target, &historical_wal).expect("install historical WAL");
+        let historical_before = fs::read(&target).expect("historical bytes");
+        let projection = recover_under_lock(&root).expect("historical projection");
+        let action_record_digest = projection.head_digest.clone().expect("historical head");
+        let (_, origin_line) = build_record_line(
+            &projection,
+            &test_identity(),
+            1,
+            native_host_origin_event(&action_record_digest),
+        )
+        .expect("native host provenance record");
+        assert_eq!(
+            schema_from_line(&origin_line),
+            WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION
+        );
+
+        let mut with_origin = historical_wal.clone();
+        with_origin.extend_from_slice(&origin_line);
+        assert_eq!(
+            &with_origin[..historical_before.len()],
+            historical_before.as_slice(),
+            "the 0.5 successor must not rewrite frozen historical bytes"
+        );
+        fs::write(&target, &with_origin).expect("install 0.5 WAL");
+        let projection = recover_under_lock(&root).expect("recover 0.5 wire");
+        assert_eq!(
+            fs::read(&target).expect("0.5 WAL after recovery"),
+            with_origin,
+            "0.5 recovery must preserve the complete historical prefix and provenance bytes"
+        );
+        let head = projection.head_digest.clone().expect("0.5 head");
+        let (_, later_line) =
+            build_record_line(&projection, &test_identity(), 1, broker_signal_event(&head))
+                .expect("post-provenance record");
+        assert_eq!(
+            schema_from_line(&later_line),
+            WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
+            "the first native-host companion permanently advances the ledger wire"
+        );
+        with_origin.extend_from_slice(&later_line);
+        fs::write(&target, &with_origin).expect("install post-provenance WAL");
+        assert_eq!(
+            recover_under_lock(&root)
+                .expect("recover permanent 0.5 epoch")
+                .records
+                .len(),
+            4
+        );
+
+        let later_text = String::from_utf8(later_line).expect("later record UTF-8");
+        for earlier_schema in [
+            WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+            WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+            WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
+            WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
+        ] {
+            let downgraded_later = later_text.replacen(
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION}\""
+                ),
+                &format!("\"schema_version\":\"{earlier_schema}\""),
+                1,
+            );
+            let mut downgraded_successor_wal = historical_wal.clone();
+            downgraded_successor_wal.extend_from_slice(&origin_line);
+            downgraded_successor_wal.extend_from_slice(downgraded_later.as_bytes());
+            fs::write(&target, downgraded_successor_wal)
+                .expect("install downgraded post-provenance WAL");
+            assert!(matches!(
+                recover_under_lock(&root),
+                Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 4, .. })
+            ));
+        }
+        let origin_text = String::from_utf8(origin_line).expect("origin UTF-8");
+        let downgraded = origin_text.replacen(
+            &format!(
+                "\"schema_version\":\"{WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION}\""
+            ),
+            &format!("\"schema_version\":\"{WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION}\""),
+            1,
+        );
+        let mut downgraded_wal = historical_wal;
+        downgraded_wal.extend_from_slice(downgraded.as_bytes());
+        fs::write(&target, downgraded_wal).expect("install downgraded provenance WAL");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
     #[test]
     fn historical_wire_remains_byte_exact_until_an_intent_revision_exists() {
         let root = test_root("historical-wire-preserved");
@@ -3328,6 +3517,11 @@ mod replacement_protocol_tests {
         with_intent.extend_from_slice(&intent_line);
         fs::write(&target, &with_intent).expect("install intent WAL");
         let projection = recover_under_lock(&root).expect("recover intent successor wire");
+        assert_eq!(
+            fs::read(&target).expect("0.3 WAL after recovery"),
+            with_intent,
+            "0.3 recovery must preserve the 0.1 prefix and accepted-intent bytes"
+        );
         let intent_head = projection.head_digest.clone().expect("intent head");
         let (_, later_line) = build_deterministic_broker_record_line(
             &projection,

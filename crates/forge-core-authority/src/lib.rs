@@ -80,13 +80,16 @@ pub use workflow_authority::{
 };
 pub use workflow_origin_broker::{
     workflow_broker_event_digest, workflow_broker_event_signing_bytes,
-    AuthorizedWorkflowBrokerRegistry, HistoricallyVerifiedWorkflowBrokerEvent,
-    VerifiedWorkflowBrokerEvent, VerifiedWorkflowBrokerEventAudit,
-    WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerError, WorkflowBrokerEventEnvelope,
-    WorkflowBrokerEventKind, WorkflowBrokerFreshnessPolicy, WorkflowBrokerIssuerEntry,
-    WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus, WorkflowBrokerRegistryDocument,
-    WorkflowBrokerReplayKey, WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
-    WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_SIGNATURE_DOMAIN,
+    workflow_broker_host_event_descriptor_digest, AuthorizedWorkflowBrokerRegistry,
+    HistoricallyVerifiedWorkflowBrokerEvent, VerifiedWorkflowBrokerEvent,
+    VerifiedWorkflowBrokerEventAudit, WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerError,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerEventKind, WorkflowBrokerFreshnessPolicy,
+    WorkflowBrokerIssuerEntry, WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus,
+    WorkflowBrokerRegistryDocument, WorkflowBrokerReplayKey, WorkflowBrokerSemanticInput,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_HOST_DESCRIPTOR_DOMAIN,
+    WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_SEMANTIC_INPUT_DOMAIN, WORKFLOW_BROKER_SIGNATURE_DOMAIN,
+    WORKFLOW_BROKER_SIGNATURE_DOMAIN_V2,
 };
 pub use workflow_release_review::{
     verify_workflow_release_admission_authorization, workflow_release_admission_payload_digest,

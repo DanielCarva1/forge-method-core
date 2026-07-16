@@ -9,8 +9,9 @@ prebuilt availability nor complete P7 product evidence. Verify the selected
 GitHub Release, exact asset sidecars, and matching CI run. `v0.4.0` was the
 previous independently verified Rust prebuilt before this release candidate;
 do not use that historical fact as a current availability claim. See
-[Product status](docs/product-status.md) and the
-[promise audit](docs/product-compliance-audit.md).
+[Product status](docs/product-status.md), the
+[promise audit](docs/product-compliance-audit.md), and the
+[canonical gap register](docs/product-gap-register.md).
 
 ## Choose one guide
 

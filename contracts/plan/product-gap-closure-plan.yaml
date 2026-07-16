@@ -1,0 +1,290 @@
+schema_version: "0.1"
+artifact_kind: "product-gap-closure-plan"
+plan_id: "forge-rust-product-gap-closure-v0"
+status: "active"
+created_at: "2026-07-15"
+source_checkpoint: "0.12.0"
+
+objective: >-
+  Close the evidence-backed gaps that prevent an ordinary human from installing
+  and using the Rust Forge through a supported host, then extend the same
+  governed continuity through operation, evolution, and Domain Pack authorship.
+
+scope:
+  implementation_authority: "current Rust crates and closed typed YAML contracts"
+  gap_register: "docs/product-gap-register.md"
+  existing_program: "contracts/plan/agent-native-guidance-plan.yaml"
+  legacy_boundary: >-
+    The unrelated Python/plugin lineage is forensic design input only. No Python
+    runtime, updater, marketplace installer, or authority behavior may be copied
+    into the product.
+
+priority_policy:
+  - "Preserve the authority boundary before optimizing convenience."
+  - "Close a single ordinary-user vertical slice before adding host breadth."
+  - "Treat source implementation, shipped asset, hosted evidence, and field evidence as separate exits."
+  - "Do not begin P8 or P9 breadth while a P0 release blocker remains open."
+  - "Prefer additive public contracts and migrate durable state explicitly."
+
+verification_strategy:
+  design_first:
+    - "Freeze invariants, compatibility, crash model, and adversarial cases before changing persistence or authority code."
+    - "Use independent asynchronous review for security, persistence, and host-boundary decisions; the primary agent remains accountable for integration."
+    - "Borrow proven storage-engine patterns such as explicit record versions, checksummed canonical bytes, write-ahead intent/commit ordering, directory durability, idempotent recovery, lock ownership, and failpoint testing without adding a database dependency by default."
+  per_large_work_part:
+    - "Run formatter/static promise checks plus only the directly affected package, contract, and adversarial tests."
+    - "Compile immediate dependents when a public Rust type or wire contract changes."
+    - "Do not run the full workspace, platform matrix, release archive matrix, or cumulative real-host journey after each internal work item."
+  closure_gates:
+    - "Run one focused cumulative C1 gate after the broker contract, ledger provenance, adapter contract, and adversarial corpus land together."
+    - "Reserve full workspace, native-platform, release archive, hosted timing, and real-host matrices for C3 or an explicit release candidate."
+  failure_policy:
+    - "A targeted regression blocks the part immediately; unrelated known slow suites are not rerun until their owning closure gate."
+    - "No skipped expensive suite may be described as passing; it remains explicitly pending."
+status_vocabulary:
+  - "planned"
+  - "in_progress"
+  - "blocked_external"
+  - "implemented_pending_evidence"
+  - "completed"
+
+phases:
+  - id: "C0-gap-baseline"
+    status: "completed"
+    gap_refs: []
+    outcome: "Real gaps are separated from existing primitives, deliberate boundaries, and legacy-only behavior."
+    deliverables:
+      - "docs/product-gap-register.md"
+      - "contracts/plan/product-gap-closure-plan.yaml"
+      - "machine-checked gap-to-plan coverage and documentation links"
+    exit:
+      - "Every accepted gap cites a current-source or direct public-interface boundary."
+      - "Every accepted gap is owned by exactly one implementation phase."
+      - "The plan does not propose restoring the Python runtime."
+
+  - id: "C1-first-use-authority-vertical-slice"
+    status: "in_progress"
+    priority: "P0"
+    gap_refs: ["GAP-001", "GAP-003"]
+    outcome: >-
+      One selected host integration carries one ordinary chat message across the
+      human-origin authority boundary in a source-level candidate whose private
+      authority is unreachable by the agent. Production support remains C3 evidence.
+    sequence:
+      - id: "C1.1"
+        status: "in_progress"
+        title: "Freeze the host-origin threat model and adapter contract"
+        work:
+          - "Specify authenticated native host-event input, replay binding, separation-domain claims, key custody, enrollment, rotation, revocation, and audit receipts."
+          - "Add a signed opaque host event/session/interaction reference and digest, not transcript content; persist it in broker-origin ledger provenance and migrate the closed wire contract without breaking historical verification."
+          - "Forbid signer use based only on agent-supplied subject, answer, packet digest, or enrollment material; require a native host-authenticated event or user-confirmation interaction."
+          - "Run a capability spike against Codex first; if its public extension surface cannot attest user-origin events outside agent control, record it as unsupported and select the first host that can."
+          - "Define conformance failures that prevent an adapter from claiming human presence or independent review."
+        screening_checkpoint:
+          rust_protocol_state: "implemented_pending_evidence"
+          codex_0_143_0: "rejected: public app-server/approval/hook APIs do not prove an unforgeable native user-origin signer boundary"
+          pi_0_80_7: "rejected: pre-model input and confirmation extension APIs are in-process, unauthenticated, and share agent-accessible OS authority"
+          decision_refs:
+            - "contracts/spec/C1.1-codex-host-capability-decision.yaml"
+            - "contracts/spec/C1.1-pi-host-capability-decision.yaml"
+            - "contracts/spec/C1.1-opencode-host-capability-decision.yaml"
+          opencode_1_14_33: "rejected on available local evidence: client-callable prompt/permission APIs and shell-capable in-process plugins do not prove native human origin, signer isolation, or separate administration"
+          selected_host: "none; C1.1 remains in progress and C1.2/C1.3 must not claim a reference integration"
+      - id: "C1.2"
+        title: "Implement the external broker component in Rust"
+        work:
+          - "Reuse the current broker registry, signed origin event, action packet, reserve/commit WAL, and ledger provenance contracts."
+          - "Keep private broker material outside project, sidecar state, model context, command output, agent-readable configuration, and agent-controlled process environment."
+          - "Expose no agent-callable MCP, CLI, or IPC signing oracle; the host-owned signer acts only on the authenticated native interaction frozen in C1.1."
+          - "Provide explicit host/operator enrollment, status, rotation, revocation, and bounded replay recovery whose authority cannot be initiated by agent content alone."
+      - id: "C1.3"
+        title: "Ship one thin named-host adapter"
+        work:
+          - "Package only host translation, installation metadata, broker handoff, and the existing start/next/action loop."
+          - "Include the minimum verified install, configure, diagnostic, and adapter rollback path needed for the clean reference-host test; C2 owns the complete cross-version product lifecycle."
+          - "Do not move workflow mutation into default MCP or duplicate kernel policy in the adapter."
+          - "Return typed setup gaps instead of instructing the human to edit Forge YAML."
+      - id: "C1.4"
+        title: "Prove the clean first-use path"
+        work:
+          - "Test empty install, registry enrollment, one human intent, one gated decision, conflict, replacement chat, rotation/revocation, replay, and agent-forgery rejection."
+          - "Test signer-oracle and confused-deputy attempts plus unauthorized enrollment, rotation, and revocation."
+          - "Test that deleting or exposing the broker key invalidates the assurance claim rather than degrading silently."
+    exit:
+      - "One selected-host source candidate completes the public chat-only journey in a clean isolated environment without hand-authored authority artifacts."
+      - "The agent cannot create or approve a human-origin event, invoke the signer as an oracle, or authorize broker enrollment/rotation/revocation."
+      - "Opaque host-interaction provenance survives wire migration and historical recovery without storing transcript content."
+      - "All durable effects retain current Admission, WAL, receipt, and ledger provenance."
+      - "A versioned adapter conformance suite can be applied unchanged to the remaining named hosts."
+
+  - id: "C2-state-loss-and-install-lifecycle"
+    status: "planned"
+    priority: "P0"
+    gap_refs: ["GAP-002", "GAP-004"]
+    outcome: >-
+      Bootstrap, installation, diagnosis, update, rollback, uninstall, backup,
+      and restore are explicit idempotent operations that cannot erase or
+      silently replace durable authority.
+    sequence:
+      - id: "C2.1"
+        title: "Fail closed on linked-sidecar loss"
+        work:
+          - "Separate never-initialized bootstrap from evidence of a previously initialized but missing sidecar."
+          - "Replace automatic state recreation with a typed state-loss diagnostic and explicit recovery choices."
+      - id: "C2.2"
+        title: "Add complete-state backup and restore contracts"
+        work:
+          - "Bind Project Link, full sidecar, external public trust material, replay anchors, and source/release identity in a verifiable manifest."
+          - "Keep private external broker keys in their owner-specific backup procedure; never copy them into Forge state."
+          - "Reject partial, stale, cross-project, rollback, and tampered restores."
+      - id: "C2.3"
+        title: "Implement the owned product lifecycle"
+        work:
+          - "Provide an idempotent public setup/diagnostic surface and exact host configuration status."
+          - "Install or update only verified immutable assets, preserve prior working binaries/configuration for rollback, and never silently migrate project authority."
+          - "Uninstall product-owned binaries/adapters without deleting consumer projects, sidecars, operator anchors, or backups."
+      - id: "C2.4"
+        title: "Exercise interrupted and mixed-version states"
+        work:
+          - "Cover partial setup, stale host config, interrupted update, downgrade refusal, wrapper mismatch, retained-state uninstall, backup interruption, and restore after replacement-machine installation."
+    exit:
+      - "A linked missing sidecar never becomes fresh authoritative state implicitly."
+      - "A normal user can diagnose and repair installation/configuration without editing YAML."
+      - "Update rollback and uninstall preserve durable project authority by default."
+      - "Backup verification and restore produce durable, project-bound receipts."
+
+  - id: "C3-release-assurance-and-publication"
+    status: "planned"
+    priority: "P0"
+    gap_refs: ["GAP-005", "GAP-006"]
+    outcome: >-
+      The first supported host journey is shipped as an independently verifiable
+      release, then demonstrated on its exact public assets.
+    sequence:
+      - id: "C3.1"
+        title: "Close release-control debts"
+        work:
+          - "Use locked Cargo resolution for every release build."
+          - "Run a dedicated declared-MSRV lane."
+          - "Add native or explicitly bounded emulated Linux ARM64 install smoke."
+          - "Make the POSIX wrapper independent of readlink -f."
+          - "Bind the release SBOM to the exact archive set through signed/checksummed release metadata."
+      - id: "C3.2"
+        title: "Run the cumulative source and hosted gates"
+        work:
+          - "Complete workspace tests, targeted failure injection, native platform gates, release archive tests, and consecutive CI timing runs."
+          - "Retain command, duration, timeout, inventory, and failure artifacts."
+      - id: "C3.3"
+        title: "Publish and independently verify the matching release"
+        work:
+          - "Tag only the immutable commit that passed the cumulative gate."
+          - "Verify binary version, tag/commit, archive manifest, checksum, signature, SBOM binding, wrapper, and clean installation from downloaded assets."
+      - id: "C3.4"
+        title: "Collect real-host evidence"
+        work:
+          - "Run P7F with the exact published integration and no private helpers or fixture authority."
+          - "Obtain independent semantic and actor-separation review; the structural bundle checker alone cannot pass this item."
+    exit:
+      - "The selected release and every supported archive are immutable and independently verifiable."
+      - "The exact published assets complete one clean real-host journey."
+      - "P7F and P7G evidence is reviewed without converting transcript text into authority."
+
+  - id: "C4-host-breadth"
+    status: "planned"
+    priority: "P1"
+    gap_refs: ["GAP-010"]
+    outcome: "The proven adapter contract expands without weakening assurance or pretending unsupported host capabilities exist."
+    sequence:
+      - id: "C4.1"
+        title: "Apply conformance to Claude, Cursor, and OpenCode"
+        work:
+          - "Implement only the thin host-specific packaging and event bridge needed by the frozen contract."
+          - "Mark targets unsupported when host APIs cannot preserve the required origin boundary."
+      - id: "C4.2"
+        title: "Publish a supported-host matrix"
+        work:
+          - "Separate manifest recognition, installability, read-only MCP, human-origin assurance, governed mutation, and field evidence per host/version."
+    exit:
+      - "Every advertised target has exact supported versions, installation assets, conformance evidence, and known limits."
+
+  - id: "C5-ready-operate-evolve"
+    status: "planned"
+    priority: "P1"
+    gap_refs: ["GAP-007"]
+    outcome: "Governed continuity proceeds from BuildVerify through release, operation, feedback, rollback, and repeated evolution."
+    sequence:
+      - id: "C5.1"
+        title: "Specify post-BuildVerify durable episodes"
+        work:
+          - "Define release subject, rollback baseline, deployment observation, operational evidence, feedback, incident/bug intake, and evolution episode identity."
+          - "Reuse existing readiness, ready-release, reality-evidence, context-recovery, and evolve-project policies."
+      - id: "C5.2"
+        title: "Implement guarded phase advancement"
+        work:
+          - "Expose BuildVerify to ReadyOperate and ReadyOperate to Evolve only through admitted gate results and exact current snapshots."
+          - "Make rollback and a post-release bug open the correct typed episode rather than editing phase state."
+      - id: "C5.3"
+        title: "Prove replacement-agent operation"
+        work:
+          - "Resume release identity, rollback baseline, live observations, unresolved feedback, and next action across fresh processes."
+    exit:
+      - "A real release and rollback baseline have durable receipts."
+      - "Operational evidence and feedback can disprove readiness after release."
+      - "A replacement agent resumes the exact evolution episode without hidden chat context."
+
+  - id: "C6-domain-pack-normal-lifecycle"
+    status: "planned"
+    priority: "P2"
+    gap_refs: ["GAP-008"]
+    outcome: "Clean and initialized projects manage packs through chat-level intent without human-authored lifecycle documents."
+    sequence:
+      - id: "C6.1"
+        title: "Derive install, upgrade, rollback, remove, and rebase operations"
+        work:
+          - "Add high-level intent derivation for first acquisition and initialized-state changes over the existing lifecycle TCB rather than duplicate resolver, composition, trust, preflight, CAS, or recovery logic."
+          - "Keep explicit candidate approval and degraded-empty gaps."
+      - id: "C6.2"
+        title: "Add immutable remote acquisition"
+        work:
+          - "Define signed catalog metadata, digest-pinned download, revocation, mirror, cache, offline, and rollback semantics."
+          - "Never make discovery, download, trust, install, and activation one implicit authority step."
+    exit:
+      - "All lifecycle intents are reachable through public high-level derivation and crash-recoverable apply."
+      - "Remote content is immutable, review-bound, revocable, and never silently activated."
+
+  - id: "C7-domain-pack-sdk"
+    status: "planned"
+    priority: "P2"
+    gap_refs: ["GAP-009"]
+    outcome: "External authors can create and evolve packs without changing universal-core Rust."
+    sequence:
+      - id: "C7.1"
+        title: "Productize existing authoring, learning, and compatibility primitives"
+        work:
+          - "Generate a minimal typed pack skeleton and compose existing validation, learning, review/promotion, compatibility, and adversarial primitives into one author-facing test workflow."
+      - id: "C7.2"
+        title: "Ship package, sign, review, publish, revoke, and evolve workflows"
+        work:
+          - "Bind every published revision to immutable content, reviewer evidence, compatibility, provenance, and revocation state."
+    exit:
+      - "A third-party author completes the full lifecycle without core changes."
+      - "Incompatible, shadowing, tampered, and revoked packs fail closed."
+
+first_executable_slice:
+  phase: "C1-first-use-authority-vertical-slice"
+  first_item: "C1.1"
+  rationale: >-
+    GAP-001 blocks the first required human decision in every ordinary clean
+    journey. The threat-model and host-capability contract must be frozen before
+    implementation so convenience cannot accidentally give the agent human or
+    reviewer authority.
+  initial_artifacts:
+    - "contracts/spec/workflow-host-origin-adapter-v0.yaml"
+    - "contracts/spec/C1.1-codex-host-capability-decision.yaml"
+    - "contracts/spec/host-origin-broker-conformance-v0.yaml"
+    - "versioned opaque host-event provenance and historical-recovery migration fixtures"
+  stop_conditions:
+    - "The selected host cannot attest user-origin events outside model/agent control."
+    - "The design requires placing a broker private key in the project, sidecar state, model context, or agent-readable process environment."
+    - "The broker can be used as a signing oracle or enrollment authority through agent-callable CLI, MCP, IPC, environment, or content alone."
+    - "The design bypasses current action packet, Admission, WAL, receipt, or workflow ledger authority."
