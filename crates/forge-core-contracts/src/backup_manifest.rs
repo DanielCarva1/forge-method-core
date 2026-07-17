@@ -224,6 +224,8 @@ pub struct BackupDeclaredEffectOutput {
     pub operation_id: String,
     pub effect_id: String,
     pub target_kind: BackupDeclaredEffectTargetKind,
+    /// Exact spelling emitted by the store; normalized archive identity is separate.
+    pub physical_ref: String,
     pub logical_ref: String,
     pub state_relative_path: String,
     pub access_mode: BackupEffectOutputAccessMode,
@@ -586,6 +588,9 @@ pub enum BackupManifestValidationError {
     DuplicateEntryPath {
         path: String,
     },
+    ImpossibleArchiveTopology {
+        path: String,
+    },
     SourceStateInventoryMismatch {
         material: BackupEntryKind,
     },
@@ -822,29 +827,35 @@ impl BackupManifestDocument {
     /// Unknown files fail closed; lock/private/crash protocol files are explicit exclusions.
     pub fn classify_source_file(
         &self,
-        logical_path: &str,
+        source_path: &str,
     ) -> Result<BackupSourceFileClassification, BackupManifestValidationError> {
-        validate_safe_path(logical_path)?;
+        let archive_path = canonical_archive_path(source_path)?;
+        let normalized_source = normalized_utf8_repo_relative(source_path).ok_or_else(|| {
+            BackupManifestValidationError::InvalidLogicalPath {
+                path: source_path.to_owned(),
+            }
+        })?;
         let manifest = &self.backup_manifest;
-        let state = state_prefix(&manifest.project.archive_layout);
+        let state = normalized_utf8_repo_relative(&state_prefix(&manifest.project.archive_layout))
+            .ok_or(BackupManifestValidationError::InvalidProjectLink)?;
         // Exclusions are security policy, not a fallback. They must win even when a
         // caller maliciously lists a broad-family descendant in the manifest.
-        if is_forbidden_private_path(logical_path) {
+        if is_forbidden_private_path(&normalized_source) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::ForbiddenPrivateMaterial,
             ));
         }
-        if is_explicit_lock_path(logical_path, &state) {
+        if is_explicit_lock_path(&normalized_source, &state) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::ProducerLock,
             ));
         }
-        if is_crash_protocol_path(logical_path) {
+        if is_crash_protocol_path(&normalized_source) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::CrashRecoveryArtifact,
             ));
         }
-        if is_domain_pack_staging_path(logical_path, &state) {
+        if is_domain_pack_staging_path(&normalized_source, &state) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::IncompleteDomainPackStaging,
             ));
@@ -852,12 +863,12 @@ impl BackupManifestDocument {
         if let Some(entry) = manifest
             .entries
             .iter()
-            .find(|entry| entry.logical_path == logical_path)
+            .find(|entry| entry.logical_path == archive_path)
         {
             return Ok(BackupSourceFileClassification::Archive(entry.material));
         }
         Err(BackupManifestValidationError::UnclassifiedSourceFile {
-            path: logical_path.to_owned(),
+            path: source_path.to_owned(),
         })
     }
 
@@ -869,11 +880,12 @@ impl BackupManifestDocument {
     ) -> Result<(), BackupManifestValidationError> {
         self.validate_integrity()?;
         let mut archived = BTreeMap::new();
-        let mut all_paths = BTreeSet::new();
+        let mut all_identities = BTreeSet::new();
         for file in observed {
+            let archive_path = canonical_archive_path(&file.logical_path)?;
             if file.entry_type != BackupArchiveEntryType::RegularFile
                 || file.hard_link_count != 1
-                || !all_paths.insert(file.logical_path.as_str())
+                || !all_identities.insert(archive_path.clone())
             {
                 return Err(BackupManifestValidationError::UnclassifiedSourceFile {
                     path: file.logical_path.clone(),
@@ -882,7 +894,7 @@ impl BackupManifestDocument {
             match self.classify_source_file(&file.logical_path)? {
                 BackupSourceFileClassification::Archive(material) => {
                     archived.insert(
-                        file.logical_path.as_str(),
+                        archive_path,
                         (material, file.byte_length, file.sha256.as_str()),
                     );
                 }
@@ -890,8 +902,7 @@ impl BackupManifestDocument {
             }
         }
         for entry in &self.backup_manifest.entries {
-            let Some((material, byte_length, digest_value)) =
-                archived.get(entry.logical_path.as_str())
+            let Some((material, byte_length, digest_value)) = archived.get(&entry.logical_path)
             else {
                 return Err(
                     BackupManifestValidationError::SourceStateInventoryMismatch {
@@ -942,16 +953,14 @@ impl BackupManifestDocument {
         {
             return Err(BackupManifestValidationError::EffectMetadataIndexBytesMismatch);
         }
-        let parsed = parse_effect_metadata_index(
-            archived_index_bytes,
-            &self.backup_manifest.project.archive_layout,
-        )?;
+        let parsed = parse_effect_metadata_index(archived_index_bytes, &self.backup_manifest)?;
         let projected = parsed
             .iter()
             .map(|output| BackupDeclaredEffectOutput {
                 operation_id: output.operation_id.clone(),
                 effect_id: output.effect_id.clone(),
                 target_kind: output.target_kind,
+                physical_ref: output.physical_ref.clone(),
                 logical_ref: output.logical_ref.clone(),
                 state_relative_path: output.state_relative_path.clone(),
                 access_mode: output.access_mode,
@@ -990,8 +999,9 @@ impl BackupManifest {
         let mut previous = None;
         let mut paths = BTreeSet::new();
         for entry in &self.entries {
-            validate_safe_path(&entry.logical_path)?;
-            if is_forbidden_private_path(&entry.logical_path) {
+            validate_canonical_archive_path(&entry.logical_path)?;
+            let source_identity = decode_canonical_archive_path(&entry.logical_path)?;
+            if is_forbidden_private_path(&source_identity) {
                 return Err(BackupManifestValidationError::ForbiddenPrivatePath {
                     path: entry.logical_path.clone(),
                 });
@@ -1001,7 +1011,7 @@ impl BackupManifest {
                     path: entry.logical_path.clone(),
                 });
             }
-            validate_entry_path(entry, &self.project.archive_layout)?;
+            validate_entry_path(entry, self)?;
             digest("entries[].sha256", &entry.sha256)?;
             let key = (entry.material, entry.logical_path.as_str());
             if previous.is_some_and(|prior| prior >= key) {
@@ -1011,6 +1021,15 @@ impl BackupManifest {
             if !paths.insert(&entry.logical_path) {
                 return Err(BackupManifestValidationError::DuplicateEntryPath {
                     path: entry.logical_path.clone(),
+                });
+            }
+        }
+        let mut paths_by_name = paths.into_iter().collect::<Vec<_>>();
+        paths_by_name.sort_unstable();
+        for pair in paths_by_name.windows(2) {
+            if pair[1].starts_with(&format!("{}/", pair[0])) {
+                return Err(BackupManifestValidationError::ImpossibleArchiveTopology {
+                    path: pair[0].clone(),
                 });
             }
         }
@@ -1606,16 +1625,18 @@ fn validate_declared_effect_outputs(
     expected: &mut BTreeMap<BackupEntryKind, u64>,
 ) -> Result<(), BackupManifestValidationError> {
     let outputs = &manifest.source_state.declared_effect_outputs;
-    expected.insert(
-        BackupEntryKind::DeclaredEffectOutput,
-        outputs
-            .iter()
-            .filter(|output| output.target_kind == BackupDeclaredEffectTargetKind::FilePath)
-            .count() as u64,
-    );
+    let declared_count = outputs
+        .iter()
+        .filter(|output| {
+            effect_output_material(manifest, &output.state_relative_path)
+                == Some(BackupEntryKind::DeclaredEffectOutput)
+        })
+        .count() as u64;
+    expected.insert(BackupEntryKind::DeclaredEffectOutput, declared_count);
     let state = state_prefix(&manifest.project.archive_layout);
     let mut previous: Option<&str> = None;
     let mut metadata_records = BTreeSet::new();
+    let mut physical_identities = BTreeSet::new();
     for output in outputs {
         required("declared_effect.operation_id", &output.operation_id)?;
         required("declared_effect.effect_id", &output.effect_id)?;
@@ -1624,22 +1645,30 @@ fn validate_declared_effect_outputs(
             &output.metadata_record_sha256,
         )?;
         digest("declared_effect.content_sha256", &output.content_sha256)?;
-        validate_safe_path(&output.state_relative_path)?;
+        validate_canonical_archive_path(&output.state_relative_path)?;
         let metadata_kind = effect_metadata_target_kind(output.target_kind);
-        let Some(expected_state_relative_path) = expected_effect_state_relative_path(
+        let expected_physical_ref =
+            expected_effect_physical_ref(metadata_kind, &output.logical_ref)
+                .ok_or(BackupManifestValidationError::InvalidDeclaredEffectProjection)?;
+        let expected_state_relative_path = expected_effect_state_relative_path(
             metadata_kind,
             &output.logical_ref,
             &manifest.project.archive_layout,
-        ) else {
+        )
+        .ok_or(BackupManifestValidationError::InvalidDeclaredEffectProjection)?;
+        if !is_live_effect_source_path_allowed(
+            &expected_physical_ref,
+            &manifest.project.archive_layout,
+        ) {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        }
+        let Some(material) = effect_output_material(manifest, &output.state_relative_path) else {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         };
-        let Some(material) =
-            effect_output_material(output.target_kind, &output.state_relative_path)
-        else {
-            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
-        };
-        if output.state_relative_path != expected_state_relative_path
+        if output.physical_ref != expected_physical_ref
+            || output.state_relative_path != expected_state_relative_path
             || previous.is_some_and(|path| path >= output.state_relative_path.as_str())
+            || !physical_identities.insert(output.state_relative_path.as_str())
             || !metadata_records.insert(output.metadata_record_sha256.as_str())
         {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
@@ -1661,51 +1690,49 @@ fn validate_declared_effect_outputs(
 }
 
 fn effect_output_material(
-    target_kind: BackupDeclaredEffectTargetKind,
+    manifest: &BackupManifest,
     state_relative_path: &str,
 ) -> Option<BackupEntryKind> {
-    match target_kind {
-        BackupDeclaredEffectTargetKind::FilePath
-            if !is_reserved_effect_output_path(state_relative_path) =>
-        {
-            Some(BackupEntryKind::DeclaredEffectOutput)
-        }
-        BackupDeclaredEffectTargetKind::ArtifactId
-            if state_relative_path.starts_with("artifacts/") =>
-        {
-            Some(BackupEntryKind::Artifact)
-        }
-        BackupDeclaredEffectTargetKind::EvidenceId
-            if state_relative_path.starts_with("evidence/") =>
-        {
-            Some(BackupEntryKind::Evidence)
-        }
-        BackupDeclaredEffectTargetKind::EvidenceId
-            if state_relative_path.starts_with("snapshots/") =>
-        {
-            Some(BackupEntryKind::Snapshot)
-        }
-        BackupDeclaredEffectTargetKind::LedgerStream if state_relative_path == "ledger.ndjson" => {
-            Some(BackupEntryKind::RootLedger)
-        }
-        BackupDeclaredEffectTargetKind::LedgerStream
-            if state_relative_path.starts_with("ledger/") =>
-        {
-            Some(BackupEntryKind::LedgerStream)
-        }
-        BackupDeclaredEffectTargetKind::RequestStream
-            if state_relative_path == "requests.ndjson"
-                || state_relative_path.starts_with("requests/") =>
-        {
-            Some(BackupEntryKind::RequestStream)
-        }
-        _ => None,
+    let full_path = format!(
+        "{}/{}",
+        state_prefix(&manifest.project.archive_layout),
+        state_relative_path
+    );
+    if let Some(entry) = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.logical_path == full_path)
+    {
+        return Some(entry.material);
+    }
+    if state_relative_path == "artifacts"
+        || state_relative_path == "evidence"
+        || state_relative_path == "snapshots"
+        || state_relative_path == "ledger"
+        || state_relative_path == "requests"
+    {
+        return Some(BackupEntryKind::DeclaredEffectOutput);
+    }
+    if state_relative_path.starts_with("artifacts/") {
+        Some(BackupEntryKind::Artifact)
+    } else if state_relative_path.starts_with("evidence/") {
+        Some(BackupEntryKind::Evidence)
+    } else if state_relative_path.starts_with("snapshots/") {
+        Some(BackupEntryKind::Snapshot)
+    } else if state_relative_path.starts_with("ledger/") {
+        Some(BackupEntryKind::LedgerStream)
+    } else if state_relative_path == "requests.ndjson"
+        || state_relative_path.starts_with("requests/")
+    {
+        Some(BackupEntryKind::RequestStream)
+    } else {
+        None
     }
 }
 
 fn parse_effect_metadata_index(
     raw: &[u8],
-    layout: &BackupArchiveLayout,
+    manifest: &BackupManifest,
 ) -> Result<Vec<BackupParsedEffectOutput>, BackupManifestValidationError> {
     if raw.is_empty() {
         return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
@@ -1775,25 +1802,25 @@ fn parse_effect_metadata_index(
         if record.access_mode == EffectMetadataAccessMode::Delete {
             continue;
         }
-        let Some(state_relative_path) =
-            expected_effect_state_relative_path(record.target_kind, &record.logical_ref, layout)
-        else {
-            // Shipped FilePath targets may be ordinary repository files. They remain
-            // fully validated index records but are not members of the state backup.
+        let Some(state_relative_path) = expected_effect_state_relative_path(
+            record.target_kind,
+            &record.logical_ref,
+            &manifest.project.archive_layout,
+        ) else {
+            // Valid repository FilePath targets outside the state root are not backup members.
             continue;
         };
+        if !is_live_effect_source_path_allowed(
+            &record.physical_ref,
+            &manifest.project.archive_layout,
+        ) {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
         let target_kind = backup_effect_target_kind(record.target_kind)
             .expect("validated shipped file-backed metadata target");
-        let Some(_material) = effect_output_material(target_kind, &state_relative_path) else {
-            if target_kind == BackupDeclaredEffectTargetKind::FilePath
-                && is_reserved_effect_output_path(&state_relative_path)
-            {
-                // Reserved state families are inventoried by their own typed entries; a
-                // valid generic FilePath metadata record cannot claim them a second time.
-                continue;
-            }
+        if effect_output_material(manifest, &state_relative_path).is_none() {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
-        };
+        }
         if !paths.insert(state_relative_path.clone()) {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
@@ -1900,7 +1927,7 @@ fn expected_effect_physical_ref(
         | EffectMetadataTargetKind::StateKey
         | EffectMetadataTargetKind::CompletionId => return None,
     };
-    normalized_effect_repo_relative(&physical_ref)?;
+    normalized_utf8_repo_relative(&physical_ref)?;
     Some(physical_ref)
 }
 
@@ -1944,7 +1971,7 @@ fn project_effect_logical_target(
     Some(format!("{base_dir}/{file_name}"))
 }
 
-fn normalized_effect_repo_relative(path: &str) -> Option<String> {
+fn normalized_utf8_components(path: &str) -> Option<Vec<String>> {
     let path = Path::new(path);
     if path.as_os_str().is_empty() || path.is_absolute() {
         return None;
@@ -1952,12 +1979,111 @@ fn normalized_effect_repo_relative(path: &str) -> Option<String> {
     let mut normalized = Vec::new();
     for component in path.components() {
         match component {
-            Component::Normal(value) => normalized.push(value.to_str()?.to_owned()),
+            Component::Normal(value) => {
+                let value = value.to_str()?;
+                if value.contains('\0') {
+                    return None;
+                }
+                normalized.push(value.to_owned());
+            }
             Component::CurDir => {}
             Component::Prefix(_) | Component::RootDir | Component::ParentDir => return None,
         }
     }
-    (!normalized.is_empty()).then(|| normalized.join("/"))
+    (!normalized.is_empty()).then_some(normalized)
+}
+
+fn normalized_utf8_repo_relative(path: &str) -> Option<String> {
+    normalized_utf8_components(path).map(|components| components.join("/"))
+}
+
+fn encode_archive_component(component: &str) -> String {
+    let mut encoded = String::new();
+    for byte in component.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b'.') {
+            encoded.push(char::from(*byte));
+        } else {
+            use std::fmt::Write as _;
+            write!(&mut encoded, "%{byte:02X}").expect("writing to String cannot fail");
+        }
+    }
+    encoded
+}
+
+/// Canonical, injective archive identity for a normalized UTF-8 OS path.
+/// Components are normalized with target-platform `Path::components`; every byte outside
+/// the portable unreserved set (including `%`, backslash, controls, and non-ASCII UTF-8)
+/// is uppercase percent encoded within its component.
+///
+/// # Errors
+///
+/// Returns `InvalidLogicalPath` when the source is not a relative, representable UTF-8
+/// target-platform path.
+pub fn canonical_archive_path(source_path: &str) -> Result<String, BackupManifestValidationError> {
+    let components = normalized_utf8_components(source_path).ok_or_else(|| {
+        BackupManifestValidationError::InvalidLogicalPath {
+            path: source_path.to_owned(),
+        }
+    })?;
+    Ok(components
+        .iter()
+        .map(|component| encode_archive_component(component))
+        .collect::<Vec<_>>()
+        .join("/"))
+}
+
+fn decode_canonical_archive_path(
+    archive_path: &str,
+) -> Result<String, BackupManifestValidationError> {
+    validate_safe_path(archive_path)?;
+    let mut decoded_components = Vec::new();
+    for component in archive_path.split('/') {
+        let bytes = component.as_bytes();
+        let mut decoded = Vec::with_capacity(bytes.len());
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == b'%' {
+                if index + 2 >= bytes.len()
+                    || !bytes[index + 1].is_ascii_hexdigit()
+                    || !bytes[index + 2].is_ascii_hexdigit()
+                {
+                    return Err(BackupManifestValidationError::InvalidLogicalPath {
+                        path: archive_path.to_owned(),
+                    });
+                }
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).expect("ASCII hex");
+                decoded.push(u8::from_str_radix(hex, 16).map_err(|_| {
+                    BackupManifestValidationError::InvalidLogicalPath {
+                        path: archive_path.to_owned(),
+                    }
+                })?);
+                index += 3;
+            } else {
+                decoded.push(bytes[index]);
+                index += 1;
+            }
+        }
+        let decoded = String::from_utf8(decoded).map_err(|_| {
+            BackupManifestValidationError::InvalidLogicalPath {
+                path: archive_path.to_owned(),
+            }
+        })?;
+        decoded_components.push(decoded);
+    }
+    Ok(decoded_components.join("/"))
+}
+
+fn validate_canonical_archive_path(
+    archive_path: &str,
+) -> Result<(), BackupManifestValidationError> {
+    let decoded = decode_canonical_archive_path(archive_path)?;
+    if canonical_archive_path(&decoded).as_deref() == Ok(archive_path) {
+        Ok(())
+    } else {
+        Err(BackupManifestValidationError::InvalidLogicalPath {
+            path: archive_path.to_owned(),
+        })
+    }
 }
 
 fn expected_effect_state_relative_path(
@@ -1966,12 +2092,32 @@ fn expected_effect_state_relative_path(
     layout: &BackupArchiveLayout,
 ) -> Option<String> {
     let physical_ref = expected_effect_physical_ref(kind, logical_ref)?;
-    let normalized_physical_ref = normalized_effect_repo_relative(&physical_ref)?;
-    let normalized_state_root =
-        normalized_effect_repo_relative(&layout.state_root_relative_to_sidecar)?;
-    normalized_physical_ref
-        .strip_prefix(&format!("{normalized_state_root}/"))
-        .map(str::to_owned)
+    let physical_components = normalized_utf8_components(&physical_ref)?;
+    let state_components = normalized_utf8_components(&layout.state_root_relative_to_sidecar)?;
+    let relative = physical_components.strip_prefix(state_components.as_slice())?;
+    if relative.is_empty() {
+        return None;
+    }
+    Some(
+        relative
+            .iter()
+            .map(|component| encode_archive_component(component))
+            .collect::<Vec<_>>()
+            .join("/"),
+    )
+}
+
+fn is_live_effect_source_path_allowed(physical_ref: &str, layout: &BackupArchiveLayout) -> bool {
+    let Some(path) = normalized_utf8_repo_relative(physical_ref) else {
+        return false;
+    };
+    let Some(state) = normalized_utf8_repo_relative(&layout.state_root_relative_to_sidecar) else {
+        return false;
+    };
+    !is_forbidden_private_path(&path)
+        && !is_explicit_lock_path(&path, &state)
+        && !is_crash_protocol_path(&path)
+        && !is_domain_pack_staging_path(&path, &state)
 }
 
 fn validate_external_authorities(
@@ -2150,8 +2296,9 @@ fn validate_registry_observation(
 
 fn validate_entry_path(
     entry: &BackupEntry,
-    layout: &BackupArchiveLayout,
+    manifest: &BackupManifest,
 ) -> Result<(), BackupManifestValidationError> {
+    let layout = &manifest.project.archive_layout;
     let state = state_prefix(layout);
     let exact = |suffix: &str| entry.logical_path == format!("{state}/{suffix}");
     let below = |directory: &str| {
@@ -2245,9 +2392,11 @@ fn validate_entry_path(
         BackupEntryKind::PreflightProfile => exact("preflight.yaml"),
         BackupEntryKind::EffectMetadataIndex => exact("index/effect-targets.ndjson"),
         BackupEntryKind::TraceLog => exact("traces/events.ndjson"),
-        BackupEntryKind::DeclaredEffectOutput => {
-            entry.logical_path.starts_with(&format!("{state}/"))
-        }
+        BackupEntryKind::DeclaredEffectOutput => manifest
+            .source_state
+            .declared_effect_outputs
+            .iter()
+            .any(|output| entry.logical_path == format!("{state}/{}", output.state_relative_path)),
     };
     if valid {
         Ok(())
@@ -2360,42 +2509,6 @@ fn is_forbidden_private_path(path: &str) -> bool {
         || path.contains("/private-keys/")
         || path.ends_with(".pem")
         || path.ends_with(".key")
-}
-
-fn is_reserved_effect_output_path(path: &str) -> bool {
-    const RESERVED: &[&str] = &[
-        "locks",
-        "wal",
-        "domain-packs",
-        "domain-pack-learning",
-        "contracts/isolations",
-        "memory",
-        "research",
-        "governance",
-        "claims-active",
-        "handoffs",
-        "artifacts",
-        "evidence",
-        "snapshots",
-        "ledger",
-        "requests",
-        "runtime",
-        "stories",
-        "agents",
-        "index",
-        "traces",
-    ];
-    matches!(
-        path,
-        "state.yaml"
-            | "ledger.ndjson"
-            | "replay-wal.manifest.json"
-            | "workflow-action-replay.manifest.json"
-            | "preflight.yaml"
-            | "requests.ndjson"
-    ) || RESERVED
-        .iter()
-        .any(|prefix| path == *prefix || path.starts_with(&format!("{prefix}/")))
 }
 
 fn is_explicit_lock_path(path: &str, state: &str) -> bool {
@@ -2566,7 +2679,7 @@ mod tests {
             .entries
             .iter()
             .map(|entry| BackupSourceFileMetadata {
-                logical_path: entry.logical_path.clone(),
+                logical_path: decode_canonical_archive_path(&entry.logical_path).unwrap(),
                 entry_type: entry.entry_type,
                 hard_link_count: 1,
                 byte_length: entry.byte_length,
@@ -2623,7 +2736,22 @@ mod tests {
             &document.backup_manifest.project.archive_layout,
         )
         .unwrap();
-        let material = effect_output_material(target_kind, &state_relative_path).unwrap();
+        if effect_output_material(&document.backup_manifest, &state_relative_path).is_none() {
+            let output_path = format!(
+                "{}/{}",
+                state_prefix(&document.backup_manifest.project.archive_layout),
+                state_relative_path
+            );
+            document
+                .backup_manifest
+                .entries
+                .iter_mut()
+                .find(|entry| entry.material == BackupEntryKind::DeclaredEffectOutput)
+                .unwrap()
+                .logical_path = output_path;
+        }
+        let material =
+            effect_output_material(&document.backup_manifest, &state_relative_path).unwrap();
         let content_sha256 = declared_record.content_hash.clone().unwrap();
         let output = document
             .backup_manifest
@@ -2636,6 +2764,9 @@ mod tests {
             .clone_from(&declared_record.operation_id);
         output.effect_id.clone_from(&declared_record.effect_id);
         output.target_kind = target_kind;
+        output
+            .physical_ref
+            .clone_from(&declared_record.physical_ref);
         output.logical_ref.clone_from(&declared_record.logical_ref);
         output.state_relative_path = state_relative_path;
         output.access_mode = match declared_record.access_mode {
@@ -3559,6 +3690,29 @@ mod tests {
             document.verify_effect_metadata_index_bytes(&raw),
             Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
         );
+
+        let mut typed = effect_record(
+            "operation.typed-artifact",
+            "effect.typed-artifact",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            47,
+        );
+        typed.target_kind = EffectMetadataTargetKind::ArtifactId;
+        typed.logical_ref = "result".to_owned();
+        typed.physical_ref = ".forge-method/artifacts/result.yaml".to_owned();
+        let mut generic = typed.clone();
+        generic.operation_id = "operation.generic-artifact".to_owned();
+        generic.effect_id = "effect.generic-artifact".to_owned();
+        generic.target_kind = EffectMetadataTargetKind::FilePath;
+        generic.logical_ref = generic.physical_ref.clone();
+        let cross_kind_raw = encoded_effect_records(&[typed, generic]);
+        let mut cross_kind = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut cross_kind, &cross_kind_raw);
+        assert_eq!(
+            cross_kind.verify_effect_metadata_index_bytes(&cross_kind_raw),
+            Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+        );
     }
 
     #[test]
@@ -3636,25 +3790,232 @@ mod tests {
     }
 
     #[test]
-    fn effect_index_validates_but_omits_reserved_family_file_path() {
-        let hash = format!("sha256:{}", "9".repeat(64));
+    fn reserved_family_file_path_is_cross_bound_to_exact_typed_bytes() {
+        let forged_hash = format!("sha256:{}", "9".repeat(64));
         let mut reserved = effect_record(
             "operation.reserved",
             "effect.reserved",
             EffectMetadataAccessMode::Create,
-            Some(&hash),
+            Some(&forged_hash),
             47,
         );
         reserved.logical_ref = ".forge-method/artifacts/result.yaml".to_owned();
         reserved.physical_ref = reserved.logical_ref.clone();
-        let raw = encoded_effect_records(std::slice::from_ref(&reserved));
-        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
-        bind_index_without_outputs(&mut document, &raw);
+        let forged_raw = encoded_effect_records(std::slice::from_ref(&reserved));
+        let mut forged = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut forged, &forged_raw);
+        assert_eq!(
+            forged.verify_effect_metadata_index_bytes(&forged_raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
 
-        assert!(document
-            .verify_effect_metadata_index_bytes(&raw)
+        reserved.content_hash = Some(format!("sha256:{}", "a".repeat(64)));
+        let matching_raw = encoded_effect_records(std::slice::from_ref(&reserved));
+        let mut matching = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut matching, &matching_raw, &reserved);
+        let parsed = matching
+            .verify_effect_metadata_index_bytes(&matching_raw)
+            .unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(
+            parsed[0].target_kind,
+            BackupDeclaredEffectTargetKind::FilePath
+        );
+        assert_eq!(parsed[0].physical_ref, reserved.physical_ref);
+        matching
+            .verify_source_enumeration(&source_metadata(&matching))
+            .unwrap();
+    }
+
+    #[test]
+    fn canonical_archive_encoding_roundtrips_weird_live_linux_paths_without_collisions() {
+        let hash = format!("sha256:{}", "8".repeat(64));
+        let cases = [
+            (".forge-method/custom\\name.yaml", "custom%5Cname.yaml"),
+            (".forge-method/custom\nname.yaml", "custom%0Aname.yaml"),
+            (".forge-method/custom%5Cname.yaml", "custom%255Cname.yaml"),
+        ];
+        let mut archive_identities = BTreeSet::new();
+        for (physical_ref, archive_relative) in cases {
+            let mut record = effect_record(
+                "operation.weird",
+                "effect.weird",
+                EffectMetadataAccessMode::Create,
+                Some(&hash),
+                55,
+            );
+            record.logical_ref = physical_ref.to_owned();
+            record.physical_ref = physical_ref.to_owned();
+            let raw = encoded_effect_records(std::slice::from_ref(&record));
+            let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+            bind_effect_fixture(&mut document, &raw, &record);
+
+            let parsed = document.verify_effect_metadata_index_bytes(&raw).unwrap();
+            assert_eq!(parsed[0].physical_ref, physical_ref);
+            assert_eq!(parsed[0].state_relative_path, archive_relative);
+            let archive_path = format!("sidecar/.forge-method/{archive_relative}");
+            assert!(archive_identities.insert(archive_path.clone()));
+            assert_eq!(
+                decode_canonical_archive_path(&archive_path).unwrap(),
+                format!("sidecar/{physical_ref}")
+            );
+            assert_eq!(
+                document.classify_source_file(&format!("sidecar/{physical_ref}")),
+                Ok(BackupSourceFileClassification::Archive(
+                    BackupEntryKind::DeclaredEffectOutput
+                ))
+            );
+            document
+                .verify_source_enumeration(&source_metadata(&document))
+                .unwrap();
+            document
+                .verify_archive_entries(&document.backup_manifest.entries)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn exact_effect_spelling_and_normalized_source_identity_are_both_bound() {
+        let hash = format!("sha256:{}", "7".repeat(64));
+        for physical_ref in [
+            ".forge-method/custom/./source-derived-output.yaml",
+            ".forge-method/custom//source-derived-output.yaml",
+        ] {
+            let mut record = effect_record(
+                "operation.alias",
+                "effect.alias",
+                EffectMetadataAccessMode::Write,
+                Some(&hash),
+                55,
+            );
+            record.logical_ref = physical_ref.to_owned();
+            record.physical_ref = physical_ref.to_owned();
+            let raw = encoded_effect_records(std::slice::from_ref(&record));
+            let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+            bind_effect_fixture(&mut document, &raw, &record);
+            document.validate_integrity().unwrap();
+            let output = &document
+                .backup_manifest
+                .source_state
+                .declared_effect_outputs[0];
+            assert_eq!(output.physical_ref, physical_ref);
+            assert_eq!(
+                output.state_relative_path,
+                "custom/source-derived-output.yaml"
+            );
+            document.verify_effect_metadata_index_bytes(&raw).unwrap();
+        }
+
+        let document = parse_manifest("valid/multi-generation-v1.yaml");
+        let mut aliases = source_metadata(&document);
+        let duplicate = aliases
+            .iter()
+            .find(|file| file.logical_path.ends_with("/artifacts/result.yaml"))
             .unwrap()
-            .is_empty());
+            .clone();
+        let mut spelled_alias = duplicate;
+        spelled_alias.logical_path = "sidecar/.forge-method/artifacts/./result.yaml".to_owned();
+        aliases.push(spelled_alias);
+        assert!(document.verify_source_enumeration(&aliases).is_err());
+    }
+
+    #[test]
+    fn every_shipped_typed_prefix_root_has_valid_dot_and_repeated_archive_material() {
+        let hash = format!("sha256:{}", "6".repeat(64));
+        let cases = [
+            (
+                EffectMetadataTargetKind::ArtifactId,
+                "artifacts",
+                BackupEntryKind::Artifact,
+            ),
+            (
+                EffectMetadataTargetKind::EvidenceId,
+                "evidence",
+                BackupEntryKind::Evidence,
+            ),
+            (
+                EffectMetadataTargetKind::EvidenceId,
+                "snapshots",
+                BackupEntryKind::Snapshot,
+            ),
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                "ledger",
+                BackupEntryKind::LedgerStream,
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                "requests",
+                BackupEntryKind::RequestStream,
+            ),
+        ];
+        for (target_kind, family, owned_material) in cases {
+            for suffix in [".", ""] {
+                let physical_ref = if suffix.is_empty() {
+                    format!(".forge-method/{family}//")
+                } else {
+                    format!(".forge-method/{family}/{suffix}")
+                };
+                let mut record = effect_record(
+                    "operation.family-root",
+                    "effect.family-root",
+                    EffectMetadataAccessMode::Create,
+                    Some(&hash),
+                    55,
+                );
+                record.target_kind = target_kind;
+                record.logical_ref = physical_ref.clone();
+                record.physical_ref = physical_ref.clone();
+                let raw = encoded_effect_records(std::slice::from_ref(&record));
+                let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+                document
+                    .backup_manifest
+                    .entries
+                    .retain(|entry| entry.material != owned_material);
+                let counts = &mut document.backup_manifest.source_state.public_sidecars;
+                match owned_material {
+                    BackupEntryKind::Artifact => counts.artifacts = 0,
+                    BackupEntryKind::Evidence => counts.evidence = 0,
+                    BackupEntryKind::Snapshot => counts.snapshots = 0,
+                    BackupEntryKind::LedgerStream => counts.ledger_streams = 0,
+                    BackupEntryKind::RequestStream => counts.request_streams = 0,
+                    _ => unreachable!(),
+                }
+                bind_effect_fixture(&mut document, &raw, &record);
+                document.validate_integrity().unwrap();
+                let parsed = document.verify_effect_metadata_index_bytes(&raw).unwrap();
+                assert_eq!(parsed[0].state_relative_path, family);
+                assert!(document.backup_manifest.entries.iter().any(|entry| {
+                    entry.material == BackupEntryKind::DeclaredEffectOutput
+                        && entry.logical_path == format!("sidecar/.forge-method/{family}")
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn archive_file_and_descendant_topology_is_impossible() {
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs[0]
+            .state_relative_path = "artifacts".to_owned();
+        document
+            .backup_manifest
+            .entries
+            .iter_mut()
+            .find(|entry| entry.material == BackupEntryKind::DeclaredEffectOutput)
+            .unwrap()
+            .logical_path = "sidecar/.forge-method/artifacts".to_owned();
+        document.backup_manifest.entries.sort_by(|left, right| {
+            (left.material, &left.logical_path).cmp(&(right.material, &right.logical_path))
+        });
+        recompute(&mut document);
+        assert!(matches!(
+            document.validate_integrity(),
+            Err(BackupManifestValidationError::ImpossibleArchiveTopology { .. })
+        ));
     }
 
     #[test]

@@ -532,7 +532,7 @@
       "mcp_private_keys"
     ],
     "format": "forge_project_state_backup_v1",
-    "manifest_set_digest": "sha256:4e83b6345cffdbe51955741d9c8e00342e6933307687a865be4c9374229c3a73",
+    "manifest_set_digest": "sha256:0612583e706c14b32c7a343d404f558523e8ed0a281b7c609aebab4f52afc4aa",
     "project": {
       "archive_layout": {
         "project_link_archive_path": "project/.forge-method.yaml",
@@ -587,6 +587,7 @@
           "content_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "effect_id": "effect.custom",
           "logical_ref": ".forge-method/custom/source-derived-output.yaml",
+          "physical_ref": ".forge-method/custom/source-derived-output.yaml",
           "metadata_record_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "operation_id": "operation.custom",
           "state_relative_path": "custom/source-derived-output.yaml",

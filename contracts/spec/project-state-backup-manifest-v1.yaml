@@ -38,9 +38,13 @@ backup_manifest_contract:
       - exact provisioned sidecar/operator public registry files
     classifier_api: BackupManifestDocument::classify_source_file
     complete_enumeration_api: BackupManifestDocument::verify_source_enumeration
-    invariant: every no-follow regular source file is either one exact typed archive member or one explicit shipped exclusion; unknown files reject
-    metadata: [logical_path, no_follow_entry_type, no_follow_hard_link_count, byte_length, sha256]
-    classification_precedence: forbidden-private -> producer-lock -> crash-temporary -> incomplete-staging -> exact manifest entry lookup
+    invariant: every no-follow regular source file normalizes to exactly one injective canonical archive identity and is either one exact typed member or one explicit shipped exclusion; unknown files reject
+    metadata: [raw_repo_relative_utf8_os_path, no_follow_entry_type, no_follow_hard_link_count, byte_length, sha256]
+    source_normalization: target-platform Rust Path::components removes repeated separators and CurDir; empty, absolute, prefix, root, ParentDir, and non-UTF-8 inputs reject
+    canonical_archive_encoding: normalize components, preserve only ASCII alphanumeric plus '-' '_' '.' bytes, uppercase-percent-encode every other UTF-8 byte within its component, join components with '/', and encode '%' itself as '%25'
+    reversibility: each archive component must decode as UTF-8 and re-encode byte-for-byte to the same canonical spelling; lowercase/redundant escapes and escaped separators are noncanonical
+    alias_closure: two raw enumerated spellings with one normalized archive identity reject as a duplicate; exact effect physical_ref spelling remains independently bound
+    classification_precedence: forbidden-private -> producer-lock -> crash-temporary -> incomplete-staging -> exact canonical manifest entry lookup
     broad_family_override: forbidden; a listed artifact/evidence/snapshot/runtime/story/agent descendant that matches an exclusion is still excluded and makes complete enumeration fail
     archive_verification_is_not_enumeration: true
     explicit_exclusions:
@@ -77,8 +81,10 @@ backup_manifest_contract:
       generic_catch_all: forbidden
       cross_binding_api: BackupManifestDocument::verify_effect_metadata_index_bytes
       source: exact archived index/effect-targets.ndjson bytes read while effect-index and effect-WAL locks plus producer quiescence remain retained
-      binding: sorted operation_id, effect_id, exact file-backed target kind, exact caller logical_ref, exact shipped physical_ref, normalized state-relative archive path, access_mode, content SHA-256, byte length, exact source-record SHA-256, and exact typed archive-entry SHA-256
-      reserved_internal_families: valid generic file_path records are validated but omitted because typed source inventory owns those paths
+      binding: sorted operation_id, effect_id, exact file-backed target kind, exact caller logical_ref, exact shipped physical_ref spelling, canonical encoded state-relative archive identity, access_mode, content SHA-256, byte length, exact source-frame SHA-256, and exact archive-entry material/SHA-256/length
+      physical_identity_closure: duplicate live normalized physical identities reject across generic and typed target keys even if operation/effect identities differ
+      reserved_internal_families: never omit a live generic file_path; an exact existing typed member inherits that exact BackupEntryKind and bytes, while narrowly source-derived custom paths and textual family-root files use DeclaredEffectOutput
+      family_roots: textual allowed-prefix spellings ending in '/.' or repeated separators normalize to a representable family-root file; a family-root file cannot coexist with descendants in one archive
       resolver_mirror:
         crate_cycle: forbidden; the wire-compatible mirror remains in forge-core-contracts because forge-core-store depends on it
         source_evidence:
@@ -86,9 +92,13 @@ backup_manifest_contract:
           typed_projection_and_safe_logical_id: crates/forge-core-store/src/lib.rs:3524-3551,3562-3616
           unsupported_non_file_backed: crates/forge-core-store/src/lib.rs:3552-3556,3758-3785,3979-4003
           read_rejection_and_metadata_source: crates/forge-core-store/src/lib.rs:3648-3665,3758-3785,3979-4003
-        file_path: apply target-platform Rust Path::components empty/absolute/prefix/root/parent checks, retain accepted caller spelling in physical_ref, and normalize components only for state-relative archive identity and duplicate-path closure
+        file_path: apply target-platform Rust Path::components empty/absolute/prefix/root/parent checks, retain accepted caller spelling in physical_ref, and canonical-encode normalized components only for archive identity and duplicate-path closure
         typed_ids: apply reference path-likeness, exact allowed prefix/exact forms, otherwise safe_logical_id character sanitization, dot trimming, ASCII-alphanumeric requirement, and extension behavior with no invented length or normalization limit
         streams: path-like ledger/request references preserve every safe suffix and extension below their allowed prefix; ID forms alone acquire .ndjson
+      platform_portability_preflight:
+        creation_platform: accepted UTF-8 names follow that target's Path::components semantics; valid Linux backslash/control/newline names are encoded rather than rejected
+        destination: before extraction C2-S04 must decode every canonical identity, reject unsupported destination names before any write, and never substitute, case-fold, trim, or silently rename a component
+        collision_rule: decoded destination identities must remain injective under destination filesystem semantics or restore preflight fails atomically
       s04_algorithm:
         - retain effect metadata-index append lock before effect WAL lock in BACKUP_LOCK_ORDER and keep producer quiescence through parse, copy, and stable enumeration
         - read exact metadata-index bytes once; require byte length and SHA-256 to equal the EffectMetadataIndex archive entry
@@ -96,10 +106,10 @@ backup_manifest_contract:
         - hash each raw JSON frame without its newline and validate schema/record kind, nonblank operation/effect/actor identities, redaction hint, target-specific logical_ref grammar, and exact shipped physical_ref
         - require create/write/append to carry a valid final content_hash; require delete to carry no content hash and byte_len zero; reject read metadata records
         - validate every historical frame before source-order latest/delete replacement keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
-        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref (FilePath identity; typed ID sanitization/extensions/path-family rules; unsupported non-file-backed kinds reject), validate its Rust-path component safety, and require exact spelling equality
-        - after latest/delete selection, normalize safe path components for archive identity, omit repository FilePath records outside the state root, and omit reserved-family generic FilePath records; only live state-backup outputs enter typed closure; duplicate normalized physical paths reject, then outputs sort by state-relative path
-        - map typed live ledger/request prefix outputs to exact LedgerStream/RequestStream members regardless of suffix, with no generic fallback; reserved families and exclusions remain exact and exclusion-first
-        - compare the complete derived projection, including raw frame digest, operation/effect/target identity, access_mode, and byte_len, with declared_effect_outputs; require content hash and byte_len to equal the exact typed archive entry; stale, forged, deleted, omitted, or extra claims reject
+        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref, require exact spelling equality, then normalize and canonical-encode components without rejecting representable Linux names
+        - omit only repository FilePath records outside the state root; every live state-root output enters closure, duplicate normalized physical identities reject, and outputs sort by canonical state-relative identity
+        - map each live identity to an exact existing typed material when present; otherwise admit only the narrow DeclaredEffectOutput projection, including custom and family-root files; exclusions remain exact and exclusion-first
+        - compare the complete derived projection, including physical_ref and raw frame digest, with declared_effect_outputs; cross-bind target kind, logical/physical identity, access mode, hash, length, material, and exact entry bytes
         - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
   domain_pack_external_provisioning:
     lifecycle_independent: true
@@ -139,7 +149,9 @@ backup_manifest_contract:
     no_follow: required
     regular_file_only: true
     hardlink_count: exactly_one
-    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, omitted, extra, substituted, unclassified]
+    archive_member_identity: canonical encoded path only; every member decodes and re-encodes identically
+    impossible_topology: reject any regular-file member that is also a path-component prefix of another member
+    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, alias, impossible_file_plus_descendant, omitted, extra, substituted, unclassified]
   fixtures:
     valid:
       - contracts/fixtures/backup-manifest/valid/empty-pre-rotation-v1.yaml

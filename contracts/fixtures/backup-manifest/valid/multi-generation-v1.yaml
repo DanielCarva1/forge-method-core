@@ -156,6 +156,7 @@
           "content_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "operation_id": "operation.custom",
           "logical_ref": ".forge-method/custom/source-derived-output.yaml",
+          "physical_ref": ".forge-method/custom/source-derived-output.yaml",
           "metadata_record_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "access_mode": "create",
           "byte_length": 55
@@ -694,6 +695,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:bb5abf4d88459e4a23fdf10e528cf17d131feca05a97d225de36c2803b994a04"
+    "manifest_set_digest": "sha256:8810f2218e011121b9c7d2bef1c8ece3a4b8eac3b729dafd643eca5d2d4eafad"
   }
 }
