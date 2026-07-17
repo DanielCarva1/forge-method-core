@@ -668,14 +668,16 @@ impl ClaimWalRetainedLock {
 pub(crate) fn acquire_claim_wal_retained_lock(
     state_root: &Path,
 ) -> Result<ClaimWalRetainedLock, ClaimWalReadError> {
-    let path = claim_wal_lock_path(state_root);
-    create_parent_dir(&path).map_err(|source| ClaimWalReadError::OpenLock {
-        path: path.clone(),
-        source: source.to_string(),
-    })?;
-    acquire_claim_wal_retained_lock_raw(state_root).map_err(|source| ClaimWalReadError::Lock {
-        path,
-        source: source.to_string(),
+    let requested_lock_path = claim_wal_lock_path(state_root);
+    acquire_claim_wal_retained_lock_raw(state_root).map_err(|source| match source.kind() {
+        io::ErrorKind::Other => ClaimWalReadError::Lock {
+            path: requested_lock_path.clone(),
+            source: source.to_string(),
+        },
+        _ => ClaimWalReadError::OpenLock {
+            path: requested_lock_path.clone(),
+            source: source.to_string(),
+        },
     })
 }
 
@@ -686,10 +688,16 @@ pub(crate) fn recover_claim_wal_under_retained_lock(
     repair: bool,
 ) -> Result<ClaimWalRecovery, ClaimWalReadError> {
     guard.validate(state_root)?;
-    let wal_path = claim_wal_path(state_root);
-    recover_claim_wal_file_under_lock(&wal_path, repair).map_err(|source| {
+    recover_claim_wal_for_guard(guard, repair)
+}
+
+fn recover_claim_wal_for_guard(
+    guard: &ClaimWalRetainedLock,
+    repair: bool,
+) -> Result<ClaimWalRecovery, ClaimWalReadError> {
+    recover_claim_wal_file_under_lock(&guard.wal_path, repair).map_err(|source| {
         ClaimWalReadError::ReadWal {
-            path: wal_path,
+            path: guard.wal_path.clone(),
             source: source.to_string(),
         }
     })
@@ -736,37 +744,46 @@ pub fn append_claim_wal_record_with_durability(
     recorded_at: &str,
     durability: crate::WalDurability,
 ) -> Result<ClaimWalAppendResult, ClaimWalAppendError> {
-    let state_root = state_root.as_ref();
-    let wal_path = claim_wal_path(state_root);
-    let lock_path = claim_wal_lock_path(state_root);
-
-    create_parent_dir(&lock_path).map_err(|source| ClaimWalAppendError::CreateDir {
-        path: lock_path
-            .parent()
-            .unwrap_or_else(|| Path::new(""))
-            .to_path_buf(),
-        source: source.to_string(),
-    })?;
-    let lock =
-        acquire_claim_wal_retained_lock_raw(state_root).map_err(|source| match source.kind() {
-            io::ErrorKind::Other => ClaimWalAppendError::Lock {
-                path: lock_path.clone(),
-                source: source.to_string(),
-            },
-            _ => ClaimWalAppendError::OpenLock {
-                path: lock_path.clone(),
-                source: source.to_string(),
-            },
+    let requested_root = state_root.as_ref();
+    let requested_lock_path = claim_wal_lock_path(requested_root);
+    let guard =
+        acquire_claim_wal_retained_lock_raw(requested_root).map_err(|source| {
+            match source.kind() {
+                io::ErrorKind::Other => ClaimWalAppendError::Lock {
+                    path: requested_lock_path.clone(),
+                    source: source.to_string(),
+                },
+                _ => ClaimWalAppendError::OpenLock {
+                    path: requested_lock_path.clone(),
+                    source: source.to_string(),
+                },
+            }
         })?;
+    append_claim_wal_record_under_retained_lock(
+        &guard,
+        operation,
+        claim_contract,
+        recorded_at,
+        durability,
+    )
+}
 
-    create_parent_dir(&wal_path).map_err(|source| ClaimWalAppendError::CreateDir {
-        path: wal_path
+fn append_claim_wal_record_under_retained_lock(
+    guard: &ClaimWalRetainedLock,
+    operation: ClaimWalOperation,
+    claim_contract: &ClaimContract,
+    recorded_at: &str,
+    durability: crate::WalDurability,
+) -> Result<ClaimWalAppendResult, ClaimWalAppendError> {
+    create_parent_dir(&guard.wal_path).map_err(|source| ClaimWalAppendError::CreateDir {
+        path: guard
+            .wal_path
             .parent()
             .unwrap_or_else(|| Path::new(""))
             .to_path_buf(),
         source: source.to_string(),
     })?;
-    let (recovery, recovery_elapsed_ms) = recover_appendable_wal(state_root, &lock)?;
+    let (recovery, recovery_elapsed_ms) = recover_appendable_wal(guard)?;
     let last_seq = recovery.last_observed_seq;
     let seq = last_seq
         .checked_add(1)
@@ -774,39 +791,30 @@ pub fn append_claim_wal_record_with_durability(
     let payload_bytes = lifecycle_payload_bytes(operation, claim_contract, recorded_at)?;
     let record_bytes = encode_record(seq, operation.record_type(), &payload_bytes)?;
 
-    write_claim_wal_record_bytes_durability(&wal_path, &record_bytes, durability)?;
+    write_claim_wal_record_bytes_durability(&guard.wal_path, &record_bytes, durability)?;
     maybe_rotate_after_append(
-        state_root,
-        &wal_path,
+        &guard.state_root,
+        &guard.wal_path,
         &recovery,
         record_bytes.len(),
         recovery_elapsed_ms,
         recorded_at,
     )?;
-    drop(lock);
 
     Ok(ClaimWalAppendResult {
-        wal_path,
+        wal_path: guard.wal_path.clone(),
         seq,
         bytes_appended: u64::try_from(record_bytes.len()).unwrap_or(u64::MAX),
     })
 }
 
 fn recover_appendable_wal(
-    state_root: &Path,
     guard: &ClaimWalRetainedLock,
 ) -> Result<(ClaimWalRecovery, u64), ClaimWalAppendError> {
     let recovery_started_at = Instant::now();
-    guard
-        .validate(state_root)
-        .map_err(|source| ClaimWalAppendError::ReadWal {
-            path: guard.wal_path.clone(),
-            source: source.to_string(),
-        })?;
-    let wal_path = claim_wal_path(state_root);
-    let recovery = recover_claim_wal_file_under_lock(&wal_path, true).map_err(|source| {
+    let recovery = recover_claim_wal_file_under_lock(&guard.wal_path, true).map_err(|source| {
         ClaimWalAppendError::ReadWal {
-            path: wal_path,
+            path: guard.wal_path.clone(),
             source: source.to_string(),
         }
     })?;
@@ -987,24 +995,33 @@ pub fn rotate_claim_wal_if_needed(
     created_at: &str,
     options: &ClaimWalRotationOptions,
 ) -> Result<ClaimWalRotationResult, ClaimWalRotationError> {
-    let state_root = state_root.as_ref();
-    let lock_path = claim_wal_lock_path(state_root);
-    let lock =
-        acquire_claim_wal_retained_lock_raw(state_root).map_err(|source| match source.kind() {
-            io::ErrorKind::Other => ClaimWalRotationError::Lock {
-                path: lock_path.clone(),
-                source: source.to_string(),
-            },
-            _ => ClaimWalRotationError::OpenLock {
-                path: lock_path.clone(),
-                source: source.to_string(),
-            },
+    let requested_root = state_root.as_ref();
+    let requested_lock_path = claim_wal_lock_path(requested_root);
+    let guard =
+        acquire_claim_wal_retained_lock_raw(requested_root).map_err(|source| {
+            match source.kind() {
+                io::ErrorKind::Other => ClaimWalRotationError::Lock {
+                    path: requested_lock_path.clone(),
+                    source: source.to_string(),
+                },
+                _ => ClaimWalRotationError::OpenLock {
+                    path: requested_lock_path.clone(),
+                    source: source.to_string(),
+                },
+            }
         })?;
-    let wal_path = claim_wal_path(state_root);
+    rotate_claim_wal_if_needed_under_retained_lock(&guard, created_at, options)
+}
+
+fn rotate_claim_wal_if_needed_under_retained_lock(
+    guard: &ClaimWalRetainedLock,
+    created_at: &str,
+    options: &ClaimWalRotationOptions,
+) -> Result<ClaimWalRotationResult, ClaimWalRotationError> {
     let recovery_started_at = Instant::now();
-    let recovery = recover_claim_wal_file_under_lock(&wal_path, true).map_err(|source| {
+    let recovery = recover_claim_wal_file_under_lock(&guard.wal_path, true).map_err(|source| {
         ClaimWalRotationError::RecoverWal {
-            path: wal_path.clone(),
+            path: guard.wal_path.clone(),
             source: source.to_string(),
         }
     })?;
@@ -1016,11 +1033,10 @@ pub fn rotate_claim_wal_if_needed(
         recovery_elapsed_ms,
         options,
     ) else {
-        drop(lock);
         return Ok(ClaimWalRotationResult {
             rotated: false,
             reason: None,
-            wal_path,
+            wal_path: guard.wal_path.clone(),
             snapshot_path: None,
             archived_wal_path: None,
             manifest_path: None,
@@ -1029,9 +1045,13 @@ pub fn rotate_claim_wal_if_needed(
             compacted_records: recovery.valid_record_count,
         });
     };
-    let result = rotate_claim_wal_under_lock(state_root, &wal_path, &recovery, created_at, reason)?;
-    drop(lock);
-    Ok(result)
+    rotate_claim_wal_under_lock(
+        &guard.state_root,
+        &guard.wal_path,
+        &recovery,
+        created_at,
+        reason,
+    )
 }
 
 #[must_use]
@@ -1825,6 +1845,15 @@ fn is_unsupported_directory_sync(error: &io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use forge_core_contracts::claim::{
+        ActorRole, ClaimIdentity, ClaimKind, ClaimLease, ClaimScope, ClaimScopeKind,
+        ClaimStatusRecord, ExpiryAction, ExpiryPolicy, ReclaimPolicy,
+    };
+    #[cfg(unix)]
+    use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -1906,6 +1935,131 @@ mod tests {
         drop(guard);
         FileExt::try_lock(&second).expect("drop must release lock");
         FileExt::unlock(&second).expect("unlock second handle");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_guard_survives_caller_symlink_retarget_for_recovery_append_and_rotation() {
+        let sandbox = TestRoot::new();
+        let authority_a = sandbox.0.join("authority-a");
+        let authority_b = sandbox.0.join("authority-b");
+        let selected = sandbox.0.join("selected");
+        fs::create_dir_all(claim_wal_path(&authority_a).parent().expect("A WAL parent"))
+            .expect("create A WAL parent");
+        fs::create_dir_all(claim_wal_path(&authority_b).parent().expect("B WAL parent"))
+            .expect("create B WAL parent");
+        fs::write(claim_wal_path(&authority_a), b"torn").expect("write torn A WAL");
+        let b_sentinel = b"B must remain untouched";
+        fs::write(claim_wal_path(&authority_b), b_sentinel).expect("write B sentinel");
+        symlink(&authority_a, &selected).expect("point selected root at A");
+
+        let guard = acquire_claim_wal_retained_lock(&selected).expect("lock canonical A");
+        guard
+            .validate(&selected)
+            .expect("validate selected root as A");
+        fs::remove_file(&selected).expect("unlink selected root");
+        symlink(&authority_b, &selected).expect("repoint selected root at B");
+
+        let rejected = recover_claim_wal_under_retained_lock(&selected, &guard, true)
+            .expect_err("retargeted caller alias must be rejected");
+        assert!(matches!(rejected, ClaimWalReadError::ReadWal { .. }));
+        assert_eq!(
+            fs::read(claim_wal_path(&authority_b)).expect("read B after rejection"),
+            b_sentinel
+        );
+
+        let appended = append_claim_wal_record_under_retained_lock(
+            &guard,
+            ClaimWalOperation::Acquire,
+            &test_claim(),
+            "2027-01-15T08:00:00Z",
+            crate::WalDurability::NoSync,
+        )
+        .expect("repair and append through canonical guard");
+        assert_eq!(appended.wal_path, claim_wal_path(&authority_a));
+        let recovery = recover_claim_wal_for_guard(&guard, false).expect("recover canonical A");
+        assert!(recovery.last_observed_seq >= appended.seq);
+        assert_eq!(
+            fs::read(claim_wal_path(&authority_b)).expect("read B after append"),
+            b_sentinel
+        );
+
+        let rotation = rotate_claim_wal_if_needed_under_retained_lock(
+            &guard,
+            "2027-01-15T08:01:00Z",
+            &ClaimWalRotationOptions {
+                max_wal_bytes: u64::MAX,
+                max_records: 0,
+                max_replay_millis: u64::MAX,
+            },
+        )
+        .expect("rotate canonical A");
+        assert!(rotation.rotated);
+        assert_eq!(rotation.wal_path, claim_wal_path(&authority_a));
+        for path in [
+            rotation.snapshot_path,
+            rotation.archived_wal_path,
+            rotation.manifest_path,
+        ] {
+            let path = path.expect("rotation output path");
+            assert!(
+                path.starts_with(&authority_a),
+                "{} escaped A",
+                path.display()
+            );
+            assert!(path.exists(), "{} was not persisted", path.display());
+        }
+        assert_eq!(
+            fs::read(claim_wal_path(&authority_b)).expect("read B after rotation"),
+            b_sentinel
+        );
+        assert!(!claim_wal_snapshot_dir(&authority_b).exists());
+        assert!(!claim_wal_archive_dir(&authority_b).exists());
+        assert!(!claim_wal_manifest_path(&authority_b).exists());
+    }
+
+    #[cfg(unix)]
+    fn test_claim() -> ClaimContract {
+        ClaimContract {
+            id: ClaimId("claim.story.C2.C2".to_string()),
+            contract_ref: RepoPath("claims-active/claim-story-C2-C2.yaml".to_string()),
+            claim: ClaimIdentity {
+                claimant_principal_id: None,
+                kind: ClaimKind::Story,
+                claimant_agent_id: StableId("luna".to_string()),
+                claimant_role: ActorRole::Worker,
+                registry_ref: None,
+            },
+            scope: ClaimScope {
+                kind: ClaimScopeKind::Story,
+                id: ScopeId("C2".to_string()),
+                product_area: None,
+                paths: vec![RepoPath("src/lib.rs".to_string())],
+            },
+            lease: ClaimLease {
+                acquired_at: "2027-01-15T08:00:00Z".to_string(),
+                last_heartbeat_at: "2027-01-15T08:00:00Z".to_string(),
+                expires_at: "2027-01-15T08:10:00Z".to_string(),
+                ttl_seconds: 600,
+                heartbeat_interval_seconds: 120,
+                expected_state_version: 0,
+            },
+            status: ClaimStatusRecord {
+                value: ClaimStatus::Active,
+                evaluated_at: "2027-01-15T08:00:00Z".to_string(),
+                reason_code: None,
+            },
+            expiry_policy: ExpiryPolicy {
+                on_expiry: ExpiryAction::RecordHandoffRequest,
+                handoff_required: true,
+                release_without_handoff_allowed: false,
+                reclaim_policy: ReclaimPolicy::DriverReview,
+                handoff_request_ref: Some(RepoPath(
+                    "contracts/requests/claim-expiry-handoff-request.yaml".to_string(),
+                )),
+            },
+            evidence_refs: Vec::new(),
+        }
     }
 }
 
@@ -2213,11 +2367,11 @@ fn create_parent_dir(path: &Path) -> io::Result<()> {
 }
 
 fn acquire_claim_wal_retained_lock_raw(state_root: &Path) -> io::Result<ClaimWalRetainedLock> {
-    let lock_path = claim_wal_lock_path(state_root);
-    create_parent_dir(&lock_path)?;
+    fs::create_dir_all(state_root)?;
     let state_root = fs::canonicalize(state_root)?;
     let wal_path = claim_wal_path(&state_root);
     let lock_path = claim_wal_lock_path(&state_root);
+    create_parent_dir(&lock_path)?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
