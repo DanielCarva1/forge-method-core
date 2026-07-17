@@ -186,6 +186,145 @@ class ReleaseArchiveTests(unittest.TestCase):
         return package, wrapper
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_bare_path_lookup_handles_newlines_and_selects_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            non_executable = root / "not executable\nfirst"
+            non_executable.mkdir()
+            shadow = non_executable / "forge"
+            shutil.copyfile(wrapper, shadow)
+            shadow.chmod(0o644)
+            path = os.pathsep.join([str(non_executable), str(package), "/usr/bin", "/bin"])
+            argument = "argument with spaces\nand newline"
+            environment = os.environ.copy()
+            bare_command = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    'PATH="$1"; exec forge "$2"',
+                    "bare-command",
+                    path,
+                    argument,
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            sourced_bare = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    'PATH="$1"; wrapper=$2; argument=$3; set -- "$argument"; . "$wrapper"',
+                    "forge",
+                    path,
+                    str(wrapper),
+                    argument,
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            expected = f"real-core\n{argument}\n"
+            for completed in (bare_command, sourced_bare):
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout, expected)
+                self.assertEqual(completed.stderr, "")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_ignores_path_controlled_readlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            aliases = root / "aliases\nwith spaces"
+            aliases.mkdir()
+            alias = aliases / "forge"
+            alias.symlink_to(os.path.relpath(wrapper, aliases))
+            fake_bin = root / "fake-bin"
+            fake_bin.mkdir()
+            marker = root / "fake-readlink-called"
+            fake_readlink = fake_bin / "readlink"
+            fake_readlink.write_text(
+                "#!/bin/sh\n"
+                ": > \"$FAKE_READLINK_MARKER\"\n"
+                "printf '%s\\n' /tmp/redirected\n",
+                encoding="utf-8",
+            )
+            fake_readlink.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = os.pathsep.join(
+                [str(fake_bin), "/usr/bin", "/bin"]
+            )
+            environment["FAKE_READLINK_MARKER"] = str(marker)
+            completed = subprocess.run(
+                [str(alias), "not redirected"],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "real-core\nnot redirected\n")
+            self.assertEqual(completed.stderr, "")
+            self.assertFalse(marker.exists(), completed.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_resolver_fails_closed_at_symlink_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, wrapper = self.wrapper_fixture(root)
+            loop_dir = root / "resolver loop"
+            loop_dir.mkdir()
+            links = [loop_dir / f"link-{index}" for index in range(41)]
+            for index, link in enumerate(links):
+                link.symlink_to(links[(index + 1) % len(links)].name)
+            completed = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    '. "$1"',
+                    str(links[0]),
+                    str(wrapper),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(completed.returncode, 127)
+            self.assertIn("symlink loop", completed.stderr)
+            self.assertEqual(completed.stdout, "")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_bare_lookup_fails_closed_when_path_is_unset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, wrapper = self.wrapper_fixture(Path(directory))
+            environment = os.environ.copy()
+            environment.pop("PATH", None)
+            completed = subprocess.run(
+                [
+                    "/bin/sh",
+                    "-c",
+                    'unset PATH; . "$1"',
+                    "forge",
+                    str(wrapper),
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(completed.returncode, 127)
+            self.assertIn("unset or empty PATH", completed.stderr)
+            self.assertNotIn("parameter not set", completed.stderr)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_resolves_relocated_relative_newline_path_and_path_shadow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

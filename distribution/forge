@@ -28,14 +28,18 @@ self=$0
 case $self in
     */*) ;;
     *)
+        path=${PATH-}
+        [ -n "$path" ] || fail "cannot locate wrapper $self through an unset or empty PATH"
         old_ifs=$IFS
         IFS=:
         set -f
         found=
-        for entry in $PATH; do
+        for entry in $path; do
             [ -n "$entry" ] || entry=.
             candidate=$entry/$self
-            if [ -f "$candidate" ] || [ -L "$candidate" ]; then
+            # Match the shell's executable PATH lookup: skip non-executable
+            # files and dangling links rather than shadowing a later entry.
+            if [ -f "$candidate" ] && [ -x "$candidate" ]; then
                 self=$candidate
                 found=1
                 break
@@ -49,11 +53,23 @@ esac
 # Resolve every invocation symlink, including relative targets.  The bound is
 # deliberate: a loop fails closed instead of hanging.  A sentinel preserves
 # trailing newlines; the two suffix removals discard only output delimiters.
+# readlink is not a POSIX utility, so use only trusted system locations and do
+# not let an attacker-selected PATH replace the resolver.
+readlink_bin=
 symlink_count=0
 while [ -L "$self" ]; do
     symlink_count=$((symlink_count + 1))
     [ "$symlink_count" -le 40 ] || fail "symlink loop while resolving $0"
-    if ! target=$(readlink "$self" && printf '\001'); then
+    if [ -z "$readlink_bin" ]; then
+        if [ -f /usr/bin/readlink ] && [ -x /usr/bin/readlink ]; then
+            readlink_bin=/usr/bin/readlink
+        elif [ -f /bin/readlink ] && [ -x /bin/readlink ]; then
+            readlink_bin=/bin/readlink
+        else
+            fail "cannot resolve invocation symlink: no supported resolver"
+        fi
+    fi
+    if ! target=$("$readlink_bin" "$self" && printf '\001'); then
         fail "cannot read invocation symlink $self"
     fi
     target=${target%?}
