@@ -217,14 +217,15 @@ pub struct BackupIsolationContractProjection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BackupDeclaredEffectOutput {
-    /// Typed fields copied from one committed effect-target metadata index record.
+    /// Source-derived identity copied only from a parsed metadata-index record.
     pub operation_id: String,
     pub effect_id: String,
     pub target_kind: BackupDeclaredEffectTargetKind,
     pub logical_ref: String,
     pub state_relative_path: String,
-    pub content_sha256: String,
+    /// Accepted only when `verify_effect_metadata_index_bytes` finds these exact bytes.
     pub metadata_record_sha256: String,
+    pub content_sha256: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -235,6 +236,28 @@ pub enum BackupDeclaredEffectTargetKind {
     EvidenceId,
     LedgerStream,
     RequestStream,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupEffectOutputAccessMode {
+    Write,
+    Append,
+    Create,
+}
+
+/// Exact source evidence returned by the metadata-index parser, never manifest input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupParsedEffectOutput {
+    pub operation_id: String,
+    pub effect_id: String,
+    pub target_kind: BackupDeclaredEffectTargetKind,
+    pub logical_ref: String,
+    pub physical_ref: String,
+    pub state_relative_path: String,
+    pub access_mode: BackupEffectOutputAccessMode,
+    pub content_sha256: String,
+    pub byte_length: u64,
+    pub source_record_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -559,6 +582,9 @@ pub enum BackupManifestValidationError {
     InvalidDomainPackProjection,
     InvalidLearningProjection,
     InvalidIsolationProjection,
+    InvalidEffectMetadataIndex,
+    EffectMetadataIndexBytesMismatch,
+    EffectOutputClosureMismatch,
     InvalidDeclaredEffectProjection,
     InvalidSnapshotProtocol,
     InvalidExternalAuthorities,
@@ -600,6 +626,73 @@ pub struct BackupSourceFileMetadata {
     pub hard_link_count: u64,
     pub byte_length: u64,
     pub sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EffectMetadataRecordKind {
+    EffectTarget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EffectMetadataTargetKind {
+    FilePath,
+    Glob,
+    StateKey,
+    ArtifactId,
+    EvidenceId,
+    LedgerStream,
+    RequestStream,
+    CompletionId,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EffectMetadataAccessMode {
+    Read,
+    Write,
+    Append,
+    Create,
+    Delete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EffectMetadataActorRole {
+    Driver,
+    Worker,
+    Human,
+    Runtime,
+    Unknown,
+}
+
+/// Wire-compatible mirror of `forge-core-store::EffectTargetMetadataRecord`.
+/// The store depends on this crate, so mirroring here avoids a dependency cycle.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EffectMetadataRecord {
+    schema_version: String,
+    record_kind: EffectMetadataRecordKind,
+    recorded_at: Option<String>,
+    operation_id: String,
+    effect_id: String,
+    logical_ref: String,
+    physical_ref: String,
+    target_kind: EffectMetadataTargetKind,
+    access_mode: EffectMetadataAccessMode,
+    content_hash: Option<String>,
+    byte_len: u64,
+    actor_agent_id: String,
+    actor_role: EffectMetadataActorRole,
+    destructive: bool,
+    redaction_hint: String,
+}
+
+#[derive(Debug, Clone)]
+struct IndexedEffectMetadataRecord {
+    record: EffectMetadataRecord,
+    source_record_sha256: String,
 }
 
 impl BackupManifestDocument {
@@ -723,19 +816,14 @@ impl BackupManifestDocument {
     ) -> Result<BackupSourceFileClassification, BackupManifestValidationError> {
         validate_safe_path(logical_path)?;
         let manifest = &self.backup_manifest;
-        if let Some(entry) = manifest
-            .entries
-            .iter()
-            .find(|entry| entry.logical_path == logical_path)
-        {
-            return Ok(BackupSourceFileClassification::Archive(entry.material));
-        }
+        let state = state_prefix(&manifest.project.archive_layout);
+        // Exclusions are security policy, not a fallback. They must win even when a
+        // caller maliciously lists a broad-family descendant in the manifest.
         if is_forbidden_private_path(logical_path) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::ForbiddenPrivateMaterial,
             ));
         }
-        let state = state_prefix(&manifest.project.archive_layout);
         if is_explicit_lock_path(logical_path, &state) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::ProducerLock,
@@ -746,10 +834,17 @@ impl BackupManifestDocument {
                 BackupSourceExclusion::CrashRecoveryArtifact,
             ));
         }
-        if logical_path.starts_with(&format!("{state}/domain-packs/generations/staging/")) {
+        if is_domain_pack_staging_path(logical_path, &state) {
             return Ok(BackupSourceFileClassification::Exclude(
                 BackupSourceExclusion::IncompleteDomainPackStaging,
             ));
+        }
+        if let Some(entry) = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.logical_path == logical_path)
+        {
+            return Ok(BackupSourceFileClassification::Archive(entry.material));
         }
         Err(BackupManifestValidationError::UnclassifiedSourceFile {
             path: logical_path.to_owned(),
@@ -806,6 +901,57 @@ impl BackupManifestDocument {
             }
         }
         Ok(())
+    }
+
+    /// Parse the exact archived effect metadata-index bytes and prove that the manifest's
+    /// declared file outputs are exactly the latest live `file_path` records.
+    pub fn verify_effect_metadata_index_bytes(
+        &self,
+        archived_index_bytes: &[u8],
+    ) -> Result<Vec<BackupParsedEffectOutput>, BackupManifestValidationError> {
+        self.validate_integrity()?;
+        let index_entry = self
+            .backup_manifest
+            .entries
+            .iter()
+            .find(|entry| entry.material == BackupEntryKind::EffectMetadataIndex);
+        let Some(index_entry) = index_entry else {
+            if archived_index_bytes.is_empty()
+                && self
+                    .backup_manifest
+                    .source_state
+                    .declared_effect_outputs
+                    .is_empty()
+            {
+                return Ok(Vec::new());
+            }
+            return Err(BackupManifestValidationError::EffectMetadataIndexBytesMismatch);
+        };
+        if index_entry.byte_length != archived_index_bytes.len() as u64
+            || index_entry.sha256 != sha256(archived_index_bytes)
+        {
+            return Err(BackupManifestValidationError::EffectMetadataIndexBytesMismatch);
+        }
+        let parsed = parse_effect_metadata_index(
+            archived_index_bytes,
+            &self.backup_manifest.project.archive_layout,
+        )?;
+        let projected = parsed
+            .iter()
+            .map(|output| BackupDeclaredEffectOutput {
+                operation_id: output.operation_id.clone(),
+                effect_id: output.effect_id.clone(),
+                target_kind: output.target_kind,
+                logical_ref: output.logical_ref.clone(),
+                state_relative_path: output.state_relative_path.clone(),
+                metadata_record_sha256: output.source_record_sha256.clone(),
+                content_sha256: output.content_sha256.clone(),
+            })
+            .collect::<Vec<_>>();
+        if projected != self.backup_manifest.source_state.declared_effect_outputs {
+            return Err(BackupManifestValidationError::EffectOutputClosureMismatch);
+        }
+        Ok(parsed)
     }
 }
 
@@ -1448,18 +1594,26 @@ fn validate_declared_effect_outputs(
     expected: &mut BTreeMap<BackupEntryKind, u64>,
 ) -> Result<(), BackupManifestValidationError> {
     let outputs = &manifest.source_state.declared_effect_outputs;
-    expected.insert(BackupEntryKind::DeclaredEffectOutput, outputs.len() as u64);
+    expected.insert(
+        BackupEntryKind::DeclaredEffectOutput,
+        outputs
+            .iter()
+            .filter(|output| output.target_kind == BackupDeclaredEffectTargetKind::FilePath)
+            .count() as u64,
+    );
     let state = state_prefix(&manifest.project.archive_layout);
     let mut previous: Option<&str> = None;
     let mut metadata_records = BTreeSet::new();
     for output in outputs {
         required("declared_effect.operation_id", &output.operation_id)?;
         required("declared_effect.effect_id", &output.effect_id)?;
-        digest("declared_effect.content_sha256", &output.content_sha256)?;
+        required("declared_effect.logical_ref", &output.logical_ref)?;
         digest(
             "declared_effect.metadata_record_sha256",
             &output.metadata_record_sha256,
         )?;
+        digest("declared_effect.content_sha256", &output.content_sha256)?;
+        validate_safe_path(&output.logical_ref)?;
         validate_safe_path(&output.state_relative_path)?;
         let expected_logical_ref = format!(
             "{}/{}",
@@ -1469,19 +1623,25 @@ fn validate_declared_effect_outputs(
                 .state_root_relative_to_sidecar,
             output.state_relative_path
         );
-        if output.target_kind != BackupDeclaredEffectTargetKind::FilePath
-            || output.logical_ref != expected_logical_ref
+        let Some(material) =
+            effect_output_material(output.target_kind, &output.state_relative_path)
+        else {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        };
+        if (output.target_kind == BackupDeclaredEffectTargetKind::FilePath
+            && output.logical_ref != expected_logical_ref)
             || previous.is_some_and(|path| path >= output.state_relative_path.as_str())
             || !metadata_records.insert(output.metadata_record_sha256.as_str())
-            || is_reserved_effect_output_path(&output.state_relative_path)
         {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         }
         previous = Some(&output.state_relative_path);
         let path = format!("{state}/{}", output.state_relative_path);
-        let Some(entry) = manifest.entries.iter().find(|entry| {
-            entry.material == BackupEntryKind::DeclaredEffectOutput && entry.logical_path == path
-        }) else {
+        let Some(entry) = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.material == material && entry.logical_path == path)
+        else {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         };
         if entry.sha256 != output.content_sha256 {
@@ -1489,6 +1649,269 @@ fn validate_declared_effect_outputs(
         }
     }
     Ok(())
+}
+
+fn effect_output_material(
+    target_kind: BackupDeclaredEffectTargetKind,
+    state_relative_path: &str,
+) -> Option<BackupEntryKind> {
+    match target_kind {
+        BackupDeclaredEffectTargetKind::FilePath
+            if !is_reserved_effect_output_path(state_relative_path) =>
+        {
+            Some(BackupEntryKind::DeclaredEffectOutput)
+        }
+        BackupDeclaredEffectTargetKind::ArtifactId
+            if state_relative_path.starts_with("artifacts/") =>
+        {
+            Some(BackupEntryKind::Artifact)
+        }
+        BackupDeclaredEffectTargetKind::EvidenceId
+            if state_relative_path.starts_with("evidence/") =>
+        {
+            Some(BackupEntryKind::Evidence)
+        }
+        BackupDeclaredEffectTargetKind::EvidenceId
+            if state_relative_path.starts_with("snapshots/") =>
+        {
+            Some(BackupEntryKind::Snapshot)
+        }
+        BackupDeclaredEffectTargetKind::LedgerStream if state_relative_path == "ledger.ndjson" => {
+            Some(BackupEntryKind::RootLedger)
+        }
+        BackupDeclaredEffectTargetKind::LedgerStream
+            if state_relative_path.starts_with("ledger/")
+                && state_relative_path.ends_with(".ndjson") =>
+        {
+            Some(BackupEntryKind::LedgerStream)
+        }
+        BackupDeclaredEffectTargetKind::RequestStream
+            if (state_relative_path == "requests.ndjson"
+                || state_relative_path.starts_with("requests/"))
+                && state_relative_path.ends_with(".ndjson") =>
+        {
+            Some(BackupEntryKind::RequestStream)
+        }
+        _ => None,
+    }
+}
+
+fn parse_effect_metadata_index(
+    raw: &[u8],
+    layout: &BackupArchiveLayout,
+) -> Result<Vec<BackupParsedEffectOutput>, BackupManifestValidationError> {
+    if raw.is_empty() {
+        return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+    }
+    let state_root_prefix = format!("{}/", layout.state_root_relative_to_sidecar);
+    let mut latest = BTreeMap::<String, IndexedEffectMetadataRecord>::new();
+    for frame in raw.split_inclusive(|byte| *byte == b'\n') {
+        let Some(payload) = frame.strip_suffix(b"\n") else {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        };
+        if payload.is_empty() || payload.ends_with(b"\r") {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
+        let record: EffectMetadataRecord = serde_json::from_slice(payload)
+            .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
+        if serde_json::to_vec(&record).ok().as_deref() != Some(payload)
+            || record.schema_version != "0.1"
+            || record.record_kind != EffectMetadataRecordKind::EffectTarget
+            || record.operation_id.trim().is_empty()
+            || record.effect_id.trim().is_empty()
+            || record.logical_ref.trim().is_empty()
+            || record.physical_ref.trim().is_empty()
+            || record.actor_agent_id.trim().is_empty()
+            || record.redaction_hint != "raw_content_not_indexed"
+        {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
+        validate_safe_path(&record.logical_ref)
+            .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
+        validate_safe_path(&record.physical_ref)
+            .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
+        let Some(target_kind) = backup_effect_target_kind(record.target_kind) else {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        };
+        let Some(state_relative_path) = record.physical_ref.strip_prefix(&state_root_prefix) else {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        };
+        if state_relative_path.is_empty()
+            || effect_output_material(target_kind, state_relative_path).is_none()
+            || expected_effect_physical_ref(target_kind, &record.logical_ref).as_deref()
+                != Some(record.physical_ref.as_str())
+        {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
+        match record.access_mode {
+            EffectMetadataAccessMode::Delete
+                if record.content_hash.is_some() || record.byte_len != 0 =>
+            {
+                return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+            }
+            EffectMetadataAccessMode::Write
+            | EffectMetadataAccessMode::Append
+            | EffectMetadataAccessMode::Create => {
+                digest(
+                    "effect_metadata.content_hash",
+                    record.content_hash.as_deref().unwrap_or_default(),
+                )?;
+            }
+            EffectMetadataAccessMode::Read => {
+                return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+            }
+            EffectMetadataAccessMode::Delete => {}
+        }
+        let key = format!(
+            "{}:{}",
+            effect_metadata_target_kind_key(record.target_kind),
+            record.logical_ref
+        );
+        latest.insert(
+            key,
+            IndexedEffectMetadataRecord {
+                record,
+                source_record_sha256: sha256(payload),
+            },
+        );
+    }
+
+    let state_prefix = state_root_prefix;
+    let mut outputs = Vec::new();
+    let mut paths = BTreeSet::new();
+    for indexed in latest.into_values() {
+        let record = indexed.record;
+        if record.access_mode == EffectMetadataAccessMode::Delete {
+            continue;
+        }
+        let target_kind = backup_effect_target_kind(record.target_kind)
+            .expect("validated file-backed metadata target");
+        let state_relative_path = record
+            .physical_ref
+            .strip_prefix(&state_prefix)
+            .expect("validated state-root physical ref")
+            .to_owned();
+        if !paths.insert(state_relative_path.clone()) {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
+        let access_mode = match record.access_mode {
+            EffectMetadataAccessMode::Write => BackupEffectOutputAccessMode::Write,
+            EffectMetadataAccessMode::Append => BackupEffectOutputAccessMode::Append,
+            EffectMetadataAccessMode::Create => BackupEffectOutputAccessMode::Create,
+            EffectMetadataAccessMode::Read | EffectMetadataAccessMode::Delete => unreachable!(),
+        };
+        outputs.push(BackupParsedEffectOutput {
+            operation_id: record.operation_id,
+            target_kind,
+            effect_id: record.effect_id,
+            logical_ref: record.logical_ref,
+            physical_ref: record.physical_ref,
+            state_relative_path,
+            access_mode,
+            content_sha256: record.content_hash.expect("validated live content hash"),
+            byte_length: record.byte_len,
+            source_record_sha256: indexed.source_record_sha256,
+        });
+    }
+    outputs.sort_by(|left, right| left.state_relative_path.cmp(&right.state_relative_path));
+    Ok(outputs)
+}
+
+fn effect_metadata_target_kind_key(kind: EffectMetadataTargetKind) -> &'static str {
+    match kind {
+        EffectMetadataTargetKind::FilePath => "file_path",
+        EffectMetadataTargetKind::Glob => "glob",
+        EffectMetadataTargetKind::StateKey => "state_key",
+        EffectMetadataTargetKind::ArtifactId => "artifact_id",
+        EffectMetadataTargetKind::EvidenceId => "evidence_id",
+        EffectMetadataTargetKind::LedgerStream => "ledger_stream",
+        EffectMetadataTargetKind::RequestStream => "request_stream",
+        EffectMetadataTargetKind::CompletionId => "completion_id",
+    }
+}
+
+fn backup_effect_target_kind(
+    kind: EffectMetadataTargetKind,
+) -> Option<BackupDeclaredEffectTargetKind> {
+    match kind {
+        EffectMetadataTargetKind::FilePath => Some(BackupDeclaredEffectTargetKind::FilePath),
+        EffectMetadataTargetKind::ArtifactId => Some(BackupDeclaredEffectTargetKind::ArtifactId),
+        EffectMetadataTargetKind::EvidenceId => Some(BackupDeclaredEffectTargetKind::EvidenceId),
+        EffectMetadataTargetKind::LedgerStream => {
+            Some(BackupDeclaredEffectTargetKind::LedgerStream)
+        }
+        EffectMetadataTargetKind::RequestStream => {
+            Some(BackupDeclaredEffectTargetKind::RequestStream)
+        }
+        EffectMetadataTargetKind::Glob
+        | EffectMetadataTargetKind::StateKey
+        | EffectMetadataTargetKind::CompletionId => None,
+    }
+}
+
+fn expected_effect_physical_ref(
+    kind: BackupDeclaredEffectTargetKind,
+    logical_ref: &str,
+) -> Option<String> {
+    let (allowed_prefixes, allowed_exact, base_dir, extension): (&[&str], &[&str], &str, &str) =
+        match kind {
+            BackupDeclaredEffectTargetKind::FilePath => return Some(logical_ref.to_owned()),
+            BackupDeclaredEffectTargetKind::ArtifactId => (
+                &[".forge-method/artifacts/"],
+                &[],
+                ".forge-method/artifacts",
+                ".yaml",
+            ),
+            BackupDeclaredEffectTargetKind::EvidenceId => (
+                &[".forge-method/evidence/", ".forge-method/snapshots/"],
+                &[],
+                ".forge-method/evidence",
+                ".json",
+            ),
+            BackupDeclaredEffectTargetKind::LedgerStream => (
+                &[".forge-method/ledger/"],
+                &[".forge-method/ledger.ndjson"],
+                ".forge-method/ledger",
+                ".ndjson",
+            ),
+            BackupDeclaredEffectTargetKind::RequestStream => (
+                &[".forge-method/requests/"],
+                &[".forge-method/requests.ndjson"],
+                ".forge-method/requests",
+                ".ndjson",
+            ),
+        };
+    if logical_ref.contains('/') || logical_ref.contains('\\') {
+        return (allowed_exact.contains(&logical_ref)
+            || allowed_prefixes
+                .iter()
+                .any(|prefix| logical_ref.starts_with(prefix)))
+        .then(|| logical_ref.to_owned());
+    }
+    let sanitized = logical_ref
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    let safe_id = sanitized.trim_matches('.');
+    if safe_id.is_empty()
+        || !safe_id
+            .chars()
+            .any(|character| character.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    let file_name = if safe_id.ends_with(extension) {
+        safe_id.to_owned()
+    } else {
+        format!("{safe_id}{extension}")
+    };
+    Some(format!("{base_dir}/{file_name}"))
 }
 
 fn validate_external_authorities(
@@ -1550,7 +1973,7 @@ fn validate_external_authorities(
     if observations.domain_pack_supply_chain.is_some() != supply_provisioned
         || observations.domain_pack_reviewed_learning.is_some() != learning_provisioned
         || (domain_active && (!supply_provisioned || !learning_provisioned))
-        || (operator_sources_present && !supply_provisioned)
+        || (operator_sources_present && (!supply_provisioned || !learning_provisioned))
     {
         return Err(BackupManifestValidationError::InvalidExternalAuthorities);
     }
@@ -1924,6 +2347,10 @@ fn is_explicit_lock_path(path: &str, state: &str) -> bool {
         || path == format!("{state}/contracts/isolations/.forge-isolation.lock")
 }
 
+fn is_domain_pack_staging_path(path: &str, state: &str) -> bool {
+    path.starts_with(&format!("{state}/domain-packs/generations/staging/"))
+}
+
 fn is_crash_protocol_path(path: &str) -> bool {
     let Some(name) = path.rsplit('/').next() else {
         return false;
@@ -2090,6 +2517,94 @@ mod tests {
             .collect()
     }
 
+    fn effect_record(
+        operation_id: &str,
+        effect_id: &str,
+        access_mode: EffectMetadataAccessMode,
+        content_hash: Option<&str>,
+        byte_len: u64,
+    ) -> EffectMetadataRecord {
+        EffectMetadataRecord {
+            schema_version: "0.1".to_owned(),
+            record_kind: EffectMetadataRecordKind::EffectTarget,
+            recorded_at: Some("2026-07-16T00:00:00Z".to_owned()),
+            operation_id: operation_id.to_owned(),
+            effect_id: effect_id.to_owned(),
+            logical_ref: ".forge-method/custom/source-derived-output.yaml".to_owned(),
+            physical_ref: ".forge-method/custom/source-derived-output.yaml".to_owned(),
+            target_kind: EffectMetadataTargetKind::FilePath,
+            access_mode,
+            content_hash: content_hash.map(str::to_owned),
+            byte_len,
+            actor_agent_id: "agent.backup-test".to_owned(),
+            actor_role: EffectMetadataActorRole::Runtime,
+            destructive: access_mode == EffectMetadataAccessMode::Delete,
+            redaction_hint: "raw_content_not_indexed".to_owned(),
+        }
+    }
+
+    fn encoded_effect_records(records: &[EffectMetadataRecord]) -> Vec<u8> {
+        let mut raw = Vec::new();
+        for record in records {
+            raw.extend(serde_json::to_vec(record).unwrap());
+            raw.push(b'\n');
+        }
+        raw
+    }
+
+    fn bind_effect_fixture(
+        document: &mut BackupManifestDocument,
+        raw: &[u8],
+        declared_record: &EffectMetadataRecord,
+    ) {
+        let record_bytes = serde_json::to_vec(declared_record).unwrap();
+        let target_kind = backup_effect_target_kind(declared_record.target_kind).unwrap();
+        let state_relative_path = declared_record
+            .physical_ref
+            .strip_prefix(".forge-method/")
+            .unwrap()
+            .to_owned();
+        let material = effect_output_material(target_kind, &state_relative_path).unwrap();
+        let content_sha256 = declared_record.content_hash.clone().unwrap();
+        let output = document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs
+            .first_mut()
+            .unwrap();
+        output
+            .operation_id
+            .clone_from(&declared_record.operation_id);
+        output.effect_id.clone_from(&declared_record.effect_id);
+        output.target_kind = target_kind;
+        output.logical_ref.clone_from(&declared_record.logical_ref);
+        output.state_relative_path = state_relative_path;
+        output.content_sha256.clone_from(&content_sha256);
+        output.metadata_record_sha256 = sha256(&record_bytes);
+        if material != BackupEntryKind::DeclaredEffectOutput {
+            document
+                .backup_manifest
+                .entries
+                .retain(|entry| entry.material != BackupEntryKind::DeclaredEffectOutput);
+        }
+        let output_entry = document
+            .backup_manifest
+            .entries
+            .iter_mut()
+            .find(|entry| entry.material == material)
+            .unwrap();
+        output_entry.sha256 = content_sha256;
+        let index_entry = document
+            .backup_manifest
+            .entries
+            .iter_mut()
+            .find(|entry| entry.material == BackupEntryKind::EffectMetadataIndex)
+            .unwrap();
+        index_entry.byte_length = raw.len() as u64;
+        index_entry.sha256 = sha256(raw);
+        recompute(document);
+    }
+
     #[test]
     fn every_valid_fixture_parses_then_validates() {
         for path in [
@@ -2162,6 +2677,10 @@ mod tests {
                 "InvalidExternalAuthorities",
             ),
             (
+                "no-active-reviewed-anchor-omission.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            (
                 "omitted-authority.invalid.yaml",
                 "InvalidExternalAuthorities",
             ),
@@ -2230,6 +2749,47 @@ mod tests {
     }
 
     #[test]
+    fn operator_sources_require_both_acquisition_anchors_even_without_active_generation() {
+        let mut document = parse_manifest("valid/no-active-provisioned-v1.yaml");
+        document
+            .backup_manifest
+            .source_state
+            .domain_pack_reviewed_learning_anchor = BackupProvisioningState::NotProvisioned;
+        document
+            .backup_manifest
+            .external_authority_observations
+            .domain_pack_reviewed_learning = None;
+        recompute(&mut document);
+        assert_eq!(
+            document.validate_integrity(),
+            Err(BackupManifestValidationError::InvalidExternalAuthorities)
+        );
+    }
+
+    #[test]
+    fn lock_hostile_specifically_places_effect_wal_after_replay_wal() {
+        let document = parse_manifest("hostile/lock-effect-after-replay.invalid.yaml");
+        let mut exact_attack = BACKUP_LOCK_ORDER.to_vec();
+        let effect = exact_attack
+            .iter()
+            .position(|scope| *scope == BackupLockScope::EffectWal)
+            .unwrap();
+        let replay = exact_attack
+            .iter()
+            .position(|scope| *scope == BackupLockScope::ReplayWal)
+            .unwrap();
+        exact_attack.swap(effect, replay);
+        assert_eq!(
+            document.backup_manifest.snapshot_protocol.lock_order,
+            exact_attack
+        );
+        assert_eq!(
+            document.validate_integrity(),
+            Err(BackupManifestValidationError::InvalidSnapshotProtocol)
+        );
+    }
+
+    #[test]
     fn unknown_field_is_explicit_parse_rejection_not_semantic_coverage() {
         assert!(yaml_serde::from_str::<BackupManifestDocument>(&fixture(
             "parse-rejection/unknown-field.invalid.yaml"
@@ -2283,6 +2843,90 @@ mod tests {
             document.classify_source_file("sidecar/.forge-method/capture.lock"),
             Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
         ));
+    }
+
+    #[test]
+    fn exclusions_precede_broad_manifest_family_lookup() {
+        let original = parse_manifest("valid/multi-generation-v1.yaml");
+        let cases = [
+            (
+                BackupEntryKind::Artifact,
+                "sidecar/.forge-method/artifacts/.result.yaml.123.456.0.tmp",
+                BackupSourceExclusion::CrashRecoveryArtifact,
+            ),
+            (
+                BackupEntryKind::Evidence,
+                "sidecar/.forge-method/evidence/.command.ndjson.forge-tmp",
+                BackupSourceExclusion::CrashRecoveryArtifact,
+            ),
+            (
+                BackupEntryKind::Snapshot,
+                "sidecar/.forge-method/snapshots/.browser.json.forge-bak",
+                BackupSourceExclusion::CrashRecoveryArtifact,
+            ),
+            (
+                BackupEntryKind::RuntimeSnapshot,
+                "sidecar/.forge-method/runtime/.snapshot.yaml.forge-next",
+                BackupSourceExclusion::CrashRecoveryArtifact,
+            ),
+            (
+                BackupEntryKind::StoryState,
+                "sidecar/.forge-method/locks/story.lock",
+                BackupSourceExclusion::ProducerLock,
+            ),
+            (
+                BackupEntryKind::AgentRegistryState,
+                "sidecar/.forge-method/domain-packs/generations/staging/agent.yaml",
+                BackupSourceExclusion::IncompleteDomainPackStaging,
+            ),
+            (
+                BackupEntryKind::Artifact,
+                "sidecar/.forge-method/artifacts/private-keys/signing.key",
+                BackupSourceExclusion::ForbiddenPrivateMaterial,
+            ),
+        ];
+        for (kind, path, exclusion) in cases {
+            let mut document = original.clone();
+            document
+                .backup_manifest
+                .entries
+                .iter_mut()
+                .find(|entry| entry.material == kind)
+                .unwrap()
+                .logical_path = path.to_owned();
+            assert_eq!(
+                document.classify_source_file(path),
+                Ok(BackupSourceFileClassification::Exclude(exclusion)),
+                "listed broad-family path must remain excluded: {path}"
+            );
+        }
+
+        for entry_type in [
+            BackupArchiveEntryType::Symlink,
+            BackupArchiveEntryType::Hardlink,
+            BackupArchiveEntryType::Directory,
+            BackupArchiveEntryType::Fifo,
+            BackupArchiveEntryType::BlockDevice,
+            BackupArchiveEntryType::CharacterDevice,
+            BackupArchiveEntryType::Socket,
+        ] {
+            let mut observed = source_metadata(&original);
+            observed
+                .iter_mut()
+                .find(|entry| entry.logical_path == "sidecar/.forge-method/artifacts/result.yaml")
+                .unwrap()
+                .entry_type = entry_type;
+            assert!(original.verify_source_enumeration(&observed).is_err());
+        }
+        let mut hardlinked_regular = source_metadata(&original);
+        hardlinked_regular
+            .iter_mut()
+            .find(|entry| entry.logical_path == "sidecar/.forge-method/artifacts/result.yaml")
+            .unwrap()
+            .hard_link_count = 2;
+        assert!(original
+            .verify_source_enumeration(&hardlinked_regular)
+            .is_err());
     }
 
     #[test]
@@ -2348,6 +2992,170 @@ mod tests {
             2,
         )
         .is_err());
+    }
+
+    #[test]
+    fn effect_index_uses_latest_source_record_and_returns_exact_record_evidence() {
+        let old_hash = format!("sha256:{}", "1".repeat(64));
+        let latest_hash = format!("sha256:{}", "2".repeat(64));
+        let old = effect_record(
+            "operation.old",
+            "effect.old",
+            EffectMetadataAccessMode::Create,
+            Some(&old_hash),
+            10,
+        );
+        let latest = effect_record(
+            "operation.latest",
+            "effect.latest",
+            EffectMetadataAccessMode::Append,
+            Some(&latest_hash),
+            20,
+        );
+        let raw = encoded_effect_records(&[old, latest.clone()]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &latest);
+
+        let parsed = document.verify_effect_metadata_index_bytes(&raw).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].operation_id, "operation.latest");
+        assert_eq!(parsed[0].effect_id, "effect.latest");
+        assert_eq!(parsed[0].access_mode, BackupEffectOutputAccessMode::Append);
+        assert_eq!(parsed[0].content_sha256, latest_hash);
+        assert_eq!(
+            parsed[0].source_record_sha256,
+            sha256(&serde_json::to_vec(&latest).unwrap())
+        );
+    }
+
+    #[test]
+    fn effect_index_closes_source_real_typed_file_backed_target() {
+        let content_hash = format!("sha256:{}", "8".repeat(64));
+        let mut artifact = effect_record(
+            "operation.artifact",
+            "effect.artifact",
+            EffectMetadataAccessMode::Create,
+            Some(&content_hash),
+            21,
+        );
+        artifact.logical_ref = "result".to_owned();
+        artifact.physical_ref = ".forge-method/artifacts/result.yaml".to_owned();
+        artifact.target_kind = EffectMetadataTargetKind::ArtifactId;
+        let raw = encoded_effect_records(std::slice::from_ref(&artifact));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &artifact);
+
+        let parsed = document.verify_effect_metadata_index_bytes(&raw).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(
+            parsed[0].target_kind,
+            BackupDeclaredEffectTargetKind::ArtifactId
+        );
+        assert_eq!(parsed[0].logical_ref, "result");
+        assert_eq!(parsed[0].state_relative_path, "artifacts/result.yaml");
+        assert_eq!(parsed[0].content_sha256, content_hash);
+    }
+
+    #[test]
+    fn effect_index_rejects_stale_declared_output() {
+        let old_hash = format!("sha256:{}", "3".repeat(64));
+        let latest_hash = format!("sha256:{}", "4".repeat(64));
+        let old = effect_record(
+            "operation.old",
+            "effect.old",
+            EffectMetadataAccessMode::Create,
+            Some(&old_hash),
+            10,
+        );
+        let latest = effect_record(
+            "operation.latest",
+            "effect.latest",
+            EffectMetadataAccessMode::Write,
+            Some(&latest_hash),
+            11,
+        );
+        let raw = encoded_effect_records(&[old.clone(), latest]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &old);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
+    }
+
+    #[test]
+    fn effect_index_rejects_forged_operation_and_effect_identity() {
+        let content_hash = format!("sha256:{}", "5".repeat(64));
+        let latest = effect_record(
+            "operation.source",
+            "effect.source",
+            EffectMetadataAccessMode::Write,
+            Some(&content_hash),
+            12,
+        );
+        let raw = encoded_effect_records(std::slice::from_ref(&latest));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &latest);
+        let output = document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs
+            .first_mut()
+            .unwrap();
+        output.operation_id = "operation.forged".to_owned();
+        output.effect_id = "effect.forged".to_owned();
+        recompute(&mut document);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
+    }
+
+    #[test]
+    fn effect_index_latest_delete_removes_live_output() {
+        let content_hash = format!("sha256:{}", "6".repeat(64));
+        let live = effect_record(
+            "operation.live",
+            "effect.live",
+            EffectMetadataAccessMode::Create,
+            Some(&content_hash),
+            13,
+        );
+        let deleted = effect_record(
+            "operation.delete",
+            "effect.delete",
+            EffectMetadataAccessMode::Delete,
+            None,
+            0,
+        );
+        let raw = encoded_effect_records(&[live.clone(), deleted]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &live);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
+    }
+
+    #[test]
+    fn effect_index_rejects_forged_physical_ref() {
+        let content_hash = format!("sha256:{}", "7".repeat(64));
+        let source = effect_record(
+            "operation.physical",
+            "effect.physical",
+            EffectMetadataAccessMode::Create,
+            Some(&content_hash),
+            14,
+        );
+        let mut forged = source.clone();
+        forged.physical_ref = ".forge-method-other/custom/source-derived-output.yaml".to_owned();
+        let raw = encoded_effect_records(std::slice::from_ref(&forged));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &source);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+        );
     }
 
     #[test]
