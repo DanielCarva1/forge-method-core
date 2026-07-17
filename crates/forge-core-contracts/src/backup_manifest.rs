@@ -223,6 +223,8 @@ pub struct BackupDeclaredEffectOutput {
     pub target_kind: BackupDeclaredEffectTargetKind,
     pub logical_ref: String,
     pub state_relative_path: String,
+    pub access_mode: BackupEffectOutputAccessMode,
+    pub byte_length: u64,
     /// Accepted only when `verify_effect_metadata_index_bytes` finds these exact bytes.
     pub metadata_record_sha256: String,
     pub content_sha256: String,
@@ -238,7 +240,8 @@ pub enum BackupDeclaredEffectTargetKind {
     RequestStream,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum BackupEffectOutputAccessMode {
     Write,
     Append,
@@ -312,6 +315,7 @@ pub enum BackupLockScope {
     WorkflowCredentialRegistry,
     WorkflowBrokerRegistry,
     WorkflowGovernance,
+    ClaimCacheMutation,
     ClaimWal,
     WorkflowActionReplayWal,
     MemoryLog,
@@ -342,6 +346,7 @@ impl BackupLockScope {
             Self::WorkflowCredentialRegistry => "<operator-root>/.workflow-credential.lock",
             Self::WorkflowBrokerRegistry => "<operator-root>/.workflow-broker.lock",
             Self::WorkflowGovernance => "locks/workflow-governance.lock",
+            Self::ClaimCacheMutation => "claims-active/.forge-claim.lock",
             Self::ClaimWal => "locks/claims.wal.lock",
             Self::WorkflowActionReplayWal => "locks/workflow-action-replay.lock",
             Self::MemoryLog => "locks/memory.log.lock",
@@ -359,7 +364,8 @@ impl BackupLockScope {
 }
 
 /// Compatible with shipped nested acquisitions: supply -> reviewed ->
-/// operator-source/rebase -> lifecycle -> workflow, and effect -> replay.
+/// operator-source/rebase -> lifecycle -> workflow, claim-cache -> claim-WAL ->
+/// claim-cache atomic mutation, and effect -> replay.
 pub const BACKUP_LOCK_ORDER: &[BackupLockScope] = &[
     BackupLockScope::ExternalDomainPackSupplyChainAnchor,
     BackupLockScope::ExternalDomainPackReviewedLearningAnchor,
@@ -370,6 +376,7 @@ pub const BACKUP_LOCK_ORDER: &[BackupLockScope] = &[
     BackupLockScope::WorkflowCredentialRegistry,
     BackupLockScope::WorkflowBrokerRegistry,
     BackupLockScope::WorkflowGovernance,
+    BackupLockScope::ClaimCacheMutation,
     BackupLockScope::ClaimWal,
     BackupLockScope::WorkflowActionReplayWal,
     BackupLockScope::MemoryLog,
@@ -944,6 +951,8 @@ impl BackupManifestDocument {
                 target_kind: output.target_kind,
                 logical_ref: output.logical_ref.clone(),
                 state_relative_path: output.state_relative_path.clone(),
+                access_mode: output.access_mode,
+                byte_length: output.byte_length,
                 metadata_record_sha256: output.source_record_sha256.clone(),
                 content_sha256: output.content_sha256.clone(),
             })
@@ -1644,7 +1653,7 @@ fn validate_declared_effect_outputs(
         else {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         };
-        if entry.sha256 != output.content_sha256 {
+        if entry.sha256 != output.content_sha256 || entry.byte_length != output.byte_length {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         }
     }
@@ -1730,16 +1739,8 @@ fn parse_effect_metadata_index(
             .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
         validate_safe_path(&record.physical_ref)
             .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
-        let Some(target_kind) = backup_effect_target_kind(record.target_kind) else {
-            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
-        };
-        let Some(state_relative_path) = record.physical_ref.strip_prefix(&state_root_prefix) else {
-            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
-        };
-        if state_relative_path.is_empty()
-            || effect_output_material(target_kind, state_relative_path).is_none()
-            || expected_effect_physical_ref(target_kind, &record.logical_ref).as_deref()
-                != Some(record.physical_ref.as_str())
+        if expected_effect_physical_ref(record.target_kind, &record.logical_ref).as_deref()
+            != Some(record.physical_ref.as_str())
         {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
@@ -1776,7 +1777,6 @@ fn parse_effect_metadata_index(
         );
     }
 
-    let state_prefix = state_root_prefix;
     let mut outputs = Vec::new();
     let mut paths = BTreeSet::new();
     for indexed in latest.into_values() {
@@ -1784,13 +1784,27 @@ fn parse_effect_metadata_index(
         if record.access_mode == EffectMetadataAccessMode::Delete {
             continue;
         }
+        let Some(state_relative_path) = record.physical_ref.strip_prefix(&state_root_prefix) else {
+            // Shipped FilePath targets may be ordinary repository files. They remain
+            // fully validated index records but are not members of the state backup.
+            continue;
+        };
+        if state_relative_path.is_empty() {
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        }
         let target_kind = backup_effect_target_kind(record.target_kind)
-            .expect("validated file-backed metadata target");
-        let state_relative_path = record
-            .physical_ref
-            .strip_prefix(&state_prefix)
-            .expect("validated state-root physical ref")
-            .to_owned();
+            .expect("validated shipped file-backed metadata target");
+        let Some(_material) = effect_output_material(target_kind, state_relative_path) else {
+            if target_kind == BackupDeclaredEffectTargetKind::FilePath
+                && is_reserved_effect_output_path(state_relative_path)
+            {
+                // Reserved state families are inventoried by their own typed entries; a
+                // valid generic FilePath metadata record cannot claim them a second time.
+                continue;
+            }
+            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
+        };
+        let state_relative_path = state_relative_path.to_owned();
         if !paths.insert(state_relative_path.clone()) {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
@@ -1850,36 +1864,39 @@ fn backup_effect_target_kind(
 }
 
 fn expected_effect_physical_ref(
-    kind: BackupDeclaredEffectTargetKind,
+    kind: EffectMetadataTargetKind,
     logical_ref: &str,
 ) -> Option<String> {
     let (allowed_prefixes, allowed_exact, base_dir, extension): (&[&str], &[&str], &str, &str) =
         match kind {
-            BackupDeclaredEffectTargetKind::FilePath => return Some(logical_ref.to_owned()),
-            BackupDeclaredEffectTargetKind::ArtifactId => (
+            EffectMetadataTargetKind::FilePath => return Some(logical_ref.to_owned()),
+            EffectMetadataTargetKind::ArtifactId => (
                 &[".forge-method/artifacts/"],
                 &[],
                 ".forge-method/artifacts",
                 ".yaml",
             ),
-            BackupDeclaredEffectTargetKind::EvidenceId => (
+            EffectMetadataTargetKind::EvidenceId => (
                 &[".forge-method/evidence/", ".forge-method/snapshots/"],
                 &[],
                 ".forge-method/evidence",
                 ".json",
             ),
-            BackupDeclaredEffectTargetKind::LedgerStream => (
+            EffectMetadataTargetKind::LedgerStream => (
                 &[".forge-method/ledger/"],
                 &[".forge-method/ledger.ndjson"],
                 ".forge-method/ledger",
                 ".ndjson",
             ),
-            BackupDeclaredEffectTargetKind::RequestStream => (
+            EffectMetadataTargetKind::RequestStream => (
                 &[".forge-method/requests/"],
                 &[".forge-method/requests.ndjson"],
                 ".forge-method/requests",
                 ".ndjson",
             ),
+            EffectMetadataTargetKind::Glob
+            | EffectMetadataTargetKind::StateKey
+            | EffectMetadataTargetKind::CompletionId => return None,
         };
     if logical_ref.contains('/') || logical_ref.contains('\\') {
         return (allowed_exact.contains(&logical_ref)
@@ -2344,6 +2361,7 @@ fn is_reserved_effect_output_path(path: &str) -> bool {
 fn is_explicit_lock_path(path: &str, state: &str) -> bool {
     path.starts_with(&format!("{state}/locks/"))
         || path == format!("{state}/domain-pack-learning/capture.lock")
+        || path == format!("{state}/claims-active/.forge-claim.lock")
         || path == format!("{state}/contracts/isolations/.forge-isolation.lock")
 }
 
@@ -2579,6 +2597,13 @@ mod tests {
         output.target_kind = target_kind;
         output.logical_ref.clone_from(&declared_record.logical_ref);
         output.state_relative_path = state_relative_path;
+        output.access_mode = match declared_record.access_mode {
+            EffectMetadataAccessMode::Write => BackupEffectOutputAccessMode::Write,
+            EffectMetadataAccessMode::Append => BackupEffectOutputAccessMode::Append,
+            EffectMetadataAccessMode::Create => BackupEffectOutputAccessMode::Create,
+            EffectMetadataAccessMode::Read | EffectMetadataAccessMode::Delete => unreachable!(),
+        };
+        output.byte_length = declared_record.byte_len;
         output.content_sha256.clone_from(&content_sha256);
         output.metadata_record_sha256 = sha256(&record_bytes);
         if material != BackupEntryKind::DeclaredEffectOutput {
@@ -2594,6 +2619,28 @@ mod tests {
             .find(|entry| entry.material == material)
             .unwrap();
         output_entry.sha256 = content_sha256;
+        output_entry.byte_length = declared_record.byte_len;
+        let index_entry = document
+            .backup_manifest
+            .entries
+            .iter_mut()
+            .find(|entry| entry.material == BackupEntryKind::EffectMetadataIndex)
+            .unwrap();
+        index_entry.byte_length = raw.len() as u64;
+        index_entry.sha256 = sha256(raw);
+        recompute(document);
+    }
+
+    fn bind_index_without_outputs(document: &mut BackupManifestDocument, raw: &[u8]) {
+        document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs
+            .clear();
+        document
+            .backup_manifest
+            .entries
+            .retain(|entry| entry.material != BackupEntryKind::DeclaredEffectOutput);
         let index_entry = document
             .backup_manifest
             .entries
@@ -2627,6 +2674,10 @@ mod tests {
                 "InvalidExternalAuthorities",
             ),
             ("duplicate-entry.invalid.yaml", "EntriesNotCanonical"),
+            (
+                "effect-byte-length-substitution.invalid.yaml",
+                "InvalidDeclaredEffectProjection",
+            ),
             (
                 "external-domain-trust-substitution.invalid.yaml",
                 "InvalidExternalAuthorities",
@@ -2821,6 +2872,12 @@ mod tests {
         ));
         assert!(matches!(
             document
+                .classify_source_file("sidecar/.forge-method/claims-active/.forge-claim.lock")
+                .unwrap(),
+            BackupSourceFileClassification::Exclude(BackupSourceExclusion::ProducerLock)
+        ));
+        assert!(matches!(
+            document
                 .classify_source_file(
                     "sidecar/.forge-method/domain-pack-learning/.index.json.forge-next"
                 )
@@ -2872,6 +2929,11 @@ mod tests {
             (
                 BackupEntryKind::StoryState,
                 "sidecar/.forge-method/locks/story.lock",
+                BackupSourceExclusion::ProducerLock,
+            ),
+            (
+                BackupEntryKind::ClaimCache,
+                "sidecar/.forge-method/claims-active/.forge-claim.lock",
                 BackupSourceExclusion::ProducerLock,
             ),
             (
@@ -3022,6 +3084,7 @@ mod tests {
         assert_eq!(parsed[0].effect_id, "effect.latest");
         assert_eq!(parsed[0].access_mode, BackupEffectOutputAccessMode::Append);
         assert_eq!(parsed[0].content_sha256, latest_hash);
+        assert_eq!(parsed[0].byte_length, 20);
         assert_eq!(
             parsed[0].source_record_sha256,
             sha256(&serde_json::to_vec(&latest).unwrap())
@@ -3131,6 +3194,192 @@ mod tests {
         let raw = encoded_effect_records(&[live.clone(), deleted]);
         let mut document = parse_manifest("valid/multi-generation-v1.yaml");
         bind_effect_fixture(&mut document, &raw, &live);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
+    }
+
+    #[test]
+    fn effect_physical_ref_mirror_covers_shipped_target_kind_matrix() {
+        let cases = [
+            (
+                EffectMetadataTargetKind::FilePath,
+                "src/lib.rs",
+                "src/lib.rs",
+            ),
+            (
+                EffectMetadataTargetKind::ArtifactId,
+                "result:id",
+                ".forge-method/artifacts/result_id.yaml",
+            ),
+            (
+                EffectMetadataTargetKind::EvidenceId,
+                "command.json",
+                ".forge-method/evidence/command.json",
+            ),
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                ".forge-method/ledger.ndjson",
+                ".forge-method/ledger.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                "handoff",
+                ".forge-method/requests/handoff.ndjson",
+            ),
+        ];
+        for (kind, logical_ref, physical_ref) in cases {
+            assert_eq!(
+                expected_effect_physical_ref(kind, logical_ref).as_deref(),
+                Some(physical_ref)
+            );
+        }
+        for unsupported in [
+            EffectMetadataTargetKind::Glob,
+            EffectMetadataTargetKind::StateKey,
+            EffectMetadataTargetKind::CompletionId,
+        ] {
+            assert_eq!(expected_effect_physical_ref(unsupported, "target"), None);
+        }
+    }
+    #[test]
+    fn effect_index_validates_but_omits_normal_repository_file_records() {
+        let old_hash = format!("sha256:{}", "9".repeat(64));
+        let latest_hash = format!("sha256:{}", "a".repeat(64));
+        let mut old = effect_record(
+            "operation.source-old",
+            "effect.source-old",
+            EffectMetadataAccessMode::Create,
+            Some(&old_hash),
+            11,
+        );
+        old.logical_ref = "src/lib.rs".to_owned();
+        old.physical_ref = "src/lib.rs".to_owned();
+        let mut latest = old.clone();
+        latest.operation_id = "operation.source-latest".to_owned();
+        latest.effect_id = "effect.source-latest".to_owned();
+        latest.access_mode = EffectMetadataAccessMode::Write;
+        latest.content_hash = Some(latest_hash);
+        latest.byte_len = 22;
+        let raw = encoded_effect_records(&[old, latest]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+
+        assert!(document
+            .verify_effect_metadata_index_bytes(&raw)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn effect_index_validates_but_omits_out_of_state_delete() {
+        let hash = format!("sha256:{}", "9".repeat(64));
+        let mut live = effect_record(
+            "operation.source-live",
+            "effect.source-live",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            11,
+        );
+        live.logical_ref = "src/deleted.rs".to_owned();
+        live.physical_ref = "src/deleted.rs".to_owned();
+        let mut deleted = live.clone();
+        deleted.operation_id = "operation.source-delete".to_owned();
+        deleted.effect_id = "effect.source-delete".to_owned();
+        deleted.access_mode = EffectMetadataAccessMode::Delete;
+        deleted.content_hash = None;
+        deleted.byte_len = 0;
+        deleted.destructive = true;
+        let raw = encoded_effect_records(&[live, deleted]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+
+        assert!(document
+            .verify_effect_metadata_index_bytes(&raw)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn effect_index_validates_but_omits_reserved_family_file_path() {
+        let hash = format!("sha256:{}", "9".repeat(64));
+        let mut reserved = effect_record(
+            "operation.reserved",
+            "effect.reserved",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            47,
+        );
+        reserved.logical_ref = ".forge-method/artifacts/result.yaml".to_owned();
+        reserved.physical_ref = reserved.logical_ref.clone();
+        let raw = encoded_effect_records(std::slice::from_ref(&reserved));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+
+        assert!(document
+            .verify_effect_metadata_index_bytes(&raw)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn effect_index_rejects_forged_999_byte_claim_for_55_byte_archive_entry() {
+        let hash = format!("sha256:{}", "a".repeat(64));
+        let forged = effect_record(
+            "operation.forged-length",
+            "effect.forged-length",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            999,
+        );
+        let raw = encoded_effect_records(std::slice::from_ref(&forged));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &forged);
+        let output = document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs
+            .first_mut()
+            .unwrap();
+        output.byte_length = 55;
+        document
+            .backup_manifest
+            .entries
+            .iter_mut()
+            .find(|entry| entry.material == BackupEntryKind::DeclaredEffectOutput)
+            .unwrap()
+            .byte_length = 55;
+        recompute(&mut document);
+
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::EffectOutputClosureMismatch)
+        );
+    }
+
+    #[test]
+    fn effect_index_cross_binds_declared_access_mode() {
+        let hash = format!("sha256:{}", "a".repeat(64));
+        let source = effect_record(
+            "operation.access",
+            "effect.access",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            55,
+        );
+        let raw = encoded_effect_records(std::slice::from_ref(&source));
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut document, &raw, &source);
+        document
+            .backup_manifest
+            .source_state
+            .declared_effect_outputs
+            .first_mut()
+            .unwrap()
+            .access_mode = BackupEffectOutputAccessMode::Write;
+        recompute(&mut document);
+
         assert_eq!(
             document.verify_effect_metadata_index_bytes(&raw),
             Err(BackupManifestValidationError::EffectOutputClosureMismatch)

@@ -47,6 +47,7 @@ backup_manifest_contract:
       producer_locks:
         - state-root/locks/**
         - state-root/domain-pack-learning/capture.lock
+        - state-root/claims-active/.forge-claim.lock
         - state-root/contracts/isolations/.forge-isolation.lock
       crash_private:
         - crash-replace .forge-next/.forge-previous/.forge-transaction siblings
@@ -77,7 +78,7 @@ backup_manifest_contract:
       cross_binding_api: BackupManifestDocument::verify_effect_metadata_index_bytes
       source: exact archived index/effect-targets.ndjson bytes read while effect-index and effect-WAL locks plus producer quiescence remain retained
       binding: sorted operation_id, effect_id, file_path target kind, exact logical_ref and physical_ref/state-relative path, access_mode, content SHA-256, byte length, exact source-record SHA-256, and archive entry SHA-256
-      reserved_internal_families: forbidden
+      reserved_internal_families: valid generic file_path records are validated but omitted because typed source inventory owns those paths
       s04_algorithm:
         - retain effect metadata-index append lock before effect WAL lock in BACKUP_LOCK_ORDER and keep producer quiescence through parse, copy, and stable enumeration
         - read exact metadata-index bytes once; require byte length and SHA-256 to equal the EffectMetadataIndex archive entry
@@ -85,8 +86,9 @@ backup_manifest_contract:
         - hash each raw JSON frame without its newline and validate schema/record kind, nonblank operation/effect/actor identities, logical_ref, physical_ref, redaction hint, and safe paths
         - require create/write/append to carry a valid final content_hash; require delete to carry no content hash and byte_len zero; reject read metadata records
         - in source order replace a map entry keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
-        - for every file-backed record recompute the shipped physical_ref from target_kind plus logical_ref (including ID sanitization/extensions and path-family rules), require exact equality beneath the state root, reject reserved generic file_path and duplicate latest-live physical paths, then sort by state-relative path
-        - compare the complete derived projection, including raw frame digest and operation/effect/target identity, with declared_effect_outputs and compare every output content hash with its exact typed archive entry; stale, forged, deleted, omitted, or extra claims reject
+        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref (FilePath identity; typed ID sanitization/extensions/path-family rules; unsupported non-file-backed kinds reject) and require exact equality
+        - after latest/delete selection, omit valid live or deleted repository FilePath records outside the state root and omit reserved-family generic FilePath records; only live state-backup outputs enter the closure; duplicate included physical paths reject, then outputs sort by state-relative path
+        - compare the complete derived projection, including raw frame digest, operation/effect/target identity, access_mode, and byte_len, with declared_effect_outputs; require content hash and byte_len to equal the exact typed archive entry; stale, forged, deleted, omitted, or extra claims reject
         - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
   domain_pack_external_provisioning:
     lifecycle_independent: true
@@ -107,8 +109,10 @@ backup_manifest_contract:
     mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
     real_producer_locks_include:
       - Domain Pack external anchors, operator sources, rebase, lifecycle, and learning capture
-      - workflow credential/broker registries, workflow governance, claims, action replay, memory, research, governance conflicts, and isolations
+      - workflow credential/broker registries, workflow governance, claims-active cache mutation, claim WAL, action replay, memory, research, governance conflicts, and isolations
       - command evidence, effect index, effect WAL, replay WAL, trace, and protected replay anchor
+    claim_mutation_order: acquire and retain claims-active/.forge-claim.lock -> load authoritative claim WAL -> acquire locks/claims.wal.lock for WAL recovery/append/rotation -> release claim-WAL lock -> atomically write claims-active YAML cache while the outer claims-active lock remains retained -> release outer lock
+    backup_claim_order: ClaimCacheMutation immediately precedes ClaimWal in BACKUP_LOCK_ORDER; S04 retains both in that order before enumerating/copying claim WAL rotation closure and claim cache
     unlocked_producers: require opaque_exclusive_quiescence_required_by_restore_engine plus stable complete enumeration
     effect_replay_order: effect_wal must immediately precede replay_wal in the normative order; the hostile lock fixture specifically reverses only this pair
     assertion_boolean: forbidden

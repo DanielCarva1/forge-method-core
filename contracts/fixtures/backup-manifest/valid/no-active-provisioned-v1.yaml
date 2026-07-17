@@ -116,6 +116,7 @@
         "workflow_credential_registry",
         "workflow_broker_registry",
         "workflow_governance",
+        "claim_cache_mutation",
         "claim_wal",
         "workflow_action_replay_wal",
         "memory_log",
@@ -221,6 +222,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:fefa342ea73c5166152e8c6d3528b34ca9083f90af7830e84bae5335ccc5cd84"
+    "manifest_set_digest": "sha256:b2f64cca115ffad6866606cf167795b6879160f6227bddb79b36b5165e172ddc"
   }
 }

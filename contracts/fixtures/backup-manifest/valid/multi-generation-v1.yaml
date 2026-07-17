@@ -156,7 +156,9 @@
           "content_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "operation_id": "operation.custom",
           "logical_ref": ".forge-method/custom/source-derived-output.yaml",
-          "metadata_record_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          "metadata_record_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "access_mode": "create",
+          "byte_length": 55
         }
       ]
     },
@@ -172,6 +174,7 @@
         "workflow_credential_registry",
         "workflow_broker_registry",
         "workflow_governance",
+        "claim_cache_mutation",
         "claim_wal",
         "workflow_action_replay_wal",
         "memory_log",
@@ -691,6 +694,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:6bc45d45047ccfd8d7a92413b5e0f144168f3f894e3c327968e05a435d765d28"
+    "manifest_set_digest": "sha256:bb5abf4d88459e4a23fdf10e528cf17d131feca05a97d225de36c2803b994a04"
   }
 }
