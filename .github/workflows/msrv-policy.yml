@@ -1,0 +1,38 @@
+name: MSRV Policy
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  enforce:
+    name: Enforce trusted MSRV policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted base policy
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout candidate as untrusted data
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Provision exact YAML parser
+        run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3
+
+      - name: Validate candidate with trusted base checker
+        run: python trusted/scripts/check-msrv.py --root candidate --workflow candidate/.github/workflows/ci.yml --policy-workflow candidate/.github/workflows/msrv-policy.yml

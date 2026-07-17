@@ -14,6 +14,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
+POLICY_WORKFLOW = ROOT / ".github/workflows/msrv-policy.yml"
 FIXTURE = ROOT / "contracts/fixtures/msrv/post-1.85-language"
 
 
@@ -34,6 +35,7 @@ class MsrvContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = WORKFLOW.read_text(encoding="utf-8")
+        cls.policy_source = POLICY_WORKFLOW.read_text(encoding="utf-8")
 
     def replace_once(self, old: str, new: str) -> str:
         self.assertEqual(self.source.count(old), 1, old)
@@ -45,6 +47,16 @@ class MsrvContractTests(unittest.TestCase):
 
     def assert_workflow_rejected(self, old: str, new: str, reason: str) -> None:
         self.assert_source_rejected(self.replace_once(old, new), reason)
+
+    def replace_policy_once(self, old: str, new: str) -> str:
+        self.assertEqual(self.policy_source.count(old), 1, old)
+        return self.policy_source.replace(old, new, 1)
+
+    def assert_policy_rejected(self, old: str, new: str, reason: str) -> None:
+        with self.assertRaisesRegex(checker.MsrvCheckError, reason):
+            checker.check_policy_workflow_source(
+                self.replace_policy_once(old, new)
+            )
 
     def copied_manifests(self, destination: Path) -> None:
         shutil.copy2(ROOT / "Cargo.toml", destination / "Cargo.toml")
@@ -131,7 +143,7 @@ class MsrvContractTests(unittest.TestCase):
         self.assert_workflow_rejected(
             dependency, dependency.replace("static_docs", "focused"), "job dependency"
         )
-        runner = dependency + "    runs-on: ubuntu-latest\n"
+        runner = dependency + "    if: always()\n    runs-on: ubuntu-latest\n"
         self.assert_workflow_rejected(
             runner, runner.replace("ubuntu-latest", "windows-latest"), "job runner"
         )
@@ -149,13 +161,13 @@ class MsrvContractTests(unittest.TestCase):
             "uses: ./reusable.yml",
             "shell: bash",
             "working-directory: crates",
-            "if: success()",
             "permissions: read-all",
         ):
             with self.subTest(field=field):
                 runner = (
                     "  msrv:\n    name: Rust 1.85 minimum supported version\n"
-                    "    needs: static_docs\n    runs-on: ubuntu-latest\n"
+                    "    needs: static_docs\n    if: always()\n"
+                    "    runs-on: ubuntu-latest\n"
                 )
                 mutated = self.replace_once(runner, runner + f"    {field}\n")
                 self.assert_source_rejected(mutated, "msrv job keys")
@@ -254,7 +266,9 @@ class MsrvContractTests(unittest.TestCase):
     def test_rejects_extra_reordered_and_duplicate_steps(self) -> None:
         checkout = (
             "      - name: Checkout\n"
-            f"        uses: {checker.CHECKOUT_ACTION} # v4\n\n"
+            f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
+            "        with:\n"
+            "          persist-credentials: false\n\n"
         )
         install = (
             "      - name: Install exact MSRV toolchain\n"
@@ -316,6 +330,123 @@ class MsrvContractTests(unittest.TestCase):
             "--budget-seconds 99999 --report target/ci-timing/msrv-workspace.json",
             "exact values",
         )
+
+    def test_rejects_both_skip_gate_attacks(self) -> None:
+        static_header = (
+            "  static_docs:\n"
+            "    name: Tier 0 static and docs\n"
+            "    runs-on: ubuntu-latest\n"
+        )
+        self.assert_workflow_rejected(
+            static_header,
+            static_header + "    if: false\n",
+            "static_docs job keys",
+        )
+        self.assert_workflow_rejected(
+            "    if: always()\n    runs-on: ubuntu-latest\n",
+            "    if: false\n    runs-on: ubuntu-latest\n",
+            "msrv job condition",
+        )
+
+    def test_policy_rejects_trigger_permissions_and_job_bypasses(self) -> None:
+        mutations = [
+            (
+                "  pull_request_target:\n",
+                "  pull_request:\n",
+                "workflow triggers",
+            ),
+            ("  contents: read\n", "  contents: write\n", "workflow permissions"),
+            (
+                "    timeout-minutes: 10\n",
+                "    timeout-minutes: 10\n    if: false\n",
+                "enforce job keys",
+            ),
+            (
+                "    timeout-minutes: 10\n",
+                "    timeout-minutes: 10\n    continue-on-error: true\n",
+                "enforce job keys",
+            ),
+            (
+                "jobs:\n  enforce:\n",
+                "jobs:\n  bypass:\n    runs-on: ubuntu-latest\n"
+                "    steps: []\n  enforce:\n",
+                "policy jobs keys",
+            ),
+        ]
+        for old, new, reason in mutations:
+            with self.subTest(mutation=new.strip().splitlines()[-1]):
+                self.assert_policy_rejected(old, new, reason)
+
+    def test_policy_rejects_mutable_checkout_and_candidate_execution(self) -> None:
+        candidate_checkout = (
+            "      - name: Checkout candidate as untrusted data\n"
+            f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
+        )
+        mutations = [
+            (
+                candidate_checkout,
+                candidate_checkout.replace(
+                    checker.CHECKOUT_ACTION, "actions/checkout@v4"
+                ),
+            ),
+            (
+                "          ref: ${{ github.event.pull_request.head.sha }}\n",
+                "          ref: ${{ github.event.pull_request.head.ref }}\n",
+            ),
+            (
+                "          path: candidate\n"
+                "          persist-credentials: false\n",
+                "          path: candidate\n"
+                "          persist-credentials: true\n",
+            ),
+            (
+                "      - name: Provision exact YAML parser\n",
+                "      - name: Run candidate checker\n"
+                "        run: python candidate/scripts/check-msrv.py\n\n"
+                "      - name: Provision exact YAML parser\n",
+            ),
+            (
+                checker.PYYAML_INSTALL_COMMAND,
+                "python -m pip install PyYAML",
+            ),
+            (
+                checker.POLICY_COMMAND,
+                checker.POLICY_COMMAND.replace("trusted/scripts", "candidate/scripts"),
+            ),
+        ]
+        for old, new in mutations:
+            with self.subTest(mutation=new.splitlines()[0]):
+                self.assert_policy_rejected(old, new, "policy steps")
+
+    def test_policy_rejects_base_ref_and_unknown_step_keys(self) -> None:
+        self.assert_policy_rejected(
+            "          ref: ${{ github.event.pull_request.base.sha }}\n",
+            "          ref: main\n",
+            "policy steps",
+        )
+        provision = "      - name: Provision exact YAML parser\n"
+        self.assert_policy_rejected(
+            provision,
+            provision + "        continue-on-error: true\n",
+            "policy steps",
+        )
+
+    def test_policy_deletion_rename_and_symlink_fail_closed(self) -> None:
+        missing = ROOT / ".github/workflows/msrv-policy-renamed.yml"
+        with self.assertRaisesRegex(checker.MsrvCheckError, "required MSRV policy"):
+            checker.check(policy_workflow=missing)
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            self.copied_manifests(root)
+            workflows = root / ".github/workflows"
+            workflows.mkdir(parents=True)
+            shutil.copy2(WORKFLOW, workflows / "ci.yml")
+            (workflows / "msrv-policy.yml").symlink_to(POLICY_WORKFLOW)
+            with self.assertRaisesRegex(checker.MsrvCheckError, "symbolic link"):
+                checker.check(
+                    workflows / "ci.yml", root, workflows / "msrv-policy.yml"
+                )
 
     def test_rejects_workspace_member_omission_and_undeclared_crate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

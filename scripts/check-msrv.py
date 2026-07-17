@@ -18,6 +18,7 @@ except ImportError:  # Fail closed rather than interpreting security topology as
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
+POLICY_WORKFLOW = ROOT / ".github/workflows/msrv-policy.yml"
 DECLARED_MSRV = "1.85"
 TOOLCHAIN = "1.85.1"
 CHECKOUT_ACTION = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
@@ -37,6 +38,12 @@ CARGO_COMMAND = (
     "python scripts/run-ci-tier.py --tier msrv-workspace --budget-seconds 1800 "
     "--report target/ci-timing/msrv-workspace.json -- cargo +1.85.1 check "
     "--locked --workspace --all-targets --all-features"
+)
+
+POLICY_COMMAND = (
+    "python trusted/scripts/check-msrv.py --root candidate "
+    "--workflow candidate/.github/workflows/ci.yml "
+    "--policy-workflow candidate/.github/workflows/msrv-policy.yml"
 )
 
 
@@ -114,6 +121,20 @@ def validate_unambiguous_yaml(source: str) -> None:
     parse_workflow(source)
 
 
+def _require_regular_data_file(path: Path, root: Path, label: str) -> None:
+    try:
+        relative = path.relative_to(root)
+    except ValueError as error:
+        raise MsrvCheckError(f"{label} must remain inside the candidate root") from error
+    current = root
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise MsrvCheckError(f"{label} must not be a symbolic link")
+    if not path.is_file():
+        raise MsrvCheckError(f"required {label} is missing or not a regular file")
+
+
 def _load_toml(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as stream:
@@ -143,6 +164,7 @@ def _member_paths(manifest: dict[str, Any]) -> list[PurePosixPath]:
 
 
 def check_manifests(root: Path = ROOT) -> list[str]:
+    _require_regular_data_file(root / "Cargo.toml", root, "root Cargo.toml")
     manifest = _load_toml(root / "Cargo.toml")
     workspace = manifest["workspace"]
     package_policy = workspace.get("package")
@@ -167,6 +189,7 @@ def check_manifests(root: Path = ROOT) -> list[str]:
     names: list[str] = []
     for relative in members:
         path = root / relative / "Cargo.toml"
+        _require_regular_data_file(path, root, f"{relative}/Cargo.toml")
         member = _load_toml(path)
         package = member.get("package")
         if not isinstance(package, dict) or not isinstance(package.get("name"), str):
@@ -206,6 +229,167 @@ def _exact_value(actual: Any, expected: Any, label: str) -> None:
         raise MsrvCheckError(f"{label} must remain exactly {expected!r}")
 
 
+def _check_static_docs_job(value: Any) -> None:
+    job = _exact_mapping(
+        value,
+        "static_docs job",
+        {"name", "runs-on", "timeout-minutes", "env", "steps"},
+    )
+    _exact_value(job["name"], "Tier 0 static and docs", "static_docs job name")
+    _exact_value(job["runs-on"], "ubuntu-latest", "static_docs job runner")
+    _exact_value(job["timeout-minutes"], "10", "static_docs job timeout")
+    _exact_value(
+        job["env"],
+        {"FORGE_CI_CACHE_CONTEXT": "Swatinem/rust-cache@v2"},
+        "static_docs job environment",
+    )
+    expected_steps = [
+        (
+            "Checkout",
+            {
+                "name": "Checkout",
+                "uses": CHECKOUT_ACTION,
+                "with": {"persist-credentials": "false"},
+            },
+        ),
+        (
+            "Install Rust",
+            {
+                "name": "Install Rust",
+                "uses": TOOLCHAIN_ACTION,
+                "with": {"components": "rustfmt"},
+            },
+        ),
+        (
+            "Cache Rust artifacts",
+            {
+                "name": "Cache Rust artifacts",
+                "uses": "Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32",
+            },
+        ),
+        (
+            "Check generated workspace layout",
+            {"name", "timeout-minutes", "run"},
+        ),
+        (
+            "Check local documentation links",
+            {"name", "timeout-minutes", "run"},
+        ),
+        (
+            "Audit public promises and release payload",
+            {"name", "timeout-minutes", "run"},
+        ),
+        (
+            "Test CI and evidence tooling failure semantics",
+            {"name", "timeout-minutes", "shell", "run"},
+        ),
+        ("Check formatting", {"name", "timeout-minutes", "run"}),
+        (
+            "Upload Tier 0 timing reports",
+            {
+                "name": "Upload Tier 0 timing reports",
+                "if": "always()",
+                "uses": UPLOAD_ACTION,
+                "with": {
+                    "name": "ci-timing-static-docs",
+                    "path": "target/ci-timing",
+                    "if-no-files-found": "warn",
+                },
+            },
+        ),
+    ]
+    steps = job["steps"]
+    if not isinstance(steps, list):
+        raise MsrvCheckError("static_docs steps must be an exact ordered YAML list")
+    names = [step.get("name") if isinstance(step, dict) else None for step in steps]
+    expected_names = [name for name, _ in expected_steps]
+    if names != expected_names:
+        raise MsrvCheckError(
+            "static_docs step topology must be the reviewed exact named sequence; "
+            f"expected={expected_names}, actual={names}"
+        )
+    for step, (name, expected) in zip(steps, expected_steps, strict=True):
+        assert isinstance(step, dict)
+        expected_keys = expected if isinstance(expected, set) else set(expected)
+        _exact_mapping(step, f"static_docs step {name!r}", expected_keys)
+        if isinstance(expected, dict) and step != expected:
+            raise MsrvCheckError(
+                f"static_docs step {name!r} fields must match reviewed exact values"
+            )
+
+
+def check_policy_workflow_source(source: str) -> None:
+    document = parse_workflow(source)
+    root = _exact_mapping(
+        document, "MSRV policy workflow", {"name", "on", "permissions", "jobs"}
+    )
+    _exact_value(root["name"], "MSRV Policy", "MSRV policy workflow name")
+    _exact_value(
+        root["on"],
+        {
+            "pull_request_target": {
+                "types": ["opened", "reopened", "synchronize", "ready_for_review"]
+            }
+        },
+        "MSRV policy workflow triggers",
+    )
+    _exact_value(
+        root["permissions"],
+        {"contents": "read"},
+        "MSRV policy workflow permissions",
+    )
+    jobs = _exact_mapping(root["jobs"], "MSRV policy jobs", {"enforce"})
+    job = _exact_mapping(
+        jobs["enforce"],
+        "MSRV policy enforce job",
+        {"name", "runs-on", "timeout-minutes", "steps"},
+    )
+    _exact_value(
+        job["name"], "Enforce trusted MSRV policy", "MSRV policy job name"
+    )
+    _exact_value(job["runs-on"], "ubuntu-latest", "MSRV policy job runner")
+    _exact_value(job["timeout-minutes"], "10", "MSRV policy job timeout")
+    expected_steps = [
+        {
+            "name": "Checkout trusted base policy",
+            "uses": CHECKOUT_ACTION,
+            "with": {
+                "repository": "${{ github.repository }}",
+                "ref": "${{ github.event.pull_request.base.sha }}",
+                "path": "trusted",
+                "persist-credentials": "false",
+                "fetch-depth": "1",
+            },
+        },
+        {
+            "name": "Checkout candidate as untrusted data",
+            "uses": CHECKOUT_ACTION,
+            "with": {
+                "repository": "${{ github.event.pull_request.head.repo.full_name }}",
+                "ref": "${{ github.event.pull_request.head.sha }}",
+                "path": "candidate",
+                "persist-credentials": "false",
+                "fetch-depth": "1",
+            },
+        },
+        {
+            "name": "Provision exact YAML parser",
+            "run": PYYAML_INSTALL_COMMAND,
+        },
+        {
+            "name": "Validate candidate with trusted base checker",
+            "run": POLICY_COMMAND,
+        },
+    ]
+    steps = job["steps"]
+    if not isinstance(steps, list) or steps != expected_steps:
+        raise MsrvCheckError(
+            "MSRV policy steps must be the reviewed exact ordered sequence"
+        )
+    for step, expected in zip(steps, expected_steps, strict=True):
+        _exact_mapping(step, f"MSRV policy step {expected['name']!r}", set(expected))
+
+
 def check_workflow_source(source: str) -> None:
     document = parse_workflow(source)
     root = _exact_mapping(
@@ -235,22 +419,22 @@ def check_workflow_source(source: str) -> None:
         "CI workflow environment",
     )
 
-    jobs = root["jobs"]
-    if not isinstance(jobs, dict):
-        raise MsrvCheckError("CI jobs must be a YAML mapping")
-    if "static_docs" not in jobs or not isinstance(jobs["static_docs"], dict):
-        raise MsrvCheckError("CI must define the static_docs dependency job")
-    if "msrv" not in jobs:
-        raise MsrvCheckError("CI must define exactly one 'msrv' job")
+    jobs = _exact_mapping(
+        root["jobs"],
+        "CI jobs",
+        {"static_docs", "msrv", "focused", "platform", "expensive-journey"},
+    )
+    _check_static_docs_job(jobs["static_docs"])
     job = _exact_mapping(
         jobs["msrv"],
         "msrv job",
-        {"name", "needs", "runs-on", "timeout-minutes", "env", "steps"},
+        {"name", "needs", "if", "runs-on", "timeout-minutes", "env", "steps"},
     )
     _exact_value(
         job["name"], "Rust 1.85 minimum supported version", "msrv job name"
     )
     _exact_value(job["needs"], "static_docs", "msrv job dependency")
+    _exact_value(job["if"], "always()", "msrv job condition")
     _exact_value(job["runs-on"], "ubuntu-latest", "msrv job runner")
     _exact_value(job["timeout-minutes"], "35", "msrv job timeout")
     _exact_value(
@@ -261,7 +445,14 @@ def check_workflow_source(source: str) -> None:
 
     steps = job["steps"]
     expected_steps: list[tuple[str, dict[str, Any]]] = [
-        ("Checkout", {"name": "Checkout", "uses": CHECKOUT_ACTION}),
+        (
+            "Checkout",
+            {
+                "name": "Checkout",
+                "uses": CHECKOUT_ACTION,
+                "with": {"persist-credentials": "false"},
+            },
+        ),
         (
             "Install exact MSRV toolchain",
             {
@@ -327,13 +518,22 @@ def check_workflow_source(source: str) -> None:
         )
 
 
-def check(workflow: Path = WORKFLOW, root: Path = ROOT) -> list[str]:
+def check(
+    workflow: Path = WORKFLOW,
+    root: Path = ROOT,
+    policy_workflow: Path | None = None,
+) -> list[str]:
+    policy_workflow = policy_workflow or root / ".github/workflows/msrv-policy.yml"
     packages = check_manifests(root)
+    _require_regular_data_file(workflow, root, "CI workflow")
+    _require_regular_data_file(policy_workflow, root, "MSRV policy workflow")
     try:
-        source = workflow.read_text(encoding="utf-8")
+        workflow_source = workflow.read_text(encoding="utf-8")
+        policy_source = policy_workflow.read_text(encoding="utf-8")
     except OSError as error:
-        raise MsrvCheckError(f"cannot read {workflow}: {error}") from error
-    check_workflow_source(source)
+        raise MsrvCheckError(f"cannot read candidate policy data: {error}") from error
+    check_workflow_source(workflow_source)
+    check_policy_workflow_source(policy_source)
     return packages
 
 
@@ -341,16 +541,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--workflow", type=Path)
+    parser.add_argument("--policy-workflow", type=Path)
     args = parser.parse_args(argv)
     workflow = args.workflow or args.root / ".github/workflows/ci.yml"
+    policy_workflow = (
+        args.policy_workflow or args.root / ".github/workflows/msrv-policy.yml"
+    )
     try:
-        packages = check(workflow, args.root)
+        packages = check(workflow, args.root, policy_workflow)
     except MsrvCheckError as error:
         print(f"MSRV check failed: {error}", file=sys.stderr)
         return 1
     print(
         f"MSRV topology passed: Rust {TOOLCHAIN}, {len(packages)} workspace packages, "
-        "all targets/features, locked Cargo, no shared cache"
+        "trusted PR policy, all targets/features, locked Cargo, no shared cache"
     )
     return 0
 
