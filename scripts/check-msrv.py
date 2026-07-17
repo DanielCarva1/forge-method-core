@@ -23,10 +23,16 @@ TOOLCHAIN = "1.85.1"
 CHECKOUT_ACTION = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
 TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30"
 UPLOAD_ACTION = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
-CHECK_COMMAND = (
+PYYAML_VERSION = "6.0.3"
+PYYAML_INSTALL_COMMAND = (
+    "python -m pip install --disable-pip-version-check --no-deps "
+    f"PyYAML=={PYYAML_VERSION}"
+)
+CONTRACT_COMMAND = (
     "python scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 "
     "--report target/ci-timing/msrv-contract.json -- python scripts/test-msrv.py"
 )
+CHECK_COMMAND = f"{PYYAML_INSTALL_COMMAND} && {CONTRACT_COMMAND}"
 CARGO_COMMAND = (
     "python scripts/run-ci-tier.py --tier msrv-workspace --budget-seconds 1800 "
     "--report target/ci-timing/msrv-workspace.json -- cargo +1.85.1 check "

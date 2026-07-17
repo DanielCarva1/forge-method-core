@@ -10,7 +10,7 @@ alone met a time budget.
 | Tier | Trigger | Per-step budget | Owned evidence |
 |---|---|---:|---|
 | **Tier 0: static/docs** | Every pull request and push to `main`/`master` | 120 seconds | Generated workspace layout, local Markdown links, public-promise audit, evidence-tool tests, Rust formatting |
-| **MSRV** | Every pull request and push to `main`/`master`, after Tier 0 | 300 seconds contract test; 1,800 seconds compile | Exact Rust 1.85.1, locked workspace, every Cargo target and feature, adversarial lane tests |
+| **MSRV** | Every pull request and push to `main`/`master`, after Tier 0 | 300 seconds contract test; 1,800 seconds compile | Exact PyYAML 6.0.3 provisioning and Rust 1.85.1, locked workspace, every Cargo target and feature, adversarial lane tests |
 | **Focused package/integration** | Every pull request and push to `main`/`master`, after Tier 0 | 900 seconds | Generated command/release subjects, retirement runtime, test inventories, all-feature pedantic clippy, aggregate validation and regression anchors |
 | **Platform** | Every pull request and push to `main`/`master`, after Tier 0; native Linux, Windows, Intel macOS, Apple Silicon macOS matrix | 1,800 seconds | Workspace all-target compilation and default workspace tests on every runner; each non-Linux runner also compiles the expensive P6d target |
 | **Expensive cumulative journey** | Push to `main`/`master` only, after Tier 0 + focused + platform succeed | 1,800 seconds | Exact Linux P6d reference-pack real-process journey once |
@@ -26,14 +26,18 @@ expresses a stable release line as major.minor. CI pins patch release **1.85.1**
 to make compiler behavior reproducible while staying within that declared 1.85
 line; the patch pin does not raise the source MSRV to a different Rust release.
 The MSRV job deliberately has no Cargo cache, so a newer compiler cannot seed it
-and the lane cannot save artifacts for other jobs. `scripts/check-msrv.py`
-discovers every `crates/*/Cargo.toml`, reconciles it with explicit workspace
-members, and parses each member's features and package policy. Its duplicate-key-
-safe structured YAML check rejects aliases, merges, unknown workflow/MSRV-job
-keys, unapproved inherited or job/step environment, and any step outside the
-exact named sequence and closed per-step fields. The accepted compile remains the
-wrapped exact `cargo +1.85.1 check --locked --workspace --all-targets
---all-features`; the always-run timing upload cannot change that step's result.
+and the lane cannot save artifacts for other jobs. The existing `Verify MSRV lane
+contract` step first installs exact `PyYAML==6.0.3` with dependency installation
+disabled (`--no-deps`), rather than trusting runner-preinstalled Python packages,
+and only then starts the structured checker tests. `scripts/check-msrv.py`
+requires that exact provisioning command and order, discovers every
+`crates/*/Cargo.toml`, reconciles it with explicit workspace members, and parses
+each member's features and package policy. Its duplicate-key-safe structured
+YAML check rejects aliases, merges, unknown workflow/MSRV-job keys, unapproved
+inherited or job/step environment, and any step outside the exact named sequence
+and closed per-step fields. The accepted compile remains the wrapped exact
+`cargo +1.85.1 check --locked --workspace --all-targets --all-features`; the
+always-run timing upload cannot change that step's result.
 
 ## Timing and failure evidence
 

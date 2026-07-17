@@ -80,7 +80,7 @@ jobs:
 
       - name: Verify MSRV lane contract
         timeout-minutes: 6
-        run: python scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 --report target/ci-timing/msrv-contract.json -- python scripts/test-msrv.py
+        run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3 && python scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 --report target/ci-timing/msrv-contract.json -- python scripts/test-msrv.py
 
       - name: Check complete workspace at MSRV
         timeout-minutes: 31

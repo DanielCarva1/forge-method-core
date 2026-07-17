@@ -93,6 +93,25 @@ class MsrvContractTests(unittest.TestCase):
                 )
                 self.assert_source_rejected(mutated, "exact values")
 
+    def test_requires_exact_pinned_no_deps_pyyaml_provisioning(self) -> None:
+        mutations = [
+            (f"{checker.PYYAML_INSTALL_COMMAND} && ", ""),
+            (f"PyYAML=={checker.PYYAML_VERSION}", "PyYAML"),
+            (f"PyYAML=={checker.PYYAML_VERSION}", "PyYAML==6.0.2"),
+            (" --no-deps ", " "),
+            ("python -m pip install", "pip install"),
+        ]
+        for old, new in mutations:
+            with self.subTest(mutation=(old, new)):
+                self.assert_workflow_rejected(old, new, "exact values")
+
+    def test_rejects_pyyaml_install_after_contract_verification(self) -> None:
+        self.assert_workflow_rejected(
+            checker.CHECK_COMMAND,
+            f"{checker.CONTRACT_COMMAND} && {checker.PYYAML_INSTALL_COMMAND}",
+            "exact values",
+        )
+
     def test_rejects_every_omitted_cargo_dimension(self) -> None:
         for flag in ("--locked", "--workspace", "--all-targets", "--all-features"):
             with self.subTest(flag=flag):
