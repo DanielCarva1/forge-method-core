@@ -999,7 +999,6 @@ impl BackupManifest {
         let mut previous = None;
         let mut paths = BTreeSet::new();
         for entry in &self.entries {
-            validate_canonical_archive_path(&entry.logical_path)?;
             let source_identity = decode_canonical_archive_path(&entry.logical_path)?;
             if is_forbidden_private_path(&source_identity) {
                 return Err(BackupManifestValidationError::ForbiddenPrivatePath {
@@ -1629,7 +1628,7 @@ fn validate_declared_effect_outputs(
         .iter()
         .filter(|output| {
             effect_output_material(manifest, &output.state_relative_path)
-                == Some(BackupEntryKind::DeclaredEffectOutput)
+                == BackupEntryKind::DeclaredEffectOutput
         })
         .count() as u64;
     expected.insert(BackupEntryKind::DeclaredEffectOutput, declared_count);
@@ -1645,7 +1644,7 @@ fn validate_declared_effect_outputs(
             &output.metadata_record_sha256,
         )?;
         digest("declared_effect.content_sha256", &output.content_sha256)?;
-        validate_canonical_archive_path(&output.state_relative_path)?;
+        decode_canonical_archive_path(&output.state_relative_path)?;
         let metadata_kind = effect_metadata_target_kind(output.target_kind);
         let expected_physical_ref =
             expected_effect_physical_ref(metadata_kind, &output.logical_ref)
@@ -1662,9 +1661,7 @@ fn validate_declared_effect_outputs(
         ) {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         }
-        let Some(material) = effect_output_material(manifest, &output.state_relative_path) else {
-            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
-        };
+        let material = effect_output_material(manifest, &output.state_relative_path);
         if output.physical_ref != expected_physical_ref
             || output.state_relative_path != expected_state_relative_path
             || previous.is_some_and(|path| path >= output.state_relative_path.as_str())
@@ -1689,45 +1686,39 @@ fn validate_declared_effect_outputs(
     Ok(())
 }
 
-fn effect_output_material(
-    manifest: &BackupManifest,
-    state_relative_path: &str,
-) -> Option<BackupEntryKind> {
+fn effect_output_material(manifest: &BackupManifest, state_relative_path: &str) -> BackupEntryKind {
+    // Reserved families own every descendant regardless of a manifest occupant's
+    // claimed material. Textual family-root files remain declared outputs.
+    match state_relative_path {
+        "artifacts" | "evidence" | "snapshots" | "ledger" | "requests" => {
+            return BackupEntryKind::DeclaredEffectOutput;
+        }
+        path if path.starts_with("artifacts/") => return BackupEntryKind::Artifact,
+        path if path.starts_with("evidence/") => return BackupEntryKind::Evidence,
+        path if path.starts_with("snapshots/") => return BackupEntryKind::Snapshot,
+        path if path.starts_with("ledger/") => return BackupEntryKind::LedgerStream,
+        "requests.ndjson" => return BackupEntryKind::RequestStream,
+        path if path.starts_with("requests/") => return BackupEntryKind::RequestStream,
+        _ => {}
+    }
+
+    // Outside reserved families, inherit only an independently typed entry. A
+    // DeclaredEffectOutput occupant cannot grant its own material classification.
     let full_path = format!(
         "{}/{}",
         state_prefix(&manifest.project.archive_layout),
         state_relative_path
     );
-    if let Some(entry) = manifest
+    manifest
         .entries
         .iter()
-        .find(|entry| entry.logical_path == full_path)
-    {
-        return Some(entry.material);
-    }
-    if state_relative_path == "artifacts"
-        || state_relative_path == "evidence"
-        || state_relative_path == "snapshots"
-        || state_relative_path == "ledger"
-        || state_relative_path == "requests"
-    {
-        return Some(BackupEntryKind::DeclaredEffectOutput);
-    }
-    if state_relative_path.starts_with("artifacts/") {
-        Some(BackupEntryKind::Artifact)
-    } else if state_relative_path.starts_with("evidence/") {
-        Some(BackupEntryKind::Evidence)
-    } else if state_relative_path.starts_with("snapshots/") {
-        Some(BackupEntryKind::Snapshot)
-    } else if state_relative_path.starts_with("ledger/") {
-        Some(BackupEntryKind::LedgerStream)
-    } else if state_relative_path == "requests.ndjson"
-        || state_relative_path.starts_with("requests/")
-    {
-        Some(BackupEntryKind::RequestStream)
-    } else {
-        None
-    }
+        .find(|entry| {
+            entry.logical_path == full_path
+                && entry.material != BackupEntryKind::DeclaredEffectOutput
+        })
+        .map_or(BackupEntryKind::DeclaredEffectOutput, |entry| {
+            entry.material
+        })
 }
 
 fn parse_effect_metadata_index(
@@ -1818,9 +1809,6 @@ fn parse_effect_metadata_index(
         }
         let target_kind = backup_effect_target_kind(record.target_kind)
             .expect("validated shipped file-backed metadata target");
-        if effect_output_material(manifest, &state_relative_path).is_none() {
-            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
-        }
         if !paths.insert(state_relative_path.clone()) {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
@@ -2032,7 +2020,18 @@ pub fn canonical_archive_path(source_path: &str) -> Result<String, BackupManifes
         .join("/"))
 }
 
-fn decode_canonical_archive_path(
+/// Decodes one canonical archive identity back to its normalized UTF-8 source path.
+///
+/// This is the strict inverse of [`canonical_archive_path`] and the single public
+/// canonical-path validator. It rejects malformed escapes, invalid UTF-8, escaped
+/// separators, redundant or lowercase escapes, and every spelling that does not
+/// decode and re-encode byte-for-byte identically.
+///
+/// # Errors
+///
+/// Returns `InvalidLogicalPath` unless `archive_path` is a canonical encoded
+/// relative path accepted by [`canonical_archive_path`].
+pub fn decode_canonical_archive_path(
     archive_path: &str,
 ) -> Result<String, BackupManifestValidationError> {
     validate_safe_path(archive_path)?;
@@ -2070,15 +2069,9 @@ fn decode_canonical_archive_path(
         })?;
         decoded_components.push(decoded);
     }
-    Ok(decoded_components.join("/"))
-}
-
-fn validate_canonical_archive_path(
-    archive_path: &str,
-) -> Result<(), BackupManifestValidationError> {
-    let decoded = decode_canonical_archive_path(archive_path)?;
+    let decoded = decoded_components.join("/");
     if canonical_archive_path(&decoded).as_deref() == Ok(archive_path) {
-        Ok(())
+        Ok(decoded)
     } else {
         Err(BackupManifestValidationError::InvalidLogicalPath {
             path: archive_path.to_owned(),
@@ -2736,22 +2729,7 @@ mod tests {
             &document.backup_manifest.project.archive_layout,
         )
         .unwrap();
-        if effect_output_material(&document.backup_manifest, &state_relative_path).is_none() {
-            let output_path = format!(
-                "{}/{}",
-                state_prefix(&document.backup_manifest.project.archive_layout),
-                state_relative_path
-            );
-            document
-                .backup_manifest
-                .entries
-                .iter_mut()
-                .find(|entry| entry.material == BackupEntryKind::DeclaredEffectOutput)
-                .unwrap()
-                .logical_path = output_path;
-        }
-        let material =
-            effect_output_material(&document.backup_manifest, &state_relative_path).unwrap();
+        let material = effect_output_material(&document.backup_manifest, &state_relative_path);
         let content_sha256 = declared_record.content_hash.clone().unwrap();
         let output = document
             .backup_manifest
@@ -2830,6 +2808,55 @@ mod tests {
         index_entry.byte_length = raw.len() as u64;
         index_entry.sha256 = sha256(raw);
         recompute(document);
+    }
+
+    #[test]
+    fn canonical_decoder_is_public_at_crate_root_and_enforces_identity() {
+        use crate::{
+            canonical_archive_path as root_encode, decode_canonical_archive_path as root_decode,
+        };
+
+        for (encoded, decoded) in [
+            (
+                "sidecar/.forge-method/custom%25name.yaml",
+                "sidecar/.forge-method/custom%name.yaml",
+            ),
+            (
+                "sidecar/.forge-method/%7E/%F0%9F%92%A9",
+                "sidecar/.forge-method/~/💩",
+            ),
+        ] {
+            assert_eq!(root_decode(encoded).as_deref(), Ok(decoded));
+            assert_eq!(root_encode(decoded).as_deref(), Ok(encoded));
+        }
+    }
+
+    #[test]
+    fn canonical_decoder_rejects_adversarial_noncanonical_spellings() {
+        for encoded in [
+            "",
+            "sidecar//state",
+            "sidecar/%",
+            "sidecar/%0",
+            "sidecar/%GG",
+            "sidecar/%2Fstate",
+            "sidecar/%2fstate",
+            "sidecar/%41",
+            "sidecar/%61",
+            "sidecar/%7e",
+            "sidecar/%00",
+            "sidecar/%FF",
+            "sidecar/%C3%28",
+            "sidecar/café",
+        ] {
+            assert!(
+                matches!(
+                    crate::decode_canonical_archive_path(encoded),
+                    Err(BackupManifestValidationError::InvalidLogicalPath { .. })
+                ),
+                "noncanonical archive identity was accepted: {encoded:?}"
+            );
+        }
     }
 
     #[test]
@@ -3825,6 +3852,60 @@ mod tests {
         matching
             .verify_source_enumeration(&source_metadata(&matching))
             .unwrap();
+    }
+
+    #[test]
+    fn reserved_family_occupant_cannot_be_retyped_as_declared_output() {
+        let content_hash = format!("sha256:{}", "a".repeat(64));
+        for target_kind in [
+            EffectMetadataTargetKind::FilePath,
+            EffectMetadataTargetKind::ArtifactId,
+        ] {
+            let mut record = effect_record(
+                "operation.reserved-material",
+                "effect.reserved-material",
+                EffectMetadataAccessMode::Create,
+                Some(&content_hash),
+                47,
+            );
+            record.target_kind = target_kind;
+            record.logical_ref = match target_kind {
+                EffectMetadataTargetKind::FilePath => {
+                    ".forge-method/artifacts/result.yaml".to_owned()
+                }
+                EffectMetadataTargetKind::ArtifactId => "result".to_owned(),
+                _ => unreachable!(),
+            };
+            record.physical_ref = ".forge-method/artifacts/result.yaml".to_owned();
+            let raw = encoded_effect_records(std::slice::from_ref(&record));
+            let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+            bind_effect_fixture(&mut document, &raw, &record);
+            document.validate_integrity().unwrap();
+            document.verify_effect_metadata_index_bytes(&raw).unwrap();
+
+            document
+                .backup_manifest
+                .entries
+                .iter_mut()
+                .find(|entry| entry.material == BackupEntryKind::Artifact)
+                .unwrap()
+                .material = BackupEntryKind::DeclaredEffectOutput;
+            document.backup_manifest.entries.sort_by(|left, right| {
+                (left.material, &left.logical_path).cmp(&(right.material, &right.logical_path))
+            });
+            recompute(&mut document);
+
+            assert_eq!(
+                document.validate_integrity(),
+                Err(BackupManifestValidationError::InvalidDeclaredEffectProjection),
+                "reserved occupant retyping survived for {target_kind:?}"
+            );
+            assert_eq!(
+                document.verify_effect_metadata_index_bytes(&raw),
+                Err(BackupManifestValidationError::InvalidDeclaredEffectProjection),
+                "byte verification inherited retyped occupant for {target_kind:?}"
+            );
+        }
     }
 
     #[test]
