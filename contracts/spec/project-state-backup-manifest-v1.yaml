@@ -11,136 +11,114 @@ backup_manifest_contract:
   security_claims:
     integrity_only:
       api: BackupManifestDocument::validate_integrity
-      proves: canonical self-consistency, typed source inventory, entry hashes, and cross-bindings
+      proves: canonical self-consistency, closed typed source inventory, entry hashes, and cross-bindings
       does_not_prove: authenticity, freshness, or whole-set substitution/rollback resistance
-      warning: manifest_set_digest is a recomputable self-hash and is never a trust root
-    authenticity_and_freshness:
-      api: BackupManifestDocument::validate_for_restore
-      requires:
-        - forge_project_state_backup_trusted_expectation_v1 loaded from non-archive trusted storage
-        - forge_project_state_backup_restore_preflight_v1 constructed by the restore engine, never deserialized from archive YAML
-      trusted_expectation_binds:
-        - manifest_set_digest
-        - exact ProjectLinkDocument and SHA-256 of its archived bytes
-        - project id, complete release identity including release_version, and effective epoch identity
-        - current ReplayAnchorDocument projection
-        - Domain Pack supply-chain and reviewed-learning monotonic heads plus exact public input-file digests
-        - exact public workflow principal and broker registry digests/identity-set digests when provisioned
+      warning: manifest_set_digest is recomputable and never a trust root
+    authenticity_and_restore:
+      s03_public_success_api: none
+      reason: retained filesystem guards, archive readers, protected receipt loading, and restore publication belong to C2-S04
+      c2_s04_required_opaque_inputs:
+        - a private-field verified archive capability minted only after no-follow exact-member and exact Project Link byte verification
+        - a private-field retained exclusive mutation/quiescence guard backed by real OS locks or an opaque host boundary
+        - a private-field trusted backup receipt loaded and verified from operator-protected storage disjoint from archive and staging
+      trusted_receipt_provenance:
+        archive_derived: forbidden
+        caller_comment_or_boolean: forbidden
+        minimum_binding: [manifest_set_digest, project_id, exact_project_link_sha256, workflow_release, effective_epoch, replay_monotonic_head, domain_pack_monotonic_heads, archived_public_registry_raw_sha256]
+        story_boundary: C2-S04 must implement protected receipt I/O and private constructors; S03 deliberately cannot mint proof of future I/O
   canonical_set_digest:
     encoding: RFC 8785 JSON Canonicalization Scheme
     exclusion: backup_manifest.manifest_set_digest is removed before canonicalization
     input: forge-method:project-state-backup-set:v1\0 || u64be(canonical_byte_length) || canonical_bytes
     output: sha256:<64-lowercase-hex>
-  project_link:
-    archive_path: project/.forge-method.yaml
-    state_root_leaf: .forge-method
-    state_root_relative_to_sidecar: .forge-method
-    binding:
-      - project_link_sha256 equals the ProjectLink entry SHA-256
-      - archive API hashes exact raw bytes and compares caller-parsed ProjectLinkDocument with the manifest document
-      - trusted expectation repeats the exact document and raw-byte digest
+  source_enumerator:
+    roots:
+      - exact project/.forge-method.yaml
+      - complete no-follow recursive state root
+      - exact provisioned sidecar/operator public registry files
+    classifier_api: BackupManifestDocument::classify_source_file
+    complete_enumeration_api: BackupManifestDocument::verify_source_enumeration
+    invariant: every no-follow regular source file is either one exact typed archive member or one explicit shipped exclusion; unknown files reject
+    metadata: [logical_path, no_follow_entry_type, no_follow_hard_link_count, byte_length, sha256]
+    archive_verification_is_not_enumeration: true
+    explicit_exclusions:
+      producer_locks:
+        - state-root/locks/**
+        - state-root/domain-pack-learning/capture.lock
+        - state-root/contracts/isolations/.forge-isolation.lock
+      crash_private:
+        - crash-replace .forge-next/.forge-previous/.forge-transaction siblings
+        - atomic-write .tmp and effect .forge-tmp/.forge-bak siblings
+        - claim-WAL and project-state temporary siblings
+        - domain-packs/generations/staging/**
+        - workflow/operator secret roots, private-keys/**, '*.key', and '*.pem'
   source_derived_inventory:
-    always_present:
-      - project/.forge-method.yaml
-      - state-root/ledger.ndjson
-      - state-root/replay-wal.manifest.json
-      - state-root/wal/replay.fmr1
-    conditional_states:
-      project_state: [initialized_before_start, started_with_state_yaml]
-      claim_store: [empty_before_first_claim, active_with_exact_retained_rotation_count]
-      workflow_governance: [before_initialization, initialized]
-      workflow_action_replay: [before_initialization, initialized_pair]
-      effect_store: [empty_before_first_effect, active_with_optional_compaction_manifest]
-      memory_store: [before_initialization, initialized]
-      workflow_registries: [not_provisioned, provisioned]
-      domain_pack: [no_active_generation, active_with_complete_contiguous_retained_generations]
-    domain_pack_generation_closure:
-      cardinality: once_per_retained_generation
-      members:
-        - ledger/<record-digest>.yaml
-        - generations/<generation>-<record-digest>/generation.yaml
-        - generations/<generation>-<record-digest>/lock.yaml
-        - generations/<generation>-<record-digest>/preflight.yaml
-        - generations/<generation>-<record-digest>/compatibility.yaml
-        - generations/<generation>-<record-digest>/receipt.yaml
-        - generations/<generation>-<record-digest>/resolution-request.yaml
-        - generations/<generation>-<record-digest>/composition-request.yaml
-        - generations/<generation>-<record-digest>/trust-input.yaml
-        - receipts/<receipt-digest>.yaml
-      shared_objects: exact sorted union of every retained generation object_raw_digests
-      active_binding: active generation equals WorkflowEffectiveBundleIdentity.domain_pack_generation.generation
-    shipped_public_sidecars:
-      - state.yaml and root ledger
-      - claims-active/*.yaml and official handoffs/expired-claims/*.yaml
-      - artifacts/**, evidence/**, snapshots/**, ledger/*.ndjson, requests/**, runtime/**
-      - stories/**, agents/**, preflight.yaml, index/effect-targets.ndjson, traces/events.ndjson
-      - memory/events.ndjson
-      - source-derived state-relative ToolEffect/MCP outputs explicitly counted as state_effect_output
-      - domain-packs/operator-sources.yaml and domain-packs/rebase-plan.yaml when present
-      - operator/workflow-principal-registry.yaml and operator/workflow-broker-registry.yaml when provisioned
-    path_policy:
-      no_generic_untyped_state_file: true
-      dynamic_paths: admitted only by a source-specific typed kind and exact source-state count
+    always_present: [project/.forge-method.yaml, state-root/ledger.ndjson, state-root/replay-wal.manifest.json, state-root/wal/replay.fmr1]
+    conditional_stores:
+      - project state and claim WAL rotation closure
+      - workflow governance and workflow action replay WALs
+      - effect WAL/compaction, memory events, research/sources.ndjson, governance/conflicts.ndjson
+      - Domain Pack lifecycle generations, ledger records, receipts, and exact object union
+      - Domain Pack local learning index plus exact content-addressed object closure
+      - isolation contract identities/agents/raw digests under contracts/isolations
+      - workflow principal and broker archived public registry raw bytes
+      - claims, handoffs, artifacts, evidence, snapshots, ledgers, requests, runtime, stories, agents, preflight, effect index, and trace families
+    domain_pack_learning:
+      index: domain-pack-learning/index.json
+      closure: each sorted parsed record binds candidate_id, candidate_digest, raw_sha256, exact object_relative_path, and object entry SHA-256
+      race_prevention: capture.lock retained across index/object source projection and copy; otherwise opaque exclusive quiescence required
+    isolation_contracts:
+      closure: each sorted projection binds isolation_id, agent_id, exact YAML path, and raw SHA-256
+      race_prevention: .forge-isolation.lock retained across projection and copy
+    declared_effect_outputs:
+      generic_catch_all: forbidden
+      source: committed file-backed effect WAL/metadata-index records parsed under effect/index locks
+      binding: sorted operation_id, effect_id, file_path target kind, exact metadata logical_ref/state-relative path, content SHA-256, and raw metadata-record SHA-256
+      reserved_internal_families: forbidden
+  domain_pack_external_provisioning:
+    lifecycle_independent: true
+    operator_sources_before_activation_or_interrupted_acquisition: supported
+    supply_chain_anchor_state: [not_provisioned, provisioned]
+    reviewed_learning_anchor_state: [not_provisioned, provisioned]
+    binding_when_provisioned:
+      - exact operator-sources raw SHA-256, operator root identity, public input paths, and public input SHA-256 values
+      - supply-chain/reviewer/reviewed monotonic head identities, generations, and digests
+      - active lifecycle generation digests when active
+  public_workflow_registries:
+    archived_material_identity: exact raw registry SHA-256
+    undefined_identity_set_digest: removed
+    current_machine_state: not represented by archived material
+    replacement_machine_absence: legitimate; C2-S04 reads current protected monotonic authorities independently and never manufactures presence from archive
+  snapshot_protocol:
+    mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
+    real_producer_locks_include:
+      - Domain Pack external anchors, operator sources, rebase, lifecycle, and learning capture
+      - workflow credential/broker registries, workflow governance, claims, action replay, memory, research, governance conflicts, and isolations
+      - command evidence, effect index, effect WAL, replay WAL, trace, and protected replay anchor
+    unlocked_producers: require opaque_exclusive_quiescence_required_by_restore_engine plus stable complete enumeration
+    assertion_boolean: forbidden
+  replay_anchor:
+    preserved_source_fields: [schema_version, deployment_id, epoch, generation, previous_anchor_digest, head]
+    invariants:
+      - deployment_id is nonblank and at most 256 bytes
+      - generation is nonzero; generation one has no predecessor and later generations require one
+      - epoch is 32-byte lowercase hex
+      - record_count equals last_seq
+      - manifest digest, WAL prefix digest, and WAL byte length equal archived entries
   archive_entry_policy:
     no_follow: required
     regular_file_only: true
-    hardlink_check: no-follow filesystem link count must equal one
-    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, omitted, extra, substituted]
-    private_roots_forbidden:
-      - sidecar/operator/workflow-secrets/**
-      - sidecar/operator/secrets/**
-      - private-keys/**
-      - "*.key"
-      - "*.pem"
-  snapshot_protocol:
-    mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
-    lock_order:
-      - <operator-root>/.forge-domain-pack-registry-anchor.lock
-      - <operator-root>/.forge-domain-pack-learning-anchor.lock
-      - locks/domain-packs.operator-sources.lock
-      - locks/domain-packs.rebase-plan.lock
-      - locks/domain-packs.lifecycle.lock
-      - <operator-root>/.workflow-credential.lock
-      - <operator-root>/.workflow-broker.lock
-      - locks/workflow-governance.lock
-      - locks/claims.wal.lock
-      - locks/workflow-action-replay.lock
-      - locks/memory.log.lock
-      - command-evidence append-json-line lock
-      - effect-index append-json-line lock
-      - locks/effects.lock
-      - locks/replay.wal.lock
-      - trace append-json-line lock
-      - <protected-replay-anchor>.lock
-    derivation:
-      - shipped Domain Pack mutation order is supply-chain anchor -> reviewed-learning anchor -> operator source/rebase -> lifecycle
-      - workflow effective transactions use lifecycle -> workflow governance -> workflow action replay
-      - prepared execution holds effect -> replay while appending the principal trace, so trace follows replay
-    invariant_limits:
-      - cooperative locks exclude only mutation paths that actually acquire them
-      - claim cache/handoff publication, state bootstrap, and other unlocked producers require trusted exclusive producer quiescence plus stable double enumeration
-      - no manifest boolean may assert quiescence or restore preflight
-  replay_anchor:
-    preserved_source_fields: [schema_version, deployment_id, epoch, generation, previous_anchor_digest, head]
-    head_fields: [manifest_digest, wal_prefix_digest, last_seq, record_count, byte_len]
-    invariants:
-      - generation is nonzero
-      - generation one has no predecessor; later generations require one
-      - epoch is 32-byte lowercase hex
-      - record_count equals last_seq
-      - manifest digest equals archived replay manifest hash
-      - WAL prefix digest and byte length equal archived replay WAL
-      - no comparison with project/governance state counters
-  restore:
-    target: empty staging root only
-    preflight_api_requires:
-      - exact regular archive member verification
-      - exact Project Link bytes/hash/typed document verification
-      - current external authorities equal trusted expectation
-      - exclusive mutation boundary held
-    publish: fsync and atomically publish restored state only after complete validation
+    hardlink_count: exactly_one
+    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, omitted, extra, substituted, unclassified]
   fixtures:
     valid:
       - contracts/fixtures/backup-manifest/valid/empty-pre-rotation-v1.yaml
       - contracts/fixtures/backup-manifest/valid/multi-generation-v1.yaml
-    hostile: contracts/fixtures/backup-manifest/hostile/
+      - contracts/fixtures/backup-manifest/valid/no-active-provisioned-v1.yaml
+      - contracts/fixtures/backup-manifest/valid/replacement-machine-public-material-v1.yaml
+    semantic_hostile:
+      path: contracts/fixtures/backup-manifest/hostile/
+      invariant: every named file is a full parse-valid unique document and is enumerated by the Rust semantic-rejection test
+    parse_rejection:
+      path: contracts/fixtures/backup-manifest/parse-rejection/
+      invariant: strict-deserialization evidence is exercised separately and never counted as semantic coverage

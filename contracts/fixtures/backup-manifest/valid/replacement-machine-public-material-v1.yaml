@@ -54,11 +54,11 @@
       "memory_store": "before_initialization",
       "domain_pack_store": {
         "status": "no_active_generation",
-        "operator_sources_present": false,
+        "operator_sources_present": true,
         "rebase_plan_present": false
       },
-      "workflow_principal_registry": "not_provisioned",
-      "workflow_broker_registry": "not_provisioned",
+      "workflow_principal_registry": "provisioned",
+      "workflow_broker_registry": "provisioned",
       "public_sidecars": {
         "claim_cache_files": 0,
         "official_handoff_artifacts": 0,
@@ -76,15 +76,32 @@
       },
       "research_store": "before_initialization",
       "governance_conflict_store": "before_initialization",
-      "domain_pack_operator_sources": null,
+      "domain_pack_operator_sources": {
+        "schema_version": "forge-domain-pack-operator-sources-v1",
+        "file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "operator_root_identity": "operator://domain-pack/app",
+        "trust_policy_file": "operator/trust-policy.yaml",
+        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "registry_file": "operator/registry.yaml",
+        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "reviewer_registry_file": "operator/reviewers.yaml",
+        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_file": "operator/reviewed.yaml",
+        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "capability_registry_file": "operator/capabilities.yaml",
+        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "sandbox_policy_file": "operator/sandbox.yaml",
+        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "operator/artifacts"
+      },
       "domain_pack_learning_store": {
         "status": "before_first_capture"
       },
       "isolation_store": {
         "status": "empty"
       },
-      "domain_pack_supply_chain_anchor": "not_provisioned",
-      "domain_pack_reviewed_learning_anchor": "not_provisioned",
+      "domain_pack_supply_chain_anchor": "provisioned",
+      "domain_pack_reviewed_learning_anchor": "provisioned",
       "declared_effect_outputs": []
     },
     "snapshot_protocol": {
@@ -142,6 +159,27 @@
         "entry_type": "regular_file",
         "byte_length": 0,
         "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "material": "domain_pack_operator_sources",
+        "logical_path": "sidecar/.forge-method/domain-packs/operator-sources.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 18,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "public_principal_registry",
+        "logical_path": "sidecar/operator/workflow-principal-registry.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 43,
+        "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "public_broker_registry",
+        "logical_path": "sidecar/operator/workflow-broker-registry.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 44,
+        "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
       }
     ],
     "external_authority_observations": {
@@ -159,10 +197,45 @@
         "replay_wal_record_count": 0,
         "replay_wal_byte_length": 0
       },
-      "domain_pack_supply_chain": null,
-      "domain_pack_reviewed_learning": null,
-      "workflow_principal_registry": null,
-      "workflow_broker_registry": null
+      "domain_pack_supply_chain": {
+        "schema_version": "forge-domain-pack-registry-anchor-v1",
+        "operator_root_identity": "operator://domain-pack/app",
+        "registry_id": "registry.app",
+        "audience": "forge-core:domain-pack:app",
+        "generation": 2,
+        "anchor_document_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "registry_snapshot_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "trust_policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "domain_pack_reviewed_learning": {
+        "schema_version": "forge-domain-pack-learning-anchor-v1",
+        "operator_root_identity": "operator://domain-pack/app",
+        "reviewer_registry_id": "reviewers.app",
+        "reviewer_audience": "forge-core:domain-pack:app",
+        "reviewer_generation": 2,
+        "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_id": "reviewed.app",
+        "reviewed_audience": "forge-core:domain-pack:app",
+        "reviewed_generation": 2,
+        "reviewed_registry_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "anchor_document_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "workflow_principal_registry": {
+        "schema_version": "forge_workflow_principal_registry_v1",
+        "audience": "forge-core:workflow:app",
+        "registry_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "workflow_broker_registry": {
+        "schema_version": "forge_workflow_broker_registry_v1",
+        "audience": "forge-core:workflow:app",
+        "registry_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      }
     },
     "forbidden_private_material": [
       "broker_private_keys",
@@ -170,6 +243,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:d0ec8efcb3673381f84b6fabbcec9ae3d2b962253154aa561a64e5b54cd57c8a"
+    "manifest_set_digest": "sha256:7f6796f99edf45265e641a0e1fcdd4efa5064cd4384ad3f94626c7241ae77edf"
   }
 }

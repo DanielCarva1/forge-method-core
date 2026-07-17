@@ -1,8 +1,8 @@
-//! Fail-closed, source-derived backup authority and continuity contract.
+//! Fail-closed, source-derived backup integrity and continuity contract.
 //!
-//! `validate_integrity` proves only internal consistency. Authenticity and
-//! rollback/substitution resistance require `validate_for_restore` with a
-//! trusted expectation and restore preflight supplied outside the archive.
+//! This S03 module defines a closed classifier and manifest invariants only.
+//! Authenticity, restore I/O, retained locks, and opaque trusted receipts are
+//! intentionally deferred to C2-S04; no caller-forgeable success capability is exposed.
 
 use crate::{
     ProjectLinkDocument, WorkflowEffectiveBundleIdentity, WorkflowGovernanceReleaseIdentity,
@@ -13,10 +13,6 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const BACKUP_MANIFEST_SCHEMA_VERSION: &str = "forge_project_state_backup_manifest_v1";
-pub const BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION: &str =
-    "forge_project_state_backup_trusted_expectation_v1";
-pub const BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION: &str =
-    "forge_project_state_backup_restore_preflight_v1";
 const SET_DIGEST_DOMAIN: &[u8] = b"forge-method:project-state-backup-set:v1\0";
 const PROJECT_LINK_ARCHIVE_PATH: &str = "project/.forge-method.yaml";
 
@@ -76,8 +72,8 @@ pub struct BackupEffectiveEpochBinding {
     pub governance_ledger_head_digest: String,
 }
 
-/// Typed projection of healthy source states. Counts are exact no-follow
-/// regular-file counts captured under the snapshot protocol, not minima.
+/// Typed projection of healthy source states. Counts and closures are derived
+/// from parsed source stores under the snapshot boundary, never from archive names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BackupSourceState {
@@ -87,9 +83,18 @@ pub struct BackupSourceState {
     pub workflow_action_replay_store: BackupInitializationState,
     pub effect_store: BackupEffectStoreState,
     pub memory_store: BackupInitializationState,
+    pub research_store: BackupInitializationState,
+    pub governance_conflict_store: BackupInitializationState,
     pub domain_pack_store: BackupDomainPackStoreState,
+    pub domain_pack_operator_sources: Option<BackupDomainPackOperatorSourcesProjection>,
+    pub domain_pack_learning_store: BackupDomainPackLearningStoreState,
+    pub isolation_store: BackupIsolationStoreState,
+    pub domain_pack_supply_chain_anchor: BackupProvisioningState,
+    pub domain_pack_reviewed_learning_anchor: BackupProvisioningState,
     pub workflow_principal_registry: BackupProvisioningState,
     pub workflow_broker_registry: BackupProvisioningState,
+    /// Exact state-root-relative outputs reconstructed from committed effect WAL/index records.
+    pub declared_effect_outputs: Vec<BackupDeclaredEffectOutput>,
     pub public_sidecars: BackupPublicSidecarCounts,
 }
 
@@ -118,12 +123,7 @@ pub enum BackupProvisioningState {
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BackupClaimStoreState {
     EmptyBeforeFirstClaim,
-    Active {
-        /// Number of complete snapshot/archive generations. The current
-        /// manifest names only the latest pair, but all retained pairs remain
-        /// continuity material and are counted independently.
-        rotation_generations: u64,
-    },
+    Active { rotation_generations: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -154,9 +154,87 @@ pub struct BackupDomainPackGeneration {
     pub generation: u64,
     pub record_digest: String,
     pub receipt_digest: String,
-    /// Exact immutable object digests referenced by this generation. Objects
-    /// shared by retained generations appear once in the archive.
     pub object_raw_digests: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDomainPackOperatorSourcesProjection {
+    pub schema_version: String,
+    pub file_sha256: String,
+    pub operator_root_identity: String,
+    pub trust_policy_file: String,
+    pub trust_policy_file_sha256: String,
+    pub registry_file: String,
+    pub registry_file_sha256: String,
+    pub reviewer_registry_file: String,
+    pub reviewer_registry_file_sha256: String,
+    pub reviewed_registry_file: String,
+    pub reviewed_registry_file_sha256: String,
+    pub capability_registry_file: String,
+    pub capability_registry_file_sha256: String,
+    pub sandbox_policy_file: String,
+    pub sandbox_policy_file_sha256: String,
+    pub artifact_root: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupDomainPackLearningStoreState {
+    BeforeFirstCapture,
+    Captured {
+        records: Vec<BackupDomainPackLearningRecord>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDomainPackLearningRecord {
+    pub candidate_id: String,
+    pub candidate_digest: String,
+    pub raw_sha256: String,
+    pub object_relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupIsolationStoreState {
+    Empty,
+    Contracts {
+        contracts: Vec<BackupIsolationContractProjection>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupIsolationContractProjection {
+    pub isolation_id: String,
+    pub agent_id: String,
+    pub contract_relative_path: String,
+    pub contract_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDeclaredEffectOutput {
+    /// Typed fields copied from one committed effect-target metadata index record.
+    pub operation_id: String,
+    pub effect_id: String,
+    pub target_kind: BackupDeclaredEffectTargetKind,
+    pub logical_ref: String,
+    pub state_relative_path: String,
+    pub content_sha256: String,
+    pub metadata_record_sha256: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupDeclaredEffectTargetKind {
+    FilePath,
+    ArtifactId,
+    EvidenceId,
+    LedgerStream,
+    RequestStream,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -172,7 +250,6 @@ pub struct BackupPublicSidecarCounts {
     pub runtime_snapshots: u64,
     pub story_state: u64,
     pub agent_registry_state: u64,
-    pub state_effect_outputs: u64,
     pub preflight_profiles: u64,
     pub effect_metadata_indexes: u64,
     pub trace_logs: u64,
@@ -183,12 +260,19 @@ pub struct BackupPublicSidecarCounts {
 pub struct BackupSnapshotProtocol {
     pub mode: BackupSnapshotMode,
     pub lock_order: Vec<BackupLockScope>,
+    pub unlocked_producer_boundary: BackupUnlockedProducerBoundary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BackupSnapshotMode {
     CooperativeLocksWithProducerQuiescenceAndStableEnumeration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupUnlockedProducerBoundary {
+    OpaqueExclusiveQuiescenceRequiredByRestoreEngine,
 }
 
 #[derive(
@@ -201,12 +285,16 @@ pub enum BackupLockScope {
     DomainPackOperatorSources,
     DomainPackRebasePlan,
     DomainPackLifecycle,
+    DomainPackLearningCapture,
     WorkflowCredentialRegistry,
     WorkflowBrokerRegistry,
     WorkflowGovernance,
     ClaimWal,
     WorkflowActionReplayWal,
     MemoryLog,
+    ResearchLog,
+    GovernanceConflictLog,
+    IsolationContracts,
     CommandEvidenceAppend,
     EffectMetadataIndexAppend,
     TraceAppend,
@@ -227,15 +315,19 @@ impl BackupLockScope {
             Self::DomainPackOperatorSources => "locks/domain-packs.operator-sources.lock",
             Self::DomainPackRebasePlan => "locks/domain-packs.rebase-plan.lock",
             Self::DomainPackLifecycle => "locks/domain-packs.lifecycle.lock",
+            Self::DomainPackLearningCapture => "domain-pack-learning/capture.lock",
             Self::WorkflowCredentialRegistry => "<operator-root>/.workflow-credential.lock",
             Self::WorkflowBrokerRegistry => "<operator-root>/.workflow-broker.lock",
             Self::WorkflowGovernance => "locks/workflow-governance.lock",
             Self::ClaimWal => "locks/claims.wal.lock",
             Self::WorkflowActionReplayWal => "locks/workflow-action-replay.lock",
             Self::MemoryLog => "locks/memory.log.lock",
-            Self::CommandEvidenceAppend => ".forge-method/locks/append-json-line/79899deda60f0cf87554de78196657720f9653f755719f3fbd6f89e296f3ab19.lock",
-            Self::EffectMetadataIndexAppend => ".forge-method/locks/append-json-line/de843c78e5ad008a50494b3ebdd5612f7cb346a95cfd8054a75429b8ce869ef5.lock",
-            Self::TraceAppend => "locks/append-json-line/39fe4f5a2f2718849442e553b8bbb43026b04915a02baa3cad08ed99ed42c341.lock",
+            Self::ResearchLog => "locks/research.sources.lock",
+            Self::GovernanceConflictLog => "locks/governance.conflicts.lock",
+            Self::IsolationContracts => "contracts/isolations/.forge-isolation.lock",
+            Self::CommandEvidenceAppend => "locks/append-json-line/<command-evidence-hash>.lock",
+            Self::EffectMetadataIndexAppend => "locks/append-json-line/<effect-index-hash>.lock",
+            Self::TraceAppend => "locks/append-json-line/<trace-hash>.lock",
             Self::EffectWal => "locks/effects.lock",
             Self::ReplayWal => "locks/replay.wal.lock",
             Self::ExternalReplayAnchor => "<protected-replay-anchor>.lock",
@@ -251,12 +343,16 @@ pub const BACKUP_LOCK_ORDER: &[BackupLockScope] = &[
     BackupLockScope::DomainPackOperatorSources,
     BackupLockScope::DomainPackRebasePlan,
     BackupLockScope::DomainPackLifecycle,
+    BackupLockScope::DomainPackLearningCapture,
     BackupLockScope::WorkflowCredentialRegistry,
     BackupLockScope::WorkflowBrokerRegistry,
     BackupLockScope::WorkflowGovernance,
     BackupLockScope::ClaimWal,
     BackupLockScope::WorkflowActionReplayWal,
     BackupLockScope::MemoryLog,
+    BackupLockScope::ResearchLog,
+    BackupLockScope::GovernanceConflictLog,
+    BackupLockScope::IsolationContracts,
     BackupLockScope::CommandEvidenceAppend,
     BackupLockScope::EffectMetadataIndexAppend,
     BackupLockScope::EffectWal,
@@ -285,6 +381,8 @@ pub enum BackupEntryKind {
     EffectWal,
     EffectWalCompactionManifest,
     MemoryEventLog,
+    ResearchEventLog,
+    GovernanceConflictEventLog,
     DomainPackOperatorSources,
     DomainPackRebasePlan,
     DomainPackActivePointer,
@@ -299,6 +397,9 @@ pub enum BackupEntryKind {
     DomainPackGenerationTrustInput,
     DomainPackPublishedReceipt,
     DomainPackObject,
+    DomainPackLearningIndex,
+    DomainPackLearningObject,
+    IsolationContract,
     PublicPrincipalRegistry,
     PublicBrokerRegistry,
     ClaimCache,
@@ -311,7 +412,7 @@ pub enum BackupEntryKind {
     RuntimeSnapshot,
     StoryState,
     AgentRegistryState,
-    StateEffectOutput,
+    DeclaredEffectOutput,
     PreflightProfile,
     EffectMetadataIndex,
     TraceLog,
@@ -346,8 +447,9 @@ pub struct BackupExternalAuthorityObservations {
     pub replay_rollback_anchor: BackupReplayRollbackAnchor,
     pub domain_pack_supply_chain: Option<BackupDomainPackSupplyChainAuthority>,
     pub domain_pack_reviewed_learning: Option<BackupDomainPackLearningAuthority>,
-    pub workflow_principal_registry: Option<BackupPublicRegistryAuthority>,
-    pub workflow_broker_registry: Option<BackupPublicRegistryAuthority>,
+    /// Archived public material; current-machine absence is legitimate and is not represented here.
+    pub workflow_principal_registry: Option<BackupPublicRegistryMaterial>,
+    pub workflow_broker_registry: Option<BackupPublicRegistryMaterial>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -404,11 +506,11 @@ pub struct BackupDomainPackLearningAuthority {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct BackupPublicRegistryAuthority {
+pub struct BackupPublicRegistryMaterial {
     pub schema_version: String,
     pub audience: String,
+    /// Exact raw SHA-256 is the sole normative identity of archived registry material.
     pub registry_sha256: String,
-    pub public_identity_set_digest: String,
 }
 
 #[derive(
@@ -420,58 +522,6 @@ pub enum BackupForbiddenPrivateMaterial {
     WorkflowSecretRoots,
     OperatorSecretRoots,
     McpPrivateKeys,
-}
-
-/// Versioned value loaded from trusted storage or operator policy, never from
-/// the archive being restored.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct BackupTrustedExpectationV1 {
-    pub schema_version: String,
-    pub manifest_set_digest: String,
-    pub project_id: String,
-    pub project_link: ProjectLinkDocument,
-    pub project_link_sha256: String,
-    pub workflow_release: WorkflowGovernanceReleaseIdentity,
-    pub effective_epoch: BackupEffectiveEpochBinding,
-    pub external_authorities: BackupExternalAuthorityObservations,
-}
-
-/// Trusted restore API input. This is intentionally not deserializable from
-/// archive YAML. The restore engine constructs it after no-follow filesystem
-/// verification and reading current protected authorities.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackupRestorePreflightV1 {
-    pub schema_version: String,
-    pub archive_members: BackupArchiveMembersStatus,
-    pub project_link: BackupProjectLinkVerificationStatus,
-    pub target_state: BackupRestoreTargetState,
-    pub producer_quiescence: BackupProducerQuiescence,
-    pub current_external_authorities: BackupExternalAuthorityObservations,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupProjectLinkVerificationStatus {
-    ExactBytesHashAndTypedDocumentVerified,
-    Unverified,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupArchiveMembersStatus {
-    ExactRegularFilesVerified,
-    Unverified,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupRestoreTargetState {
-    EmptyStagingRoot,
-    ExistingState,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BackupProducerQuiescence {
-    ExclusiveMutationBoundaryHeld,
-    NotEstablished,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -507,14 +557,16 @@ pub enum BackupManifestValidationError {
         material: BackupEntryKind,
     },
     InvalidDomainPackProjection,
+    InvalidLearningProjection,
+    InvalidIsolationProjection,
+    InvalidDeclaredEffectProjection,
     InvalidSnapshotProtocol,
     InvalidExternalAuthorities,
     PrivateMaterialPolicyMismatch,
     ManifestSetDigestMismatch,
-    TrustedExpectationMismatch {
-        field: &'static str,
+    UnclassifiedSourceFile {
+        path: String,
     },
-    RestorePreflightRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -525,6 +577,29 @@ pub enum BackupArchiveVerificationError {
     SubstitutedEntry { path: String },
     SymlinkOrNonRegularEntry { path: String },
     ProjectLinkBytesMismatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupSourceExclusion {
+    ProducerLock,
+    CrashRecoveryArtifact,
+    IncompleteDomainPackStaging,
+    ForbiddenPrivateMaterial,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupSourceFileClassification {
+    Archive(BackupEntryKind),
+    Exclude(BackupSourceExclusion),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupSourceFileMetadata {
+    pub logical_path: String,
+    pub entry_type: BackupArchiveEntryType,
+    pub hard_link_count: u64,
+    pub byte_length: u64,
+    pub sha256: String,
 }
 
 impl BackupManifestDocument {
@@ -561,64 +636,6 @@ impl BackupManifestDocument {
         hasher.update((canonical.len() as u64).to_be_bytes());
         hasher.update(canonical);
         Ok(format!("sha256:{:x}", hasher.finalize()))
-    }
-
-    pub fn validate_for_restore(
-        &self,
-        trusted: &BackupTrustedExpectationV1,
-        preflight: &BackupRestorePreflightV1,
-    ) -> Result<(), BackupManifestValidationError> {
-        self.validate_integrity()?;
-        if trusted.schema_version != BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION {
-            return Err(BackupManifestValidationError::UnsupportedSchemaVersion);
-        }
-        let manifest = &self.backup_manifest;
-        for (field, matches) in [
-            (
-                "trusted.manifest_set_digest",
-                trusted.manifest_set_digest == manifest.manifest_set_digest,
-            ),
-            (
-                "trusted.project_id",
-                trusted.project_id == manifest.project.project_link.project_id.0,
-            ),
-            (
-                "trusted.project_link",
-                trusted.project_link == manifest.project.project_link,
-            ),
-            (
-                "trusted.project_link_sha256",
-                trusted.project_link_sha256 == manifest.project.project_link_sha256,
-            ),
-            (
-                "trusted.workflow_release",
-                trusted.workflow_release == manifest.workflow_release,
-            ),
-            (
-                "trusted.effective_epoch",
-                trusted.effective_epoch == manifest.effective_epoch,
-            ),
-            (
-                "trusted.external_authorities",
-                trusted.external_authorities == manifest.external_authority_observations,
-            ),
-        ] {
-            if !matches {
-                return Err(BackupManifestValidationError::TrustedExpectationMismatch { field });
-            }
-        }
-        if preflight.schema_version != BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION
-            || preflight.archive_members != BackupArchiveMembersStatus::ExactRegularFilesVerified
-            || preflight.project_link
-                != BackupProjectLinkVerificationStatus::ExactBytesHashAndTypedDocumentVerified
-            || preflight.target_state != BackupRestoreTargetState::EmptyStagingRoot
-            || preflight.producer_quiescence
-                != BackupProducerQuiescence::ExclusiveMutationBoundaryHeld
-            || preflight.current_external_authorities != trusted.external_authorities
-        {
-            return Err(BackupManifestValidationError::RestorePreflightRejected);
-        }
-        Ok(())
     }
 
     pub fn verify_project_link_bytes(
@@ -698,6 +715,98 @@ impl BackupManifestDocument {
         }
         Ok(())
     }
+    /// Classify one no-follow regular file from the complete source scan.
+    /// Unknown files fail closed; lock/private/crash protocol files are explicit exclusions.
+    pub fn classify_source_file(
+        &self,
+        logical_path: &str,
+    ) -> Result<BackupSourceFileClassification, BackupManifestValidationError> {
+        validate_safe_path(logical_path)?;
+        let manifest = &self.backup_manifest;
+        if let Some(entry) = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.logical_path == logical_path)
+        {
+            return Ok(BackupSourceFileClassification::Archive(entry.material));
+        }
+        if is_forbidden_private_path(logical_path) {
+            return Ok(BackupSourceFileClassification::Exclude(
+                BackupSourceExclusion::ForbiddenPrivateMaterial,
+            ));
+        }
+        let state = state_prefix(&manifest.project.archive_layout);
+        if is_explicit_lock_path(logical_path, &state) {
+            return Ok(BackupSourceFileClassification::Exclude(
+                BackupSourceExclusion::ProducerLock,
+            ));
+        }
+        if is_crash_protocol_path(logical_path) {
+            return Ok(BackupSourceFileClassification::Exclude(
+                BackupSourceExclusion::CrashRecoveryArtifact,
+            ));
+        }
+        if logical_path.starts_with(&format!("{state}/domain-packs/generations/staging/")) {
+            return Ok(BackupSourceFileClassification::Exclude(
+                BackupSourceExclusion::IncompleteDomainPackStaging,
+            ));
+        }
+        Err(BackupManifestValidationError::UnclassifiedSourceFile {
+            path: logical_path.to_owned(),
+        })
+    }
+
+    /// Compare a complete source enumeration with the manifest. C2-S04 must supply
+    /// this metadata directly from no-follow OS I/O; this function mints no capability.
+    pub fn verify_source_enumeration(
+        &self,
+        observed: &[BackupSourceFileMetadata],
+    ) -> Result<(), BackupManifestValidationError> {
+        self.validate_integrity()?;
+        let mut archived = BTreeMap::new();
+        let mut all_paths = BTreeSet::new();
+        for file in observed {
+            if file.entry_type != BackupArchiveEntryType::RegularFile
+                || file.hard_link_count != 1
+                || !all_paths.insert(file.logical_path.as_str())
+            {
+                return Err(BackupManifestValidationError::UnclassifiedSourceFile {
+                    path: file.logical_path.clone(),
+                });
+            }
+            match self.classify_source_file(&file.logical_path)? {
+                BackupSourceFileClassification::Archive(material) => {
+                    archived.insert(
+                        file.logical_path.as_str(),
+                        (material, file.byte_length, file.sha256.as_str()),
+                    );
+                }
+                BackupSourceFileClassification::Exclude(_) => {}
+            }
+        }
+        for entry in &self.backup_manifest.entries {
+            let Some((material, byte_length, digest_value)) =
+                archived.get(entry.logical_path.as_str())
+            else {
+                return Err(
+                    BackupManifestValidationError::SourceStateInventoryMismatch {
+                        material: entry.material,
+                    },
+                );
+            };
+            if *material != entry.material
+                || *byte_length != entry.byte_length
+                || *digest_value != entry.sha256
+            {
+                return Err(
+                    BackupManifestValidationError::SourceStateInventoryMismatch {
+                        material: entry.material,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl BackupManifest {
@@ -714,6 +823,8 @@ impl BackupManifest {
         if self.snapshot_protocol.mode
             != BackupSnapshotMode::CooperativeLocksWithProducerQuiescenceAndStableEnumeration
             || self.snapshot_protocol.lock_order.as_slice() != BACKUP_LOCK_ORDER
+            || self.snapshot_protocol.unlocked_producer_boundary
+                != BackupUnlockedProducerBoundary::OpaqueExclusiveQuiescenceRequiredByRestoreEngine
         {
             return Err(BackupManifestValidationError::InvalidSnapshotProtocol);
         }
@@ -933,6 +1044,19 @@ fn validate_source_inventory(
             u64::from(manifest.source_state.memory_store == BackupInitializationState::Initialized),
         );
         require(
+            BackupEntryKind::ResearchEventLog,
+            u64::from(
+                manifest.source_state.research_store == BackupInitializationState::Initialized,
+            ),
+        );
+        require(
+            BackupEntryKind::GovernanceConflictEventLog,
+            u64::from(
+                manifest.source_state.governance_conflict_store
+                    == BackupInitializationState::Initialized,
+            ),
+        );
+        require(
             BackupEntryKind::PublicPrincipalRegistry,
             u64::from(
                 manifest.source_state.workflow_principal_registry
@@ -948,6 +1072,9 @@ fn validate_source_inventory(
         );
     }
     validate_domain_pack_inventory(manifest, &mut expected)?;
+    validate_learning_inventory(manifest, &mut expected)?;
+    validate_isolation_inventory(manifest, &mut expected)?;
+    validate_declared_effect_outputs(manifest, &mut expected)?;
     let sidecars = &manifest.source_state.public_sidecars;
     for (kind, count) in [
         (
@@ -982,10 +1109,6 @@ fn validate_source_inventory(
         (
             BackupEntryKind::AgentRegistryState,
             sidecars.agent_registry_state,
-        ),
-        (
-            BackupEntryKind::StateEffectOutput,
-            sidecars.state_effect_outputs,
         ),
         (
             BackupEntryKind::PreflightProfile,
@@ -1065,6 +1188,45 @@ fn validate_domain_pack_inventory(
             )
         }
     };
+    if operator != manifest.source_state.domain_pack_operator_sources.is_some() {
+        return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+    }
+    if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
+        if sources.schema_version != "forge-domain-pack-operator-sources-v1" {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        }
+        for value in [
+            &sources.operator_root_identity,
+            &sources.trust_policy_file,
+            &sources.registry_file,
+            &sources.reviewer_registry_file,
+            &sources.reviewed_registry_file,
+            &sources.capability_registry_file,
+            &sources.sandbox_policy_file,
+            &sources.artifact_root,
+        ] {
+            required("domain_pack.operator_sources", value)?;
+        }
+        validate_digest_fields([
+            &sources.file_sha256,
+            &sources.trust_policy_file_sha256,
+            &sources.registry_file_sha256,
+            &sources.reviewer_registry_file_sha256,
+            &sources.reviewed_registry_file_sha256,
+            &sources.capability_registry_file_sha256,
+            &sources.sandbox_policy_file_sha256,
+        ])?;
+        let path = format!(
+            "{}/domain-packs/operator-sources.yaml",
+            state_prefix(&manifest.project.archive_layout)
+        );
+        if !has_entry(manifest, BackupEntryKind::DomainPackOperatorSources, &path)
+            || entry(manifest, BackupEntryKind::DomainPackOperatorSources)?.sha256
+                != sources.file_sha256
+        {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        }
+    }
     expected.insert(
         BackupEntryKind::DomainPackOperatorSources,
         u64::from(operator),
@@ -1173,6 +1335,162 @@ fn validate_domain_pack_inventory(
     Ok(())
 }
 
+fn validate_learning_inventory(
+    manifest: &BackupManifest,
+    expected: &mut BTreeMap<BackupEntryKind, u64>,
+) -> Result<(), BackupManifestValidationError> {
+    let state = state_prefix(&manifest.project.archive_layout);
+    let records = match &manifest.source_state.domain_pack_learning_store {
+        BackupDomainPackLearningStoreState::BeforeFirstCapture => {
+            expected.insert(BackupEntryKind::DomainPackLearningIndex, 0);
+            expected.insert(BackupEntryKind::DomainPackLearningObject, 0);
+            return Ok(());
+        }
+        BackupDomainPackLearningStoreState::Captured { records } if !records.is_empty() => records,
+        BackupDomainPackLearningStoreState::Captured { .. } => {
+            return Err(BackupManifestValidationError::InvalidLearningProjection);
+        }
+    };
+    expected.insert(BackupEntryKind::DomainPackLearningIndex, 1);
+    expected.insert(
+        BackupEntryKind::DomainPackLearningObject,
+        records.len() as u64,
+    );
+    if !has_entry(
+        manifest,
+        BackupEntryKind::DomainPackLearningIndex,
+        &format!("{state}/domain-pack-learning/index.json"),
+    ) {
+        return Err(BackupManifestValidationError::InvalidLearningProjection);
+    }
+    let mut candidate_ids = BTreeSet::new();
+    let mut raw_digests = BTreeSet::new();
+    let mut previous_id: Option<&str> = None;
+    for record in records {
+        required("domain_pack_learning.candidate_id", &record.candidate_id)?;
+        digest(
+            "domain_pack_learning.candidate_digest",
+            &record.candidate_digest,
+        )?;
+        digest("domain_pack_learning.raw_sha256", &record.raw_sha256)?;
+        if previous_id.is_some_and(|previous| previous >= record.candidate_id.as_str())
+            || !candidate_ids.insert(record.candidate_id.as_str())
+            || !raw_digests.insert(record.raw_sha256.as_str())
+            || record.object_relative_path
+                != format!(
+                    "domain-pack-learning/objects/{}",
+                    digest_token(&record.raw_sha256)?
+                )
+        {
+            return Err(BackupManifestValidationError::InvalidLearningProjection);
+        }
+        previous_id = Some(&record.candidate_id);
+        let path = format!("{state}/{}", record.object_relative_path);
+        let Some(object) = manifest.entries.iter().find(|entry| {
+            entry.material == BackupEntryKind::DomainPackLearningObject
+                && entry.logical_path == path
+        }) else {
+            return Err(BackupManifestValidationError::InvalidLearningProjection);
+        };
+        if object.sha256 != record.raw_sha256 {
+            return Err(BackupManifestValidationError::InvalidLearningProjection);
+        }
+    }
+    Ok(())
+}
+
+fn validate_isolation_inventory(
+    manifest: &BackupManifest,
+    expected: &mut BTreeMap<BackupEntryKind, u64>,
+) -> Result<(), BackupManifestValidationError> {
+    let contracts = match &manifest.source_state.isolation_store {
+        BackupIsolationStoreState::Empty => &[][..],
+        BackupIsolationStoreState::Contracts { contracts } if !contracts.is_empty() => {
+            contracts.as_slice()
+        }
+        BackupIsolationStoreState::Contracts { .. } => {
+            return Err(BackupManifestValidationError::InvalidIsolationProjection);
+        }
+    };
+    expected.insert(BackupEntryKind::IsolationContract, contracts.len() as u64);
+    let state = state_prefix(&manifest.project.archive_layout);
+    let mut ids = BTreeSet::new();
+    let mut previous_path: Option<&str> = None;
+    for contract in contracts {
+        required("isolation.isolation_id", &contract.isolation_id)?;
+        required("isolation.agent_id", &contract.agent_id)?;
+        digest("isolation.contract_sha256", &contract.contract_sha256)?;
+        let relative = contract.contract_relative_path.as_str();
+        if !relative.starts_with("contracts/isolations/")
+            || !relative.ends_with(".yaml")
+            || relative["contracts/isolations/".len()..].contains('/')
+            || previous_path.is_some_and(|previous| previous >= relative)
+            || !ids.insert(contract.isolation_id.as_str())
+        {
+            return Err(BackupManifestValidationError::InvalidIsolationProjection);
+        }
+        previous_path = Some(relative);
+        let path = format!("{state}/{relative}");
+        let Some(entry) = manifest.entries.iter().find(|entry| {
+            entry.material == BackupEntryKind::IsolationContract && entry.logical_path == path
+        }) else {
+            return Err(BackupManifestValidationError::InvalidIsolationProjection);
+        };
+        if entry.sha256 != contract.contract_sha256 {
+            return Err(BackupManifestValidationError::InvalidIsolationProjection);
+        }
+    }
+    Ok(())
+}
+
+fn validate_declared_effect_outputs(
+    manifest: &BackupManifest,
+    expected: &mut BTreeMap<BackupEntryKind, u64>,
+) -> Result<(), BackupManifestValidationError> {
+    let outputs = &manifest.source_state.declared_effect_outputs;
+    expected.insert(BackupEntryKind::DeclaredEffectOutput, outputs.len() as u64);
+    let state = state_prefix(&manifest.project.archive_layout);
+    let mut previous: Option<&str> = None;
+    let mut metadata_records = BTreeSet::new();
+    for output in outputs {
+        required("declared_effect.operation_id", &output.operation_id)?;
+        required("declared_effect.effect_id", &output.effect_id)?;
+        digest("declared_effect.content_sha256", &output.content_sha256)?;
+        digest(
+            "declared_effect.metadata_record_sha256",
+            &output.metadata_record_sha256,
+        )?;
+        validate_safe_path(&output.state_relative_path)?;
+        let expected_logical_ref = format!(
+            "{}/{}",
+            manifest
+                .project
+                .archive_layout
+                .state_root_relative_to_sidecar,
+            output.state_relative_path
+        );
+        if output.target_kind != BackupDeclaredEffectTargetKind::FilePath
+            || output.logical_ref != expected_logical_ref
+            || previous.is_some_and(|path| path >= output.state_relative_path.as_str())
+            || !metadata_records.insert(output.metadata_record_sha256.as_str())
+            || is_reserved_effect_output_path(&output.state_relative_path)
+        {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        }
+        previous = Some(&output.state_relative_path);
+        let path = format!("{state}/{}", output.state_relative_path);
+        let Some(entry) = manifest.entries.iter().find(|entry| {
+            entry.material == BackupEntryKind::DeclaredEffectOutput && entry.logical_path == path
+        }) else {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        };
+        if entry.sha256 != output.content_sha256 {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        }
+    }
+    Ok(())
+}
+
 fn validate_external_authorities(
     manifest: &BackupManifest,
 ) -> Result<(), BackupManifestValidationError> {
@@ -1180,6 +1498,7 @@ fn validate_external_authorities(
     let anchor = &observations.replay_rollback_anchor;
     if anchor.schema_version != "0.1"
         || anchor.deployment_id.trim().is_empty()
+        || anchor.deployment_id.len() > 256
         || anchor.protected_anchor_identity.trim().is_empty()
         || anchor.epoch.len() != 64
         || !anchor
@@ -1210,12 +1529,28 @@ fn validate_external_authorities(
     {
         return Err(BackupManifestValidationError::InvalidExternalAuthorities);
     }
+    let supply_provisioned = manifest.source_state.domain_pack_supply_chain_anchor
+        == BackupProvisioningState::Provisioned;
+    let learning_provisioned = manifest.source_state.domain_pack_reviewed_learning_anchor
+        == BackupProvisioningState::Provisioned;
     let domain_active = matches!(
         manifest.source_state.domain_pack_store,
         BackupDomainPackStoreState::Active { .. }
     );
-    if observations.domain_pack_supply_chain.is_some() != domain_active
-        || observations.domain_pack_reviewed_learning.is_some() != domain_active
+    let operator_sources_present = match manifest.source_state.domain_pack_store {
+        BackupDomainPackStoreState::NoActiveGeneration {
+            operator_sources_present,
+            ..
+        }
+        | BackupDomainPackStoreState::Active {
+            operator_sources_present,
+            ..
+        } => operator_sources_present,
+    };
+    if observations.domain_pack_supply_chain.is_some() != supply_provisioned
+        || observations.domain_pack_reviewed_learning.is_some() != learning_provisioned
+        || (domain_active && (!supply_provisioned || !learning_provisioned))
+        || (operator_sources_present && !supply_provisioned)
     {
         return Err(BackupManifestValidationError::InvalidExternalAuthorities);
     }
@@ -1238,6 +1573,16 @@ fn validate_external_authorities(
             &value.capability_registry_file_sha256,
             &value.sandbox_policy_file_sha256,
         ])?;
+        if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
+            if value.operator_root_identity != sources.operator_root_identity
+                || value.registry_file_sha256 != sources.registry_file_sha256
+                || value.trust_policy_file_sha256 != sources.trust_policy_file_sha256
+                || value.capability_registry_file_sha256 != sources.capability_registry_file_sha256
+                || value.sandbox_policy_file_sha256 != sources.sandbox_policy_file_sha256
+            {
+                return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+            }
+        }
     }
     if let Some(value) = &observations.domain_pack_reviewed_learning {
         for text in [
@@ -1262,6 +1607,14 @@ fn validate_external_authorities(
             &value.reviewer_registry_file_sha256,
             &value.reviewed_registry_file_sha256,
         ])?;
+        if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
+            if value.operator_root_identity != sources.operator_root_identity
+                || value.reviewer_registry_file_sha256 != sources.reviewer_registry_file_sha256
+                || value.reviewed_registry_file_sha256 != sources.reviewed_registry_file_sha256
+            {
+                return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+            }
+        }
         if let (Some(supply), Some(learning), Some(effective)) = (
             &observations.domain_pack_supply_chain,
             &observations.domain_pack_reviewed_learning,
@@ -1295,7 +1648,7 @@ fn validate_external_authorities(
 fn validate_registry_observation(
     manifest: &BackupManifest,
     kind: BackupEntryKind,
-    observation: &Option<BackupPublicRegistryAuthority>,
+    observation: &Option<BackupPublicRegistryMaterial>,
     state: BackupProvisioningState,
 ) -> Result<(), BackupManifestValidationError> {
     if (state == BackupProvisioningState::Provisioned) != observation.is_some() {
@@ -1305,10 +1658,6 @@ fn validate_registry_observation(
         required("public_registry.schema_version", &value.schema_version)?;
         required("public_registry.audience", &value.audience)?;
         digest("public_registry.registry_sha256", &value.registry_sha256)?;
-        digest(
-            "public_registry.public_identity_set_digest",
-            &value.public_identity_set_digest,
-        )?;
         if entry(manifest, kind)?.sha256 != value.registry_sha256 {
             return Err(BackupManifestValidationError::InvalidExternalAuthorities);
         }
@@ -1349,6 +1698,8 @@ fn validate_entry_path(
             exact("wal/.effects.ndjson.compaction-manifest.json")
         }
         BackupEntryKind::MemoryEventLog => exact("memory/events.ndjson"),
+        BackupEntryKind::ResearchEventLog => exact("research/sources.ndjson"),
+        BackupEntryKind::GovernanceConflictEventLog => exact("governance/conflicts.ndjson"),
         BackupEntryKind::DomainPackOperatorSources => exact("domain-packs/operator-sources.yaml"),
         BackupEntryKind::DomainPackRebasePlan => exact("domain-packs/rebase-plan.yaml"),
         BackupEntryKind::DomainPackActivePointer => exact("domain-packs/active.lock.yaml"),
@@ -1385,6 +1736,11 @@ fn validate_entry_path(
             below("domain-packs/receipts") && entry.logical_path.ends_with(".yaml")
         }
         BackupEntryKind::DomainPackObject => below("domain-packs/objects"),
+        BackupEntryKind::DomainPackLearningIndex => exact("domain-pack-learning/index.json"),
+        BackupEntryKind::DomainPackLearningObject => below("domain-pack-learning/objects"),
+        BackupEntryKind::IsolationContract => {
+            below("contracts/isolations") && entry.logical_path.ends_with(".yaml")
+        }
         BackupEntryKind::PublicPrincipalRegistry => {
             sidecar("operator/workflow-principal-registry.yaml")
         }
@@ -1409,9 +1765,8 @@ fn validate_entry_path(
         BackupEntryKind::PreflightProfile => exact("preflight.yaml"),
         BackupEntryKind::EffectMetadataIndex => exact("index/effect-targets.ndjson"),
         BackupEntryKind::TraceLog => exact("traces/events.ndjson"),
-        BackupEntryKind::StateEffectOutput => {
+        BackupEntryKind::DeclaredEffectOutput => {
             entry.logical_path.starts_with(&format!("{state}/"))
-                && !entry.logical_path.contains("/locks/")
         }
     };
     if valid {
@@ -1441,6 +1796,8 @@ fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
         BackupEntryKind::EffectWal,
         BackupEntryKind::EffectWalCompactionManifest,
         BackupEntryKind::MemoryEventLog,
+        BackupEntryKind::ResearchEventLog,
+        BackupEntryKind::GovernanceConflictEventLog,
         BackupEntryKind::DomainPackOperatorSources,
         BackupEntryKind::DomainPackRebasePlan,
         BackupEntryKind::DomainPackActivePointer,
@@ -1455,6 +1812,9 @@ fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
         BackupEntryKind::DomainPackGenerationTrustInput,
         BackupEntryKind::DomainPackPublishedReceipt,
         BackupEntryKind::DomainPackObject,
+        BackupEntryKind::DomainPackLearningIndex,
+        BackupEntryKind::DomainPackLearningObject,
+        BackupEntryKind::IsolationContract,
         BackupEntryKind::PublicPrincipalRegistry,
         BackupEntryKind::PublicBrokerRegistry,
         BackupEntryKind::ClaimCache,
@@ -1467,7 +1827,7 @@ fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
         BackupEntryKind::RuntimeSnapshot,
         BackupEntryKind::StoryState,
         BackupEntryKind::AgentRegistryState,
-        BackupEntryKind::StateEffectOutput,
+        BackupEntryKind::DeclaredEffectOutput,
         BackupEntryKind::PreflightProfile,
         BackupEntryKind::EffectMetadataIndex,
         BackupEntryKind::TraceLog,
@@ -1520,6 +1880,101 @@ fn is_forbidden_private_path(path: &str) -> bool {
         || path.contains("/private-keys/")
         || path.ends_with(".pem")
         || path.ends_with(".key")
+}
+
+fn is_reserved_effect_output_path(path: &str) -> bool {
+    const RESERVED: &[&str] = &[
+        "locks",
+        "wal",
+        "domain-packs",
+        "domain-pack-learning",
+        "contracts/isolations",
+        "memory",
+        "research",
+        "governance",
+        "claims-active",
+        "handoffs",
+        "artifacts",
+        "evidence",
+        "snapshots",
+        "ledger",
+        "requests",
+        "runtime",
+        "stories",
+        "agents",
+        "index",
+        "traces",
+    ];
+    matches!(
+        path,
+        "state.yaml"
+            | "ledger.ndjson"
+            | "replay-wal.manifest.json"
+            | "workflow-action-replay.manifest.json"
+            | "preflight.yaml"
+            | "requests.ndjson"
+    ) || RESERVED
+        .iter()
+        .any(|prefix| path == *prefix || path.starts_with(&format!("{prefix}/")))
+}
+
+fn is_explicit_lock_path(path: &str, state: &str) -> bool {
+    path.starts_with(&format!("{state}/locks/"))
+        || path == format!("{state}/domain-pack-learning/capture.lock")
+        || path == format!("{state}/contracts/isolations/.forge-isolation.lock")
+}
+
+fn is_crash_protocol_path(path: &str) -> bool {
+    let Some(name) = path.rsplit('/').next() else {
+        return false;
+    };
+    if name.starts_with('.')
+        && [
+            ".forge-next",
+            ".forge-previous",
+            ".forge-transaction",
+            ".forge-tmp",
+            ".forge-bak",
+        ]
+        .iter()
+        .any(|suffix| name.ends_with(suffix))
+    {
+        return true;
+    }
+    if let Some(pid) = name.strip_prefix("state.yaml.tmp-") {
+        return pid.parse::<u32>().is_ok();
+    }
+    if name.starts_with(".forge-method.yaml.tmp-") {
+        let mut parts = name.rsplit('-');
+        return parts.next().is_some()
+            && parts.next().is_some_and(|pid| pid.parse::<u32>().is_ok());
+    }
+    let claim_temp = name.rsplit_once(".tmp.").is_some_and(|(_, suffix)| {
+        let mut values = suffix.split('.');
+        values.next().is_some_and(|pid| pid.parse::<u32>().is_ok())
+            && values
+                .next()
+                .is_some_and(|millis| millis.parse::<u64>().is_ok())
+            && values.next().is_none()
+    });
+    if claim_temp {
+        return true;
+    }
+    if !name.starts_with('.') || !name.ends_with(".tmp") {
+        return false;
+    }
+    let mut parts = name.rsplit('.');
+    parts.next() == Some("tmp")
+        && parts
+            .next()
+            .is_some_and(|value| value.parse::<u32>().is_ok())
+        && parts
+            .next()
+            .is_some_and(|value| value.parse::<u128>().is_ok())
+        && parts
+            .next()
+            .is_some_and(|value| value.parse::<u32>().is_ok())
+        && parts.next().is_some()
 }
 
 fn normalized_relative(state_root: &str, sidecar_root: &str) -> Option<String> {
@@ -1611,164 +2066,269 @@ mod tests {
         .unwrap()
     }
 
-    fn valid_fixture(path: &str) -> BackupManifestDocument {
-        yaml_serde::from_str(&fixture(path)).unwrap()
-    }
-
-    fn trusted(document: &BackupManifestDocument) -> BackupTrustedExpectationV1 {
-        let manifest = &document.backup_manifest;
-        BackupTrustedExpectationV1 {
-            schema_version: BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION.to_owned(),
-            manifest_set_digest: manifest.manifest_set_digest.clone(),
-            project_link: manifest.project.project_link.clone(),
-            project_id: manifest.project.project_link.project_id.0.clone(),
-            project_link_sha256: manifest.project.project_link_sha256.clone(),
-            workflow_release: manifest.workflow_release.clone(),
-            effective_epoch: manifest.effective_epoch.clone(),
-            external_authorities: manifest.external_authority_observations.clone(),
-        }
-    }
-
-    fn preflight(document: &BackupManifestDocument) -> BackupRestorePreflightV1 {
-        BackupRestorePreflightV1 {
-            schema_version: BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION.to_owned(),
-            project_link:
-                BackupProjectLinkVerificationStatus::ExactBytesHashAndTypedDocumentVerified,
-            archive_members: BackupArchiveMembersStatus::ExactRegularFilesVerified,
-            target_state: BackupRestoreTargetState::EmptyStagingRoot,
-            producer_quiescence: BackupProducerQuiescence::ExclusiveMutationBoundaryHeld,
-            current_external_authorities: document
-                .backup_manifest
-                .external_authority_observations
-                .clone(),
-        }
+    fn parse_manifest(path: &str) -> BackupManifestDocument {
+        yaml_serde::from_str(&fixture(path))
+            .unwrap_or_else(|error| panic!("{path} must parse before semantic validation: {error}"))
     }
 
     fn recompute(document: &mut BackupManifestDocument) {
         document.backup_manifest.manifest_set_digest = document.set_digest().unwrap();
     }
 
+    fn source_metadata(document: &BackupManifestDocument) -> Vec<BackupSourceFileMetadata> {
+        document
+            .backup_manifest
+            .entries
+            .iter()
+            .map(|entry| BackupSourceFileMetadata {
+                logical_path: entry.logical_path.clone(),
+                entry_type: entry.entry_type,
+                hard_link_count: 1,
+                byte_length: entry.byte_length,
+                sha256: entry.sha256.clone(),
+            })
+            .collect()
+    }
+
     #[test]
-    fn healthy_empty_and_multi_generation_fixtures_validate() {
+    fn every_valid_fixture_parses_then_validates() {
         for path in [
             "valid/empty-pre-rotation-v1.yaml",
             "valid/multi-generation-v1.yaml",
+            "valid/no-active-provisioned-v1.yaml",
+            "valid/replacement-machine-public-material-v1.yaml",
         ] {
-            let document = valid_fixture(path);
-            document.validate_integrity().unwrap();
-            document
-                .validate_for_restore(&trusted(&document), &preflight(&document))
-                .unwrap();
+            parse_manifest(path)
+                .validate_integrity()
+                .unwrap_or_else(|error| panic!("{path} failed semantic validation: {error:?}"));
         }
     }
 
     #[test]
-    fn recomputed_project_link_substitution_is_only_rejected_by_external_trust() {
-        let original = valid_fixture("valid/empty-pre-rotation-v1.yaml");
-        let expectation = trusted(&original);
-        let mut attack = original.clone();
-        attack.backup_manifest.project.project_link.project_id.0 = "substituted".to_owned();
-        recompute(&mut attack);
-        attack.validate_integrity().unwrap();
-        assert!(matches!(
-            attack.validate_for_restore(&expectation, &preflight(&attack)),
-            Err(BackupManifestValidationError::TrustedExpectationMismatch { .. })
-        ));
-    }
-
-    #[test]
-    fn named_hostile_documents_parse_then_fail_semantically() {
-        for name in [
-            "anchor-wal-binding.invalid.yaml",
-            "duplicate-entry.invalid.yaml",
-            "identity-domain-reviewer.invalid.yaml",
-            "identity-release-version.invalid.yaml",
-            "lock-effect-after-replay.invalid.yaml",
-            "omitted-claim-wal.invalid.yaml",
-            "omitted-entry.invalid.yaml",
-            "path-traversal.invalid.yaml",
-            "private-key-entry.invalid.yaml",
-            "private-root.invalid.yaml",
-            "stale-generation.invalid.yaml",
-            "symlink-entry.invalid.yaml",
-            "unknown-version.invalid.yaml",
-            "project-link-mismatch.invalid.yaml",
-            "omitted-authority.invalid.yaml",
-            "multiple-generation-omission.invalid.yaml",
-            "malformed-replay-projection.invalid.yaml",
-            "hardlink-entry.invalid.yaml",
-            "fifo-entry.invalid.yaml",
-        ] {
-            let document = valid_fixture(&format!("hostile/{name}"));
+    fn every_named_hostile_manifest_is_unique_and_fails_with_its_attack_class() {
+        let expected = [
+            (
+                "anchor-wal-binding.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            ("duplicate-entry.invalid.yaml", "EntriesNotCanonical"),
+            (
+                "external-domain-trust-substitution.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            ("extra-entry.invalid.yaml", "SourceStateInventoryMismatch"),
+            ("fifo-entry.invalid.yaml", "NonRegularArchiveEntry"),
+            (
+                "generic-fallback-admission.invalid.yaml",
+                "InvalidDeclaredEffectProjection",
+            ),
+            ("hardlink-entry.invalid.yaml", "NonRegularArchiveEntry"),
+            (
+                "identity-domain-reviewer.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            ("identity-release-version.invalid.yaml", "InvalidDigest"),
+            (
+                "isolation-mutation.invalid.yaml",
+                "InvalidIsolationProjection",
+            ),
+            (
+                "learning-object-index-race.invalid.yaml",
+                "InvalidLearningProjection",
+            ),
+            (
+                "lock-admission.invalid.yaml",
+                "InvalidDeclaredEffectProjection",
+            ),
+            (
+                "lock-effect-after-replay.invalid.yaml",
+                "InvalidSnapshotProtocol",
+            ),
+            (
+                "malformed-replay-projection.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            ("mixed-project.invalid.yaml", "InvalidProjectLink"),
+            (
+                "multiple-generation-omission.invalid.yaml",
+                "InvalidDomainPackProjection",
+            ),
+            (
+                "multiple-generation-substitution.invalid.yaml",
+                "InvalidDomainPackProjection",
+            ),
+            (
+                "no-active-anchor-substitution.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            (
+                "omitted-authority.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            (
+                "omitted-claim-wal.invalid.yaml",
+                "SourceStateInventoryMismatch",
+            ),
+            ("omitted-entry.invalid.yaml", "SourceStateInventoryMismatch"),
+            (
+                "oversized-deployment-id.invalid.yaml",
+                "InvalidExternalAuthorities",
+            ),
+            ("path-traversal.invalid.yaml", "InvalidLogicalPath"),
+            ("private-key-entry.invalid.yaml", "ForbiddenPrivatePath"),
+            ("private-root.invalid.yaml", "ForbiddenPrivatePath"),
+            (
+                "project-link-mismatch.invalid.yaml",
+                "ProjectLinkEntryMismatch",
+            ),
+            (
+                "project-link-substitution.invalid.yaml",
+                "ProjectLinkEntryMismatch",
+            ),
+            ("release-mismatch.invalid.yaml", "Blank"),
+            (
+                "stale-generation.invalid.yaml",
+                "InvalidDomainPackProjection",
+            ),
+            ("substituted-project.invalid.yaml", "InvalidProjectLink"),
+            ("symlink-entry.invalid.yaml", "NonRegularArchiveEntry"),
+            ("unknown-version.invalid.yaml", "UnsupportedSchemaVersion"),
+        ];
+        let hostile = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(FIXTURE_ROOT)
+            .join("hostile");
+        let mut names = std::fs::read_dir(hostile)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(
+            names,
+            expected
+                .iter()
+                .map(|(name, _)| (*name).to_owned())
+                .collect::<Vec<_>>()
+        );
+        let mut frozen_documents = BTreeSet::new();
+        for (name, expected_error) in expected {
+            let relative = format!("hostile/{name}");
+            let raw = fixture(&relative);
             assert!(
-                document.validate_integrity().is_err(),
-                "{name} must parse and fail semantic validation"
+                frozen_documents.insert(raw.clone()),
+                "{relative} duplicates another nominal hostile case"
+            );
+            let document: BackupManifestDocument = yaml_serde::from_str(&raw)
+                .unwrap_or_else(|error| panic!("{relative} must parse before validation: {error}"));
+            let actual = document
+                .validate_integrity()
+                .expect_err("named hostile fixture must fail semantic validation");
+            assert!(
+                format!("{actual:?}").starts_with(expected_error),
+                "{relative} exercised {actual:?}, expected attack class {expected_error}"
             );
         }
     }
 
     #[test]
-    fn unknown_field_fixture_is_parse_rejection_not_semantic_coverage() {
+    fn unknown_field_is_explicit_parse_rejection_not_semantic_coverage() {
         assert!(yaml_serde::from_str::<BackupManifestDocument>(&fixture(
-            "hostile/unknown-field.invalid.yaml"
+            "parse-rejection/unknown-field.invalid.yaml"
         ))
         .is_err());
     }
 
     #[test]
-    fn recomputed_self_consistent_attacks_fail_trusted_validation() {
-        let rich = valid_fixture("valid/multi-generation-v1.yaml");
-        let rich_expectation = trusted(&rich);
-        for name in [
-            "external-domain-trust-substitution.invalid.yaml",
-            "multiple-generation-substitution.invalid.yaml",
-        ] {
-            let attack = valid_fixture(&format!("hostile/{name}"));
-            attack.validate_integrity().unwrap();
-            assert!(attack
-                .validate_for_restore(&rich_expectation, &preflight(&attack))
-                .is_err());
-        }
-
-        let empty = valid_fixture("valid/empty-pre-rotation-v1.yaml");
-        let empty_expectation = trusted(&empty);
-        for name in [
-            "project-link-substitution.invalid.yaml",
-            "mixed-project.invalid.yaml",
-            "substituted-project.invalid.yaml",
-            "release-mismatch.invalid.yaml",
-            "extra-entry.invalid.yaml",
-        ] {
-            let attack = valid_fixture(&format!("hostile/{name}"));
-            attack.validate_integrity().unwrap();
-            assert!(attack
-                .validate_for_restore(&empty_expectation, &preflight(&attack))
-                .is_err());
-        }
+    fn whole_set_substitution_remains_integrity_only() {
+        let mut substituted = parse_manifest("valid/empty-pre-rotation-v1.yaml");
+        substituted
+            .backup_manifest
+            .project
+            .project_link
+            .project_id
+            .0 = "substituted".to_owned();
+        recompute(&mut substituted);
+        substituted.validate_integrity().unwrap();
     }
 
     #[test]
-    fn archive_api_rejects_every_omission_substitution_and_non_regular_class() {
-        let document = valid_fixture("valid/multi-generation-v1.yaml");
-        for index in 0..document.backup_manifest.entries.len() {
-            let mut missing = document.backup_manifest.entries.clone();
-            missing.remove(index);
-            assert!(matches!(
-                document.verify_archive_entries(&missing),
-                Err(BackupArchiveVerificationError::MissingEntry { .. })
-            ));
-            let mut replaced = document.backup_manifest.entries.clone();
-            let replacement = if replaced[index].sha256 == format!("sha256:{}", "f".repeat(64)) {
-                "e"
-            } else {
-                "f"
-            };
-            replaced[index].sha256 = format!("sha256:{}", replacement.repeat(64));
-            assert!(matches!(
-                document.verify_archive_entries(&replaced),
-                Err(BackupArchiveVerificationError::SubstitutedEntry { .. })
-            ));
-        }
+    fn classifier_is_closed_and_explicitly_excludes_only_shipped_transients() {
+        let document = parse_manifest("valid/multi-generation-v1.yaml");
+        assert!(matches!(
+            document
+                .classify_source_file("sidecar/.forge-method/domain-pack-learning/capture.lock")
+                .unwrap(),
+            BackupSourceFileClassification::Exclude(BackupSourceExclusion::ProducerLock)
+        ));
+        assert!(matches!(
+            document
+                .classify_source_file(
+                    "sidecar/.forge-method/domain-pack-learning/.index.json.forge-next"
+                )
+                .unwrap(),
+            BackupSourceFileClassification::Exclude(BackupSourceExclusion::CrashRecoveryArtifact)
+        ));
+        assert!(matches!(
+            document
+                .classify_source_file("sidecar/operator/workflow-secrets/private.yaml")
+                .unwrap(),
+            BackupSourceFileClassification::Exclude(
+                BackupSourceExclusion::ForbiddenPrivateMaterial
+            )
+        ));
+        assert!(matches!(
+            document.classify_source_file("sidecar/.forge-method/unclassified.bin"),
+            Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
+        ));
+        assert!(matches!(
+            document.classify_source_file("sidecar/.forge-method/capture.lock"),
+            Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
+        ));
+    }
+
+    #[test]
+    fn source_enumerator_rejects_unknown_omitted_linked_and_substituted_metadata() {
+        let document = parse_manifest("valid/multi-generation-v1.yaml");
+        let complete = source_metadata(&document);
+        document.verify_source_enumeration(&complete).unwrap();
+
+        let mut unknown = complete.clone();
+        unknown.push(BackupSourceFileMetadata {
+            logical_path: "sidecar/.forge-method/unknown.bin".to_owned(),
+            entry_type: BackupArchiveEntryType::RegularFile,
+            hard_link_count: 1,
+            byte_length: 1,
+            sha256: format!("sha256:{}", "a".repeat(64)),
+        });
+        assert!(document.verify_source_enumeration(&unknown).is_err());
+
+        let mut omitted = complete.clone();
+        omitted.pop();
+        assert!(document.verify_source_enumeration(&omitted).is_err());
+
+        let mut linked = complete.clone();
+        linked[0].hard_link_count = 2;
+        assert!(document.verify_source_enumeration(&linked).is_err());
+
+        let mut substituted = complete;
+        substituted[0].sha256 = format!("sha256:{}", "f".repeat(64));
+        assert!(document.verify_source_enumeration(&substituted).is_err());
+    }
+
+    #[test]
+    fn archive_metadata_api_rejects_omission_substitution_and_special_classes() {
+        let document = parse_manifest("valid/multi-generation-v1.yaml");
+        let mut missing = document.backup_manifest.entries.clone();
+        missing.remove(0);
+        assert!(matches!(
+            document.verify_archive_entries(&missing),
+            Err(BackupArchiveVerificationError::MissingEntry { .. })
+        ));
+        let mut replaced = document.backup_manifest.entries.clone();
+        replaced[0].sha256 = format!("sha256:{}", "f".repeat(64));
+        assert!(matches!(
+            document.verify_archive_entries(&replaced),
+            Err(BackupArchiveVerificationError::SubstitutedEntry { .. })
+        ));
         for class in [
             BackupArchiveEntryType::Symlink,
             BackupArchiveEntryType::Hardlink,
@@ -1780,16 +2340,8 @@ mod tests {
         ] {
             let mut observed = document.backup_manifest.entries.clone();
             observed[0].entry_type = class;
-            assert!(matches!(
-                document.verify_archive_entries(&observed),
-                Err(BackupArchiveVerificationError::SymlinkOrNonRegularEntry { .. })
-            ));
+            assert!(document.verify_archive_entries(&observed).is_err());
         }
-        let raw = fixture("valid/project-link.yaml");
-        let parsed: ProjectLinkDocument = yaml_serde::from_str(&raw).unwrap();
-        document
-            .verify_project_link_bytes(raw.as_bytes(), &parsed)
-            .unwrap();
         assert!(BackupManifestDocument::verify_filesystem_entry_class(
             "sidecar/.forge-method/ledger.ndjson",
             BackupArchiveEntryType::RegularFile,
@@ -1799,13 +2351,35 @@ mod tests {
     }
 
     #[test]
-    fn restore_preflight_is_trusted_api_not_archive_boolean() {
-        let document = valid_fixture("valid/empty-pre-rotation-v1.yaml");
-        let mut rejected = preflight(&document);
-        rejected.producer_quiescence = BackupProducerQuiescence::NotEstablished;
-        assert!(matches!(
-            document.validate_for_restore(&trusted(&document), &rejected),
-            Err(BackupManifestValidationError::RestorePreflightRejected)
-        ));
+    fn project_link_verification_hashes_exact_raw_bytes() {
+        let document = parse_manifest("valid/empty-pre-rotation-v1.yaml");
+        let raw = fixture("valid/project-link.yaml");
+        let parsed: ProjectLinkDocument = yaml_serde::from_str(&raw).unwrap();
+        document
+            .verify_project_link_bytes(raw.as_bytes(), &parsed)
+            .unwrap();
+        let mut changed = raw.into_bytes();
+        changed.push(b' ');
+        assert!(document
+            .verify_project_link_bytes(&changed, &parsed)
+            .is_err());
+    }
+
+    #[test]
+    fn s03_exposes_no_forgeable_restore_or_trusted_success_api() {
+        let source = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/backup_manifest.rs"),
+        )
+        .unwrap();
+        let forbidden = [
+            ["pub struct BackupRestore", "PreflightV1"].concat(),
+            ["pub struct BackupTrusted", "ExpectationV1"].concat(),
+            ["pub enum BackupArchive", "MembersStatus"].concat(),
+            ["pub enum BackupProducer", "Quiescence"].concat(),
+            ["fn validate_for_", "restore"].concat(),
+        ];
+        for name in forbidden {
+            assert!(!source.contains(&name), "forbidden public API: {name}");
+        }
     }
 }

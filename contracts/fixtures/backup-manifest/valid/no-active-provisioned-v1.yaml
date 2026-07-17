@@ -54,7 +54,7 @@
       "memory_store": "before_initialization",
       "domain_pack_store": {
         "status": "no_active_generation",
-        "operator_sources_present": false,
+        "operator_sources_present": true,
         "rebase_plan_present": false
       },
       "workflow_principal_registry": "not_provisioned",
@@ -70,11 +70,39 @@
         "runtime_snapshots": 0,
         "story_state": 0,
         "agent_registry_state": 0,
-        "state_effect_outputs": 0,
         "preflight_profiles": 0,
         "effect_metadata_indexes": 0,
         "trace_logs": 0
-      }
+      },
+      "research_store": "before_initialization",
+      "governance_conflict_store": "before_initialization",
+      "domain_pack_operator_sources": {
+        "schema_version": "forge-domain-pack-operator-sources-v1",
+        "file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "operator_root_identity": "operator://domain-pack/app",
+        "trust_policy_file": "operator/trust-policy.yaml",
+        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "registry_file": "operator/registry.yaml",
+        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "reviewer_registry_file": "operator/reviewers.yaml",
+        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_file": "operator/reviewed.yaml",
+        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "capability_registry_file": "operator/capabilities.yaml",
+        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "sandbox_policy_file": "operator/sandbox.yaml",
+        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "operator/artifacts"
+      },
+      "domain_pack_learning_store": {
+        "status": "before_first_capture"
+      },
+      "isolation_store": {
+        "status": "empty"
+      },
+      "domain_pack_supply_chain_anchor": "provisioned",
+      "domain_pack_reviewed_learning_anchor": "provisioned",
+      "declared_effect_outputs": []
     },
     "snapshot_protocol": {
       "mode": "cooperative_locks_with_producer_quiescence_and_stable_enumeration",
@@ -84,19 +112,24 @@
         "domain_pack_operator_sources",
         "domain_pack_rebase_plan",
         "domain_pack_lifecycle",
+        "domain_pack_learning_capture",
         "workflow_credential_registry",
         "workflow_broker_registry",
         "workflow_governance",
         "claim_wal",
         "workflow_action_replay_wal",
         "memory_log",
+        "research_log",
+        "governance_conflict_log",
+        "isolation_contracts",
         "command_evidence_append",
         "effect_metadata_index_append",
         "effect_wal",
         "replay_wal",
         "trace_append",
         "external_replay_anchor"
-      ]
+      ],
+      "unlocked_producer_boundary": "opaque_exclusive_quiescence_required_by_restore_engine"
     },
     "entries": [
       {
@@ -126,6 +159,13 @@
         "entry_type": "regular_file",
         "byte_length": 0,
         "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "material": "domain_pack_operator_sources",
+        "logical_path": "sidecar/.forge-method/domain-packs/operator-sources.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 18,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     ],
     "external_authority_observations": {
@@ -143,8 +183,35 @@
         "replay_wal_record_count": 0,
         "replay_wal_byte_length": 0
       },
-      "domain_pack_supply_chain": null,
-      "domain_pack_reviewed_learning": null,
+      "domain_pack_supply_chain": {
+        "schema_version": "forge-domain-pack-registry-anchor-v1",
+        "operator_root_identity": "operator://domain-pack/app",
+        "registry_id": "registry.app",
+        "audience": "forge-core:domain-pack:app",
+        "generation": 2,
+        "anchor_document_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "registry_snapshot_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "trust_policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "domain_pack_reviewed_learning": {
+        "schema_version": "forge-domain-pack-learning-anchor-v1",
+        "operator_root_identity": "operator://domain-pack/app",
+        "reviewer_registry_id": "reviewers.app",
+        "reviewer_audience": "forge-core:domain-pack:app",
+        "reviewer_generation": 2,
+        "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_id": "reviewed.app",
+        "reviewed_audience": "forge-core:domain-pack:app",
+        "reviewed_generation": 2,
+        "reviewed_registry_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "anchor_document_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
       "workflow_principal_registry": null,
       "workflow_broker_registry": null
     },
@@ -154,7 +221,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "unexpected_field": "reject",
-    "manifest_set_digest": "sha256:3275bd6fc4f4bc1226cd83b4729f5698e895b14d2174e7ec1e018565a73f256b"
+    "manifest_set_digest": "sha256:fefa342ea73c5166152e8c6d3528b34ca9083f90af7830e84bae5335ccc5cd84"
   }
 }
