@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import os
 import shutil
@@ -31,15 +32,39 @@ def load_checker():
 checker = load_checker()
 
 
+def release_cargo() -> str | None:
+    """Prefer the real toolchain binary so parallel rustup proxies cannot serialize probes."""
+    rustup_home = Path(os.environ.get("RUSTUP_HOME", Path.home() / ".rustup"))
+    candidates = sorted((rustup_home / "toolchains").glob("*/bin/cargo"))
+    stable = [path for path in candidates if path.parents[1].name.startswith("stable-")]
+    selected = (stable or candidates)[:1]
+    return str(selected[0]) if selected else shutil.which("cargo")
+
+
 class ReleaseLockingTests(unittest.TestCase):
     def assert_mutation_rejected(self, mutated: str) -> None:
+        """Bypass only the byte hash: the independent graph must still reject."""
         original = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotEqual(mutated, original)
-        with tempfile.TemporaryDirectory() as directory:
-            candidate = Path(directory) / "release.yml"
-            candidate.write_text(mutated, encoding="utf-8")
-            with self.assertRaises(checker.ReleaseLockError):
-                checker.check(candidate, repo_root=ROOT)
+        with self.assertRaises(checker.ReleaseLockError):
+            checker.check_source(
+                mutated,
+                repo_root=ROOT,
+                expected_workflow_sha256=hashlib.sha256(mutated.encode()).hexdigest(),
+            )
+
+    def assert_semantic_rejected(self, mutated: str) -> None:
+        """Authorize candidate hashes so semantic/parser checks must reject."""
+        original = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotEqual(mutated, original)
+        graph_hash = checker.graph_digest(mutated)
+        with self.assertRaises(checker.ReleaseLockError):
+            checker.check_source(
+                mutated,
+                repo_root=ROOT,
+                expected_workflow_sha256=hashlib.sha256(mutated.encode()).hexdigest(),
+                expected_graph_sha256=graph_hash,
+            )
 
     def replace_once(self, old: str, new: str) -> str:
         source = WORKFLOW.read_text(encoding="utf-8")
@@ -69,7 +94,7 @@ class ReleaseLockingTests(unittest.TestCase):
         self.assertEqual(len(offsets), 4)
         for number, offset in enumerate(offsets, 1):
             with self.subTest(invocation=number):
-                self.assert_mutation_rejected(
+                self.assert_semantic_rejected(
                     source[:offset] + source[offset + len("--locked") :]
                 )
 
@@ -79,17 +104,74 @@ class ReleaseLockingTests(unittest.TestCase):
             "path-qualified": self.replace_once(native, native.replace("cargo", "/usr/bin/cargo", 1)),
             "toolchain": self.replace_once(native, native.replace("cargo build", "cargo +1.97.0 build", 1)),
             "global-config": self.replace_once(native, native.replace("cargo build", "cargo --config net.retry=2 build", 1)),
-            "quoted-cargo-env": self.replace_once(native, native.replace("cargo", '"$CARGO"', 1)),
+            "quoted-cargo-env": self.replace_once(native, "run: |\n          \"$CARGO\" build --locked --release"),
             "shell-variable": self.replace_once(native, "run: |\n          tool=cargo\n          \"$tool\" build --locked --release"),
             "alias": self.replace_once(native, "run: |\n          alias builder='cargo'\n          builder build --locked --release"),
             "function": self.replace_once(native, "run: |\n          builder() { cargo \"$@\"; }\n          builder build --locked --release"),
+            "env": self.replace_once(native, native.replace("cargo", "env cargo", 1)),
+            "usr-bin-env": self.replace_once(native, native.replace("cargo", "/usr/bin/env cargo", 1)),
+            "eval": self.replace_once(native, "run: eval 'cargo build --locked --release'"),
+            "sh-c": self.replace_once(native, "run: sh -c 'cargo build --locked --release'"),
+            "bash-c": self.replace_once(native, "run: bash -c 'cargo build --locked --release'"),
+            "exec": self.replace_once(native, native.replace("cargo", "exec cargo", 1)),
+            "time": self.replace_once(native, native.replace("cargo", "time cargo", 1)),
+            "command-option": self.replace_once(native, native.replace("cargo", "command -- cargo", 1)),
+            "command-p": self.replace_once(native, native.replace("cargo", "command -p cargo", 1)),
+            "source": self.replace_once(native, "run: source scripts/package.sh"),
+            "dot": self.replace_once(native, "run: . scripts/package.sh"),
             "payload-locked": self.replace_once(native, "run: cargo run --release -- --locked"),
             "called-python": self.replace_once(native, "run: python scripts/package.py"),
             "called-shell": self.replace_once(native, "run: bash scripts/package.sh"),
         }
         for name, mutated in mutations.items():
             with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+
+    def test_exact_graph_rejects_changes_when_only_workflow_hash_is_updated(self) -> None:
+        native = "run: cargo build --locked --release --target ${{ matrix.target }} -p forge-core-cli"
+        mutations = {
+            "changed-body": self.replace_once(native, native + " --verbose"),
+            "new-step": self.replace_once(
+                "      - name: Test deterministic archive tooling\n        run: python scripts/test-release-archive.py",
+                "      - name: Test deterministic archive tooling\n        run: python scripts/test-release-archive.py\n\n      - name: Unexpected\n        run: echo unexpected",
+            ),
+            "new-job": WORKFLOW.read_text(encoding="utf-8") + "\n  unexpected:\n    name: Unexpected\n    needs: metadata\n    runs-on: ubuntu-latest\n    steps:\n      - name: Unexpected\n        run: echo unexpected\n",
+            "dependency-edge": self.replace_once("    needs: metadata", "    needs: [metadata, release]"),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
                 self.assert_mutation_rejected(mutated)
+
+    def test_local_job_level_reusable_workflow_is_rejected_semantically(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8") + (
+            "\n  escape:\n    name: Escape\n    needs: metadata\n"
+            "    uses: ./.github/workflows/unlocked.yml\n"
+        )
+        self.assert_semantic_rejected(source)
+
+    def test_dispatch_ref_and_tag_commit_mismatch_fails_identity_gate(self) -> None:
+        jobs = checker.parse_graph(WORKFLOW.read_text(encoding="utf-8"))
+        metadata = next(job for job in jobs if job.key == "metadata")
+        gate = next(step for step in metadata.steps if step.name.startswith("Bind executing"))
+        environment = os.environ.copy()
+        environment["EXECUTING_WORKFLOW_SHA"] = "b" * 40
+        simulated = gate.run.replace(
+            'checked_out_sha="$(git rev-parse HEAD)"',
+            f'checked_out_sha="{"a" * 40}"',
+            1,
+        )
+        rejected = subprocess.run(
+            ["bash", "-c", simulated], cwd=ROOT, env=environment,
+            text=True, capture_output=True, check=False, timeout=10,
+        )
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("does not match checked-out release commit", rejected.stderr)
+        mutation = WORKFLOW.read_text(encoding="utf-8").replace(
+            "EXECUTING_WORKFLOW_SHA: ${{ github.workflow_sha }}",
+            "EXECUTING_WORKFLOW_SHA: ${{ github.sha }}",
+            1,
+        )
+        self.assert_semantic_rejected(mutation)
 
     def test_echoed_wrapper_plus_direct_plugin_is_rejected(self) -> None:
         command = """          python scripts/run-release-locked-sbom.py \\
@@ -100,7 +182,7 @@ class ReleaseLockingTests(unittest.TestCase):
             --override-filename \"forge-core-$VERSION.cdx\""""
         bypass = """          echo \"python scripts/run-release-locked-sbom.py\"
           cargo-cyclonedx cyclonedx --format json --manifest-path crates/forge-core-cli/Cargo.toml"""
-        self.assert_mutation_rejected(self.replace_once(command, bypass))
+        self.assert_semantic_rejected(self.replace_once(command, bypass))
 
     def test_yaml_alias_run_is_rejected_as_yaml_not_as_text(self) -> None:
         source = self.replace_once(
@@ -108,11 +190,12 @@ class ReleaseLockingTests(unittest.TestCase):
             "run: *native_build",
         )
         source = source.replace("jobs:\n", "jobs:\n  native_template: &native_build cargo build --locked\n", 1)
-        with tempfile.TemporaryDirectory() as directory:
-            candidate = Path(directory) / "release.yml"
-            candidate.write_text(source, encoding="utf-8")
-            with self.assertRaisesRegex(checker.ReleaseLockError, "unsupported YAML|anchors, aliases"):
-                checker.check(candidate, repo_root=ROOT)
+        with self.assertRaisesRegex(checker.ReleaseLockError, "unsupported YAML|anchors, aliases"):
+            checker.check_source(
+                source,
+                repo_root=ROOT,
+                expected_workflow_sha256=hashlib.sha256(source.encode()).hexdigest(),
+            )
 
     def test_inline_literal_and_folded_run_scalars_are_semantic(self) -> None:
         source = """jobs:
@@ -154,13 +237,24 @@ cross build \\
 
     def test_cargo_parser_rejects_all_executable_spellings_and_payload_lock(self) -> None:
         negatives = {
-            "path": "/usr/bin/cargo package",
-            "toolchain": "cargo +1.97.0 package",
-            "global-option": "cargo --config net.retry=2 package",
+            "path": "/usr/bin/cargo package --locked",
+            "toolchain-unlocked": "cargo +1.97.0 package",
+            "global-option-unlocked": "cargo --config net.retry=2 package",
             "quoted-env": '"$CARGO" package --locked',
             "assignment": "tool=cargo\n\"$tool\" package --locked",
             "alias": "alias c=cargo; c package --locked",
             "function": "function c { cargo package --locked; }; c",
+            "env": "env cargo package --locked",
+            "usr-bin-env": "/usr/bin/env cargo package --locked",
+            "eval": "eval 'cargo package --locked'",
+            "sh-c": "sh -c 'cargo package --locked'",
+            "bash-c": "bash -c 'cargo package --locked'",
+            "exec": "exec cargo package --locked",
+            "time": "time cargo package --locked",
+            "command-option": "command -- cargo package --locked",
+            "command-p": "command -p cargo package --locked",
+            "source": "source scripts/package.sh",
+            "dot": ". scripts/package.sh",
             "plugin": "cargo-cyclonedx cyclonedx --locked",
             "cargo-plugin": "cargo cyclonedx --locked",
             "payload": "cargo run --release -- --locked",
@@ -172,6 +266,53 @@ cross build \\
             "cargo +1.97.0 --config net.retry=2 package --locked --allow-dirty"
         )
         self.assertEqual([(item.tool, item.subcommand) for item in accepted], [("cargo", "package")])
+
+    def test_malicious_forge_cmd_source_drift_is_rejected(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in checker.GOVERNED_FILE_SHA256:
+                destination = root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            wrapper = root / "distribution/forge.cmd"
+            wrapper.write_text(
+                "@echo off\r\ncargo metadata --format-version 1 >NUL\r\n"
+                '"%~dp0forge-core.exe" %*\r\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(checker.ReleaseLockError, "forge.cmd"):
+                checker.check_source(source, repo_root=root)
+
+    def test_canonical_workflow_symlink_is_rejected_before_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflow = root / ".github/workflows/release.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.symlink_to(WORKFLOW)
+            with self.assertRaisesRegex(checker.ReleaseLockError, "unsafe"):
+                checker.check(workflow, repo_root=root)
+
+    def test_sbom_lockfile_symlink_and_outside_repository_are_rejected(self) -> None:
+        runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            link = Path(directory) / "Cargo.lock"
+            link.symlink_to(ROOT / "Cargo.lock")
+            linked = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(link), "--", "--format", "json"],
+                cwd=ROOT, text=True, capture_output=True, check=False, timeout=10,
+            )
+            self.assertNotEqual(linked.returncode, 0)
+            self.assertIn("missing or unsafe", linked.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            outside = Path(directory) / "Cargo.lock"
+            outside.write_bytes((ROOT / "Cargo.lock").read_bytes())
+            rejected = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(outside), "--", "--format", "json"],
+                cwd=ROOT, text=True, capture_output=True, check=False, timeout=10,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("inside checked repository", rejected.stderr)
 
     def test_sbom_runner_content_drift_is_rejected(self) -> None:
         runner = ROOT / "scripts/run-release-locked-sbom.py"
@@ -188,7 +329,7 @@ cross build \\
                 checker.check(WORKFLOW, candidate, ROOT)
 
     def test_sbom_metadata_shim_rejects_manifest_lock_drift(self) -> None:
-        cargo = shutil.which("cargo")
+        cargo = release_cargo()
         self.assertIsNotNone(cargo, "Cargo is required to prove release lock enforcement")
         runner = ROOT / "scripts/run-release-locked-sbom.py"
         with tempfile.TemporaryDirectory() as directory:
@@ -230,9 +371,13 @@ cross build \\
     def test_real_cargo_cyclonedx_stale_lock_has_no_output(self) -> None:
         if shutil.which("cargo-cyclonedx") is None:
             self.skipTest("real cargo-cyclonedx 0.5.9 probe requires installed plugin")
-        runner = ROOT / "scripts/run-release-locked-sbom.py"
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "fixture"
+            repository = Path(directory)
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir()
+            shutil.copy2(production_runner, runner)
+            root = repository / "fixture"
             shutil.copytree(FIXTURE, root)
             original_lock = (root / "Cargo.lock").read_bytes()
             completed = subprocess.run(
@@ -245,7 +390,7 @@ cross build \\
             self.assertEqual(list(root.rglob("*.cdx.json")), [])
 
     def test_manifest_lock_drift_fails_before_packaging(self) -> None:
-        cargo = shutil.which("cargo")
+        cargo = release_cargo()
         self.assertIsNotNone(cargo, "Cargo is required to prove release lock enforcement")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "fixture"

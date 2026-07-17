@@ -59,6 +59,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Bind executing workflow to checked-out release commit
+        shell: bash
+        env:
+          EXECUTING_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$EXECUTING_WORKFLOW_SHA" = "$checked_out_sha" || {
+            echo "release rejected: executing workflow commit $EXECUTING_WORKFLOW_SHA does not match checked-out release commit $checked_out_sha" >&2
+            exit 1
+          }
+
       - name: Require tag, workspace version, and commit identity to agree
         id: identity
         shell: bash

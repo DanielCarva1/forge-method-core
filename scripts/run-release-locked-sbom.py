@@ -8,6 +8,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -49,9 +50,18 @@ def main() -> int:
     if not forwarded:
         parser.error("cargo-cyclonedx arguments are required after --")
 
-    lockfile = args.lockfile.resolve()
-    if not lockfile.is_file() or lockfile.is_symlink():
-        raise RuntimeError(f"release lockfile is missing or unsafe: {lockfile}")
+    repository = Path(__file__).resolve().parents[1]
+    candidate = args.lockfile if args.lockfile.is_absolute() else Path.cwd() / args.lockfile
+    metadata = os.lstat(candidate)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError(f"release lockfile is missing or unsafe: {candidate}")
+    lockfile = candidate.resolve(strict=True)
+    try:
+        lockfile.relative_to(repository)
+    except ValueError as error:
+        raise RuntimeError(
+            f"release lockfile must remain inside checked repository {repository}: {lockfile}"
+        ) from error
     before = digest(lockfile)
 
     cargo = shutil.which("cargo")

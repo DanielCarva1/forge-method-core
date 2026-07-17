@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import os
 import re
 import shlex
+import stat
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
@@ -30,9 +33,19 @@ class Step(NamedTuple):
     uses: str | None
 
 
-# This checker deliberately has no permissive mode. Any release workflow edit must
-# update this reviewed content commitment and the semantic command expectations.
-EXPECTED_WORKFLOW_SHA256 = "6a9fd2484ea488fec3c9b0101c685b0ad62df3a57da19bb63594ec0ec6658ddc"
+class Job(NamedTuple):
+    key: str
+    name: str
+    needs: tuple[str, ...]
+    uses: str | None
+    steps: tuple[Step, ...]
+
+
+# This checker has no permissive production mode. A workflow edit requires review
+# of both the byte commitment and the independent exact graph commitment. Changing
+# EXPECTED_WORKFLOW_SHA256 alone can never authorize a changed job/step graph.
+EXPECTED_WORKFLOW_SHA256 = "aa7d30cbb4b54a992661c4683d4aa9ba618a1caad877a9dcdc2ef3eb6e52e654"
+EXPECTED_GRAPH_SHA256 = "29dec609a91b98068040b28fd3dc56b58be56450fa10394c1d8ca53a1adfaff4"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
@@ -51,13 +64,14 @@ SBOM_WRAPPER_ARGV = (
 # self-hashed. Imported/transitively executed support and fixture files are
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
-    "scripts/run-release-locked-sbom.py": "81f0e23ad5928426a5ac2b75f4b6a07486cfa32c3819ad8bf56c286e763cbbcc",
-    "scripts/test-release-locking.py": "b7491f05744b797b5339fec768f86bfe75434db81c8f86ec8f00f693b8f0611e",
+    "scripts/run-release-locked-sbom.py": "1756eaa44d19988f49d70b5d1c99f2a873fef3707196ab7011010476c00452da",
+    "scripts/test-release-locking.py": "437ef4a54dcb0b95c2bdb47014ddf9e6e57fcaf419594d36299054590be133e1",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
     "scripts/smoke-release-install.py": "6fa71b14db1fb27c69f7393ee81f4f1a19456fb5ce852310f3b38cae62cc3013",
     "distribution/forge": "6b151926a6b69e514d6542ff93974c1251f9a597a246ab49d8c04649f8a5f25b",
+    "distribution/forge.cmd": "408e1172fcfda87b70956ddefda9798c6246419ad099763c22401638021bce38",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
@@ -71,6 +85,31 @@ DIRECT_LOCAL_SCRIPTS = {
     ("build", "Smoke extracted native release install"): {"scripts/smoke-release-install.py"},
     ("release", "Re-verify archive manifests and checksums"): {"scripts/check-release-archive.py"},
     SBOM_STEP: {"scripts/run-release-locked-sbom.py"},
+}
+
+# Reviewed transitive local executable/read graph. Contents are committed above;
+# these edges state why each file is reachable. External tools are closed by the
+# exact run/uses graph and immutable action revisions.
+TRANSITIVE_LOCAL_GRAPH = {
+    "scripts/test-release-locking.py": {
+        "scripts/run-release-locked-sbom.py",
+        "contracts/fixtures/release-lock/manifest-drift/Cargo.toml",
+        "contracts/fixtures/release-lock/manifest-drift/Cargo.lock",
+        "contracts/fixtures/release-lock/manifest-drift/src/main.rs",
+    },
+    "scripts/test-release-archive.py": {
+        "scripts/build-release-archive.py",
+        "scripts/check-release-archive.py",
+        "distribution/forge",
+    },
+    "scripts/build-release-archive.py": {"distribution/forge", "distribution/forge.cmd"},
+    "scripts/smoke-release-install.py": {
+        "scripts/check-release-archive.py",
+        "distribution/forge",
+        "distribution/forge.cmd",
+    },
+    "scripts/run-release-locked-sbom.py": set(),
+    "scripts/check-release-archive.py": set(),
 }
 
 ANCHOR_OR_ALIAS = re.compile(r"(?:^|[\s:[{,])(?:&|\*)[A-Za-z0-9_-]+(?=$|[\s,\]}#])")
@@ -260,6 +299,84 @@ def parse_workflow(source: str) -> list[Step]:
     return steps
 
 
+def parse_graph(source: str) -> tuple[Job, ...]:
+    """Model every job, dependency edge, job-level use, and named step body."""
+    lines = source.splitlines()
+    try:
+        jobs_line = lines.index("jobs:")
+    except ValueError as error:
+        raise ReleaseLockError("release workflow has no jobs mapping") from error
+    headers = [
+        (index, match.group(1))
+        for index in range(jobs_line + 1, len(lines))
+        if (match := JOB_HEADER.match(lines[index])) is not None
+    ]
+    if not headers:
+        raise ReleaseLockError("release workflow has no jobs")
+    parsed_steps = parse_workflow(source)
+    jobs: list[Job] = []
+    for position, (start, key) in enumerate(headers):
+        end = headers[position + 1][0] if position + 1 < len(headers) else len(lines)
+        fields: dict[str, str] = {}
+        for index in range(start + 1, end):
+            match = re.match(r"^    ([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$", lines[index])
+            if match is None or match.group(1) not in {"name", "needs", "uses"}:
+                continue
+            field = match.group(1)
+            if field in fields:
+                raise ReleaseLockError(f"workflow:{index + 1}: duplicate job field {field!r}")
+            value = match.group(2) or ""
+            fields[field] = value.strip() if field == "needs" else _scalar(value, f"workflow:{index + 1}")
+        name = fields.get("name", "")
+        if not name:
+            raise ReleaseLockError(f"workflow:{start + 1}: every release job needs an exact name")
+        needs_source = fields.get("needs", "")
+        if needs_source.startswith("["):
+            if not needs_source.endswith("]"):
+                raise ReleaseLockError(f"workflow:{start + 1}: unsupported multiline needs")
+            needs = tuple(
+                item.strip() for item in needs_source[1:-1].split(",") if item.strip()
+            )
+        else:
+            needs = (needs_source,) if needs_source else ()
+        if len(needs) != len(set(needs)):
+            raise ReleaseLockError(f"workflow:{start + 1}: duplicate dependency edge")
+        steps = tuple(step for step in parsed_steps if step.job == key)
+        job_uses = fields.get("uses") or None
+        if bool(steps) == bool(job_uses):
+            raise ReleaseLockError(
+                f"workflow:{start + 1}: job must have exactly one of steps or job-level uses"
+            )
+        jobs.append(Job(key, name, needs, job_uses, steps))
+    keys = [job.key for job in jobs]
+    if len(keys) != len(set(keys)):
+        raise ReleaseLockError("release workflow contains duplicate jobs")
+    known = set(keys)
+    for job in jobs:
+        unknown = set(job.needs) - known
+        if unknown:
+            raise ReleaseLockError(f"job {job.key!r} needs unknown jobs {sorted(unknown)!r}")
+    return tuple(jobs)
+
+
+def graph_digest(source: str) -> str:
+    jobs = parse_graph(source)
+    payload = [
+        {
+            "job": job.key,
+            "name": job.name,
+            "needs": list(job.needs),
+            "uses": job.uses,
+            "steps": [
+                {"name": step.name, "run": step.run, "uses": step.uses}
+                for step in job.steps
+            ],
+        }
+        for job in jobs
+    ]
+    return _digest(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
+
+
 def _segments(body: str) -> list[list[str]]:
     if "<<" in body or "`" in body or "$(" in body:
         raise ReleaseLockError("Cargo-bearing shell uses unsupported expansion or heredoc")
@@ -311,34 +428,80 @@ def _cargo_subcommand(arguments: list[str]) -> tuple[str, int]:
     raise ReleaseLockError("Cargo invocation has no subcommand")
 
 
+def _without_heredocs(body: str) -> str:
+    """Remove literal heredoc payloads while preserving their shell command line."""
+    result: list[str] = []
+    delimiter: str | None = None
+    for line in body.splitlines():
+        if delimiter is not None:
+            if line == delimiter:
+                delimiter = None
+            continue
+        match = re.search(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*$", line)
+        if match is not None:
+            delimiter = match.group(2)
+            result.append(line[: match.start()].rstrip())
+        else:
+            result.append(line)
+    if delimiter is not None:
+        raise ReleaseLockError("unterminated shell heredoc")
+    return "\n".join(result)
+
+
 def find_invocations(body: str, line: int = 1) -> list[Invocation]:
-    """Parse simple Cargo-bearing shell; ambiguous executable indirection rejects."""
+    """Scan one run body; reject Cargo wrappers and executable indirection."""
+    shell = _without_heredocs(body)
+    candidate = re.compile(r"(?<![A-Za-z0-9_.-])(?:cargo(?:-[A-Za-z0-9_-]+)?|cross)(?![A-Za-z0-9_.-])", re.I)
+    if candidate.search(shell) is None and not re.search(
+        r"(?:^|[;&|]\s*)(?:source|\.)\s+", shell, re.M
+    ):
+        return []
+
     invocations: list[Invocation] = []
-    for words in _segments(body):
+    for original_words in _segments(shell):
+        words = list(original_words)
         if not words:
             continue
+        segment_has_candidate = any(candidate.search(word) for word in words)
+        if words[0] in {"source", "."}:
+            raise ReleaseLockError("source and dot commands are forbidden in release runs")
         if words[0] in {"alias", "function"} or any(word in {"alias", "function"} for word in words):
-            raise ReleaseLockError("shell aliases and functions are forbidden in Cargo-bearing runs")
+            if segment_has_candidate:
+                raise ReleaseLockError("shell aliases and functions are forbidden in Cargo-bearing runs")
+            continue
         assignments = []
         while words and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]):
             assignments.append(words.pop(0))
-        if assignments:
-            if any(re.search(r"cargo|cross", item, re.IGNORECASE) for item in assignments) or not words:
-                raise ReleaseLockError("shell assignment may not define or hide a release executable")
+        if assignments and (
+            any(candidate.search(item) for item in assignments) or not words
+        ):
+            raise ReleaseLockError("shell assignment may not define or hide a release executable")
         if not words:
             continue
-        if words[0] == "command":
-            words = words[1:]
-            if not words:
-                raise ReleaseLockError("command wrapper has no executable")
         executable = words[0]
-        if executable.startswith("$") or executable.startswith("${"):
-            raise ReleaseLockError("variable-selected release executables are forbidden")
         basename = PurePosixPath(executable.replace("\\", "/")).name
-        if basename == "cargo-cyclonedx":
-            raise ReleaseLockError("direct cargo-cyclonedx execution is forbidden")
-        if basename not in {"cargo", "cross"}:
+        if basename in {"env", "eval", "exec", "time", "command"}:
+            if segment_has_candidate:
+                raise ReleaseLockError(f"{basename} may not wrap a Cargo release executable")
             continue
+        if basename in {"sh", "bash"} and "-c" in words[1:]:
+            if segment_has_candidate:
+                raise ReleaseLockError(f"{basename} -c may not hide a Cargo release executable")
+            continue
+        if executable.startswith("$") or executable.startswith("${"):
+            if segment_has_candidate:
+                raise ReleaseLockError("variable-selected release executables are forbidden")
+            continue
+        if basename.startswith("cargo-"):
+            raise ReleaseLockError("direct Cargo plugin execution is forbidden")
+        if basename not in {"cargo", "cross"}:
+            if segment_has_candidate:
+                raise ReleaseLockError(
+                    f"Cargo release executable is indirect behind {executable!r}"
+                )
+            continue
+        if executable != basename:
+            raise ReleaseLockError(f"path-qualified {basename} execution is forbidden")
         subcommand, _ = _cargo_subcommand(words[1:])
         if subcommand == "cyclonedx":
             raise ReleaseLockError("direct Cargo cyclonedx plugin execution is forbidden")
@@ -370,62 +533,137 @@ def _script_command(body: str, script: str) -> tuple[str, ...]:
     raise ReleaseLockError(f"missing exact local command for {script}")
 
 
-def _check_governed_files(root: Path) -> None:
-    for relative, expected in GOVERNED_FILE_SHA256.items():
-        path = root / relative
+def _read_regular_nofollow(path: Path, label: str) -> bytes:
+    try:
+        metadata = os.lstat(path)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ReleaseLockError(f"{label} is missing or unsafe: {path}")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
         try:
-            if not path.is_file() or path.is_symlink():
-                raise ReleaseLockError(f"governed release file is missing or unsafe: {relative}")
-            actual = _digest(path.read_bytes())
-        except OSError as error:
-            raise ReleaseLockError(f"cannot read governed release file {relative}: {error}") from error
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise ReleaseLockError(f"{label} is not a regular file: {path}")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                return stream.read()
+        finally:
+            os.close(descriptor)
+    except ReleaseLockError:
+        raise
+    except OSError as error:
+        raise ReleaseLockError(f"cannot read {label} {path}: {error}") from error
+
+
+def _check_governed_files(root: Path) -> None:
+    governed = set(GOVERNED_FILE_SHA256)
+    graph_files = set(TRANSITIVE_LOCAL_GRAPH)
+    graph_files.update(path for targets in TRANSITIVE_LOCAL_GRAPH.values() for path in targets)
+    if not graph_files <= governed:
+        raise ReleaseLockError(
+            f"transitive local graph contains uncommitted files: {sorted(graph_files - governed)}"
+        )
+    for relative, expected in GOVERNED_FILE_SHA256.items():
+        path = root.joinpath(*PurePosixPath(relative).parts)
+        actual = _digest(_read_regular_nofollow(path, "governed release file"))
         if actual != expected:
             raise ReleaseLockError(
                 f"governed release file content drifted: {relative} ({actual})"
             )
 
 
-def check(
-    workflow: Path, sbom_runner: Path | None = None, repo_root: Path | None = None
+def _check_graph_security(source: str, jobs: tuple[Job, ...]) -> None:
+    by_key = {job.key: job for job in jobs}
+    metadata = by_key.get("metadata")
+    if metadata is None or metadata.needs:
+        raise ReleaseLockError("metadata must be the root release identity gate")
+    gate = next(
+        (step for step in metadata.steps if step.name == "Bind executing workflow to checked-out release commit"),
+        None,
+    )
+    if gate is None or gate.run is None:
+        raise ReleaseLockError("immutable executing-workflow identity gate is missing")
+    binding = "EXECUTING_WORKFLOW_SHA: ${{ github.workflow_sha }}"
+    if source.count(binding) != 1:
+        raise ReleaseLockError("workflow identity gate must consume exact github.workflow_sha")
+    if "test \"$EXECUTING_WORKFLOW_SHA\" = \"$checked_out_sha\"" not in gate.run:
+        raise ReleaseLockError("workflow identity gate does not compare workflow SHA to checkout HEAD")
+
+    def reaches_metadata(key: str, visiting: set[str]) -> bool:
+        if key == "metadata":
+            return True
+        if key in visiting:
+            raise ReleaseLockError(f"dependency cycle reaches {key!r}")
+        return any(
+            reaches_metadata(parent, visiting | {key})
+            for parent in by_key[key].needs
+        )
+
+    for job in jobs:
+        if job.key != "metadata" and not reaches_metadata(job.key, set()):
+            raise ReleaseLockError(
+                f"artifact-capable job {job.key!r} does not depend on metadata identity gate"
+            )
+        if job.uses is not None and job.uses.startswith(("./", "../")):
+            raise ReleaseLockError(f"local job-level reusable workflow is forbidden: {job.uses}")
+        uses_values = [step.uses for step in job.steps if step.uses is not None]
+        if job.uses is not None:
+            uses_values.append(job.uses)
+        for uses in uses_values:
+            if uses.startswith(("./", "../")):
+                raise ReleaseLockError(f"ungoverned local action/workflow is forbidden: {uses}")
+            if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/.+)?@[0-9a-f]{40}", uses) is None:
+                raise ReleaseLockError(f"remote action/workflow is not immutable: {uses}")
+
+
+def check_source(
+    source: str,
+    *,
+    repo_root: Path,
+    sbom_runner: Path | None = None,
+    expected_workflow_sha256: str = EXPECTED_WORKFLOW_SHA256,
+    expected_graph_sha256: str = EXPECTED_GRAPH_SHA256,
 ) -> list[Invocation]:
     try:
-        raw = workflow.read_bytes()
-        source = raw.decode("utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        raise ReleaseLockError(f"cannot read UTF-8 workflow {workflow}: {error}") from error
-    steps = parse_workflow(source)
+        raw = source.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ReleaseLockError(f"workflow is not UTF-8: {error}") from error
+    jobs = parse_graph(source)
+    steps = [step for job in jobs for step in job.steps]
     by_identity = {(step.job, step.name): step for step in steps}
+    _check_graph_security(source, jobs)
 
-    # Inventory local scripts semantically from actual run bodies before checking
-    # the whole-workflow commitment, so unsupported additions get a precise error.
     actual_direct: dict[tuple[str, str], set[str]] = {}
+    scanned: list[Invocation] = []
     for step in steps:
         if step.run is None:
-            if step.uses is not None and step.uses.startswith(("./", "../")):
-                raise ReleaseLockError(f"ungoverned local action in {step.job}/{step.name}: {step.uses}")
             continue
         scripts = {path.removeprefix("./") for path in LOCAL_EXECUTABLE.findall(step.run)}
         if scripts:
             actual_direct[(step.job, step.name)] = scripts
+        scanned.extend(find_invocations(step.run, step.line))
     if actual_direct != DIRECT_LOCAL_SCRIPTS:
         raise ReleaseLockError(
             f"local release script graph drifted; expected={DIRECT_LOCAL_SCRIPTS!r}, actual={actual_direct!r}"
         )
 
     actual_workflow_hash = _digest(raw)
-    if actual_workflow_hash != EXPECTED_WORKFLOW_SHA256:
+    if actual_workflow_hash != expected_workflow_sha256:
         raise ReleaseLockError(
-            "release workflow is outside the exact reviewed command graph "
-            f"({actual_workflow_hash}); review semantics and update the commitment"
+            "release workflow is outside the exact reviewed source identity "
+            f"({actual_workflow_hash}); checker plus commitments are the review trust root"
+        )
+    actual_graph_hash = graph_digest(source)
+    if actual_graph_hash != expected_graph_sha256:
+        raise ReleaseLockError(
+            f"release job/step graph is outside the reviewed closed manifest ({actual_graph_hash})"
         )
 
-    root = repo_root or Path(__file__).resolve().parents[1]
+    root = repo_root.resolve(strict=True)
     if sbom_runner is not None:
-        expected_runner = root / "scripts/run-release-locked-sbom.py"
-        if sbom_runner.resolve() != expected_runner.resolve():
-            runner_hash = _digest(sbom_runner.read_bytes())
-            if runner_hash != GOVERNED_FILE_SHA256["scripts/run-release-locked-sbom.py"]:
-                raise ReleaseLockError("SBOM runner is outside the governed content contract")
+        runner_hash = _digest(_read_regular_nofollow(sbom_runner, "SBOM runner"))
+        if runner_hash != GOVERNED_FILE_SHA256["scripts/run-release-locked-sbom.py"]:
+            raise ReleaseLockError("SBOM runner is outside the governed content contract")
     _check_governed_files(root)
 
     invocations: list[Invocation] = []
@@ -454,7 +692,29 @@ def check(
     invocations.append(
         Invocation(sbom.line, "cargo", "metadata", "cargo metadata --locked (exact governed cargo-cyclonedx shim)")
     )
+    if [(item.tool, item.subcommand, item.command) for item in scanned] != [
+        (item.tool, item.subcommand, item.command) for item in invocations[:-1]
+    ]:
+        raise ReleaseLockError("whole-workflow Cargo scan differs from exact five-invocation model")
     return invocations
+
+
+def check(
+    workflow: Path, sbom_runner: Path | None = None, repo_root: Path | None = None
+) -> list[Invocation]:
+    root = (repo_root or Path(__file__).resolve().parents[1]).resolve(strict=True)
+    canonical = root / ".github/workflows/release.yml"
+    candidate = Path(os.path.abspath(workflow))
+    if candidate != canonical:
+        raise ReleaseLockError(
+            f"checker is bound to canonical repository workflow {canonical}, got {candidate}"
+        )
+    raw = _read_regular_nofollow(candidate, "canonical release workflow")
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ReleaseLockError(f"cannot read UTF-8 workflow {candidate}: {error}") from error
+    return check_source(source, repo_root=root, sbom_runner=sbom_runner)
 
 
 def main() -> int:
