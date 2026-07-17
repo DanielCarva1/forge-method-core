@@ -83,7 +83,8 @@ backup_manifest_contract:
       source: exact archived index/effect-targets.ndjson bytes read while effect-index and effect-WAL locks plus producer quiescence remain retained
       binding: sorted operation_id, effect_id, exact file-backed target kind, exact caller logical_ref, exact shipped physical_ref spelling, canonical encoded state-relative archive identity, access_mode, content SHA-256, byte length, exact source-frame SHA-256, and exact archive-entry material/SHA-256/length
       physical_identity_closure: duplicate live normalized physical identities reject across generic and typed target keys even if operation/effect identities differ
-      reserved_internal_families: never omit a live generic file_path; an exact existing typed member inherits that exact BackupEntryKind and bytes, while narrowly source-derived custom paths and textual family-root files use DeclaredEffectOutput
+      declared_fallback_namespace: only canonical state-relative custom/** descendants; the exact custom root, lookalike components, and arbitrary wal/index/domain-pack/runtime paths are forbidden unless an independently typed exact occupant supplies a non-Declared material
+      reserved_internal_families: never omit a live generic file_path; reserved descendants resolve to their exact typed material before occupants, an independently typed exact occupant outside those families may inherit only that non-Declared material, and textual family-root files use DeclaredEffectOutput
       family_roots: textual allowed-prefix spellings ending in '/.' or repeated separators normalize to a representable family-root file; a family-root file cannot coexist with descendants in one archive
       resolver_mirror:
         crate_cycle: forbidden; the wire-compatible mirror remains in forge-core-contracts because forge-core-store depends on it
@@ -108,7 +109,7 @@ backup_manifest_contract:
         - validate every historical frame before source-order latest/delete replacement keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
         - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref, require exact spelling equality, then normalize and canonical-encode components without rejecting representable Linux names
         - omit only repository FilePath records outside the state root; every live state-root output enters closure, duplicate normalized physical identities reject, and outputs sort by canonical state-relative identity
-        - map each live identity to an exact existing typed material when present; otherwise admit only the narrow DeclaredEffectOutput projection, including custom and family-root files; exclusions remain exact and exclusion-first
+        - map reserved descendants to exact typed material before occupants; otherwise inherit only an independently typed exact non-Declared occupant, or admit DeclaredEffectOutput solely for canonical custom/** descendants and textual family-root files; exclusions remain exact and exclusion-first
         - compare the complete derived projection, including physical_ref and raw frame digest, with declared_effect_outputs; cross-bind target kind, logical/physical identity, access mode, hash, length, material, and exact entry bytes
         - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
   domain_pack_external_provisioning:
