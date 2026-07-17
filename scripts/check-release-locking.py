@@ -65,8 +65,8 @@ SBOM_WRAPPER_ARGV = (
 # self-hashed. Imported/transitively executed support and fixture files are
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
-    "scripts/run-release-locked-sbom.py": "5d844acb42ad5c407081a5240700b9a6e725004f0114559e285db9b20d16f811",
-    "scripts/test-release-locking.py": "534a73187b38ddccd578ababa2c7e5daf943713b6a1588bafe9787f708fe9b39",
+    "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
+    "scripts/test-release-locking.py": "af69674afb3b847554815fb7d8eee0d47f418578a8a5f7fe6cda4b691165daca",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
@@ -249,10 +249,19 @@ def workflow_semantic_manifest(source: str) -> dict[str, object]:
     return {"format": "forge-release-workflow-semantic-manifest-v1", "entries": entries}
 
 
-def _check_full_semantic_manifest(source: str, root: Path) -> None:
-    path = root.joinpath(*PurePosixPath(SEMANTIC_MANIFEST).parts)
+def _check_full_semantic_manifest(source: str, root_fd: int) -> None:
+    manifest_bytes = _read_relative_regular(
+        root_fd, SEMANTIC_MANIFEST, "release semantic manifest"
+    )
+    actual_hash = _digest(manifest_bytes)
+    expected_hash = GOVERNED_FILE_SHA256[SEMANTIC_MANIFEST]
+    if actual_hash != expected_hash:
+        raise ReleaseLockError(
+            f"immutable release semantic manifest drifted ({actual_hash})"
+        )
     try:
-        expected = json.loads(_read_regular_nofollow(path, "release semantic manifest"))
+        # The bytes authenticated above are the only bytes parsed and used.
+        expected = json.loads(manifest_bytes)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ReleaseLockError(f"invalid immutable release semantic manifest: {error}") from error
     actual = workflow_semantic_manifest(source)
@@ -677,29 +686,103 @@ def _script_command(body: str, script: str) -> tuple[str, ...]:
     raise ReleaseLockError(f"missing exact local command for {script}")
 
 
-def _read_regular_nofollow(path: Path, label: str) -> bytes:
+def _require_descriptor_primitives() -> None:
+    if not hasattr(os, "O_NOFOLLOW") or not Path("/proc/self/fd").is_dir():
+        raise ReleaseLockError(
+            "release governance requires Linux O_NOFOLLOW and /proc/self/fd"
+        )
+
+
+def _open_absolute_directory(path: Path, label: str) -> int:
+    """Bind an absolute directory through no-follow opens of every component."""
+    _require_descriptor_primitives()
+    absolute = Path(os.path.abspath(path))
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        metadata = os.lstat(path)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise ReleaseLockError(f"{label} is missing or unsafe: {path}")
-        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        descriptor = os.open(path, flags)
-        try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-                raise ReleaseLockError(f"{label} is not a regular file: {path}")
-            with os.fdopen(descriptor, "rb", closefd=False) as stream:
-                return stream.read()
-        finally:
+        for part in absolute.parts[1:]:
+            if part in {"", ".", ".."}:
+                raise ReleaseLockError(f"{label} has an unsafe path component: {absolute}")
+            next_fd = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor
+            )
             os.close(descriptor)
+            descriptor = next_fd
+        return descriptor
+    except BaseException as error:
+        os.close(descriptor)
+        if isinstance(error, ReleaseLockError):
+            raise
+        if isinstance(error, OSError):
+            raise ReleaseLockError(
+                f"cannot bind {label} without following symlinks: {absolute}: {error}"
+            ) from error
+        raise
+
+
+def _relative_parts(relative: str) -> tuple[str, ...]:
+    pure = PurePosixPath(relative)
+    if pure.is_absolute() or not pure.parts or any(
+        part in {"", ".", ".."} for part in pure.parts
+    ):
+        raise ReleaseLockError(f"unsafe governed relative path: {relative!r}")
+    return pure.parts
+
+
+def _read_relative_regular(root_fd: int, relative: str, label: str) -> bytes:
+    """Read one leaf through retained no-follow parent descriptors and bind identity."""
+    parts = _relative_parts(relative)
+    parent_fd = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            next_fd = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd
+            )
+            os.close(parent_fd)
+            parent_fd = next_fd
+        fd = os.open(
+            parts[-1],
+            os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_BINARY", 0),
+            dir_fd=parent_fd,
+        )
+        try:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                raise ReleaseLockError(f"{label} is not a safe regular file: {relative}")
+            chunks: list[bytes] = []
+            while chunk := os.read(fd, 1024 * 1024):
+                chunks.append(chunk)
+            after = os.fstat(fd)
+            before_identity = (
+                before.st_dev, before.st_ino, before.st_mode, before.st_nlink,
+                before.st_size, before.st_mtime_ns, before.st_ctime_ns,
+            )
+            after_identity = (
+                after.st_dev, after.st_ino, after.st_mode, after.st_nlink,
+                after.st_size, after.st_mtime_ns, after.st_ctime_ns,
+            )
+            if before_identity != after_identity:
+                raise ReleaseLockError(f"{label} changed while read: {relative}")
+            return b"".join(chunks)
+        finally:
+            os.close(fd)
     except ReleaseLockError:
         raise
     except OSError as error:
-        raise ReleaseLockError(f"cannot read {label} {path}: {error}") from error
+        raise ReleaseLockError(f"cannot read {label} {relative}: {error}") from error
+    finally:
+        os.close(parent_fd)
 
 
-def _check_governed_files(root: Path) -> None:
+def _read_absolute_regular(path: Path, label: str) -> bytes:
+    absolute = Path(os.path.abspath(path))
+    parent_fd = _open_absolute_directory(absolute.parent, f"{label} parent")
+    try:
+        return _read_relative_regular(parent_fd, absolute.name, label)
+    finally:
+        os.close(parent_fd)
+
+
+def _check_governed_files(root_fd: int) -> None:
     governed = set(GOVERNED_FILE_SHA256)
     graph_files = set(TRANSITIVE_LOCAL_GRAPH)
     graph_files.update(path for targets in TRANSITIVE_LOCAL_GRAPH.values() for path in targets)
@@ -708,8 +791,11 @@ def _check_governed_files(root: Path) -> None:
             f"transitive local graph contains uncommitted files: {sorted(graph_files - governed)}"
         )
     for relative, expected in GOVERNED_FILE_SHA256.items():
-        path = root.joinpath(*PurePosixPath(relative).parts)
-        actual = _digest(_read_regular_nofollow(path, "governed release file"))
+        # The semantic manifest was already authenticated and consumed from one
+        # descriptor read; never reopen it as a later authorization decision.
+        if relative == SEMANTIC_MANIFEST:
+            continue
+        actual = _digest(_read_relative_regular(root_fd, relative, "governed release file"))
         if actual != expected:
             raise ReleaseLockError(
                 f"governed release file content drifted: {relative} ({actual})"
@@ -775,20 +861,26 @@ def _check_graph_security(source: str, jobs: tuple[Job, ...]) -> None:
                 raise ReleaseLockError(f"remote action/workflow is not immutable: {uses}")
 
 
-def check_source(
+def _check_source_bound(
     source: str,
     *,
-    repo_root: Path,
-    sbom_runner: Path | None = None,
-    expected_workflow_sha256: str = EXPECTED_WORKFLOW_SHA256,
-    expected_graph_sha256: str = EXPECTED_GRAPH_SHA256,
+    root_fd: int,
+    sbom_runner: Path | None,
+    expected_workflow_sha256: str,
+    expected_graph_sha256: str,
 ) -> list[Invocation]:
     try:
         raw = source.encode("utf-8")
     except UnicodeEncodeError as error:
         raise ReleaseLockError(f"workflow is not UTF-8: {error}") from error
-    root = repo_root.resolve(strict=True)
-    _check_full_semantic_manifest(source, root)
+    # Authenticate the exact candidate bytes before any YAML/shell parsing.
+    actual_workflow_hash = _digest(raw)
+    if actual_workflow_hash != expected_workflow_sha256:
+        raise ReleaseLockError(
+            "release workflow is outside the exact reviewed source identity "
+            f"({actual_workflow_hash}); checker plus commitments are the review trust root"
+        )
+    _check_full_semantic_manifest(source, root_fd)
     jobs = parse_graph(source)
     steps = [step for job in jobs for step in job.steps]
     by_identity = {(step.job, step.name): step for step in steps}
@@ -808,12 +900,6 @@ def check_source(
             f"local release script graph drifted; expected={DIRECT_LOCAL_SCRIPTS!r}, actual={actual_direct!r}"
         )
 
-    actual_workflow_hash = _digest(raw)
-    if actual_workflow_hash != expected_workflow_sha256:
-        raise ReleaseLockError(
-            "release workflow is outside the exact reviewed source identity "
-            f"({actual_workflow_hash}); checker plus commitments are the review trust root"
-        )
     actual_graph_hash = graph_digest(source)
     if actual_graph_hash != expected_graph_sha256:
         raise ReleaseLockError(
@@ -821,10 +907,10 @@ def check_source(
         )
 
     if sbom_runner is not None:
-        runner_hash = _digest(_read_regular_nofollow(sbom_runner, "SBOM runner"))
+        runner_hash = _digest(_read_absolute_regular(sbom_runner, "SBOM runner"))
         if runner_hash != GOVERNED_FILE_SHA256["scripts/run-release-locked-sbom.py"]:
             raise ReleaseLockError("SBOM runner is outside the governed content contract")
-    _check_governed_files(root)
+    _check_governed_files(root_fd)
 
     invocations: list[Invocation] = []
     for identity, expected_argv in EXPECTED_CARGO_STEPS.items():
@@ -859,22 +945,60 @@ def check_source(
     return invocations
 
 
+def check_source(
+    source: str,
+    *,
+    repo_root: Path,
+    sbom_runner: Path | None = None,
+    expected_workflow_sha256: str = EXPECTED_WORKFLOW_SHA256,
+    expected_graph_sha256: str = EXPECTED_GRAPH_SHA256,
+) -> list[Invocation]:
+    root_fd = _open_absolute_directory(repo_root, "canonical repository root")
+    try:
+        return _check_source_bound(
+            source, root_fd=root_fd, sbom_runner=sbom_runner,
+            expected_workflow_sha256=expected_workflow_sha256,
+            expected_graph_sha256=expected_graph_sha256,
+        )
+    finally:
+        os.close(root_fd)
+
+
 def check(
     workflow: Path, sbom_runner: Path | None = None, repo_root: Path | None = None
 ) -> list[Invocation]:
-    root = (repo_root or Path(__file__).resolve().parents[1]).resolve(strict=True)
+    root = Path(os.path.abspath(
+        repo_root or Path(os.path.abspath(__file__)).parents[1]
+    ))
     canonical = root / ".github/workflows/release.yml"
     candidate = Path(os.path.abspath(workflow))
     if candidate != canonical:
         raise ReleaseLockError(
             f"checker is bound to canonical repository workflow {canonical}, got {candidate}"
         )
-    raw = _read_regular_nofollow(candidate, "canonical release workflow")
+    root_fd = _open_absolute_directory(root, "canonical repository root")
     try:
-        source = raw.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise ReleaseLockError(f"cannot read UTF-8 workflow {candidate}: {error}") from error
-    return check_source(source, repo_root=root, sbom_runner=sbom_runner)
+        raw = _read_relative_regular(
+            root_fd, ".github/workflows/release.yml", "canonical release workflow"
+        )
+        # Do not decode or otherwise consume canonical bytes until committed.
+        actual = _digest(raw)
+        if actual != EXPECTED_WORKFLOW_SHA256:
+            raise ReleaseLockError(
+                "release workflow is outside the exact reviewed source identity "
+                f"({actual}); checker plus commitments are the review trust root"
+            )
+        try:
+            source = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ReleaseLockError(f"cannot read UTF-8 workflow {candidate}: {error}") from error
+        return _check_source_bound(
+            source, root_fd=root_fd, sbom_runner=sbom_runner,
+            expected_workflow_sha256=EXPECTED_WORKFLOW_SHA256,
+            expected_graph_sha256=EXPECTED_GRAPH_SHA256,
+        )
+    finally:
+        os.close(root_fd)
 
 
 def main() -> int:

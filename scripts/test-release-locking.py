@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import importlib.util
 import os
 import shutil
@@ -12,6 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +32,29 @@ def load_checker():
 
 
 checker = load_checker()
+
+
+def load_runner():
+    path = ROOT / "scripts/run-release-locked-sbom.py"
+    spec = importlib.util.spec_from_file_location("forge_release_sbom_runner", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runner_module = load_runner()
+
+
+def commit_repository(repository: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Release Test", "-c", "user.email=release@example.invalid",
+         "commit", "-qm", "fixture"],
+        cwd=repository, check=True,
+    )
 
 
 def release_cargo() -> str | None:
@@ -70,6 +95,13 @@ class ReleaseLockingTests(unittest.TestCase):
         source = WORKFLOW.read_text(encoding="utf-8")
         self.assertEqual(source.count(old), 1, old)
         return source.replace(old, new, 1)
+
+    def copy_governed(self, root: Path) -> None:
+        for relative in checker.GOVERNED_FILE_SHA256:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, destination)
+
 
     def test_real_release_topology_is_exact_and_locked(self) -> None:
         invocations = checker.check(WORKFLOW)
@@ -371,13 +403,93 @@ cross build \\
             with self.assertRaisesRegex(checker.ReleaseLockError, "forge.cmd"):
                 checker.check_source(source, repo_root=root)
 
+
+    def test_manifest_parent_swap_restore_rejects_authorized_semantics(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        mutations = [
+            source.replace(
+                "env:\n  CARGO_INCREMENTAL",
+                "env:\n  PATH: ${{ github.workspace }}/tool-bin:${{ env.PATH }}\n  CARGO_INCREMENTAL",
+                1,
+            ),
+            source.replace(
+                "  build:\n    name: Build ${{ matrix.target }}",
+                "  build:\n    name: Build ${{ matrix.target }}\n    if: always()",
+                1,
+            ),
+        ]
+        for mutated in mutations:
+            with self.subTest(mutation=hashlib.sha256(mutated.encode()).hexdigest()):
+                with tempfile.TemporaryDirectory() as directory:
+                    base = Path(directory)
+                    root = base / "repository"
+                    self.copy_governed(root)
+                    parent = root / "contracts/fixtures/release-lock"
+                    retained = parent.with_name("release-lock.retained")
+                    outside = base / "outside-release-lock"
+                    outside.mkdir()
+                    (outside / "workflow-semantic-manifest.json").write_text(
+                        json.dumps(checker.workflow_semantic_manifest(mutated)),
+                        encoding="utf-8",
+                    )
+                    parent.rename(retained)
+                    parent.symlink_to(outside, target_is_directory=True)
+                    try:
+                        with self.assertRaisesRegex(
+                            checker.ReleaseLockError, "cannot read release semantic manifest"
+                        ):
+                            checker.check_source(
+                                mutated, repo_root=root,
+                                expected_workflow_sha256=hashlib.sha256(mutated.encode()).hexdigest(),
+                                expected_graph_sha256=checker.graph_digest(mutated),
+                            )
+                    finally:
+                        parent.unlink()
+                        retained.rename(parent)
+                    self.assertTrue(parent.is_dir())
+                    self.assertFalse(parent.is_symlink())
+
+    def test_governed_parent_symlink_and_hardlink_are_rejected(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "repository"
+            self.copy_governed(root)
+            scripts = root / "scripts"
+            retained = root / "scripts.retained"
+            scripts.rename(retained)
+            scripts.symlink_to(retained, target_is_directory=True)
+            try:
+                with self.assertRaises((checker.ReleaseLockError, OSError)):
+                    checker.check_source(source, repo_root=root)
+            finally:
+                scripts.unlink()
+                retained.rename(scripts)
+            linked = root / "forge-hardlink"
+            os.link(root / "distribution/forge.cmd", linked)
+            with self.assertRaisesRegex(checker.ReleaseLockError, "safe regular file"):
+                checker.check_source(source, repo_root=root)
+
+    def test_canonical_workflow_parent_symlink_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "repository"
+            outside = base / "outside-workflows"
+            outside.mkdir()
+            shutil.copy2(WORKFLOW, outside / "release.yml")
+            (root / ".github").mkdir(parents=True)
+            (root / ".github/workflows").symlink_to(outside, target_is_directory=True)
+            with self.assertRaises(checker.ReleaseLockError):
+                checker.check(root / ".github/workflows/release.yml", repo_root=root)
+
+
     def test_canonical_workflow_symlink_is_rejected_before_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             workflow = root / ".github/workflows/release.yml"
             workflow.parent.mkdir(parents=True)
             workflow.symlink_to(WORKFLOW)
-            with self.assertRaisesRegex(checker.ReleaseLockError, "unsafe"):
+            with self.assertRaisesRegex(checker.ReleaseLockError, "cannot read|unsafe"):
                 checker.check(workflow, repo_root=root)
 
     def test_sbom_lockfile_symlink_and_outside_repository_are_rejected(self) -> None:
@@ -390,7 +502,7 @@ cross build \\
                 cwd=ROOT, text=True, capture_output=True, check=False, timeout=10,
             )
             self.assertNotEqual(linked.returncode, 0)
-            self.assertIn("missing or unsafe", linked.stderr)
+            self.assertIn("symbolic links", linked.stderr)
         with tempfile.TemporaryDirectory() as directory:
             outside = Path(directory) / "Cargo.lock"
             outside.write_bytes((ROOT / "Cargo.lock").read_bytes())
@@ -411,6 +523,7 @@ cross build \\
             shutil.copy2(production_runner, runner)
             fixture = repository / "fixture"
             shutil.copytree(FIXTURE, fixture)
+            commit_repository(repository)
             lockfile = fixture / "Cargo.lock"
             outside = root / "outside.lock"
             outside.write_bytes(lockfile.read_bytes())
@@ -463,9 +576,183 @@ cross build \\
                 timeout=30,
             )
             self.assertNotEqual(completed.returncode, 0, completed.stdout)
-            self.assertIn("during SBOM generation", completed.stderr)
+            self.assertRegex(
+                completed.stderr, "path was replaced|symbolic links|safe unlinked regular file"
+            )
             self.assertEqual(list(fixture.rglob("*.cdx.json")), [])
 
+    def test_immutable_head_symlink_lock_is_rejected_without_outside_write(self) -> None:
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir(parents=True)
+            shutil.copy2(production_runner, runner)
+            fixture = repository / "fixture"
+            shutil.copytree(FIXTURE, fixture)
+            lock = fixture / "Cargo.lock"
+            lock_bytes = lock.read_bytes()
+            outside = base / "outside.lock"
+            outside.write_bytes(b"OUTSIDE-UNCHANGED\n")
+            lock.unlink()
+            lock.symlink_to(outside)
+            commit_repository(repository)
+            lock.unlink()
+            lock.write_bytes(lock_bytes)
+            fake_bin = base / "bin"
+            fake_bin.mkdir()
+            for name in ("cargo", "cargo-cyclonedx"):
+                tool = fake_bin / name
+                tool.write_text(f"#!{sys.executable}\nraise SystemExit(0)\n", encoding="utf-8")
+                tool.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(lock), "--", "--format", "json",
+                 "--manifest-path", str(fixture / "Cargo.toml"), "--override-filename", "symlink.cdx"],
+                cwd=fixture, env=environment, text=True, capture_output=True, check=False, timeout=30,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("non-symlink blob", completed.stderr)
+            self.assertEqual(outside.read_bytes(), b"OUTSIDE-UNCHANGED\n")
+            self.assertEqual(list(repository.rglob("*.cdx.json")), [])
+
+    def test_initial_hardlinked_cargo_lock_is_rejected(self) -> None:
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir(parents=True)
+            shutil.copy2(production_runner, runner)
+            fixture = repository / "fixture"
+            shutil.copytree(FIXTURE, fixture)
+            commit_repository(repository)
+            os.link(fixture / "Cargo.lock", base / "attacker-hardlink.lock")
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(fixture / "Cargo.lock"), "--",
+                 "--format", "json", "--manifest-path", str(fixture / "Cargo.toml"),
+                 "--override-filename", "hardlink.cdx"],
+                cwd=fixture, text=True, capture_output=True, check=False, timeout=10,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("safe unlinked regular file", completed.stderr)
+            self.assertEqual(list(repository.rglob("*.cdx.json")), [])
+
+    def test_source_parent_swap_restore_cannot_substitute_staged_lock(self) -> None:
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir(parents=True)
+            shutil.copy2(production_runner, runner)
+            fixture = repository / "fixture"
+            shutil.copytree(FIXTURE, fixture)
+            committed_lock = (fixture / "Cargo.lock").read_bytes()
+            commit_repository(repository)
+            fake_bin = base / "bin"
+            fake_bin.mkdir()
+            cargo = fake_bin / "cargo"
+            cargo.write_text(f"#!{sys.executable}\nraise SystemExit(0)\n", encoding="utf-8")
+            cargo.chmod(0o755)
+            plugin = fake_bin / "cargo-cyclonedx"
+            plugin.write_text(
+                f"#!{sys.executable}\n"
+                "import os,pathlib,shutil,sys\n"
+                "source=pathlib.Path(os.environ['SOURCE_PARENT'])\n"
+                "retained=source.with_name(source.name+'.retained')\n"
+                "source.rename(retained)\n"
+                "source.mkdir()\n"
+                "try:\n"
+                " (source/'Cargo.lock').write_bytes(b'ATTACKER-LOCK\\n')\n"
+                " args=sys.argv[1:]\n"
+                " manifest=pathlib.Path(args[args.index('--manifest-path')+1])\n"
+                " name=args[args.index('--override-filename')+1]+'.json'\n"
+                " (manifest.parent/name).write_bytes((manifest.parent/'Cargo.lock').read_bytes())\n"
+                "finally:\n"
+                " shutil.rmtree(source)\n"
+                " retained.rename(source)\n",
+                encoding="utf-8",
+            )
+            plugin.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+            environment["SOURCE_PARENT"] = str(fixture)
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(fixture / "Cargo.lock"), "--",
+                 "--format", "json", "--manifest-path", str(fixture / "Cargo.toml"),
+                 "--override-filename", "bound.cdx"],
+                cwd=fixture, env=environment, text=True, capture_output=True, check=False, timeout=30,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual((fixture / "bound.cdx.json").read_bytes(), committed_lock)
+            self.assertEqual((fixture / "Cargo.lock").read_bytes(), committed_lock)
+
+    def test_output_parent_symlink_race_writes_neither_outside_nor_output(self) -> None:
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            repository = base / "repository"
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir(parents=True)
+            shutil.copy2(production_runner, runner)
+            fixture = repository / "fixture"
+            shutil.copytree(FIXTURE, fixture)
+            shutil.copy2(fixture / "Cargo.lock", repository / "Cargo.lock")
+            commit_repository(repository)
+            outside = base / "outside"
+            outside.mkdir()
+            retained = repository / "fixture.retained"
+            fake_bin = base / "bin"
+            fake_bin.mkdir()
+            cargo = fake_bin / "cargo"
+            cargo.write_text(f"#!{sys.executable}\nraise SystemExit(0)\n", encoding="utf-8")
+            cargo.chmod(0o755)
+            plugin = fake_bin / "cargo-cyclonedx"
+            plugin.write_text(
+                f"#!{sys.executable}\n"
+                "import os,pathlib,sys\n"
+                "source=pathlib.Path(os.environ['SOURCE_PARENT'])\n"
+                "source.rename(pathlib.Path(os.environ['RETAINED_PARENT']))\n"
+                "source.symlink_to(pathlib.Path(os.environ['OUTSIDE_PARENT']), target_is_directory=True)\n"
+                "args=sys.argv[1:]\n"
+                "manifest=pathlib.Path(args[args.index('--manifest-path')+1])\n"
+                "name=args[args.index('--override-filename')+1]+'.json'\n"
+                "(manifest.parent/name).write_bytes(b'STAGED')\n",
+                encoding="utf-8",
+            )
+            plugin.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+            environment["SOURCE_PARENT"] = str(fixture)
+            environment["RETAINED_PARENT"] = str(retained)
+            environment["OUTSIDE_PARENT"] = str(outside)
+            completed = subprocess.run(
+                [sys.executable, str(runner), "--lockfile", str(repository / "Cargo.lock"), "--",
+                 "--format", "json", "--manifest-path", str(fixture / "Cargo.toml"),
+                 "--override-filename", "escaped.cdx"],
+                cwd=fixture, env=environment, text=True, capture_output=True, check=False, timeout=30,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("destination parent", completed.stderr)
+            self.assertEqual(list(outside.iterdir()), [])
+            self.assertEqual(list(retained.rglob("*.cdx.json")), [])
+            fixture.unlink()
+            retained.rename(fixture)
+
+    def test_atomic_replace_failure_cleans_temporary_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory)
+            fd = os.open(destination, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                with mock.patch.object(runner_module.os, "replace", side_effect=OSError("injected")):
+                    with self.assertRaises(OSError):
+                        runner_module._publish_output(fd, "result.cdx.json", b"SBOM", lambda: None)
+            finally:
+                os.close(fd)
+            self.assertEqual(list(destination.iterdir()), [])
     def test_sbom_runner_content_drift_is_rejected(self) -> None:
         runner = ROOT / "scripts/run-release-locked-sbom.py"
         source = runner.read_text(encoding="utf-8")
@@ -531,6 +818,7 @@ cross build \\
             shutil.copy2(production_runner, runner)
             root = repository / "fixture"
             shutil.copytree(FIXTURE, root)
+            commit_repository(repository)
             original_lock = (root / "Cargo.lock").read_bytes()
             completed = subprocess.run(
                 [sys.executable, str(runner), "--lockfile", str(root / "Cargo.lock"), "--", "--format", "json", "--manifest-path", str(root / "Cargo.toml"), "--override-filename", "stale-proof.cdx"],
