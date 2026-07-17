@@ -42,10 +42,11 @@ class Job(NamedTuple):
 
 
 # This checker has no permissive production mode. A workflow edit requires review
-# of both the byte commitment and the independent exact graph commitment. Changing
-# EXPECTED_WORKFLOW_SHA256 alone can never authorize a changed job/step graph.
+# of the byte commitment, complete semantic manifest, and independently modeled
+# graph edges. Authorizing candidate byte/graph digests cannot bypass the fixed
+# manifest governed below.
 EXPECTED_WORKFLOW_SHA256 = "aa7d30cbb4b54a992661c4683d4aa9ba618a1caad877a9dcdc2ef3eb6e52e654"
-EXPECTED_GRAPH_SHA256 = "29dec609a91b98068040b28fd3dc56b58be56450fa10394c1d8ca53a1adfaff4"
+EXPECTED_GRAPH_SHA256 = "a9647fae81a3ca378706fdfe226908eaf34d4ce41b85317096ee036e575dde4d"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
@@ -64,8 +65,8 @@ SBOM_WRAPPER_ARGV = (
 # self-hashed. Imported/transitively executed support and fixture files are
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
-    "scripts/run-release-locked-sbom.py": "1756eaa44d19988f49d70b5d1c99f2a873fef3707196ab7011010476c00452da",
-    "scripts/test-release-locking.py": "437ef4a54dcb0b95c2bdb47014ddf9e6e57fcaf419594d36299054590be133e1",
+    "scripts/run-release-locked-sbom.py": "5d844acb42ad5c407081a5240700b9a6e725004f0114559e285db9b20d16f811",
+    "scripts/test-release-locking.py": "534a73187b38ddccd578ababa2c7e5daf943713b6a1588bafe9787f708fe9b39",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
@@ -75,6 +76,7 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "4bf79afdf1fe16eee13b174337dd5b9d3d917142eb08e67f5c4b014f5b663eeb",
 }
 DIRECT_LOCAL_SCRIPTS = {
     ("metadata", "Test release lock enforcement"): {"scripts/test-release-locking.py"},
@@ -96,6 +98,7 @@ TRANSITIVE_LOCAL_GRAPH = {
         "contracts/fixtures/release-lock/manifest-drift/Cargo.toml",
         "contracts/fixtures/release-lock/manifest-drift/Cargo.lock",
         "contracts/fixtures/release-lock/manifest-drift/src/main.rs",
+        "contracts/fixtures/release-lock/workflow-semantic-manifest.json",
     },
     "scripts/test-release-archive.py": {
         "scripts/build-release-archive.py",
@@ -124,6 +127,142 @@ GLOBAL_FLAG_OPTIONS = {
     "--locked", "--offline", "--frozen", "--quiet", "--verbose", "-q", "-v",
     "--help", "--version", "--list",
 }
+
+
+SEMANTIC_MANIFEST = "contracts/fixtures/release-lock/workflow-semantic-manifest.json"
+PLAIN_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$")
+SEQUENCE_KEY = re.compile(r"^-\s+([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$")
+
+
+def _strip_yaml_comment(text: str) -> str:
+    """Strip a YAML comment without treating quoted # characters as comments."""
+    single = False
+    double = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "'" and not double:
+            if single and index + 1 < len(text) and text[index + 1] == "'":
+                index += 2
+                continue
+            single = not single
+        elif char == '"' and not single:
+            escaped = index > 0 and text[index - 1] == "\\"
+            if not escaped:
+                double = not double
+        elif char == "#" and not single and not double and (
+            index == 0 or text[index - 1].isspace()
+        ):
+            return text[:index].rstrip()
+        index += 1
+    return text.rstrip()
+
+
+def _validate_unambiguous_yaml(source: str) -> None:
+    """Reject duplicate mapping keys throughout the supported workflow YAML."""
+    if "\t" in source:
+        raise ReleaseLockError("release workflow may not contain tabs")
+    seen: dict[tuple[object, int], set[str]] = {}
+    active: dict[int, object] = {}
+    sequence_numbers: dict[tuple[object, int], int] = {}
+    block_indent: int | None = None
+
+    for number, raw in enumerate(source.splitlines(), 1):
+        indent = len(raw) - len(raw.lstrip(" "))
+        if block_indent is not None:
+            if not raw.strip() or indent > block_indent:
+                continue
+            block_indent = None
+        content = _strip_yaml_comment(raw[indent:])
+        if not content:
+            continue
+        if "<<:" in content or ANCHOR_OR_ALIAS.search(content):
+            raise ReleaseLockError(
+                f"workflow:{number}: YAML anchors, aliases, and merges are unsupported"
+            )
+        for level in [level for level in active if level >= indent]:
+            del active[level]
+        parent = active[max(active)] if active else ("document",)
+
+        sequence = SEQUENCE_KEY.fullmatch(content)
+        plain = PLAIN_KEY.fullmatch(content)
+        if sequence is not None:
+            counter_key = (parent, indent)
+            item_number = sequence_numbers.get(counter_key, 0) + 1
+            sequence_numbers[counter_key] = item_number
+            item = (parent, "item", indent, item_number)
+            active[indent] = item
+            mapping = (item, indent)
+            key, value = sequence.group(1), sequence.group(2) or ""
+        elif plain is not None:
+            mapping = (parent, indent)
+            key, value = plain.group(1), plain.group(2) or ""
+        elif content.startswith("-"):
+            # Scalar sequence entries have no keys but still establish unique items.
+            counter_key = (parent, indent)
+            item_number = sequence_numbers.get(counter_key, 0) + 1
+            sequence_numbers[counter_key] = item_number
+            active[indent] = (parent, "item", indent, item_number)
+            continue
+        else:
+            continue
+
+        keys = seen.setdefault(mapping, set())
+        if key in keys:
+            raise ReleaseLockError(f"workflow:{number}: duplicate YAML mapping key {key!r}")
+        keys.add(key)
+        stripped_value = value.strip()
+        if stripped_value.startswith("{") and stripped_value != "{}" and not stripped_value.startswith("${{"):
+            raise ReleaseLockError(
+                f"workflow:{number}: non-empty flow mappings are unsupported and ambiguous"
+            )
+        if stripped_value in {"|", "|-", "|+", ">", ">-", ">+"}:
+            block_indent = indent
+        elif not stripped_value:
+            active[indent] = (mapping, key)
+
+
+def workflow_semantic_manifest(source: str) -> dict[str, object]:
+    """Return the complete reviewed YAML/shell token manifest.
+
+    This is deliberately an exact closed shape, not a heuristic shell AST. Every
+    non-comment YAML token and every byte of block-scalar command bodies is part
+    of the immutable manifest.
+    """
+    _validate_unambiguous_yaml(source)
+    entries: list[str] = []
+    block_indent: int | None = None
+    for raw in source.splitlines():
+        indent = len(raw) - len(raw.lstrip(" "))
+        if block_indent is not None:
+            if not raw.strip() or indent > block_indent:
+                entries.append(raw)
+                continue
+            block_indent = None
+        semantic = _strip_yaml_comment(raw)
+        if not semantic.strip():
+            continue
+        entries.append(semantic)
+        value = semantic.strip()
+        if re.search(r":\s*[|>]([-+])?\s*$", value):
+            block_indent = indent
+    return {"format": "forge-release-workflow-semantic-manifest-v1", "entries": entries}
+
+
+def _check_full_semantic_manifest(source: str, root: Path) -> None:
+    path = root.joinpath(*PurePosixPath(SEMANTIC_MANIFEST).parts)
+    try:
+        expected = json.loads(_read_regular_nofollow(path, "release semantic manifest"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ReleaseLockError(f"invalid immutable release semantic manifest: {error}") from error
+    actual = workflow_semantic_manifest(source)
+    if actual != expected:
+        raise ReleaseLockError(
+            "release workflow semantics differ from the immutable full manifest; "
+            "all job, step, action-input, environment, runner, matrix, shell, "
+            "permission, output, container, service, concurrency, timeout, "
+            "default, condition, and checkout-ref fields are closed"
+        )
 
 
 def _digest(data: bytes) -> str:
@@ -199,6 +338,7 @@ def _block_value(
 
 def parse_workflow(source: str) -> list[Step]:
     """Parse the bounded GitHub workflow subset; reject YAML indirection."""
+    _validate_unambiguous_yaml(source)
     if "\t" in source:
         raise ReleaseLockError("release workflow may not contain tabs")
     lines = source.splitlines()
@@ -360,20 +500,24 @@ def parse_graph(source: str) -> tuple[Job, ...]:
 
 
 def graph_digest(source: str) -> str:
+    """Commit the complete workflow semantics plus the independently modeled edges."""
     jobs = parse_graph(source)
-    payload = [
-        {
-            "job": job.key,
-            "name": job.name,
-            "needs": list(job.needs),
-            "uses": job.uses,
-            "steps": [
-                {"name": step.name, "run": step.run, "uses": step.uses}
-                for step in job.steps
-            ],
-        }
-        for job in jobs
-    ]
+    payload = {
+        "semantic_manifest": workflow_semantic_manifest(source),
+        "modeled_jobs": [
+            {
+                "job": job.key,
+                "name": job.name,
+                "needs": list(job.needs),
+                "uses": job.uses,
+                "steps": [
+                    {"name": step.name, "run": step.run, "uses": step.uses}
+                    for step in job.steps
+                ],
+            }
+            for job in jobs
+        ],
+    }
     return _digest(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
 
 
@@ -589,6 +733,21 @@ def _check_graph_security(source: str, jobs: tuple[Job, ...]) -> None:
     if "test \"$EXECUTING_WORKFLOW_SHA\" = \"$checked_out_sha\"" not in gate.run:
         raise ReleaseLockError("workflow identity gate does not compare workflow SHA to checkout HEAD")
 
+    checkout_use = "uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+    metadata_ref = "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}"
+    immutable_ref = "ref: ${{ needs.metadata.outputs.commit_sha }}"
+    ref_keys = re.findall(r"^\s+ref:\s*.+$", source, re.MULTILINE)
+    if (
+        source.count(checkout_use) != 3
+        or ref_keys.count("          " + metadata_ref) != 1
+        or ref_keys.count("          " + immutable_ref) != 2
+        or len(ref_keys) != 3
+    ):
+        raise ReleaseLockError(
+            "checkout refs are not closed: metadata selects the requested tag and "
+            "every artifact job must checkout exactly needs.metadata.outputs.commit_sha"
+        )
+
     def reaches_metadata(key: str, visiting: set[str]) -> bool:
         if key == "metadata":
             return True
@@ -628,6 +787,8 @@ def check_source(
         raw = source.encode("utf-8")
     except UnicodeEncodeError as error:
         raise ReleaseLockError(f"workflow is not UTF-8: {error}") from error
+    root = repo_root.resolve(strict=True)
+    _check_full_semantic_manifest(source, root)
     jobs = parse_graph(source)
     steps = [step for job in jobs for step in job.steps]
     by_identity = {(step.job, step.name): step for step in steps}
@@ -659,7 +820,6 @@ def check_source(
             f"release job/step graph is outside the reviewed closed manifest ({actual_graph_hash})"
         )
 
-    root = repo_root.resolve(strict=True)
     if sbom_runner is not None:
         runner_hash = _digest(_read_regular_nofollow(sbom_runner, "SBOM runner"))
         if runner_hash != GOVERNED_FILE_SHA256["scripts/run-release-locked-sbom.py"]:

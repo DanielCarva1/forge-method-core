@@ -57,8 +57,8 @@ class ReleaseLockingTests(unittest.TestCase):
         """Authorize candidate hashes so semantic/parser checks must reject."""
         original = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotEqual(mutated, original)
-        graph_hash = checker.graph_digest(mutated)
         with self.assertRaises(checker.ReleaseLockError):
+            graph_hash = checker.graph_digest(mutated)
             checker.check_source(
                 mutated,
                 repo_root=ROOT,
@@ -122,6 +122,93 @@ class ReleaseLockingTests(unittest.TestCase):
             "payload-locked": self.replace_once(native, "run: cargo run --release -- --locked"),
             "called-python": self.replace_once(native, "run: python scripts/package.py"),
             "called-shell": self.replace_once(native, "run: bash scripts/package.sh"),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+
+    def test_full_manifest_rejects_reviewer_semantic_repros_with_candidate_hashes(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        native_step = (
+            "      - name: Test deterministic archive tooling\n"
+            "        run: python scripts/test-release-archive.py"
+        )
+        remote_job = (
+            "\n  remote-escape:\n"
+            "    name: Remote escape\n"
+            "    needs: metadata\n"
+            "    uses: example/release/.github/workflows/unlocked.yml@" + "0" * 40 + "\n"
+        )
+        mutations = {
+            "attacker-checkout-ref": source.replace(
+                "ref: ${{ needs.metadata.outputs.commit_sha }}",
+                "ref: refs/heads/attacker",
+                1,
+            ),
+            "build-if-always": source.replace(
+                "  build:\n    name: Build ${{ matrix.target }}",
+                "  build:\n    name: Build ${{ matrix.target }}\n    if: always()",
+                1,
+            ),
+            "self-hosted-matrix-runner": source.replace(
+                "runner: ubuntu-latest\n            expected-arch: x86_64",
+                "runner: self-hosted\n            expected-arch: x86_64",
+                1,
+            ),
+            "rustup-nightly": source.replace(
+                "env:\n  CARGO_INCREMENTAL",
+                "env:\n  RUSTUP_TOOLCHAIN: nightly\n  CARGO_INCREMENTAL",
+                1,
+            ),
+            "local-rustc-wrapper": source.replace(
+                "env:\n  CARGO_INCREMENTAL",
+                "env:\n  RUSTC_WRAPPER: ./scripts/unlocked\n  CARGO_INCREMENTAL",
+                1,
+            ),
+            "extensionless-python": source.replace(
+                native_step,
+                native_step + "\n\n      - name: Unlocked extensionless tool\n"
+                "        run: python scripts/unlocked",
+                1,
+            ),
+            "github-path-mutation": source.replace(
+                native_step,
+                native_step + "\n\n      - name: Mutate executable search\n"
+                "        run: echo \\\"$PWD/tool-bin\\\" >> \\\"$GITHUB_PATH\\\"",
+                1,
+            ),
+            "path-env-mutation": source.replace(
+                "env:\n  CARGO_INCREMENTAL",
+                "env:\n  PATH: ${{ github.workspace }}/tool-bin:${{ env.PATH }}\n"
+                "  CARGO_INCREMENTAL",
+                1,
+            ),
+            "pinned-remote-reusable-job": source + remote_job,
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+
+    def test_duplicate_yaml_keys_are_rejected_at_every_mapping_depth(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        mutations = {
+            "step-with": source.replace(
+                "          ref: ${{ needs.metadata.outputs.commit_sha }}",
+                "          ref: ${{ needs.metadata.outputs.commit_sha }}\n"
+                "          ref: refs/heads/attacker",
+                1,
+            ),
+            "global-env": source.replace(
+                '  CARGO_INCREMENTAL: "0"',
+                '  CARGO_INCREMENTAL: "0"\n  CARGO_INCREMENTAL: "1"',
+                1,
+            ),
+            "matrix-entry": source.replace(
+                "          - target: x86_64-unknown-linux-gnu",
+                "          - target: x86_64-unknown-linux-gnu\n"
+                "            target: attacker",
+                1,
+            ),
         }
         for name, mutated in mutations.items():
             with self.subTest(name=name):
@@ -313,6 +400,71 @@ cross build \\
             )
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("inside checked repository", rejected.stderr)
+
+    def test_sbom_lockfile_replacement_race_fails_without_publishing_output(self) -> None:
+        production_runner = ROOT / "scripts/run-release-locked-sbom.py"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = root / "repository"
+            runner = repository / "scripts/run-release-locked-sbom.py"
+            runner.parent.mkdir(parents=True)
+            shutil.copy2(production_runner, runner)
+            fixture = repository / "fixture"
+            shutil.copytree(FIXTURE, fixture)
+            lockfile = fixture / "Cargo.lock"
+            outside = root / "outside.lock"
+            outside.write_bytes(lockfile.read_bytes())
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_cargo = fake_bin / "cargo"
+            fake_cargo.write_text(
+                f"#!{sys.executable}\nraise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+            fake_plugin = fake_bin / "cargo-cyclonedx"
+            fake_plugin.write_text(
+                f"#!{sys.executable}\n"
+                "import os,pathlib,sys\n"
+                "lock=pathlib.Path(os.environ['ATTACK_LOCK'])\n"
+                "lock.unlink()\n"
+                "lock.symlink_to(pathlib.Path(os.environ['OUTSIDE_LOCK']))\n"
+                "args=sys.argv[1:]\n"
+                "manifest=pathlib.Path(args[args.index('--manifest-path')+1])\n"
+                "name=args[args.index('--override-filename')+1] + '.json'\n"
+                "(manifest.parent/name).write_text('attacker output')\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            fake_plugin.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+            environment["ATTACK_LOCK"] = str(lockfile)
+            environment["OUTSIDE_LOCK"] = str(outside)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(runner),
+                    "--lockfile",
+                    str(lockfile),
+                    "--",
+                    "--format",
+                    "json",
+                    "--manifest-path",
+                    str(fixture / "Cargo.toml"),
+                    "--override-filename",
+                    "race-proof.cdx",
+                ],
+                cwd=fixture,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=30,
+            )
+            self.assertNotEqual(completed.returncode, 0, completed.stdout)
+            self.assertIn("during SBOM generation", completed.stderr)
+            self.assertEqual(list(fixture.rglob("*.cdx.json")), [])
 
     def test_sbom_runner_content_drift_is_rejected(self) -> None:
         runner = ROOT / "scripts/run-release-locked-sbom.py"
