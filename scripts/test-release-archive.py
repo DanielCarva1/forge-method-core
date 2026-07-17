@@ -9,6 +9,7 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -246,8 +247,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             shadow.chmod(0o644)
             path = os.pathsep.join([str(non_executable), str(package), "/usr/bin", "/bin"])
             argument = "argument with spaces\nand newline"
-            environment = os.environ.copy()
-            bare_command = subprocess.run(
+            completed = subprocess.run(
                 [
                     "/bin/sh",
                     "-c",
@@ -256,39 +256,20 @@ class ReleaseArchiveTests(unittest.TestCase):
                     path,
                     argument,
                 ],
-                env=environment,
                 text=True,
                 capture_output=True,
                 check=False,
                 timeout=5,
             )
-            sourced_bare = subprocess.run(
-                [
-                    "/bin/sh",
-                    "-c",
-                    'PATH="$1"; wrapper=$2; argument=$3; set -- "$argument"; . "$wrapper"',
-                    "forge",
-                    path,
-                    str(wrapper),
-                    argument,
-                ],
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
-            expected = f"real-core\n{argument}\n"
-            for completed in (bare_command, sourced_bare):
-                self.assertEqual(completed.returncode, 0, completed.stderr)
-                self.assertEqual(completed.stderr, "")
-                self.assertEqual(completed.stdout, expected)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stderr, "")
+            self.assertEqual(completed.stdout, f"real-core\n{argument}\n")
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
-    def test_wrapper_bare_lookup_preserves_every_empty_path_component(self) -> None:
+    def test_wrapper_executes_bare_from_each_empty_path_component(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            package, wrapper = self.wrapper_fixture(root)
+            package, _ = self.wrapper_fixture(root)
             missing_a = root / "missing-a"
             missing_b = root / "missing-b"
             paths = {
@@ -304,11 +285,10 @@ class ReleaseArchiveTests(unittest.TestCase):
                         [
                             "/bin/sh",
                             "-c",
-                            'PATH=$1; argument=$2; wrapper=$3; set -- "$argument"; . "$wrapper"',
-                            "forge",
+                            'PATH=$1; exec forge "$2"',
+                            "bare-command",
                             path,
                             argument,
-                            str(wrapper),
                         ],
                         cwd=package,
                         text=True,
@@ -321,43 +301,48 @@ class ReleaseArchiveTests(unittest.TestCase):
                     self.assertEqual(completed.stderr, "")
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
-    def test_wrapper_ignores_path_controlled_platform_and_resolver_tools(self) -> None:
+    def test_wrapper_fixed_interpreter_and_tools_ignore_attacker_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             package, wrapper = self.wrapper_fixture(root)
+            self.assertEqual(wrapper.read_bytes().splitlines()[0], b"#!/bin/sh")
             aliases = root / "aliases\nwith spaces"
             aliases.mkdir()
             alias = aliases / "forge"
             alias.symlink_to(os.path.relpath(wrapper, aliases))
             fake_bin = root / "fake-bin"
             fake_bin.mkdir()
-            marker = root / "fake-system-tool-called"
-            for name in ("uname", "getconf", "readlink"):
+            marker = root / "fake-program-called"
+            for name in ("sh", "uname", "getconf", "readlink"):
                 fake_tool = fake_bin / name
                 fake_tool.write_text(
                     "#!/bin/sh\n"
-                    ": > \"$FAKE_SYSTEM_TOOL_MARKER\"\n"
-                    "printf '%s\\n' attacker-controlled\n",
+                    f"printf '%s\\n' '{name}' >> \"$FAKE_PROGRAM_MARKER\"\n"
+                    "exit 91\n",
                     encoding="utf-8",
                 )
                 fake_tool.chmod(0o755)
             environment = os.environ.copy()
-            environment["PATH"] = os.pathsep.join(
-                [str(fake_bin), "/usr/bin", "/bin"]
-            )
-            environment["FAKE_SYSTEM_TOOL_MARKER"] = str(marker)
-            completed = subprocess.run(
-                [str(alias), "not redirected"],
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertEqual(completed.stdout, "real-core\nnot redirected\n")
-            self.assertEqual(completed.stderr, "")
-            self.assertFalse(marker.exists(), completed.stdout)
+            environment["PATH"] = os.pathsep.join([str(fake_bin), "/usr/bin", "/bin"])
+            environment["FAKE_PROGRAM_MARKER"] = str(marker)
+            invocations = {"direct": wrapper, "symlink": alias}
+            for name, invoked in invocations.items():
+                with self.subTest(name=name):
+                    marker.unlink(missing_ok=True)
+                    argument = f"{name} argument\nwith newline"
+                    completed = subprocess.run(
+                        [str(invoked), argument],
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, f"real-core\n{argument}\n")
+                    self.assertEqual(completed.stderr, "")
+                    self.assertFalse(marker.exists(), completed.stdout)
+            self.assertEqual(package, wrapper.parent)
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_resolver_accepts_declared_package_targets(self) -> None:
@@ -452,19 +437,21 @@ class ReleaseArchiveTests(unittest.TestCase):
             self.assertEqual(completed.stdout, "")
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
-    def test_wrapper_bare_lookup_fails_closed_when_path_is_unset(self) -> None:
+    def test_wrapper_execve_fails_closed_when_path_is_unset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            _, wrapper = self.wrapper_fixture(Path(directory))
+            root = Path(directory)
+            package, _ = self.wrapper_fixture(root)
             environment = os.environ.copy()
             environment.pop("PATH", None)
+            argument = "unset PATH argument\nwith newline"
             completed = subprocess.run(
                 [
-                    "/bin/sh",
+                    str(Path(sys.executable).resolve()),
                     "-c",
-                    'unset PATH; . "$1"',
-                    "forge",
-                    str(wrapper),
+                    "import os, sys; os.execve('forge', ['forge', sys.argv[1]], os.environ)",
+                    argument,
                 ],
+                cwd=package,
                 env=environment,
                 text=True,
                 capture_output=True,
@@ -472,7 +459,13 @@ class ReleaseArchiveTests(unittest.TestCase):
                 timeout=5,
             )
             self.assertEqual(completed.returncode, 127)
-            self.assertIn("unset PATH", completed.stderr)
+            self.assertEqual(completed.stdout, "")
+            # /bin/sh may initialize its implementation-default PATH when execve
+            # receives none. Either way, the production wrapper itself fails closed.
+            self.assertRegex(
+                completed.stderr,
+                r"forge wrapper: cannot locate wrapper forge through (?:an unset )?PATH",
+            )
             self.assertNotIn("parameter not set", completed.stderr)
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")

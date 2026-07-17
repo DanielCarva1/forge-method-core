@@ -1,5 +1,7 @@
-#!/usr/bin/env sh
+#!/bin/sh
 # Forge release wrapper (POSIX shell) — delegates to forge-core beside it.
+# Every declared package target provides /bin/sh; fixing the interpreter path
+# keeps interpreter selection outside an attacker-controlled PATH.
 #
 # Supported release packages are GNU/Linux x86_64/aarch64 and macOS
 # x86_64/arm64.  Invocation-symlink resolution is deliberately limited to
