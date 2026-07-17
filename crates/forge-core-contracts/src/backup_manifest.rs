@@ -10,7 +10,10 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Component, Path},
+};
 
 pub const BACKUP_MANIFEST_SCHEMA_VERSION: &str = "forge_project_state_backup_manifest_v1";
 const SET_DIGEST_DOMAIN: &[u8] = b"forge-method:project-state-backup-set:v1\0";
@@ -1616,29 +1619,26 @@ fn validate_declared_effect_outputs(
     for output in outputs {
         required("declared_effect.operation_id", &output.operation_id)?;
         required("declared_effect.effect_id", &output.effect_id)?;
-        required("declared_effect.logical_ref", &output.logical_ref)?;
         digest(
             "declared_effect.metadata_record_sha256",
             &output.metadata_record_sha256,
         )?;
         digest("declared_effect.content_sha256", &output.content_sha256)?;
-        validate_safe_path(&output.logical_ref)?;
         validate_safe_path(&output.state_relative_path)?;
-        let expected_logical_ref = format!(
-            "{}/{}",
-            manifest
-                .project
-                .archive_layout
-                .state_root_relative_to_sidecar,
-            output.state_relative_path
-        );
+        let metadata_kind = effect_metadata_target_kind(output.target_kind);
+        let Some(expected_state_relative_path) = expected_effect_state_relative_path(
+            metadata_kind,
+            &output.logical_ref,
+            &manifest.project.archive_layout,
+        ) else {
+            return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
+        };
         let Some(material) =
             effect_output_material(output.target_kind, &output.state_relative_path)
         else {
             return Err(BackupManifestValidationError::InvalidDeclaredEffectProjection);
         };
-        if (output.target_kind == BackupDeclaredEffectTargetKind::FilePath
-            && output.logical_ref != expected_logical_ref)
+        if output.state_relative_path != expected_state_relative_path
             || previous.is_some_and(|path| path >= output.state_relative_path.as_str())
             || !metadata_records.insert(output.metadata_record_sha256.as_str())
         {
@@ -1689,15 +1689,13 @@ fn effect_output_material(
             Some(BackupEntryKind::RootLedger)
         }
         BackupDeclaredEffectTargetKind::LedgerStream
-            if state_relative_path.starts_with("ledger/")
-                && state_relative_path.ends_with(".ndjson") =>
+            if state_relative_path.starts_with("ledger/") =>
         {
             Some(BackupEntryKind::LedgerStream)
         }
         BackupDeclaredEffectTargetKind::RequestStream
-            if (state_relative_path == "requests.ndjson"
-                || state_relative_path.starts_with("requests/"))
-                && state_relative_path.ends_with(".ndjson") =>
+            if state_relative_path == "requests.ndjson"
+                || state_relative_path.starts_with("requests/") =>
         {
             Some(BackupEntryKind::RequestStream)
         }
@@ -1712,7 +1710,6 @@ fn parse_effect_metadata_index(
     if raw.is_empty() {
         return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
     }
-    let state_root_prefix = format!("{}/", layout.state_root_relative_to_sidecar);
     let mut latest = BTreeMap::<String, IndexedEffectMetadataRecord>::new();
     for frame in raw.split_inclusive(|byte| *byte == b'\n') {
         let Some(payload) = frame.strip_suffix(b"\n") else {
@@ -1728,17 +1725,11 @@ fn parse_effect_metadata_index(
             || record.record_kind != EffectMetadataRecordKind::EffectTarget
             || record.operation_id.trim().is_empty()
             || record.effect_id.trim().is_empty()
-            || record.logical_ref.trim().is_empty()
-            || record.physical_ref.trim().is_empty()
             || record.actor_agent_id.trim().is_empty()
             || record.redaction_hint != "raw_content_not_indexed"
         {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
-        validate_safe_path(&record.logical_ref)
-            .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
-        validate_safe_path(&record.physical_ref)
-            .map_err(|_| BackupManifestValidationError::InvalidEffectMetadataIndex)?;
         if expected_effect_physical_ref(record.target_kind, &record.logical_ref).as_deref()
             != Some(record.physical_ref.as_str())
         {
@@ -1784,19 +1775,18 @@ fn parse_effect_metadata_index(
         if record.access_mode == EffectMetadataAccessMode::Delete {
             continue;
         }
-        let Some(state_relative_path) = record.physical_ref.strip_prefix(&state_root_prefix) else {
+        let Some(state_relative_path) =
+            expected_effect_state_relative_path(record.target_kind, &record.logical_ref, layout)
+        else {
             // Shipped FilePath targets may be ordinary repository files. They remain
             // fully validated index records but are not members of the state backup.
             continue;
         };
-        if state_relative_path.is_empty() {
-            return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
-        }
         let target_kind = backup_effect_target_kind(record.target_kind)
             .expect("validated shipped file-backed metadata target");
-        let Some(_material) = effect_output_material(target_kind, state_relative_path) else {
+        let Some(_material) = effect_output_material(target_kind, &state_relative_path) else {
             if target_kind == BackupDeclaredEffectTargetKind::FilePath
-                && is_reserved_effect_output_path(state_relative_path)
+                && is_reserved_effect_output_path(&state_relative_path)
             {
                 // Reserved state families are inventoried by their own typed entries; a
                 // valid generic FilePath metadata record cannot claim them a second time.
@@ -1804,7 +1794,6 @@ fn parse_effect_metadata_index(
             }
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         };
-        let state_relative_path = state_relative_path.to_owned();
         if !paths.insert(state_relative_path.clone()) {
             return Err(BackupManifestValidationError::InvalidEffectMetadataIndex);
         }
@@ -1863,41 +1852,65 @@ fn backup_effect_target_kind(
     }
 }
 
+fn effect_metadata_target_kind(kind: BackupDeclaredEffectTargetKind) -> EffectMetadataTargetKind {
+    match kind {
+        BackupDeclaredEffectTargetKind::FilePath => EffectMetadataTargetKind::FilePath,
+        BackupDeclaredEffectTargetKind::ArtifactId => EffectMetadataTargetKind::ArtifactId,
+        BackupDeclaredEffectTargetKind::EvidenceId => EffectMetadataTargetKind::EvidenceId,
+        BackupDeclaredEffectTargetKind::LedgerStream => EffectMetadataTargetKind::LedgerStream,
+        BackupDeclaredEffectTargetKind::RequestStream => EffectMetadataTargetKind::RequestStream,
+    }
+}
+
 fn expected_effect_physical_ref(
     kind: EffectMetadataTargetKind,
     logical_ref: &str,
 ) -> Option<String> {
-    let (allowed_prefixes, allowed_exact, base_dir, extension): (&[&str], &[&str], &str, &str) =
-        match kind {
-            EffectMetadataTargetKind::FilePath => return Some(logical_ref.to_owned()),
-            EffectMetadataTargetKind::ArtifactId => (
-                &[".forge-method/artifacts/"],
-                &[],
-                ".forge-method/artifacts",
-                ".yaml",
-            ),
-            EffectMetadataTargetKind::EvidenceId => (
-                &[".forge-method/evidence/", ".forge-method/snapshots/"],
-                &[],
-                ".forge-method/evidence",
-                ".json",
-            ),
-            EffectMetadataTargetKind::LedgerStream => (
-                &[".forge-method/ledger/"],
-                &[".forge-method/ledger.ndjson"],
-                ".forge-method/ledger",
-                ".ndjson",
-            ),
-            EffectMetadataTargetKind::RequestStream => (
-                &[".forge-method/requests/"],
-                &[".forge-method/requests.ndjson"],
-                ".forge-method/requests",
-                ".ndjson",
-            ),
-            EffectMetadataTargetKind::Glob
-            | EffectMetadataTargetKind::StateKey
-            | EffectMetadataTargetKind::CompletionId => return None,
-        };
+    let physical_ref = match kind {
+        EffectMetadataTargetKind::FilePath => logical_ref.to_owned(),
+        EffectMetadataTargetKind::ArtifactId => project_effect_logical_target(
+            logical_ref,
+            &[".forge-method/artifacts/"],
+            &[],
+            ".forge-method/artifacts",
+            ".yaml",
+        )?,
+        EffectMetadataTargetKind::EvidenceId => project_effect_logical_target(
+            logical_ref,
+            &[".forge-method/evidence/", ".forge-method/snapshots/"],
+            &[],
+            ".forge-method/evidence",
+            ".json",
+        )?,
+        EffectMetadataTargetKind::LedgerStream => project_effect_logical_target(
+            logical_ref,
+            &[".forge-method/ledger/"],
+            &[".forge-method/ledger.ndjson"],
+            ".forge-method/ledger",
+            ".ndjson",
+        )?,
+        EffectMetadataTargetKind::RequestStream => project_effect_logical_target(
+            logical_ref,
+            &[".forge-method/requests/"],
+            &[".forge-method/requests.ndjson"],
+            ".forge-method/requests",
+            ".ndjson",
+        )?,
+        EffectMetadataTargetKind::Glob
+        | EffectMetadataTargetKind::StateKey
+        | EffectMetadataTargetKind::CompletionId => return None,
+    };
+    normalized_effect_repo_relative(&physical_ref)?;
+    Some(physical_ref)
+}
+
+fn project_effect_logical_target(
+    logical_ref: &str,
+    allowed_prefixes: &[&str],
+    allowed_exact: &[&str],
+    base_dir: &str,
+    extension: &str,
+) -> Option<String> {
     if logical_ref.contains('/') || logical_ref.contains('\\') {
         return (allowed_exact.contains(&logical_ref)
             || allowed_prefixes
@@ -1929,6 +1942,36 @@ fn expected_effect_physical_ref(
         format!("{safe_id}{extension}")
     };
     Some(format!("{base_dir}/{file_name}"))
+}
+
+fn normalized_effect_repo_relative(path: &str) -> Option<String> {
+    let path = Path::new(path);
+    if path.as_os_str().is_empty() || path.is_absolute() {
+        return None;
+    }
+    let mut normalized = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(value) => normalized.push(value.to_str()?.to_owned()),
+            Component::CurDir => {}
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir => return None,
+        }
+    }
+    (!normalized.is_empty()).then(|| normalized.join("/"))
+}
+
+fn expected_effect_state_relative_path(
+    kind: EffectMetadataTargetKind,
+    logical_ref: &str,
+    layout: &BackupArchiveLayout,
+) -> Option<String> {
+    let physical_ref = expected_effect_physical_ref(kind, logical_ref)?;
+    let normalized_physical_ref = normalized_effect_repo_relative(&physical_ref)?;
+    let normalized_state_root =
+        normalized_effect_repo_relative(&layout.state_root_relative_to_sidecar)?;
+    normalized_physical_ref
+        .strip_prefix(&format!("{normalized_state_root}/"))
+        .map(str::to_owned)
 }
 
 fn validate_external_authorities(
@@ -2194,11 +2237,8 @@ fn validate_entry_path(
         BackupEntryKind::Artifact => below("artifacts"),
         BackupEntryKind::Evidence => below("evidence"),
         BackupEntryKind::Snapshot => below("snapshots"),
-        BackupEntryKind::LedgerStream => below("ledger") && entry.logical_path.ends_with(".ndjson"),
-        BackupEntryKind::RequestStream => {
-            (below("requests") || exact("requests.ndjson"))
-                && entry.logical_path.ends_with(".ndjson")
-        }
+        BackupEntryKind::LedgerStream => below("ledger"),
+        BackupEntryKind::RequestStream => below("requests") || exact("requests.ndjson"),
         BackupEntryKind::RuntimeSnapshot => below("runtime"),
         BackupEntryKind::StoryState => below("stories"),
         BackupEntryKind::AgentRegistryState => below("agents"),
@@ -2577,11 +2617,12 @@ mod tests {
     ) {
         let record_bytes = serde_json::to_vec(declared_record).unwrap();
         let target_kind = backup_effect_target_kind(declared_record.target_kind).unwrap();
-        let state_relative_path = declared_record
-            .physical_ref
-            .strip_prefix(".forge-method/")
-            .unwrap()
-            .to_owned();
+        let state_relative_path = expected_effect_state_relative_path(
+            declared_record.target_kind,
+            &declared_record.logical_ref,
+            &document.backup_manifest.project.archive_layout,
+        )
+        .unwrap();
         let material = effect_output_material(target_kind, &state_relative_path).unwrap();
         let content_sha256 = declared_record.content_hash.clone().unwrap();
         let output = document
@@ -2618,6 +2659,11 @@ mod tests {
             .iter_mut()
             .find(|entry| entry.material == material)
             .unwrap();
+        output_entry.logical_path = format!(
+            "{}/{}",
+            state_prefix(&document.backup_manifest.project.archive_layout),
+            output.state_relative_path
+        );
         output_entry.sha256 = content_sha256;
         output_entry.byte_length = declared_record.byte_len;
         let index_entry = document
@@ -2628,6 +2674,9 @@ mod tests {
             .unwrap();
         index_entry.byte_length = raw.len() as u64;
         index_entry.sha256 = sha256(raw);
+        document.backup_manifest.entries.sort_by(|left, right| {
+            (left.material, &left.logical_path).cmp(&(right.material, &right.logical_path))
+        });
         recompute(document);
     }
 
@@ -3209,14 +3258,55 @@ mod tests {
                 "src/lib.rs",
             ),
             (
+                EffectMetadataTargetKind::FilePath,
+                "src//lib.rs",
+                "src//lib.rs",
+            ),
+            (EffectMetadataTargetKind::FilePath, " ", " "),
+            (
                 EffectMetadataTargetKind::ArtifactId,
-                "result:id",
-                ".forge-method/artifacts/result_id.yaml",
+                "story-current",
+                ".forge-method/artifacts/story-current.yaml",
+            ),
+            (
+                EffectMetadataTargetKind::ArtifactId,
+                ".forge-method/artifacts/story-current.yaml",
+                ".forge-method/artifacts/story-current.yaml",
+            ),
+            (
+                EffectMetadataTargetKind::ArtifactId,
+                "artifact\nid",
+                ".forge-method/artifacts/artifact_id.yaml",
             ),
             (
                 EffectMetadataTargetKind::EvidenceId,
-                "command.json",
-                ".forge-method/evidence/command.json",
+                "evidence\nid",
+                ".forge-method/evidence/evidence_id.json",
+            ),
+            (
+                EffectMetadataTargetKind::EvidenceId,
+                "browser snapshot",
+                ".forge-method/evidence/browser_snapshot.json",
+            ),
+            (
+                EffectMetadataTargetKind::EvidenceId,
+                ".forge-method/snapshots/browser.json",
+                ".forge-method/snapshots/browser.json",
+            ),
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                "agent-main",
+                ".forge-method/ledger/agent-main.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                "ledger\nid",
+                ".forge-method/ledger/ledger_id.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                "custom.yaml",
+                ".forge-method/ledger/custom.yaml.ndjson",
             ),
             (
                 EffectMetadataTargetKind::LedgerStream,
@@ -3224,15 +3314,61 @@ mod tests {
                 ".forge-method/ledger.ndjson",
             ),
             (
+                EffectMetadataTargetKind::LedgerStream,
+                ".forge-method/ledger/custom.yaml",
+                ".forge-method/ledger/custom.yaml",
+            ),
+            (
                 EffectMetadataTargetKind::RequestStream,
                 "handoff",
                 ".forge-method/requests/handoff.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                "request\nid",
+                ".forge-method/requests/request_id.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                ".forge-method/requests.ndjson",
+                ".forge-method/requests.ndjson",
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                ".forge-method/requests/custom.yaml",
+                ".forge-method/requests/custom.yaml",
             ),
         ];
         for (kind, logical_ref, physical_ref) in cases {
             assert_eq!(
                 expected_effect_physical_ref(kind, logical_ref).as_deref(),
-                Some(physical_ref)
+                Some(physical_ref),
+                "shipped projection mismatch for {kind:?} {logical_ref:?}"
+            );
+        }
+
+        for (kind, logical_ref) in [
+            (EffectMetadataTargetKind::FilePath, ""),
+            (EffectMetadataTargetKind::FilePath, "."),
+            (EffectMetadataTargetKind::FilePath, "../outside"),
+            (EffectMetadataTargetKind::EvidenceId, "\n"),
+            (EffectMetadataTargetKind::LedgerStream, "___"),
+            (EffectMetadataTargetKind::RequestStream, "..."),
+            (EffectMetadataTargetKind::FilePath, "/absolute"),
+            (EffectMetadataTargetKind::ArtifactId, ""),
+            (EffectMetadataTargetKind::ArtifactId, "..."),
+            (EffectMetadataTargetKind::ArtifactId, "___"),
+            (EffectMetadataTargetKind::ArtifactId, "\n"),
+            (EffectMetadataTargetKind::ArtifactId, "../outside"),
+            (
+                EffectMetadataTargetKind::ArtifactId,
+                ".forge-method/artifacts/../outside.yaml",
+            ),
+        ] {
+            assert_eq!(
+                expected_effect_physical_ref(kind, logical_ref),
+                None,
+                "shipped resolver must reject {kind:?} {logical_ref:?}"
             );
         }
         for unsupported in [
@@ -3270,6 +3406,204 @@ mod tests {
             .verify_effect_metadata_index_bytes(&raw)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn reviewer_canonical_frames_accept_preserved_file_spelling_and_sanitized_id() {
+        let hash = format!("sha256:{}", "b".repeat(64));
+
+        let mut file = effect_record(
+            "operation.reviewer-file",
+            "effect.reviewer-file",
+            EffectMetadataAccessMode::Write,
+            Some(&hash),
+            22,
+        );
+        file.logical_ref = "src//lib.rs".to_owned();
+        file.physical_ref = file.logical_ref.clone();
+        let file_raw = encoded_effect_records(std::slice::from_ref(&file));
+        let mut file_document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut file_document, &file_raw);
+        assert!(file_document
+            .verify_effect_metadata_index_bytes(&file_raw)
+            .unwrap()
+            .is_empty());
+
+        let mut normalized_forgery = file.clone();
+        normalized_forgery.physical_ref = "src/lib.rs".to_owned();
+        let forged_raw = encoded_effect_records(&[normalized_forgery]);
+        let mut forged_document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut forged_document, &forged_raw);
+        assert_eq!(
+            forged_document.verify_effect_metadata_index_bytes(&forged_raw),
+            Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+        );
+
+        let mut artifact = effect_record(
+            "operation.reviewer-artifact",
+            "effect.reviewer-artifact",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            23,
+        );
+        artifact.logical_ref = "artifact\nid".to_owned();
+        artifact.physical_ref = ".forge-method/artifacts/artifact_id.yaml".to_owned();
+        artifact.target_kind = EffectMetadataTargetKind::ArtifactId;
+        let artifact_raw = encoded_effect_records(std::slice::from_ref(&artifact));
+        let mut artifact_document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_effect_fixture(&mut artifact_document, &artifact_raw, &artifact);
+        let parsed = artifact_document
+            .verify_effect_metadata_index_bytes(&artifact_raw)
+            .unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].logical_ref, "artifact\nid");
+        assert_eq!(
+            parsed[0].physical_ref,
+            ".forge-method/artifacts/artifact_id.yaml"
+        );
+    }
+
+    #[test]
+    fn historical_sanitized_id_record_remains_valid_before_latest_delete() {
+        let hash = format!("sha256:{}", "c".repeat(64));
+        let mut historical = effect_record(
+            "operation.historical",
+            "effect.historical",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            24,
+        );
+        historical.logical_ref = "artifact\nid".to_owned();
+        historical.physical_ref = ".forge-method/artifacts/artifact_id.yaml".to_owned();
+        historical.target_kind = EffectMetadataTargetKind::ArtifactId;
+        let mut deleted = historical.clone();
+        deleted.operation_id = "operation.delete".to_owned();
+        deleted.effect_id = "effect.delete".to_owned();
+        deleted.access_mode = EffectMetadataAccessMode::Delete;
+        deleted.content_hash = None;
+        deleted.byte_len = 0;
+        deleted.destructive = true;
+        let raw = encoded_effect_records(&[historical, deleted]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+        assert!(document
+            .verify_effect_metadata_index_bytes(&raw)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn live_non_ndjson_streams_have_exact_typed_archive_and_classifier_closure() {
+        let hash = format!("sha256:{}", "d".repeat(64));
+        for (kind, physical_ref, material) in [
+            (
+                EffectMetadataTargetKind::LedgerStream,
+                ".forge-method/ledger/custom.yaml",
+                BackupEntryKind::LedgerStream,
+            ),
+            (
+                EffectMetadataTargetKind::RequestStream,
+                ".forge-method/requests/custom.yaml",
+                BackupEntryKind::RequestStream,
+            ),
+        ] {
+            let mut stream = effect_record(
+                "operation.custom-stream",
+                "effect.custom-stream",
+                EffectMetadataAccessMode::Append,
+                Some(&hash),
+                25,
+            );
+            stream.logical_ref = physical_ref.to_owned();
+            stream.physical_ref = physical_ref.to_owned();
+            stream.target_kind = kind;
+            let raw = encoded_effect_records(std::slice::from_ref(&stream));
+            let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+            bind_effect_fixture(&mut document, &raw, &stream);
+
+            let parsed = document.verify_effect_metadata_index_bytes(&raw).unwrap();
+            assert_eq!(parsed.len(), 1);
+            let archive_path = format!("sidecar/{physical_ref}");
+            assert_eq!(
+                document.classify_source_file(&archive_path),
+                Ok(BackupSourceFileClassification::Archive(material))
+            );
+            document
+                .verify_source_enumeration(&source_metadata(&document))
+                .unwrap();
+            document
+                .verify_archive_entries(&document.backup_manifest.entries)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn normalized_duplicate_live_physical_paths_reject() {
+        let hash = format!("sha256:{}", "e".repeat(64));
+        let first = effect_record(
+            "operation.duplicate-one",
+            "effect.duplicate-one",
+            EffectMetadataAccessMode::Create,
+            Some(&hash),
+            26,
+        );
+        let mut second = first.clone();
+        second.operation_id = "operation.duplicate-two".to_owned();
+        second.effect_id = "effect.duplicate-two".to_owned();
+        second.logical_ref = ".forge-method/custom//source-derived-output.yaml".to_owned();
+        second.physical_ref = second.logical_ref.clone();
+        let raw = encoded_effect_records(&[first, second]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+        );
+    }
+
+    #[test]
+    fn shipped_non_file_backed_and_read_records_remain_rejected() {
+        let hash = format!("sha256:{}", "f".repeat(64));
+        for unsupported in [
+            EffectMetadataTargetKind::Glob,
+            EffectMetadataTargetKind::StateKey,
+            EffectMetadataTargetKind::CompletionId,
+        ] {
+            let mut record = effect_record(
+                "operation.unsupported",
+                "effect.unsupported",
+                EffectMetadataAccessMode::Write,
+                Some(&hash),
+                27,
+            );
+            record.target_kind = unsupported;
+            record.logical_ref = "target".to_owned();
+            record.physical_ref = "target".to_owned();
+            let raw = encoded_effect_records(&[record]);
+            let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+            bind_index_without_outputs(&mut document, &raw);
+            assert_eq!(
+                document.verify_effect_metadata_index_bytes(&raw),
+                Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+            );
+        }
+
+        let mut read = effect_record(
+            "operation.read",
+            "effect.read",
+            EffectMetadataAccessMode::Read,
+            Some(&hash),
+            28,
+        );
+        read.logical_ref = "src/read.rs".to_owned();
+        read.physical_ref = read.logical_ref.clone();
+        let raw = encoded_effect_records(&[read]);
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        bind_index_without_outputs(&mut document, &raw);
+        assert_eq!(
+            document.verify_effect_metadata_index_bytes(&raw),
+            Err(BackupManifestValidationError::InvalidEffectMetadataIndex)
+        );
     }
 
     #[test]

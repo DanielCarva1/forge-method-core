@@ -65,7 +65,7 @@ backup_manifest_contract:
       - Domain Pack local learning index plus exact content-addressed object closure
       - isolation contract identities/agents/raw digests under contracts/isolations
       - workflow principal and broker archived public registry raw bytes
-      - claims, handoffs, artifacts, evidence, snapshots, ledgers, requests, runtime, stories, agents, preflight, effect index, and trace families
+      - claims, handoffs, artifacts, evidence, snapshots, ledgers/requests with every shipped-safe typed suffix, runtime, stories, agents, preflight, effect index, and trace families
     domain_pack_learning:
       index: domain-pack-learning/index.json
       closure: each sorted parsed record binds candidate_id, candidate_digest, raw_sha256, exact object_relative_path, and object entry SHA-256
@@ -77,17 +77,28 @@ backup_manifest_contract:
       generic_catch_all: forbidden
       cross_binding_api: BackupManifestDocument::verify_effect_metadata_index_bytes
       source: exact archived index/effect-targets.ndjson bytes read while effect-index and effect-WAL locks plus producer quiescence remain retained
-      binding: sorted operation_id, effect_id, file_path target kind, exact logical_ref and physical_ref/state-relative path, access_mode, content SHA-256, byte length, exact source-record SHA-256, and archive entry SHA-256
+      binding: sorted operation_id, effect_id, exact file-backed target kind, exact caller logical_ref, exact shipped physical_ref, normalized state-relative archive path, access_mode, content SHA-256, byte length, exact source-record SHA-256, and exact typed archive-entry SHA-256
       reserved_internal_families: valid generic file_path records are validated but omitted because typed source inventory owns those paths
+      resolver_mirror:
+        crate_cycle: forbidden; the wire-compatible mirror remains in forge-core-contracts because forge-core-store depends on it
+        source_evidence:
+          file_path_safety_and_spelling: crates/forge-core-store/src/lib.rs:3361-3415,3517-3524,3558-3559,3619-3623
+          typed_projection_and_safe_logical_id: crates/forge-core-store/src/lib.rs:3524-3551,3562-3616
+          unsupported_non_file_backed: crates/forge-core-store/src/lib.rs:3552-3556,3758-3785,3979-4003
+          read_rejection_and_metadata_source: crates/forge-core-store/src/lib.rs:3648-3665,3758-3785,3979-4003
+        file_path: apply target-platform Rust Path::components empty/absolute/prefix/root/parent checks, retain accepted caller spelling in physical_ref, and normalize components only for state-relative archive identity and duplicate-path closure
+        typed_ids: apply reference path-likeness, exact allowed prefix/exact forms, otherwise safe_logical_id character sanitization, dot trimming, ASCII-alphanumeric requirement, and extension behavior with no invented length or normalization limit
+        streams: path-like ledger/request references preserve every safe suffix and extension below their allowed prefix; ID forms alone acquire .ndjson
       s04_algorithm:
         - retain effect metadata-index append lock before effect WAL lock in BACKUP_LOCK_ORDER and keep producer quiescence through parse, copy, and stable enumeration
         - read exact metadata-index bytes once; require byte length and SHA-256 to equal the EffectMetadataIndex archive entry
         - split only newline-terminated shipped JSON record frames; strict-deserialize the mirrored 0.1 EffectTargetMetadataRecord schema and require exact serde re-encoding
-        - hash each raw JSON frame without its newline and validate schema/record kind, nonblank operation/effect/actor identities, logical_ref, physical_ref, redaction hint, and safe paths
+        - hash each raw JSON frame without its newline and validate schema/record kind, nonblank operation/effect/actor identities, redaction hint, target-specific logical_ref grammar, and exact shipped physical_ref
         - require create/write/append to carry a valid final content_hash; require delete to carry no content hash and byte_len zero; reject read metadata records
-        - in source order replace a map entry keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
-        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref (FilePath identity; typed ID sanitization/extensions/path-family rules; unsupported non-file-backed kinds reject) and require exact equality
-        - after latest/delete selection, omit valid live or deleted repository FilePath records outside the state root and omit reserved-family generic FilePath records; only live state-backup outputs enter the closure; duplicate included physical paths reject, then outputs sort by state-relative path
+        - validate every historical frame before source-order latest/delete replacement keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
+        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref (FilePath identity; typed ID sanitization/extensions/path-family rules; unsupported non-file-backed kinds reject), validate its Rust-path component safety, and require exact spelling equality
+        - after latest/delete selection, normalize safe path components for archive identity, omit repository FilePath records outside the state root, and omit reserved-family generic FilePath records; only live state-backup outputs enter typed closure; duplicate normalized physical paths reject, then outputs sort by state-relative path
+        - map typed live ledger/request prefix outputs to exact LedgerStream/RequestStream members regardless of suffix, with no generic fallback; reserved families and exclusions remain exact and exclusion-first
         - compare the complete derived projection, including raw frame digest, operation/effect/target identity, access_mode, and byte_len, with declared_effect_outputs; require content hash and byte_len to equal the exact typed archive entry; stale, forged, deleted, omitted, or extra claims reject
         - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
   domain_pack_external_provisioning:
