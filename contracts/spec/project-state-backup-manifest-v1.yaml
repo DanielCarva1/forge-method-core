@@ -8,84 +8,139 @@ backup_manifest_contract:
     format: forge_project_state_backup_v1
     unknown_versions: reject
     unknown_fields: reject
-  canonical_bytes:
-    encoding: RFC 8785 JSON Canonicalization Scheme over the typed manifest document
-    exclusion: backup_manifest.manifest_set_digest is removed, never blanked, before canonicalization
-    set_digest:
-      algorithm: sha256
-      output: sha256:<64-lowercase-hex>
-      input: forge-method:project-state-backup-set:v1\0 || u64be(canonical_byte_length) || canonical_bytes
-      binds:
-        - exact Project Link and its safe archive mapping
-        - complete WorkflowGovernanceReleaseIdentity including release_version
-        - complete WorkflowEffectiveBundleIdentity, receipt context, and Domain Pack generation bindings
-        - governance ledger head and every typed archive member
-        - complete protected ReplayAnchorDocument projection and broker registry public identity
-        - private-root exclusion policy
-  source_derived_authority_inventory:
-    closed: true
-    generic_state_file_escape_hatch: forbidden
-    required_typed_members:
+  security_claims:
+    integrity_only:
+      api: BackupManifestDocument::validate_integrity
+      proves: canonical self-consistency, typed source inventory, entry hashes, and cross-bindings
+      does_not_prove: authenticity, freshness, or whole-set substitution/rollback resistance
+      warning: manifest_set_digest is a recomputable self-hash and is never a trust root
+    authenticity_and_freshness:
+      api: BackupManifestDocument::validate_for_restore
+      requires:
+        - forge_project_state_backup_trusted_expectation_v1 loaded from non-archive trusted storage
+        - forge_project_state_backup_restore_preflight_v1 constructed by the restore engine, never deserialized from archive YAML
+      trusted_expectation_binds:
+        - manifest_set_digest
+        - exact ProjectLinkDocument and SHA-256 of its archived bytes
+        - project id, complete release identity including release_version, and effective epoch identity
+        - current ReplayAnchorDocument projection
+        - Domain Pack supply-chain and reviewed-learning monotonic heads plus exact public input-file digests
+        - exact public workflow principal and broker registry digests/identity-set digests when provisioned
+  canonical_set_digest:
+    encoding: RFC 8785 JSON Canonicalization Scheme
+    exclusion: backup_manifest.manifest_set_digest is removed before canonicalization
+    input: forge-method:project-state-backup-set:v1\0 || u64be(canonical_byte_length) || canonical_bytes
+    output: sha256:<64-lowercase-hex>
+  project_link:
+    archive_path: project/.forge-method.yaml
+    state_root_leaf: .forge-method
+    state_root_relative_to_sidecar: .forge-method
+    binding:
+      - project_link_sha256 equals the ProjectLink entry SHA-256
+      - archive API hashes exact raw bytes and compares caller-parsed ProjectLinkDocument with the manifest document
+      - trusted expectation repeats the exact document and raw-byte digest
+  source_derived_inventory:
+    always_present:
       - project/.forge-method.yaml
-      - state-root/wal/workflow-governance.ndjson
-      - state-root/wal/claims.fmw1, claims.wal.manifest.json, snapshots/*, and archive/*
-      - state-root/replay-wal.manifest.json and wal/replay.fmr1
-      - state-root/workflow-action-replay.manifest.json and wal/workflow-action-replay.jsonl
-      - state-root/wal/effects.ndjson and .effects.ndjson.compaction-manifest.json
-      - state-root/domain-packs/active.lock.yaml, ledger/*, generations/*/{lock,preflight,receipt}.yaml, receipts/*, and objects/*
-      - sidecar-root/operator/workflow-principal-registry.yaml
-      - sidecar-root/operator/workflow-broker-registry.yaml
-    directories:
-      archive_entries: regular_files_only
-      restore_created_not_archived:
-        - locks
-        - wal/snapshots
-        - wal/archive
-        - domain-packs/objects
-  project_link_archive_mapping:
-    project_link_archive_path: project/.forge-method.yaml
-    sidecar_archive_root: sidecar
-    state_root_relative_to_sidecar: normalized(ProjectLinkDocument.state_root - ProjectLinkDocument.sidecar_root)
-    reject:
-      - a mapping that cannot be derived from the exact Project Link
-      - absolute, escaping, dot, dot-dot, backslash, NUL, or control-character logical paths
-      - hard-coded default .forge-method mapping when the Link names another valid state root
-  entry_rules:
-    enumeration: no-follow regular-file enumeration rejects private roots before typed entry construction
-    reject:
-      - symlink, hardlink, device, FIFO, directory, duplicate, omitted, extra, or substituted entries
-      - material kinds not defined by v1
+      - state-root/ledger.ndjson
+      - state-root/replay-wal.manifest.json
+      - state-root/wal/replay.fmr1
+    conditional_states:
+      project_state: [initialized_before_start, started_with_state_yaml]
+      claim_store: [empty_before_first_claim, active_with_exact_retained_rotation_count]
+      workflow_governance: [before_initialization, initialized]
+      workflow_action_replay: [before_initialization, initialized_pair]
+      effect_store: [empty_before_first_effect, active_with_optional_compaction_manifest]
+      memory_store: [before_initialization, initialized]
+      workflow_registries: [not_provisioned, provisioned]
+      domain_pack: [no_active_generation, active_with_complete_contiguous_retained_generations]
+    domain_pack_generation_closure:
+      cardinality: once_per_retained_generation
+      members:
+        - ledger/<record-digest>.yaml
+        - generations/<generation>-<record-digest>/generation.yaml
+        - generations/<generation>-<record-digest>/lock.yaml
+        - generations/<generation>-<record-digest>/preflight.yaml
+        - generations/<generation>-<record-digest>/compatibility.yaml
+        - generations/<generation>-<record-digest>/receipt.yaml
+        - generations/<generation>-<record-digest>/resolution-request.yaml
+        - generations/<generation>-<record-digest>/composition-request.yaml
+        - generations/<generation>-<record-digest>/trust-input.yaml
+        - receipts/<receipt-digest>.yaml
+      shared_objects: exact sorted union of every retained generation object_raw_digests
+      active_binding: active generation equals WorkflowEffectiveBundleIdentity.domain_pack_generation.generation
+    shipped_public_sidecars:
+      - state.yaml and root ledger
+      - claims-active/*.yaml and official handoffs/expired-claims/*.yaml
+      - artifacts/**, evidence/**, snapshots/**, ledger/*.ndjson, requests/**, runtime/**
+      - stories/**, agents/**, preflight.yaml, index/effect-targets.ndjson, traces/events.ndjson
+      - memory/events.ndjson
+      - source-derived state-relative ToolEffect/MCP outputs explicitly counted as state_effect_output
+      - domain-packs/operator-sources.yaml and domain-packs/rebase-plan.yaml when present
+      - operator/workflow-principal-registry.yaml and operator/workflow-broker-registry.yaml when provisioned
+    path_policy:
+      no_generic_untyped_state_file: true
+      dynamic_paths: admitted only by a source-specific typed kind and exact source-state count
+  archive_entry_policy:
+    no_follow: required
+    regular_file_only: true
+    hardlink_check: no-follow filesystem link count must equal one
+    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, omitted, extra, substituted]
+    private_roots_forbidden:
       - sidecar/operator/workflow-secrets/**
       - sidecar/operator/secrets/**
-      - private-keys/**, *.key, and *.pem
-    ordering: BackupEntryKind declaration order; repeated typed closures use lexical logical-path order
+      - private-keys/**
+      - "*.key"
+      - "*.pem"
   snapshot_protocol:
-    recovery_before_copy: true
-    actual_lock_order:
+    mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
+    lock_order:
+      - <operator-root>/.forge-domain-pack-registry-anchor.lock
+      - <operator-root>/.forge-domain-pack-learning-anchor.lock
+      - locks/domain-packs.operator-sources.lock
+      - locks/domain-packs.rebase-plan.lock
       - locks/domain-packs.lifecycle.lock
+      - <operator-root>/.workflow-credential.lock
+      - <operator-root>/.workflow-broker.lock
       - locks/workflow-governance.lock
       - locks/claims.wal.lock
       - locks/workflow-action-replay.lock
+      - locks/memory.log.lock
+      - command-evidence append-json-line lock
+      - effect-index append-json-line lock
       - locks/effects.lock
       - locks/replay.wal.lock
-      - <protected-anchor>.lock
-    invariant: effect lock precedes replay lock; all mutation/recovery paths are excluded through recovery, no-follow enumeration, staged copy/hash/fsync, and final manifest publication
-    publish: manifest is fsynced and atomically published last
-  external_authorities:
-    broker_public_trust:
-      authority_root: sidecar-root/operator/workflow-broker-registry.yaml
-      format: forge_workflow_broker_registry_v1
-      binds: [identity, public_key_fingerprint, observed_generation, registry_sha256]
-    replay_rollback_anchor:
-      restore_preflight: read and compare current protected anchor before replay or restore writes
-      binds: [schema_version, protected_anchor_identity, deployment_id, epoch, generation, previous_anchor_digest, anchor_document_sha256, replay_wal_manifest_digest, replay_wal_prefix_digest, replay_wal_last_seq, replay_wal_record_count, replay_wal_byte_length]
-  restore_compatibility:
-    mode: exact_v1_only
-    rejects:
-      - migration, merge, repair, truncation, recreation, or best-effort restore
-      - Project Link, release, effective-bundle, ledger-head, or entry binding mismatch
-      - stale protected-anchor generation or replay-head binding mismatch
-      - mixed-project, partial, extra, omitted, substituted, or symlink-backed inputs
+      - trace append-json-line lock
+      - <protected-replay-anchor>.lock
+    derivation:
+      - shipped Domain Pack mutation order is supply-chain anchor -> reviewed-learning anchor -> operator source/rebase -> lifecycle
+      - workflow effective transactions use lifecycle -> workflow governance -> workflow action replay
+      - prepared execution holds effect -> replay while appending the principal trace, so trace follows replay
+    invariant_limits:
+      - cooperative locks exclude only mutation paths that actually acquire them
+      - claim cache/handoff publication, state bootstrap, and other unlocked producers require trusted exclusive producer quiescence plus stable double enumeration
+      - no manifest boolean may assert quiescence or restore preflight
+  replay_anchor:
+    preserved_source_fields: [schema_version, deployment_id, epoch, generation, previous_anchor_digest, head]
+    head_fields: [manifest_digest, wal_prefix_digest, last_seq, record_count, byte_len]
+    invariants:
+      - generation is nonzero
+      - generation one has no predecessor; later generations require one
+      - epoch is 32-byte lowercase hex
+      - record_count equals last_seq
+      - manifest digest equals archived replay manifest hash
+      - WAL prefix digest and byte length equal archived replay WAL
+      - no comparison with project/governance state counters
+  restore:
+    target: empty staging root only
+    preflight_api_requires:
+      - exact regular archive member verification
+      - exact Project Link bytes/hash/typed document verification
+      - current external authorities equal trusted expectation
+      - exclusive mutation boundary held
+    publish: fsync and atomically publish restored state only after complete validation
   fixtures:
-    valid: contracts/fixtures/backup-manifest/valid/complete-state-v1.yaml
+    valid:
+      - contracts/fixtures/backup-manifest/valid/empty-pre-rotation-v1.yaml
+      - contracts/fixtures/backup-manifest/valid/multi-generation-v1.yaml
     hostile: contracts/fixtures/backup-manifest/hostile/

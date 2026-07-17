@@ -1,9 +1,8 @@
-//! Closed, source-derived contract for complete Forge state backups.
+//! Fail-closed, source-derived backup authority and continuity contract.
 //!
-//! This is deliberately an authority inventory, not a recursive file backup
-//! format. Every v1 member has a typed name and a source-defined path. Archive
-//! walkers must no-follow enumerate the declared roots, reject private roots
-//! before constructing entries, and compare their result exactly to this list.
+//! `validate_integrity` proves only internal consistency. Authenticity and
+//! rollback/substitution resistance require `validate_for_restore` with a
+//! trusted expectation and restore preflight supplied outside the archive.
 
 use crate::{
     ProjectLinkDocument, WorkflowEffectiveBundleIdentity, WorkflowGovernanceReleaseIdentity,
@@ -14,6 +13,10 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const BACKUP_MANIFEST_SCHEMA_VERSION: &str = "forge_project_state_backup_manifest_v1";
+pub const BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION: &str =
+    "forge_project_state_backup_trusted_expectation_v1";
+pub const BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION: &str =
+    "forge_project_state_backup_restore_preflight_v1";
 const SET_DIGEST_DOMAIN: &[u8] = b"forge-method:project-state-backup-set:v1\0";
 const PROJECT_LINK_ARCHIVE_PATH: &str = "project/.forge-method.yaml";
 
@@ -28,20 +31,15 @@ pub struct BackupManifestDocument {
 #[serde(deny_unknown_fields)]
 pub struct BackupManifest {
     pub format: BackupManifestFormat,
-    /// The full Project Link is retained so archive mapping cannot silently
-    /// assume the default sidecar layout.
     pub project: BackupProjectBinding,
-    /// The existing release identity is retained verbatim, including
-    /// `release_version`.
     pub workflow_release: WorkflowGovernanceReleaseIdentity,
-    /// The existing effective bundle identity is retained verbatim, including
-    /// both runtime identities, receipt context, and domain-pack bindings.
     pub effective_epoch: BackupEffectiveEpochBinding,
-    pub snapshot: BackupSnapshotBinding,
-    /// Exact ordered, typed authority set. No catch-all state-file variant is
-    /// available in v1.
+    pub source_state: BackupSourceState,
+    pub snapshot_protocol: BackupSnapshotProtocol,
     pub entries: Vec<BackupEntry>,
-    pub external_authorities: BackupExternalAuthorities,
+    /// Observations are integrity-bound but are not trust roots. Restore compares
+    /// them with independently supplied trusted expectations.
+    pub external_authority_observations: BackupExternalAuthorityObservations,
     pub forbidden_private_material: Vec<BackupForbiddenPrivateMaterial>,
     pub manifest_set_digest: String,
 }
@@ -56,9 +54,8 @@ pub enum BackupManifestFormat {
 #[serde(deny_unknown_fields)]
 pub struct BackupProjectBinding {
     pub project_link: ProjectLinkDocument,
+    /// SHA-256 of the exact archived Project Link bytes, not a reserialization.
     pub project_link_sha256: String,
-    pub state_generation: u64,
-    /// Physical-to-logical mapping derived from the exact Project Link.
     pub archive_layout: BackupArchiveLayout,
 }
 
@@ -67,11 +64,7 @@ pub struct BackupProjectBinding {
 pub struct BackupArchiveLayout {
     pub project_link_archive_path: String,
     pub sidecar_archive_root: String,
-    /// The normalized relative relationship `state_root - sidecar_root` from
-    /// the Project Link. It is never assumed to be `.forge-method`.
     pub state_root_relative_to_sidecar: String,
-    /// Directories are created during restore but are not archive members.
-    pub restore_created_directories: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -83,18 +76,119 @@ pub struct BackupEffectiveEpochBinding {
     pub governance_ledger_head_digest: String,
 }
 
+/// Typed projection of healthy source states. Counts are exact no-follow
+/// regular-file counts captured under the snapshot protocol, not minima.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct BackupSnapshotBinding {
-    /// Actual cooperative lock files, held in this order through recovery,
-    /// no-follow enumeration, staged copy/hash/fsync, and manifest publish.
+pub struct BackupSourceState {
+    pub project_state: BackupProjectState,
+    pub claim_store: BackupClaimStoreState,
+    pub workflow_governance_store: BackupInitializationState,
+    pub workflow_action_replay_store: BackupInitializationState,
+    pub effect_store: BackupEffectStoreState,
+    pub memory_store: BackupInitializationState,
+    pub domain_pack_store: BackupDomainPackStoreState,
+    pub workflow_principal_registry: BackupProvisioningState,
+    pub workflow_broker_registry: BackupProvisioningState,
+    pub public_sidecars: BackupPublicSidecarCounts,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupProjectState {
+    InitializedBeforeStart,
+    StartedWithStateYaml,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupInitializationState {
+    BeforeInitialization,
+    Initialized,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupProvisioningState {
+    NotProvisioned,
+    Provisioned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupClaimStoreState {
+    EmptyBeforeFirstClaim,
+    Active {
+        /// Number of complete snapshot/archive generations. The current
+        /// manifest names only the latest pair, but all retained pairs remain
+        /// continuity material and are counted independently.
+        rotation_generations: u64,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupEffectStoreState {
+    EmptyBeforeFirstEffect,
+    Active { compaction_manifest_present: bool },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupDomainPackStoreState {
+    NoActiveGeneration {
+        operator_sources_present: bool,
+        rebase_plan_present: bool,
+    },
+    Active {
+        operator_sources_present: bool,
+        rebase_plan_present: bool,
+        active_generation: u64,
+        generations: Vec<BackupDomainPackGeneration>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDomainPackGeneration {
+    pub generation: u64,
+    pub record_digest: String,
+    pub receipt_digest: String,
+    /// Exact immutable object digests referenced by this generation. Objects
+    /// shared by retained generations appear once in the archive.
+    pub object_raw_digests: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupPublicSidecarCounts {
+    pub claim_cache_files: u64,
+    pub official_handoff_artifacts: u64,
+    pub artifacts: u64,
+    pub evidence: u64,
+    pub snapshots: u64,
+    pub ledger_streams: u64,
+    pub request_streams: u64,
+    pub runtime_snapshots: u64,
+    pub story_state: u64,
+    pub agent_registry_state: u64,
+    pub state_effect_outputs: u64,
+    pub preflight_profiles: u64,
+    pub effect_metadata_indexes: u64,
+    pub trace_logs: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupSnapshotProtocol {
+    pub mode: BackupSnapshotMode,
     pub lock_order: Vec<BackupLockScope>,
-    pub stores_recovered_before_copy: bool,
-    pub manifest_published_last: bool,
-    /// Restore must read and compare the currently protected external anchor
-    /// before any replay or write; an internally valid older backup fails.
-    pub restore_reads_current_anchor_before_replay: bool,
-    pub restore_compatibility: BackupRestoreCompatibility,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupSnapshotMode {
+    CooperativeLocksWithProducerQuiescenceAndStableEnumeration,
 }
 
 #[derive(
@@ -102,10 +196,20 @@ pub struct BackupSnapshotBinding {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum BackupLockScope {
+    ExternalDomainPackSupplyChainAnchor,
+    ExternalDomainPackReviewedLearningAnchor,
+    DomainPackOperatorSources,
+    DomainPackRebasePlan,
     DomainPackLifecycle,
+    WorkflowCredentialRegistry,
+    WorkflowBrokerRegistry,
     WorkflowGovernance,
     ClaimWal,
     WorkflowActionReplayWal,
+    MemoryLog,
+    CommandEvidenceAppend,
+    EffectMetadataIndexAppend,
+    TraceAppend,
     EffectWal,
     ReplayWal,
     ExternalReplayAnchor,
@@ -114,84 +218,103 @@ pub enum BackupLockScope {
 impl BackupLockScope {
     pub const fn relative_path(self) -> &'static str {
         match self {
+            Self::ExternalDomainPackSupplyChainAnchor => {
+                "<operator-root>/.forge-domain-pack-registry-anchor.lock"
+            }
+            Self::ExternalDomainPackReviewedLearningAnchor => {
+                "<operator-root>/.forge-domain-pack-learning-anchor.lock"
+            }
+            Self::DomainPackOperatorSources => "locks/domain-packs.operator-sources.lock",
+            Self::DomainPackRebasePlan => "locks/domain-packs.rebase-plan.lock",
             Self::DomainPackLifecycle => "locks/domain-packs.lifecycle.lock",
+            Self::WorkflowCredentialRegistry => "<operator-root>/.workflow-credential.lock",
+            Self::WorkflowBrokerRegistry => "<operator-root>/.workflow-broker.lock",
             Self::WorkflowGovernance => "locks/workflow-governance.lock",
             Self::ClaimWal => "locks/claims.wal.lock",
             Self::WorkflowActionReplayWal => "locks/workflow-action-replay.lock",
+            Self::MemoryLog => "locks/memory.log.lock",
+            Self::CommandEvidenceAppend => ".forge-method/locks/append-json-line/79899deda60f0cf87554de78196657720f9653f755719f3fbd6f89e296f3ab19.lock",
+            Self::EffectMetadataIndexAppend => ".forge-method/locks/append-json-line/de843c78e5ad008a50494b3ebdd5612f7cb346a95cfd8054a75429b8ce869ef5.lock",
+            Self::TraceAppend => "locks/append-json-line/39fe4f5a2f2718849442e553b8bbb43026b04915a02baa3cad08ed99ed42c341.lock",
             Self::EffectWal => "locks/effects.lock",
             Self::ReplayWal => "locks/replay.wal.lock",
-            // The actual anchor lock is the protected anchor filename plus
-            // `.lock`; its parent is outside the sidecar by design.
-            Self::ExternalReplayAnchor => "<protected-anchor>.lock",
+            Self::ExternalReplayAnchor => "<protected-replay-anchor>.lock",
         }
     }
 }
 
-/// Effect precedes replay, matching `replay_wal`'s required global ordering.
+/// Compatible with shipped nested acquisitions: supply -> reviewed ->
+/// operator-source/rebase -> lifecycle -> workflow, and effect -> replay.
 pub const BACKUP_LOCK_ORDER: &[BackupLockScope] = &[
+    BackupLockScope::ExternalDomainPackSupplyChainAnchor,
+    BackupLockScope::ExternalDomainPackReviewedLearningAnchor,
+    BackupLockScope::DomainPackOperatorSources,
+    BackupLockScope::DomainPackRebasePlan,
     BackupLockScope::DomainPackLifecycle,
+    BackupLockScope::WorkflowCredentialRegistry,
+    BackupLockScope::WorkflowBrokerRegistry,
     BackupLockScope::WorkflowGovernance,
     BackupLockScope::ClaimWal,
     BackupLockScope::WorkflowActionReplayWal,
+    BackupLockScope::MemoryLog,
+    BackupLockScope::CommandEvidenceAppend,
+    BackupLockScope::EffectMetadataIndexAppend,
     BackupLockScope::EffectWal,
     BackupLockScope::ReplayWal,
+    BackupLockScope::TraceAppend,
     BackupLockScope::ExternalReplayAnchor,
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum BackupRestoreCompatibility {
-    ExactV1Only,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum BackupMaterialClass {
-    Required,
-}
-
-/// Source-derived durable authority inventory. The names and path forms match
-/// the store APIs; adding a new durable authority requires a new manifest
-/// version rather than being admitted through a generic file variant.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum BackupEntryKind {
     ProjectLink,
+    ProjectState,
+    RootLedger,
+    ReplayWalManifest,
+    ReplayWal,
     WorkflowGovernanceWal,
     ClaimWal,
     ClaimWalManifest,
     ClaimWalSnapshot,
     ClaimWalArchive,
-    ReplayWalManifest,
-    ReplayWal,
     WorkflowActionReplayManifest,
     WorkflowActionReplayWal,
     EffectWal,
     EffectWalCompactionManifest,
-    DomainPackActiveLock,
+    MemoryEventLog,
+    DomainPackOperatorSources,
+    DomainPackRebasePlan,
+    DomainPackActivePointer,
     DomainPackLedgerRecord,
+    DomainPackGenerationManifest,
     DomainPackGenerationLock,
     DomainPackGenerationPreflight,
+    DomainPackGenerationCompatibility,
     DomainPackGenerationReceipt,
-    DomainPackReceipt,
+    DomainPackGenerationResolutionRequest,
+    DomainPackGenerationCompositionRequest,
+    DomainPackGenerationTrustInput,
+    DomainPackPublishedReceipt,
     DomainPackObject,
     PublicPrincipalRegistry,
     PublicBrokerRegistry,
-}
-
-impl BackupEntryKind {
-    const fn may_repeat(self) -> bool {
-        matches!(
-            self,
-            Self::ClaimWalSnapshot
-                | Self::ClaimWalArchive
-                | Self::DomainPackLedgerRecord
-                | Self::DomainPackReceipt
-                | Self::DomainPackObject
-        )
-    }
+    ClaimCache,
+    OfficialHandoffArtifact,
+    Artifact,
+    Evidence,
+    Snapshot,
+    LedgerStream,
+    RequestStream,
+    RuntimeSnapshot,
+    StoryState,
+    AgentRegistryState,
+    StateEffectOutput,
+    PreflightProfile,
+    EffectMetadataIndex,
+    TraceLog,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -199,45 +322,34 @@ impl BackupEntryKind {
 pub enum BackupArchiveEntryType {
     RegularFile,
     Symlink,
+    Hardlink,
+    Directory,
+    Fifo,
+    BlockDevice,
+    CharacterDevice,
+    Socket,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BackupEntry {
     pub material: BackupEntryKind,
-    pub classification: BackupMaterialClass,
     pub logical_path: String,
     pub entry_type: BackupArchiveEntryType,
     pub byte_length: u64,
     pub sha256: String,
-    pub project_id: String,
-    pub state_generation: u64,
-    pub workflow_release_digest: String,
-    pub effective_receipt_context_digest: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct BackupExternalAuthorities {
-    pub broker_public_trust: BackupPublicBrokerTrust,
+pub struct BackupExternalAuthorityObservations {
     pub replay_rollback_anchor: BackupReplayRollbackAnchor,
+    pub domain_pack_supply_chain: Option<BackupDomainPackSupplyChainAuthority>,
+    pub domain_pack_reviewed_learning: Option<BackupDomainPackLearningAuthority>,
+    pub workflow_principal_registry: Option<BackupPublicRegistryAuthority>,
+    pub workflow_broker_registry: Option<BackupPublicRegistryAuthority>,
 }
 
-/// The broker registry is the real public authority root. Private key roots
-/// are neither a registry alternative nor archive material.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct BackupPublicBrokerTrust {
-    pub registry_format: String,
-    pub registry_logical_path: String,
-    pub identity: String,
-    pub public_key_fingerprint: String,
-    pub observed_generation: u64,
-    pub registry_sha256: String,
-}
-
-/// Complete replay-anchor document binding. Restore preflight compares this
-/// whole value with the current protected anchor before replaying a WAL.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BackupReplayRollbackAnchor {
@@ -255,6 +367,50 @@ pub struct BackupReplayRollbackAnchor {
     pub replay_wal_byte_length: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDomainPackSupplyChainAuthority {
+    pub schema_version: String,
+    pub operator_root_identity: String,
+    pub registry_id: String,
+    pub audience: String,
+    pub generation: u64,
+    pub anchor_document_sha256: String,
+    pub registry_snapshot_digest: String,
+    pub trust_policy_digest: String,
+    pub registry_file_sha256: String,
+    pub trust_policy_file_sha256: String,
+    pub capability_registry_file_sha256: String,
+    pub sandbox_policy_file_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupDomainPackLearningAuthority {
+    pub schema_version: String,
+    pub operator_root_identity: String,
+    pub reviewer_registry_id: String,
+    pub reviewer_audience: String,
+    pub reviewer_generation: u64,
+    pub reviewer_registry_digest: String,
+    pub reviewed_registry_id: String,
+    pub reviewed_audience: String,
+    pub reviewed_generation: u64,
+    pub reviewed_registry_digest: String,
+    pub anchor_document_sha256: String,
+    pub reviewer_registry_file_sha256: String,
+    pub reviewed_registry_file_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupPublicRegistryAuthority {
+    pub schema_version: String,
+    pub audience: String,
+    pub registry_sha256: String,
+    pub public_identity_set_digest: String,
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
@@ -263,6 +419,59 @@ pub enum BackupForbiddenPrivateMaterial {
     BrokerPrivateKeys,
     WorkflowSecretRoots,
     OperatorSecretRoots,
+    McpPrivateKeys,
+}
+
+/// Versioned value loaded from trusted storage or operator policy, never from
+/// the archive being restored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupTrustedExpectationV1 {
+    pub schema_version: String,
+    pub manifest_set_digest: String,
+    pub project_id: String,
+    pub project_link: ProjectLinkDocument,
+    pub project_link_sha256: String,
+    pub workflow_release: WorkflowGovernanceReleaseIdentity,
+    pub effective_epoch: BackupEffectiveEpochBinding,
+    pub external_authorities: BackupExternalAuthorityObservations,
+}
+
+/// Trusted restore API input. This is intentionally not deserializable from
+/// archive YAML. The restore engine constructs it after no-follow filesystem
+/// verification and reading current protected authorities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupRestorePreflightV1 {
+    pub schema_version: String,
+    pub archive_members: BackupArchiveMembersStatus,
+    pub project_link: BackupProjectLinkVerificationStatus,
+    pub target_state: BackupRestoreTargetState,
+    pub producer_quiescence: BackupProducerQuiescence,
+    pub current_external_authorities: BackupExternalAuthorityObservations,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupProjectLinkVerificationStatus {
+    ExactBytesHashAndTypedDocumentVerified,
+    Unverified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupArchiveMembersStatus {
+    ExactRegularFilesVerified,
+    Unverified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupRestoreTargetState {
+    EmptyStagingRoot,
+    ExistingState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupProducerQuiescence {
+    ExclusiveMutationBoundaryHeld,
+    NotEstablished,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -275,10 +484,11 @@ pub enum BackupManifestValidationError {
     Blank {
         field: &'static str,
     },
+    InvalidProjectLink,
+    ProjectLinkEntryMismatch,
     InvalidLogicalPath {
         path: String,
     },
-    InvalidArchiveLayout,
     InvalidEntryPath {
         material: BackupEntryKind,
         path: String,
@@ -289,23 +499,22 @@ pub enum BackupManifestValidationError {
     NonRegularArchiveEntry {
         path: String,
     },
-    WrongMaterialClassification {
-        material: BackupEntryKind,
-    },
     EntriesNotCanonical,
-    DuplicateEntry {
+    DuplicateEntryPath {
+        path: String,
+    },
+    SourceStateInventoryMismatch {
         material: BackupEntryKind,
     },
-    MissingRequiredEntry {
-        material: BackupEntryKind,
-    },
-    BindingMismatch {
-        field: &'static str,
-    },
+    InvalidDomainPackProjection,
     InvalidSnapshotProtocol,
     InvalidExternalAuthorities,
     PrivateMaterialPolicyMismatch,
     ManifestSetDigestMismatch,
+    TrustedExpectationMismatch {
+        field: &'static str,
+    },
+    RestorePreflightRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -315,14 +524,22 @@ pub enum BackupArchiveVerificationError {
     DuplicateEntry { path: String },
     SubstitutedEntry { path: String },
     SymlinkOrNonRegularEntry { path: String },
+    ProjectLinkBytesMismatch,
 }
 
 impl BackupManifestDocument {
-    pub fn validate(&self) -> Result<(), BackupManifestValidationError> {
+    /// Internal archive integrity only. A successful result does not prove
+    /// authenticity, freshness, or resistance to whole-set substitution.
+    pub fn validate_integrity(&self) -> Result<(), BackupManifestValidationError> {
         if self.schema_version != BACKUP_MANIFEST_SCHEMA_VERSION {
             return Err(BackupManifestValidationError::UnsupportedSchemaVersion);
         }
-        self.backup_manifest.validate(self)
+        self.backup_manifest.validate_integrity(self)
+    }
+
+    /// Backward-compatible name with deliberately integrity-only semantics.
+    pub fn validate(&self) -> Result<(), BackupManifestValidationError> {
+        self.validate_integrity()
     }
 
     pub fn canonical_set_bytes(&self) -> Result<Vec<u8>, BackupManifestValidationError> {
@@ -344,6 +561,94 @@ impl BackupManifestDocument {
         hasher.update((canonical.len() as u64).to_be_bytes());
         hasher.update(canonical);
         Ok(format!("sha256:{:x}", hasher.finalize()))
+    }
+
+    pub fn validate_for_restore(
+        &self,
+        trusted: &BackupTrustedExpectationV1,
+        preflight: &BackupRestorePreflightV1,
+    ) -> Result<(), BackupManifestValidationError> {
+        self.validate_integrity()?;
+        if trusted.schema_version != BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION {
+            return Err(BackupManifestValidationError::UnsupportedSchemaVersion);
+        }
+        let manifest = &self.backup_manifest;
+        for (field, matches) in [
+            (
+                "trusted.manifest_set_digest",
+                trusted.manifest_set_digest == manifest.manifest_set_digest,
+            ),
+            (
+                "trusted.project_id",
+                trusted.project_id == manifest.project.project_link.project_id.0,
+            ),
+            (
+                "trusted.project_link",
+                trusted.project_link == manifest.project.project_link,
+            ),
+            (
+                "trusted.project_link_sha256",
+                trusted.project_link_sha256 == manifest.project.project_link_sha256,
+            ),
+            (
+                "trusted.workflow_release",
+                trusted.workflow_release == manifest.workflow_release,
+            ),
+            (
+                "trusted.effective_epoch",
+                trusted.effective_epoch == manifest.effective_epoch,
+            ),
+            (
+                "trusted.external_authorities",
+                trusted.external_authorities == manifest.external_authority_observations,
+            ),
+        ] {
+            if !matches {
+                return Err(BackupManifestValidationError::TrustedExpectationMismatch { field });
+            }
+        }
+        if preflight.schema_version != BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION
+            || preflight.archive_members != BackupArchiveMembersStatus::ExactRegularFilesVerified
+            || preflight.project_link
+                != BackupProjectLinkVerificationStatus::ExactBytesHashAndTypedDocumentVerified
+            || preflight.target_state != BackupRestoreTargetState::EmptyStagingRoot
+            || preflight.producer_quiescence
+                != BackupProducerQuiescence::ExclusiveMutationBoundaryHeld
+            || preflight.current_external_authorities != trusted.external_authorities
+        {
+            return Err(BackupManifestValidationError::RestorePreflightRejected);
+        }
+        Ok(())
+    }
+
+    pub fn verify_project_link_bytes(
+        &self,
+        raw: &[u8],
+        parsed_from_raw: &ProjectLinkDocument,
+    ) -> Result<(), BackupArchiveVerificationError> {
+        let digest = sha256(raw);
+        if digest != self.backup_manifest.project.project_link_sha256
+            || parsed_from_raw != &self.backup_manifest.project.project_link
+        {
+            return Err(BackupArchiveVerificationError::ProjectLinkBytesMismatch);
+        }
+        Ok(())
+    }
+
+    /// Validate source filesystem metadata before constructing an archive
+    /// member. `hard_link_count` must come from no-follow metadata (for example
+    /// Unix `st_nlink`); tar entry tags alone cannot detect a regular hardlink.
+    pub fn verify_filesystem_entry_class(
+        path: &str,
+        entry_type: BackupArchiveEntryType,
+        hard_link_count: u64,
+    ) -> Result<(), BackupArchiveVerificationError> {
+        if entry_type != BackupArchiveEntryType::RegularFile || hard_link_count != 1 {
+            return Err(BackupArchiveVerificationError::SymlinkOrNonRegularEntry {
+                path: path.to_owned(),
+            });
+        }
+        Ok(())
     }
 
     pub fn verify_archive_entries(
@@ -396,28 +701,25 @@ impl BackupManifestDocument {
 }
 
 impl BackupManifest {
-    fn validate(
+    fn validate_integrity(
         &self,
         document: &BackupManifestDocument,
     ) -> Result<(), BackupManifestValidationError> {
         if self.format != BackupManifestFormat::ForgeProjectStateBackupV1 {
             return Err(BackupManifestValidationError::UnsupportedManifestFormat);
         }
-        validate_project(&self.project)?;
+        validate_project(self)?;
         validate_release(&self.workflow_release)?;
         validate_effective_epoch(&self.effective_epoch)?;
-        if self.snapshot.lock_order.as_slice() != BACKUP_LOCK_ORDER
-            || !self.snapshot.stores_recovered_before_copy
-            || !self.snapshot.manifest_published_last
-            || !self.snapshot.restore_reads_current_anchor_before_replay
-            || self.snapshot.restore_compatibility != BackupRestoreCompatibility::ExactV1Only
+        if self.snapshot_protocol.mode
+            != BackupSnapshotMode::CooperativeLocksWithProducerQuiescenceAndStableEnumeration
+            || self.snapshot_protocol.lock_order.as_slice() != BACKUP_LOCK_ORDER
         {
             return Err(BackupManifestValidationError::InvalidSnapshotProtocol);
         }
 
         let mut previous = None;
         let mut paths = BTreeSet::new();
-        let mut seen = BTreeSet::new();
         for entry in &self.entries {
             validate_safe_path(&entry.logical_path)?;
             if is_forbidden_private_path(&entry.logical_path) {
@@ -430,58 +732,27 @@ impl BackupManifest {
                     path: entry.logical_path.clone(),
                 });
             }
-            if entry.classification != BackupMaterialClass::Required {
-                return Err(BackupManifestValidationError::WrongMaterialClassification {
-                    material: entry.material,
-                });
-            }
             validate_entry_path(entry, &self.project.archive_layout)?;
+            digest("entries[].sha256", &entry.sha256)?;
             let key = (entry.material, entry.logical_path.as_str());
-            if previous.is_some_and(|prior| prior >= key) || !paths.insert(&entry.logical_path) {
+            if previous.is_some_and(|prior| prior >= key) {
                 return Err(BackupManifestValidationError::EntriesNotCanonical);
             }
             previous = Some(key);
-            if !entry.material.may_repeat() && seen.contains(&entry.material) {
-                return Err(BackupManifestValidationError::DuplicateEntry {
-                    material: entry.material,
-                });
-            }
-            seen.insert(entry.material);
-            digest("entries[].sha256", &entry.sha256)?;
-            if entry.project_id != self.project.project_link.project_id.0 {
-                return Err(BackupManifestValidationError::BindingMismatch {
-                    field: "entries[].project_id",
-                });
-            }
-            if entry.state_generation != self.project.state_generation {
-                return Err(BackupManifestValidationError::BindingMismatch {
-                    field: "entries[].state_generation",
-                });
-            }
-            if entry.workflow_release_digest != self.workflow_release.release_digest {
-                return Err(BackupManifestValidationError::BindingMismatch {
-                    field: "entries[].workflow_release_digest",
-                });
-            }
-            if entry.effective_receipt_context_digest
-                != self.effective_epoch.effective_bundle.receipt_context_digest
-            {
-                return Err(BackupManifestValidationError::BindingMismatch {
-                    field: "entries[].effective_receipt_context_digest",
+            if !paths.insert(&entry.logical_path) {
+                return Err(BackupManifestValidationError::DuplicateEntryPath {
+                    path: entry.logical_path.clone(),
                 });
             }
         }
-        for material in required_materials() {
-            if !seen.contains(&material) {
-                return Err(BackupManifestValidationError::MissingRequiredEntry { material });
-            }
-        }
+        validate_source_inventory(self)?;
         validate_external_authorities(self)?;
         if self.forbidden_private_material
             != [
                 BackupForbiddenPrivateMaterial::BrokerPrivateKeys,
                 BackupForbiddenPrivateMaterial::WorkflowSecretRoots,
                 BackupForbiddenPrivateMaterial::OperatorSecretRoots,
+                BackupForbiddenPrivateMaterial::McpPrivateKeys,
             ]
         {
             return Err(BackupManifestValidationError::PrivateMaterialPolicyMismatch);
@@ -494,63 +765,37 @@ impl BackupManifest {
     }
 }
 
-fn required_materials() -> impl Iterator<Item = BackupEntryKind> {
-    [
-        BackupEntryKind::ProjectLink,
-        BackupEntryKind::WorkflowGovernanceWal,
-        BackupEntryKind::ClaimWal,
-        BackupEntryKind::ClaimWalManifest,
-        BackupEntryKind::ClaimWalSnapshot,
-        BackupEntryKind::ClaimWalArchive,
-        BackupEntryKind::ReplayWalManifest,
-        BackupEntryKind::ReplayWal,
-        BackupEntryKind::WorkflowActionReplayManifest,
-        BackupEntryKind::WorkflowActionReplayWal,
-        BackupEntryKind::EffectWal,
-        BackupEntryKind::EffectWalCompactionManifest,
-        BackupEntryKind::DomainPackActiveLock,
-        BackupEntryKind::DomainPackLedgerRecord,
-        BackupEntryKind::DomainPackGenerationLock,
-        BackupEntryKind::DomainPackGenerationPreflight,
-        BackupEntryKind::DomainPackGenerationReceipt,
-        BackupEntryKind::DomainPackReceipt,
-        BackupEntryKind::DomainPackObject,
-        BackupEntryKind::PublicPrincipalRegistry,
-        BackupEntryKind::PublicBrokerRegistry,
-    ]
-    .into_iter()
-}
-
-fn validate_project(project: &BackupProjectBinding) -> Result<(), BackupManifestValidationError> {
-    required(
-        "project.project_link.project_id",
-        &project.project_link.project_id.0,
-    )?;
-    if project.project_link.schema_version != crate::PROJECT_LINK_SCHEMA_VERSION {
-        return Err(BackupManifestValidationError::BindingMismatch {
-            field: "project.project_link.schema_version",
-        });
+fn validate_project(manifest: &BackupManifest) -> Result<(), BackupManifestValidationError> {
+    let project = &manifest.project;
+    required("project.project_id", &project.project_link.project_id.0)?;
+    if project.project_link.schema_version != crate::PROJECT_LINK_SCHEMA_VERSION
+        || leaf(&project.project_link.state_root.0) != Some(".forge-method")
+    {
+        return Err(BackupManifestValidationError::InvalidProjectLink);
     }
     digest("project.project_link_sha256", &project.project_link_sha256)?;
     let layout = &project.archive_layout;
     if layout.project_link_archive_path != PROJECT_LINK_ARCHIVE_PATH
         || layout.sidecar_archive_root != "sidecar"
-        || !safe_relative(&layout.state_root_relative_to_sidecar)
-        || layout.restore_created_directories
-            != vec![
-                "locks".to_owned(),
-                "wal/snapshots".to_owned(),
-                "wal/archive".to_owned(),
-                "domain-packs/objects".to_owned(),
-            ]
+        || layout.state_root_relative_to_sidecar != ".forge-method"
         || normalized_relative(
             &project.project_link.state_root.0,
             &project.project_link.sidecar_root.0,
         )
         .as_deref()
-            != Some(layout.state_root_relative_to_sidecar.as_str())
+            != Some(".forge-method")
     {
-        return Err(BackupManifestValidationError::InvalidArchiveLayout);
+        return Err(BackupManifestValidationError::InvalidProjectLink);
+    }
+    let link = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.material == BackupEntryKind::ProjectLink);
+    if link.is_none_or(|entry| {
+        entry.logical_path != PROJECT_LINK_ARCHIVE_PATH
+            || entry.sha256 != project.project_link_sha256
+    }) {
+        return Err(BackupManifestValidationError::ProjectLinkEntryMismatch);
     }
     Ok(())
 }
@@ -573,70 +818,356 @@ fn validate_effective_epoch(
         &value.governance_ledger_head_digest,
     )?;
     let bundle = &value.effective_bundle;
-    for (field, identity) in [
-        (
-            "effective_epoch.core_runtime_bundle.bundle_id",
-            &bundle.core_runtime_bundle.bundle_id.0,
-        ),
-        (
-            "effective_epoch.effective_runtime_bundle.bundle_id",
-            &bundle.effective_runtime_bundle.bundle_id.0,
-        ),
-    ] {
-        required(field, identity)?;
-    }
+    required(
+        "core_runtime_bundle.bundle_id",
+        &bundle.core_runtime_bundle.bundle_id.0,
+    )?;
+    required(
+        "effective_runtime_bundle.bundle_id",
+        &bundle.effective_runtime_bundle.bundle_id.0,
+    )?;
     for (field, value) in [
         (
-            "effective_epoch.core_runtime_bundle.bundle_digest",
+            "core.bundle_digest",
             &bundle.core_runtime_bundle.bundle_digest,
         ),
         (
-            "effective_epoch.core_runtime_bundle.policy_set_digest",
+            "core.policy_set_digest",
             &bundle.core_runtime_bundle.policy_set_digest,
         ),
         (
-            "effective_epoch.effective_runtime_bundle.bundle_digest",
+            "effective.bundle_digest",
             &bundle.effective_runtime_bundle.bundle_digest,
         ),
         (
-            "effective_epoch.effective_runtime_bundle.policy_set_digest",
+            "effective.policy_set_digest",
             &bundle.effective_runtime_bundle.policy_set_digest,
         ),
         (
-            "effective_epoch.receipt_context_digest",
+            "effective.receipt_context_digest",
             &bundle.receipt_context_digest,
         ),
     ] {
         digest(field, value)?;
     }
     if let Some(pack) = &bundle.domain_pack_generation {
-        for (field, value) in [
+        if pack.generation == 0 {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        }
+        for value in [
+            &pack.active_lock_digest,
+            &pack.composition_digest,
+            &pack.base_core_bundle_digest,
+            &pack.supply_chain_registry_digest,
+            &pack.reviewer_registry_digest,
+            &pack.reviewed_registry_digest,
+        ] {
+            digest("effective.domain_pack_digest", value)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_source_inventory(
+    manifest: &BackupManifest,
+) -> Result<(), BackupManifestValidationError> {
+    let mut expected = BTreeMap::<BackupEntryKind, u64>::new();
+    {
+        let mut require = |kind, count| {
+            expected.insert(kind, count);
+        };
+        require(BackupEntryKind::ProjectLink, 1);
+        require(BackupEntryKind::RootLedger, 1);
+        require(BackupEntryKind::ReplayWalManifest, 1);
+        require(BackupEntryKind::ReplayWal, 1);
+        require(
+            BackupEntryKind::ProjectState,
+            u64::from(
+                manifest.source_state.project_state == BackupProjectState::StartedWithStateYaml,
+            ),
+        );
+        require(
+            BackupEntryKind::WorkflowGovernanceWal,
+            u64::from(
+                manifest.source_state.workflow_governance_store
+                    == BackupInitializationState::Initialized,
+            ),
+        );
+        let (claim_wal, rotations) = match manifest.source_state.claim_store {
+            BackupClaimStoreState::EmptyBeforeFirstClaim => (0, 0),
+            BackupClaimStoreState::Active {
+                rotation_generations,
+            } => (1, rotation_generations),
+        };
+        require(BackupEntryKind::ClaimWal, claim_wal);
+        require(BackupEntryKind::ClaimWalManifest, u64::from(rotations > 0));
+        require(BackupEntryKind::ClaimWalSnapshot, rotations);
+        require(BackupEntryKind::ClaimWalArchive, rotations);
+        let action_initialized = manifest.source_state.workflow_action_replay_store
+            == BackupInitializationState::Initialized;
+        require(
+            BackupEntryKind::WorkflowActionReplayManifest,
+            u64::from(action_initialized),
+        );
+        require(
+            BackupEntryKind::WorkflowActionReplayWal,
+            u64::from(action_initialized),
+        );
+        match manifest.source_state.effect_store {
+            BackupEffectStoreState::EmptyBeforeFirstEffect => {
+                require(BackupEntryKind::EffectWal, 0);
+                require(BackupEntryKind::EffectWalCompactionManifest, 0);
+            }
+            BackupEffectStoreState::Active {
+                compaction_manifest_present,
+            } => {
+                require(BackupEntryKind::EffectWal, 1);
+                require(
+                    BackupEntryKind::EffectWalCompactionManifest,
+                    u64::from(compaction_manifest_present),
+                );
+            }
+        }
+        require(
+            BackupEntryKind::MemoryEventLog,
+            u64::from(manifest.source_state.memory_store == BackupInitializationState::Initialized),
+        );
+        require(
+            BackupEntryKind::PublicPrincipalRegistry,
+            u64::from(
+                manifest.source_state.workflow_principal_registry
+                    == BackupProvisioningState::Provisioned,
+            ),
+        );
+        require(
+            BackupEntryKind::PublicBrokerRegistry,
+            u64::from(
+                manifest.source_state.workflow_broker_registry
+                    == BackupProvisioningState::Provisioned,
+            ),
+        );
+    }
+    validate_domain_pack_inventory(manifest, &mut expected)?;
+    let sidecars = &manifest.source_state.public_sidecars;
+    for (kind, count) in [
+        (
+            BackupEntryKind::PreflightProfile,
+            sidecars.preflight_profiles,
+        ),
+        (
+            BackupEntryKind::EffectMetadataIndex,
+            sidecars.effect_metadata_indexes,
+        ),
+        (BackupEntryKind::TraceLog, sidecars.trace_logs),
+    ] {
+        if count > 1 {
+            return Err(
+                BackupManifestValidationError::SourceStateInventoryMismatch { material: kind },
+            );
+        }
+    }
+    for (kind, count) in [
+        (BackupEntryKind::ClaimCache, sidecars.claim_cache_files),
+        (
+            BackupEntryKind::OfficialHandoffArtifact,
+            sidecars.official_handoff_artifacts,
+        ),
+        (BackupEntryKind::Artifact, sidecars.artifacts),
+        (BackupEntryKind::Evidence, sidecars.evidence),
+        (BackupEntryKind::Snapshot, sidecars.snapshots),
+        (BackupEntryKind::LedgerStream, sidecars.ledger_streams),
+        (BackupEntryKind::RequestStream, sidecars.request_streams),
+        (BackupEntryKind::RuntimeSnapshot, sidecars.runtime_snapshots),
+        (BackupEntryKind::StoryState, sidecars.story_state),
+        (
+            BackupEntryKind::AgentRegistryState,
+            sidecars.agent_registry_state,
+        ),
+        (
+            BackupEntryKind::StateEffectOutput,
+            sidecars.state_effect_outputs,
+        ),
+        (
+            BackupEntryKind::PreflightProfile,
+            sidecars.preflight_profiles,
+        ),
+        (
+            BackupEntryKind::EffectMetadataIndex,
+            sidecars.effect_metadata_indexes,
+        ),
+        (BackupEntryKind::TraceLog, sidecars.trace_logs),
+    ] {
+        expected.insert(kind, count);
+    }
+    let mut actual = BTreeMap::<BackupEntryKind, u64>::new();
+    for entry in &manifest.entries {
+        *actual.entry(entry.material).or_default() += 1;
+    }
+    for kind in all_entry_kinds() {
+        if actual.get(&kind).copied().unwrap_or_default()
+            != expected.get(&kind).copied().unwrap_or_default()
+        {
+            return Err(
+                BackupManifestValidationError::SourceStateInventoryMismatch { material: kind },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_domain_pack_inventory(
+    manifest: &BackupManifest,
+    expected: &mut BTreeMap<BackupEntryKind, u64>,
+) -> Result<(), BackupManifestValidationError> {
+    let (operator, rebase, active, generations) = match &manifest.source_state.domain_pack_store {
+        BackupDomainPackStoreState::NoActiveGeneration {
+            operator_sources_present,
+            rebase_plan_present,
+        } => {
+            if *rebase_plan_present
+                || manifest
+                    .effective_epoch
+                    .effective_bundle
+                    .domain_pack_generation
+                    .is_some()
+            {
+                return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+            }
+            (*operator_sources_present, false, false, &[][..])
+        }
+        BackupDomainPackStoreState::Active {
+            operator_sources_present,
+            rebase_plan_present,
+            active_generation,
+            generations,
+        } => {
+            let effective_generation = manifest
+                .effective_epoch
+                .effective_bundle
+                .domain_pack_generation
+                .as_ref()
+                .map(|generation| generation.generation);
+            if generations.first().map(|generation| generation.generation) != Some(1)
+                || generations.last().map(|generation| generation.generation)
+                    != Some(*active_generation)
+                || effective_generation != Some(*active_generation)
+                || !generations
+                    .windows(2)
+                    .all(|pair| pair[0].generation.checked_add(1) == Some(pair[1].generation))
+            {
+                return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+            }
             (
-                "effective_epoch.domain_pack.active_lock_digest",
-                &pack.active_lock_digest,
+                *operator_sources_present,
+                *rebase_plan_present,
+                true,
+                generations.as_slice(),
+            )
+        }
+    };
+    expected.insert(
+        BackupEntryKind::DomainPackOperatorSources,
+        u64::from(operator),
+    );
+    expected.insert(BackupEntryKind::DomainPackRebasePlan, u64::from(rebase));
+    expected.insert(BackupEntryKind::DomainPackActivePointer, u64::from(active));
+    let count = generations.len() as u64;
+    for kind in [
+        BackupEntryKind::DomainPackLedgerRecord,
+        BackupEntryKind::DomainPackGenerationManifest,
+        BackupEntryKind::DomainPackGenerationLock,
+        BackupEntryKind::DomainPackGenerationPreflight,
+        BackupEntryKind::DomainPackGenerationCompatibility,
+        BackupEntryKind::DomainPackGenerationReceipt,
+        BackupEntryKind::DomainPackGenerationResolutionRequest,
+        BackupEntryKind::DomainPackGenerationCompositionRequest,
+        BackupEntryKind::DomainPackGenerationTrustInput,
+        BackupEntryKind::DomainPackPublishedReceipt,
+    ] {
+        expected.insert(kind, count);
+    }
+    let mut objects = BTreeSet::new();
+    let state = state_prefix(&manifest.project.archive_layout);
+    for generation in generations {
+        if generation.generation == 0 {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        }
+        digest("domain_pack.record_digest", &generation.record_digest)?;
+        digest("domain_pack.receipt_digest", &generation.receipt_digest)?;
+        let record = digest_token(&generation.record_digest)?;
+        let receipt = digest_token(&generation.receipt_digest)?;
+        let root = format!(
+            "{state}/domain-packs/generations/{:020}-{record}",
+            generation.generation
+        );
+        for (kind, path) in [
+            (
+                BackupEntryKind::DomainPackLedgerRecord,
+                format!("{state}/domain-packs/ledger/{record}.yaml"),
             ),
             (
-                "effective_epoch.domain_pack.composition_digest",
-                &pack.composition_digest,
+                BackupEntryKind::DomainPackGenerationManifest,
+                format!("{root}/generation.yaml"),
             ),
             (
-                "effective_epoch.domain_pack.base_core_bundle_digest",
-                &pack.base_core_bundle_digest,
+                BackupEntryKind::DomainPackGenerationLock,
+                format!("{root}/lock.yaml"),
             ),
             (
-                "effective_epoch.domain_pack.supply_chain_registry_digest",
-                &pack.supply_chain_registry_digest,
+                BackupEntryKind::DomainPackGenerationPreflight,
+                format!("{root}/preflight.yaml"),
             ),
             (
-                "effective_epoch.domain_pack.reviewer_registry_digest",
-                &pack.reviewer_registry_digest,
+                BackupEntryKind::DomainPackGenerationCompatibility,
+                format!("{root}/compatibility.yaml"),
             ),
             (
-                "effective_epoch.domain_pack.reviewed_registry_digest",
-                &pack.reviewed_registry_digest,
+                BackupEntryKind::DomainPackGenerationReceipt,
+                format!("{root}/receipt.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackGenerationResolutionRequest,
+                format!("{root}/resolution-request.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackGenerationCompositionRequest,
+                format!("{root}/composition-request.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackGenerationTrustInput,
+                format!("{root}/trust-input.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackPublishedReceipt,
+                format!("{state}/domain-packs/receipts/{receipt}.yaml"),
             ),
         ] {
-            digest(field, value)?;
+            if !has_entry(manifest, kind, &path) {
+                return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+            }
+        }
+        if generation
+            .object_raw_digests
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        }
+        for digest_value in &generation.object_raw_digests {
+            digest("domain_pack.object_raw_digest", digest_value)?;
+            objects.insert(digest_value.clone());
+        }
+    }
+    expected.insert(BackupEntryKind::DomainPackObject, objects.len() as u64);
+    for object in objects {
+        let path = format!("{state}/domain-packs/objects/{}", digest_token(&object)?);
+        let Some(entry) = manifest.entries.iter().find(|entry| {
+            entry.material == BackupEntryKind::DomainPackObject && entry.logical_path == path
+        }) else {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        };
+        if entry.sha256 != object {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
         }
     }
     Ok(())
@@ -645,71 +1176,142 @@ fn validate_effective_epoch(
 fn validate_external_authorities(
     manifest: &BackupManifest,
 ) -> Result<(), BackupManifestValidationError> {
-    let external = &manifest.external_authorities;
-    let broker = &external.broker_public_trust;
-    if broker.registry_format != "forge_workflow_broker_registry_v1"
-        || broker.registry_logical_path
-            != sidecar_path(
-                &manifest.project.archive_layout,
-                "operator/workflow-broker-registry.yaml",
-            )
+    let observations = &manifest.external_authority_observations;
+    let anchor = &observations.replay_rollback_anchor;
+    if anchor.schema_version != "0.1"
+        || anchor.deployment_id.trim().is_empty()
+        || anchor.protected_anchor_identity.trim().is_empty()
+        || anchor.epoch.len() != 64
+        || !anchor
+            .epoch
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        || anchor.generation == 0
+        || (anchor.generation == 1) != anchor.previous_anchor_digest.is_none()
+        || anchor.replay_wal_record_count != anchor.replay_wal_last_seq
     {
         return Err(BackupManifestValidationError::InvalidExternalAuthorities);
     }
-    required("broker_public_trust.identity", &broker.identity)?;
-    digest(
-        "broker_public_trust.public_key_fingerprint",
-        &broker.public_key_fingerprint,
-    )?;
-    digest(
-        "broker_public_trust.registry_sha256",
-        &broker.registry_sha256,
-    )?;
-    let broker_entry = manifest
-        .entries
-        .iter()
-        .find(|entry| entry.material == BackupEntryKind::PublicBrokerRegistry);
-    if broker_entry.is_none_or(|entry| entry.sha256 != broker.registry_sha256) {
-        return Err(BackupManifestValidationError::BindingMismatch {
-            field: "broker_public_trust.registry_sha256",
-        });
-    }
-
-    let anchor = &external.replay_rollback_anchor;
-    required(
-        "replay_rollback_anchor.protected_anchor_identity",
-        &anchor.protected_anchor_identity,
-    )?;
-    required(
-        "replay_rollback_anchor.deployment_id",
-        &anchor.deployment_id,
-    )?;
-    required("replay_rollback_anchor.epoch", &anchor.epoch)?;
-    digest(
-        "replay_rollback_anchor.anchor_document_sha256",
+    for value in [
         &anchor.anchor_document_sha256,
-    )?;
-    digest(
-        "replay_rollback_anchor.replay_wal_manifest_digest",
         &anchor.replay_wal_manifest_digest,
-    )?;
-    digest(
-        "replay_rollback_anchor.replay_wal_prefix_digest",
         &anchor.replay_wal_prefix_digest,
-    )?;
-    if let Some(previous) = &anchor.previous_anchor_digest {
-        digest("replay_rollback_anchor.previous_anchor_digest", previous)?;
+    ] {
+        digest("replay_anchor.digest", value)?;
     }
-    let manifest_entry = manifest
-        .entries
-        .iter()
-        .find(|entry| entry.material == BackupEntryKind::ReplayWalManifest);
-    if manifest_entry.is_none_or(|entry| entry.sha256 != anchor.replay_wal_manifest_digest)
-        || anchor.generation < manifest.project.state_generation
+    if let Some(previous) = &anchor.previous_anchor_digest {
+        digest("replay_anchor.previous_anchor_digest", previous)?;
+    }
+    let replay_manifest = entry(manifest, BackupEntryKind::ReplayWalManifest)?;
+    let replay_wal = entry(manifest, BackupEntryKind::ReplayWal)?;
+    if replay_manifest.sha256 != anchor.replay_wal_manifest_digest
+        || replay_wal.sha256 != anchor.replay_wal_prefix_digest
+        || replay_wal.byte_length != anchor.replay_wal_byte_length
     {
-        return Err(BackupManifestValidationError::BindingMismatch {
-            field: "replay_rollback_anchor",
-        });
+        return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+    }
+    let domain_active = matches!(
+        manifest.source_state.domain_pack_store,
+        BackupDomainPackStoreState::Active { .. }
+    );
+    if observations.domain_pack_supply_chain.is_some() != domain_active
+        || observations.domain_pack_reviewed_learning.is_some() != domain_active
+    {
+        return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+    }
+    if let Some(value) = &observations.domain_pack_supply_chain {
+        required(
+            "domain_supply.operator_root_identity",
+            &value.operator_root_identity,
+        )?;
+        required("domain_supply.registry_id", &value.registry_id)?;
+        required("domain_supply.audience", &value.audience)?;
+        if value.schema_version != "forge-domain-pack-registry-anchor-v1" || value.generation == 0 {
+            return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+        }
+        validate_digest_fields([
+            &value.anchor_document_sha256,
+            &value.registry_snapshot_digest,
+            &value.trust_policy_digest,
+            &value.registry_file_sha256,
+            &value.trust_policy_file_sha256,
+            &value.capability_registry_file_sha256,
+            &value.sandbox_policy_file_sha256,
+        ])?;
+    }
+    if let Some(value) = &observations.domain_pack_reviewed_learning {
+        for text in [
+            &value.operator_root_identity,
+            &value.reviewer_registry_id,
+            &value.reviewer_audience,
+            &value.reviewed_registry_id,
+            &value.reviewed_audience,
+        ] {
+            required("domain_learning.identity", text)?;
+        }
+        if value.schema_version != "forge-domain-pack-learning-anchor-v1"
+            || value.reviewer_generation == 0
+            || value.reviewed_generation == 0
+        {
+            return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+        }
+        validate_digest_fields([
+            &value.reviewer_registry_digest,
+            &value.reviewed_registry_digest,
+            &value.anchor_document_sha256,
+            &value.reviewer_registry_file_sha256,
+            &value.reviewed_registry_file_sha256,
+        ])?;
+        if let (Some(supply), Some(learning), Some(effective)) = (
+            &observations.domain_pack_supply_chain,
+            &observations.domain_pack_reviewed_learning,
+            &manifest
+                .effective_epoch
+                .effective_bundle
+                .domain_pack_generation,
+        ) {
+            if supply.registry_snapshot_digest != effective.supply_chain_registry_digest
+                || learning.reviewer_registry_digest != effective.reviewer_registry_digest
+                || learning.reviewed_registry_digest != effective.reviewed_registry_digest
+            {
+                return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+            }
+        }
+    }
+    validate_registry_observation(
+        manifest,
+        BackupEntryKind::PublicPrincipalRegistry,
+        &observations.workflow_principal_registry,
+        manifest.source_state.workflow_principal_registry,
+    )?;
+    validate_registry_observation(
+        manifest,
+        BackupEntryKind::PublicBrokerRegistry,
+        &observations.workflow_broker_registry,
+        manifest.source_state.workflow_broker_registry,
+    )
+}
+
+fn validate_registry_observation(
+    manifest: &BackupManifest,
+    kind: BackupEntryKind,
+    observation: &Option<BackupPublicRegistryAuthority>,
+    state: BackupProvisioningState,
+) -> Result<(), BackupManifestValidationError> {
+    if (state == BackupProvisioningState::Provisioned) != observation.is_some() {
+        return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+    }
+    if let Some(value) = observation {
+        required("public_registry.schema_version", &value.schema_version)?;
+        required("public_registry.audience", &value.audience)?;
+        digest("public_registry.registry_sha256", &value.registry_sha256)?;
+        digest(
+            "public_registry.public_identity_set_digest",
+            &value.public_identity_set_digest,
+        )?;
+        if entry(manifest, kind)?.sha256 != value.registry_sha256 {
+            return Err(BackupManifestValidationError::InvalidExternalAuthorities);
+        }
     }
     Ok(())
 }
@@ -718,75 +1320,98 @@ fn validate_entry_path(
     entry: &BackupEntry,
     layout: &BackupArchiveLayout,
 ) -> Result<(), BackupManifestValidationError> {
-    let state = |suffix: &str| {
-        sidecar_path(
-            layout,
-            &format!("{}/{}", layout.state_root_relative_to_sidecar, suffix),
-        )
+    let state = state_prefix(layout);
+    let exact = |suffix: &str| entry.logical_path == format!("{state}/{suffix}");
+    let below = |directory: &str| {
+        entry
+            .logical_path
+            .starts_with(&format!("{state}/{directory}/"))
     };
-    let sidecar = |suffix: &str| sidecar_path(layout, suffix);
+    let sidecar =
+        |suffix: &str| entry.logical_path == format!("{}/{suffix}", layout.sidecar_archive_root);
     let valid = match entry.material {
         BackupEntryKind::ProjectLink => entry.logical_path == layout.project_link_archive_path,
-        BackupEntryKind::WorkflowGovernanceWal => {
-            entry.logical_path == state("wal/workflow-governance.ndjson")
-        }
-        BackupEntryKind::ClaimWal => entry.logical_path == state("wal/claims.fmw1"),
-        BackupEntryKind::ClaimWalManifest => {
-            entry.logical_path == state("wal/claims.wal.manifest.json")
-        }
-        BackupEntryKind::ClaimWalSnapshot => {
-            entry.logical_path.starts_with(&state("wal/snapshots/"))
-        }
-        BackupEntryKind::ClaimWalArchive => entry.logical_path.starts_with(&state("wal/archive/")),
-        BackupEntryKind::ReplayWalManifest => {
-            entry.logical_path == state("replay-wal.manifest.json")
-        }
-        BackupEntryKind::ReplayWal => entry.logical_path == state("wal/replay.fmr1"),
+        BackupEntryKind::ProjectState => exact("state.yaml"),
+        BackupEntryKind::RootLedger => exact("ledger.ndjson"),
+        BackupEntryKind::ReplayWalManifest => exact("replay-wal.manifest.json"),
+        BackupEntryKind::ReplayWal => exact("wal/replay.fmr1"),
+        BackupEntryKind::WorkflowGovernanceWal => exact("wal/workflow-governance.ndjson"),
+        BackupEntryKind::ClaimWal => exact("wal/claims.fmw1"),
+        BackupEntryKind::ClaimWalManifest => exact("wal/claims.wal.manifest.json"),
+        BackupEntryKind::ClaimWalSnapshot => below("wal/snapshots"),
+        BackupEntryKind::ClaimWalArchive => below("wal/archive"),
         BackupEntryKind::WorkflowActionReplayManifest => {
-            entry.logical_path == state("workflow-action-replay.manifest.json")
+            exact("workflow-action-replay.manifest.json")
         }
-        BackupEntryKind::WorkflowActionReplayWal => {
-            entry.logical_path == state("wal/workflow-action-replay.jsonl")
-        }
-        BackupEntryKind::EffectWal => entry.logical_path == state("wal/effects.ndjson"),
+        BackupEntryKind::WorkflowActionReplayWal => exact("wal/workflow-action-replay.jsonl"),
+        BackupEntryKind::EffectWal => exact("wal/effects.ndjson"),
         BackupEntryKind::EffectWalCompactionManifest => {
-            entry.logical_path == state("wal/.effects.ndjson.compaction-manifest.json")
+            exact("wal/.effects.ndjson.compaction-manifest.json")
         }
-        BackupEntryKind::DomainPackActiveLock => {
-            entry.logical_path == state("domain-packs/active.lock.yaml")
+        BackupEntryKind::MemoryEventLog => exact("memory/events.ndjson"),
+        BackupEntryKind::DomainPackOperatorSources => exact("domain-packs/operator-sources.yaml"),
+        BackupEntryKind::DomainPackRebasePlan => exact("domain-packs/rebase-plan.yaml"),
+        BackupEntryKind::DomainPackActivePointer => exact("domain-packs/active.lock.yaml"),
+        BackupEntryKind::DomainPackLedgerRecord => {
+            below("domain-packs/ledger") && entry.logical_path.ends_with(".yaml")
         }
-        BackupEntryKind::DomainPackLedgerRecord => entry
-            .logical_path
-            .starts_with(&state("domain-packs/ledger/")),
+        BackupEntryKind::DomainPackGenerationManifest => {
+            below("domain-packs/generations") && entry.logical_path.ends_with("/generation.yaml")
+        }
         BackupEntryKind::DomainPackGenerationLock => {
-            entry
-                .logical_path
-                .starts_with(&state("domain-packs/generations/"))
-                && entry.logical_path.ends_with("/lock.yaml")
+            below("domain-packs/generations") && entry.logical_path.ends_with("/lock.yaml")
         }
         BackupEntryKind::DomainPackGenerationPreflight => {
-            entry
-                .logical_path
-                .starts_with(&state("domain-packs/generations/"))
-                && entry.logical_path.ends_with("/preflight.yaml")
+            below("domain-packs/generations") && entry.logical_path.ends_with("/preflight.yaml")
+        }
+        BackupEntryKind::DomainPackGenerationCompatibility => {
+            below("domain-packs/generations") && entry.logical_path.ends_with("/compatibility.yaml")
         }
         BackupEntryKind::DomainPackGenerationReceipt => {
-            entry
-                .logical_path
-                .starts_with(&state("domain-packs/generations/"))
-                && entry.logical_path.ends_with("/receipt.yaml")
+            below("domain-packs/generations") && entry.logical_path.ends_with("/receipt.yaml")
         }
-        BackupEntryKind::DomainPackReceipt => entry
-            .logical_path
-            .starts_with(&state("domain-packs/receipts/")),
-        BackupEntryKind::DomainPackObject => entry
-            .logical_path
-            .starts_with(&state("domain-packs/objects/")),
+        BackupEntryKind::DomainPackGenerationResolutionRequest => {
+            below("domain-packs/generations")
+                && entry.logical_path.ends_with("/resolution-request.yaml")
+        }
+        BackupEntryKind::DomainPackGenerationCompositionRequest => {
+            below("domain-packs/generations")
+                && entry.logical_path.ends_with("/composition-request.yaml")
+        }
+        BackupEntryKind::DomainPackGenerationTrustInput => {
+            below("domain-packs/generations") && entry.logical_path.ends_with("/trust-input.yaml")
+        }
+        BackupEntryKind::DomainPackPublishedReceipt => {
+            below("domain-packs/receipts") && entry.logical_path.ends_with(".yaml")
+        }
+        BackupEntryKind::DomainPackObject => below("domain-packs/objects"),
         BackupEntryKind::PublicPrincipalRegistry => {
-            entry.logical_path == sidecar("operator/workflow-principal-registry.yaml")
+            sidecar("operator/workflow-principal-registry.yaml")
         }
-        BackupEntryKind::PublicBrokerRegistry => {
-            entry.logical_path == sidecar("operator/workflow-broker-registry.yaml")
+        BackupEntryKind::PublicBrokerRegistry => sidecar("operator/workflow-broker-registry.yaml"),
+        BackupEntryKind::ClaimCache => {
+            below("claims-active") && entry.logical_path.ends_with(".yaml")
+        }
+        BackupEntryKind::OfficialHandoffArtifact => {
+            below("handoffs/expired-claims") && entry.logical_path.ends_with(".yaml")
+        }
+        BackupEntryKind::Artifact => below("artifacts"),
+        BackupEntryKind::Evidence => below("evidence"),
+        BackupEntryKind::Snapshot => below("snapshots"),
+        BackupEntryKind::LedgerStream => below("ledger") && entry.logical_path.ends_with(".ndjson"),
+        BackupEntryKind::RequestStream => {
+            (below("requests") || exact("requests.ndjson"))
+                && entry.logical_path.ends_with(".ndjson")
+        }
+        BackupEntryKind::RuntimeSnapshot => below("runtime"),
+        BackupEntryKind::StoryState => below("stories"),
+        BackupEntryKind::AgentRegistryState => below("agents"),
+        BackupEntryKind::PreflightProfile => exact("preflight.yaml"),
+        BackupEntryKind::EffectMetadataIndex => exact("index/effect-targets.ndjson"),
+        BackupEntryKind::TraceLog => exact("traces/events.ndjson"),
+        BackupEntryKind::StateEffectOutput => {
+            entry.logical_path.starts_with(&format!("{state}/"))
+                && !entry.logical_path.contains("/locks/")
         }
     };
     if valid {
@@ -799,8 +1424,94 @@ fn validate_entry_path(
     }
 }
 
-fn sidecar_path(layout: &BackupArchiveLayout, suffix: &str) -> String {
-    format!("{}/{}", layout.sidecar_archive_root, suffix)
+fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
+    [
+        BackupEntryKind::ProjectLink,
+        BackupEntryKind::ProjectState,
+        BackupEntryKind::RootLedger,
+        BackupEntryKind::ReplayWalManifest,
+        BackupEntryKind::ReplayWal,
+        BackupEntryKind::WorkflowGovernanceWal,
+        BackupEntryKind::ClaimWal,
+        BackupEntryKind::ClaimWalManifest,
+        BackupEntryKind::ClaimWalSnapshot,
+        BackupEntryKind::ClaimWalArchive,
+        BackupEntryKind::WorkflowActionReplayManifest,
+        BackupEntryKind::WorkflowActionReplayWal,
+        BackupEntryKind::EffectWal,
+        BackupEntryKind::EffectWalCompactionManifest,
+        BackupEntryKind::MemoryEventLog,
+        BackupEntryKind::DomainPackOperatorSources,
+        BackupEntryKind::DomainPackRebasePlan,
+        BackupEntryKind::DomainPackActivePointer,
+        BackupEntryKind::DomainPackLedgerRecord,
+        BackupEntryKind::DomainPackGenerationManifest,
+        BackupEntryKind::DomainPackGenerationLock,
+        BackupEntryKind::DomainPackGenerationPreflight,
+        BackupEntryKind::DomainPackGenerationCompatibility,
+        BackupEntryKind::DomainPackGenerationReceipt,
+        BackupEntryKind::DomainPackGenerationResolutionRequest,
+        BackupEntryKind::DomainPackGenerationCompositionRequest,
+        BackupEntryKind::DomainPackGenerationTrustInput,
+        BackupEntryKind::DomainPackPublishedReceipt,
+        BackupEntryKind::DomainPackObject,
+        BackupEntryKind::PublicPrincipalRegistry,
+        BackupEntryKind::PublicBrokerRegistry,
+        BackupEntryKind::ClaimCache,
+        BackupEntryKind::OfficialHandoffArtifact,
+        BackupEntryKind::Artifact,
+        BackupEntryKind::Evidence,
+        BackupEntryKind::Snapshot,
+        BackupEntryKind::LedgerStream,
+        BackupEntryKind::RequestStream,
+        BackupEntryKind::RuntimeSnapshot,
+        BackupEntryKind::StoryState,
+        BackupEntryKind::AgentRegistryState,
+        BackupEntryKind::StateEffectOutput,
+        BackupEntryKind::PreflightProfile,
+        BackupEntryKind::EffectMetadataIndex,
+        BackupEntryKind::TraceLog,
+    ]
+    .into_iter()
+}
+
+fn entry(
+    manifest: &BackupManifest,
+    kind: BackupEntryKind,
+) -> Result<&BackupEntry, BackupManifestValidationError> {
+    manifest
+        .entries
+        .iter()
+        .find(|entry| entry.material == kind)
+        .ok_or(BackupManifestValidationError::SourceStateInventoryMismatch { material: kind })
+}
+
+fn has_entry(manifest: &BackupManifest, kind: BackupEntryKind, path: &str) -> bool {
+    manifest
+        .entries
+        .iter()
+        .any(|entry| entry.material == kind && entry.logical_path == path)
+}
+
+fn state_prefix(layout: &BackupArchiveLayout) -> String {
+    format!(
+        "{}/{}",
+        layout.sidecar_archive_root, layout.state_root_relative_to_sidecar
+    )
+}
+
+fn digest_token(value: &str) -> Result<&str, BackupManifestValidationError> {
+    digest("digest_token", value)?;
+    Ok(&value[7..])
+}
+
+fn validate_digest_fields<'a>(
+    values: impl IntoIterator<Item = &'a String>,
+) -> Result<(), BackupManifestValidationError> {
+    for value in values {
+        digest("external_authority.digest", value)?;
+    }
+    Ok(())
 }
 
 fn is_forbidden_private_path(path: &str) -> bool {
@@ -811,23 +1522,16 @@ fn is_forbidden_private_path(path: &str) -> bool {
         || path.ends_with(".key")
 }
 
-fn safe_relative(path: &str) -> bool {
-    !path.is_empty() && validate_safe_path(path).is_ok()
-}
-
 fn normalized_relative(state_root: &str, sidecar_root: &str) -> Option<String> {
     fn normalize(value: &str) -> Option<Vec<String>> {
         let mut parts = Vec::new();
         for component in value.split('/') {
             match component {
                 "" | "." => {}
-                ".." => {
-                    if parts.last().is_some_and(|part| part != "..") {
-                        parts.pop();
-                    } else {
-                        parts.push("..".to_owned());
-                    }
+                ".." if parts.last().is_some_and(|part| part != "..") => {
+                    parts.pop();
                 }
+                ".." => parts.push("..".to_owned()),
                 value
                     if !value.contains('\\')
                         && !value.bytes().any(|byte| byte.is_ascii_control()) =>
@@ -842,6 +1546,10 @@ fn normalized_relative(state_root: &str, sidecar_root: &str) -> Option<String> {
     let sidecar = normalize(sidecar_root)?;
     let state = normalize(state_root)?;
     Some(state.strip_prefix(sidecar.as_slice())?.join("/"))
+}
+
+fn leaf(path: &str) -> Option<&str> {
+    path.trim_end_matches('/').rsplit('/').next()
 }
 
 fn validate_safe_path(path: &str) -> Result<(), BackupManifestValidationError> {
@@ -884,6 +1592,10 @@ fn digest(field: &'static str, value: &str) -> Result<(), BackupManifestValidati
     }
 }
 
+fn sha256(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -899,109 +1611,37 @@ mod tests {
         .unwrap()
     }
 
-    fn valid_fixture() -> BackupManifestDocument {
-        yaml_serde::from_str(&fixture("valid/complete-state-v1.yaml")).unwrap()
+    fn valid_fixture(path: &str) -> BackupManifestDocument {
+        yaml_serde::from_str(&fixture(path)).unwrap()
     }
 
-    #[derive(serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct HostileFixture {
-        case: String,
-        replacements: Vec<HostileReplacement>,
-    }
-
-    #[derive(serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct HostileReplacement {
-        from: String,
-        to: String,
-    }
-
-    fn hostile_fixture(path: &str) -> String {
-        let hostile: HostileFixture = yaml_serde::from_str(&fixture(path)).unwrap();
-        assert_eq!(
-            hostile.case,
-            path.rsplit('/')
-                .next()
-                .unwrap()
-                .trim_end_matches(".invalid.yaml")
-        );
-        let mut document = fixture("valid/complete-state-v1.yaml");
-        for replacement in hostile.replacements {
-            assert!(
-                document.contains(&replacement.from),
-                "{} must apply",
-                hostile.case
-            );
-            document = document.replacen(&replacement.from, &replacement.to, 1);
-        }
-        document
-    }
-
-    #[test]
-    fn backup_manifest_valid_fixture_is_complete_and_canonical() {
-        let document = valid_fixture();
-        document.validate().unwrap();
-        assert_eq!(
-            document.set_digest().unwrap(),
-            document.backup_manifest.manifest_set_digest
-        );
-    }
-
-    #[test]
-    fn frozen_hostile_fixtures_fail_closed() {
-        for name in [
-            "anchor-wal-binding.invalid.yaml",
-            "duplicate-entry.invalid.yaml",
-            "extra-entry.invalid.yaml",
-            "identity-domain-reviewer.invalid.yaml",
-            "identity-release-version.invalid.yaml",
-            "lock-effect-after-replay.invalid.yaml",
-            "mixed-project.invalid.yaml",
-            "omitted-claim-wal.invalid.yaml",
-            "omitted-entry.invalid.yaml",
-            "path-traversal.invalid.yaml",
-            "private-key-entry.invalid.yaml",
-            "private-root.invalid.yaml",
-            "release-mismatch.invalid.yaml",
-            "stale-generation.invalid.yaml",
-            "substituted-project.invalid.yaml",
-            "symlink-entry.invalid.yaml",
-            "unknown-field.invalid.yaml",
-            "unknown-version.invalid.yaml",
-        ] {
-            let parsed = yaml_serde::from_str::<BackupManifestDocument>(&hostile_fixture(
-                &format!("hostile/{name}"),
-            ));
-            assert!(
-                parsed.is_err() || parsed.unwrap().validate().is_err(),
-                "{name} must fail closed"
-            );
+    fn trusted(document: &BackupManifestDocument) -> BackupTrustedExpectationV1 {
+        let manifest = &document.backup_manifest;
+        BackupTrustedExpectationV1 {
+            schema_version: BACKUP_TRUSTED_EXPECTATION_SCHEMA_VERSION.to_owned(),
+            manifest_set_digest: manifest.manifest_set_digest.clone(),
+            project_link: manifest.project.project_link.clone(),
+            project_id: manifest.project.project_link.project_id.0.clone(),
+            project_link_sha256: manifest.project.project_link_sha256.clone(),
+            workflow_release: manifest.workflow_release.clone(),
+            effective_epoch: manifest.effective_epoch.clone(),
+            external_authorities: manifest.external_authority_observations.clone(),
         }
     }
 
-    #[test]
-    fn backup_manifest_rejects_each_typed_authority_omission_and_substitution() {
-        let document = valid_fixture();
-        for index in 0..document.backup_manifest.entries.len() {
-            let mut missing = document.backup_manifest.entries.clone();
-            missing.remove(index);
-            assert!(document.verify_archive_entries(&missing).is_err());
-            let mut replaced = document.backup_manifest.entries.clone();
-            replaced[index].sha256 = format!("sha256:{}", "f".repeat(64));
-            assert!(matches!(
-                document.verify_archive_entries(&replaced),
-                Err(BackupArchiveVerificationError::SubstitutedEntry { .. })
-            ));
+    fn preflight(document: &BackupManifestDocument) -> BackupRestorePreflightV1 {
+        BackupRestorePreflightV1 {
+            schema_version: BACKUP_RESTORE_PREFLIGHT_SCHEMA_VERSION.to_owned(),
+            project_link:
+                BackupProjectLinkVerificationStatus::ExactBytesHashAndTypedDocumentVerified,
+            archive_members: BackupArchiveMembersStatus::ExactRegularFilesVerified,
+            target_state: BackupRestoreTargetState::EmptyStagingRoot,
+            producer_quiescence: BackupProducerQuiescence::ExclusiveMutationBoundaryHeld,
+            current_external_authorities: document
+                .backup_manifest
+                .external_authority_observations
+                .clone(),
         }
-        let mut extra = document.backup_manifest.entries.clone();
-        let mut injected = extra[0].clone();
-        injected.logical_path = "sidecar/private-keys/injected.key".to_owned();
-        extra.push(injected);
-        assert!(matches!(
-            document.verify_archive_entries(&extra),
-            Err(BackupArchiveVerificationError::ExtraEntry { .. })
-        ));
     }
 
     fn recompute(document: &mut BackupManifestDocument) {
@@ -1009,68 +1649,163 @@ mod tests {
     }
 
     #[test]
-    fn hostile_identity_component_anchor_and_lock_order_mutations_fail_closed() {
-        let document = valid_fixture();
-        let mut release = document.clone();
-        release
-            .backup_manifest
-            .workflow_release
-            .release_version
-            .clear();
-        recompute(&mut release);
-        assert!(release.validate().is_err());
-
-        for component in 0..7 {
-            let mut effective = document.clone();
-            let bundle = &mut effective.backup_manifest.effective_epoch.effective_bundle;
-            match component {
-                0 => bundle.core_runtime_bundle.bundle_id.0.clear(),
-                1 => bundle.core_runtime_bundle.bundle_digest.clear(),
-                2 => bundle.core_runtime_bundle.policy_set_digest.clear(),
-                3 => bundle.effective_runtime_bundle.bundle_id.0.clear(),
-                4 => bundle.effective_runtime_bundle.bundle_digest.clear(),
-                5 => bundle.effective_runtime_bundle.policy_set_digest.clear(),
-                _ => bundle.receipt_context_digest.clear(),
-            }
-            recompute(&mut effective);
-            assert!(effective.validate().is_err());
-        }
-
-        for field in 0..6 {
-            let mut pack_document = document.clone();
-            let generation = pack_document
-                .backup_manifest
-                .effective_epoch
-                .effective_bundle
-                .domain_pack_generation
-                .as_mut()
+    fn healthy_empty_and_multi_generation_fixtures_validate() {
+        for path in [
+            "valid/empty-pre-rotation-v1.yaml",
+            "valid/multi-generation-v1.yaml",
+        ] {
+            let document = valid_fixture(path);
+            document.validate_integrity().unwrap();
+            document
+                .validate_for_restore(&trusted(&document), &preflight(&document))
                 .unwrap();
-            match field {
-                0 => generation.active_lock_digest.clear(),
-                1 => generation.composition_digest.clear(),
-                2 => generation.base_core_bundle_digest.clear(),
-                3 => generation.supply_chain_registry_digest.clear(),
-                4 => generation.reviewer_registry_digest.clear(),
-                _ => generation.reviewed_registry_digest.clear(),
-            }
-            recompute(&mut pack_document);
-            assert!(pack_document.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn recomputed_project_link_substitution_is_only_rejected_by_external_trust() {
+        let original = valid_fixture("valid/empty-pre-rotation-v1.yaml");
+        let expectation = trusted(&original);
+        let mut attack = original.clone();
+        attack.backup_manifest.project.project_link.project_id.0 = "substituted".to_owned();
+        recompute(&mut attack);
+        attack.validate_integrity().unwrap();
+        assert!(matches!(
+            attack.validate_for_restore(&expectation, &preflight(&attack)),
+            Err(BackupManifestValidationError::TrustedExpectationMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn named_hostile_documents_parse_then_fail_semantically() {
+        for name in [
+            "anchor-wal-binding.invalid.yaml",
+            "duplicate-entry.invalid.yaml",
+            "identity-domain-reviewer.invalid.yaml",
+            "identity-release-version.invalid.yaml",
+            "lock-effect-after-replay.invalid.yaml",
+            "omitted-claim-wal.invalid.yaml",
+            "omitted-entry.invalid.yaml",
+            "path-traversal.invalid.yaml",
+            "private-key-entry.invalid.yaml",
+            "private-root.invalid.yaml",
+            "stale-generation.invalid.yaml",
+            "symlink-entry.invalid.yaml",
+            "unknown-version.invalid.yaml",
+            "project-link-mismatch.invalid.yaml",
+            "omitted-authority.invalid.yaml",
+            "multiple-generation-omission.invalid.yaml",
+            "malformed-replay-projection.invalid.yaml",
+            "hardlink-entry.invalid.yaml",
+            "fifo-entry.invalid.yaml",
+        ] {
+            let document = valid_fixture(&format!("hostile/{name}"));
+            assert!(
+                document.validate_integrity().is_err(),
+                "{name} must parse and fail semantic validation"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_field_fixture_is_parse_rejection_not_semantic_coverage() {
+        assert!(yaml_serde::from_str::<BackupManifestDocument>(&fixture(
+            "hostile/unknown-field.invalid.yaml"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn recomputed_self_consistent_attacks_fail_trusted_validation() {
+        let rich = valid_fixture("valid/multi-generation-v1.yaml");
+        let rich_expectation = trusted(&rich);
+        for name in [
+            "external-domain-trust-substitution.invalid.yaml",
+            "multiple-generation-substitution.invalid.yaml",
+        ] {
+            let attack = valid_fixture(&format!("hostile/{name}"));
+            attack.validate_integrity().unwrap();
+            assert!(attack
+                .validate_for_restore(&rich_expectation, &preflight(&attack))
+                .is_err());
         }
 
-        let mut anchor = document.clone();
-        anchor
-            .backup_manifest
-            .external_authorities
-            .replay_rollback_anchor
-            .replay_wal_manifest_digest = format!("sha256:{}", "f".repeat(64));
-        recompute(&mut anchor);
-        assert!(anchor.validate().is_err());
-        let mut lock_order = document;
-        lock_order.backup_manifest.snapshot.lock_order.swap(4, 5);
-        recompute(&mut lock_order);
+        let empty = valid_fixture("valid/empty-pre-rotation-v1.yaml");
+        let empty_expectation = trusted(&empty);
+        for name in [
+            "project-link-substitution.invalid.yaml",
+            "mixed-project.invalid.yaml",
+            "substituted-project.invalid.yaml",
+            "release-mismatch.invalid.yaml",
+            "extra-entry.invalid.yaml",
+        ] {
+            let attack = valid_fixture(&format!("hostile/{name}"));
+            attack.validate_integrity().unwrap();
+            assert!(attack
+                .validate_for_restore(&empty_expectation, &preflight(&attack))
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn archive_api_rejects_every_omission_substitution_and_non_regular_class() {
+        let document = valid_fixture("valid/multi-generation-v1.yaml");
+        for index in 0..document.backup_manifest.entries.len() {
+            let mut missing = document.backup_manifest.entries.clone();
+            missing.remove(index);
+            assert!(matches!(
+                document.verify_archive_entries(&missing),
+                Err(BackupArchiveVerificationError::MissingEntry { .. })
+            ));
+            let mut replaced = document.backup_manifest.entries.clone();
+            let replacement = if replaced[index].sha256 == format!("sha256:{}", "f".repeat(64)) {
+                "e"
+            } else {
+                "f"
+            };
+            replaced[index].sha256 = format!("sha256:{}", replacement.repeat(64));
+            assert!(matches!(
+                document.verify_archive_entries(&replaced),
+                Err(BackupArchiveVerificationError::SubstitutedEntry { .. })
+            ));
+        }
+        for class in [
+            BackupArchiveEntryType::Symlink,
+            BackupArchiveEntryType::Hardlink,
+            BackupArchiveEntryType::Directory,
+            BackupArchiveEntryType::Fifo,
+            BackupArchiveEntryType::BlockDevice,
+            BackupArchiveEntryType::CharacterDevice,
+            BackupArchiveEntryType::Socket,
+        ] {
+            let mut observed = document.backup_manifest.entries.clone();
+            observed[0].entry_type = class;
+            assert!(matches!(
+                document.verify_archive_entries(&observed),
+                Err(BackupArchiveVerificationError::SymlinkOrNonRegularEntry { .. })
+            ));
+        }
+        let raw = fixture("valid/project-link.yaml");
+        let parsed: ProjectLinkDocument = yaml_serde::from_str(&raw).unwrap();
+        document
+            .verify_project_link_bytes(raw.as_bytes(), &parsed)
+            .unwrap();
+        assert!(BackupManifestDocument::verify_filesystem_entry_class(
+            "sidecar/.forge-method/ledger.ndjson",
+            BackupArchiveEntryType::RegularFile,
+            2,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn restore_preflight_is_trusted_api_not_archive_boolean() {
+        let document = valid_fixture("valid/empty-pre-rotation-v1.yaml");
+        let mut rejected = preflight(&document);
+        rejected.producer_quiescence = BackupProducerQuiescence::NotEstablished;
         assert!(matches!(
-            lock_order.validate(),
-            Err(BackupManifestValidationError::InvalidSnapshotProtocol)
+            document.validate_for_restore(&trusted(&document), &rejected),
+            Err(BackupManifestValidationError::RestorePreflightRejected)
         ));
     }
 }

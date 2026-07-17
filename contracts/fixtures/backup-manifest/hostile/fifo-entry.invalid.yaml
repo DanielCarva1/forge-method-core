@@ -1,5 +1,5 @@
 {
-  "schema_version": "forge_project_state_backup_manifest_v2",
+  "schema_version": "forge_project_state_backup_manifest_v1",
   "backup_manifest": {
     "format": "forge_project_state_backup_v1",
     "project": {
@@ -102,7 +102,7 @@
       {
         "material": "project_link",
         "logical_path": "project/.forge-method.yaml",
-        "entry_type": "regular_file",
+        "entry_type": "fifo",
         "byte_length": 120,
         "sha256": "sha256:b50939b75ef7669c82ae235ae106745c7caf4991e341614ddbb7c2695ce0dfd8"
       },
@@ -154,6 +154,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:f58548547ab8bb39c585e3e379de6d886df511e50976829899733534784f7b70"
+    "manifest_set_digest": "sha256:d203c081af05cea8f3657dbb4563ffde2307e2911698aa4b8aa76ccaaeba15c3"
   }
 }

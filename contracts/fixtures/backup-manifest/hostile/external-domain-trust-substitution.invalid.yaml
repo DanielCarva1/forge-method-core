@@ -41,7 +41,7 @@
           "active_lock_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
           "composition_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
           "base_core_bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
-          "supply_chain_registry_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "supply_chain_registry_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "reviewed_registry_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
         },
@@ -558,7 +558,7 @@
         "audience": "forge-core:domain-pack:app",
         "generation": 2,
         "anchor_document_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
-        "registry_snapshot_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "registry_snapshot_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "trust_policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
         "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
         "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
@@ -571,7 +571,7 @@
         "reviewer_registry_id": "reviewers.app",
         "reviewer_audience": "forge-core:domain-pack:app",
         "reviewer_generation": 2,
-        "reviewer_registry_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "reviewed_registry_id": "reviewed.app",
         "reviewed_audience": "forge-core:domain-pack:app",
         "reviewed_generation": 2,
@@ -599,6 +599,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:4ce0e3ddf461981d2fe91cf361c7d46bb276fb74fd6cc61163e486c59270676d"
+    "manifest_set_digest": "sha256:6a7a86e487e21af5ea788babd9d69eb0f85b31d7a4fe0ce1abc515d1b71cbbef"
   }
 }

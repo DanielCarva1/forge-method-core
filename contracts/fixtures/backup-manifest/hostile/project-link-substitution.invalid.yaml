@@ -1,11 +1,11 @@
 {
-  "schema_version": "forge_project_state_backup_manifest_v2",
+  "schema_version": "forge_project_state_backup_manifest_v1",
   "backup_manifest": {
     "format": "forge_project_state_backup_v1",
     "project": {
       "project_link": {
         "schema_version": "forge_project_link_v1",
-        "project_id": "app",
+        "project_id": "substituted",
         "sidecar_root": "../forge-app",
         "state_root": "../forge-app/.forge-method"
       },
@@ -154,6 +154,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:f58548547ab8bb39c585e3e379de6d886df511e50976829899733534784f7b70"
+    "manifest_set_digest": "sha256:e2e184a896a7453247d0458452f692e043f9262cd6c805f8d7919823b7c27498"
   }
 }

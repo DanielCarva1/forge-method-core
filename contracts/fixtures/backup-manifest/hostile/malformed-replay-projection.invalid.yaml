@@ -1,5 +1,5 @@
 {
-  "schema_version": "forge_project_state_backup_manifest_v2",
+  "schema_version": "forge_project_state_backup_manifest_v1",
   "backup_manifest": {
     "format": "forge_project_state_backup_v1",
     "project": {
@@ -140,7 +140,7 @@
         "replay_wal_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
         "replay_wal_prefix_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
         "replay_wal_last_seq": 0,
-        "replay_wal_record_count": 0,
+        "replay_wal_record_count": 1,
         "replay_wal_byte_length": 0
       },
       "domain_pack_supply_chain": null,
@@ -154,6 +154,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:f58548547ab8bb39c585e3e379de6d886df511e50976829899733534784f7b70"
+    "manifest_set_digest": "sha256:46c7b243d25df7a0ff6c3e1ea9f299b70e20573cf9983ab69dd7f61c08bb8739"
   }
 }

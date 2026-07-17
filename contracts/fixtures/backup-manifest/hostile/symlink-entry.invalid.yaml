@@ -1,4 +1,159 @@
-case: symlink-entry
-replacements:
-  - from: '"entry_type": "regular_file"'
-    to: '"entry_type": "symlink"'
+{
+  "schema_version": "forge_project_state_backup_manifest_v1",
+  "backup_manifest": {
+    "format": "forge_project_state_backup_v1",
+    "project": {
+      "project_link": {
+        "schema_version": "forge_project_link_v1",
+        "project_id": "app",
+        "sidecar_root": "../forge-app",
+        "state_root": "../forge-app/.forge-method"
+      },
+      "project_link_sha256": "sha256:b50939b75ef7669c82ae235ae106745c7caf4991e341614ddbb7c2695ce0dfd8",
+      "archive_layout": {
+        "project_link_archive_path": "project/.forge-method.yaml",
+        "sidecar_archive_root": "sidecar",
+        "state_root_relative_to_sidecar": ".forge-method"
+      }
+    },
+    "workflow_release": {
+      "lineage_id": "workflow-governance",
+      "release_id": "workflow-governance.release.v1",
+      "release_version": "1.0.0",
+      "release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "effective_epoch": {
+      "epoch_id": "effective-epoch.app",
+      "epoch_generation": 1,
+      "effective_bundle": {
+        "core_runtime_bundle": {
+          "bundle_id": "core-runtime",
+          "bundle_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "policy_set_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "effective_runtime_bundle": {
+          "bundle_id": "effective-runtime",
+          "bundle_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "policy_set_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+        },
+        "domain_pack_generation": null,
+        "receipt_context_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "governance_ledger_head_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "source_state": {
+      "project_state": "initialized_before_start",
+      "claim_store": {
+        "status": "empty_before_first_claim"
+      },
+      "workflow_governance_store": "before_initialization",
+      "workflow_action_replay_store": "before_initialization",
+      "effect_store": {
+        "status": "empty_before_first_effect"
+      },
+      "memory_store": "before_initialization",
+      "domain_pack_store": {
+        "status": "no_active_generation",
+        "operator_sources_present": false,
+        "rebase_plan_present": false
+      },
+      "workflow_principal_registry": "not_provisioned",
+      "workflow_broker_registry": "not_provisioned",
+      "public_sidecars": {
+        "claim_cache_files": 0,
+        "official_handoff_artifacts": 0,
+        "artifacts": 0,
+        "evidence": 0,
+        "snapshots": 0,
+        "ledger_streams": 0,
+        "request_streams": 0,
+        "runtime_snapshots": 0,
+        "story_state": 0,
+        "agent_registry_state": 0,
+        "state_effect_outputs": 0,
+        "preflight_profiles": 0,
+        "effect_metadata_indexes": 0,
+        "trace_logs": 0
+      }
+    },
+    "snapshot_protocol": {
+      "mode": "cooperative_locks_with_producer_quiescence_and_stable_enumeration",
+      "lock_order": [
+        "external_domain_pack_supply_chain_anchor",
+        "external_domain_pack_reviewed_learning_anchor",
+        "domain_pack_operator_sources",
+        "domain_pack_rebase_plan",
+        "domain_pack_lifecycle",
+        "workflow_credential_registry",
+        "workflow_broker_registry",
+        "workflow_governance",
+        "claim_wal",
+        "workflow_action_replay_wal",
+        "memory_log",
+        "command_evidence_append",
+        "effect_metadata_index_append",
+        "effect_wal",
+        "replay_wal",
+        "trace_append",
+        "external_replay_anchor"
+      ]
+    },
+    "entries": [
+      {
+        "material": "project_link",
+        "logical_path": "project/.forge-method.yaml",
+        "entry_type": "symlink",
+        "byte_length": 120,
+        "sha256": "sha256:b50939b75ef7669c82ae235ae106745c7caf4991e341614ddbb7c2695ce0dfd8"
+      },
+      {
+        "material": "root_ledger",
+        "logical_path": "sidecar/.forge-method/ledger.ndjson",
+        "entry_type": "regular_file",
+        "byte_length": 0,
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "material": "replay_wal_manifest",
+        "logical_path": "sidecar/.forge-method/replay-wal.manifest.json",
+        "entry_type": "regular_file",
+        "byte_length": 64,
+        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "material": "replay_wal",
+        "logical_path": "sidecar/.forge-method/wal/replay.fmr1",
+        "entry_type": "regular_file",
+        "byte_length": 0,
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "external_authority_observations": {
+      "replay_rollback_anchor": {
+        "schema_version": "0.1",
+        "protected_anchor_identity": "operator://replay/app",
+        "deployment_id": "deployment.app",
+        "epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "generation": 1,
+        "previous_anchor_digest": null,
+        "anchor_document_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "replay_wal_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "replay_wal_prefix_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "replay_wal_last_seq": 0,
+        "replay_wal_record_count": 0,
+        "replay_wal_byte_length": 0
+      },
+      "domain_pack_supply_chain": null,
+      "domain_pack_reviewed_learning": null,
+      "workflow_principal_registry": null,
+      "workflow_broker_registry": null
+    },
+    "forbidden_private_material": [
+      "broker_private_keys",
+      "workflow_secret_roots",
+      "operator_secret_roots",
+      "mcp_private_keys"
+    ],
+    "manifest_set_digest": "sha256:1a1b1fc743900b6d66b704226ede06d19139ee7b34b79ce3cfb9d503d0e856f0"
+  }
+}

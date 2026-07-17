@@ -571,7 +571,7 @@
         "reviewer_registry_id": "reviewers.app",
         "reviewer_audience": "forge-core:domain-pack:app",
         "reviewer_generation": 2,
-        "reviewer_registry_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "reviewed_registry_id": "reviewed.app",
         "reviewed_audience": "forge-core:domain-pack:app",
         "reviewed_generation": 2,
@@ -599,6 +599,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:4ce0e3ddf461981d2fe91cf361c7d46bb276fb74fd6cc61163e486c59270676d"
+    "manifest_set_digest": "sha256:83a8c857d72d421feae40642b50a13fb53f3b0ecbd14e462a32f03cd4dbe59d8"
   }
 }

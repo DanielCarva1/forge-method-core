@@ -1,5 +1,5 @@
 {
-  "schema_version": "forge_project_state_backup_manifest_v2",
+  "schema_version": "forge_project_state_backup_manifest_v1",
   "backup_manifest": {
     "format": "forge_project_state_backup_v1",
     "project": {
@@ -154,6 +154,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:f58548547ab8bb39c585e3e379de6d886df511e50976829899733534784f7b70"
+    "manifest_set_digest": "sha256:4e3e731c8d9bafa5b2167625f08c9bcdaf7f29e8da53eb5cd9f5e328ed136413"
   }
 }
