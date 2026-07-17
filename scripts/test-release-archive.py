@@ -186,6 +186,34 @@ class ReleaseArchiveTests(unittest.TestCase):
         binary.chmod(0o755)
         return package, wrapper
 
+    def install_marker_core(self, package: Path) -> Path:
+        binary = package / "forge-core"
+        binary.write_text(
+            f"#!{Path(sys.executable).resolve()}\n"
+            "import os\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "Path(os.environ['REAL_CORE_MARKER']).write_text("
+            "'executed\\n', encoding='utf-8')\n"
+            "print('real-core')\n"
+            "for argument in sys.argv[1:]:\n"
+            "    print(argument)\n",
+            encoding="utf-8",
+        )
+        binary.chmod(0o755)
+        return binary
+
+    def require_bash_5(self) -> Path:
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("Bash 5 poisoning regression requires bash")
+        completed = subprocess.run(
+            [bash, "--version"], text=True, capture_output=True, check=False, timeout=5
+        )
+        if completed.returncode != 0 or not completed.stdout.startswith("GNU bash, version 5."):
+            self.skipTest("Bash 5 poisoning regression requires Bash major version 5")
+        return Path(bash).resolve()
+
     def simulated_platform_wrapper_fixture(
         self, root: Path, system: str, machine: str, libc: str | None
     ) -> tuple[Path, Path, Path]:
@@ -234,6 +262,123 @@ class ReleaseArchiveTests(unittest.TestCase):
         wrapper.write_text(source, encoding="utf-8")
         wrapper.chmod(0o755)
         return package, wrapper, marker
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_blocks_exact_exported_bash_pwd_function_attack(self) -> None:
+        bash = self.require_bash_5()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            self.install_marker_core(package)
+            poison_marker = root / "pwd-function-called"
+            core_marker = root / "real-core-called"
+            environment = os.environ.copy()
+            environment["POISON_MARKER"] = str(poison_marker)
+            environment["REAL_CORE_MARKER"] = str(core_marker)
+            environment["BASH_FUNC_pwd%%"] = (
+                "() { printf '%s\\n' /tmp; : > \"$POISON_MARKER\"; }"
+            )
+            completed = subprocess.run(
+                [str(bash), "--posix", str(wrapper), "pwd-attack"],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "real-core\npwd-attack\n")
+            self.assertEqual(completed.stderr, "")
+            self.assertTrue(core_marker.exists())
+            self.assertFalse(poison_marker.exists())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_blocks_all_poisonable_command_functions_in_bash_modes(self) -> None:
+        bash = self.require_bash_5()
+        poisoned_names = (
+            "command",
+            "cd",
+            "pwd",
+            "printf",
+            "test",
+            "uname",
+            "getconf",
+            "readlink",
+            "fail",
+            "select_readlink",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            self.install_marker_core(package)
+            alias = root / "forge-alias"
+            alias.symlink_to(os.path.relpath(wrapper, root))
+            poison_markers = root / "poison-markers"
+            poison_markers.mkdir()
+            for mode in ("posix", "sh"):
+                with self.subTest(mode=mode):
+                    core_marker = root / f"real-core-called-{mode}"
+                    environment = os.environ.copy()
+                    environment["REAL_CORE_MARKER"] = str(core_marker)
+                    for name in poisoned_names:
+                        environment[f"BASH_FUNC_{name}%%"] = (
+                            f"() {{ : > \"{poison_markers}/{name}\"; return 93; }}"
+                        )
+                    if mode == "posix":
+                        argv = [str(bash), "--posix", str(alias), mode]
+                        executable = None
+                    else:
+                        argv = ["sh", str(alias), mode]
+                        executable = str(bash)
+                    completed = subprocess.run(
+                        argv,
+                        executable=executable,
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, f"real-core\n{mode}\n")
+                    self.assertEqual(completed.stderr, "")
+                    self.assertTrue(core_marker.exists())
+                    self.assertEqual(list(poison_markers.iterdir()), [])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_bash_rejects_special_or_nonidentifier_function_poisoning(self) -> None:
+        bash = self.require_bash_5()
+        rejected_names = ("[", ":", "break", "exec", "exit", "set", "unset")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            self.install_marker_core(package)
+            for name in rejected_names:
+                with self.subTest(name=name):
+                    poison_marker = root / f"poison-{name}"
+                    core_marker = root / f"real-core-{name}"
+                    environment = os.environ.copy()
+                    environment["REAL_CORE_MARKER"] = str(core_marker)
+                    environment[f"BASH_FUNC_{name}%%"] = (
+                        f"() {{ : > \"{poison_marker}\"; return 93; }}"
+                    )
+                    completed = subprocess.run(
+                        [str(bash), "--posix", str(wrapper), name],
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    if name in ("break", "exec", "exit", "set", "unset"):
+                        self.assertEqual(completed.returncode, 2, completed.stderr)
+                        self.assertEqual(completed.stdout, "")
+                        self.assertFalse(core_marker.exists())
+                    else:
+                        self.assertEqual(completed.returncode, 0, completed.stderr)
+                        self.assertEqual(completed.stdout, f"real-core\n{name}\n")
+                        self.assertTrue(core_marker.exists())
+                    self.assertFalse(poison_marker.exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_bare_path_lookup_handles_newlines_and_selects_executable(self) -> None:
