@@ -102,6 +102,13 @@ class ReleaseLockingTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, destination)
 
+    def check_with_governed_variant(self, relative: str, content: bytes):
+        source = WORKFLOW.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_governed(root)
+            (root / relative).write_bytes(content)
+            return checker.check_source(source, repo_root=root)
 
     def test_real_release_topology_is_exact_and_locked(self) -> None:
         invocations = checker.check(WORKFLOW)
@@ -386,21 +393,74 @@ cross build \\
         )
         self.assertEqual([(item.tool, item.subcommand) for item in accepted], [("cargo", "package")])
 
-    def test_malicious_forge_cmd_source_drift_is_rejected(self) -> None:
+    def test_lf_and_crlf_forge_cmd_share_governed_commitment(self) -> None:
+        relative = "distribution/forge.cmd"
+        canonical = (ROOT / relative).read_bytes()
+        self.assertNotIn(b"\r", canonical)
+        lf_invocations = self.check_with_governed_variant(relative, canonical)
+        crlf_invocations = self.check_with_governed_variant(
+            relative, canonical.replace(b"\n", b"\r\n")
+        )
+        self.assertEqual(lf_invocations, crlf_invocations)
+
+    def test_all_approved_git_text_wrappers_accept_crlf(self) -> None:
+        self.assertEqual(
+            checker.GIT_TEXT_GOVERNED_FILES,
+            {"distribution/forge", "distribution/forge.cmd"},
+        )
+        for relative in checker.GIT_TEXT_GOVERNED_FILES:
+            canonical = (ROOT / relative).read_bytes()
+            with self.subTest(relative=relative):
+                self.assertNotIn(b"\r", canonical)
+                invocations = self.check_with_governed_variant(
+                    relative, canonical.replace(b"\n", b"\r\n")
+                )
+                self.assertEqual(len(invocations), 5)
+
+    def test_malicious_forge_cmd_is_rejected_under_lf_and_crlf(self) -> None:
+        relative = "distribution/forge.cmd"
+        canonical = (ROOT / relative).read_bytes()
+        malicious = canonical + b"start calc.exe\n"
+        for name, content in {
+            "lf": malicious,
+            "crlf": malicious.replace(b"\n", b"\r\n"),
+        }.items():
+            with self.subTest(eol=name), self.assertRaisesRegex(
+                checker.ReleaseLockError, "forge.cmd"
+            ):
+                self.check_with_governed_variant(relative, content)
+
+    def test_mixed_and_lone_cr_forge_cmd_are_rejected_as_malformed(self) -> None:
+        relative = "distribution/forge.cmd"
+        canonical = (ROOT / relative).read_bytes()
+        malformed = {
+            "mixed": canonical.replace(b"\n", b"\r\n", 1),
+            "lone-cr": canonical.replace(b"\n", b"\r", 1),
+        }
+        for name, content in malformed.items():
+            with self.subTest(representation=name), self.assertRaisesRegex(
+                checker.ReleaseLockError, "mixed or lone CR"
+            ):
+                self.check_with_governed_variant(relative, content)
+
+    def test_forge_cmd_byte_substitution_is_rejected(self) -> None:
+        relative = "distribution/forge.cmd"
+        canonical = (ROOT / relative).read_bytes()
+        substituted = canonical.replace(b"Forge wrapper", b"Xorge wrapper", 1)
+        self.assertEqual(len(substituted), len(canonical))
+        with self.assertRaisesRegex(checker.ReleaseLockError, "forge.cmd"):
+            self.check_with_governed_variant(relative, substituted)
+
+    def test_security_sensitive_governed_script_keeps_exact_eol_hash(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for relative in checker.GOVERNED_FILE_SHA256:
-                destination = root / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ROOT / relative, destination)
-            wrapper = root / "distribution/forge.cmd"
-            wrapper.write_text(
-                "@echo off\r\ncargo metadata --format-version 1 >NUL\r\n"
-                '"%~dp0forge-core.exe" %*\r\n',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(checker.ReleaseLockError, "forge.cmd"):
+            self.copy_governed(root)
+            script = root / "scripts/run-release-locked-sbom.py"
+            script.write_bytes(script.read_bytes().replace(b"\n", b"\r\n"))
+            with self.assertRaisesRegex(
+                checker.ReleaseLockError, "run-release-locked-sbom.py"
+            ):
                 checker.check_source(source, repo_root=root)
 
 

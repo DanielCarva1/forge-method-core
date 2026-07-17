@@ -66,7 +66,7 @@ SBOM_WRAPPER_ARGV = (
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
-    "scripts/test-release-locking.py": "af69674afb3b847554815fb7d8eee0d47f418578a8a5f7fe6cda4b691165daca",
+    "scripts/test-release-locking.py": "e5804b36f632c24e1d70a1eb0cd0ae6a5102ca25612031c2bc1518d57e0e9ae9",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
@@ -78,6 +78,15 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
     "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "4bf79afdf1fe16eee13b174337dd5b9d3d917142eb08e67f5c4b014f5b663eeb",
 }
+
+# Only these reviewed release payloads use Git's `text:auto` checkout policy.
+# Their commitments are SHA-256 over canonical Git text (LF) bytes. All other
+# governed files, especially workflow/security executables and the semantic
+# manifest, retain exact materialized-byte authentication.
+GIT_TEXT_GOVERNED_FILES = frozenset({
+    "distribution/forge",
+    "distribution/forge.cmd",
+})
 DIRECT_LOCAL_SCRIPTS = {
     ("metadata", "Test release lock enforcement"): {"scripts/test-release-locking.py"},
     ("metadata", "Test deterministic archive tooling"): {"scripts/test-release-archive.py"},
@@ -782,6 +791,18 @@ def _read_absolute_regular(path: Path, label: str) -> bytes:
         os.close(parent_fd)
 
 
+def _canonical_governed_bytes(relative: str, data: bytes) -> bytes:
+    """Return reviewed Git text bytes; reject every representation but LF/CRLF."""
+    if relative not in GIT_TEXT_GOVERNED_FILES or b"\r" not in data:
+        return data
+    crlf_count = data.count(b"\r\n")
+    if crlf_count != data.count(b"\r") or crlf_count != data.count(b"\n"):
+        raise ReleaseLockError(
+            f"governed Git text has mixed or lone CR line endings: {relative}"
+        )
+    return data.replace(b"\r\n", b"\n")
+
+
 def _check_governed_files(root_fd: int) -> None:
     governed = set(GOVERNED_FILE_SHA256)
     graph_files = set(TRANSITIVE_LOCAL_GRAPH)
@@ -795,7 +816,10 @@ def _check_governed_files(root_fd: int) -> None:
         # descriptor read; never reopen it as a later authorization decision.
         if relative == SEMANTIC_MANIFEST:
             continue
-        actual = _digest(_read_relative_regular(root_fd, relative, "governed release file"))
+        materialized = _read_relative_regular(
+            root_fd, relative, "governed release file"
+        )
+        actual = _digest(_canonical_governed_bytes(relative, materialized))
         if actual != expected:
             raise ReleaseLockError(
                 f"governed release file content drifted: {relative} ({actual})"
