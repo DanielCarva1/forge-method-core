@@ -185,6 +185,55 @@ class ReleaseArchiveTests(unittest.TestCase):
         binary.chmod(0o755)
         return package, wrapper
 
+    def simulated_platform_wrapper_fixture(
+        self, root: Path, system: str, machine: str, libc: str | None
+    ) -> tuple[Path, Path, Path]:
+        package, wrapper = self.wrapper_fixture(root)
+        tools = root / "trusted-tools"
+        tools.mkdir()
+        uname = tools / "uname"
+        uname.write_text(
+            "#!/bin/sh\n"
+            "case ${1-} in\n"
+            f"  -s) printf '%s\\n' '{system}' ;;\n"
+            f"  -m) printf '%s\\n' '{machine}' ;;\n"
+            "  *) exit 2 ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        uname.chmod(0o755)
+        getconf = tools / "getconf"
+        if libc is None:
+            getconf.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        else:
+            getconf.write_text(
+                f"#!/bin/sh\nprintf '%s\\n' '{libc}'\n", encoding="utf-8"
+            )
+        getconf.chmod(0o755)
+        marker = root / "trusted-readlink-called"
+        readlink = tools / "readlink"
+        readlink.write_text(
+            "#!/bin/sh\n"
+            ": > \"$TRUSTED_READLINK_MARKER\"\n"
+            "exec /usr/bin/readlink \"$@\"\n",
+            encoding="utf-8",
+        )
+        readlink.chmod(0o755)
+
+        source = wrapper.read_text(encoding="utf-8")
+        for production, simulated in (
+            ("/usr/bin/uname", uname),
+            ("/bin/uname", uname),
+            ("/usr/bin/getconf", getconf),
+            ("/bin/getconf", getconf),
+            ("/usr/bin/readlink", readlink),
+            ("/bin/readlink", readlink),
+        ):
+            source = source.replace(production, str(simulated))
+        wrapper.write_text(source, encoding="utf-8")
+        wrapper.chmod(0o755)
+        return package, wrapper, marker
+
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_bare_path_lookup_handles_newlines_and_selects_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -232,11 +281,47 @@ class ReleaseArchiveTests(unittest.TestCase):
             expected = f"real-core\n{argument}\n"
             for completed in (bare_command, sourced_bare):
                 self.assertEqual(completed.returncode, 0, completed.stderr)
-                self.assertEqual(completed.stdout, expected)
                 self.assertEqual(completed.stderr, "")
+                self.assertEqual(completed.stdout, expected)
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
-    def test_wrapper_ignores_path_controlled_readlink(self) -> None:
+    def test_wrapper_bare_lookup_preserves_every_empty_path_component(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            missing_a = root / "missing-a"
+            missing_b = root / "missing-b"
+            paths = {
+                "empty": "",
+                "leading-empty": f":{missing_a}",
+                "interior-empty": f"{missing_a}::{missing_b}",
+                "trailing-empty": f"{missing_a}:",
+            }
+            for name, path in paths.items():
+                with self.subTest(name=name):
+                    argument = f"{name} argument\nwith newline"
+                    completed = subprocess.run(
+                        [
+                            "/bin/sh",
+                            "-c",
+                            'PATH=$1; argument=$2; wrapper=$3; set -- "$argument"; . "$wrapper"',
+                            "forge",
+                            path,
+                            argument,
+                            str(wrapper),
+                        ],
+                        cwd=package,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, f"real-core\n{argument}\n")
+                    self.assertEqual(completed.stderr, "")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_ignores_path_controlled_platform_and_resolver_tools(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             package, wrapper = self.wrapper_fixture(root)
@@ -246,20 +331,21 @@ class ReleaseArchiveTests(unittest.TestCase):
             alias.symlink_to(os.path.relpath(wrapper, aliases))
             fake_bin = root / "fake-bin"
             fake_bin.mkdir()
-            marker = root / "fake-readlink-called"
-            fake_readlink = fake_bin / "readlink"
-            fake_readlink.write_text(
-                "#!/bin/sh\n"
-                ": > \"$FAKE_READLINK_MARKER\"\n"
-                "printf '%s\\n' /tmp/redirected\n",
-                encoding="utf-8",
-            )
-            fake_readlink.chmod(0o755)
+            marker = root / "fake-system-tool-called"
+            for name in ("uname", "getconf", "readlink"):
+                fake_tool = fake_bin / name
+                fake_tool.write_text(
+                    "#!/bin/sh\n"
+                    ": > \"$FAKE_SYSTEM_TOOL_MARKER\"\n"
+                    "printf '%s\\n' attacker-controlled\n",
+                    encoding="utf-8",
+                )
+                fake_tool.chmod(0o755)
             environment = os.environ.copy()
             environment["PATH"] = os.pathsep.join(
                 [str(fake_bin), "/usr/bin", "/bin"]
             )
-            environment["FAKE_READLINK_MARKER"] = str(marker)
+            environment["FAKE_SYSTEM_TOOL_MARKER"] = str(marker)
             completed = subprocess.run(
                 [str(alias), "not redirected"],
                 env=environment,
@@ -272,6 +358,71 @@ class ReleaseArchiveTests(unittest.TestCase):
             self.assertEqual(completed.stdout, "real-core\nnot redirected\n")
             self.assertEqual(completed.stderr, "")
             self.assertFalse(marker.exists(), completed.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_resolver_accepts_declared_package_targets(self) -> None:
+        targets = (
+            ("Linux", "x86_64", "glibc 2.17"),
+            ("Linux", "aarch64", "glibc 2.17"),
+            ("Darwin", "x86_64", None),
+            ("Darwin", "arm64", None),
+        )
+        for system, machine, libc in targets:
+            with self.subTest(system=system, machine=machine):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    package, wrapper, marker = self.simulated_platform_wrapper_fixture(
+                        root, system, machine, libc
+                    )
+                    alias = root / "forge-alias"
+                    alias.symlink_to(os.path.relpath(wrapper, root))
+                    environment = os.environ.copy()
+                    environment["TRUSTED_READLINK_MARKER"] = str(marker)
+                    completed = subprocess.run(
+                        [str(alias), "supported"],
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, "real-core\nsupported\n")
+                    self.assertEqual(completed.stderr, "")
+                    self.assertTrue(marker.exists())
+                    self.assertEqual(package, wrapper.parent)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_resolver_rejects_outside_declared_package_targets(self) -> None:
+        targets = (
+            ("Linux", "x86_64", None),
+            ("Linux", "armv7l", "glibc 2.17"),
+            ("Darwin", "powerpc", None),
+            ("FreeBSD", "x86_64", None),
+        )
+        for system, machine, libc in targets:
+            with self.subTest(system=system, machine=machine, libc=libc):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    _, wrapper, marker = self.simulated_platform_wrapper_fixture(
+                        root, system, machine, libc
+                    )
+                    alias = root / "forge-alias"
+                    alias.symlink_to(os.path.relpath(wrapper, root))
+                    environment = os.environ.copy()
+                    environment["TRUSTED_READLINK_MARKER"] = str(marker)
+                    completed = subprocess.run(
+                        [str(alias)],
+                        env=environment,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(completed.returncode, 127)
+                    self.assertIn("unsupported symlink resolver platform", completed.stderr)
+                    self.assertEqual(completed.stdout, "")
+                    self.assertFalse(marker.exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_resolver_fails_closed_at_symlink_bound(self) -> None:
@@ -321,7 +472,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                 timeout=5,
             )
             self.assertEqual(completed.returncode, 127)
-            self.assertIn("unset or empty PATH", completed.stderr)
+            self.assertIn("unset PATH", completed.stderr)
             self.assertNotIn("parameter not set", completed.stderr)
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
