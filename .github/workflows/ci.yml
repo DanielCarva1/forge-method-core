@@ -62,6 +62,40 @@ jobs:
           path: target/ci-timing
           if-no-files-found: warn
 
+  msrv:
+    name: Rust 1.85 minimum supported version
+    needs: static_docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      FORGE_CI_CACHE_CONTEXT: "disabled-msrv-1.85.1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install exact MSRV toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+        with:
+          toolchain: 1.85.1
+
+      - name: Verify MSRV lane contract
+        timeout-minutes: 6
+        run: python scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 --report target/ci-timing/msrv-contract.json -- python scripts/test-msrv.py
+
+      - name: Check complete workspace at MSRV
+        timeout-minutes: 31
+        run: python scripts/run-ci-tier.py --tier msrv-workspace --budget-seconds 1800 --report target/ci-timing/msrv-workspace.json -- cargo +1.85.1 check --locked --workspace --all-targets --all-features
+
+      # Deliberately no Cargo cache: this independent lane neither consumes nor
+      # saves artifacts produced by a newer compiler.
+      - name: Upload MSRV timing reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-timing-msrv
+          path: target/ci-timing/msrv-*.json
+          if-no-files-found: warn
+          retention-days: 14
   focused:
     name: Focused package and integration evidence
     needs: static_docs

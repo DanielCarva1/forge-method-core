@@ -10,15 +10,26 @@ alone met a time budget.
 | Tier | Trigger | Per-step budget | Owned evidence |
 |---|---|---:|---|
 | **Tier 0: static/docs** | Every pull request and push to `main`/`master` | 120 seconds | Generated workspace layout, local Markdown links, public-promise audit, evidence-tool tests, Rust formatting |
+| **MSRV** | Every pull request and push to `main`/`master`, after Tier 0 | 300 seconds contract test; 1,800 seconds compile | Exact Rust 1.85.1, locked workspace, every Cargo target and feature, adversarial lane tests |
 | **Focused package/integration** | Every pull request and push to `main`/`master`, after Tier 0 | 900 seconds | Generated command/release subjects, retirement runtime, test inventories, all-feature pedantic clippy, aggregate validation and regression anchors |
 | **Platform** | Every pull request and push to `main`/`master`, after Tier 0; native Linux, Windows, Intel macOS, Apple Silicon macOS matrix | 1,800 seconds | Workspace all-target compilation and default workspace tests on every runner; each non-Linux runner also compiles the expensive P6d target |
 | **Expensive cumulative journey** | Push to `main`/`master` only, after Tier 0 + focused + platform succeed | 1,800 seconds | Exact Linux P6d reference-pack real-process journey once |
 
-Job timeouts (10, 45, 40, and 35 minutes respectively) are outer safety bounds.
+Job timeouts (10, 35, 45, 40, and 35 minutes respectively) are outer safety bounds.
 Each wrapped step also enforces its own hard wall-clock timeout, terminates its
 complete child process tree, and persists timing evidence. Pull requests do not
 execute the expensive journey, but focused all-feature clippy compiles its code
 on Linux and every non-Linux platform has a dedicated feature-gated compile.
+
+The workspace declares `rust-version = "1.85"` because Cargo's manifest field
+expresses a stable release line as major.minor. CI pins patch release **1.85.1**
+to make compiler behavior reproducible while staying within that declared 1.85
+line; the patch pin does not raise the source MSRV to a different Rust release.
+The MSRV job deliberately has no Cargo cache, so a newer compiler cannot seed it
+and the lane cannot save artifacts for other jobs. `scripts/check-msrv.py`
+discovers every `crates/*/Cargo.toml`, reconciles it with explicit workspace
+members, parses each member's features and package policy, and authenticates the
+complete `--locked --workspace --all-targets --all-features` job topology.
 
 ## Timing and failure evidence
 
@@ -36,6 +47,7 @@ The report records exact argv/display, runner OS/architecture/name/environment,
 cache context, elapsed/budget seconds, underlying command exit, budget status,
 outcome, and wrapper exit. It is uploaded even after failure:
 
+- `ci-timing-msrv` (14-day retention)
 - `ci-timing-static-docs`
 - `ci-timing-focused`
 - `ci-timing-platform-${{ matrix.id }}`
@@ -62,8 +74,23 @@ Tier 0 parity when static/generated surfaces are affected:
 ```bash
 python scripts/generate-workspace-layout.py --check
 python scripts/check-doc-links.py
-cargo fmt --all -- --check
 ```
+cargo fmt --all -- --check
+
+MSRV topology and exact-toolchain parity:
+
+```bash
+python scripts/check-msrv.py
+python scripts/test-msrv.py
+cargo +1.85.1 check --locked --workspace --all-targets --all-features
+```
+
+The adversarial suite includes a standalone, parse-valid let-chain fixture that
+a post-1.85 compiler accepts but Rust 1.85.1 rejects with the intended `E0658`
+language-stability diagnostic. A successful local run is source-topology
+evidence only. Hosted evidence exists only after the `msrv` job runs on GitHub
+and retains its `ci-timing-msrv` artifact; that native hosted run is pending for
+an unpushed change.
 
 Focused development uses the smallest owning package/integration commands:
 
