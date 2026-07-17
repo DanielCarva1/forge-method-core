@@ -69,6 +69,75 @@ pub struct ReplayAnchorAdvance {
     pub anchor: ReplayAnchorDocument,
 }
 
+/// Validated bytes captured while the matching external-anchor lock is retained.
+#[derive(Debug)]
+pub(crate) struct ReplayAnchorSnapshot {
+    document: ReplayAnchorDocument,
+    bytes: Vec<u8>,
+}
+
+impl ReplayAnchorSnapshot {
+    pub(crate) fn into_parts(self) -> (ReplayAnchorDocument, Vec<u8>) {
+        (self.document, self.bytes)
+    }
+}
+
+/// Crate-private retained external replay-anchor authority.
+///
+/// Private canonical paths bind this guard to one protected anchor. It carries
+/// no verification/success bit and grants no authority outside that exact file.
+pub(crate) struct ReplayAnchorRetainedLock {
+    file: File,
+    state_root: PathBuf,
+    anchor_path: PathBuf,
+    lock_path: PathBuf,
+}
+
+impl ReplayAnchorRetainedLock {
+    fn validate(&self, state_root: &Path, anchor_path: &Path) -> Result<(), ReplayAnchorError> {
+        let actual_root = canonical_state_root(state_root)?;
+        let actual_anchor = validated_external_anchor_path(&actual_root, anchor_path, true)?;
+        let actual_lock = anchor_lock_path(&actual_anchor)?;
+        if actual_root != self.state_root
+            || actual_anchor != self.anchor_path
+            || fs::canonicalize(&actual_lock).ok().as_ref() != Some(&self.lock_path)
+        {
+            return Err(ReplayAnchorError::Invalid(format!(
+                "retained lock protects {}, not requested anchor {}",
+                self.anchor_path.display(),
+                actual_anchor.display()
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Drop for ReplayAnchorRetainedLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+/// Acquire the exact protected external replay-anchor lock for later snapshot.
+pub(crate) fn acquire_replay_anchor_retained_lock(
+    state_root: &Path,
+    anchor_path: &Path,
+) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
+    acquire_replay_anchor_retained_lock_inner(state_root, anchor_path, true)
+}
+
+/// Read and validate the matching anchor without reacquiring its retained lock.
+pub(crate) fn snapshot_replay_anchor_under_retained_lock(
+    state_root: &Path,
+    anchor_path: &Path,
+    guard: &ReplayAnchorRetainedLock,
+) -> Result<ReplayAnchorSnapshot, ReplayAnchorError> {
+    guard.validate(state_root, anchor_path)?;
+    let bytes = read_anchor_bytes(&guard.anchor_path)?;
+    let document = parse_anchor_bytes(&bytes)?;
+    Ok(ReplayAnchorSnapshot { document, bytes })
+}
+
 /// Create the first trusted head in an operator-protected external store.
 ///
 /// Existing replay history is allowed so an operator can adopt anchoring for
@@ -93,7 +162,7 @@ pub fn provision_replay_anchor(
     let state_root = canonical_state_root(state_root.as_ref())?;
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path.as_ref(), false)?;
     let head = capture_replay_head(&state_root)?;
-    let _lock = acquire_anchor_lock(&anchor_path)?;
+    let _lock = acquire_replay_anchor_retained_lock_inner(&state_root, &anchor_path, false)?;
     if anchor_path
         .try_exists()
         .map_err(|error| io_error(&anchor_path, &error))?
@@ -193,8 +262,10 @@ fn advance_replay_anchor_inner(
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path, true)?;
     for attempt in 0..ADVANCE_RETRIES {
         let current = capture_replay_head_with_bytes(&state_root)?;
-        let lock = acquire_anchor_lock(&anchor_path)?;
-        let anchor = read_anchor(&anchor_path)?;
+        let lock = acquire_replay_anchor_retained_lock(&state_root, &anchor_path)?;
+        let (anchor, _anchor_bytes) =
+            snapshot_replay_anchor_under_retained_lock(&state_root, &anchor_path, &lock)?
+                .into_parts();
         if let Some(expected) = expected_deployment_id {
             if anchor.deployment_id != expected {
                 return Err(ReplayAnchorError::DeploymentMismatch {
@@ -365,6 +436,10 @@ fn validate_anchor_document(anchor: &ReplayAnchorDocument) -> Result<(), ReplayA
 }
 
 fn read_anchor(path: &Path) -> Result<ReplayAnchorDocument, ReplayAnchorError> {
+    parse_anchor_bytes(&read_anchor_bytes(path)?)
+}
+
+fn read_anchor_bytes(path: &Path) -> Result<Vec<u8>, ReplayAnchorError> {
     ensure_regular_anchor(path)?;
     let metadata = fs::metadata(path).map_err(|error| io_error(path, &error))?;
     if metadata.len() > MAX_ANCHOR_BYTES {
@@ -373,8 +448,11 @@ fn read_anchor(path: &Path) -> Result<ReplayAnchorDocument, ReplayAnchorError> {
             metadata.len()
         )));
     }
-    let bytes = fs::read(path).map_err(|error| io_error(path, &error))?;
-    let anchor: ReplayAnchorDocument = serde_json::from_slice(&bytes)
+    fs::read(path).map_err(|error| io_error(path, &error))
+}
+
+fn parse_anchor_bytes(bytes: &[u8]) -> Result<ReplayAnchorDocument, ReplayAnchorError> {
+    let anchor: ReplayAnchorDocument = serde_json::from_slice(bytes)
         .map_err(|error| ReplayAnchorError::Invalid(error.to_string()))?;
     validate_anchor_document(&anchor)?;
     Ok(anchor)
@@ -428,17 +506,30 @@ fn ensure_regular_anchor(path: &Path) -> Result<(), ReplayAnchorError> {
     Ok(())
 }
 
-fn acquire_anchor_lock(anchor_path: &Path) -> Result<File, ReplayAnchorError> {
-    let lock_path = anchor_lock_path(anchor_path)?;
-    let lock = OpenOptions::new()
+fn acquire_replay_anchor_retained_lock_inner(
+    state_root: &Path,
+    anchor_path: &Path,
+    must_exist: bool,
+) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
+    let state_root = canonical_state_root(state_root)?;
+    let anchor_path = validated_external_anchor_path(&state_root, anchor_path, must_exist)?;
+    let lock_path = anchor_lock_path(&anchor_path)?;
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(&lock_path)
         .map_err(|error| io_error(&lock_path, &error))?;
-    FileExt::lock(&lock).map_err(|error| io_error(&lock_path, &error))?;
-    Ok(lock)
+    FileExt::lock(&file).map_err(|error| io_error(&lock_path, &error))?;
+    let canonical_lock =
+        fs::canonicalize(&lock_path).map_err(|error| io_error(&lock_path, &error))?;
+    Ok(ReplayAnchorRetainedLock {
+        file,
+        state_root,
+        anchor_path,
+        lock_path: canonical_lock,
+    })
 }
 
 fn anchor_lock_path(anchor_path: &Path) -> Result<PathBuf, ReplayAnchorError> {
@@ -605,3 +696,68 @@ impl fmt::Display for ReplayAnchorError {
 }
 
 impl std::error::Error for ReplayAnchorError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::replay_wal::initialize_replay_wal;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "forge-replay-anchor-{label}-{}-{id}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("create test directory");
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn retained_lock_binds_anchor_snapshots_without_relocking_and_releases_on_drop() {
+        let root = TestDir::new("state");
+        let protected = TestDir::new("protected");
+        initialize_replay_wal(&root.0).expect("initialize replay WAL");
+        let anchor = protected.0.join("replay-anchor.json");
+        let other_anchor = protected.0.join("other-anchor.json");
+        provision_replay_anchor(&root.0, &anchor, "deployment-a").expect("provision anchor");
+        provision_replay_anchor(&root.0, &other_anchor, "deployment-a")
+            .expect("provision other anchor");
+        let guard = acquire_replay_anchor_retained_lock(&root.0, &anchor)
+            .expect("acquire retained anchor lock");
+
+        let second = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(anchor_lock_path(&anchor).expect("lock path"))
+            .expect("open second lock handle");
+        let error = FileExt::try_lock(&second).expect_err("retained guard must block");
+        assert!(matches!(error, fs4::TryLockError::WouldBlock));
+
+        let snapshot = snapshot_replay_anchor_under_retained_lock(&root.0, &anchor, &guard)
+            .expect("snapshot under retained lock");
+        let (document, bytes) = snapshot.into_parts();
+        assert_eq!(document.deployment_id, "deployment-a");
+        assert!(!bytes.is_empty());
+        let mismatch = snapshot_replay_anchor_under_retained_lock(&root.0, &other_anchor, &guard)
+            .expect_err("mismatched anchor must fail");
+        assert!(matches!(mismatch, ReplayAnchorError::Invalid(_)));
+
+        drop(guard);
+        FileExt::try_lock(&second).expect("drop must release lock");
+        FileExt::unlock(&second).expect("unlock second handle");
+    }
+}

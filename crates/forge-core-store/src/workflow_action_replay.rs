@@ -120,7 +120,7 @@ pub struct WorkflowActionReplayMutation {
 #[must_use = "dropping the reservation releases the replay lock without changing replay state"]
 pub struct WorkflowActionReplayReservation {
     wal_path: PathBuf,
-    _lock: WorkflowActionReplayLock,
+    _lock: WorkflowActionReplayRetainedLock,
     prepared: PreparedReplayCommit,
 }
 
@@ -309,7 +309,7 @@ pub fn initialize_workflow_action_replay(
     state_root: impl AsRef<Path>,
 ) -> Result<WorkflowActionReplayInitialization, WorkflowActionReplayError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_lock(&state_root)?;
+    let _lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
     let initialized = ensure_initialized_under_lock(&state_root, true)?;
     Ok(WorkflowActionReplayInitialization {
         wal_path: wal_path(&state_root),
@@ -329,9 +329,8 @@ pub fn recover_workflow_action_replay(
     state_root: impl AsRef<Path>,
 ) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    recover_under_lock(&wal_path(&state_root))
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    recover_workflow_action_replay_under_retained_lock(&state_root, &lock)
 }
 
 /// Return the domain-separated fingerprint used to compare an opaque replay
@@ -372,9 +371,8 @@ pub fn begin_workflow_action_replay_reservation(
     let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = wal_path(&state_root);
-    let replay_lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_under_lock(&wal_path)?;
+    let replay_lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &replay_lock)?;
 
     let prepared = if let Some(existing) = recovery.entries.get(&key_hash) {
         validate_binding(
@@ -486,9 +484,8 @@ pub fn reserve_workflow_action(
     let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = wal_path(&state_root);
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_under_lock(&wal_path)?;
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &lock)?;
 
     if let Some(existing) = recovery.entries.get(&key_hash) {
         validate_binding(
@@ -552,9 +549,8 @@ pub fn commit_workflow_action(
     let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = wal_path(&state_root);
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_under_lock(&wal_path)?;
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &lock)?;
     let existing = recovery.entries.get(&key_hash).ok_or_else(|| {
         WorkflowActionReplayError::ReservationMissing {
             key_hash: key_hash.clone(),
@@ -704,7 +700,7 @@ fn reject_cross_key_replay(
     Ok(())
 }
 
-fn recover_under_lock(
+fn recover_workflow_action_replay_file_under_lock(
     wal_path: &Path,
 ) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
     ensure_regular_authority_file(wal_path)?;
@@ -1144,8 +1140,50 @@ fn ensure_regular_authority_file(path: &Path) -> Result<(), WorkflowActionReplay
     Ok(())
 }
 
-fn acquire_lock(state_root: &Path) -> Result<WorkflowActionReplayLock, WorkflowActionReplayError> {
-    let path = lock_path(state_root);
+/// Crate-private retained workflow-action replay authority.
+///
+/// The private canonical root, WAL, and lock paths bind this unforgeable guard
+/// to one authority. Holding it permits sibling backup code to recover and read
+/// a stable snapshot without changing this store's no-repair durability policy.
+pub(crate) struct WorkflowActionReplayRetainedLock {
+    file: File,
+    state_root: PathBuf,
+    wal_path: PathBuf,
+    lock_path: PathBuf,
+}
+
+impl WorkflowActionReplayRetainedLock {
+    fn validate(&self, state_root: &Path) -> Result<(), WorkflowActionReplayError> {
+        let actual_root = trusted_state_root(state_root)?;
+        let actual_wal = wal_path(&actual_root);
+        let actual_lock = lock_path(&actual_root);
+        if actual_root != self.state_root
+            || actual_wal != self.wal_path
+            || fs::canonicalize(&actual_lock).ok().as_ref() != Some(&self.lock_path)
+        {
+            return Err(WorkflowActionReplayError::ReadWal {
+                path: actual_wal,
+                source: format!(
+                    "retained lock protects {}, not the requested workflow-action replay WAL",
+                    self.wal_path.display()
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Drop for WorkflowActionReplayRetainedLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+pub(crate) fn acquire_workflow_action_replay_retained_lock(
+    state_root: &Path,
+) -> Result<WorkflowActionReplayRetainedLock, WorkflowActionReplayError> {
+    let state_root = trusted_state_root(state_root)?;
+    let path = lock_path(&state_root);
     let parent = path
         .parent()
         .ok_or_else(|| WorkflowActionReplayError::CreateDirectory {
@@ -1156,7 +1194,7 @@ fn acquire_lock(state_root: &Path) -> Result<WorkflowActionReplayLock, WorkflowA
         path: parent.to_path_buf(),
         source: source.to_string(),
     })?;
-    ensure_directory_within_root(state_root, parent)?;
+    ensure_directory_within_root(&state_root, parent)?;
     if path.exists() {
         ensure_regular_authority_file(&path)?;
     }
@@ -1171,20 +1209,29 @@ fn acquire_lock(state_root: &Path) -> Result<WorkflowActionReplayLock, WorkflowA
             source: source.to_string(),
         })?;
     FileExt::lock(&file).map_err(|source| WorkflowActionReplayError::Lock {
-        path,
+        path: path.clone(),
         source: source.to_string(),
     })?;
-    Ok(WorkflowActionReplayLock { file })
+    let lock_path = fs::canonicalize(&path).map_err(|source| WorkflowActionReplayError::Lock {
+        path: path.clone(),
+        source: source.to_string(),
+    })?;
+    Ok(WorkflowActionReplayRetainedLock {
+        file,
+        wal_path: wal_path(&state_root),
+        state_root,
+        lock_path,
+    })
 }
 
-struct WorkflowActionReplayLock {
-    file: File,
-}
-
-impl Drop for WorkflowActionReplayLock {
-    fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.file);
-    }
+/// Verify the exact workflow-action replay WAL under its already-retained lock.
+pub(crate) fn recover_workflow_action_replay_under_retained_lock(
+    state_root: &Path,
+    guard: &WorkflowActionReplayRetainedLock,
+) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
+    guard.validate(state_root)?;
+    ensure_initialized_under_lock(&guard.state_root, false)?;
+    recover_workflow_action_replay_file_under_lock(&guard.wal_path)
 }
 
 fn validate_digest(field: &'static str, value: &str) -> Result<(), WorkflowActionReplayError> {
@@ -1358,6 +1405,38 @@ mod tests {
 
     fn digest(character: char) -> String {
         format!("sha256:{}", character.to_string().repeat(64))
+    }
+
+    #[test]
+    fn retained_lock_binds_root_recovers_without_relocking_and_releases_on_drop() {
+        let root = TestRoot::new();
+        let other = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize replay WAL");
+        initialize_workflow_action_replay(&other.0).expect("initialize other replay WAL");
+        let guard =
+            acquire_workflow_action_replay_retained_lock(&root.0).expect("acquire retained lock");
+
+        let second = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(lock_path(&root.0))
+            .expect("open second lock handle");
+        let error = FileExt::try_lock(&second).expect_err("retained guard must block");
+        assert!(matches!(error, fs4::TryLockError::WouldBlock));
+
+        let recovery = recover_workflow_action_replay_under_retained_lock(&root.0, &guard)
+            .expect("recover under retained lock");
+        assert_eq!(recovery.valid_record_count, 0);
+        let mismatch = recover_workflow_action_replay_under_retained_lock(&other.0, &guard)
+            .expect_err("mismatched root must fail");
+        assert!(matches!(
+            mismatch,
+            WorkflowActionReplayError::ReadWal { .. }
+        ));
+
+        drop(guard);
+        FileExt::try_lock(&second).expect("drop must release lock");
+        FileExt::unlock(&second).expect("unlock second handle");
     }
 
     #[test]

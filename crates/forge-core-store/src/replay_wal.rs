@@ -221,7 +221,7 @@ struct PreparedConsume {
 }
 
 struct ReplayGuardState {
-    _replay_lock: ReplayWalLock,
+    _replay_lock: ReplayWalRetainedLock,
     wal_path: PathBuf,
     reserved: ReplayReservation,
     prepared: PreparedConsume,
@@ -674,10 +674,10 @@ pub fn initialize_replay_wal(
     state_root: impl AsRef<Path>,
 ) -> Result<ReplayWalInitializationResult, ReplayWalError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_replay_lock(&state_root)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
     let initialized = ensure_replay_initialized_under_lock(&state_root, true)?;
     if !initialized {
-        let recovery = recover_replay_wal_under_lock(&replay_wal_path(&state_root), false)?;
+        let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, false)?;
         ensure_appendable(&recovery)?;
     }
     Ok(ReplayWalInitializationResult {
@@ -740,9 +740,8 @@ pub fn reserve_replay_nonce(
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, true)?;
     ensure_appendable(&recovery)?;
 
     if let Some(existing) = recovery.reservations.get(&key_hash) {
@@ -821,9 +820,8 @@ pub fn consume_replay_nonce_non_boundary(
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, true)?;
     ensure_appendable(&recovery)?;
     consume_replay_recovered(
         wal_path,
@@ -870,9 +868,8 @@ pub fn consume_replay_key_hash_under_effect_lock(
     let state_root = trusted_state_root(state_root.as_ref())?;
     validate_effect_lock_scope(&state_root, effect_lock, expected_effect_lock_relative_path)?;
     let wal_path = replay_wal_path(&state_root);
-    let _replay_lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let replay_lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &replay_lock, true)?;
     ensure_appendable(&recovery)?;
     consume_replay_recovered(
         wal_path,
@@ -1068,10 +1065,9 @@ fn prepare_replay_guard_state(
 
     // Lock ordering is load-bearing: the EffectStoreLock already exists before
     // replay acquisition and is retained by the borrowed or owned public guard.
-    let replay_lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
+    let replay_lock = acquire_replay_wal_retained_lock(&state_root)?;
     let wal_path = replay_wal_path(&state_root);
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &replay_lock, true)?;
     ensure_appendable(&recovery)?;
     let Some(existing) = recovery.reservations.get(&key_hash) else {
         return Err(ReplayWalError::ReservationMissing { key_hash });
@@ -1153,10 +1149,8 @@ pub fn recover_replay_wal(
     repair: bool,
 ) -> Result<ReplayWalRecovery, ReplayWalError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    recover_replay_wal_under_lock(&wal_path, repair)
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    recover_replay_wal_under_retained_lock(&state_root, &lock, repair)
 }
 
 fn validate_nonblank(field: &'static str, value: &str) -> Result<(), ReplayWalError> {
@@ -1476,8 +1470,11 @@ fn ensure_directory_within_root(state_root: &Path, directory: &Path) -> Result<(
     Ok(())
 }
 
-fn acquire_replay_lock(state_root: &Path) -> Result<ReplayWalLock, ReplayWalError> {
-    let path = replay_wal_lock_path(state_root);
+pub(crate) fn acquire_replay_wal_retained_lock(
+    state_root: &Path,
+) -> Result<ReplayWalRetainedLock, ReplayWalError> {
+    let state_root = trusted_state_root(state_root)?;
+    let path = replay_wal_lock_path(&state_root);
     let parent = path.parent().ok_or_else(|| ReplayWalError::CreateDir {
         path: path.clone(),
         source: "lock path has no parent".to_owned(),
@@ -1486,7 +1483,7 @@ fn acquire_replay_lock(state_root: &Path) -> Result<ReplayWalLock, ReplayWalErro
         path: parent.to_path_buf(),
         source: source.to_string(),
     })?;
-    ensure_directory_within_root(state_root, parent)?;
+    ensure_directory_within_root(&state_root, parent)?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -1498,23 +1495,72 @@ fn acquire_replay_lock(state_root: &Path) -> Result<ReplayWalLock, ReplayWalErro
             source: source.to_string(),
         })?;
     FileExt::lock(&file).map_err(|source| ReplayWalError::Lock {
-        path,
+        path: path.clone(),
         source: source.to_string(),
     })?;
-    Ok(ReplayWalLock { file })
+    let lock_path = fs::canonicalize(&path).map_err(|source| ReplayWalError::OpenLock {
+        path: path.clone(),
+        source: source.to_string(),
+    })?;
+    Ok(ReplayWalRetainedLock {
+        file,
+        wal_path: replay_wal_path(&state_root),
+        state_root,
+        lock_path,
+    })
 }
 
-struct ReplayWalLock {
+/// Crate-private retained replay-WAL authority.
+///
+/// This guard proves only replay-WAL ownership. It deliberately carries no
+/// effect-lock field or success flag; backup orchestration must acquire and
+/// retain the Effect WAL authority before acquiring this guard.
+pub(crate) struct ReplayWalRetainedLock {
     file: File,
+    state_root: PathBuf,
+    wal_path: PathBuf,
+    lock_path: PathBuf,
 }
 
-impl Drop for ReplayWalLock {
+impl ReplayWalRetainedLock {
+    fn validate(&self, state_root: &Path) -> Result<(), ReplayWalError> {
+        let actual_root = trusted_state_root(state_root)?;
+        let actual_wal = replay_wal_path(&actual_root);
+        let actual_lock = replay_wal_lock_path(&actual_root);
+        if actual_root != self.state_root
+            || actual_wal != self.wal_path
+            || fs::canonicalize(&actual_lock).ok().as_ref() != Some(&self.lock_path)
+        {
+            return Err(ReplayWalError::ReadWal {
+                path: actual_wal,
+                source: format!(
+                    "retained lock protects {}, not the requested replay WAL",
+                    self.wal_path.display()
+                ),
+            });
+        }
+        Ok(())
+    }
+}
+
+impl Drop for ReplayWalRetainedLock {
     fn drop(&mut self) {
         let _ = FileExt::unlock(&self.file);
     }
 }
 
-fn recover_replay_wal_under_lock(
+/// Recover the matching replay WAL without reacquiring its retained lock.
+pub(crate) fn recover_replay_wal_under_retained_lock(
+    state_root: &Path,
+    guard: &ReplayWalRetainedLock,
+    repair: bool,
+) -> Result<ReplayWalRecovery, ReplayWalError> {
+    guard.validate(state_root)?;
+    ensure_replay_initialized_under_lock(&guard.state_root, false)?;
+    recover_replay_wal_file_under_lock(&guard.wal_path, repair)
+}
+
+fn recover_replay_wal_file_under_lock(
     wal_path: &Path,
     repair: bool,
 ) -> Result<ReplayWalRecovery, ReplayWalError> {
@@ -1916,10 +1962,60 @@ fn payload_crc32c(header_prefix: &[u8], payload: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    struct TestRoot(PathBuf);
+
+    impl TestRoot {
+        fn new() -> Self {
+            let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("forge-replay-wal-lock-{}-{id}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("create test root");
+            Self(path)
+        }
+    }
+
+    impl Drop for TestRoot {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
     use super::*;
 
     fn token(character: char) -> String {
         format!("sha256:{}", character.to_string().repeat(64))
+    }
+
+    #[test]
+    fn retained_lock_binds_root_recovers_without_relocking_and_releases_on_drop() {
+        let root = TestRoot::new();
+        let other = TestRoot::new();
+        initialize_replay_wal(&root.0).expect("initialize replay WAL");
+        initialize_replay_wal(&other.0).expect("initialize other replay WAL");
+        let guard = acquire_replay_wal_retained_lock(&root.0).expect("acquire retained lock");
+
+        let second = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(replay_wal_lock_path(&root.0))
+            .expect("open second lock handle");
+        let error = FileExt::try_lock(&second).expect_err("retained guard must block");
+        assert!(matches!(error, fs4::TryLockError::WouldBlock));
+
+        let recovery = recover_replay_wal_under_retained_lock(&root.0, &guard, false)
+            .expect("recover under retained lock");
+        assert!(recovery.is_clean());
+        let mismatch = recover_replay_wal_under_retained_lock(&other.0, &guard, false)
+            .expect_err("mismatched root must fail");
+        assert!(matches!(mismatch, ReplayWalError::ReadWal { .. }));
+
+        drop(guard);
+        FileExt::try_lock(&second).expect("drop must release lock");
+        FileExt::unlock(&second).expect("unlock second handle");
     }
 
     #[test]
