@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import re
 import shlex
 import sys
 import tomllib
 from pathlib import Path, PurePosixPath
-from typing import Any, NamedTuple
+from typing import Any
+
+try:
+    import yaml
+except ImportError:  # Fail closed rather than interpreting security topology as text.
+    yaml = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,94 +38,74 @@ class MsrvCheckError(RuntimeError):
     """The declared MSRV or its complete CI proof has drifted."""
 
 
-class Step(NamedTuple):
-    name: str
-    fields: dict[str, str]
-    with_fields: dict[str, str]
+if yaml is not None:
+    class UniqueBaseLoader(yaml.BaseLoader):
+        """Load scalar text without YAML 1.1 coercion and reject duplicate keys."""
 
 
-ANCHOR_OR_ALIAS = re.compile(r"(?:^|[\s:[{,])(?:&|\*)[A-Za-z0-9_-]+(?=$|[\s,\]}#])")
-PLAIN_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$")
-SEQUENCE_KEY = re.compile(r"^-\s+([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$")
+    def _construct_unique_mapping(loader: Any, node: Any, deep: bool = False):
+        mapping: dict[str, Any] = {}
+        for key_node, value_node in node.value:
+            if not isinstance(key_node, yaml.nodes.ScalarNode):
+                raise MsrvCheckError("CI workflow mapping keys must be scalar strings")
+            key = loader.construct_object(key_node, deep=deep)
+            if key in mapping:
+                line = key_node.start_mark.line + 1
+                raise MsrvCheckError(
+                    f"CI workflow:{line}: duplicate YAML key {key!r}"
+                )
+            mapping[key] = loader.construct_object(value_node, deep=deep)
+        return mapping
 
 
-def _strip_yaml_comment(text: str) -> str:
-    single = False
-    double = False
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if char == "'" and not double:
-            if single and index + 1 < len(text) and text[index + 1] == "'":
-                index += 2
-                continue
-            single = not single
-        elif char == '"' and not single and (index == 0 or text[index - 1] != "\\"):
-            double = not double
-        elif char == "#" and not single and not double and (
-            index == 0 or text[index - 1].isspace()
-        ):
-            return text[:index].rstrip()
-        index += 1
-    return text.rstrip()
+    UniqueBaseLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
+    )
+else:
+    UniqueBaseLoader = None
+
+
+def _reject_unsupported_yaml(value: Any, path: str = "workflow") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise MsrvCheckError(f"{path}: YAML mapping keys must be strings")
+            if key == "<<":
+                raise MsrvCheckError(f"{path}: YAML merges are forbidden")
+            _reject_unsupported_yaml(child, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_unsupported_yaml(child, f"{path}[{index}]")
+    elif not isinstance(value, str):
+        raise MsrvCheckError(
+            f"{path}: unsupported YAML value type {type(value).__name__}"
+        )
+
+
+def parse_workflow(source: str) -> dict[str, Any]:
+    """Parse one alias-free YAML document with duplicate-safe string scalars."""
+    if yaml is None or UniqueBaseLoader is None:
+        raise MsrvCheckError("structured CI validation requires PyYAML")
+    try:
+        for token in yaml.scan(source):
+            if isinstance(token, (yaml.tokens.AnchorToken, yaml.tokens.AliasToken)):
+                raise MsrvCheckError("CI workflow YAML anchors and aliases are forbidden")
+            if isinstance(token, yaml.tokens.TagToken):
+                raise MsrvCheckError("CI workflow explicit YAML tags are forbidden")
+        document = yaml.load(source, Loader=UniqueBaseLoader)
+    except MsrvCheckError:
+        raise
+    except yaml.YAMLError as error:
+        raise MsrvCheckError(f"cannot parse CI workflow YAML: {error}") from error
+    if not isinstance(document, dict):
+        raise MsrvCheckError("CI workflow must be one YAML mapping document")
+    _reject_unsupported_yaml(document)
+    return document
 
 
 def validate_unambiguous_yaml(source: str) -> None:
-    """Reject duplicate keys, tabs, aliases, and merges before semantic parsing."""
-    if "\t" in source:
-        raise MsrvCheckError("CI workflow may not contain tabs")
-    seen: dict[tuple[object, int], set[str]] = {}
-    active: dict[int, object] = {}
-    sequence_numbers: dict[tuple[object, int], int] = {}
-    block_indent: int | None = None
-
-    for number, raw in enumerate(source.splitlines(), 1):
-        indent = len(raw) - len(raw.lstrip(" "))
-        if block_indent is not None:
-            if not raw.strip() or indent > block_indent:
-                continue
-            block_indent = None
-        content = _strip_yaml_comment(raw[indent:])
-        if not content:
-            continue
-        if "<<:" in content or ANCHOR_OR_ALIAS.search(content):
-            raise MsrvCheckError(
-                f"CI workflow:{number}: YAML anchors, aliases, and merges are unsupported"
-            )
-        for level in [level for level in active if level >= indent]:
-            del active[level]
-        parent = active[max(active)] if active else ("document",)
-
-        sequence = SEQUENCE_KEY.fullmatch(content)
-        plain = PLAIN_KEY.fullmatch(content)
-        if sequence is not None:
-            counter_key = (parent, indent)
-            item_number = sequence_numbers.get(counter_key, 0) + 1
-            sequence_numbers[counter_key] = item_number
-            item = (parent, "item", indent, item_number)
-            active[indent] = item
-            mapping = (item, indent)
-            key, value = sequence.group(1), sequence.group(2) or ""
-        elif plain is not None:
-            mapping = (parent, indent)
-            key, value = plain.group(1), plain.group(2) or ""
-        elif content.startswith("-"):
-            counter_key = (parent, indent)
-            item_number = sequence_numbers.get(counter_key, 0) + 1
-            sequence_numbers[counter_key] = item_number
-            active[indent] = (parent, "item", indent, item_number)
-            continue
-        else:
-            continue
-
-        keys = seen.setdefault(mapping, set())
-        if key in keys:
-            raise MsrvCheckError(f"CI workflow:{number}: duplicate YAML key {key!r}")
-        keys.add(key)
-        if value in {"|", ">", "|-", ">-", "|+", ">+"}:
-            block_indent = indent
-        elif not value:
-            active[indent] = (parent, key, indent)
+    """Compatibility entry point for callers that only require strict parsing."""
+    parse_workflow(source)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -195,109 +179,146 @@ def check_manifests(root: Path = ROOT) -> list[str]:
     return names
 
 
-def _job_block(source: str, key: str) -> list[str]:
-    lines = source.splitlines()
-    starts = [index for index, line in enumerate(lines) if line == f"  {key}:"]
-    if len(starts) != 1:
-        raise MsrvCheckError(f"CI must define exactly one {key!r} job")
-    start = starts[0]
-    end = next(
-        (index for index in range(start + 1, len(lines)) if re.fullmatch(r"  [A-Za-z0-9_-]+:", lines[index])),
-        len(lines),
-    )
-    return lines[start:end]
+def _exact_mapping(
+    value: Any, label: str, expected_keys: set[str]
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise MsrvCheckError(f"{label} must be a YAML mapping")
+    actual = set(value)
+    if actual != expected_keys:
+        missing = sorted(expected_keys - actual)
+        unknown = sorted(actual - expected_keys)
+        raise MsrvCheckError(
+            f"{label} keys must be exactly the reviewed allowlist; "
+            f"missing={missing}, unknown={unknown}"
+        )
+    return value
 
 
-def _scalar(block: list[str], key: str) -> str | None:
-    prefix = f"    {key}:"
-    values = [_strip_yaml_comment(line[len(prefix):]).strip() for line in block if line.startswith(prefix)]
-    if len(values) > 1:
-        raise MsrvCheckError(f"msrv job has ambiguous {key!r} fields")
-    return values[0] if values else None
-
-
-def _steps(block: list[str]) -> list[Step]:
-    starts = [index for index, line in enumerate(block) if line.startswith("      - name:")]
-    steps: list[Step] = []
-    for position, start in enumerate(starts):
-        end = starts[position + 1] if position + 1 < len(starts) else len(block)
-        name = _strip_yaml_comment(block[start].split(":", 1)[1]).strip()
-        fields: dict[str, str] = {}
-        with_fields: dict[str, str] = {}
-        in_with = False
-        for line in block[start + 1:end]:
-            if line == "        with:":
-                in_with = True
-                continue
-            match = re.fullmatch(r"        ([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*", line)
-            if match:
-                in_with = False
-                fields[match.group(1)] = _strip_yaml_comment(match.group(2)).strip()
-                continue
-            match = re.fullmatch(r"          ([A-Za-z_][A-Za-z0-9_-]*):\s*(.*?)\s*", line)
-            if in_with and match:
-                with_fields[match.group(1)] = _strip_yaml_comment(match.group(2)).strip()
-        steps.append(Step(name, fields, with_fields))
-    return steps
+def _exact_value(actual: Any, expected: Any, label: str) -> None:
+    if actual != expected:
+        raise MsrvCheckError(f"{label} must remain exactly {expected!r}")
 
 
 def check_workflow_source(source: str) -> None:
-    validate_unambiguous_yaml(source)
-    required_triggers = (
-        "on:\n  push:\n    branches: [master, main]\n  pull_request:",
+    document = parse_workflow(source)
+    root = _exact_mapping(
+        document, "CI workflow", {"name", "on", "concurrency", "env", "jobs"}
     )
-    if not all(fragment in source for fragment in required_triggers):
-        raise MsrvCheckError("CI triggers must include every pull request and main/master push")
-    block = _job_block(source, "msrv")
-    if _scalar(block, "needs") != "static_docs":
-        raise MsrvCheckError("msrv job must depend exactly on static_docs")
-    if _scalar(block, "runs-on") != "ubuntu-latest":
-        raise MsrvCheckError("msrv job must use the supported Linux host")
-    if _scalar(block, "if") is not None:
-        raise MsrvCheckError("msrv job may not have a conditional trigger")
+    _exact_value(root["name"], "CI", "CI workflow name")
+    _exact_value(
+        root["on"],
+        {"push": {"branches": ["master", "main"]}, "pull_request": ""},
+        "CI workflow triggers",
+    )
+    _exact_value(
+        root["concurrency"],
+        {
+            "group": "ci-${{ github.workflow }}-${{ github.ref }}",
+            "cancel-in-progress": "true",
+        },
+        "CI workflow concurrency",
+    )
+    _exact_value(
+        root["env"],
+        {
+            "CARGO_INCREMENTAL": "0",
+            "CARGO_PROFILE_DEV_DEBUG": "0",
+            "CARGO_PROFILE_TEST_DEBUG": "0",
+        },
+        "CI workflow environment",
+    )
 
-    steps = _steps(block)
-    if (
-        '      FORGE_CI_CACHE_CONTEXT: "disabled-msrv-1.85.1"' not in block
-        or any(
-            "cache" in step.name.casefold()
-            or "cache" in step.fields.get("uses", "").casefold()
-            or "shared-key" in step.with_fields
-            or "save-if" in step.with_fields
-            for step in steps
+    jobs = root["jobs"]
+    if not isinstance(jobs, dict):
+        raise MsrvCheckError("CI jobs must be a YAML mapping")
+    if "static_docs" not in jobs or not isinstance(jobs["static_docs"], dict):
+        raise MsrvCheckError("CI must define the static_docs dependency job")
+    if "msrv" not in jobs:
+        raise MsrvCheckError("CI must define exactly one 'msrv' job")
+    job = _exact_mapping(
+        jobs["msrv"],
+        "msrv job",
+        {"name", "needs", "runs-on", "timeout-minutes", "env", "steps"},
+    )
+    _exact_value(
+        job["name"], "Rust 1.85 minimum supported version", "msrv job name"
+    )
+    _exact_value(job["needs"], "static_docs", "msrv job dependency")
+    _exact_value(job["runs-on"], "ubuntu-latest", "msrv job runner")
+    _exact_value(job["timeout-minutes"], "35", "msrv job timeout")
+    _exact_value(
+        job["env"],
+        {"FORGE_CI_CACHE_CONTEXT": "disabled-msrv-1.85.1"},
+        "msrv job environment",
+    )
+
+    steps = job["steps"]
+    expected_steps: list[tuple[str, dict[str, Any]]] = [
+        ("Checkout", {"name": "Checkout", "uses": CHECKOUT_ACTION}),
+        (
+            "Install exact MSRV toolchain",
+            {
+                "name": "Install exact MSRV toolchain",
+                "uses": TOOLCHAIN_ACTION,
+                "with": {"toolchain": TOOLCHAIN},
+            },
+        ),
+        (
+            "Verify MSRV lane contract",
+            {
+                "name": "Verify MSRV lane contract",
+                "timeout-minutes": "6",
+                "run": CHECK_COMMAND,
+            },
+        ),
+        (
+            "Check complete workspace at MSRV",
+            {
+                "name": "Check complete workspace at MSRV",
+                "timeout-minutes": "31",
+                "run": CARGO_COMMAND,
+            },
+        ),
+        (
+            "Upload MSRV timing reports",
+            {
+                "name": "Upload MSRV timing reports",
+                "if": "always()",
+                "uses": UPLOAD_ACTION,
+                "with": {
+                    "name": "ci-timing-msrv",
+                    "path": "target/ci-timing/msrv-*.json",
+                    "if-no-files-found": "warn",
+                    "retention-days": "14",
+                },
+            },
+        ),
+    ]
+    if not isinstance(steps, list):
+        raise MsrvCheckError("msrv steps must be an exact ordered YAML list")
+    names = [step.get("name") if isinstance(step, dict) else None for step in steps]
+    expected_names = [name for name, _ in expected_steps]
+    if names != expected_names:
+        raise MsrvCheckError(
+            "msrv job step topology must be the reviewed exact named sequence; "
+            f"expected={expected_names}, actual={names}"
         )
-    ):
-        raise MsrvCheckError("msrv job must disable and never restore/save Cargo caches")
-    if [step.name for step in steps] != [
-        "Checkout",
-        "Install exact MSRV toolchain",
-        "Verify MSRV lane contract",
-        "Check complete workspace at MSRV",
-        "Upload MSRV timing reports",
-    ]:
-        raise MsrvCheckError("msrv job step topology is not the reviewed exact sequence")
-    checkout, install, contract, cargo, upload = steps
-    if checkout.fields.get("uses") != CHECKOUT_ACTION:
-        raise MsrvCheckError("msrv checkout action must use the reviewed immutable revision")
-    if install.fields.get("uses") != TOOLCHAIN_ACTION or install.with_fields != {"toolchain": TOOLCHAIN}:
-        raise MsrvCheckError(f"msrv setup must install exact Rust {TOOLCHAIN}")
-    if contract.fields.get("run") != CHECK_COMMAND:
-        raise MsrvCheckError("msrv contract test must use the reviewed bounded command")
-    if cargo.fields.get("run") != CARGO_COMMAND:
-        raise MsrvCheckError("msrv compilation must use the complete exact locked command")
-    argv = shlex.split(cargo.fields["run"])
+    for step, (name, expected) in zip(steps, expected_steps, strict=True):
+        assert isinstance(step, dict)
+        _exact_mapping(step, f"msrv step {name!r}", set(expected))
+        if step != expected:
+            raise MsrvCheckError(
+                f"msrv step {name!r} fields must match the reviewed exact values"
+            )
+
+    cargo = steps[3]
+    argv = shlex.split(cargo["run"])
     required = {"--locked", "--workspace", "--all-targets", "--all-features"}
     if not required.issubset(argv) or argv.count(f"+{TOOLCHAIN}") != 1:
-        raise MsrvCheckError("msrv Cargo command omits a locked workspace target/feature dimension")
-    if upload.fields.get("if") != "always()" or upload.fields.get("uses") != UPLOAD_ACTION:
-        raise MsrvCheckError("MSRV timing upload must run always at an immutable revision")
-    if upload.with_fields != {
-        "name": "ci-timing-msrv",
-        "path": "target/ci-timing/msrv-*.json",
-        "if-no-files-found": "warn",
-        "retention-days": "14",
-    }:
-        raise MsrvCheckError("MSRV timing artifact retention/path topology drifted")
+        raise MsrvCheckError(
+            "msrv Cargo command omits a locked workspace target/feature dimension"
+        )
 
 
 def check(workflow: Path = WORKFLOW, root: Path = ROOT) -> list[str]:

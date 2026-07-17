@@ -28,8 +28,12 @@ line; the patch pin does not raise the source MSRV to a different Rust release.
 The MSRV job deliberately has no Cargo cache, so a newer compiler cannot seed it
 and the lane cannot save artifacts for other jobs. `scripts/check-msrv.py`
 discovers every `crates/*/Cargo.toml`, reconciles it with explicit workspace
-members, parses each member's features and package policy, and authenticates the
-complete `--locked --workspace --all-targets --all-features` job topology.
+members, and parses each member's features and package policy. Its duplicate-key-
+safe structured YAML check rejects aliases, merges, unknown workflow/MSRV-job
+keys, unapproved inherited or job/step environment, and any step outside the
+exact named sequence and closed per-step fields. The accepted compile remains the
+wrapped exact `cargo +1.85.1 check --locked --workspace --all-targets
+--all-features`; the always-run timing upload cannot change that step's result.
 
 ## Timing and failure evidence
 
