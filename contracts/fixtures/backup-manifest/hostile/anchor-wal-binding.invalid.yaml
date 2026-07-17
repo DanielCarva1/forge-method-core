@@ -1,0 +1,4 @@
+case: anchor-wal-binding
+replacements:
+  - from: "\"replay_wal_manifest_digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\""
+    to: "\"replay_wal_manifest_digest\": \"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\""

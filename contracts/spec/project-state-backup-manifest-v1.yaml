@@ -1,0 +1,91 @@
+schema_version: "0.1"
+backup_manifest_contract:
+  id: project-state-backup-manifest-v1
+  status: frozen
+  rust_schema:
+    document: forge_core_contracts::BackupManifestDocument
+    schema_version: forge_project_state_backup_manifest_v1
+    format: forge_project_state_backup_v1
+    unknown_versions: reject
+    unknown_fields: reject
+  canonical_bytes:
+    encoding: RFC 8785 JSON Canonicalization Scheme over the typed manifest document
+    exclusion: backup_manifest.manifest_set_digest is removed, never blanked, before canonicalization
+    set_digest:
+      algorithm: sha256
+      output: sha256:<64-lowercase-hex>
+      input: forge-method:project-state-backup-set:v1\0 || u64be(canonical_byte_length) || canonical_bytes
+      binds:
+        - exact Project Link and its safe archive mapping
+        - complete WorkflowGovernanceReleaseIdentity including release_version
+        - complete WorkflowEffectiveBundleIdentity, receipt context, and Domain Pack generation bindings
+        - governance ledger head and every typed archive member
+        - complete protected ReplayAnchorDocument projection and broker registry public identity
+        - private-root exclusion policy
+  source_derived_authority_inventory:
+    closed: true
+    generic_state_file_escape_hatch: forbidden
+    required_typed_members:
+      - project/.forge-method.yaml
+      - state-root/wal/workflow-governance.ndjson
+      - state-root/wal/claims.fmw1, claims.wal.manifest.json, snapshots/*, and archive/*
+      - state-root/replay-wal.manifest.json and wal/replay.fmr1
+      - state-root/workflow-action-replay.manifest.json and wal/workflow-action-replay.jsonl
+      - state-root/wal/effects.ndjson and .effects.ndjson.compaction-manifest.json
+      - state-root/domain-packs/active.lock.yaml, ledger/*, generations/*/{lock,preflight,receipt}.yaml, receipts/*, and objects/*
+      - sidecar-root/operator/workflow-principal-registry.yaml
+      - sidecar-root/operator/workflow-broker-registry.yaml
+    directories:
+      archive_entries: regular_files_only
+      restore_created_not_archived:
+        - locks
+        - wal/snapshots
+        - wal/archive
+        - domain-packs/objects
+  project_link_archive_mapping:
+    project_link_archive_path: project/.forge-method.yaml
+    sidecar_archive_root: sidecar
+    state_root_relative_to_sidecar: normalized(ProjectLinkDocument.state_root - ProjectLinkDocument.sidecar_root)
+    reject:
+      - a mapping that cannot be derived from the exact Project Link
+      - absolute, escaping, dot, dot-dot, backslash, NUL, or control-character logical paths
+      - hard-coded default .forge-method mapping when the Link names another valid state root
+  entry_rules:
+    enumeration: no-follow regular-file enumeration rejects private roots before typed entry construction
+    reject:
+      - symlink, hardlink, device, FIFO, directory, duplicate, omitted, extra, or substituted entries
+      - material kinds not defined by v1
+      - sidecar/operator/workflow-secrets/**
+      - sidecar/operator/secrets/**
+      - private-keys/**, *.key, and *.pem
+    ordering: BackupEntryKind declaration order; repeated typed closures use lexical logical-path order
+  snapshot_protocol:
+    recovery_before_copy: true
+    actual_lock_order:
+      - locks/domain-packs.lifecycle.lock
+      - locks/workflow-governance.lock
+      - locks/claims.wal.lock
+      - locks/workflow-action-replay.lock
+      - locks/effects.lock
+      - locks/replay.wal.lock
+      - <protected-anchor>.lock
+    invariant: effect lock precedes replay lock; all mutation/recovery paths are excluded through recovery, no-follow enumeration, staged copy/hash/fsync, and final manifest publication
+    publish: manifest is fsynced and atomically published last
+  external_authorities:
+    broker_public_trust:
+      authority_root: sidecar-root/operator/workflow-broker-registry.yaml
+      format: forge_workflow_broker_registry_v1
+      binds: [identity, public_key_fingerprint, observed_generation, registry_sha256]
+    replay_rollback_anchor:
+      restore_preflight: read and compare current protected anchor before replay or restore writes
+      binds: [schema_version, protected_anchor_identity, deployment_id, epoch, generation, previous_anchor_digest, anchor_document_sha256, replay_wal_manifest_digest, replay_wal_prefix_digest, replay_wal_last_seq, replay_wal_record_count, replay_wal_byte_length]
+  restore_compatibility:
+    mode: exact_v1_only
+    rejects:
+      - migration, merge, repair, truncation, recreation, or best-effort restore
+      - Project Link, release, effective-bundle, ledger-head, or entry binding mismatch
+      - stale protected-anchor generation or replay-head binding mismatch
+      - mixed-project, partial, extra, omitted, substituted, or symlink-backed inputs
+  fixtures:
+    valid: contracts/fixtures/backup-manifest/valid/complete-state-v1.yaml
+    hostile: contracts/fixtures/backup-manifest/hostile/

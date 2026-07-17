@@ -1,0 +1,4 @@
+case: unknown-version
+replacements:
+  - from: 'forge_project_state_backup_manifest_v1'
+    to: 'forge_project_state_backup_manifest_v2'

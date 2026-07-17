@@ -1,0 +1,4 @@
+case: omitted-entry
+replacements:
+  - from: '"claim_wal"'
+    to: '"claim_wal_omitted"'

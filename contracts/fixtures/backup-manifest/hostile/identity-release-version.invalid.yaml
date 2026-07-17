@@ -1,0 +1,4 @@
+case: identity-release-version
+replacements:
+  - from: "\"release_version\": \"1.0.0\""
+    to: "\"release_version\": \"\""

@@ -1,0 +1,4 @@
+case: private-root
+replacements:
+  - from: "sidecar/runtime-state/wal/workflow-governance.ndjson"
+    to: "sidecar/operator/workflow-secrets/private.key"

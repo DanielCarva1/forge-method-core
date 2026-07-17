@@ -1,0 +1,4 @@
+case: release-mismatch
+replacements:
+  - from: '"workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"'
+    to: '"workflow_release_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"'

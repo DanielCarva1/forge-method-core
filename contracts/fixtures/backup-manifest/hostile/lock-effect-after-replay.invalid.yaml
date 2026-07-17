@@ -1,0 +1,4 @@
+case: lock-effect-after-replay
+replacements:
+  - from: "\"effect_wal\",\n        \"replay_wal\""
+    to: "\"replay_wal\",\n        \"effect_wal\""

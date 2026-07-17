@@ -1,0 +1,4 @@
+case: stale-generation
+replacements:
+  - from: '"state_generation": 42'
+    to: '"state_generation": 41'

@@ -1,0 +1,4 @@
+case: symlink-entry
+replacements:
+  - from: '"entry_type": "regular_file"'
+    to: '"entry_type": "symlink"'

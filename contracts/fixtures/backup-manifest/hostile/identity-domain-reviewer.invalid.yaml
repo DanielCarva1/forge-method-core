@@ -1,0 +1,4 @@
+case: identity-domain-reviewer
+replacements:
+  - from: "\"reviewed_registry_digest\": \"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\""
+    to: "\"reviewed_registry_digest\": \"\""

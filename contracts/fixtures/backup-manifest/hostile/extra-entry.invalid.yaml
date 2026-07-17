@@ -1,0 +1,4 @@
+case: extra-entry
+replacements:
+  - from: '"workflow_governance_wal"'
+    to: '"unknown_v1_authority"'

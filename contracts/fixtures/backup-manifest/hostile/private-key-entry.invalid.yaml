@@ -1,0 +1,4 @@
+case: private-key-entry
+replacements:
+  - from: 'sidecar/runtime-state/wal/effects.ndjson'
+    to: 'sidecar/operator/workflow-secrets/private.key'

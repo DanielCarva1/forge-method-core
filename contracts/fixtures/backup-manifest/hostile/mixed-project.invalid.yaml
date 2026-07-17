@@ -1,0 +1,4 @@
+case: mixed-project
+replacements:
+  - from: '"project_id": "app"'
+    to: '"project_id": "other-project"'

@@ -1,0 +1,4 @@
+case: path-traversal
+replacements:
+  - from: 'sidecar/runtime-state/wal/claims.fmw1'
+    to: 'sidecar/runtime-state/wal/../claims.fmw1'

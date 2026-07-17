@@ -1,0 +1,359 @@
+{
+  "schema_version": "forge_project_state_backup_manifest_v1",
+  "backup_manifest": {
+    "format": "forge_project_state_backup_v1",
+    "project": {
+      "project_link": {
+        "schema_version": "forge_project_link_v1",
+        "project_id": "app",
+        "sidecar_root": "../forge-app",
+        "state_root": "../forge-app/runtime-state"
+      },
+      "project_link_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "state_generation": 42,
+      "archive_layout": {
+        "project_link_archive_path": "project/.forge-method.yaml",
+        "sidecar_archive_root": "sidecar",
+        "state_root_relative_to_sidecar": "runtime-state",
+        "restore_created_directories": [
+          "locks",
+          "wal/snapshots",
+          "wal/archive",
+          "domain-packs/objects"
+        ]
+      }
+    },
+    "workflow_release": {
+      "lineage_id": "workflow-governance",
+      "release_id": "workflow-governance.release.v1",
+      "release_version": "1.0.0",
+      "release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "effective_epoch": {
+      "epoch_id": "effective-epoch.app",
+      "epoch_generation": 7,
+      "effective_bundle": {
+        "core_runtime_bundle": {
+          "bundle_id": "core-runtime",
+          "bundle_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "policy_set_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        "effective_runtime_bundle": {
+          "bundle_id": "effective-runtime",
+          "bundle_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+          "policy_set_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+        },
+        "domain_pack_generation": {
+          "generation": 7,
+          "active_lock_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+          "composition_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+          "base_core_bundle_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "supply_chain_registry_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "reviewed_registry_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "governance_ledger_head_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "snapshot": {
+      "lock_order": [
+        "domain_pack_lifecycle",
+        "workflow_governance",
+        "claim_wal",
+        "workflow_action_replay_wal",
+        "effect_wal",
+        "replay_wal",
+        "external_replay_anchor"
+      ],
+      "stores_recovered_before_copy": true,
+      "manifest_published_last": true,
+      "restore_reads_current_anchor_before_replay": true,
+      "restore_compatibility": "exact_v1_only"
+    },
+    "entries": [
+      {
+        "material": "project_link",
+        "classification": "required",
+        "logical_path": "project/.forge-method.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 500,
+        "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "workflow_governance_wal",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/workflow-governance.ndjson",
+        "entry_type": "regular_file",
+        "byte_length": 600,
+        "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "claim_wal",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/claims.fmw1",
+        "entry_type": "regular_file",
+        "byte_length": 700,
+        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "claim_wal_manifest",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/claims.wal.manifest.json",
+        "entry_type": "regular_file",
+        "byte_length": 800,
+        "sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "claim_wal_snapshot",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/snapshots/claims.snapshot.42.json",
+        "entry_type": "regular_file",
+        "byte_length": 900,
+        "sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "claim_wal_archive",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/archive/claims.000041.fmw1",
+        "entry_type": "regular_file",
+        "byte_length": 1000,
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "replay_wal_manifest",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/replay-wal.manifest.json",
+        "entry_type": "regular_file",
+        "byte_length": 1100,
+        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "replay_wal",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/replay.fmr1",
+        "entry_type": "regular_file",
+        "byte_length": 1200,
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "workflow_action_replay_manifest",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/workflow-action-replay.manifest.json",
+        "entry_type": "regular_file",
+        "byte_length": 1300,
+        "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "workflow_action_replay_wal",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/workflow-action-replay.jsonl",
+        "entry_type": "regular_file",
+        "byte_length": 1400,
+        "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "effect_wal",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/effects.ndjson",
+        "entry_type": "regular_file",
+        "byte_length": 1500,
+        "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "effect_wal_compaction_manifest",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/wal/.effects.ndjson.compaction-manifest.json",
+        "entry_type": "regular_file",
+        "byte_length": 1600,
+        "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_active_lock",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/active.lock.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 1700,
+        "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_ledger_record",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/ledger/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 1800,
+        "sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_generation_lock",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/generations/00000000000000000007-aaaaaaaaaaaaaaaa/lock.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 1900,
+        "sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_generation_preflight",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/generations/00000000000000000007-aaaaaaaaaaaaaaaa/preflight.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2000,
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_generation_receipt",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/generations/00000000000000000007-aaaaaaaaaaaaaaaa/receipt.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2100,
+        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_receipt",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/receipts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2200,
+        "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "domain_pack_object",
+        "classification": "required",
+        "logical_path": "sidecar/runtime-state/domain-packs/objects/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2300,
+        "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "public_principal_registry",
+        "classification": "required",
+        "logical_path": "sidecar/operator/workflow-principal-registry.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2400,
+        "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "material": "public_broker_registry",
+        "classification": "required",
+        "logical_path": "sidecar/operator/workflow-broker-registry.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 2500,
+        "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "project_id": "app",
+        "state_generation": 42,
+        "workflow_release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "effective_receipt_context_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ],
+    "external_authorities": {
+      "broker_public_trust": {
+        "registry_format": "forge_workflow_broker_registry_v1",
+        "registry_logical_path": "sidecar/operator/workflow-broker-registry.yaml",
+        "identity": "broker.app.primary",
+        "public_key_fingerprint": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "observed_generation": 12,
+        "registry_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "replay_rollback_anchor": {
+        "schema_version": "0.1",
+        "protected_anchor_identity": "operator://anchors/app",
+        "deployment_id": "deployment.app.primary",
+        "epoch": "anchor-epoch-7",
+        "generation": 42,
+        "previous_anchor_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "anchor_document_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "replay_wal_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "replay_wal_prefix_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "replay_wal_last_seq": 88,
+        "replay_wal_record_count": 88,
+        "replay_wal_byte_length": 2400
+      }
+    },
+    "forbidden_private_material": [
+      "broker_private_keys",
+      "workflow_secret_roots",
+      "operator_secret_roots"
+    ],
+    "manifest_set_digest": "sha256:ca97156c0caa8dbd5972bdd42fc24384a2b8af3f2e720dd7f8bcb78440a47795"
+  }
+}

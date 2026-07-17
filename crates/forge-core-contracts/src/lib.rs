@@ -8,6 +8,7 @@ pub mod typed_failure;
 pub mod agent_run;
 pub mod assurance;
 pub mod autonomy_policy;
+pub mod backup_manifest;
 pub mod bootstrap_recovery;
 pub mod checkpoint;
 pub mod completion;
@@ -72,6 +73,7 @@ pub use assurance::{
     WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument};
+pub use backup_manifest::*;
 pub use bootstrap_recovery::{
     BootstrapRecoveryAction, BootstrapRecoveryAuthorityEffect, BootstrapRecoveryAvailability,
     BootstrapRecoveryChoice, BootstrapRecoveryChoices, BootstrapRecoveryRequirement,
