@@ -29,22 +29,29 @@ PYYAML_INSTALL_COMMAND = (
     "python -m pip install --disable-pip-version-check --no-deps "
     f"PyYAML=={PYYAML_VERSION}"
 )
-CONTRACT_COMMAND = (
-    "python scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 "
-    "--report target/ci-timing/msrv-contract.json -- python scripts/test-msrv.py"
+TRUSTED_REF = (
+    "${{ github.event_name == 'pull_request' && "
+    "github.event.pull_request.base.sha || github.sha }}"
 )
-CHECK_COMMAND = f"{PYYAML_INSTALL_COMMAND} && {CONTRACT_COMMAND}"
-CARGO_COMMAND = (
-    "python scripts/run-ci-tier.py --tier msrv-workspace --budget-seconds 1800 "
-    "--report target/ci-timing/msrv-workspace.json -- cargo +1.85.1 check "
-    "--locked --workspace --all-targets --all-features"
-)
-
-POLICY_COMMAND = (
-    "python trusted/scripts/check-msrv.py --root candidate "
+TRUSTED_CHECK_COMMAND = (
+    "python -I trusted/scripts/check-msrv.py --root candidate "
     "--workflow candidate/.github/workflows/ci.yml "
     "--policy-workflow candidate/.github/workflows/msrv-policy.yml"
 )
+CONTRACT_COMMAND = (
+    "python -I trusted/scripts/run-ci-tier.py --tier msrv-contract "
+    "--budget-seconds 300 --report target/ci-timing/msrv-contract.json -- "
+    f"{TRUSTED_CHECK_COMMAND}"
+)
+CHECK_COMMAND = f"{PYYAML_INSTALL_COMMAND} && {CONTRACT_COMMAND}"
+CARGO_COMMAND = (
+    "python -I trusted/scripts/run-ci-tier.py --tier msrv-workspace "
+    "--budget-seconds 1800 --report target/ci-timing/msrv-workspace.json -- "
+    "cargo +1.85.1 check --manifest-path candidate/Cargo.toml --locked "
+    "--workspace --all-targets --all-features"
+)
+
+POLICY_COMMAND = TRUSTED_CHECK_COMMAND
 
 
 class MsrvCheckError(RuntimeError):
@@ -52,9 +59,9 @@ class MsrvCheckError(RuntimeError):
 
 
 if yaml is not None:
+
     class UniqueBaseLoader(yaml.BaseLoader):
         """Load scalar text without YAML 1.1 coercion and reject duplicate keys."""
-
 
     def _construct_unique_mapping(loader: Any, node: Any, deep: bool = False):
         mapping: dict[str, Any] = {}
@@ -64,12 +71,9 @@ if yaml is not None:
             key = loader.construct_object(key_node, deep=deep)
             if key in mapping:
                 line = key_node.start_mark.line + 1
-                raise MsrvCheckError(
-                    f"CI workflow:{line}: duplicate YAML key {key!r}"
-                )
+                raise MsrvCheckError(f"CI workflow:{line}: duplicate YAML key {key!r}")
             mapping[key] = loader.construct_object(value_node, deep=deep)
         return mapping
-
 
     UniqueBaseLoader.add_constructor(
         yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
@@ -102,7 +106,9 @@ def parse_workflow(source: str) -> dict[str, Any]:
     try:
         for token in yaml.scan(source):
             if isinstance(token, (yaml.tokens.AnchorToken, yaml.tokens.AliasToken)):
-                raise MsrvCheckError("CI workflow YAML anchors and aliases are forbidden")
+                raise MsrvCheckError(
+                    "CI workflow YAML anchors and aliases are forbidden"
+                )
             if isinstance(token, yaml.tokens.TagToken):
                 raise MsrvCheckError("CI workflow explicit YAML tags are forbidden")
         document = yaml.load(source, Loader=UniqueBaseLoader)
@@ -125,7 +131,9 @@ def _require_regular_data_file(path: Path, root: Path, label: str) -> None:
     try:
         relative = path.relative_to(root)
     except ValueError as error:
-        raise MsrvCheckError(f"{label} must remain inside the candidate root") from error
+        raise MsrvCheckError(
+            f"{label} must remain inside the candidate root"
+        ) from error
     current = root
     for part in relative.parts:
         current /= part
@@ -155,20 +163,60 @@ def _member_paths(manifest: dict[str, Any]) -> list[PurePosixPath]:
         if not isinstance(value, str) or not value:
             raise MsrvCheckError("every workspace member must be a non-empty path")
         path = PurePosixPath(value)
-        if path.is_absolute() or ".." in path.parts or any(char in value for char in "*?["):
-            raise MsrvCheckError(f"workspace member must be an explicit local path: {value!r}")
+        if (
+            path.is_absolute()
+            or ".." in path.parts
+            or any(char in value for char in "*?[")
+        ):
+            raise MsrvCheckError(
+                f"workspace member must be an explicit local path: {value!r}"
+            )
         if path in normalized:
             raise MsrvCheckError(f"duplicate workspace member: {value!r}")
         normalized.append(path)
     return normalized
 
 
+def _reject_candidate_cargo_config(root: Path) -> None:
+    """Reject candidate-controlled Cargo configuration before any compiler proof."""
+    cargo_dir = root / ".cargo"
+    try:
+        cargo_dir.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise MsrvCheckError(
+            f"cannot inspect candidate root Cargo configuration: {error}"
+        ) from error
+    if cargo_dir.is_symlink() or not cargo_dir.is_dir():
+        raise MsrvCheckError(
+            "candidate root .cargo must not be a symlink or non-directory alias"
+        )
+    for name in ("config", "config.toml"):
+        path = cargo_dir / name
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise MsrvCheckError(
+                f"cannot inspect candidate root {path}: {error}"
+            ) from error
+        raise MsrvCheckError(
+            f"candidate root .cargo/{name} is forbidden, including symlinks and nonregular aliases"
+        )
+
+
 def check_manifests(root: Path = ROOT) -> list[str]:
+    _reject_candidate_cargo_config(root)
     _require_regular_data_file(root / "Cargo.toml", root, "root Cargo.toml")
     manifest = _load_toml(root / "Cargo.toml")
     workspace = manifest["workspace"]
     package_policy = workspace.get("package")
-    if not isinstance(package_policy, dict) or package_policy.get("rust-version") != DECLARED_MSRV:
+    if (
+        not isinstance(package_policy, dict)
+        or package_policy.get("rust-version") != DECLARED_MSRV
+    ):
         raise MsrvCheckError(
             f"workspace.package.rust-version must remain exactly {DECLARED_MSRV!r}"
         )
@@ -200,17 +248,19 @@ def check_manifests(root: Path = ROOT) -> list[str]:
                 f"{relative}/Cargo.toml must inherit the workspace MSRV or omit a package override"
             )
         features = member.get("features", {})
-        if not isinstance(features, dict) or not all(isinstance(key, str) for key in features):
-            raise MsrvCheckError(f"{relative}/Cargo.toml has an invalid [features] table")
+        if not isinstance(features, dict) or not all(
+            isinstance(key, str) for key in features
+        ):
+            raise MsrvCheckError(
+                f"{relative}/Cargo.toml has an invalid [features] table"
+            )
         names.append(package["name"])
     if len(names) != len(set(names)):
         raise MsrvCheckError("workspace package names must be unique")
     return names
 
 
-def _exact_mapping(
-    value: Any, label: str, expected_keys: set[str]
-) -> dict[str, Any]:
+def _exact_mapping(value: Any, label: str, expected_keys: set[str]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MsrvCheckError(f"{label} must be a YAML mapping")
     actual = set(value)
@@ -344,9 +394,7 @@ def check_policy_workflow_source(source: str) -> None:
         "MSRV policy enforce job",
         {"name", "runs-on", "timeout-minutes", "steps"},
     )
-    _exact_value(
-        job["name"], "Enforce trusted MSRV policy", "MSRV policy job name"
-    )
+    _exact_value(job["name"], "Enforce trusted MSRV policy", "MSRV policy job name")
     _exact_value(job["runs-on"], "ubuntu-latest", "MSRV policy job runner")
     _exact_value(job["timeout-minutes"], "10", "MSRV policy job timeout")
     expected_steps = [
@@ -430,9 +478,7 @@ def check_workflow_source(source: str) -> None:
         "msrv job",
         {"name", "needs", "if", "runs-on", "timeout-minutes", "env", "steps"},
     )
-    _exact_value(
-        job["name"], "Rust 1.85 minimum supported version", "msrv job name"
-    )
+    _exact_value(job["name"], "Rust 1.85 minimum supported version", "msrv job name")
     _exact_value(job["needs"], "static_docs", "msrv job dependency")
     _exact_value(job["if"], "always()", "msrv job condition")
     _exact_value(job["runs-on"], "ubuntu-latest", "msrv job runner")
@@ -446,11 +492,28 @@ def check_workflow_source(source: str) -> None:
     steps = job["steps"]
     expected_steps: list[tuple[str, dict[str, Any]]] = [
         (
-            "Checkout",
+            "Checkout candidate as untrusted data",
             {
-                "name": "Checkout",
+                "name": "Checkout candidate as untrusted data",
                 "uses": CHECKOUT_ACTION,
-                "with": {"persist-credentials": "false"},
+                "with": {
+                    "path": "candidate",
+                    "persist-credentials": "false",
+                },
+            },
+        ),
+        (
+            "Checkout immutable trusted MSRV tools",
+            {
+                "name": "Checkout immutable trusted MSRV tools",
+                "uses": CHECKOUT_ACTION,
+                "with": {
+                    "repository": "${{ github.repository }}",
+                    "ref": TRUSTED_REF,
+                    "path": "trusted",
+                    "persist-credentials": "false",
+                    "fetch-depth": "1",
+                },
             },
         ),
         (
@@ -462,17 +525,17 @@ def check_workflow_source(source: str) -> None:
             },
         ),
         (
-            "Verify MSRV lane contract",
+            "Verify MSRV lane contract with trusted checker",
             {
-                "name": "Verify MSRV lane contract",
+                "name": "Verify MSRV lane contract with trusted checker",
                 "timeout-minutes": "6",
                 "run": CHECK_COMMAND,
             },
         ),
         (
-            "Check complete workspace at MSRV",
+            "Check complete candidate workspace at MSRV",
             {
-                "name": "Check complete workspace at MSRV",
+                "name": "Check complete candidate workspace at MSRV",
                 "timeout-minutes": "31",
                 "run": CARGO_COMMAND,
             },
@@ -509,7 +572,7 @@ def check_workflow_source(source: str) -> None:
                 f"msrv step {name!r} fields must match the reviewed exact values"
             )
 
-    cargo = steps[3]
+    cargo = steps[4]
     argv = shlex.split(cargo["run"])
     required = {"--locked", "--workspace", "--all-targets", "--all-features"}
     if not required.issubset(argv) or argv.count(f"+{TOOLCHAIN}") != 1:

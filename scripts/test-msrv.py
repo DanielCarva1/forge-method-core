@@ -7,6 +7,7 @@ import importlib.util
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import unittest
@@ -54,9 +55,7 @@ class MsrvContractTests(unittest.TestCase):
 
     def assert_policy_rejected(self, old: str, new: str, reason: str) -> None:
         with self.assertRaisesRegex(checker.MsrvCheckError, reason):
-            checker.check_policy_workflow_source(
-                self.replace_policy_once(old, new)
-            )
+            checker.check_policy_workflow_source(self.replace_policy_once(old, new))
 
     def copied_manifests(self, destination: Path) -> None:
         shutil.copy2(ROOT / "Cargo.toml", destination / "Cargo.toml")
@@ -205,18 +204,20 @@ class MsrvContractTests(unittest.TestCase):
 
     def test_rejects_continue_on_error_on_exact_compile_step(self) -> None:
         compile_timeout = (
-            "      - name: Check complete workspace at MSRV\n"
+            "      - name: Check complete candidate workspace at MSRV\n"
             "        timeout-minutes: 31\n"
         )
         self.assert_workflow_rejected(
             compile_timeout,
             compile_timeout + "        continue-on-error: true\n",
-            "msrv step 'Check complete workspace at MSRV' keys",
+            "msrv step 'Check complete candidate workspace at MSRV' keys",
         )
 
-    def test_rejects_compile_step_conditions_shell_directory_and_unknown_keys(self) -> None:
+    def test_rejects_compile_step_conditions_shell_directory_and_unknown_keys(
+        self,
+    ) -> None:
         compile_timeout = (
-            "      - name: Check complete workspace at MSRV\n"
+            "      - name: Check complete candidate workspace at MSRV\n"
             "        timeout-minutes: 31\n"
         )
         for field in (
@@ -229,12 +230,12 @@ class MsrvContractTests(unittest.TestCase):
                 self.assert_workflow_rejected(
                     compile_timeout,
                     compile_timeout + f"        {field}\n",
-                    "msrv step 'Check complete workspace at MSRV' keys",
+                    "msrv step 'Check complete candidate workspace at MSRV' keys",
                 )
 
     def test_rejects_compile_step_environment_overrides(self) -> None:
         compile_timeout = (
-            "      - name: Check complete workspace at MSRV\n"
+            "      - name: Check complete candidate workspace at MSRV\n"
             "        timeout-minutes: 31\n"
         )
         for key in ("RUSTC", "RUSTC_WRAPPER", "RUSTUP_TOOLCHAIN", "PATH"):
@@ -242,7 +243,7 @@ class MsrvContractTests(unittest.TestCase):
                 self.assert_workflow_rejected(
                     compile_timeout,
                     compile_timeout + f"        env:\n          {key}: /tmp/bypass\n",
-                    "msrv step 'Check complete workspace at MSRV' keys",
+                    "msrv step 'Check complete candidate workspace at MSRV' keys",
                 )
 
     def test_rejects_nameless_cache_action_exact_reproducer(self) -> None:
@@ -264,11 +265,22 @@ class MsrvContractTests(unittest.TestCase):
                 self.assert_workflow_rejected(install, step + install, "step topology")
 
     def test_rejects_extra_reordered_and_duplicate_steps(self) -> None:
-        checkout = (
-            "      - name: Checkout\n"
+        candidate_checkout = (
+            "      - name: Checkout candidate as untrusted data\n"
             f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
             "        with:\n"
+            "          path: candidate\n"
             "          persist-credentials: false\n\n"
+        )
+        trusted_checkout = (
+            "      - name: Checkout immutable trusted MSRV tools\n"
+            f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
+            "        with:\n"
+            "          repository: ${{ github.repository }}\n"
+            f"          ref: {checker.TRUSTED_REF}\n"
+            "          path: trusted\n"
+            "          persist-credentials: false\n"
+            "          fetch-depth: 1\n\n"
         )
         install = (
             "      - name: Install exact MSRV toolchain\n"
@@ -277,8 +289,12 @@ class MsrvContractTests(unittest.TestCase):
             "          toolchain: 1.85.1\n\n"
         )
         mutations = [
-            self.source.replace(install, install + checkout, 1),
-            self.source.replace(checkout + install, install + checkout, 1),
+            self.source.replace(install, install + candidate_checkout, 1),
+            self.source.replace(
+                candidate_checkout + trusted_checkout,
+                trusted_checkout + candidate_checkout,
+                1,
+            ),
             self.source.replace(
                 install,
                 "      - name: Extra step\n        run: true\n\n" + install,
@@ -293,7 +309,7 @@ class MsrvContractTests(unittest.TestCase):
         msrv_checkout = (
             '      FORGE_CI_CACHE_CONTEXT: "disabled-msrv-1.85.1"\n'
             "    steps:\n"
-            "      - name: Checkout\n"
+            "      - name: Checkout candidate as untrusted data\n"
             f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
         )
         mutated = msrv_checkout.replace(
@@ -301,6 +317,105 @@ class MsrvContractTests(unittest.TestCase):
             "uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32",
         )
         self.assert_workflow_rejected(msrv_checkout, mutated, "exact values")
+
+    def test_requires_immutable_trusted_checkout_boundary(self) -> None:
+        mutations = [
+            (
+                f"          ref: {checker.TRUSTED_REF}\n",
+                "          ref: ${{ github.sha }}\n",
+            ),
+            (
+                "          path: trusted\n          persist-credentials: false\n",
+                "          path: candidate/trusted\n          persist-credentials: false\n",
+            ),
+            (
+                "          path: trusted\n          persist-credentials: false\n",
+                "          path: trusted\n          persist-credentials: true\n",
+            ),
+            ("          fetch-depth: 1\n", "          fetch-depth: 0\n"),
+        ]
+        for old, new in mutations:
+            with self.subTest(mutation=new.strip()):
+                self.assert_workflow_rejected(old, new, "exact values")
+
+    def test_requires_isolated_python_for_every_trusted_invocation(self) -> None:
+        workflow_mutations = [
+            (
+                checker.CONTRACT_COMMAND,
+                checker.CONTRACT_COMMAND.replace(
+                    "python -I trusted/scripts/run-ci-tier.py",
+                    "python trusted/scripts/run-ci-tier.py",
+                ),
+            ),
+            (
+                checker.CONTRACT_COMMAND,
+                checker.CONTRACT_COMMAND.replace(
+                    "-- python -I trusted/scripts/check-msrv.py",
+                    "-- python trusted/scripts/check-msrv.py",
+                ),
+            ),
+            (
+                checker.CARGO_COMMAND,
+                checker.CARGO_COMMAND.replace(
+                    "python -I trusted/scripts/run-ci-tier.py",
+                    "python trusted/scripts/run-ci-tier.py",
+                ),
+            ),
+        ]
+        for old, new in workflow_mutations:
+            with self.subTest(mutation=new.split()[0:3]):
+                self.assert_workflow_rejected(old, new, "exact values")
+        self.assert_policy_rejected(
+            checker.POLICY_COMMAND,
+            checker.POLICY_COMMAND.replace("python -I", "python", 1),
+            "policy steps",
+        )
+
+    def test_candidate_success_wrapper_is_never_accepted_or_executed(self) -> None:
+        mutated = self.source.replace(
+            checker.CARGO_COMMAND,
+            checker.CARGO_COMMAND.replace(
+                "trusted/scripts/run-ci-tier.py", "candidate/scripts/run-ci-tier.py"
+            ),
+            1,
+        )
+        self.assert_source_rejected(mutated, "exact values")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / "candidate-wrapper-ran"
+            fake = root / "candidate/scripts/run-ci-tier.py"
+            fake.parent.mkdir(parents=True)
+            fake.write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).touch()\nraise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            report = root / "trusted-report.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    str(ROOT / "scripts/run-ci-tier.py"),
+                    "--tier",
+                    "adversarial-msrv-wrapper",
+                    "--budget-seconds",
+                    "30",
+                    "--report",
+                    str(report),
+                    "--",
+                    sys.executable,
+                    "-c",
+                    "raise SystemExit(7)",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+            self.assertTrue(report.is_file())
+            self.assertFalse(marker.exists(), "candidate success wrapper was executed")
 
     def test_rejects_action_step_unknown_fields_and_open_with_maps(self) -> None:
         self.assert_workflow_rejected(
@@ -394,10 +509,8 @@ class MsrvContractTests(unittest.TestCase):
                 "          ref: ${{ github.event.pull_request.head.ref }}\n",
             ),
             (
-                "          path: candidate\n"
-                "          persist-credentials: false\n",
-                "          path: candidate\n"
-                "          persist-credentials: true\n",
+                "          path: candidate\n          persist-credentials: false\n",
+                "          path: candidate\n          persist-credentials: true\n",
             ),
             (
                 "      - name: Provision exact YAML parser\n",
@@ -444,9 +557,46 @@ class MsrvContractTests(unittest.TestCase):
             shutil.copy2(WORKFLOW, workflows / "ci.yml")
             (workflows / "msrv-policy.yml").symlink_to(POLICY_WORKFLOW)
             with self.assertRaisesRegex(checker.MsrvCheckError, "symbolic link"):
-                checker.check(
-                    workflows / "ci.yml", root, workflows / "msrv-policy.yml"
-                )
+                checker.check(workflows / "ci.yml", root, workflows / "msrv-policy.yml")
+
+    def test_rejects_candidate_root_cargo_compiler_overrides_and_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copied_manifests(root)
+            cargo_dir = root / ".cargo"
+            cargo_dir.mkdir()
+            marker = root / "newer-rustc-wrapper-ran"
+            wrapper = root / "newer-rustc-wrapper"
+            wrapper.write_text(f"#!/bin/sh\ntouch {marker}\nexit 0\n", encoding="utf-8")
+            (cargo_dir / "config.toml").write_text(
+                f'[build]\nrustc-wrapper = "{wrapper}"\n', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                checker.MsrvCheckError, "candidate root .cargo/config.toml is forbidden"
+            ):
+                checker.check_manifests(root)
+            self.assertFalse(marker.exists(), "compiler wrapper ran before rejection")
+
+        for alias in ("config-symlink", "config-toml-directory", "cargo-symlink"):
+            with self.subTest(alias=alias), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.copied_manifests(root)
+                cargo_dir = root / ".cargo"
+                target = root / "alias-target"
+                if alias == "cargo-symlink":
+                    target.mkdir()
+                    cargo_dir.symlink_to(target, target_is_directory=True)
+                else:
+                    cargo_dir.mkdir()
+                    if alias == "config-symlink":
+                        target.write_text("[build]\n", encoding="utf-8")
+                        (cargo_dir / "config").symlink_to(target)
+                    else:
+                        (cargo_dir / "config.toml").mkdir()
+                with self.assertRaisesRegex(
+                    checker.MsrvCheckError, "candidate root .cargo"
+                ):
+                    checker.check_manifests(root)
 
     def test_rejects_workspace_member_omission_and_undeclared_crate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -477,7 +627,14 @@ class MsrvContractTests(unittest.TestCase):
             self.copied_manifests(root)
             member = root / "crates/forge-core-research/Cargo.toml"
             text = member.read_text(encoding="utf-8")
-            member.write_text(text.replace("edition.workspace = true", 'edition.workspace = true\nrust-version = "1.86"', 1), encoding="utf-8")
+            member.write_text(
+                text.replace(
+                    "edition.workspace = true",
+                    'edition.workspace = true\nrust-version = "1.86"',
+                    1,
+                ),
+                encoding="utf-8",
+            )
             with self.assertRaises(checker.MsrvCheckError):
                 checker.check_manifests(root)
 
@@ -497,13 +654,21 @@ class MsrvContractTests(unittest.TestCase):
             timeout=60,
             check=False,
         )
-        self.assertEqual(version.returncode, 0, f"missing exact toolchain: {version.stderr}")
+        self.assertEqual(
+            version.returncode, 0, f"missing exact toolchain: {version.stderr}"
+        )
         self.assertRegex(version.stdout, r"^rustc 1\.85\.1 ")
         with tempfile.TemporaryDirectory() as target:
             result = subprocess.run(
                 [
-                    "cargo", "+1.85.1", "check", "--manifest-path",
-                    str(FIXTURE / "Cargo.toml"), "--locked", "--target-dir", target,
+                    "cargo",
+                    "+1.85.1",
+                    "check",
+                    "--manifest-path",
+                    str(FIXTURE / "Cargo.toml"),
+                    "--locked",
+                    "--target-dir",
+                    target,
                 ],
                 text=True,
                 capture_output=True,
@@ -520,7 +685,11 @@ class MsrvContractTests(unittest.TestCase):
         self.assertNotIn("toolchain", output.casefold().split("error[e0658]", 1)[0])
 
         current = subprocess.run(
-            ["rustc", "--version"], text=True, capture_output=True, timeout=30, check=True
+            ["rustc", "--version"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=True,
         ).stdout
         match = re.match(r"rustc (\d+)\.(\d+)\.(\d+)", current)
         self.assertIsNotNone(match, current)
@@ -529,8 +698,13 @@ class MsrvContractTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as target:
                 accepted = subprocess.run(
                     [
-                        "cargo", "check", "--manifest-path", str(FIXTURE / "Cargo.toml"),
-                        "--locked", "--target-dir", target,
+                        "cargo",
+                        "check",
+                        "--manifest-path",
+                        str(FIXTURE / "Cargo.toml"),
+                        "--locked",
+                        "--target-dir",
+                        target,
                     ],
                     text=True,
                     capture_output=True,
