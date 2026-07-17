@@ -90,7 +90,7 @@ pub(crate) fn constant_time_eq_hex(left: &str, right: &str) -> bool {
 /// odd length or any non-hex character. The symmetric inverse of
 /// [`hex_bytes`].
 fn decode_hex(value: &str) -> Option<Vec<u8>> {
-    if !value.len().is_multiple_of(2) || !value.chars().all(|c| c.is_ascii_hexdigit()) {
+    if value.len() % 2 != 0 || !value.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
     (0..value.len())

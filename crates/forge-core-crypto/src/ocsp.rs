@@ -362,7 +362,7 @@ pub(crate) fn normalize_expected_ocsp_nonce_hex(
             return None;
         }
     }
-    if normalized.is_empty() || !normalized.len().is_multiple_of(2) {
+    if normalized.is_empty() || normalized.len() % 2 != 0 {
         reasons.push("ocsp_status_expected_nonce_hex_invalid".to_string());
         None
     } else {
@@ -479,8 +479,8 @@ mod tests {
                 algorithm: RasnOid::new_unchecked(hash_oid.to_vec().into()),
                 parameters: None,
             },
-            issuer_name_hash: RasnOctetString::from(name_hash),
-            issuer_key_hash: RasnOctetString::from(key_hash),
+            issuer_name_hash: RasnOctetString::from(name_hash.to_vec()),
+            issuer_key_hash: RasnOctetString::from(key_hash.to_vec()),
             serial_number: serial_decimal.into(),
         }
     }
@@ -807,12 +807,12 @@ mod tests {
         // OCTET STRING wrapping the raw nonce bytes (double-wrapping, matching
         // `der_ocsp_nonce_extension` in validate.rs:766-771). We encode the
         // inner OCTET STRING here so the decode in production succeeds.
-        let inner = RasnOctetString::from(nonce_bytes);
+        let inner = RasnOctetString::from(nonce_bytes.to_vec());
         let encoded = rasn::der::encode(&inner).expect("encode nonce octet string");
         Extension {
             extn_id: RasnOid::new_unchecked(NONCE_OID.to_vec().into()),
             critical: false,
-            extn_value: RasnOctetString::from(encoded.as_slice()),
+            extn_value: RasnOctetString::from(encoded),
         }
     }
 

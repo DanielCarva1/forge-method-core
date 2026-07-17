@@ -358,7 +358,7 @@ pub(crate) fn verify_merkle_inclusion(
     for proof_hash in hashes {
         if index % 2 == 1 || index == last {
             computed = hash_merkle_node(proof_hash, &computed);
-            while index.is_multiple_of(2) && index != 0 {
+            while index % 2 == 0 && index != 0 {
                 index /= 2;
                 last /= 2;
             }
@@ -387,7 +387,7 @@ fn hash_merkle_node(left: &str, right: &str) -> String {
 
 fn hex_to_bytes(value: &str) -> Option<Vec<u8>> {
     let value = normalize_sha256_display(value);
-    if !value.len().is_multiple_of(2) || !value.chars().all(|item| item.is_ascii_hexdigit()) {
+    if value.len() % 2 != 0 || !value.chars().all(|item| item.is_ascii_hexdigit()) {
         return None;
     }
     (0..value.len())

@@ -13,12 +13,13 @@ use forge_core_validate::{
     validate_tool_effect, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedYamlDocument,
     ReferenceIndex, ReferenceKind,
 };
+use fs4::{FileExt, TryLockError};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::fmt;
-use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1336,7 +1337,7 @@ impl EffectStoreLock {
 
 impl Drop for EffectStoreLock {
     fn drop(&mut self) {
-        let _ = self.file.unlock();
+        let _ = FileExt::unlock(&self.file);
     }
 }
 
@@ -5027,7 +5028,7 @@ fn acquire_effect_store_lock_inner(
             source: source.to_string(),
         })?;
     if try_only {
-        match file.try_lock() {
+        match FileExt::try_lock(&file) {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
                 return Err(EffectStoreLockError::WouldBlock { path });
@@ -5052,7 +5053,7 @@ fn acquire_effect_store_lock_with_deadline(
     path: &Path,
 ) -> Result<(), EffectStoreLockError> {
     for attempt in 0..EFFECT_STORE_LOCK_RETRY_ATTEMPTS {
-        match file.try_lock() {
+        match FileExt::try_lock(file) {
             Ok(()) => return Ok(()),
             Err(TryLockError::WouldBlock) => {
                 let shift = attempt.min(5);

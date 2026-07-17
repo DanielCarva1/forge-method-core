@@ -47,9 +47,11 @@ getrandom = "0.3.4"
 include_dir = "0.7.4"
 libc = "0.2.183"
 p256 = { version = "0.13.2", features = ["ecdsa", "pem"] }
-rasn = "0.28.13"
-rasn-ocsp = "0.28.13"
-rasn-pkix = "0.28.13"
+# rasn 0.28.x uses language/library features stabilized after Rust 1.85;
+# 0.26.6 provides the ASN.1 APIs Forge uses and compiles on the workspace MSRV.
+rasn = "=0.26.6"
+rasn-ocsp = "=0.26.6"
+rasn-pkix = "=0.26.6"
 schemars = "1.2.1"
 semver = "1.0.28"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -76,11 +78,11 @@ fs4 = "1.1.0"
 # code). Std-lib does not ship a regex engine; this is the de-facto Rust choice.
 regex = "1.11"
 tokio = { version = "1.52.3", default-features = false, features = ["rt", "time"] }
-# F08 — Official Rust MCP SDK (modelcontextprotocol/rust-sdk). Used by
-# `forge-core-protocol-mcp` for stdio JSON-RPC transport. Default features
-# (base64, macros, server) cover the tool/server surface; the crate enables
-# `transport-io` locally for stdio + `tokio` `io-util`/`macros` locally.
-rmcp = "2"
+# F08 — Official Rust MCP SDK (modelcontextprotocol/rust-sdk). 0.11.0 is the
+# newest release in this API line whose complete locked graph supports Rust 1.85;
+# newer rmcp releases pull process-wrap/darling versions requiring Rust 1.87/1.88.
+# Local crates enable the transport features they need.
+rmcp = "=0.11.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "registry", "fmt", "json", "env-filter", "ansi"] }
 
@@ -92,7 +94,8 @@ zeroize = { version = "1.8", features = ["derive"] }
 subtle = "2.6"
 
 [workspace.dependencies.rcgen]
-version = "0.14.8"
+# 0.14.8 raises MSRV to 1.88 without API changes needed by Forge.
+version = "=0.14.7"
 
 [workspace.dependencies.proptest]
 version = "1.5"

@@ -6,7 +6,7 @@ use forge_core_contracts::{
 use forge_core_decisions::unix_to_rfc3339;
 use forge_core_store::claim_wal::{append_claim_wal_record, ClaimWalOperation};
 use forge_core_store::sha256_content_hash;
-use rmcp::model::{CallToolRequestParams, Meta};
+use rmcp::model::{CallToolRequest, CallToolRequestParam, ClientRequest, Meta, ServerResult};
 use rmcp::transport::TokioChildProcess;
 use rmcp::ServiceExt;
 use serde_json::Value;
@@ -416,7 +416,10 @@ async fn official_rmcp_client_initializes_lists_and_calls_real_stdio_server() {
     .expect("arguments object")
     .clone();
     let result = client
-        .call_tool(CallToolRequestParams::new("assurance").with_arguments(arguments))
+        .call_tool(CallToolRequestParam {
+            name: "assurance".into(),
+            arguments: Some(arguments),
+        })
         .await
         .expect("tools/call");
     assert_ne!(result.is_error, Some(true), "assurance result: {result:?}");
@@ -429,18 +432,44 @@ async fn official_rmcp_client_initializes_lists_and_calls_real_stdio_server() {
     client.cancel().await.expect("close client");
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MutationAttestationCase {
+    Trusted,
+    Missing,
+    Malformed,
+    Untrusted,
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn generated_config_drives_signed_mutation_through_official_rmcp_client() {
-    run_generated_config_fixture(trusted_fixture(false)).await;
+    run_generated_config_fixture(trusted_fixture(false), MutationAttestationCase::Trusted).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn generated_config_commits_operation_wide_call_through_official_rmcp_client() {
-    run_generated_config_fixture(trusted_fixture(true)).await;
+    run_generated_config_fixture(trusted_fixture(true), MutationAttestationCase::Trusted).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generated_config_rejects_missing_attestation_from_official_rmcp_client() {
+    run_generated_config_fixture(trusted_fixture(false), MutationAttestationCase::Missing).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generated_config_rejects_malformed_attestation_from_official_rmcp_client() {
+    run_generated_config_fixture(trusted_fixture(false), MutationAttestationCase::Malformed).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn generated_config_rejects_untrusted_attestation_from_official_rmcp_client() {
+    run_generated_config_fixture(trusted_fixture(false), MutationAttestationCase::Untrusted).await;
 }
 
 #[allow(clippy::too_many_lines)] // one official-client assertion chain keeps the full trust path visible
-async fn run_generated_config_fixture(fixture: TrustedFixture) {
+async fn run_generated_config_fixture(
+    fixture: TrustedFixture,
+    attestation_case: MutationAttestationCase,
+) {
     let config: Value =
         serde_json::from_slice(&fs::read(&fixture.client_config).expect("generated client config"))
             .expect("client config JSON");
@@ -480,13 +509,67 @@ async fn run_generated_config_fixture(fixture: TrustedFixture) {
         1
     );
 
-    let mut meta = serde_json::Map::new();
-    meta.insert("attestation".to_owned(), fixture.attestation.clone());
-    let mut request =
-        CallToolRequestParams::new("execute-operation").with_arguments(fixture.arguments.clone());
-    request.meta = Some(Meta(meta));
-    let result = client.call_tool(request).await.expect("trusted tools/call");
-    assert_ne!(result.is_error, Some(true), "mutation result: {result:?}");
+    let params = CallToolRequestParam {
+        name: "execute-operation".into(),
+        arguments: Some(fixture.arguments.clone()),
+    };
+    let mut request = CallToolRequest::new(params);
+    match attestation_case {
+        MutationAttestationCase::Trusted => {
+            let mut meta = serde_json::Map::new();
+            meta.insert("attestation".to_owned(), fixture.attestation.clone());
+            request.extensions.insert(Meta(meta));
+        }
+        MutationAttestationCase::Missing => {}
+        MutationAttestationCase::Malformed => {
+            let mut meta = serde_json::Map::new();
+            meta.insert(
+                "attestation".to_owned(),
+                Value::String("malformed-attestation".to_owned()),
+            );
+            request.extensions.insert(Meta(meta));
+        }
+        MutationAttestationCase::Untrusted => {
+            let mut attestation = fixture.attestation.clone();
+            let public_key = attestation
+                .get_mut("public_key_hex")
+                .expect("signed attestation public key");
+            *public_key = Value::String("00".repeat(32));
+            let mut meta = serde_json::Map::new();
+            meta.insert("attestation".to_owned(), attestation);
+            request.extensions.insert(Meta(meta));
+        }
+    }
+    let response = client
+        .send_request(ClientRequest::CallToolRequest(request))
+        .await
+        .expect("trusted tools/call protocol response");
+    let ServerResult::CallToolResult(result) = response else {
+        panic!("tools/call returned unexpected server result: {response:?}");
+    };
+    if attestation_case != MutationAttestationCase::Trusted {
+        assert_eq!(
+            result.is_error,
+            Some(true),
+            "mutation must reject: {result:?}"
+        );
+        let rejection = result
+            .content
+            .first()
+            .and_then(|content| content.as_text())
+            .expect("rejection text");
+        assert!(
+            rejection.text.contains("attestation"),
+            "rejection must identify attestation gate: {}",
+            rejection.text
+        );
+        assert!(
+            !fixture.target.exists(),
+            "rejected mutation must not create its effect target"
+        );
+        client.cancel().await.expect("close rejected client");
+        return;
+    }
     let text = result
         .content
         .first()

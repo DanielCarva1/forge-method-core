@@ -146,7 +146,7 @@ fn validate_reviewer_registry(
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    if !value.len().is_multiple_of(2) {
+    if value.len() % 2 != 0 {
         return Err("hex value must have even length".into());
     }
     value
