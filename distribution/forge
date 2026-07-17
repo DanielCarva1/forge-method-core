@@ -1,7 +1,8 @@
-#!/bin/sh
+#!/bin/sh -p
 # Forge release wrapper (POSIX shell) — delegates to forge-core beside it.
-# Every declared package target provides /bin/sh; fixing the interpreter path
-# keeps interpreter selection outside an attacker-controlled PATH.
+# Every declared package target provides /bin/sh and its kernel passes the one
+# shebang argument. Fixing both /bin/sh and POSIX sh's -p option keeps interpreter
+# selection and privileged startup outside an attacker-controlled environment.
 #
 # Supported release packages are GNU/Linux x86_64/aarch64 and macOS
 # x86_64/arm64.  Invocation-symlink resolution is deliberately limited to
@@ -18,13 +19,14 @@
 # The resolved wrapper directory is made physical with `cd -P`, and the
 # packaged binary must be a non-symlink regular file in that directory. Thus
 # a PATH entry, relocation, or wrapper symlink cannot select another core.
-# POSIX shells resolve the `unset` special builtin before functions.  Use that
-# trusted bootstrap to remove an imported Bash function named `command`; quoting
-# the utility name also prevents alias substitution.  Once `command` is trusted,
-# remove functions for every utility name used below.  This is portable POSIX
-# `unset -f` (including Bash-as-sh, dash, and the declared macOS /bin/sh).
-\unset -f command 2>/dev/null
-\command unset -f break cd pwd printf test '[' uname getconf readlink exec exit set unset 2>/dev/null || \command :
+#
+# Security contract: invoke the installed executable directly (for example,
+# `forge` or `/path/to/forge`) so the kernel applies `#!/bin/sh -p`. Privileged
+# shell startup ignores startup environment such as imported shell functions,
+# SHELLOPTS, BASHOPTS, BASH_ENV, and ENV before this file is parsed. Explicitly
+# running `sh forge` bypasses the shebang option and is not a secure launcher.
+# Backslash-quoted `command` spellings below retain alias/lookup hardening after
+# startup without an in-script function-sanitization bootstrap.
 \command set -eu
 
 fail() {

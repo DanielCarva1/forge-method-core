@@ -203,15 +203,17 @@ class ReleaseArchiveTests(unittest.TestCase):
         binary.chmod(0o755)
         return binary
 
-    def require_bash_5(self) -> Path:
+    def require_bash(self) -> Path:
         bash = shutil.which("bash")
         if bash is None:
-            self.skipTest("Bash 5 poisoning regression requires bash")
+            self.skipTest("privileged Bash startup regression requires bash")
         completed = subprocess.run(
             [bash, "--version"], text=True, capture_output=True, check=False, timeout=5
         )
-        if completed.returncode != 0 or not completed.stdout.startswith("GNU bash, version 5."):
-            self.skipTest("Bash 5 poisoning regression requires Bash major version 5")
+        if completed.returncode != 0 or not completed.stdout.startswith(
+            "GNU bash, version "
+        ):
+            self.skipTest("privileged Bash startup regression requires GNU Bash")
         return Path(bash).resolve()
 
     def simulated_platform_wrapper_fixture(
@@ -263,9 +265,94 @@ class ReleaseArchiveTests(unittest.TestCase):
         wrapper.chmod(0o755)
         return package, wrapper, marker
 
+    def hostile_startup_environment(
+        self, core_marker: Path, poison_marker: Path, ps4_marker: Path
+    ) -> dict[str, str]:
+        environment = os.environ.copy()
+        environment["REAL_CORE_MARKER"] = str(core_marker)
+        environment["POISON_MARKER"] = str(poison_marker)
+        environment["SHELLOPTS"] = "xtrace"
+        environment["PS4"] = f'$(printf owned > "{ps4_marker}")+'
+        function = "() { : > \"$POISON_MARKER\"; return 93; }"
+        # Patched Bash uses BASH_FUNC_name%%; Bash 3.2 also recognized the
+        # historical name=() form. Privileged startup must import neither.
+        environment["BASH_FUNC_command%%"] = function
+        environment["command"] = function
+        return environment
+
+    def assert_hostile_startup_blocked(
+        self, completed: subprocess.CompletedProcess[str], core_marker: Path,
+        poison_marker: Path, ps4_marker: Path, argument: str
+    ) -> None:
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout, f"real-core\n{argument}\n")
+        self.assertEqual(completed.stderr, "")
+        self.assertTrue(core_marker.exists())
+        self.assertFalse(poison_marker.exists())
+        self.assertFalse(ps4_marker.exists())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_direct_exec_blocks_prebootstrap_shell_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            production = SCRIPTS.parent / "distribution/forge"
+            self.assertEqual(wrapper.read_bytes(), production.read_bytes())
+            self.assertEqual(wrapper.read_bytes().splitlines()[0], b"#!/bin/sh -p")
+            self.install_marker_core(package)
+            core_marker = root / "real-core-called"
+            poison_marker = root / "function-called"
+            ps4_marker = root / "ps4-called"
+            environment = self.hostile_startup_environment(
+                core_marker, poison_marker, ps4_marker
+            )
+            self.assertFalse(poison_marker.exists())
+            self.assertFalse(ps4_marker.exists())
+            completed = subprocess.run(
+                [str(wrapper), "direct"],
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assert_hostile_startup_blocked(
+                completed, core_marker, poison_marker, ps4_marker, "direct"
+            )
+
+    @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
+    def test_wrapper_bash_as_sh_p_blocks_prebootstrap_shell_environment(self) -> None:
+        bash = self.require_bash()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package, wrapper = self.wrapper_fixture(root)
+            production = SCRIPTS.parent / "distribution/forge"
+            self.assertEqual(wrapper.read_bytes(), production.read_bytes())
+            self.install_marker_core(package)
+            core_marker = root / "real-core-called"
+            poison_marker = root / "function-called"
+            ps4_marker = root / "ps4-called"
+            environment = self.hostile_startup_environment(
+                core_marker, poison_marker, ps4_marker
+            )
+            self.assertFalse(poison_marker.exists())
+            self.assertFalse(ps4_marker.exists())
+            completed = subprocess.run(
+                ["sh", "-p", str(wrapper), "bash-as-sh"],
+                executable=str(bash),
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            self.assert_hostile_startup_blocked(
+                completed, core_marker, poison_marker, ps4_marker, "bash-as-sh"
+            )
+
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_blocks_exact_exported_bash_pwd_function_attack(self) -> None:
-        bash = self.require_bash_5()
+        bash = self.require_bash()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             package, wrapper = self.wrapper_fixture(root)
@@ -279,7 +366,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                 "() { printf '%s\\n' /tmp; : > \"$POISON_MARKER\"; }"
             )
             completed = subprocess.run(
-                [str(bash), "--posix", str(wrapper), "pwd-attack"],
+                [str(bash), "--posix", "-p", str(wrapper), "pwd-attack"],
                 env=environment,
                 text=True,
                 capture_output=True,
@@ -294,7 +381,7 @@ class ReleaseArchiveTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
     def test_wrapper_blocks_all_poisonable_command_functions_in_bash_modes(self) -> None:
-        bash = self.require_bash_5()
+        bash = self.require_bash()
         poisoned_names = (
             "command",
             "cd",
@@ -325,10 +412,10 @@ class ReleaseArchiveTests(unittest.TestCase):
                             f"() {{ : > \"{poison_markers}/{name}\"; return 93; }}"
                         )
                     if mode == "posix":
-                        argv = [str(bash), "--posix", str(alias), mode]
+                        argv = [str(bash), "--posix", "-p", str(alias), mode]
                         executable = None
                     else:
-                        argv = ["sh", str(alias), mode]
+                        argv = ["sh", "-p", str(alias), mode]
                         executable = str(bash)
                     completed = subprocess.run(
                         argv,
@@ -346,8 +433,8 @@ class ReleaseArchiveTests(unittest.TestCase):
                     self.assertEqual(list(poison_markers.iterdir()), [])
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
-    def test_bash_rejects_special_or_nonidentifier_function_poisoning(self) -> None:
-        bash = self.require_bash_5()
+    def test_bash_privileged_startup_ignores_special_function_poisoning(self) -> None:
+        bash = self.require_bash()
         rejected_names = ("[", ":", "break", "exec", "exit", "set", "unset")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -363,21 +450,16 @@ class ReleaseArchiveTests(unittest.TestCase):
                         f"() {{ : > \"{poison_marker}\"; return 93; }}"
                     )
                     completed = subprocess.run(
-                        [str(bash), "--posix", str(wrapper), name],
+                        [str(bash), "--posix", "-p", str(wrapper), name],
                         env=environment,
                         text=True,
                         capture_output=True,
                         check=False,
                         timeout=5,
                     )
-                    if name in ("break", "exec", "exit", "set", "unset"):
-                        self.assertEqual(completed.returncode, 2, completed.stderr)
-                        self.assertEqual(completed.stdout, "")
-                        self.assertFalse(core_marker.exists())
-                    else:
-                        self.assertEqual(completed.returncode, 0, completed.stderr)
-                        self.assertEqual(completed.stdout, f"real-core\n{name}\n")
-                        self.assertTrue(core_marker.exists())
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, f"real-core\n{name}\n")
+                    self.assertTrue(core_marker.exists())
                     self.assertFalse(poison_marker.exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX wrapper tests require a POSIX shell")
@@ -450,7 +532,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             package, wrapper = self.wrapper_fixture(root)
-            self.assertEqual(wrapper.read_bytes().splitlines()[0], b"#!/bin/sh")
+            self.assertEqual(wrapper.read_bytes().splitlines()[0], b"#!/bin/sh -p")
             aliases = root / "aliases\nwith spaces"
             aliases.mkdir()
             alias = aliases / "forge"
