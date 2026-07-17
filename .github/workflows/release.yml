@@ -114,6 +114,14 @@ jobs:
               stream.write(f"source_date_epoch={source_date_epoch}\n")
           PY
 
+      - name: Install pinned release Rust for lock regression
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+        with:
+          toolchain: 1.97.0
+
+      - name: Test release lock enforcement
+        run: python scripts/test-release-locking.py
+
       - name: Test deterministic archive tooling
         run: python scripts/test-release-archive.py
 
@@ -226,11 +234,11 @@ jobs:
 
       - name: Build (Linux cross)
         if: runner.os == 'Linux' && matrix.native_release == false
-        run: cross build --release --target ${{ matrix.target }} -p forge-core-cli
+        run: cross build --locked --release --target ${{ matrix.target }} -p forge-core-cli
 
       - name: Build (native)
         if: runner.os != 'Linux' || matrix.native_release == true
-        run: cargo build --release --target ${{ matrix.target }} -p forge-core-cli
+        run: cargo build --locked --release --target ${{ matrix.target }} -p forge-core-cli
 
       - name: Smoke test version and core commands (POSIX)
         if: runner.os != 'Windows' && matrix.can_smoke
@@ -454,7 +462,9 @@ jobs:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
-          cargo cyclonedx \
+          python scripts/run-release-locked-sbom.py \
+            --lockfile Cargo.lock \
+            -- \
             --format json \
             --manifest-path crates/forge-core-cli/Cargo.toml \
             --override-filename "forge-core-$VERSION.cdx"

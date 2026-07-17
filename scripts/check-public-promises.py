@@ -4,16 +4,17 @@
 from __future__ import annotations
 
 from collections import Counter
+import importlib.util
 import html
 import re
-import sys
+from typing import NoReturn
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"public promise audit failed: {message}")
 
 
@@ -113,6 +114,21 @@ def check_gap_plan_coverage() -> None:
         )
 
 
+def check_release_locking() -> None:
+    checker_path = ROOT / "scripts/check-release-locking.py"
+    spec = importlib.util.spec_from_file_location(
+        "forge_release_lock_checker", checker_path
+    )
+    if spec is None or spec.loader is None:
+        fail(f"cannot load release lock checker {checker_path}")
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    try:
+        checker.check(ROOT / ".github/workflows/release.yml")
+    except checker.ReleaseLockError as error:
+        fail(str(error))
+
+
 def main() -> int:
     cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
     version = cargo["workspace"]["package"]["version"]
@@ -145,6 +161,7 @@ def main() -> int:
             relative = path.relative_to(ROOT)
             fail(f"{relative}:{line} documents unknown command path {' '.join(key)!r}")
 
+    check_release_locking()
     check_gap_plan_coverage()
     check_payload()
     print("Public promise audit: clean")
