@@ -66,7 +66,7 @@ SBOM_WRAPPER_ARGV = (
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
-    "scripts/test-release-locking.py": "e5804b36f632c24e1d70a1eb0cd0ae6a5102ca25612031c2bc1518d57e0e9ae9",
+    "scripts/test-release-locking.py": "cdd8a29ea1e9b5e79a6494508add01c8b2312e858d31fd0dbdb8f61a7a1a3e80",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",

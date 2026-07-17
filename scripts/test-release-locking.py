@@ -102,6 +102,10 @@ class ReleaseLockingTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, destination)
 
+    def canonical_governed_fixture(self, relative: str) -> bytes:
+        materialized = (ROOT / relative).read_bytes()
+        return checker._canonical_governed_bytes(relative, materialized)
+
     def check_with_governed_variant(self, relative: str, content: bytes):
         source = WORKFLOW.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as directory:
@@ -395,12 +399,18 @@ cross build \\
 
     def test_lf_and_crlf_forge_cmd_share_governed_commitment(self) -> None:
         relative = "distribution/forge.cmd"
-        canonical = (ROOT / relative).read_bytes()
+        materialized = (ROOT / relative).read_bytes()
+        canonical = checker._canonical_governed_bytes(relative, materialized)
+        crlf = canonical.replace(b"\n", b"\r\n")
         self.assertNotIn(b"\r", canonical)
-        lf_invocations = self.check_with_governed_variant(relative, canonical)
-        crlf_invocations = self.check_with_governed_variant(
-            relative, canonical.replace(b"\n", b"\r\n")
+        expected = checker.GOVERNED_FILE_SHA256[relative]
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), expected)
+        self.assertEqual(
+            hashlib.sha256(checker._canonical_governed_bytes(relative, crlf)).hexdigest(),
+            expected,
         )
+        lf_invocations = self.check_with_governed_variant(relative, canonical)
+        crlf_invocations = self.check_with_governed_variant(relative, crlf)
         self.assertEqual(lf_invocations, crlf_invocations)
 
     def test_all_approved_git_text_wrappers_accept_crlf(self) -> None:
@@ -409,7 +419,7 @@ cross build \\
             {"distribution/forge", "distribution/forge.cmd"},
         )
         for relative in checker.GIT_TEXT_GOVERNED_FILES:
-            canonical = (ROOT / relative).read_bytes()
+            canonical = self.canonical_governed_fixture(relative)
             with self.subTest(relative=relative):
                 self.assertNotIn(b"\r", canonical)
                 invocations = self.check_with_governed_variant(
@@ -419,7 +429,7 @@ cross build \\
 
     def test_malicious_forge_cmd_is_rejected_under_lf_and_crlf(self) -> None:
         relative = "distribution/forge.cmd"
-        canonical = (ROOT / relative).read_bytes()
+        canonical = self.canonical_governed_fixture(relative)
         malicious = canonical + b"start calc.exe\n"
         for name, content in {
             "lf": malicious,
@@ -432,7 +442,7 @@ cross build \\
 
     def test_mixed_and_lone_cr_forge_cmd_are_rejected_as_malformed(self) -> None:
         relative = "distribution/forge.cmd"
-        canonical = (ROOT / relative).read_bytes()
+        canonical = self.canonical_governed_fixture(relative)
         malformed = {
             "mixed": canonical.replace(b"\n", b"\r\n", 1),
             "lone-cr": canonical.replace(b"\n", b"\r", 1),
@@ -445,7 +455,7 @@ cross build \\
 
     def test_forge_cmd_byte_substitution_is_rejected(self) -> None:
         relative = "distribution/forge.cmd"
-        canonical = (ROOT / relative).read_bytes()
+        canonical = self.canonical_governed_fixture(relative)
         substituted = canonical.replace(b"Forge wrapper", b"Xorge wrapper", 1)
         self.assertEqual(len(substituted), len(canonical))
         with self.assertRaisesRegex(checker.ReleaseLockError, "forge.cmd"):
