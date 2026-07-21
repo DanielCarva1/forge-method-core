@@ -1,0 +1,170 @@
+schema_version: "0.1"
+contract: "crate_boundaries"
+selected_host: "none"
+authority_boundary:
+  host_client_crates: ["forge-core-cli", "forge-core-protocol-mcp"]
+  compatibility_client_crates: ["forge-contract-validator"]
+  core_authority_crates: ["forge-core-authority", "forge-core-kernel"]
+  candidate_documents_are_inert: true
+crates:
+  - name: "forge-contract-validator"
+    manifest_path: "crates/forge-contract-validator/Cargo.toml"
+    depends_on: ["forge-core-cli"]
+    owns: "validates legacy contract invocations"
+    does_not_own: "core authority, host selection, or state mutation"
+    authority_boundary: "compatibility"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-authority"
+    manifest_path: "crates/forge-core-authority/Cargo.toml"
+    depends_on: ["forge-core-command-surface", "forge-core-contracts", "forge-core-decisions"]
+    owns: "verifies execution-admission capabilities and produces opaque in-process authority"
+    does_not_own: "host selection, private broker keys, or direct state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-cli"
+    manifest_path: "crates/forge-core-cli/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-command-surface", "forge-core-contracts", "forge-core-crypto", "forge-core-decisions", "forge-core-domain-pack-learning-store", "forge-core-domain-pack-tcb", "forge-core-eval", "forge-core-eval-harness", "forge-core-eventlog", "forge-core-governance", "forge-core-graph", "forge-core-kernel", "forge-core-memory", "forge-core-protocol-mcp", "forge-core-research", "forge-core-store", "forge-core-trace", "forge-core-validate", "forge-core-workflow-governance-tcb"]
+    owns: "renders structured command requests and reports"
+    does_not_own: "core policy decisions, signing authority, or host selection"
+    authority_boundary: "host_client"
+    reviewed_authority_dependencies: ["forge-core-authority", "forge-core-kernel"]
+  - name: "forge-core-command-surface"
+    manifest_path: "crates/forge-core-command-surface/Cargo.toml"
+    depends_on: []
+    owns: "defines host-neutral command request and response types"
+    does_not_own: "execution admission, state mutation, or host selection"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-contracts"
+    manifest_path: "crates/forge-core-contracts/Cargo.toml"
+    depends_on: []
+    owns: "defines typed Forge contracts and inert candidate document boundaries"
+    does_not_own: "host selection, private broker keys, signing, trust, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-crypto"
+    manifest_path: "crates/forge-core-crypto/Cargo.toml"
+    depends_on: ["forge-core-contracts"]
+    owns: "verifies cryptographic evidence"
+    does_not_own: "host selection, key custody, or policy decisions"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-decisions"
+    manifest_path: "crates/forge-core-decisions/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-validate"]
+    owns: "derives typed policy decision records"
+    does_not_own: "execution admission, state mutation, or host selection"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: ["forge-core-authority"]
+  - name: "forge-core-domain-pack-learning-store"
+    manifest_path: "crates/forge-core-domain-pack-learning-store/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-store"]
+    owns: "persists domain-pack learning projections"
+    does_not_own: "policy decisions, host selection, or private broker keys"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-domain-pack-tcb"
+    manifest_path: "crates/forge-core-domain-pack-tcb/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-decisions", "forge-core-store"]
+    owns: "enforces domain-pack trusted-computing-base invariants"
+    does_not_own: "host selection or external private broker key custody"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: ["forge-core-authority"]
+  - name: "forge-core-eval"
+    manifest_path: "crates/forge-core-eval/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-validate"]
+    owns: "evaluates typed Forge evidence"
+    does_not_own: "host selection, signing, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-eval-harness"
+    manifest_path: "crates/forge-core-eval-harness/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-eval", "forge-core-validate"]
+    owns: "coordinates read-only evaluation harness inputs"
+    does_not_own: "host selection, trust, signing, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-eventlog"
+    manifest_path: "crates/forge-core-eventlog/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-store"]
+    owns: "records durable event-log projections"
+    does_not_own: "workflow policy decisions, host selection, or private broker keys"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-governance"
+    manifest_path: "crates/forge-core-governance/Cargo.toml"
+    depends_on: ["forge-core-eventlog"]
+    owns: "derives governance projections from recorded events"
+    does_not_own: "host selection, signing, or direct execution admission"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-graph"
+    manifest_path: "crates/forge-core-graph/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-validate"]
+    owns: "validates typed workflow graph projections"
+    does_not_own: "host selection, trust, signing, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-kernel"
+    manifest_path: "crates/forge-core-kernel/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-decisions", "forge-core-domain-pack-tcb", "forge-core-store", "forge-core-trace", "forge-core-validate", "forge-core-workflow-governance-tcb"]
+    owns: "coordinates host-neutral runtime services and prepared execution admission"
+    does_not_own: "host selection, external private broker keys, or direct adapter control"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: ["forge-core-authority"]
+  - name: "forge-core-memory"
+    manifest_path: "crates/forge-core-memory/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-eventlog"]
+    owns: "persists memory projections from event records"
+    does_not_own: "host selection, trust, signing, or policy admission"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-protocol-mcp"
+    manifest_path: "crates/forge-core-protocol-mcp/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-command-surface", "forge-core-contracts", "forge-core-decisions", "forge-core-kernel", "forge-core-research", "forge-core-store", "forge-core-validate"]
+    owns: "adapts typed Forge services to the MCP protocol"
+    does_not_own: "core policy authority, host selection, or private broker key custody"
+    authority_boundary: "host_client"
+    reviewed_authority_dependencies: ["forge-core-authority", "forge-core-kernel"]
+  - name: "forge-core-research"
+    manifest_path: "crates/forge-core-research/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-eventlog", "forge-core-validate"]
+    owns: "persists research evidence projections"
+    does_not_own: "host selection, signing, trust, or execution admission"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-schema"
+    manifest_path: "crates/forge-core-schema/Cargo.toml"
+    depends_on: ["forge-core-contracts"]
+    owns: "generates schemas from typed contracts"
+    does_not_own: "host selection, state mutation, or policy decisions"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-store"
+    manifest_path: "crates/forge-core-store/Cargo.toml"
+    depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-trace", "forge-core-validate"]
+    owns: "persists and recovers typed Forge state"
+    does_not_own: "workflow policy decisions, host selection, or private broker key custody"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: ["forge-core-authority"]
+  - name: "forge-core-trace"
+    manifest_path: "crates/forge-core-trace/Cargo.toml"
+    depends_on: []
+    owns: "defines read-only observability trace types"
+    does_not_own: "host selection, signing, trust, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-validate"
+    manifest_path: "crates/forge-core-validate/Cargo.toml"
+    depends_on: ["forge-core-contracts"]
+    owns: "validates typed contracts and static structured-text architecture inputs; provides host-neutral conformance vectors and aggregate candidate-only reports"
+    does_not_own: "host selection, support, release, install, signing, trust, private broker keys, or state mutation"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []
+  - name: "forge-core-workflow-governance-tcb"
+    manifest_path: "crates/forge-core-workflow-governance-tcb/Cargo.toml"
+    depends_on: ["forge-core-contracts", "forge-core-store"]
+    owns: "enforces workflow-governance trusted-computing-base invariants"
+    does_not_own: "host selection or external private broker key custody"
+    authority_boundary: "core"
+    reviewed_authority_dependencies: []

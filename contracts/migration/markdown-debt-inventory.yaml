@@ -1,24 +1,351 @@
-schema_version: "0.2"
-note: |
-  SUPERSEDED. This file originally inventoried staged Markdown files
-  (CONTEXT.md plus docs/02..13 and docs/adr/0016-0021) and tracked a plan to
-  replace them with typed contracts under contracts/**/*.yaml. That remediation
-  plan was abandoned: a prior audit found that 11 of the 12 staged .md files
-  referenced here were already deleted (only CONTEXT.md survives) and 0 of the
-  18 target typed contracts ever materialized.
-
-  The migration pivoted. Canonical decisions now live in the ADR registries:
-    - docs/adr/                       (0022-0024: sidecar, memory trust model)
-    - docs/dev-docs/forge-method-core-dev-docs-v2/adrs/  (0001-0014: core architecture)
-  Runtime authority is contracts/**/*.yaml (the running forge-core binary plus
-  the contracts/ tree). This file is kept only as a pointer; it no longer drives
-  any remediation work.
-
-adr_numbering:
-  reserved_block_0016_0021: |
-    The 0015-0021 block remains reserved (see docs/adr/README.md numbering
-    rules). The ADRs the original inventory planned to stage here (agent-facing
-    typed contracts, Rust-only core, CLI/JSON+MCP surfaces, funnel autonomy,
-    guide orchestrator, no-generic-advance-operation) were never written;
-    those decisions are instead captured by the ADR registries above and by
-    the runtime contracts in contracts/. Do not reuse these numbers.
+schema_version: "0.3"
+policy: "markdown_retirement_authority"
+authority:
+  markdown_is_authority: false
+  allowlist_is_exhaustive: true
+  unknown_path: "deny"
+  runtime_default: "deny"
+  agent_default: "deny"
+scan_roots:
+  - "."
+allowlist:
+  - path: "CHANGELOG.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Human release history; release authority remains signed and typed release metadata."
+  - path: "CONTEXT.md"
+    role: "agent_guidance"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+      - "contracts/spec/agent-native-assurance-architecture.yaml"
+      - "contracts/plan/agent-native-guidance-plan.yaml"
+    non_authority_reason: "Agent navigation and vocabulary projection only; cited typed contracts control on conflict."
+  - path: "CONTRIBUTING.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/rust-validation-authority.yaml"
+    non_authority_reason: "Human contribution guidance; typed policy and executable gates control acceptance."
+  - path: "README.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+    non_authority_reason: "Package overview and installation distribution surface, never runtime authority."
+  - path: "SECURITY.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Human vulnerability-reporting instructions, not security-policy authority."
+  - path: "contracts/research/supply_chain.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/research/field-evidence-20260625.yaml"
+    non_authority_reason: "Research notes only; admitted evidence remains in the typed evidence registry."
+  - path: "docs/C2.4-product-lifecycle-recovery.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/C2.4-product-lifecycle-recovery-v0.yaml"
+      - "contracts/stories/C2.4-product-lifecycle-recovery-corpus.yaml"
+    non_authority_reason: "Human recovery-corpus explanation; typed lifecycle recovery contracts and executable tests control acceptance."
+  - path: "docs/README.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Documentation index only."
+  - path: "docs/agent-integration.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/hosts/host-conformance.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    non_authority_reason: "Human integration explanation; typed host and MCP contracts control."
+  - path: "docs/architecture.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/rust-workspace-architecture.yaml"
+    non_authority_reason: "Human architecture overview derived from typed crate and authority policies."
+  - path: "docs/contributing.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/rust-validation-authority.yaml"
+    non_authority_reason: "Human contributor walkthrough; typed validation policy controls."
+  - path: "docs/domain-pack-authoring.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/domain-pack-authoring-v0.yaml"
+    non_authority_reason: "Human authoring workflow explanation; typed authoring contracts and Rust decisions control behavior."
+  - path: "docs/domain-packs.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/domain-pack-lifecycle-v0.yaml"
+    non_authority_reason: "Human Domain Pack explanation; typed lifecycle contracts control."
+  - path: "docs/fixtures/domain-pack-lifecycle-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/fixtures/domain-pack-reference-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/fixtures/domain-pack-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/fixtures/execution-admission-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/fixtures/workflow-governance-golden-path-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/fixtures/workflow-governance-kernel-v0/README.md"
+    role: "fixture_explanation"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Fixture navigation only; fixture YAML and Rust tests define validation inputs."
+  - path: "docs/forking.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Human distribution and maintenance guidance."
+  - path: "docs/generated/command-surface.md"
+    role: "generated_projection"
+    provenance: "generated_from_typed_source"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/surfaces/cli-json.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    non_authority_reason: "Generated human projection; compiled command metadata and typed surfaces control."
+  - path: "docs/generated/workspace-layout.md"
+    role: "generated_projection"
+    provenance: "generated_from_typed_source"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/rust-workspace-architecture.yaml"
+    non_authority_reason: "Generated human projection of workspace manifests and typed architecture policy."
+  - path: "docs/getting-started.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Human onboarding instructions; runtime command contracts control behavior."
+  - path: "docs/operator-guide.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs: []
+    non_authority_reason: "Human operator explanation; typed operator policies and runtime checks control."
+  - path: "docs/post-build-verify-episodes.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/post-build-verify-episode-v0.yaml"
+    non_authority_reason: "Human post-build verification explanation; typed episode contracts and durable evidence records control acceptance."
+  - path: "docs/product-compliance-audit.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/plan/product-gap-closure-plan.yaml"
+    non_authority_reason: "Historical human audit narrative superseded by typed campaign authorities."
+  - path: "docs/product-gap-register.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/plan/product-gap-closure-plan.yaml"
+    non_authority_reason: "Human gap summary; typed closure plan and story inventory control."
+  - path: "docs/product-lifecycle.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/product-lifecycle-v0.yaml"
+    non_authority_reason: "Human product lifecycle explanation; typed lifecycle contracts and Store state control behavior."
+  - path: "docs/product-status.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/plan/product-gap-closure-campaign-v1.yaml"
+    non_authority_reason: "Human status projection; typed campaign state controls."
+  - path: "docs/real-host-proof.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/hosts/host-conformance.yaml"
+    non_authority_reason: "Human evidence guidance; typed evidence artifacts and host contract control claims."
+  - path: "docs/security-model.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+    non_authority_reason: "Human threat-model overview; typed policies and Rust authority checks control."
+  - path: "docs/verification.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/rust-validation-authority.yaml"
+    non_authority_reason: "Human verification guide; executable Rust validators and typed policy control acceptance."
+  - path: "skill/start-forge/SKILL.md"
+    role: "agent_guidance"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+      - "contracts/spec/agent-native-assurance-architecture.yaml"
+    non_authority_reason: "Agent invocation guidance only; Forge responses and typed contracts retain authority."
+debt_inventory:
+  - path: "CONTEXT.md"
+    former_role: "glossary staging"
+    disposition: "allowlisted_non_authority"
+    typed_target_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+      - "contracts/spec/agent-native-assurance-architecture.yaml"
+      - "contracts/plan/agent-native-guidance-plan.yaml"
+    retirement_reason: "Retained only as an agent navigation projection with explicit typed authorities."
+  - path: "docs/02-runtime-architecture.md"
+    former_role: "legacy architecture staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/policies/rust-workspace-architecture.yaml"
+    retirement_reason: "Deleted after the Rust workspace architecture policy superseded the staging prose."
+  - path: "docs/10-agent-facing-contract-migration.md"
+    former_role: "migration plan staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/migration/markdown-debt-inventory.yaml"
+      - "contracts/policies/rust-only-backlog-reconciliation.yaml"
+    retirement_reason: "Deleted; this typed inventory and reconciliation policy now own the boundary."
+  - path: "docs/11-rust-only-core-system-design.md"
+    former_role: "core architecture staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/policies/rust-workspace-architecture.yaml"
+      - "contracts/surfaces/cli-json.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    retirement_reason: "Deleted after typed Rust workspace and public-surface authorities existed."
+  - path: "docs/12-borrowed-shell-runtime-requirements.md"
+    former_role: "borrowed-shell requirements staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/hosts/host-conformance.yaml"
+      - "contracts/surfaces/cli-json.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    retirement_reason: "Deleted after typed host and borrowed-shell surface contracts existed."
+  - path: "docs/13-operation-contract-v0.md"
+    former_role: "operation contract staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/operations/operation-contract-v0.yaml"
+      - "contracts/operations/operation-reference-policy-v0.yaml"
+    retirement_reason: "Deleted after typed operation schema and reference policy existed."
+  - path: "docs/adr/0016-agent-facing-typed-contracts.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/policies/rust-only-backlog-reconciliation.yaml"
+    retirement_reason: "Never adopted as ADR authority; typed-contract-only policy supersedes it."
+  - path: "docs/adr/0017-rust-only-forge-core.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/policies/rust-only-backlog-reconciliation.yaml"
+    retirement_reason: "Never adopted as ADR authority; Rust-only typed policy supersedes it."
+  - path: "docs/adr/0018-cli-json-and-mcp-surfaces.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/surfaces/cli-json.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    retirement_reason: "Never adopted as ADR authority; typed surface contracts supersede it."
+  - path: "docs/adr/0019-funnel-autonomy.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+    retirement_reason: "Never adopted as ADR authority; typed product constitution supersedes it."
+  - path: "docs/adr/0020-guide-as-default-protocol-orchestrator.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/plan/agent-native-guidance-plan.yaml"
+    retirement_reason: "Never adopted as ADR authority; typed guidance plan supersedes it."
+  - path: "docs/adr/0021-no-generic-advance-operation.md"
+    former_role: "decision staging"
+    disposition: "deleted"
+    typed_target_refs:
+      - "contracts/operations/operation-contract-v0.yaml"
+    retirement_reason: "Never adopted as ADR authority; closed typed operation vocabulary supersedes it."

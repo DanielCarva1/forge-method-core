@@ -74,6 +74,7 @@ rustls-pki-types = { version = "1.14", default-features = false, features = ["al
 x509-parser = { version = "0.18.1", features = ["verify"] }
 crc32c = "0.6.8"
 fs4 = "1.1.0"
+rustix = { version = "1.1.4", features = ["fs"] }
 # F11 — Regex engine for Risk Audit detectors (pattern matching in source
 # code). Std-lib does not ship a regex engine; this is the de-facto Rust choice.
 regex = "1.11"

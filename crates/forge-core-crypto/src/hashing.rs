@@ -89,6 +89,7 @@ pub(crate) fn constant_time_eq_hex(left: &str, right: &str) -> bool {
 /// Decode a lowercase/uppercase hex string into bytes. Returns `None` on
 /// odd length or any non-hex character. The symmetric inverse of
 /// [`hex_bytes`].
+#[allow(clippy::manual_is_multiple_of)] // `is_multiple_of` is unstable on the Rust 1.85 MSRV.
 fn decode_hex(value: &str) -> Option<Vec<u8>> {
     if value.len() % 2 != 0 || !value.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;

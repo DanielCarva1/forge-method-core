@@ -44,8 +44,8 @@ operation_contract:
       registry_ref: null
     write_authority:
       requires_driver_claim: false
-      requires_lane_claim: false
-      claim_contract_ref: null
+      requires_lane_claim: true
+      claim_contract_ref: "contracts/claims/story-v2-010-active-claim.yaml"
     completion:
       must_check_completion: false
       completion_contract_ref: null
@@ -83,15 +83,21 @@ operation_contract:
     required: []
     optional: []
   gates:
-    required_before_mutation: []
+    required_before_mutation:
+    - scope: "destructive"
+      gate_contract_ref: "contracts/gates/destructive-review-pass-gate.yaml"
+      reason: "destructive file deletion requires exact human review"
     current_gate_status: "pass"
-    gate_contract_refs: []
+    gate_contract_refs:
+    - "contracts/gates/destructive-review-pass-gate.yaml"
   stop_conditions:
   - "execution_step_limit_reached"
   - "gate_failed"
   command_refs: []
   effect_contract_refs:
   - "contracts/effects/file-delete-restore-inverse-effect.yaml"
+  risk_boundaries:
+  - "destructive"
   diagnostics:
     warnings: []
     errors: []

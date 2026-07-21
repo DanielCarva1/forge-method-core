@@ -15,7 +15,7 @@ use forge_core_command_surface::{self as command_surface, JsonMode};
 
 use crate::host_adapter_types::{
     HostAdapterAuthorityClass, HostAdapterAutoTrigger, HostAdapterCommand, HostAdapterCommandKind,
-    HostAdapterMutationClass, HostAdapterOutputTreatment,
+    HostAdapterMutationClass, HostAdapterOutputTreatment, HostAdapterSetupGap,
 };
 
 /// Compact metadata used to materialize a [`HostAdapterCommand`] via
@@ -28,6 +28,7 @@ pub(crate) struct HostCommandMetadata<'a> {
     pub(crate) mutation_class: HostAdapterMutationClass,
     pub(crate) authority_class: HostAdapterAuthorityClass,
     pub(crate) required_contracts: Vec<&'a str>,
+    pub(crate) setup_gaps: Vec<HostAdapterSetupGap>,
     pub(crate) safe_auto_invocation_triggers: Vec<HostAdapterAutoTrigger>,
     pub(crate) output_treatment: Vec<HostAdapterOutputTreatment>,
     pub(crate) policy_refs: Vec<&'a str>,
@@ -55,6 +56,7 @@ pub(crate) fn host_command(metadata: HostCommandMetadata<'_>) -> HostAdapterComm
             .into_iter()
             .map(str::to_string)
             .collect(),
+        setup_gaps: metadata.setup_gaps,
         safe_auto_invocation_triggers: metadata.safe_auto_invocation_triggers,
         output_treatment: metadata.output_treatment,
         policy_refs: metadata
@@ -127,6 +129,7 @@ mod tests {
             mutation_class: HostAdapterMutationClass::ReadOnly,
             authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
             required_contracts: vec![],
+            setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
             safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
             output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
             policy_refs: vec![],

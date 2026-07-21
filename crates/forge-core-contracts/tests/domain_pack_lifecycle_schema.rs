@@ -5,10 +5,11 @@ use forge_core_contracts::{
     DomainPackManifestDocument, DomainPackRecoveryReportDocument,
     DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
     DomainPackRuntimeCapabilityRegistryDocument, DomainPackSupplyChainRegistryDocument,
-    DomainPackTrustPolicyDocument, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
+    DomainPackTrustPolicyDocument,
 };
 
 const ROOT: &str = "../../docs/fixtures/domain-pack-lifecycle-v0";
+const FIXTURE_SCHEMA_VERSION: &str = "0.3";
 
 fn fixture(path: &str) -> String {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(ROOT);
@@ -62,7 +63,7 @@ fn representative_v03_documents_are_closed_and_candidate_only() {
         exact_lock.schema_version,
         receipt.schema_version,
     ] {
-        assert_eq!(schema, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION);
+        assert_eq!(schema, FIXTURE_SCHEMA_VERSION);
     }
 }
 

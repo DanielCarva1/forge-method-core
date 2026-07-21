@@ -1,0 +1,155 @@
+schema_version: "0.1"
+spec: "post_build_verify_episode_v0"
+status: "c5_1_c5_2_source_implemented"
+purpose: >-
+  Define a bounded, host-independent, candidate-only C5.1 record for durable
+  post-BuildVerify continuity. The record binds an exact release subject,
+  rollback baseline, deployment and operational observations, feedback,
+  incident/bug intake, and evolution identity without changing project phase or
+  asserting that any observation is trusted.
+
+canonical_sources:
+  campaign: "contracts/plan/product-gap-closure-plan.yaml#C5.1"
+  required_model:
+    - "release subject"
+    - "rollback baseline"
+    - "deployment observation"
+    - "operational evidence"
+    - "feedback"
+    - "incident/bug intake"
+    - "evolution episode identity"
+  reused_policy_records:
+    - id: "release-readiness"
+      ref: "contracts/evidence/workflow-retirement/legacy-catalog/release-readiness.yaml"
+      role: "readiness"
+    - id: "ready-release"
+      ref: "contracts/evidence/workflow-retirement/legacy-catalog/ready-release.yaml"
+      role: "ready_release"
+    - id: "reality-evidence-gate"
+      ref: "contracts/evidence/workflow-retirement/legacy-catalog/reality-evidence-gate.yaml"
+      role: "reality_evidence"
+    - id: "context-recovery"
+      ref: "contracts/evidence/workflow-retirement/legacy-catalog/context-recovery.yaml"
+      role: "context_recovery"
+    - id: "evolve-project"
+      ref: "contracts/evidence/workflow-retirement/legacy-catalog/evolve-project.yaml"
+      role: "evolve_project"
+
+contract_surface:
+  schema_version: "0.1"
+  contracts_module: "post_build_verify_episode"
+  decisions_module: "post_build_verify_episode"
+  document: "PostBuildVerifyEpisodeDocument"
+  exact_release_subject: "WorkflowGovernanceReleaseIdentity"
+  generic_evidence_binding: "WorkflowContentAddressedReference"
+  self_digest: >-
+    The document's episode_digest is canonical JSON SHA-256 over the complete
+    document with episode_digest omitted. All content digests use the existing
+    sha256:<64 lowercase hexadecimal> grammar.
+  authority: "candidate_only"
+  closed_fields:
+    - "rollback baseline kind"
+    - "policy role"
+    - "deployment outcome"
+    - "operational evidence kind and outcome"
+    - "feedback status"
+    - "incident/bug kind, severity, and intake status"
+    - "evolution status and trigger"
+  bounds:
+    policy_references: "exactly five roles, each exactly once"
+    deployment_observations: "at most 64"
+    operational_evidence: "at most 64"
+    feedback: "at most 64"
+    incident_bug_intake: "at most 64"
+
+invariants:
+  - "The release subject has nonblank lineage/id/version and a valid exact release digest."
+  - "Every deployment observation, operational evidence item, feedback item, intake item, and evolution identity repeats that exact release digest."
+  - "A rollback baseline is either a distinct exact previous release subject or an exact BuildVerify snapshot; it is not a rollback command."
+  - "The episode generation starts at one; later generations require the immediately preceding episode digest."
+  - "Policy references contain readiness, ready-release, reality-evidence, context-recovery, and evolve-project roles exactly once; they retain references and do not reproduce policy semantics."
+  - "Evolution identity has a nonzero generation and may only recommend Discovery, Specification, Plan, or BuildVerify. It cannot advance phase state."
+  - "Continuity material is content-addressed recovery input plus a next-action identity, never a host path, process handle, Store key, transcript, or hidden chat state."
+  - "Unknown fields reject and no serializable release-admitted, deployed, trusted, rolled-back, persisted, active, or phase-mutated authority exists."
+
+pure_decision_composition:
+  api: "evaluate_post_build_verify_episode"
+  authority: "non_authoritative"
+  order:
+    - "Malformed or self-digest-invalid episode -> blocked and context-recovery reference."
+    - "No deployment observation -> release-readiness-required using readiness and ready-release references."
+    - "Failed deployment or evidence that disproves readiness -> rollback-assessment-required using context-recovery and reality-evidence references."
+    - "Untriaged feedback or unresolved incident/bug intake -> evolution-triage-required using reality-evidence and evolve-project references."
+    - "Otherwise -> operational-monitoring with context-recovery reference."
+  prohibition: >-
+    The decision does not read policy files, inspect host state or time, verify a
+    signature, persist an episode, execute a rollout or rollback, change phase,
+    route a command, or confer release/deployment/evolution authority.
+
+c5_2_runtime_admission:
+  api: "WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode"
+  request_bindings:
+    - "candidate PostBuildVerifyEpisodeDocument"
+    - "exact current project snapshot digest"
+    - "exact current workflow-ledger head digest"
+    - "exact current state version"
+  kernel_rechecks:
+    - "active admitted release equals the candidate release subject"
+    - "durable phase permits the classified route"
+    - "candidate generation and predecessor digest extend the exact prior admitted episode"
+    - "all currently eligible admitted policies and governed durable assurance admit the phase boundary"
+    - "the existing hard transition engine admits the exact adjacent gate"
+  routes:
+    - from: "BuildVerify"
+      to: "ReadyOperate"
+      required_gate: "readiness"
+      durable_outcome: "advanced_to_ready_operate"
+    - from: "ReadyOperate"
+      to: "Evolve"
+      required_gate: "release"
+      durable_outcome: "advanced_to_evolve"
+    - from: "ReadyOperate or Evolve"
+      to: null
+      required_gate: null
+      durable_outcome: "rollback_assessment_opened"
+    - from: "ReadyOperate or Evolve"
+      to: null
+      required_gate: null
+      durable_outcome: "evolution_triage_opened"
+  automatic_advancement_boundary: >-
+    Ordinary phase planning still stops at BuildVerify. ReadyOperate and Evolve
+    require this explicit exact-state admission path.
+  ledger_event: "PostBuildVerifyEpisodeAppliedEvent"
+  ledger_schema_epoch: "0.7"
+  atomicity: >-
+    A forward route records its admission audit and adjacent target phase in one
+    typed event. Rollback-assessment and evolution-triage events carry neither a
+    target phase nor an admitted gate and therefore preserve durable phase.
+  generic_append_prohibited: true
+  serialized_authority: >-
+    The event and receipt are audit projections only. Deserialization cannot
+    recreate release admission, gate admission, or mutation authority.
+
+negative_cases:
+  - "episode self-digest tamper or schema mismatch"
+  - "generation zero or missing/invalid prior generation binding"
+  - "different release digest on any observation, evidence, feedback, intake, or evolution identity"
+  - "rollback baseline equal to the current release subject"
+  - "missing, duplicated, or unknown-equivalent policy roles"
+  - "duplicate bounded-item identities or oversized input lists"
+  - "Route, ReadyOperate, or Evolve proposed as an evolution entry phase"
+  - "treating an observation, feedback report, or decision as phase, rollback, release, deployment, Store, or runtime authority"
+
+owner_boundaries:
+  contracts_and_decisions: "C5.1 defines and evaluates candidate-only durable episode snapshots."
+  guarded_phase_owner: "C5.2 consumes exact candidate state only through kernel-owned gate admission and a dedicated TCB append path."
+  replacement_continuity_owner: "C5.3 persists complete cross-process C5.1 state and exposes authority-free replacement recovery; runtime and hosted proof remain deferred."
+  authority_and_runtime_owners: "must independently verify admissions, execute deployment/rollback, and durably persist any state outside the bounded workflow-ledger audit."
+
+status_boundary: >-
+  C5.1 candidate contracts and pure decisions, C5.2 guarded admission, and C5.3
+  complete epoch-0.8 persistence plus authority-free fresh-process projection are
+  implemented and compile. This does not claim Rust test execution, runtime
+  fresh-process or interruption proof, a dedicated CLI command, a real deployment,
+  rollback execution, host execution, remote operations, hosted CI,
+  release/publication, or field evidence.

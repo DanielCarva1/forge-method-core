@@ -1,0 +1,15 @@
+schema_version: "0.1"
+host_support_matrix:
+  matrix_id: "candidate-host-support-v0"
+  authority: "candidate_only"
+  selected_host: null
+  serialization_boundary:
+    grants_support_authority: false
+    grants_release_authority: false
+    grants_install_authority: false
+    grants_mutation_authority: false
+    grants_signing_authority: false
+    grants_trust_authority: false
+    grants_private_key_authority: false
+    grants_host_selection_authority: false
+  records: []

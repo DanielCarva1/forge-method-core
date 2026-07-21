@@ -890,6 +890,63 @@ fn digest(seed: u64) -> String {
     format!("sha256:{seed:064x}")
 }
 
+fn remote_artifact_descriptor(
+    kind: DomainPackRemoteArtifactKind,
+    binding: DomainPackArtifactBinding,
+    byte_length: u64,
+    media_type: DomainPackRemoteArtifactMediaType,
+) -> DomainPackRemoteArtifactDescriptor {
+    let raw_sha256 = binding.raw_sha256.clone();
+    DomainPackRemoteArtifactDescriptor {
+        kind,
+        binding,
+        object_path: RepoPath(format!("objects/sha256/{}", &raw_sha256["sha256:".len()..])),
+        byte_length,
+        media_type,
+    }
+}
+
+fn remote_artifact_set(package: &DomainPackPackageBinding) -> DomainPackRegistryArtifactSet {
+    let content = DomainPackArtifactBinding {
+        artifact_ref: package.content.content_ref.clone(),
+        raw_sha256: package.content.raw_sha256.clone(),
+        canonical_sha256: package.content.canonical_sha256.clone(),
+    };
+    DomainPackRegistryArtifactSet {
+        manifest: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Manifest,
+            package.manifest.clone(),
+            32,
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        content: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Content,
+            content,
+            32,
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        license: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::License,
+            package.license.clone(),
+            32,
+            DomainPackRemoteArtifactMediaType::TextPlain,
+        ),
+        fixtures: package
+            .fixtures
+            .iter()
+            .cloned()
+            .map(|binding| {
+                remote_artifact_descriptor(
+                    DomainPackRemoteArtifactKind::Fixture,
+                    binding,
+                    32,
+                    DomainPackRemoteArtifactMediaType::ApplicationYaml,
+                )
+            })
+            .collect(),
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(
         String::with_capacity(bytes.len() * 2),
@@ -941,6 +998,48 @@ fn write_signed_supply_chain(operator_root: &Path) -> (PathBuf, PathBuf) {
             default_disposition: DomainPackTrustDisposition::Reject,
         },
     };
+    let artifacts = DomainPackRegistryArtifactSet {
+        manifest: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Manifest,
+            DomainPackArtifactBinding {
+                artifact_ref: RepoPath("packs/foundation/manifest.yaml".to_owned()),
+                raw_sha256: digest(80_002),
+                canonical_sha256: digest(81_002),
+            },
+            48,
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        content: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Content,
+            DomainPackArtifactBinding {
+                artifact_ref: RepoPath("packs/foundation/content.yaml".to_owned()),
+                raw_sha256: digest(80_003),
+                canonical_sha256: digest(81_003),
+            },
+            96,
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        license: remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::License,
+            DomainPackArtifactBinding {
+                artifact_ref: RepoPath("packs/foundation/LICENSE".to_owned()),
+                raw_sha256: digest(80_004),
+                canonical_sha256: digest(81_004),
+            },
+            24,
+            DomainPackRemoteArtifactMediaType::TextPlain,
+        ),
+        fixtures: vec![remote_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Fixture,
+            DomainPackArtifactBinding {
+                artifact_ref: RepoPath("packs/foundation/fixtures/base.json".to_owned()),
+                raw_sha256: digest(80_005),
+                canonical_sha256: digest(81_005),
+            },
+            64,
+            DomainPackRemoteArtifactMediaType::ApplicationJson,
+        )],
+    };
     let mut record = DomainPackRegistryPackageRecord {
         identity: DomainPackIdentity {
             publisher: StableId("publisher.cli".to_owned()),
@@ -949,10 +1048,15 @@ fn write_signed_supply_chain(operator_root: &Path) -> (PathBuf, PathBuf) {
             version: "1.0.0".to_owned(),
         },
         package_digest: digest(80_001),
-        manifest_digest: digest(80_002),
-        content_digest: digest(80_003),
-        license_digest: digest(80_004),
-        fixture_digests: vec![digest(80_005)],
+        manifest_digest: artifacts.manifest.binding.raw_sha256.clone(),
+        content_digest: artifacts.content.binding.raw_sha256.clone(),
+        license_digest: artifacts.license.binding.raw_sha256.clone(),
+        fixture_digests: artifacts
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.binding.raw_sha256.clone())
+            .collect(),
+        artifacts,
         namespace_grant_id: StableId("grant.cli".to_owned()),
         publisher_credential_id: StableId("credential.cli".to_owned()),
         publisher_signature_hex: "00".repeat(64),
@@ -988,6 +1092,22 @@ fn write_signed_supply_chain(operator_root: &Path) -> (PathBuf, PathBuf) {
                 valid_from_unix: now.saturating_sub(60),
                 valid_until_unix: now + 31_536_000,
             }],
+            mirrors: vec![
+                DomainPackRegistryMirror {
+                    mirror_id: StableId("mirror.primary.cli".to_owned()),
+                    priority: 0,
+                    transport: DomainPackRegistryMirrorTransport::Https {
+                        base_url: "https://registry.example.invalid/domain-packs".to_owned(),
+                    },
+                },
+                DomainPackRegistryMirror {
+                    mirror_id: StableId("mirror.operator-cache.cli".to_owned()),
+                    priority: 10,
+                    transport: DomainPackRegistryMirrorTransport::OperatorProvisionedLocal {
+                        location_id: StableId("operator.registry.cache.cli".to_owned()),
+                    },
+                },
+            ],
             packages: vec![record],
             revocations: Vec::new(),
             snapshot_digest: digest(80_007),
@@ -1097,32 +1217,42 @@ fn resolution_registry(
                 valid_from_unix: 0,
                 valid_until_unix: 300,
             }],
+            mirrors: vec![DomainPackRegistryMirror {
+                mirror_id: StableId("mirror.resolution.fixture".to_owned()),
+                priority: 0,
+                transport: DomainPackRegistryMirrorTransport::Https {
+                    base_url: "https://registry.example.invalid/domain-packs".to_owned(),
+                },
+            }],
             packages: candidates
                 .iter()
-                .map(|candidate| DomainPackRegistryPackageRecord {
-                    identity: candidate
-                        .input
-                        .manifest
-                        .domain_pack_manifest
-                        .identity
-                        .clone(),
-                    package_digest: candidate.package.package_digest.clone(),
-                    manifest_digest: candidate.package.manifest.canonical_sha256.clone(),
-                    content_digest: candidate.package.content.canonical_sha256.clone(),
-                    license_digest: candidate.package.license.canonical_sha256.clone(),
-                    fixture_digests: candidate
-                        .package
-                        .fixtures
-                        .iter()
-                        .map(|fixture| fixture.canonical_sha256.clone())
-                        .collect(),
-                    namespace_grant_id: StableId("grant.fixture".to_owned()),
-                    publisher_credential_id: StableId("credential.fixture".to_owned()),
-                    publisher_signature_hex: "00".repeat(64),
-                    record_digest: candidate
-                        .registry_record_digest
-                        .clone()
-                        .expect("record digest"),
+                .map(|candidate| {
+                    let artifacts = remote_artifact_set(&candidate.package);
+                    DomainPackRegistryPackageRecord {
+                        identity: candidate
+                            .input
+                            .manifest
+                            .domain_pack_manifest
+                            .identity
+                            .clone(),
+                        package_digest: candidate.package.package_digest.clone(),
+                        manifest_digest: artifacts.manifest.binding.raw_sha256.clone(),
+                        content_digest: artifacts.content.binding.raw_sha256.clone(),
+                        license_digest: artifacts.license.binding.raw_sha256.clone(),
+                        fixture_digests: artifacts
+                            .fixtures
+                            .iter()
+                            .map(|fixture| fixture.binding.raw_sha256.clone())
+                            .collect(),
+                        artifacts,
+                        namespace_grant_id: StableId("grant.fixture".to_owned()),
+                        publisher_credential_id: StableId("credential.fixture".to_owned()),
+                        publisher_signature_hex: "00".repeat(64),
+                        record_digest: candidate
+                            .registry_record_digest
+                            .clone()
+                            .expect("record digest"),
+                    }
                 })
                 .collect(),
             revocations: Vec::new(),

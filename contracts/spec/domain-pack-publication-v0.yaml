@@ -1,0 +1,225 @@
+schema_version: "0.1"
+spec: "domain_pack_publication_v0"
+status: "c7_2_implemented"
+purpose: >-
+  Define a pure, deterministic, candidate-only C7.2 workflow that binds one
+  C7.1-authored Domain Pack to immutable C6.2 artifact descriptors, requests
+  externally performed signing, evaluates independent review evidence, and
+  proposes unsigned catalog evolution or cumulative-revocation successors.
+
+dependencies:
+  stories:
+    - "C6.2"
+    - "C7.1"
+  reused_contracts:
+    - "DomainPackAuthorTestRequestDocument"
+    - "DomainPackRegistryPackageRecord"
+    - "DomainPackRegistryArtifactSet"
+    - "DomainPackRemoteArtifactDescriptor"
+    - "DomainPackSupplyChainRegistryDocument"
+    - "DomainPackPackageRevocation"
+  reused_decisions:
+    - "evaluate_domain_pack_author_test"
+    - "evaluate_domain_pack_promotion"
+    - "DomainPackSupplyChainRegistryDocument::validate_remote_acquisition_metadata"
+  authority_owned_canonical_apis:
+    - "domain_pack_package_record_digest"
+    - "domain_pack_publisher_signing_bytes"
+    - "domain_pack_registry_snapshot_digest"
+    - "domain_pack_registry_signing_bytes"
+    - "domain_pack_cumulative_revocation_digest"
+
+contract_families:
+  package_request:
+    rust_type: "DomainPackPublicationPackageRequestDocument"
+    root_key: "domain_pack_publication_package_request"
+    role: >-
+      Binds a C7.1 author-test request, one registry/audience target, and one
+      unsigned C6.2 package record candidate.
+  package_candidate:
+    rust_type: "DomainPackPublicationPackageCandidateDocument"
+    root_key: "domain_pack_publication_package_candidate"
+    role: >-
+      Retained exact C7.1 source request and freshly derived author-test report,
+      exact immutable record/descriptors, manifest provenance binding, issues,
+      and a C7.2 candidate digest. Later C7.2 steps reproduce this projection;
+      a record digest remains an unverified claim until recomputed by the
+      supply-chain authority.
+  review_request:
+    rust_type: "DomainPackPublicationReviewRequestDocument"
+    root_key: "domain_pack_publication_review_request"
+    role: >-
+      Re-evaluates a P6c promotion dossier, local candidate graph, independent
+      reviews, and conflicts against one prepared exact package candidate.
+  review_readiness:
+    rust_type: "DomainPackPublicationReviewReadinessDocument"
+    root_key: "domain_pack_publication_review_readiness"
+    role: >-
+      Candidate-only independent-review readiness and exact reviewer evidence;
+      it is neither review verification nor promotion authority.
+  signing_request:
+    rust_type: "DomainPackExternalSigningRequestDocument"
+    root_key: "domain_pack_external_signing_request"
+    role: >-
+      An exact package-record or unsigned catalog subject for an external signer.
+      The closed protocol identifies the existing authority-owned canonical
+      signing-byte implementation rather than serializing bytes or a key.
+  signing_evidence:
+    rust_type: "DomainPackExternalSigningEvidenceDocument"
+    root_key: "domain_pack_external_signing_evidence"
+    role: >-
+      Detached Ed25519 signature evidence bound to one exact C7.2 signing
+      request. It is explicitly unverified evidence.
+  signing_assessment:
+    rust_type: "DomainPackExternalSigningEvidenceAssessmentDocument"
+    root_key: "domain_pack_external_signing_evidence_assessment"
+    role: >-
+      Deterministic syntax and binding assessment only. A successful result is
+      named unverified_evidence_bound and cannot attest cryptographic validity.
+  catalog_evolution:
+    rust_type: "DomainPackCatalogEvolutionRequestDocument"
+    root_key: "domain_pack_catalog_evolution_request"
+    role: >-
+      Proposes genesis or a direct successor containing one reviewed package and
+      bound publisher-signature evidence without claiming catalog admission.
+  catalog_revocation:
+    rust_type: "DomainPackCatalogRevocationRequestDocument"
+    root_key: "domain_pack_catalog_revocation_request"
+    role: >-
+      Appends exactly one immutable revocation fact to an untrusted current
+      catalog candidate while retaining every prior fact unchanged.
+  catalog_candidate:
+    rust_type: "DomainPackCatalogPublicationCandidateDocument"
+    root_key: "domain_pack_catalog_publication_candidate"
+    role: >-
+      A catalog-shaped, unsigned candidate with an empty snapshot_digest and no
+      registry signatures. Existing authority owners alone may calculate the
+      authoritative snapshot digest, verify evidence, anchor, and admit it.
+
+authority_boundary:
+  authority: "candidate_only"
+  invariant: >-
+    Every C7.2 document is candidate evidence. Package preparation, review
+    readiness, signing requests, detached evidence assessment, catalog shaping,
+    and revocation evolution do not provide key custody, signature validity,
+    publication, trust, registry admission, anchor advancement, lifecycle,
+    installation, activation, command, network, filesystem, or subprocess
+    authority.
+  external_signing: >-
+    C7.2 carries only exact typed subjects and an explicit
+    existing_supply_chain_authority_v1 protocol. An external signer must obtain
+    its bytes from the existing authority API. C7.2 does not construct generic
+    signing payloads, accept private keys, or interpret an opaque signature as
+    verified.
+  catalog_admission: >-
+    Only the existing supply-chain authority can recompute package/registry
+    digests, verify publisher and registry signatures, validate policy and
+    namespace ownership, retain an operator-protected monotonic anchor, and
+    admit a catalog. C7.2 never calls or emulates those authority operations.
+  prohibited:
+    - "private-key custody, key generation, generic signing, or signature verification"
+    - "network transport, remote upload, remote catalog publication, or registry discovery"
+    - "trust provisioning, catalog admission, anchoring, or revocation enforcement against a protected head"
+    - "lifecycle preflight, apply, commit, installation, activation, or execution"
+
+package_preparation:
+  ordering: >-
+    C7.2 first reruns the supplied C7.1 author test, then requires an explicit
+    compatible exact-lock report and binds the resulting candidate to one C6.2
+    record. The exact source request stays in the candidate so later C7.2 steps
+    reproduce the evaluation; a caller-supplied author report is never accepted
+    in place of this evaluation.
+  exact_bindings:
+    - "record identity equals authored manifest identity and content pack/namespace"
+    - "manifest/content/license descriptors equal authored raw/canonical bindings"
+    - "record raw digest fields equal corresponding descriptor raw SHA-256 pins"
+    - "fixture descriptor bindings and fixture raw digests equal authored fixtures"
+    - "C6.2 object-path, descriptor kind, media type, uniqueness, and digest grammar validation runs"
+    - "manifest source URI/revision/digest/authors/SPDX and C7.1 report digest are copied into provenance evidence"
+  unsigned_record: >-
+    A preparation request rejects a populated publisher_signature_hex. The
+    record_digest must have repository digest grammar, but its semantic value is
+    intentionally not verified or recomputed in C7.2.
+
+review_readiness:
+  evaluation: >-
+    C7.2 invokes the existing non-authoritative promotion evaluator over the
+    supplied dossier, learning candidates, independent reviews, and conflicts.
+  exact_join: >-
+    Dossier publisher/name/version, package, manifest, content, license, and
+    fixture digests must equal the prepared C6.2 record. The complete P6c input,
+    review documents, and derived promotion evaluation digest remain bound in
+    the output so a later catalog proposal reproduces this readiness projection
+    rather than trusting a caller-supplied status.
+  ready_meaning: >-
+    evidence_ready means only that the existing pure evidence checks did not
+    block. It is not a verified review, semantic promotion, trusted registry
+    entry, or permission to publish or activate.
+
+catalog_evolution:
+  package_successor: >-
+    Genesis starts at generation one; a successor uses the exact supplied
+    current snapshot digest as predecessor and increments its generation by one.
+    Existing packages, credentials, grants, mirrors, and revocation facts are
+    retained. Duplicate exact package identities and reintroduction of a
+    cumulatively revoked record block the candidate.
+  membership: >-
+    The candidate checks that the selected publisher credential and namespace
+    grant occur in catalog metadata and name the record publisher/namespace.
+    Existing authority validation remains required for credential validity and
+    signature/policy admission.
+  registry_signing: >-
+    A completed unsigned candidate can become a registry-snapshot external
+    signing request, but no C7.2 result attaches a verified registry signature
+    or represents a published catalog.
+
+revocation_evolution:
+  cumulative: >-
+    The current C7.2 input's prior revocation facts are retained byte-for-field;
+    exactly one new fact for an existing record may be appended. Duplicate,
+    malformed, blank-explanation, missing-record, removed, or rewritten facts
+    block. Facts are deterministically ordered by record digest in the candidate.
+  protected_history: >-
+    C7.2 provides auditable carry-forward evidence only. The authority anchor
+    independently compares candidate facts with its operator-protected cumulative
+    history before any registry admission.
+
+integrity:
+  digest_grammar: "sha256:<64 lowercase hexadecimal characters>"
+  c7_2_digest_method: "canonical JSON followed by SHA-256 with each C7.2 output digest excluded from its own subject"
+  authority_digest_rule: >-
+    C7.2 output digests are workflow commitments, not substitutions for the
+    authority-owned package, registry snapshot, signing-byte, or cumulative
+    revocation digest functions.
+  closed_wire: "all C7.2 document and nested wire structs use serde deny_unknown_fields"
+
+fail_closed_cases:
+  - "blocked or incompatible C7.1 author test, missing exact-lock evidence, or mismatched identity/provenance"
+  - "raw/canonical descriptor, fixture, record-field, object-path, media-type, or immutable artifact mismatch"
+  - "nonempty publisher signature before external signing, malformed asserted record digest, or malformed evidence digest"
+  - "wrong external signer, wrong signing request, malformed signature encoding, or blocked signing request"
+  - "dossier/review evidence that does not bind the exact candidate or remains review-required/blocked"
+  - "catalog registry/audience/predecessor/generation mismatch, duplicate package, malformed metadata, or resource excess"
+  - "cumulative revocation rewrite/removal/duplicate, blank explanation, malformed digest, or absent target record"
+
+implementation:
+  contracts: "crates/forge-core-contracts/src/domain_pack_publication.rs"
+  decisions: "crates/forge-core-decisions/src/domain_pack_publication.rs"
+  source_tests:
+    - "crates/forge-core-contracts/tests/domain_pack_publication.rs"
+    - "crates/forge-core-decisions/tests/domain_pack_publication.rs"
+  public_decisions:
+    - "prepare_domain_pack_publication"
+    - "evaluate_domain_pack_publication_review_readiness"
+    - "request_domain_pack_external_signing"
+    - "assess_domain_pack_external_signing_evidence"
+    - "propose_domain_pack_catalog_evolution"
+    - "propose_domain_pack_catalog_revocation"
+  compile_status: "forge-core-contracts and forge-core-decisions compile with all source-test targets"
+  cli_integration: "None in C7.2. A later owner may render or transport only authority-admitted material."
+
+references:
+  - "contracts/spec/domain-pack-authoring-v0.yaml"
+  - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
+  - "contracts/spec/domain-pack-learning-v0.yaml"
+  - "crates/forge-core-authority/src/domain_pack_supply_chain.rs"

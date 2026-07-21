@@ -1,0 +1,92 @@
+schema_version: "0.1"
+policy: "workspace_crate_boundary"
+status: "active"
+selected_host: "none"
+workspace_crate_boundary:
+  crates:
+    - name: "forge-contract-validator"
+      manifest_path: "crates/forge-contract-validator/Cargo.toml"
+      depends_on: ["forge-core-cli"]
+    - name: "forge-core-authority"
+      manifest_path: "crates/forge-core-authority/Cargo.toml"
+      depends_on: ["forge-core-command-surface", "forge-core-contracts", "forge-core-decisions"]
+    - name: "forge-core-cli"
+      manifest_path: "crates/forge-core-cli/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-command-surface", "forge-core-contracts", "forge-core-crypto", "forge-core-decisions", "forge-core-domain-pack-learning-store", "forge-core-domain-pack-tcb", "forge-core-eval", "forge-core-eval-harness", "forge-core-eventlog", "forge-core-governance", "forge-core-graph", "forge-core-kernel", "forge-core-memory", "forge-core-protocol-mcp", "forge-core-research", "forge-core-store", "forge-core-trace", "forge-core-validate", "forge-core-workflow-governance-tcb"]
+    - name: "forge-core-command-surface"
+      manifest_path: "crates/forge-core-command-surface/Cargo.toml"
+      depends_on: []
+    - name: "forge-core-contracts"
+      manifest_path: "crates/forge-core-contracts/Cargo.toml"
+      depends_on: []
+    - name: "forge-core-crypto"
+      manifest_path: "crates/forge-core-crypto/Cargo.toml"
+      depends_on: ["forge-core-contracts"]
+    - name: "forge-core-decisions"
+      manifest_path: "crates/forge-core-decisions/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-validate"]
+    - name: "forge-core-domain-pack-learning-store"
+      manifest_path: "crates/forge-core-domain-pack-learning-store/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-store"]
+    - name: "forge-core-domain-pack-tcb"
+      manifest_path: "crates/forge-core-domain-pack-tcb/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-decisions", "forge-core-store"]
+    - name: "forge-core-eval"
+      manifest_path: "crates/forge-core-eval/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-validate"]
+    - name: "forge-core-eval-harness"
+      manifest_path: "crates/forge-core-eval-harness/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-eval", "forge-core-validate"]
+    - name: "forge-core-eventlog"
+      manifest_path: "crates/forge-core-eventlog/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-store"]
+    - name: "forge-core-governance"
+      manifest_path: "crates/forge-core-governance/Cargo.toml"
+      depends_on: ["forge-core-eventlog"]
+    - name: "forge-core-graph"
+      manifest_path: "crates/forge-core-graph/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-validate"]
+    - name: "forge-core-kernel"
+      manifest_path: "crates/forge-core-kernel/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-decisions", "forge-core-domain-pack-tcb", "forge-core-store", "forge-core-trace", "forge-core-validate", "forge-core-workflow-governance-tcb"]
+    - name: "forge-core-memory"
+      manifest_path: "crates/forge-core-memory/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-eventlog"]
+    - name: "forge-core-protocol-mcp"
+      manifest_path: "crates/forge-core-protocol-mcp/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-command-surface", "forge-core-contracts", "forge-core-decisions", "forge-core-kernel", "forge-core-research", "forge-core-store", "forge-core-validate"]
+    - name: "forge-core-research"
+      manifest_path: "crates/forge-core-research/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-eventlog", "forge-core-validate"]
+    - name: "forge-core-schema"
+      manifest_path: "crates/forge-core-schema/Cargo.toml"
+      depends_on: ["forge-core-contracts"]
+    - name: "forge-core-store"
+      manifest_path: "crates/forge-core-store/Cargo.toml"
+      depends_on: ["forge-core-authority", "forge-core-contracts", "forge-core-trace", "forge-core-validate"]
+    - name: "forge-core-trace"
+      manifest_path: "crates/forge-core-trace/Cargo.toml"
+      depends_on: []
+    - name: "forge-core-validate"
+      manifest_path: "crates/forge-core-validate/Cargo.toml"
+      depends_on: ["forge-core-contracts"]
+    - name: "forge-core-workflow-governance-tcb"
+      manifest_path: "crates/forge-core-workflow-governance-tcb/Cargo.toml"
+      depends_on: ["forge-core-contracts", "forge-core-store"]
+  reviewed_authority_edges:
+    - from: "forge-core-decisions"
+      to: "forge-core-authority"
+    - from: "forge-core-cli"
+      to: "forge-core-authority"
+    - from: "forge-core-cli"
+      to: "forge-core-kernel"
+    - from: "forge-core-domain-pack-tcb"
+      to: "forge-core-authority"
+    - from: "forge-core-kernel"
+      to: "forge-core-authority"
+    - from: "forge-core-protocol-mcp"
+      to: "forge-core-authority"
+    - from: "forge-core-protocol-mcp"
+      to: "forge-core-kernel"
+    - from: "forge-core-store"
+      to: "forge-core-authority"

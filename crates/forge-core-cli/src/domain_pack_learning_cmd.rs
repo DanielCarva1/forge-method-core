@@ -25,9 +25,8 @@ use forge_core_domain_pack_learning_store::{
     candidate_self_digest, capture_local_learning, learning_store_status,
 };
 use forge_core_store::{
-    acquire_effect_store_lock,
-    crash_replace::{recover_file_crash_safe_under_lock, replace_file_crash_safe_under_lock},
-    EffectStoreLock,
+    retained_crash_replace::reconcile_file_crash_safe_under_owned_lock,
+    OwnedRetainedCrashReplaceRead, OwnedRetainedCrashReplaceSession,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -70,20 +69,76 @@ struct LearningAnchorHead {
 
 struct LockedHeads {
     root: PathBuf,
-    lock: EffectStoreLock,
-    previous: Option<String>,
+    root_identity: crate::io_util::RetainedDirectoryIdentity,
+    reconciliation: Option<OwnedRetainedCrashReplaceSession>,
+    exact_read: Option<OwnedRetainedCrashReplaceRead>,
 }
 
+#[allow(dead_code)]
+/// Protected learning-head values captured with the exact raw anchor bytes.
+pub(crate) struct ReviewedLearningHeadProjection {
+    reviewer_generation: u64,
+    reviewed_generation: u64,
+    reviewer_registry_digest: String,
+    reviewed_registry_digest: String,
+}
+
+#[allow(dead_code)]
+impl ReviewedLearningHeadProjection {
+    pub(crate) const fn reviewer_generation(&self) -> u64 {
+        self.reviewer_generation
+    }
+
+    pub(crate) const fn reviewed_generation(&self) -> u64 {
+        self.reviewed_generation
+    }
+
+    pub(crate) fn reviewer_registry_digest(&self) -> &str {
+        &self.reviewer_registry_digest
+    }
+
+    pub(crate) fn reviewed_registry_digest(&self) -> &str {
+        &self.reviewed_registry_digest
+    }
+}
+
+#[allow(dead_code)]
 /// Retains the learning-anchor OS lock while a fresh opaque reviewed snapshot
-/// is consumed by lifecycle authorization and commit.
+/// and its exact public source bytes are consumed.
 pub(crate) struct LockedReviewedSnapshot {
     snapshot: AnchoredReviewedDomainPackRegistrySnapshot,
+    head: ReviewedLearningHeadProjection,
+    raw_anchor: Vec<u8>,
+    raw_anchor_sha256: String,
+    raw_reviewer_registry: Vec<u8>,
+    raw_reviewed_registry: Vec<u8>,
     _locked: LockedHeads,
 }
 
+#[allow(dead_code)]
 impl LockedReviewedSnapshot {
     pub(crate) const fn snapshot(&self) -> &AnchoredReviewedDomainPackRegistrySnapshot {
         &self.snapshot
+    }
+
+    pub(crate) const fn head(&self) -> &ReviewedLearningHeadProjection {
+        &self.head
+    }
+
+    pub(crate) fn raw_anchor(&self) -> &[u8] {
+        &self.raw_anchor
+    }
+
+    pub(crate) fn raw_anchor_sha256(&self) -> &str {
+        &self.raw_anchor_sha256
+    }
+
+    pub(crate) fn raw_reviewer_registry(&self) -> &[u8] {
+        &self.raw_reviewer_registry
+    }
+
+    pub(crate) fn raw_reviewed_registry(&self) -> &[u8] {
+        &self.raw_reviewed_registry
     }
 }
 
@@ -235,7 +290,11 @@ fn run_trust_provision(args: &[String]) -> Result<(), ExitError> {
     )
     .map_err(authority_error)?;
     let locked = lock_heads(&operator_root)?;
-    if locked.previous.is_some() {
+    if locked
+        .reconciliation
+        .as_ref()
+        .is_some_and(|reconciliation| reconciliation.raw_bytes().is_some())
+    {
         return Err(ExitError::conflict(
             "domain-pack learning trust is already provisioned; refusing silent trust-root replacement",
         ));
@@ -256,7 +315,7 @@ fn run_trust_provision(args: &[String]) -> Result<(), ExitError> {
         registry_digest: reviewed_digest.clone(),
     };
     persist_head(
-        &locked,
+        locked,
         &LearningAnchorHead {
             schema_version: HEAD_SCHEMA.to_owned(),
             reviewer: reviewer_head,
@@ -294,7 +353,7 @@ fn run_reviewer_rotate(args: &[String]) -> Result<(), ExitError> {
     let current: DomainPackReviewerRegistryDocument = read_typed(current_path)?;
     let proposed: DomainPackReviewerRegistryDocument = read_typed(proposed_path)?;
     let locked = lock_heads(&operator_root)?;
-    let mut head = load_head(&locked)?;
+    let mut head = load_head_for_update(&locked)?;
     let mut anchor = restore_reviewer_anchor(current, &head.reviewer)?;
     let expected = anchor.version();
     let audit = anchor
@@ -309,7 +368,7 @@ fn run_reviewer_rotate(args: &[String]) -> Result<(), ExitError> {
         full_digest: canonical_digest(&proposed)?,
         trust_policy_digest: value.trust_policy_digest.clone(),
     };
-    persist_head(&locked, &head)?;
+    persist_head(locked, &head)?;
     emit(
         "domain-pack learning reviewer-rotate",
         serde_json::json!({
@@ -335,8 +394,8 @@ fn run_registry_check(args: &[String]) -> Result<(), ExitError> {
     )?;
     require_direct_file(reviewer_path, &operator_root, "--reviewer-registry-file")?;
     require_direct_file(reviewed_path, &operator_root, "--reviewed-registry-file")?;
-    let locked = lock_heads(&operator_root)?;
-    let head = load_head(&locked)?;
+    let mut locked = lock_heads(&operator_root)?;
+    let head = load_head(&mut locked)?;
     let reviewer: DomainPackReviewerRegistryDocument = read_typed(reviewer_path)?;
     let reviewed: DomainPackReviewedRegistryDocument = read_typed(reviewed_path)?;
     let reviewer_anchor = restore_reviewer_anchor(reviewer, &head.reviewer)?;
@@ -385,10 +444,47 @@ pub(crate) fn lock_reviewed_snapshot_for_lifecycle(
         operator_root,
         "--reviewed-registry-file",
     )?;
-    let locked = lock_heads(operator_root)?;
-    let head = load_head(&locked)?;
-    let reviewer: DomainPackReviewerRegistryDocument = read_typed(reviewer_registry_file)?;
-    let reviewed: DomainPackReviewedRegistryDocument = read_typed(reviewed_registry_file)?;
+    let mut locked = lock_heads(operator_root)?;
+    let raw_anchor = snapshot_learning_head(&mut locked)?.ok_or_else(|| {
+        ExitError::invalid_value(
+            "learning trust anchors are not provisioned; run trust-provision first",
+        )
+    })?;
+    let anchor_path = operator_root.join(HEAD_PATH);
+    let head: LearningAnchorHead = parse(&raw_anchor, &anchor_path)?;
+    if head.schema_version != HEAD_SCHEMA {
+        return Err(ExitError::invalid_value(
+            "unsupported learning anchor head schema",
+        ));
+    }
+    let reviewer_file = reviewer_registry_file
+        .strip_prefix(operator_root)
+        .map_err(|error| ExitError::failed(format!("reviewer registry path: {error}")))?;
+    let reviewed_file = reviewed_registry_file
+        .strip_prefix(operator_root)
+        .map_err(|error| ExitError::failed(format!("reviewed registry path: {error}")))?;
+    let raw_reviewer_registry = locked
+        .root_identity
+        .read_direct_file_bounded(reviewer_file, MAX_DOCUMENT_BYTES)
+        .map_err(|error| {
+            ExitError::failed(format!(
+                "cannot read {}: {error}",
+                reviewer_registry_file.display()
+            ))
+        })?;
+    let raw_reviewed_registry = locked
+        .root_identity
+        .read_direct_file_bounded(reviewed_file, MAX_DOCUMENT_BYTES)
+        .map_err(|error| {
+            ExitError::failed(format!(
+                "cannot read {}: {error}",
+                reviewed_registry_file.display()
+            ))
+        })?;
+    let reviewer: DomainPackReviewerRegistryDocument =
+        parse(&raw_reviewer_registry, reviewer_registry_file)?;
+    let reviewed: DomainPackReviewedRegistryDocument =
+        parse(&raw_reviewed_registry, reviewed_registry_file)?;
     let reviewer_anchor = restore_reviewer_anchor(reviewer, &head.reviewer)?;
     let mut reviewed_anchor = restore_reviewed_anchor(
         &reviewer_anchor,
@@ -399,8 +495,24 @@ pub(crate) fn lock_reviewed_snapshot_for_lifecycle(
     let snapshot = reviewed_anchor
         .verify_exact_replay(&reviewer_anchor, reviewed, verified_at_unix)
         .map_err(authority_error)?;
+    let head_projection = ReviewedLearningHeadProjection {
+        reviewer_generation: head.reviewer.generation,
+        reviewed_generation: head.reviewed.generation,
+        reviewer_registry_digest: head.reviewer.registry_digest,
+        reviewed_registry_digest: head.reviewed.registry_digest,
+    };
+    let raw_anchor_sha256 = format!("sha256:{:x}", Sha256::digest(&raw_anchor));
+    locked
+        .root_identity
+        .validate()
+        .map_err(|error| ExitError::failed(format!("learning root changed: {error}")))?;
     Ok(LockedReviewedSnapshot {
         snapshot,
+        head: head_projection,
+        raw_anchor,
+        raw_anchor_sha256,
+        raw_reviewer_registry,
+        raw_reviewed_registry,
         _locked: locked,
     })
 }
@@ -452,7 +564,7 @@ fn run_promote(args: &[String]) -> Result<(), ExitError> {
     let reviews = read_many::<DomainPackIndependentReviewDocument>(&flags.review_files)?;
     let conflicts = read_many::<DomainPackLearningConflictDocument>(&flags.conflict_files)?;
     let locked = lock_heads(&operator_root)?;
-    let mut head = load_head(&locked)?;
+    let mut head = load_head_for_update(&locked)?;
     let reviewer_anchor = restore_reviewer_anchor(reviewer, &head.reviewer)?;
     let now = trusted_now()?;
     let mut reviewed_anchor =
@@ -485,7 +597,7 @@ fn run_promote(args: &[String]) -> Result<(), ExitError> {
         registry_digest: anchored.registry_digest().to_owned(),
     };
     head.reviewed = next_head.clone();
-    persist_head(&locked, &head)?;
+    persist_head(locked, &head)?;
     emit(
         "domain-pack learning promote",
         serde_json::json!({
@@ -611,30 +723,82 @@ fn require_direct_file(path: &Path, operator_root: &Path, label: &str) -> Result
 }
 
 fn lock_heads(root: &Path) -> Result<LockedHeads, ExitError> {
-    let lock = acquire_effect_store_lock(root, LOCK_PATH)
+    let retained_root = forge_core_store::RetainedEffectStoreRoot::acquire(root)
+        .map_err(|error| ExitError::failed(format!("cannot bind learning effect root: {error}")))?;
+    let root_identity = crate::io_util::RetainedDirectoryIdentity::capture(root)
+        .map_err(|error| ExitError::failed(format!("cannot bind learning root: {error}")))?;
+    let lock = crate::io_util::acquire_effect_store_lock_retained(&retained_root, LOCK_PATH)
         .map_err(|error| ExitError::failed(format!("cannot lock learning anchors: {error}")))?;
-    let recovered = recover_file_crash_safe_under_lock(
-        root,
-        &lock,
-        LOCK_PATH,
-        HEAD_PATH,
-        MAX_DOCUMENT_BYTES,
-    )
-    .map_err(|error| ExitError::failed(format!("cannot recover learning anchor: {error}")))?;
+    root_identity
+        .validate()
+        .map_err(|error| ExitError::failed(format!("learning root changed: {error}")))?;
+    let reconciliation =
+        reconcile_file_crash_safe_under_owned_lock(lock, Path::new(HEAD_PATH), MAX_DOCUMENT_BYTES)
+            .map_err(|error| {
+                ExitError::failed(format!("cannot recover learning anchor: {error}"))
+            })?;
+    root_identity
+        .validate()
+        .map_err(|error| ExitError::failed(format!("learning root changed: {error}")))?;
     Ok(LockedHeads {
         root: root.to_path_buf(),
-        lock,
-        previous: recovered.target_digest,
+        root_identity,
+        reconciliation: Some(reconciliation),
+        exact_read: None,
     })
 }
 
-fn load_head(locked: &LockedHeads) -> Result<LearningAnchorHead, ExitError> {
-    if locked.previous.is_none() {
-        return Err(ExitError::invalid_value(
-            "learning trust anchors are not provisioned; run trust-provision first",
-        ));
+fn snapshot_learning_head(locked: &mut LockedHeads) -> Result<Option<Vec<u8>>, ExitError> {
+    if let Some(read) = locked.exact_read.as_mut() {
+        read.revalidate().map_err(|error| {
+            ExitError::conflict(format!(
+                "{HEAD_PATH} changed after locked recovery: {error}"
+            ))
+        })?;
+        return Ok(Some(read.raw_bytes().to_vec()));
     }
-    let head: LearningAnchorHead = read_typed(&locked.root.join(HEAD_PATH))?;
+    let present = locked
+        .reconciliation
+        .as_ref()
+        .ok_or_else(|| ExitError::failed("learning-head reconciliation authority was consumed"))?
+        .raw_bytes()
+        .is_some();
+    if !present {
+        let current = locked
+            .root_identity
+            .read_optional_direct_file_bounded(Path::new(HEAD_PATH), MAX_DOCUMENT_BYTES)
+            .map_err(|error| ExitError::failed(format!("cannot inspect {HEAD_PATH}: {error}")))?;
+        if current.is_some() {
+            return Err(ExitError::conflict(format!(
+                "{HEAD_PATH} appeared after locked recovery"
+            )));
+        }
+        return Ok(None);
+    }
+    let session = locked
+        .reconciliation
+        .take()
+        .ok_or_else(|| ExitError::failed("learning-head reconciliation authority was consumed"))?;
+    let mut read = session
+        .read_exact()
+        .map_err(|error| {
+            ExitError::conflict(format!(
+                "{HEAD_PATH} changed after locked recovery: {error}"
+            ))
+        })?
+        .ok_or_else(|| ExitError::conflict(format!("{HEAD_PATH} disappeared after recovery")))?;
+    read.revalidate().map_err(|error| {
+        ExitError::conflict(format!(
+            "{HEAD_PATH} changed after locked recovery: {error}"
+        ))
+    })?;
+    let raw = read.raw_bytes().to_vec();
+    locked.exact_read = Some(read);
+    Ok(Some(raw))
+}
+
+fn parse_learning_head(raw: &[u8], path: &Path) -> Result<LearningAnchorHead, ExitError> {
+    let head: LearningAnchorHead = parse(raw, path)?;
     if head.schema_version != HEAD_SCHEMA {
         return Err(ExitError::invalid_value(
             "unsupported learning anchor head schema",
@@ -643,21 +807,48 @@ fn load_head(locked: &LockedHeads) -> Result<LearningAnchorHead, ExitError> {
     Ok(head)
 }
 
-fn persist_head(locked: &LockedHeads, head: &LearningAnchorHead) -> Result<(), ExitError> {
+fn load_head(locked: &mut LockedHeads) -> Result<LearningAnchorHead, ExitError> {
+    let raw = snapshot_learning_head(locked)?.ok_or_else(|| {
+        ExitError::invalid_value(
+            "learning trust anchors are not provisioned; run trust-provision first",
+        )
+    })?;
+    parse_learning_head(&raw, &locked.root.join(HEAD_PATH))
+}
+
+fn load_head_for_update(locked: &LockedHeads) -> Result<LearningAnchorHead, ExitError> {
+    let raw = locked
+        .reconciliation
+        .as_ref()
+        .and_then(|reconciliation| reconciliation.raw_bytes())
+        .ok_or_else(|| {
+            ExitError::invalid_value(
+                "learning trust anchors are not provisioned; run trust-provision first",
+            )
+        })?;
+    parse_learning_head(raw, &locked.root.join(HEAD_PATH))
+}
+
+fn persist_head(locked: LockedHeads, head: &LearningAnchorHead) -> Result<(), ExitError> {
     let bytes = yaml_serde::to_string(head)
         .map_err(|error| ExitError::failed(error.to_string()))?
         .into_bytes();
-    replace_file_crash_safe_under_lock(
-        &locked.root,
-        &locked.lock,
-        LOCK_PATH,
-        HEAD_PATH,
-        locked.previous.as_deref(),
-        &bytes,
-        MAX_DOCUMENT_BYTES,
-    )
-    .map(|_| ())
-    .map_err(|error| ExitError::failed(format!("cannot persist {HEAD_PATH}: {error}")))
+    if locked.exact_read.is_some() {
+        return Err(ExitError::failed(
+            "learning-head reconciliation authority was consumed as a read",
+        ));
+    }
+    let reconciliation = locked
+        .reconciliation
+        .ok_or_else(|| ExitError::failed("learning-head reconciliation authority was consumed"))?;
+    let mut installed = reconciliation
+        .replace(&bytes)
+        .map_err(|error| ExitError::failed(format!("cannot persist {HEAD_PATH}: {error}")))?;
+    installed.revalidate().map_err(|error| {
+        ExitError::conflict(format!(
+            "{HEAD_PATH} selector changed while persistence completed: {error}"
+        ))
+    })
 }
 
 fn restore_reviewer_anchor(
@@ -798,5 +989,131 @@ mod tests {
             yaml_serde::from_str::<LearningAnchorHead>(&split).is_err(),
             "a reviewer-only persisted head must fail closed"
         );
+    }
+    #[test]
+    fn retained_learning_head_fails_closed_across_parent_swap() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-learning-retained-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let expected = LearningAnchorHead {
+            schema_version: HEAD_SCHEMA.to_owned(),
+            reviewer: ReviewerHead {
+                registry_id: StableId("reviewers.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 1,
+                registry_digest: "a".repeat(64),
+                full_digest: "b".repeat(64),
+                trust_policy_digest: "c".repeat(64),
+            },
+            reviewed: ReviewedHead {
+                registry_id: StableId("reviewed.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 2,
+                registry_digest: "d".repeat(64),
+            },
+        };
+        std::fs::write(
+            root.join(HEAD_PATH),
+            yaml_serde::to_string(&expected).unwrap(),
+        )
+        .unwrap();
+        let mut locked = lock_heads(&root).unwrap();
+        let moved = root.with_extension("retained");
+        std::fs::rename(&root, &moved).unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(HEAD_PATH), b"attacker: true\n").unwrap();
+
+        assert!(load_head(&mut locked).is_err());
+        drop(locked);
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(moved);
+    }
+
+    #[test]
+    fn learning_head_persistence_rejects_byte_identical_session_substitution() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-learning-persist-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut next = LearningAnchorHead {
+            schema_version: HEAD_SCHEMA.to_owned(),
+            reviewer: ReviewerHead {
+                registry_id: StableId("reviewers.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 1,
+                registry_digest: "a".repeat(64),
+                full_digest: "b".repeat(64),
+                trust_policy_digest: "c".repeat(64),
+            },
+            reviewed: ReviewedHead {
+                registry_id: StableId("reviewed.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 2,
+                registry_digest: "d".repeat(64),
+            },
+        };
+        let raw = yaml_serde::to_string(&next).unwrap();
+        let target = root.join(HEAD_PATH);
+        std::fs::write(&target, &raw).unwrap();
+        let locked = lock_heads(&root).unwrap();
+        let replacement = target.with_extension("replacement");
+        std::fs::write(&replacement, &raw).unwrap();
+        std::fs::remove_file(&target).unwrap();
+        std::fs::rename(&replacement, &target).unwrap();
+        next.reviewed.generation += 1;
+
+        assert!(persist_head(locked, &next).is_err());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), raw);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn learning_head_persistence_rejects_late_creation_after_recovered_absence() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-learning-absence-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let locked = lock_heads(&root).unwrap();
+        std::fs::write(root.join(HEAD_PATH), b"attacker: true\n").unwrap();
+        let head = LearningAnchorHead {
+            schema_version: HEAD_SCHEMA.to_owned(),
+            reviewer: ReviewerHead {
+                registry_id: StableId("reviewers.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 1,
+                registry_digest: "a".repeat(64),
+                full_digest: "b".repeat(64),
+                trust_policy_digest: "c".repeat(64),
+            },
+            reviewed: ReviewedHead {
+                registry_id: StableId("reviewed.test".to_owned()),
+                audience: "forge.test".to_owned(),
+                generation: 2,
+                registry_digest: "d".repeat(64),
+            },
+        };
+
+        assert!(persist_head(locked, &head).is_err());
+        assert_eq!(
+            std::fs::read(root.join(HEAD_PATH)).unwrap(),
+            b"attacker: true\n"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 }

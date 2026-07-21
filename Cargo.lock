@@ -822,6 +822,7 @@ dependencies = [
  "forge-core-domain-pack-tcb",
  "forge-core-eval",
  "forge-core-eval-harness",
+ "forge-core-eventlog",
  "forge-core-governance",
  "forge-core-graph",
  "forge-core-kernel",
@@ -842,6 +843,7 @@ dependencies = [
  "rmcp",
  "rustls-pki-types",
  "sct",
+ "semver",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
@@ -974,23 +976,20 @@ dependencies = [
 name = "forge-core-eventlog"
 version = "0.12.0"
 dependencies = [
+ "forge-core-contracts",
  "forge-core-store",
+ "proptest",
+ "schemars",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
 name = "forge-core-governance"
 version = "0.12.0"
 dependencies = [
- "forge-core-contracts",
  "forge-core-eventlog",
- "forge-core-store",
- "proptest",
- "schemars",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1031,13 +1030,7 @@ version = "0.12.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
- "forge-core-store",
- "proptest",
- "schemars",
- "serde",
  "serde_json",
- "sha2",
- "tracing",
 ]
 
 [[package]]
@@ -1070,14 +1063,9 @@ version = "0.12.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
- "forge-core-store",
  "forge-core-validate",
- "proptest",
  "schemars",
  "serde",
- "serde_json",
- "sha2",
- "tracing",
  "yaml_serde",
 ]
 
@@ -1097,17 +1085,21 @@ version = "0.12.0"
 dependencies = [
  "crc32c",
  "criterion",
+ "forge-core-authority",
  "forge-core-contracts",
  "forge-core-trace",
  "forge-core-validate",
  "fs4",
  "getrandom 0.3.4",
+ "libc",
  "proptest",
+ "rustix",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
  "sha2",
  "tracing",
+ "windows-sys 0.61.2",
  "yaml_serde",
 ]
 
@@ -1129,6 +1121,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "serde_yml",
+ "sha2",
  "tracing",
  "yaml_serde",
 ]

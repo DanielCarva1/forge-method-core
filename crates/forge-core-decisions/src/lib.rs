@@ -32,20 +32,25 @@ pub mod conflict_detection;
 pub mod coordination_eval;
 pub mod domain_pack;
 pub mod domain_pack_acquisition;
+pub mod domain_pack_authoring;
 pub mod domain_pack_compatibility;
 pub mod domain_pack_discovery;
 pub mod domain_pack_learning;
+pub mod domain_pack_publication;
 pub mod domain_pack_rebase;
+pub mod domain_pack_remote_acquisition;
 pub mod domain_pack_resolution;
 pub mod domain_pack_trust;
 pub mod durable_assurance;
 pub mod embedded_contracts;
 pub mod eval;
 pub mod execution_admission;
+pub mod funnel_autonomy;
 pub mod guide_validation;
 pub mod isolation;
 pub mod obligation_engine;
 pub mod phase_transition;
+pub mod post_build_verify_episode;
 pub mod workflow_behavior;
 pub mod workflow_governance;
 pub mod workflow_migration;
@@ -87,11 +92,24 @@ pub use execution_admission::{
     ReplayReservationStatus, RevisionExpectation, SnapshotCompleteness,
     EXECUTION_ADMISSION_SCHEMA_VERSION, EXECUTION_AUTHORITY_SCOPE,
 };
+pub use funnel_autonomy::{
+    evaluate_funnel_operation, evaluate_funnel_phase, load_accepted_funnel_autonomy_policy,
+    validate_funnel_autonomy_policy, FunnelAutonomyPolicyIssue, FunnelAutonomyPolicyIssueCode,
+    FunnelAutonomyPolicyRejection, FunnelOperationDecision, FunnelOperationDisposition,
+    FunnelOperationReason, FunnelPhaseDecision,
+};
 pub use guide_validation::{validate_guide_decision, GuideRejection, GuideValidation};
 
 pub use phase_transition::{
     evaluate_transition, GateKind, ProvidedGateResult, TransitionBlockReason, TransitionDecision,
     TransitionRequest, Waiver,
+};
+pub use post_build_verify_episode::{
+    evaluate_post_build_verify_episode, route_post_build_verify_episode,
+    verify_post_build_verify_episode_decision, PostBuildVerifyEpisodeDecision,
+    PostBuildVerifyEpisodeDecisionAuthority, PostBuildVerifyEpisodeDecisionStatus,
+    PostBuildVerifyEpisodeIssue, PostBuildVerifyEpisodeIssueCode,
+    PostBuildVerifyEpisodeRuntimeRoute, PostBuildVerifyEpisodeRuntimeRouteError,
 };
 
 pub use claim_engine::{
@@ -131,6 +149,9 @@ pub use domain_pack_acquisition::{
     verify_domain_pack_acquisition_derived_inputs, verify_domain_pack_acquisition_plan,
     DomainPackAcquisitionIssue, DomainPackAcquisitionIssueCode, DomainPackAcquisitionRejection,
 };
+pub use domain_pack_authoring::{
+    evaluate_domain_pack_author_test, generate_domain_pack_author_skeleton,
+};
 pub use domain_pack_compatibility::{
     evaluate_domain_pack_compatibility, DomainPackCompatibilityInput,
 };
@@ -153,8 +174,25 @@ pub use domain_pack_learning::{
     DomainPackReviewedResolutionJoin, DomainPackReviewedResolutionJoinStatus,
     DomainPackReviewedResolutionProjection, MAX_DOMAIN_PACK_LEARNING_DIAGNOSTICS,
 };
+pub use domain_pack_publication::{
+    assess_domain_pack_external_signing_evidence,
+    evaluate_domain_pack_publication_review_readiness, prepare_domain_pack_publication,
+    propose_domain_pack_catalog_evolution, propose_domain_pack_catalog_revocation,
+    request_domain_pack_external_signing,
+};
 pub use domain_pack_rebase::{
     plan_domain_pack_rebase, verify_domain_pack_rebase_plan, DomainPackRebasePlanError,
+};
+pub use domain_pack_remote_acquisition::{
+    domain_pack_remote_artifact_set_digest, plan_domain_pack_remote_acquisition,
+    verify_domain_pack_remote_acquisition_plan, verify_domain_pack_remote_fetches,
+    DomainPackRemoteAcquisitionHandoff, DomainPackRemoteAcquisitionIssue,
+    DomainPackRemoteAcquisitionIssueCode, DomainPackRemoteAcquisitionPlanningDecision,
+    DomainPackRemoteAcquisitionPlanningInput, DomainPackRemoteAcquisitionRejection,
+    DomainPackRemoteCacheDisposition, DomainPackRemoteCatalogAvailability,
+    DomainPackRemoteCatalogFacts, DomainPackRemoteFetchAttempt,
+    DomainPackRemoteFetchVerificationInput, DomainPackRemotePlannedCacheRead,
+    DomainPackRemotePlannedTransportAttempt, DomainPackRemoteVerifiedArtifact,
 };
 pub use domain_pack_resolution::{
     domain_pack_resolution_projection_digest, resolve_domain_packs,

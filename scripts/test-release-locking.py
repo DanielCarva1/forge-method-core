@@ -232,6 +232,107 @@ class ReleaseLockingTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assert_semantic_rejected(mutated)
 
+    def test_arm64_smoke_removal_disable_and_bypass_are_rejected(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        job_start = source.index("  arm64-linux-smoke:\n")
+        job_end = source.index("  release:\n", job_start)
+        mutations = {
+            "can-smoke-false": source.replace(
+                "            can_smoke: true # executed after packaging on the bounded native ARM64 smoke runner",
+                "            can_smoke: false",
+                1,
+            ),
+            "job-removed": source[:job_start] + source[job_end:],
+            "conditional-bypass": source.replace(
+                "  arm64-linux-smoke:\n    name: Smoke packaged Linux ARM64 install on native ARM64",
+                "  arm64-linux-smoke:\n    name: Smoke packaged Linux ARM64 install on native ARM64\n    if: false",
+                1,
+            ),
+            "job-continue-on-error": source.replace(
+                "  arm64-linux-smoke:\n    name: Smoke packaged Linux ARM64 install on native ARM64",
+                "  arm64-linux-smoke:\n    name: Smoke packaged Linux ARM64 install on native ARM64\n    continue-on-error: true",
+                1,
+            ),
+            "step-if-false": source.replace(
+                "      - name: Smoke extracted Linux ARM64 release install\n        shell: bash",
+                "      - name: Smoke extracted Linux ARM64 release install\n        if: false\n        shell: bash",
+                1,
+            ),
+            "step-continue-on-error": source.replace(
+                "      - name: Smoke extracted Linux ARM64 release install\n        shell: bash",
+                "      - name: Smoke extracted Linux ARM64 release install\n        continue-on-error: true\n        shell: bash",
+                1,
+            ),
+            "publication-bypass": source.replace(
+                "    needs: [metadata, build, arm64-linux-smoke]",
+                "    needs: [metadata, build]",
+                1,
+            ),
+            "wrong-runner": source.replace("    runs-on: ubuntu-24.04-arm", "    runs-on: ubuntu-latest", 1),
+            "direct-binary-bypass": source.replace(
+                "          python scripts/smoke-release-install.py \\\n            --archive arm64-release-assets/forge-core-aarch64-linux.tar.gz \\",
+                "          arm64-release-assets/forge-core-aarch64-linux.tar.gz --version \\",
+                1,
+            ),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+                with self.assertRaises(checker.ReleaseLockError):
+                    checker._check_arm64_smoke(mutated, checker.parse_graph(mutated))
+
+    def test_release_set_removal_substitution_and_order_bypass_are_rejected(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        mutations = {
+            "build-removed": source.replace(
+                "          python scripts/build-release-set-manifest.py build \\",
+                "          true \\",
+                1,
+            ),
+            "verify-removed": source.replace(
+                "          python scripts/build-release-set-manifest.py verify \\",
+                "          true \\",
+                1,
+            ),
+            "substituted": source.replace(
+                "            --archive forge-core-aarch64-linux.tar.gz \\",
+                "            --archive forge-core-attacker-linux.tar.gz \\",
+                1,
+            ),
+            "unordered": source.replace(
+                "            --archive forge-core-x86_64-linux.tar.gz \\\n            --archive forge-core-aarch64-linux.tar.gz \\",
+                "            --archive forge-core-aarch64-linux.tar.gz \\\n            --archive forge-core-x86_64-linux.tar.gz \\",
+                1,
+            ),
+            "release-set-continue-on-error": source.replace(
+                "      - name: Build and verify deterministic release-set manifest\n        shell: bash",
+                "      - name: Build and verify deterministic release-set manifest\n        continue-on-error: true\n        shell: bash",
+                1,
+            ),
+            "final-set-continue-on-error": source.replace(
+                "      - name: Require exact final release asset set\n        shell: bash",
+                "      - name: Require exact final release asset set\n        continue-on-error: true\n        shell: bash",
+                1,
+            ),
+            "manifest-unpublished": source.replace(
+                "            release-assets/forge-core-release-set.json\n",
+                "",
+                1,
+            ),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+                if name != "manifest-unpublished":
+                    jobs = checker.parse_graph(mutated)
+                    by_identity = {
+                        (step.job, step.name): step
+                        for job in jobs
+                        for step in job.steps
+                    }
+                    with self.assertRaises(checker.ReleaseLockError):
+                        checker._check_release_set_step(by_identity)
+
     def test_duplicate_yaml_keys_are_rejected_at_every_mapping_depth(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
         mutations = {

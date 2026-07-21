@@ -1,3 +1,6 @@
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+
 //! Fail-closed, source-derived backup integrity and continuity contract.
 //!
 //! This S03 module defines a closed classifier and manifest invariants only.
@@ -5,7 +8,8 @@
 //! intentionally deferred to C2-S04; no caller-forgeable success capability is exposed.
 
 use crate::{
-    ProjectLinkDocument, WorkflowEffectiveBundleIdentity, WorkflowGovernanceReleaseIdentity,
+    ProjectLinkDocument, StableId, WorkflowEffectiveBundleIdentity,
+    WorkflowGovernanceReleaseIdentity,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -16,6 +20,17 @@ use std::{
 };
 
 pub const BACKUP_MANIFEST_SCHEMA_VERSION: &str = "forge_project_state_backup_manifest_v1";
+pub const BACKUP_RECEIPT_SCHEMA_VERSION: &str = "forge_project_state_backup_receipt_v1";
+
+/// Canonical state-root-relative `EventLog` artifacts protected from generic Store mutation.
+pub const MEMORY_EVENT_LOG_RELATIVE_PATH: &str = "memory/events.ndjson";
+pub const RESEARCH_EVENT_LOG_RELATIVE_PATH: &str = "research/sources.ndjson";
+pub const GOVERNANCE_CONFLICT_EVENT_LOG_RELATIVE_PATH: &str = "governance/conflicts.ndjson";
+pub const MEMORY_EVENT_LOG_LOCK_RELATIVE_PATH: &str = "locks/memory.log.lock";
+pub const RESEARCH_EVENT_LOG_LOCK_RELATIVE_PATH: &str = "locks/research.sources.lock";
+pub const GOVERNANCE_CONFLICT_EVENT_LOG_LOCK_RELATIVE_PATH: &str =
+    "locks/governance.conflicts.lock";
+const RECEIPT_DIGEST_DOMAIN: &[u8] = b"forge-method:project-state-backup-receipt:v1\0";
 const SET_DIGEST_DOMAIN: &[u8] = b"forge-method:project-state-backup-set:v1\0";
 const PROJECT_LINK_ARCHIVE_PATH: &str = "project/.forge-method.yaml";
 
@@ -336,6 +351,7 @@ pub enum BackupLockScope {
 }
 
 impl BackupLockScope {
+    #[must_use]
     pub const fn relative_path(self) -> &'static str {
         match self {
             Self::ExternalDomainPackSupplyChainAnchor => {
@@ -354,9 +370,9 @@ impl BackupLockScope {
             Self::ClaimCacheMutation => "claims-active/.forge-claim.lock",
             Self::ClaimWal => "locks/claims.wal.lock",
             Self::WorkflowActionReplayWal => "locks/workflow-action-replay.lock",
-            Self::MemoryLog => "locks/memory.log.lock",
-            Self::ResearchLog => "locks/research.sources.lock",
-            Self::GovernanceConflictLog => "locks/governance.conflicts.lock",
+            Self::MemoryLog => MEMORY_EVENT_LOG_LOCK_RELATIVE_PATH,
+            Self::ResearchLog => RESEARCH_EVENT_LOG_LOCK_RELATIVE_PATH,
+            Self::GovernanceConflictLog => GOVERNANCE_CONFLICT_EVENT_LOG_LOCK_RELATIVE_PATH,
             Self::IsolationContracts => "contracts/isolations/.forge-isolation.lock",
             Self::CommandEvidenceAppend => "locks/append-json-line/<command-evidence-hash>.lock",
             Self::EffectMetadataIndexAppend => "locks/append-json-line/<effect-index-hash>.lock",
@@ -423,6 +439,7 @@ pub enum BackupEntryKind {
     DomainPackActivePointer,
     DomainPackLedgerRecord,
     DomainPackGenerationManifest,
+    DomainPackGenerationCatalog,
     DomainPackGenerationLock,
     DomainPackGenerationPreflight,
     DomainPackGenerationCompatibility,
@@ -546,6 +563,41 @@ pub struct BackupPublicRegistryMaterial {
     pub audience: String,
     /// Exact raw SHA-256 is the sole normative identity of archived registry material.
     pub registry_sha256: String,
+}
+
+/// Operator-protected proof that one exact archive was produced from a retained,
+/// source-derived snapshot. The receipt is stored outside the archive and staging
+/// tree; archive bytes alone can never recreate this trust input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupReceiptDocument {
+    pub schema_version: String,
+    pub backup_receipt: BackupReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackupReceipt {
+    pub archive_sha256: String,
+    pub manifest_set_digest: String,
+    pub project_id: StableId,
+    pub project_link_sha256: String,
+    pub workflow_release: WorkflowGovernanceReleaseIdentity,
+    pub effective_epoch: BackupEffectiveEpochBinding,
+    pub replay_monotonic_head: BackupReplayRollbackAnchor,
+    pub domain_pack_supply_chain: Option<BackupDomainPackSupplyChainAuthority>,
+    pub domain_pack_reviewed_learning: Option<BackupDomainPackLearningAuthority>,
+    pub archived_principal_registry_raw_sha256: Option<String>,
+    pub archived_broker_registry_raw_sha256: Option<String>,
+    pub created_at_unix: u64,
+    pub receipt_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackupReceiptValidationError {
+    UnsupportedSchemaVersion,
+    InvalidBinding,
+    ReceiptDigestMismatch,
 }
 
 #[derive(
@@ -823,6 +875,33 @@ impl BackupManifestDocument {
         }
         Ok(())
     }
+    /// Apply the exclusion-first source policy before opening file contents.
+    /// Backup producers use this to avoid reading private material and lock or
+    /// crash-protocol files while constructing a complete no-follow scan.
+    pub fn explicit_source_exclusion(
+        source_path: &str,
+        layout: &BackupArchiveLayout,
+    ) -> Result<Option<BackupSourceExclusion>, BackupManifestValidationError> {
+        canonical_archive_path(source_path)?;
+        let normalized_source = normalized_utf8_repo_relative(source_path).ok_or_else(|| {
+            BackupManifestValidationError::InvalidLogicalPath {
+                path: source_path.to_owned(),
+            }
+        })?;
+        let state = normalized_utf8_repo_relative(&state_prefix(layout))
+            .ok_or(BackupManifestValidationError::InvalidProjectLink)?;
+        Ok(if is_forbidden_private_path(&normalized_source) {
+            Some(BackupSourceExclusion::ForbiddenPrivateMaterial)
+        } else if is_explicit_lock_path(&normalized_source, &state) {
+            Some(BackupSourceExclusion::ProducerLock)
+        } else if is_crash_protocol_path(&normalized_source, &state) {
+            Some(BackupSourceExclusion::CrashRecoveryArtifact)
+        } else if is_domain_pack_staging_path(&normalized_source, &state) {
+            Some(BackupSourceExclusion::IncompleteDomainPackStaging)
+        } else {
+            None
+        })
+    }
     /// Classify one no-follow regular file from the complete source scan.
     /// Unknown files fail closed; lock/private/crash protocol files are explicit exclusions.
     pub fn classify_source_file(
@@ -830,35 +909,13 @@ impl BackupManifestDocument {
         source_path: &str,
     ) -> Result<BackupSourceFileClassification, BackupManifestValidationError> {
         let archive_path = canonical_archive_path(source_path)?;
-        let normalized_source = normalized_utf8_repo_relative(source_path).ok_or_else(|| {
-            BackupManifestValidationError::InvalidLogicalPath {
-                path: source_path.to_owned(),
-            }
-        })?;
         let manifest = &self.backup_manifest;
-        let state = normalized_utf8_repo_relative(&state_prefix(&manifest.project.archive_layout))
-            .ok_or(BackupManifestValidationError::InvalidProjectLink)?;
         // Exclusions are security policy, not a fallback. They must win even when a
         // caller maliciously lists a broad-family descendant in the manifest.
-        if is_forbidden_private_path(&normalized_source) {
-            return Ok(BackupSourceFileClassification::Exclude(
-                BackupSourceExclusion::ForbiddenPrivateMaterial,
-            ));
-        }
-        if is_explicit_lock_path(&normalized_source, &state) {
-            return Ok(BackupSourceFileClassification::Exclude(
-                BackupSourceExclusion::ProducerLock,
-            ));
-        }
-        if is_crash_protocol_path(&normalized_source) {
-            return Ok(BackupSourceFileClassification::Exclude(
-                BackupSourceExclusion::CrashRecoveryArtifact,
-            ));
-        }
-        if is_domain_pack_staging_path(&normalized_source, &state) {
-            return Ok(BackupSourceFileClassification::Exclude(
-                BackupSourceExclusion::IncompleteDomainPackStaging,
-            ));
+        if let Some(exclusion) =
+            Self::explicit_source_exclusion(source_path, &manifest.project.archive_layout)?
+        {
+            return Ok(BackupSourceFileClassification::Exclude(exclusion));
         }
         if let Some(entry) = manifest
             .entries
@@ -927,6 +984,34 @@ impl BackupManifestDocument {
         Ok(())
     }
 
+    /// Derive the complete live effect-output projection from exact index bytes
+    /// while a producer snapshot is still being assembled. Unlike
+    /// `verify_effect_metadata_index_bytes`, this does not require the final
+    /// manifest self-digest or declared projection to exist yet; it still binds
+    /// the exact index entry bytes and applies the same strict shipped parser.
+    pub fn derive_effect_metadata_index_bytes(
+        &self,
+        archived_index_bytes: &[u8],
+    ) -> Result<Vec<BackupParsedEffectOutput>, BackupManifestValidationError> {
+        let index_entry = self
+            .backup_manifest
+            .entries
+            .iter()
+            .find(|entry| entry.material == BackupEntryKind::EffectMetadataIndex);
+        let Some(index_entry) = index_entry else {
+            return if archived_index_bytes.is_empty() {
+                Ok(Vec::new())
+            } else {
+                Err(BackupManifestValidationError::EffectMetadataIndexBytesMismatch)
+            };
+        };
+        if index_entry.byte_length != archived_index_bytes.len() as u64
+            || index_entry.sha256 != sha256(archived_index_bytes)
+        {
+            return Err(BackupManifestValidationError::EffectMetadataIndexBytesMismatch);
+        }
+        parse_effect_metadata_index(archived_index_bytes, &self.backup_manifest)
+    }
     /// Parse the exact archived effect metadata-index bytes and prove that the manifest's
     /// declared file outputs are exactly the latest live `file_path` records.
     pub fn verify_effect_metadata_index_bytes(
@@ -976,6 +1061,82 @@ impl BackupManifestDocument {
             return Err(BackupManifestValidationError::EffectOutputClosureMismatch);
         }
         Ok(parsed)
+    }
+}
+
+impl BackupReceiptDocument {
+    /// Canonical receipt bytes excluding the self-digest.
+    pub fn canonical_receipt_bytes(&self) -> Result<Vec<u8>, BackupReceiptValidationError> {
+        let mut value = serde_json::to_value(self)
+            .map_err(|_| BackupReceiptValidationError::ReceiptDigestMismatch)?;
+        value
+            .get_mut("backup_receipt")
+            .and_then(serde_json::Value::as_object_mut)
+            .and_then(|receipt| receipt.remove("receipt_digest"))
+            .ok_or(BackupReceiptValidationError::ReceiptDigestMismatch)?;
+        serde_json_canonicalizer::to_vec(&value)
+            .map_err(|_| BackupReceiptValidationError::ReceiptDigestMismatch)
+    }
+
+    pub fn digest(&self) -> Result<String, BackupReceiptValidationError> {
+        let canonical = self.canonical_receipt_bytes()?;
+        let mut hasher = Sha256::new();
+        hasher.update(RECEIPT_DIGEST_DOMAIN);
+        hasher.update((canonical.len() as u64).to_be_bytes());
+        hasher.update(canonical);
+        Ok(format!("sha256:{:x}", hasher.finalize()))
+    }
+
+    /// Bind a protected receipt to one already integrity-validated manifest.
+    pub fn validate_against(
+        &self,
+        manifest: &BackupManifestDocument,
+    ) -> Result<(), BackupReceiptValidationError> {
+        if self.schema_version != BACKUP_RECEIPT_SCHEMA_VERSION {
+            return Err(BackupReceiptValidationError::UnsupportedSchemaVersion);
+        }
+        manifest
+            .validate_integrity()
+            .map_err(|_| BackupReceiptValidationError::InvalidBinding)?;
+        let receipt = &self.backup_receipt;
+        let backup = &manifest.backup_manifest;
+        let principal = backup
+            .external_authority_observations
+            .workflow_principal_registry
+            .as_ref()
+            .map(|registry| registry.registry_sha256.clone());
+        let broker = backup
+            .external_authority_observations
+            .workflow_broker_registry
+            .as_ref()
+            .map(|registry| registry.registry_sha256.clone());
+        if digest("receipt.archive_sha256", &receipt.archive_sha256).is_err()
+            || receipt.manifest_set_digest != backup.manifest_set_digest
+            || receipt.project_id != backup.project.project_link.project_id
+            || receipt.project_link_sha256 != backup.project.project_link_sha256
+            || receipt.workflow_release != backup.workflow_release
+            || receipt.effective_epoch != backup.effective_epoch
+            || receipt.replay_monotonic_head
+                != backup
+                    .external_authority_observations
+                    .replay_rollback_anchor
+            || receipt.domain_pack_supply_chain
+                != backup
+                    .external_authority_observations
+                    .domain_pack_supply_chain
+            || receipt.domain_pack_reviewed_learning
+                != backup
+                    .external_authority_observations
+                    .domain_pack_reviewed_learning
+            || receipt.archived_principal_registry_raw_sha256 != principal
+            || receipt.archived_broker_registry_raw_sha256 != broker
+        {
+            return Err(BackupReceiptValidationError::InvalidBinding);
+        }
+        if receipt.receipt_digest != self.digest()? {
+            return Err(BackupReceiptValidationError::ReceiptDigestMismatch);
+        }
+        Ok(())
     }
 }
 
@@ -1158,6 +1319,7 @@ fn validate_effective_epoch(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_source_inventory(
     manifest: &BackupManifest,
 ) -> Result<(), BackupManifestValidationError> {
@@ -1317,6 +1479,7 @@ fn validate_source_inventory(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_domain_pack_inventory(
     manifest: &BackupManifest,
     expected: &mut BTreeMap<BackupEntryKind, u64>,
@@ -1416,6 +1579,7 @@ fn validate_domain_pack_inventory(
     for kind in [
         BackupEntryKind::DomainPackLedgerRecord,
         BackupEntryKind::DomainPackGenerationManifest,
+        BackupEntryKind::DomainPackGenerationCatalog,
         BackupEntryKind::DomainPackGenerationLock,
         BackupEntryKind::DomainPackGenerationPreflight,
         BackupEntryKind::DomainPackGenerationCompatibility,
@@ -1449,6 +1613,10 @@ fn validate_domain_pack_inventory(
             (
                 BackupEntryKind::DomainPackGenerationManifest,
                 format!("{root}/generation.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackGenerationCatalog,
+                format!("{root}/catalog.yaml"),
             ),
             (
                 BackupEntryKind::DomainPackGenerationLock,
@@ -1729,6 +1897,7 @@ fn effect_output_material(
         .then_some(BackupEntryKind::DeclaredEffectOutput)
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_effect_metadata_index(
     raw: &[u8],
     manifest: &BackupManifest,
@@ -2063,7 +2232,8 @@ pub fn decode_canonical_archive_path(
                 {
                     return Err(invalid());
                 }
-                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).expect("ASCII hex");
+                let hex =
+                    std::str::from_utf8(&bytes[index + 1..index + 3]).map_err(|_| invalid())?;
                 decoded.push(u8::from_str_radix(hex, 16).map_err(|_| invalid())?);
                 index += 3;
             } else {
@@ -2117,10 +2287,11 @@ fn is_live_effect_source_path_allowed(physical_ref: &str, layout: &BackupArchive
     };
     !is_forbidden_private_path(&path)
         && !is_explicit_lock_path(&path, &state)
-        && !is_crash_protocol_path(&path)
+        && !is_crash_protocol_path(&path, &state)
         && !is_domain_pack_staging_path(&path, &state)
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_external_authorities(
     manifest: &BackupManifest,
 ) -> Result<(), BackupManifestValidationError> {
@@ -2191,7 +2362,11 @@ fn validate_external_authorities(
         )?;
         required("domain_supply.registry_id", &value.registry_id)?;
         required("domain_supply.audience", &value.audience)?;
-        if value.schema_version != "forge-domain-pack-registry-anchor-v1" || value.generation == 0 {
+        if !matches!(
+            value.schema_version.as_str(),
+            "forge-domain-pack-registry-anchor-v1" | "forge-domain-pack-registry-anchor-v2"
+        ) || value.generation == 0
+        {
             return Err(BackupManifestValidationError::InvalidExternalAuthorities);
         }
         validate_digest_fields([
@@ -2264,13 +2439,13 @@ fn validate_external_authorities(
     validate_registry_observation(
         manifest,
         BackupEntryKind::PublicPrincipalRegistry,
-        &observations.workflow_principal_registry,
+        observations.workflow_principal_registry.as_ref(),
         manifest.source_state.workflow_principal_registry,
     )?;
     validate_registry_observation(
         manifest,
         BackupEntryKind::PublicBrokerRegistry,
-        &observations.workflow_broker_registry,
+        observations.workflow_broker_registry.as_ref(),
         manifest.source_state.workflow_broker_registry,
     )
 }
@@ -2278,7 +2453,7 @@ fn validate_external_authorities(
 fn validate_registry_observation(
     manifest: &BackupManifest,
     kind: BackupEntryKind,
-    observation: &Option<BackupPublicRegistryMaterial>,
+    observation: Option<&BackupPublicRegistryMaterial>,
     state: BackupProvisioningState,
 ) -> Result<(), BackupManifestValidationError> {
     if (state == BackupProvisioningState::Provisioned) != observation.is_some() {
@@ -2295,6 +2470,7 @@ fn validate_registry_observation(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_entry_path(
     entry: &BackupEntry,
     manifest: &BackupManifest,
@@ -2328,9 +2504,11 @@ fn validate_entry_path(
         BackupEntryKind::EffectWalCompactionManifest => {
             exact("wal/.effects.ndjson.compaction-manifest.json")
         }
-        BackupEntryKind::MemoryEventLog => exact("memory/events.ndjson"),
-        BackupEntryKind::ResearchEventLog => exact("research/sources.ndjson"),
-        BackupEntryKind::GovernanceConflictEventLog => exact("governance/conflicts.ndjson"),
+        BackupEntryKind::MemoryEventLog => exact(MEMORY_EVENT_LOG_RELATIVE_PATH),
+        BackupEntryKind::ResearchEventLog => exact(RESEARCH_EVENT_LOG_RELATIVE_PATH),
+        BackupEntryKind::GovernanceConflictEventLog => {
+            exact(GOVERNANCE_CONFLICT_EVENT_LOG_RELATIVE_PATH)
+        }
         BackupEntryKind::DomainPackOperatorSources => exact("domain-packs/operator-sources.yaml"),
         BackupEntryKind::DomainPackRebasePlan => exact("domain-packs/rebase-plan.yaml"),
         BackupEntryKind::DomainPackActivePointer => exact("domain-packs/active.lock.yaml"),
@@ -2339,6 +2517,9 @@ fn validate_entry_path(
         }
         BackupEntryKind::DomainPackGenerationManifest => {
             below("domain-packs/generations") && entry.logical_path.ends_with("/generation.yaml")
+        }
+        BackupEntryKind::DomainPackGenerationCatalog => {
+            below("domain-packs/generations") && entry.logical_path.ends_with("/catalog.yaml")
         }
         BackupEntryKind::DomainPackGenerationLock => {
             below("domain-packs/generations") && entry.logical_path.ends_with("/lock.yaml")
@@ -2437,6 +2618,7 @@ fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
         BackupEntryKind::DomainPackActivePointer,
         BackupEntryKind::DomainPackLedgerRecord,
         BackupEntryKind::DomainPackGenerationManifest,
+        BackupEntryKind::DomainPackGenerationCatalog,
         BackupEntryKind::DomainPackGenerationLock,
         BackupEntryKind::DomainPackGenerationPreflight,
         BackupEntryKind::DomainPackGenerationCompatibility,
@@ -2521,13 +2703,14 @@ fn is_explicit_lock_path(path: &str, state: &str) -> bool {
         || path == format!("{state}/domain-pack-learning/capture.lock")
         || path == format!("{state}/claims-active/.forge-claim.lock")
         || path == format!("{state}/contracts/isolations/.forge-isolation.lock")
+        || path == format!("{state}/.producer-root-authority.lock")
 }
 
 fn is_domain_pack_staging_path(path: &str, state: &str) -> bool {
     path.starts_with(&format!("{state}/domain-packs/generations/staging/"))
 }
 
-fn is_crash_protocol_path(path: &str) -> bool {
+fn is_crash_protocol_path(path: &str, state: &str) -> bool {
     let Some(name) = path.rsplit('/').next() else {
         return false;
     };
@@ -2536,7 +2719,6 @@ fn is_crash_protocol_path(path: &str) -> bool {
             ".forge-next",
             ".forge-previous",
             ".forge-transaction",
-            ".forge-tmp",
             ".forge-bak",
         ]
         .iter()
@@ -2563,6 +2745,34 @@ fn is_crash_protocol_path(path: &str) -> bool {
     if claim_temp {
         return true;
     }
+    // Retained atomic replacement leaves only this exact descriptor-relative
+    // WriteNew name after a crash: `.{target}.{pid}-{nanos}-{attempt}.forge-tmp`.
+    if let Some(without_suffix) = name
+        .strip_prefix('.')
+        .and_then(|value| value.strip_suffix(".forge-tmp"))
+    {
+        if let Some((target, nonce)) = without_suffix.rsplit_once('.') {
+            let mut nonce_parts = nonce.split('-');
+            if !target.is_empty()
+                && nonce_parts
+                    .next()
+                    .is_some_and(|pid| is_ascii_decimal(pid) && pid.parse::<u32>().is_ok())
+                && nonce_parts
+                    .next()
+                    .is_some_and(|nanos| is_ascii_decimal(nanos) && nanos.parse::<u128>().is_ok())
+                && nonce_parts.next().is_some_and(|attempt| {
+                    is_ascii_decimal(attempt) && attempt.parse::<usize>().is_ok()
+                })
+                && nonce_parts.next().is_none()
+            {
+                return true;
+            }
+        }
+    }
+    // Prior retained claim rotation used these three deterministic names.
+    if is_legacy_claim_authority_temp_path(path, state) {
+        return true;
+    }
     if !name.starts_with('.') || !name.ends_with(".tmp") {
         return false;
     }
@@ -2580,6 +2790,21 @@ fn is_crash_protocol_path(path: &str) -> bool {
         && parts.next().is_some()
 }
 
+fn is_ascii_decimal(value: &str) -> bool {
+    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn is_legacy_claim_authority_temp_path(path: &str, state: &str) -> bool {
+    path == format!("{state}/wal/claims.authority.tmp")
+        || path == format!("{state}/wal/claims.wal.manifest.authority.tmp")
+        || path
+            .strip_prefix(&format!("{state}/wal/snapshots/claims.snapshot."))
+            .and_then(|value| value.strip_suffix(".authority.tmp"))
+            .is_some_and(|sequence| {
+                sequence.len() == 20 && sequence.bytes().all(|byte| byte.is_ascii_digit())
+            })
+}
+
 fn normalized_relative(state_root: &str, sidecar_root: &str) -> Option<String> {
     fn normalize(value: &str) -> Option<Vec<String>> {
         let mut parts = Vec::new();
@@ -2594,7 +2819,7 @@ fn normalized_relative(state_root: &str, sidecar_root: &str) -> Option<String> {
                     if !value.contains('\\')
                         && !value.bytes().any(|byte| byte.is_ascii_control()) =>
                 {
-                    parts.push(value.to_owned())
+                    parts.push(value.to_owned());
                 }
                 _ => return None,
             }
@@ -2911,6 +3136,21 @@ mod tests {
     }
 
     #[test]
+    fn active_domain_pack_generation_requires_catalog_material() {
+        let mut document = parse_manifest("valid/multi-generation-v1.yaml");
+        document
+            .backup_manifest
+            .entries
+            .retain(|entry| entry.material != BackupEntryKind::DomainPackGenerationCatalog);
+        recompute(&mut document);
+        assert_eq!(
+            document.validate_integrity(),
+            Err(BackupManifestValidationError::InvalidDomainPackProjection)
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
     fn every_named_hostile_manifest_is_unique_and_fails_with_its_attack_class() {
         let expected = [
             (
@@ -3105,6 +3345,16 @@ mod tests {
     #[test]
     fn classifier_is_closed_and_explicitly_excludes_only_shipped_transients() {
         let document = parse_manifest("valid/multi-generation-v1.yaml");
+        assert_eq!(
+            document
+                .classify_source_file(
+                    "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml"
+                )
+                .unwrap(),
+            BackupSourceFileClassification::Archive(
+                BackupEntryKind::DomainPackGenerationCatalog
+            )
+        );
         assert!(matches!(
             document
                 .classify_source_file("sidecar/.forge-method/domain-pack-learning/capture.lock")
@@ -3141,6 +3391,36 @@ mod tests {
             document.classify_source_file("sidecar/.forge-method/capture.lock"),
             Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
         ));
+        assert!(matches!(
+            document
+                .classify_source_file("sidecar/.forge-method/wal/claims.authority.tmp")
+                .unwrap(),
+            BackupSourceFileClassification::Exclude(BackupSourceExclusion::CrashRecoveryArtifact)
+        ));
+        assert!(matches!(
+            document.classify_source_file(
+                "sidecar/.forge-method/wal/.claims.fmw1.not-a-nonce.forge-tmp"
+            ),
+            Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
+        ));
+        for path in [
+            "sidecar/.forge-method/wal/.notes.+7-+8.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.+7-+8-0.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.-7-8-0.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-8.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-8-.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-8-0-1.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.٧-8-0.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-８-0.forge-tmp",
+        ] {
+            assert!(
+                matches!(
+                    document.classify_source_file(path),
+                    Err(BackupManifestValidationError::UnclassifiedSourceFile { .. })
+                ),
+                "invalid retained temp was classified: {path}"
+            );
+        }
     }
 
     #[test]
@@ -3154,7 +3434,7 @@ mod tests {
             ),
             (
                 BackupEntryKind::Evidence,
-                "sidecar/.forge-method/evidence/.command.ndjson.forge-tmp",
+                "sidecar/.forge-method/evidence/.command.ndjson.123-456-0.forge-tmp",
                 BackupSourceExclusion::CrashRecoveryArtifact,
             ),
             (
@@ -3246,6 +3526,21 @@ mod tests {
             byte_length: 1,
             sha256: format!("sha256:{}", "a".repeat(64)),
         });
+        for path in [
+            "sidecar/.forge-method/wal/.notes.+7-+8-0.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-8.forge-tmp",
+            "sidecar/.forge-method/wal/.notes.7-8-0-1.forge-tmp",
+        ] {
+            let mut malformed = complete.clone();
+            malformed.push(BackupSourceFileMetadata {
+                logical_path: path.to_owned(),
+                entry_type: BackupArchiveEntryType::RegularFile,
+                hard_link_count: 1,
+                byte_length: 1,
+                sha256: format!("sha256:{}", "a".repeat(64)),
+            });
+            assert!(document.verify_source_enumeration(&malformed).is_err());
+        }
         assert!(document.verify_source_enumeration(&unknown).is_err());
 
         let mut omitted = complete.clone();
@@ -3442,6 +3737,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn effect_physical_ref_mirror_covers_shipped_target_kind_matrix() {
         let cases = [
             (

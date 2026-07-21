@@ -299,50 +299,17 @@ fn copy_validation_tree(source: &Path, target: &Path) {
         target,
         "crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs",
     );
-    copy_dir(
-        &source
-            .join("docs")
-            .join("fixtures")
-            .join("operation-contract-v0"),
-        &target
-            .join("docs")
-            .join("fixtures")
-            .join("operation-contract-v0"),
-    );
-    copy_dir(
-        &source.join("docs").join("fixtures").join("domain-pack-v0"),
-        &target.join("docs").join("fixtures").join("domain-pack-v0"),
-    );
-    copy_dir(
-        &source
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-lifecycle-v0"),
-        &target
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-lifecycle-v0"),
-    );
-    copy_dir(
-        &source
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-learning-v0"),
-        &target
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-learning-v0"),
-    );
-    copy_dir(
-        &source
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-reference-v0"),
-        &target
-            .join("docs")
-            .join("fixtures")
-            .join("domain-pack-reference-v0"),
-    );
+    copy_dir(&source.join("docs"), &target.join("docs"));
+    for relative in [
+        "CHANGELOG.md",
+        "CONTEXT.md",
+        "CONTRIBUTING.md",
+        "README.md",
+        "SECURITY.md",
+        "skill/start-forge/SKILL.md",
+    ] {
+        copy_validation_source(source, target, relative);
+    }
     // completion contracts reference the append-only ledger; copy it so
     // cross-refs resolve. The core repo's runtime state (including the ledger)
     // now lives in its sibling sidecar via the Project Link at

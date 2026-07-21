@@ -291,11 +291,11 @@ impl ProjectInitError {
             | Self::ProjectLinkSerialize { .. }
             | Self::RootNestedInAnotherRepo { .. }
             | Self::SidecarInsideAnotherRepo { .. } => ExitReason::InvalidDecisionShape,
-            Self::ExistingProjectStateUnavailable { .. }
-            | Self::ExistingInitTargetWithoutProjectLink { .. } => ExitReason::EnvConfig,
             Self::ExistingProjectLinkInvalid { exit_reason, .. } => *exit_reason,
             Self::LinkExistsRace { .. } => ExitReason::Conflict,
-            Self::RootNotFound { .. }
+            Self::ExistingProjectStateUnavailable { .. }
+            | Self::ExistingInitTargetWithoutProjectLink { .. }
+            | Self::RootNotFound { .. }
             | Self::RootNotDirectory { .. }
             | Self::RootCanonicalize { .. }
             | Self::MissingRootDirectoryName { .. }
@@ -1928,6 +1928,12 @@ fn project_subcommand_hint() -> String {
 /// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
 /// code so the entrypoint can translate it into `process::exit(code)`.
 pub fn run_project_command(args: &[String]) -> Result<(), ExitError> {
+    if args
+        .get(1)
+        .is_some_and(|subcommand| subcommand == "reinitialize")
+    {
+        return crate::project_reinitialize_cmd::run_project_reinitialize_command(&args[1..]);
+    }
     let (output, exit) = dispatch(args);
     if !output.is_empty() {
         println!("{output}");
@@ -2376,9 +2382,10 @@ state_root: ../forge-app/state
         fs::create_dir_all(&app).expect("create nested consumer root");
         seed_git_repo(&app);
 
-        // Sidecar must NOT resolve into the parent repo; put it in a separate
-        // clean temp location with no `.git` above it.
-        let sidecar = temp_root("nested-own-repo-sidecar");
+        // Sidecar must NOT resolve into the parent repo; put its not-yet-created
+        // target below a separate clean temp location with no `.git` above it.
+        let sidecar_parent = temp_root("nested-own-repo-sidecar-parent");
+        let sidecar = sidecar_parent.join("forge-app");
         let payload = init_project(
             &app,
             None,

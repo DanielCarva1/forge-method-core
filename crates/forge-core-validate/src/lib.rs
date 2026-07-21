@@ -7,9 +7,23 @@
 pub mod assurance;
 pub mod codes;
 pub mod failure;
+pub mod host_conformance;
+pub mod markdown_authority;
 pub mod risk_audit;
+pub mod testkit;
+pub mod workspace_architecture;
 
 pub use assurance::validate_assurance_case;
+pub use host_conformance::validate_common_borrowed_shell_contracts;
+pub use markdown_authority::{
+    load_authorized_markdown, validate_markdown_retirement, MarkdownFileLoadError,
+    MARKDOWN_RETIREMENT_AUTHORITY_PATH,
+};
+pub use testkit::*;
+pub use workspace_architecture::{
+    validate_workspace_architecture_contracts, WorkspaceArchitectureIssue,
+    WorkspaceArchitectureReport,
+};
 
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
@@ -212,6 +226,16 @@ pub enum DiagnosticCode {
     RuntimeRegistryCapabilityRefsEmpty,
     RuntimeRegistryUnsafeStateMutationPolicy,
     RuntimeCapabilityOutputEvidenceMissing,
+    HostConformanceInvalid,
+    HostSurfaceContractInvalid,
+    MarkdownPolicyInvalid,
+    MarkdownScanFailed,
+    MarkdownPathInvalid,
+    MarkdownAllowlistDuplicate,
+    MarkdownNotAllowlisted,
+    MarkdownAllowlistedFileMissing,
+    MarkdownEntryInvalid,
+    MarkdownDebtInvalid,
     HealthRecoveryTtlMustBePositive,
     HealthRecoveryAnomalyEvidenceMissing,
     HealthRecoveryUnhealthyWithoutAction,
@@ -620,10 +644,11 @@ fn validate_single_known_repo_ref(
     if !is_contracts_or_docs_ref(reference) {
         return;
     }
-    let exists = if reference.contains('*') {
-        known_paths.contains(glob_parent(reference))
+    let repository_ref = reference.split('#').next().unwrap_or(reference);
+    let exists = if repository_ref.contains('*') {
+        known_paths.contains(glob_parent(repository_ref))
     } else {
-        known_paths.contains(reference)
+        known_paths.contains(repository_ref)
     };
     if !exists {
         report.push(Diagnostic::error(

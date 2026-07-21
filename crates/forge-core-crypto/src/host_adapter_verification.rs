@@ -15,6 +15,7 @@ use p256::pkcs8::DecodePublicKey;
 use rasn_ocsp::OcspResponseStatus;
 use serde_json::Value;
 use std::fs;
+use std::path::Path;
 use tracing::instrument;
 use x509_parser::parse_x509_crl;
 use zeroize::Zeroizing;
@@ -23,8 +24,10 @@ use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_digest, normalize_s
 use crate::ocsp::{
     apply_ocsp_cert_status, decode_basic_ocsp_response, decode_ocsp_response,
     extract_ocsp_response_nonce_hex, find_matching_ocsp_single_response,
-    normalize_expected_ocsp_nonce_hex, ocsp_responder_id_matches_issuer, rasn_oid_matches,
-    verify_basic_ocsp_signature_with_issuer, verify_ocsp_nonce,
+    normalize_expected_ocsp_nonce_hex, ocsp_responder_id_matches_issuer,
+    ocsp_responder_public_key_sha1_hex, rasn_oid_matches, validate_ocsp_single_response_extensions,
+    verify_basic_ocsp_signature_with_certificate, verify_basic_ocsp_signature_with_issuer,
+    verify_delegated_ocsp_responder_authority, verify_ocsp_nonce,
     verify_ocsp_single_response_freshness,
 };
 use crate::rekor;
@@ -1832,27 +1835,95 @@ pub fn run_host_adapter_certificate_crl_status_verification(
     }
 }
 
-#[instrument(skip_all, fields(certificate_path = %input.certificate_path.to_string_lossy(), ocsp_response_path = %input.ocsp_response_path.to_string_lossy()), level = "info")]
+fn policy_declares_exact_ocsp_issuer(
+    policy_path: &Path,
+    certificate_authority_refs: &[String],
+    supplied_issuer_der: &[u8],
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> bool {
+    for reference in certificate_authority_refs {
+        let reference_path = Path::new(reference);
+        let resolved = if reference_path.is_absolute() {
+            reference_path.to_path_buf()
+        } else {
+            policy_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(reference_path)
+        };
+        let mut scratch_evidence = Vec::new();
+        let mut scratch_reasons = Vec::new();
+        if read_certificate_der(
+            &resolved,
+            "ocsp_status_policy_declared_issuer",
+            &mut scratch_evidence,
+            &mut scratch_reasons,
+        )
+        .is_some_and(|declared_der| declared_der == supplied_issuer_der)
+        {
+            verified_evidence.push("ocsp_status_issuer_declared_ca_identity_matched".to_string());
+            return true;
+        }
+    }
+    reasons.push("ocsp_status_issuer_declared_ca_identity_mismatch".to_string());
+    false
+}
+
+#[must_use]
 pub fn run_host_adapter_certificate_ocsp_status_verification(
     input: HostAdapterCertificateOcspStatusVerificationInput,
+) -> HostAdapterCertificateOcspStatusVerification {
+    run_host_adapter_certificate_ocsp_status_verification_with_responder_material(input, None)
+}
+
+#[instrument(skip_all, fields(certificate_path = %input.certificate_path.to_string_lossy(), ocsp_response_path = %input.ocsp_response_path.to_string_lossy()), level = "info")]
+pub fn run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+    input: HostAdapterCertificateOcspStatusVerificationInput,
+    delegated_responder_material: Option<HostAdapterOcspDelegatedResponderMaterial>,
 ) -> HostAdapterCertificateOcspStatusVerification {
     let trust_policy_path = input.trust_policy_path.to_string_lossy().to_string();
     let certificate_path = input.certificate_path.to_string_lossy().to_string();
     let issuer_certificate_path = input.issuer_certificate_path.to_string_lossy().to_string();
     let ocsp_response_path = input.ocsp_response_path.to_string_lossy().to_string();
+    let delegated_responder_issuer_chain_paths = delegated_responder_material
+        .as_ref()
+        .map(|material| {
+            material
+                .issuer_chain_certificate_paths
+                .iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let deferred_verification = vec![
         "network_ocsp_fetch".to_string(),
         "crl_status".to_string(),
+        "certificate_transparency_status".to_string(),
+        "rekor_status".to_string(),
         "tuf_freshness".to_string(),
         "install_update_authority".to_string(),
     ];
     let mut reasons = Vec::new();
     let mut verified_evidence = Vec::new();
+    if let Some(material) = delegated_responder_material.as_ref() {
+        if material.certificate_path.as_os_str().is_empty() {
+            reasons.push("ocsp_status_delegated_responder_certificate_path_invalid".to_string());
+        }
+        if material
+            .issuer_chain_certificate_paths
+            .iter()
+            .any(|path| path.as_os_str().is_empty())
+        {
+            reasons.push("ocsp_status_delegated_responder_issuer_path_invalid".to_string());
+        }
+    }
     let mut policy_mode = None;
     let mut certificate_serial_hex = None;
     let mut issuer_subject = None;
     let mut ocsp_response_status = None;
     let mut responder_authority = None;
+    let mut responder_authority_identity = None;
     let mut ocsp_produced_at_unix = None;
     let mut ocsp_this_update_unix = None;
     let mut ocsp_next_update_unix = None;
@@ -1865,6 +1936,9 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         .and_then(|nonce| normalize_expected_ocsp_nonce_hex(nonce.as_str(), &mut reasons))
         .map(OcspNonceHex::from);
     let mut observed_nonce_hex: Option<OcspNonceHex> = None;
+    let mut policy_declared_issuer = false;
+    let mut target_issuer_subject_bound = false;
+    let mut target_issuer_signature_bound = false;
 
     let trust_policy = read_sigstore_trust_policy_document(
         &input.trust_policy_path,
@@ -1884,14 +1958,6 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
             }
         } else {
             reasons.push("ocsp_status_revocation_policy_missing".to_string());
-        }
-        if path_matches_any_ref(
-            &input.issuer_certificate_path,
-            &policy.fulcio.certificate_authority_refs,
-        ) {
-            verified_evidence.push("ocsp_status_issuer_declared_ca_ref_matched".to_string());
-        } else {
-            reasons.push("ocsp_status_issuer_declared_ca_ref_missing".to_string());
         }
     }
 
@@ -1916,6 +1982,47 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         &mut reasons,
     )
     .map(Zeroizing::new);
+    let delegated_responder_der = delegated_responder_material.as_ref().and_then(|material| {
+        read_certificate_der(
+            &material.certificate_path,
+            "ocsp_status_delegated_responder_certificate",
+            &mut verified_evidence,
+            &mut reasons,
+        )
+        .map(Zeroizing::new)
+    });
+    if let (Some(document), Some(issuer_der)) = (trust_policy.as_ref(), issuer_der.as_ref()) {
+        policy_declared_issuer = policy_declares_exact_ocsp_issuer(
+            &input.trust_policy_path,
+            &document
+                .sigstore_trusted_root_policy
+                .fulcio
+                .certificate_authority_refs,
+            issuer_der,
+            &mut verified_evidence,
+            &mut reasons,
+        );
+    }
+
+    let delegated_responder_issuer_chain_ders = delegated_responder_material
+        .as_ref()
+        .map(|material| {
+            material
+                .issuer_chain_certificate_paths
+                .iter()
+                .enumerate()
+                .map(|(index, path)| {
+                    read_certificate_der(
+                        path,
+                        &format!("ocsp_status_delegated_responder_issuer_{index}"),
+                        &mut verified_evidence,
+                        &mut reasons,
+                    )
+                    .map(Zeroizing::new)
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     if let (Some(certificate_der), Some(issuer_der), Some(ocsp_der)) = (
         certificate_der.as_ref(),
@@ -1935,18 +2042,49 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
             &mut reasons,
         );
         let ocsp_response = decode_ocsp_response(ocsp_der, &mut verified_evidence, &mut reasons);
+        let delegated_responder = delegated_responder_der.as_deref().and_then(|der| {
+            parse_certificate(
+                der,
+                "ocsp_status_delegated_responder_certificate",
+                &mut verified_evidence,
+                &mut reasons,
+            )
+        });
+        let delegated_responder_issuer_chain = delegated_responder_issuer_chain_ders
+            .iter()
+            .enumerate()
+            .filter_map(|(index, der)| {
+                der.as_deref().and_then(|der| {
+                    parse_certificate(
+                        der,
+                        &format!("ocsp_status_delegated_responder_issuer_{index}"),
+                        &mut verified_evidence,
+                        &mut reasons,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        if delegated_responder_material.is_some()
+            && (delegated_responder.is_none()
+                || delegated_responder_issuer_chain.len()
+                    != delegated_responder_issuer_chain_ders.len())
+        {
+            reasons.push("ocsp_status_delegated_responder_material_incomplete".to_string());
+        }
 
         if let (Some(certificate), Some(issuer)) = (certificate.as_ref(), issuer.as_ref()) {
             certificate_serial_hex = Some(hex_bytes(certificate.tbs_certificate.raw_serial()));
             issuer_subject = Some(format!("{}", issuer.subject()));
 
             if certificate.issuer() == issuer.subject() {
+                target_issuer_subject_bound = true;
                 verified_evidence.push("ocsp_status_certificate_issuer_subject_match".to_string());
             } else {
                 reasons.push("ocsp_status_certificate_issuer_subject_mismatch".to_string());
             }
             match certificate.verify_signature(Some(issuer.public_key())) {
                 Ok(()) => {
+                    target_issuer_signature_bound = true;
                     verified_evidence
                         .push("ocsp_status_certificate_signature_verified".to_string());
                 }
@@ -2000,47 +2138,132 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
                         &mut reasons,
                     );
 
-                    if let Some(issuer) = issuer.as_ref() {
-                        if ocsp_responder_id_matches_issuer(
-                            &basic_response.tbs_response_data.responder_id,
-                            issuer,
-                            &mut verified_evidence,
-                            &mut reasons,
-                        ) {
-                            responder_authority = Some("issuer_certificate_direct".to_string());
-                        } else {
-                            reasons.push("ocsp_status_responder_unauthorized".to_string());
-                        }
-
-                        let signature_verified = verify_basic_ocsp_signature_with_issuer(
-                            &basic_response,
-                            issuer,
-                            &mut verified_evidence,
-                            &mut reasons,
-                        );
-                        if !signature_verified
-                            && basic_response
-                                .certs
-                                .as_ref()
-                                .is_some_and(|certs| !certs.is_empty())
-                        {
-                            reasons.push(
-                                "ocsp_status_delegated_responder_certificate_unsupported"
-                                    .to_string(),
-                            );
-                        }
-                    }
-
-                    if let (Some(certificate), Some(issuer)) =
+                    let matching_single_response = if let (Some(certificate), Some(issuer)) =
                         (certificate.as_ref(), issuer.as_ref())
                     {
-                        if let Some(single_response) = find_matching_ocsp_single_response(
+                        let matching = find_matching_ocsp_single_response(
                             &basic_response,
                             certificate,
                             issuer,
                             &mut verified_evidence,
                             &mut reasons,
+                        );
+                        if let Some(single_response) = matching {
+                            validate_ocsp_single_response_extensions(single_response, &mut reasons);
+                        }
+                        matching
+                    } else {
+                        None
+                    };
+
+                    if let Some(issuer) = issuer.as_ref() {
+                        let direct_responder_matches = ocsp_responder_id_matches_issuer(
+                            &basic_response.tbs_response_data.responder_id,
+                            issuer,
+                            &mut verified_evidence,
+                            &mut reasons,
+                        );
+                        if direct_responder_matches && delegated_responder_material.is_some() {
+                            reasons.push("ocsp_status_responder_authority_ambiguous".to_string());
+                        } else if direct_responder_matches {
+                            let responder_id_mode =
+                                match &basic_response.tbs_response_data.responder_id {
+                                    rasn_ocsp::ResponderId::ByName(_) => {
+                                        HostAdapterOcspResponderIdMode::ByName
+                                    }
+                                    rasn_ocsp::ResponderId::ByKey(_) => {
+                                        HostAdapterOcspResponderIdMode::ByKey
+                                    }
+                                };
+                            if verify_basic_ocsp_signature_with_issuer(
+                                &basic_response,
+                                issuer,
+                                &mut verified_evidence,
+                                &mut reasons,
+                            ) && reasons.is_empty()
+                                && policy_declared_issuer
+                                && target_issuer_subject_bound
+                                && target_issuer_signature_bound
+                            {
+                                responder_authority = Some("issuer_certificate_direct".to_string());
+                                responder_authority_identity = Some(
+                                    HostAdapterOcspResponderAuthorityIdentity {
+                                        mode: HostAdapterOcspResponderAuthorityMode::DirectIssuer,
+                                        responder_id_mode,
+                                        subject: format!("{}", issuer.subject()),
+                                        public_key_sha1_hex: ocsp_responder_public_key_sha1_hex(issuer),
+                                        certificate_path: issuer_certificate_path.clone(),
+                                        issuer_chain_certificate_paths: Vec::new(),
+                                        verified_checks: vec![
+                                            HostAdapterOcspResponderAuthorityCheck::PolicyDeclaredIssuer,
+                                            HostAdapterOcspResponderAuthorityCheck::ResponderId,
+                                            HostAdapterOcspResponderAuthorityCheck::ResponseSignature,
+                                        ],
+                                    },
+                                );
+                            }
+                        } else if let (Some(material), Some(responder)) = (
+                            delegated_responder_material.as_ref(),
+                            delegated_responder.as_ref(),
                         ) {
+                            if let Some(responder_id_mode) =
+                                verify_delegated_ocsp_responder_authority(
+                                    &basic_response,
+                                    responder,
+                                    &delegated_responder_issuer_chain,
+                                    issuer,
+                                    input.verification_time_unix,
+                                    &mut verified_evidence,
+                                    &mut reasons,
+                                )
+                            {
+                                if verify_basic_ocsp_signature_with_certificate(
+                                    &basic_response,
+                                    responder,
+                                    &mut verified_evidence,
+                                    &mut reasons,
+                                ) && reasons.is_empty()
+                                    && policy_declared_issuer
+                                    && target_issuer_subject_bound
+                                    && target_issuer_signature_bound
+                                {
+                                    verified_evidence.push(
+                                        "ocsp_status_delegated_responder_authorized".to_string(),
+                                    );
+                                    responder_authority =
+                                        Some("delegated_responder_certificate".to_string());
+                                    responder_authority_identity = Some(
+                                        HostAdapterOcspResponderAuthorityIdentity {
+                                            mode: HostAdapterOcspResponderAuthorityMode::DelegatedResponder,
+                                            responder_id_mode,
+                                            subject: format!("{}", responder.subject()),
+                                            public_key_sha1_hex: ocsp_responder_public_key_sha1_hex(responder),
+                                            certificate_path: material
+                                                .certificate_path
+                                                .to_string_lossy()
+                                                .to_string(),
+                                            issuer_chain_certificate_paths:
+                                                delegated_responder_issuer_chain_paths.clone(),
+                                            verified_checks: vec![
+                                                HostAdapterOcspResponderAuthorityCheck::PolicyDeclaredIssuer,
+                                                HostAdapterOcspResponderAuthorityCheck::ExactIssuerPath,
+                                                HostAdapterOcspResponderAuthorityCheck::ResponderValidity,
+                                                HostAdapterOcspResponderAuthorityCheck::IssuerPathValidity,
+                                                HostAdapterOcspResponderAuthorityCheck::OcspSigningExtendedKeyUsage,
+                                                HostAdapterOcspResponderAuthorityCheck::ResponderId,
+                                                HostAdapterOcspResponderAuthorityCheck::ResponseSignature,
+                                            ],
+                                        },
+                                    );
+                                }
+                            }
+                        } else {
+                            reasons.push("ocsp_status_responder_unauthorized".to_string());
+                        }
+                    }
+
+                    if certificate.is_some() && issuer.is_some() {
+                        if let Some(single_response) = matching_single_response {
                             ocsp_this_update_unix = Some(single_response.this_update.timestamp());
                             ocsp_next_update_unix = single_response
                                 .next_update
@@ -2110,6 +2333,7 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         issuer_subject,
         ocsp_response_status,
         responder_authority,
+        responder_authority_identity,
         ocsp_produced_at_unix,
         ocsp_this_update_unix,
         ocsp_next_update_unix,
@@ -2119,6 +2343,80 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         deferred_verification,
         reasons,
         verified_evidence,
-        inference_boundary: "Verifies explicit offline OCSP revocation status from a supplied RFC6960 DER OCSP response by checking successful OCSPResponse, BasicOCSPResponse, direct issuer responder authority, OCSP signature, CertID serial and issuer hashes, thisUpdate/nextUpdate freshness, and optional nonce equality. It does not fetch OCSP over the network, infer OCSP from CRL, CT, Rekor, TUF, or short-lived policy, refresh TUF trusted roots, mutate installations, or decide release update authority.".to_string(),
+        inference_boundary: "Verifies explicit offline OCSP revocation status from a supplied RFC6960 DER OCSP response by selecting exactly one verified response authority: the supplied issuer or a caller-supplied delegated responder whose exact supplied path, validity, id-kp-OCSPSigning EKU, responderID, and response signature verify. The same CertID, serial/hash, producedAt, thisUpdate/nextUpdate, status, and optional nonce requirements apply to both modes. It does not fetch OCSP or certificates over the network, infer OCSP from CRL, CT, Rekor, TUF, or short-lived policy, refresh trusted roots, mutate installations, or decide release update authority.".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod ocsp_policy_issuer_tests {
+    use super::policy_declares_exact_ocsp_issuer;
+    use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, KeyPair};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn ca_der(common_name: &str) -> Vec<u8> {
+        let mut params = CertificateParams::new(Vec::new()).expect("CA params");
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        params
+            .distinguished_name
+            .push(DnType::CommonName, common_name);
+        let key = KeyPair::generate().expect("CA key");
+        params
+            .self_signed(&key)
+            .expect("self-signed CA")
+            .der()
+            .to_vec()
+    }
+
+    #[test]
+    fn ocsp_policy_issuer_binding_rejects_same_filename_with_different_der() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-ocsp-policy-issuer-{}-{nonce}",
+            std::process::id()
+        ));
+        let trusted_dir = root.join("trusted");
+        let attacker_dir = root.join("attacker");
+        fs::create_dir_all(&trusted_dir).expect("trusted dir");
+        fs::create_dir_all(&attacker_dir).expect("attacker dir");
+        let trusted_certificate_der = ca_der("Trusted Fulcio Root");
+        let attacker_certificate_der = ca_der("Attacker Fulcio Root");
+        fs::write(
+            trusted_dir.join("fulcio-root.der"),
+            &trusted_certificate_der,
+        )
+        .expect("trusted cert");
+        fs::write(
+            attacker_dir.join("fulcio-root.der"),
+            &attacker_certificate_der,
+        )
+        .expect("attacker cert");
+        let policy_path = root.join("trust-policy.yaml");
+        let references = vec!["trusted/fulcio-root.der".to_string()];
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        assert!(!policy_declares_exact_ocsp_issuer(
+            &policy_path,
+            &references,
+            &attacker_certificate_der,
+            &mut evidence,
+            &mut reasons,
+        ));
+        assert!(reasons.contains(&"ocsp_status_issuer_declared_ca_identity_mismatch".to_string()));
+
+        reasons.clear();
+        assert!(policy_declares_exact_ocsp_issuer(
+            &policy_path,
+            &references,
+            &trusted_certificate_der,
+            &mut evidence,
+            &mut reasons,
+        ));
+        assert!(reasons.is_empty());
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 }

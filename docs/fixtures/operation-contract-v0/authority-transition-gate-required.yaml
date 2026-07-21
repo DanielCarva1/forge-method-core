@@ -1,0 +1,108 @@
+operation_contract:
+  schema_version: "0.1"
+  contract_id: "op_fixture_authority_transition_gate_required"
+  created_at: "2026-07-20T00:00:00Z"
+  project_ref:
+    root: "."
+    project_id: "forge-method-rust"
+    state_version: 1
+  source:
+    host: "codex"
+    surface: "cli_json"
+    operation: "guide"
+    human_input_digest: "sha256:fixture"
+  autonomy:
+    mode: "execute"
+    rationale: "exercise an explicitly declared authority boundary without granting it authority"
+  recommendation:
+    next_actor: "host_agent"
+    next_operation: "record_artifact"
+    host_action: "call_operation"
+    phase: "4-build-verify"
+    workflow: "build-story"
+    action: "record_authority_transition_candidate"
+  authority:
+    mutation_policy: "allowed"
+    side_effect_policy: "write_project_files"
+    authority_sources:
+      - "operation_contract"
+      - "lane_claim"
+    authority_evidence:
+      - kind: "lane_claim"
+        ref: "contracts/claims/story-v2-010-active-claim.yaml"
+    missing_authority: []
+  coordination_scope:
+    target:
+      kind: "artifact"
+      id: "authority-transition-candidate"
+      product_area: "runtime-core"
+      paths:
+        - ".forge-method/artifacts/authority-transition-candidate.yaml"
+    concurrency:
+      expected_state_version: 1
+      agent_id: null
+      caller_role: "driver"
+      fleet_mode: false
+      registry_ref: null
+    write_authority:
+      requires_driver_claim: false
+      requires_lane_claim: true
+      claim_contract_ref: "contracts/claims/story-v2-010-active-claim.yaml"
+    completion:
+      must_check_completion: false
+      completion_contract_ref: null
+  execution_policy:
+    mode: "single_step"
+    max_steps: 1
+    retry_policy:
+      max_attempts: 0
+      on_failure: "stop"
+    branch_policy:
+      allowed_branches: []
+      default_branch: "stop"
+  stop_policy:
+    stop_when:
+      - "human_input_required"
+      - "gate_failed"
+    on_stop:
+      next_actor: "human"
+      next_operation: null
+      host_action: "show_status"
+  request: null
+  decision_close: null
+  runtime_handoff: null
+  allowed_actions:
+    - "record_evidence"
+  forbidden_actions:
+    - "activate_authority"
+    - "sign_artifact"
+    - "copy_private_key"
+  human:
+    input_requirement: "none"
+    prompt:
+      mode: "none"
+      text: ""
+      options: []
+    tone_contract: "curious_direct"
+  loads:
+    required: []
+    optional: []
+  gates:
+    required_before_mutation:
+      - scope: "authority"
+        gate_contract_ref: "contracts/gates/authority-transition-pass-gate.yaml"
+        reason: "authority transitions require an exact human-reviewed authority gate"
+    current_gate_status: "pending"
+    gate_contract_refs:
+      - "contracts/gates/authority-transition-pass-gate.yaml"
+  stop_conditions:
+    - "execution_step_limit_reached"
+    - "gate_failed"
+  command_refs: []
+  effect_contract_refs:
+    - "contracts/effects/story-artifact-write-effect.yaml"
+  risk_boundaries:
+    - "authority"
+  diagnostics:
+    warnings: []
+    errors: []

@@ -9,7 +9,7 @@ Workspace members: **23**
 |---|---|---|---|
 | `forge-contract-validator` | `crates/forge-contract-validator` | bin, test | forge-core-cli |
 | `forge-core-authority` | `crates/forge-core-authority` | lib, test | forge-core-command-surface, forge-core-contracts, forge-core-decisions |
-| `forge-core-cli` | `crates/forge-core-cli` | lib, bin, test | forge-core-authority, forge-core-command-surface, forge-core-contracts, forge-core-crypto, forge-core-decisions, forge-core-domain-pack-learning-store, forge-core-domain-pack-tcb, forge-core-eval, forge-core-eval-harness, forge-core-governance, forge-core-graph, forge-core-kernel, forge-core-memory, forge-core-protocol-mcp, forge-core-research, forge-core-store, forge-core-trace, forge-core-validate |
+| `forge-core-cli` | `crates/forge-core-cli` | lib, bin, test | forge-core-authority, forge-core-command-surface, forge-core-contracts, forge-core-crypto, forge-core-decisions, forge-core-domain-pack-learning-store, forge-core-domain-pack-tcb, forge-core-eval, forge-core-eval-harness, forge-core-eventlog, forge-core-governance, forge-core-graph, forge-core-kernel, forge-core-memory, forge-core-protocol-mcp, forge-core-research, forge-core-store, forge-core-trace, forge-core-validate, forge-core-workflow-governance-tcb |
 | `forge-core-command-surface` | `crates/forge-core-command-surface` | lib, example | - |
 | `forge-core-contracts` | `crates/forge-core-contracts` | lib, test | - |
 | `forge-core-crypto` | `crates/forge-core-crypto` | lib, test, bench | forge-core-contracts |
@@ -18,15 +18,15 @@ Workspace members: **23**
 | `forge-core-domain-pack-tcb` | `crates/forge-core-domain-pack-tcb` | lib, test | forge-core-authority, forge-core-contracts, forge-core-decisions, forge-core-store |
 | `forge-core-eval` | `crates/forge-core-eval` | lib | forge-core-contracts, forge-core-validate |
 | `forge-core-eval-harness` | `crates/forge-core-eval-harness` | lib | forge-core-contracts, forge-core-eval, forge-core-validate |
-| `forge-core-eventlog` | `crates/forge-core-eventlog` | lib | forge-core-store |
-| `forge-core-governance` | `crates/forge-core-governance` | lib | forge-core-contracts, forge-core-eventlog, forge-core-store |
+| `forge-core-eventlog` | `crates/forge-core-eventlog` | lib | forge-core-contracts, forge-core-store |
+| `forge-core-governance` | `crates/forge-core-governance` | lib | forge-core-eventlog |
 | `forge-core-graph` | `crates/forge-core-graph` | lib, test | forge-core-contracts, forge-core-validate |
 | `forge-core-kernel` | `crates/forge-core-kernel` | lib, test | forge-core-authority, forge-core-contracts, forge-core-decisions, forge-core-domain-pack-tcb, forge-core-store, forge-core-trace, forge-core-validate, forge-core-workflow-governance-tcb |
-| `forge-core-memory` | `crates/forge-core-memory` | lib, test | forge-core-contracts, forge-core-eventlog, forge-core-store |
+| `forge-core-memory` | `crates/forge-core-memory` | lib, test | forge-core-eventlog, forge-core-contracts |
 | `forge-core-protocol-mcp` | `crates/forge-core-protocol-mcp` | lib, test | forge-core-authority, forge-core-command-surface, forge-core-contracts, forge-core-decisions, forge-core-kernel, forge-core-research, forge-core-store, forge-core-validate |
-| `forge-core-research` | `crates/forge-core-research` | lib | forge-core-contracts, forge-core-eventlog, forge-core-store, forge-core-validate |
+| `forge-core-research` | `crates/forge-core-research` | lib | forge-core-eventlog, forge-core-validate, forge-core-contracts |
 | `forge-core-schema` | `crates/forge-core-schema` | lib, bin, test | forge-core-contracts |
-| `forge-core-store` | `crates/forge-core-store` | lib, test, bench | forge-core-contracts, forge-core-trace, forge-core-validate |
+| `forge-core-store` | `crates/forge-core-store` | lib, test, bench | forge-core-authority, forge-core-contracts, forge-core-trace, forge-core-validate |
 | `forge-core-trace` | `crates/forge-core-trace` | lib | - |
 | `forge-core-validate` | `crates/forge-core-validate` | lib, test, bench | forge-core-contracts |
 | `forge-core-workflow-governance-tcb` | `crates/forge-core-workflow-governance-tcb` | lib, test | forge-core-contracts, forge-core-store |

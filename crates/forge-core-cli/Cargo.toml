@@ -28,6 +28,7 @@ forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-crypto = { path = "../forge-core-crypto" }
 forge-core-eval = { path = "../forge-core-eval" }
 forge-core-eval-harness = { path = "../forge-core-eval-harness" }
+forge-core-eventlog = { path = "../forge-core-eventlog" }
 forge-core-decisions = { path = "../forge-core-decisions" }
 forge-core-domain-pack-tcb = { path = "../forge-core-domain-pack-tcb" }
 forge-core-domain-pack-learning-store = { path = "../forge-core-domain-pack-learning-store" }
@@ -48,6 +49,7 @@ libc.workspace = true
 p256.workspace = true
 rasn.workspace = true
 rasn-ocsp.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_canonicalizer.workspace = true

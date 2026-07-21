@@ -1,3 +1,5 @@
+#![allow(clippy::missing_errors_doc)]
+
 //! Versioned bootstrap state-loss diagnosis and non-conflated recovery choices.
 //!
 //! The types in this module are diagnostic output, not authorization to mutate.

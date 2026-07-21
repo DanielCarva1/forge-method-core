@@ -1,20 +1,23 @@
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,
-    domain_pack_registry_signing_bytes, domain_pack_registry_snapshot_digest,
+    domain_pack_cumulative_revocation_digest, domain_pack_package_record_digest,
+    domain_pack_publisher_signing_bytes, domain_pack_registry_signing_bytes,
+    domain_pack_registry_snapshot_digest, select_domain_pack_supply_chain_record,
     verify_domain_pack_supply_chain_snapshot, DomainPackRegistryAnchor,
     DomainPackRegistryAnchorAdvance, DomainPackSupplyChainAuditAuthority,
     DomainPackSupplyChainError,
 };
 use forge_core_contracts::{
-    DomainPackCandidateAuthority, DomainPackCoordinate, DomainPackCredentialStatus,
-    DomainPackIdentity, DomainPackNamespaceGrant, DomainPackPackageRevocation,
-    DomainPackPublisherCredential, DomainPackRegistryPackageRecord, DomainPackRegistrySignature,
-    DomainPackRegistryTrustKey, DomainPackRegistryTrustRole, DomainPackRevocationReason,
-    DomainPackSourceAssurance, DomainPackSupplyChainRegistry,
-    DomainPackSupplyChainRegistryDocument, DomainPackTrustDisposition, DomainPackTrustPolicy,
-    DomainPackTrustPolicyDocument, DomainPackTrustRule, StableId,
-    DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
+    DomainPackArtifactBinding, DomainPackCandidateAuthority, DomainPackCoordinate,
+    DomainPackCredentialStatus, DomainPackIdentity, DomainPackNamespaceGrant,
+    DomainPackPackageRevocation, DomainPackPublisherCredential, DomainPackRegistryArtifactSet,
+    DomainPackRegistryMirror, DomainPackRegistryMirrorTransport, DomainPackRegistryPackageRecord,
+    DomainPackRegistrySignature, DomainPackRegistryTrustKey, DomainPackRegistryTrustRole,
+    DomainPackRemoteArtifactDescriptor, DomainPackRemoteArtifactKind,
+    DomainPackRemoteArtifactMediaType, DomainPackRevocationReason, DomainPackSourceAssurance,
+    DomainPackSupplyChainRegistry, DomainPackSupplyChainRegistryDocument,
+    DomainPackTrustDisposition, DomainPackTrustPolicy, DomainPackTrustPolicyDocument,
+    DomainPackTrustRule, RepoPath, StableId, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
 };
 use std::fmt::Write as _;
 
@@ -28,6 +31,28 @@ fn id(value: &str) -> StableId {
 
 fn digest(byte: char) -> String {
     format!("sha256:{}", byte.to_string().repeat(64))
+}
+
+fn artifact(
+    kind: DomainPackRemoteArtifactKind,
+    logical_path: &str,
+    raw_digest: char,
+    canonical_digest: char,
+    byte_length: u64,
+    media_type: DomainPackRemoteArtifactMediaType,
+) -> DomainPackRemoteArtifactDescriptor {
+    let raw_sha256 = digest(raw_digest);
+    DomainPackRemoteArtifactDescriptor {
+        kind,
+        binding: DomainPackArtifactBinding {
+            artifact_ref: RepoPath(logical_path.to_owned()),
+            raw_sha256: raw_sha256.clone(),
+            canonical_sha256: digest(canonical_digest),
+        },
+        object_path: RepoPath(format!("objects/sha256/{}", &raw_sha256[7..])),
+        byte_length,
+        media_type,
+    }
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -48,6 +73,7 @@ struct Fixture {
 }
 
 impl Fixture {
+    #[allow(clippy::too_many_lines)]
     fn new() -> Self {
         let registry_keys = vec![
             (id("registry.key.a"), SigningKey::from_bytes(&[1_u8; 32])),
@@ -87,6 +113,40 @@ impl Fixture {
                 default_disposition: DomainPackTrustDisposition::Reject,
             },
         };
+        let artifacts = DomainPackRegistryArtifactSet {
+            manifest: artifact(
+                DomainPackRemoteArtifactKind::Manifest,
+                "packs/foundation/manifest.yaml",
+                '2',
+                'a',
+                48,
+                DomainPackRemoteArtifactMediaType::ApplicationYaml,
+            ),
+            content: artifact(
+                DomainPackRemoteArtifactKind::Content,
+                "packs/foundation/content.yaml",
+                '3',
+                'b',
+                96,
+                DomainPackRemoteArtifactMediaType::ApplicationYaml,
+            ),
+            license: artifact(
+                DomainPackRemoteArtifactKind::License,
+                "packs/foundation/LICENSE",
+                '4',
+                'c',
+                24,
+                DomainPackRemoteArtifactMediaType::TextPlain,
+            ),
+            fixtures: vec![artifact(
+                DomainPackRemoteArtifactKind::Fixture,
+                "packs/foundation/fixtures/base.json",
+                '5',
+                'd',
+                64,
+                DomainPackRemoteArtifactMediaType::ApplicationJson,
+            )],
+        };
         let record = DomainPackRegistryPackageRecord {
             identity: DomainPackIdentity {
                 publisher: id("publisher.fixture"),
@@ -95,10 +155,15 @@ impl Fixture {
                 version: "1.0.0".to_owned(),
             },
             package_digest: digest('1'),
-            manifest_digest: digest('2'),
-            content_digest: digest('3'),
-            license_digest: digest('4'),
-            fixture_digests: vec![digest('5')],
+            manifest_digest: artifacts.manifest.binding.raw_sha256.clone(),
+            content_digest: artifacts.content.binding.raw_sha256.clone(),
+            license_digest: artifacts.license.binding.raw_sha256.clone(),
+            fixture_digests: artifacts
+                .fixtures
+                .iter()
+                .map(|fixture| fixture.binding.raw_sha256.clone())
+                .collect(),
+            artifacts,
             namespace_grant_id: id("grant.publisher.fixture"),
             publisher_credential_id: id("publisher.credential.fixture"),
             publisher_signature_hex: "00".repeat(64),
@@ -130,6 +195,22 @@ impl Fixture {
                     valid_from_unix: 100,
                     valid_until_unix: 900,
                 }],
+                mirrors: vec![
+                    DomainPackRegistryMirror {
+                        mirror_id: id("mirror.primary"),
+                        priority: 0,
+                        transport: DomainPackRegistryMirrorTransport::Https {
+                            base_url: "https://registry.example.invalid/domain-packs".to_owned(),
+                        },
+                    },
+                    DomainPackRegistryMirror {
+                        mirror_id: id("mirror.operator-cache"),
+                        priority: 10,
+                        transport: DomainPackRegistryMirrorTransport::OperatorProvisionedLocal {
+                            location_id: id("operator.registry.cache"),
+                        },
+                    },
+                ],
                 packages: vec![record],
                 revocations: Vec::new(),
                 snapshot_digest: digest('0'),
@@ -184,6 +265,40 @@ impl Fixture {
         }
     }
 
+    fn refresh_snapshot_digest_without_resigning(&mut self) {
+        self.snapshot
+            .domain_pack_supply_chain_registry
+            .snapshot_digest =
+            domain_pack_registry_snapshot_digest(&self.snapshot).expect("snapshot digest");
+    }
+
+    fn revoke_record(&mut self, index: usize, explanation: &str) {
+        let record_digest = self.snapshot.domain_pack_supply_chain_registry.packages[index]
+            .record_digest
+            .clone();
+        self.snapshot
+            .domain_pack_supply_chain_registry
+            .revocations
+            .push(DomainPackPackageRevocation {
+                record_digest,
+                reason: DomainPackRevocationReason::PackageTamper,
+                explanation: explanation.to_owned(),
+                revoked_at_unix: 300,
+            });
+    }
+
+    fn add_unrelated_record(&mut self) {
+        let mut record = self.snapshot.domain_pack_supply_chain_registry.packages[0].clone();
+        record.identity.name = id("unrelated");
+        record.identity.namespace = id("sample.unrelated");
+        "2.0.0".clone_into(&mut record.identity.version);
+        self.snapshot
+            .domain_pack_supply_chain_registry
+            .packages
+            .push(record);
+        self.seal_record(1);
+    }
+
     fn set_generation(
         &mut self,
         generation: u64,
@@ -211,6 +326,66 @@ fn empty_anchor() -> DomainPackRegistryAnchor {
     .expect("valid anchor identity")
 }
 
+fn assert_signed_mirror_metadata_rejects<F>(mutate: F)
+where
+    F: FnOnce(&mut DomainPackSupplyChainRegistry),
+{
+    let mut fixture = Fixture::new();
+    let signer_key_id = fixture.registry_keys[0].0.clone();
+    let verifying_key = fixture.registry_keys[0].1.verifying_key();
+    let original_bytes = domain_pack_registry_signing_bytes(
+        &fixture.snapshot,
+        &signer_key_id,
+        DomainPackRegistryTrustRole::RegistrySigner,
+    )
+    .expect("original registry signing bytes");
+    let signature = fixture.registry_keys[0].1.sign(&original_bytes);
+
+    mutate(&mut fixture.snapshot.domain_pack_supply_chain_registry);
+    let tampered_bytes = domain_pack_registry_signing_bytes(
+        &fixture.snapshot,
+        &signer_key_id,
+        DomainPackRegistryTrustRole::RegistrySigner,
+    )
+    .expect("tampered registry signing bytes");
+    assert_ne!(original_bytes, tampered_bytes);
+    assert!(verifying_key
+        .verify_strict(&tampered_bytes, &signature)
+        .is_err());
+}
+
+fn assert_signed_descriptor_metadata_rejects<F>(mutate: F)
+where
+    F: FnOnce(&mut DomainPackRegistryPackageRecord),
+{
+    let mut fixture = Fixture::new();
+    let registry_id = fixture
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .registry_id
+        .clone();
+    let audience = fixture
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .audience
+        .clone();
+    let verifying_key = fixture.publisher_key.verifying_key();
+    let original_record = fixture.snapshot.domain_pack_supply_chain_registry.packages[0].clone();
+    let original_bytes =
+        domain_pack_publisher_signing_bytes(&registry_id, &audience, &original_record)
+            .expect("original publisher signing bytes");
+    let signature = fixture.publisher_key.sign(&original_bytes);
+
+    let record = &mut fixture.snapshot.domain_pack_supply_chain_registry.packages[0];
+    mutate(record);
+    let tampered_bytes = domain_pack_publisher_signing_bytes(&registry_id, &audience, record)
+        .expect("tampered publisher signing bytes");
+    assert_ne!(original_bytes, tampered_bytes);
+    assert!(verifying_key
+        .verify_strict(&tampered_bytes, &signature)
+        .is_err());
+}
+
 #[test]
 fn exact_threshold_snapshot_yields_only_opaque_supply_chain_assurance() {
     let fixture = Fixture::new();
@@ -223,6 +398,16 @@ fn exact_threshold_snapshot_yields_only_opaque_supply_chain_assurance() {
     assert_eq!(verified.generation(), 1);
     assert_eq!(verified.entries().len(), 1);
     assert_eq!(verified.grants().len(), 1);
+    assert_eq!(verified.mirrors().len(), 2);
+    assert_eq!(
+        verified.entries()[0]
+            .record()
+            .artifacts
+            .content
+            .binding
+            .canonical_sha256,
+        digest('b')
+    );
     assert_eq!(
         verified.entries()[0].record().record_digest,
         fixture.snapshot.domain_pack_supply_chain_registry.packages[0].record_digest
@@ -371,7 +556,7 @@ fn caller_selected_or_tampered_registry_signature_cannot_pass() {
 #[test]
 fn publisher_signature_binds_exact_record_and_registry_context() {
     let mut fixture = Fixture::new();
-    fixture.snapshot.domain_pack_supply_chain_registry.packages[0].license_digest = digest('a');
+    fixture.snapshot.domain_pack_supply_chain_registry.packages[0].package_digest = digest('a');
     let record = &mut fixture.snapshot.domain_pack_supply_chain_registry.packages[0];
     record.record_digest = domain_pack_package_record_digest(record).unwrap();
     fixture.seal_snapshot();
@@ -483,30 +668,25 @@ fn overlapping_cross_publisher_namespace_grants_are_rejected() {
 }
 
 #[test]
-fn revocation_and_same_version_equivocation_are_hard_failures() {
+fn revoked_history_is_verified_but_same_version_equivocation_is_rejected() {
     let mut fixture = Fixture::new();
-    let record_digest = fixture.snapshot.domain_pack_supply_chain_registry.packages[0]
-        .record_digest
-        .clone();
-    fixture
-        .snapshot
-        .domain_pack_supply_chain_registry
-        .revocations
-        .push(DomainPackPackageRevocation {
-            record_digest,
-            reason: DomainPackRevocationReason::PackageTamper,
-            explanation: "fixture revocation".to_owned(),
-            revoked_at_unix: 300,
-        });
+    fixture.revoke_record(0, "fixture revocation");
     fixture.seal_snapshot();
-    assert!(matches!(
-        verify_domain_pack_supply_chain_snapshot(&fixture.policy, &fixture.snapshot, NOW),
-        Err(DomainPackSupplyChainError::RevokedRecord { .. })
+    let verified = fixture.verify();
+    assert_eq!(verified.entries().len(), 1);
+    assert!(verified.is_currently_revoked(
+        &fixture.snapshot.domain_pack_supply_chain_registry.packages[0].record_digest
     ));
+    assert_eq!(verified.audit().current_revocations.len(), 1);
 
     let mut fixture = Fixture::new();
     let mut divergent = fixture.snapshot.domain_pack_supply_chain_registry.packages[0].clone();
-    divergent.content_digest = digest('a');
+    divergent.content_digest = digest('e');
+    divergent.artifacts.content.binding.raw_sha256 = digest('e');
+    divergent.artifacts.content.object_path = RepoPath(format!(
+        "objects/sha256/{}",
+        &divergent.artifacts.content.binding.raw_sha256[7..]
+    ));
     divergent.record_digest = domain_pack_package_record_digest(&divergent).unwrap();
     let registry = &fixture.snapshot.domain_pack_supply_chain_registry;
     let bytes =
@@ -763,4 +943,413 @@ fn anchor_rejects_replay_and_successor_verified_under_a_swapped_trust_policy() {
         anchor.compare_and_advance(&expected, legitimate_successor.verify()),
         Ok(DomainPackRegistryAnchorAdvance::Advanced(_))
     ));
+}
+
+#[test]
+fn every_signed_mirror_and_descriptor_field_invalidates_its_signature() {
+    assert_signed_mirror_metadata_rejects(|registry| {
+        registry.mirrors[0].mirror_id = id("mirror.renamed");
+    });
+    assert_signed_mirror_metadata_rejects(|registry| {
+        registry.mirrors.swap(0, 1);
+    });
+    assert_signed_mirror_metadata_rejects(|registry| {
+        registry.mirrors[0].priority = 1;
+    });
+    assert_signed_mirror_metadata_rejects(|registry| {
+        registry.mirrors[0].transport = DomainPackRegistryMirrorTransport::Https {
+            base_url: "https://mirror.example.invalid/domain-packs".to_owned(),
+        };
+    });
+    assert_signed_mirror_metadata_rejects(|registry| {
+        registry.mirrors[1].transport =
+            DomainPackRegistryMirrorTransport::OperatorProvisionedLocal {
+                location_id: id("operator.registry.alternate-cache"),
+            };
+    });
+
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.kind = DomainPackRemoteArtifactKind::Fixture;
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.binding.artifact_ref =
+            RepoPath("packs/foundation/content-renamed.yaml".to_owned());
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.object_path = RepoPath("objects/sha256/alternate".to_owned());
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.binding.raw_sha256 = digest('e');
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.binding.canonical_sha256 = digest('e');
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.byte_length += 1;
+    });
+    assert_signed_descriptor_metadata_rejects(|record| {
+        record.artifacts.content.media_type = DomainPackRemoteArtifactMediaType::TextPlain;
+    });
+}
+
+#[test]
+fn signed_mirror_and_descriptor_metadata_tampering_fails_closed() {
+    let mut mirror_tamper = Fixture::new();
+    mirror_tamper
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .mirrors[0]
+        .priority = 9;
+    mirror_tamper.refresh_snapshot_digest_without_resigning();
+    assert!(matches!(
+        verify_domain_pack_supply_chain_snapshot(
+            &mirror_tamper.policy,
+            &mirror_tamper.snapshot,
+            NOW
+        ),
+        Err(DomainPackSupplyChainError::RegistrySignatureInvalid { .. })
+    ));
+
+    let mut location_tamper = Fixture::new();
+    location_tamper
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .mirrors[1]
+        .transport = DomainPackRegistryMirrorTransport::OperatorProvisionedLocal {
+        location_id: id("operator.registry.changed"),
+    };
+    location_tamper.refresh_snapshot_digest_without_resigning();
+    assert!(matches!(
+        verify_domain_pack_supply_chain_snapshot(
+            &location_tamper.policy,
+            &location_tamper.snapshot,
+            NOW
+        ),
+        Err(DomainPackSupplyChainError::RegistrySignatureInvalid { .. })
+    ));
+
+    let mut descriptor_tamper = Fixture::new();
+    let record = &mut descriptor_tamper
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .packages[0];
+    record.artifacts.content.binding.canonical_sha256 = digest('f');
+    record.artifacts.content.byte_length = 97;
+    record.artifacts.content.media_type = DomainPackRemoteArtifactMediaType::ApplicationJson;
+    record.record_digest = domain_pack_package_record_digest(record).expect("record digest");
+    descriptor_tamper.seal_snapshot();
+    assert!(matches!(
+        verify_domain_pack_supply_chain_snapshot(
+            &descriptor_tamper.policy,
+            &descriptor_tamper.snapshot,
+            NOW
+        ),
+        Err(DomainPackSupplyChainError::PublisherSignatureInvalid { .. })
+    ));
+
+    let mut raw_path_tamper = Fixture::new();
+    let record = &mut raw_path_tamper
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .packages[0];
+    record.artifacts.license.binding.raw_sha256 = digest('e');
+    record.artifacts.license.object_path = RepoPath(format!(
+        "objects/sha256/{}",
+        &record.artifacts.license.binding.raw_sha256[7..]
+    ));
+    record.license_digest = record.artifacts.license.binding.raw_sha256.clone();
+    record.record_digest = domain_pack_package_record_digest(record).expect("record digest");
+    raw_path_tamper.seal_snapshot();
+    assert!(matches!(
+        verify_domain_pack_supply_chain_snapshot(
+            &raw_path_tamper.policy,
+            &raw_path_tamper.snapshot,
+            NOW
+        ),
+        Err(DomainPackSupplyChainError::PublisherSignatureInvalid { .. })
+    ));
+}
+
+#[test]
+fn historical_revocations_remain_visible_but_only_block_revoked_selection() {
+    let mut fixture = Fixture::new();
+    fixture.add_unrelated_record();
+    fixture.revoke_record(0, "historical tamper evidence");
+    fixture
+        .policy
+        .domain_pack_trust_policy
+        .rules
+        .push(DomainPackTrustRule {
+            rule_id: id("rule.allow.unrelated"),
+            pack: DomainPackCoordinate {
+                publisher: id("publisher.fixture"),
+                name: id("unrelated"),
+            },
+            package_digest: None,
+            content_digest: None,
+            disposition: DomainPackTrustDisposition::InspectOnly,
+        });
+    fixture.seal_snapshot();
+    let verified = fixture.verify();
+    assert_eq!(verified.entries().len(), 2);
+    assert_eq!(verified.current_revocations().len(), 1);
+
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, verified)
+        .expect("revoked history does not invalidate the whole snapshot")
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let revoked = &fixture.snapshot.domain_pack_supply_chain_registry.packages[0];
+    assert!(matches!(
+        select_domain_pack_supply_chain_record(&anchored, revoked, &fixture.policy, NOW),
+        Err(DomainPackSupplyChainError::RevokedRecord { .. })
+    ));
+    let unrelated = &fixture.snapshot.domain_pack_supply_chain_registry.packages[1];
+    let selected =
+        select_domain_pack_supply_chain_record(&anchored, unrelated, &fixture.policy, NOW)
+            .expect("unrelated current record remains selectable");
+    assert_eq!(selected.record_digest(), unrelated.record_digest);
+    assert_eq!(anchored.audit().cumulative_revocations.len(), 1);
+}
+
+#[test]
+fn revocation_facts_are_cumulative_across_advancement_replay_and_restoration() {
+    let genesis = Fixture::new();
+    let genesis_digest = genesis
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .snapshot_digest
+        .clone();
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    anchor
+        .compare_and_advance(&version, genesis.verify())
+        .expect("accept genesis");
+
+    let mut successor = Fixture::new();
+    successor.set_generation(2, Some(genesis_digest.clone()), "1.0.1");
+    successor.revoke_record(0, "new cumulative fact");
+    successor.seal_snapshot();
+    let successor_digest = successor
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .snapshot_digest
+        .clone();
+    let version = anchor.version();
+    anchor
+        .compare_and_advance(&version, successor.verify())
+        .expect("successor may add a revocation");
+    assert_eq!(
+        anchor.version().cumulative_revocation_digest(),
+        domain_pack_cumulative_revocation_digest(
+            &successor
+                .snapshot
+                .domain_pack_supply_chain_registry
+                .revocations
+        )
+        .expect("cumulative digest")
+    );
+
+    let replay = {
+        let mut fixture = Fixture::new();
+        fixture.set_generation(2, Some(genesis_digest.clone()), "1.0.1");
+        fixture.revoke_record(0, "new cumulative fact");
+        fixture.seal_snapshot();
+        fixture
+    };
+    let version = anchor.version();
+    assert!(matches!(
+        anchor.compare_and_advance(&version, replay.verify()),
+        Ok(DomainPackRegistryAnchorAdvance::Replay { .. })
+    ));
+
+    let mut removal = Fixture::new();
+    removal.set_generation(3, Some(successor_digest.clone()), "1.0.2");
+    let version = anchor.version();
+    assert!(matches!(
+        anchor.compare_and_advance(&version, removal.verify()),
+        Err(DomainPackSupplyChainError::RegistryAnchorCumulativeRevocationMismatch { .. })
+    ));
+
+    let mut mutation = Fixture::new();
+    mutation.set_generation(3, Some(successor_digest), "1.0.2");
+    mutation.revoke_record(0, "mutated explanation");
+    mutation.seal_snapshot();
+    let version = anchor.version();
+    assert!(matches!(
+        anchor.compare_and_advance(&version, mutation.verify()),
+        Err(DomainPackSupplyChainError::RegistryAnchorCumulativeRevocationMismatch { .. })
+    ));
+
+    let restored = DomainPackRegistryAnchor::from_operator_protected_head(
+        id("registry.domain-pack.test"),
+        id("forge.domain-pack.project.test"),
+        2,
+        replay
+            .snapshot
+            .domain_pack_supply_chain_registry
+            .snapshot_digest
+            .clone(),
+        replay.verify().trust_policy_digest().to_owned(),
+        replay
+            .snapshot
+            .domain_pack_supply_chain_registry
+            .revocations
+            .clone(),
+        domain_pack_cumulative_revocation_digest(
+            &replay
+                .snapshot
+                .domain_pack_supply_chain_registry
+                .revocations,
+        )
+        .expect("canonical protected-head digest"),
+    )
+    .expect("operator head binds cumulative facts");
+    assert_eq!(
+        restored.version().cumulative_revocation_digest(),
+        anchor.version().cumulative_revocation_digest()
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn selected_record_uses_exact_policy_rules_defaults_and_ambiguous_rejection() {
+    let mut pinned = Fixture::new();
+    let record = pinned.snapshot.domain_pack_supply_chain_registry.packages[0].clone();
+    pinned.policy.domain_pack_trust_policy.rules[0].package_digest =
+        Some(record.package_digest.clone());
+    pinned.policy.domain_pack_trust_policy.rules[0].content_digest =
+        Some(record.artifacts.content.binding.canonical_sha256.clone());
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, pinned.verify())
+        .expect("accept digest-pinned policy")
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let selected = select_domain_pack_supply_chain_record(&anchored, &record, &pinned.policy, NOW)
+        .expect("matching allow rule selects record");
+    assert_eq!(
+        selected.disposition(),
+        DomainPackTrustDisposition::InspectOnly
+    );
+    assert_eq!(selected.trust_rule_id().0, "rule.allow.fixture");
+
+    let mut reject = Fixture::new();
+    reject.policy.domain_pack_trust_policy.rules[0].disposition =
+        DomainPackTrustDisposition::Reject;
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, reject.verify())
+        .unwrap()
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let record = &reject.snapshot.domain_pack_supply_chain_registry.packages[0];
+    assert!(matches!(
+        select_domain_pack_supply_chain_record(&anchored, record, &reject.policy, NOW),
+        Err(DomainPackSupplyChainError::SelectedRecordRejected { .. })
+    ));
+
+    let mut default = Fixture::new();
+    default.policy.domain_pack_trust_policy.rules.clear();
+    default.policy.domain_pack_trust_policy.default_disposition =
+        DomainPackTrustDisposition::InspectOnly;
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, default.verify())
+        .unwrap()
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let record = &default.snapshot.domain_pack_supply_chain_registry.packages[0];
+    let selected = select_domain_pack_supply_chain_record(&anchored, record, &default.policy, NOW)
+        .expect("permissive explicit default selects record");
+    assert_eq!(
+        selected.trust_rule_id().0,
+        "domain-pack.trust.default-disposition"
+    );
+
+    let mut ambiguous = Fixture::new();
+    let mut conflicting = ambiguous.policy.domain_pack_trust_policy.rules[0].clone();
+    conflicting.rule_id = id("rule.conflicting");
+    conflicting.disposition = DomainPackTrustDisposition::Reject;
+    ambiguous
+        .policy
+        .domain_pack_trust_policy
+        .rules
+        .push(conflicting);
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, ambiguous.verify())
+        .unwrap()
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let record = &ambiguous
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .packages[0];
+    assert!(matches!(
+        select_domain_pack_supply_chain_record(&anchored, record, &ambiguous.policy, NOW),
+        Err(DomainPackSupplyChainError::SelectedRecordAmbiguousTrustRule { .. })
+    ));
+
+    let mut reordered = Fixture::new();
+    let mut conflicting = reordered.policy.domain_pack_trust_policy.rules[0].clone();
+    conflicting.rule_id = id("rule.conflicting");
+    conflicting.disposition = DomainPackTrustDisposition::Reject;
+    reordered
+        .policy
+        .domain_pack_trust_policy
+        .rules
+        .insert(0, conflicting);
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, reordered.verify())
+        .unwrap()
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let record = &reordered
+        .snapshot
+        .domain_pack_supply_chain_registry
+        .packages[0];
+    assert!(matches!(
+        select_domain_pack_supply_chain_record(&anchored, record, &reordered.policy, NOW),
+        Err(DomainPackSupplyChainError::SelectedRecordAmbiguousTrustRule { .. })
+    ));
+}
+
+#[test]
+fn audit_evidence_is_non_authoritative_and_contains_no_artifact_bytes() {
+    let fixture = Fixture::new();
+    let mut anchor = empty_anchor();
+    let version = anchor.version();
+    let anchored = match anchor
+        .compare_and_advance(&version, fixture.verify())
+        .unwrap()
+    {
+        DomainPackRegistryAnchorAdvance::Advanced(capability) => capability,
+        DomainPackRegistryAnchorAdvance::Replay { .. } => panic!("genesis cannot replay"),
+    };
+    let audit = anchored.audit();
+    let json = serde_json::to_string(&audit).expect("audit JSON");
+    assert!(json.contains("non_authoritative"));
+    assert!(!json.contains("publisher_signature_hex"));
+    assert!(!json.contains("https://"));
 }

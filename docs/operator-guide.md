@@ -101,17 +101,13 @@ forge-core workflow credential provision --root <repo> \
   --agent-id agent.workflow.human-console --profile human --json
 
 forge-core workflow credential status --root <repo> --json
-forge-core workflow credential sign --root <repo> \
-  --credential-id credential.workflow.local-human \
-  --kind applicability --request-file <request.json> \
-  --output-file <attestation.json> --json
 ```
 
 Closed profiles are `human`, `agent` (alias `reviewer`), and `runtime`; each
 receives only its role-compatible grants. Use `rotate --replaces <old-id>` or
-`revoke --credential-id <id>` for lifecycle changes. The low-level `sign` plus
-`*-authorize` lane remains an expert compatibility surface, not the normal
-agent-native path.
+`revoke --credential-id <id>` for lifecycle changes. Reusable credential
+signing and the legacy `*-authorize` commands are retired; local credentials
+are consumed only inside the packet-bound `workflow action authorize` path.
 
 For a packet whose returned approval boundary is exactly
 `operator_credential_broker`, the cooperative local lane can avoid intermediate
@@ -136,23 +132,27 @@ approval boundary outside the agent process.
 
 ### Enroll an external origin broker
 
-The P7a.2 source surface stores only a broker public key and a content digest
-of the operator's out-of-agent enrollment record. The host retains the private
-key and authenticates the inbound human, reviewer, or runtime subject:
+The P7a.2 source surface stores only a strict public broker registry and
+content-free administration receipts. The host retains private keys and must
+authenticate the inbound human, reviewer, or runtime subject. Genesis requires
+a preconfigured external operator trust anchor from a selected-host adapter:
 
 ```bash
-forge-core workflow broker trust --root <repo> \
-  --issuer-id broker.host.human.v1 --profile human \
-  --public-key-file <ed25519-public-key-hex> \
-  --ceremony-ref operator://enrollment/human/v1 \
-  --ceremony-file <operator-enrollment-record> --json
+forge-core workflow broker initialize --root <repo> \
+  --registry-file <strict-generation-one-registry.yaml> \
+  --authorization-file <signed-native-admin.json> --json
 
 forge-core workflow action-packets --root <repo> --json
 forge-core workflow action apply --root <repo> \
   --origin-envelope-file <host-signed-origin-event.json> --json
 ```
 
-Use `workflow broker rotate|revoke|status` for lifecycle changes. Broker event
+The current host-independent build has `selected_host: none`, so broker
+`initialize` fails closed as `blocked_external` rather than trusting keys from
+the proposed registry or authorization envelope. After an exact host is
+selected and its external anchor adapter is separately implemented and
+verified, use `workflow broker register|rotate|revoke|status` for lifecycle
+changes. Broker event
 `0.2` carries a closed semantic answer plus signed opaque host event/session/
 interaction provenance, never raw transcript content; frozen `0.1` is recovery-
 only. Forge regenerates the current packet and derives policy, phase, evaluator,
@@ -312,11 +312,12 @@ deterministic diagnosis digest is correlation data, never authorization. The
 three choices are intentionally non-conflated:
 
 - `inspect` is available and read-only; its argv resolves Project Link metadata;
-- `restore_verified_backup` restores prior authority but is deferred until the
-  complete-state verified restore protocol ships, so it has no apply argv;
+- `restore_verified_backup` identifies restoration of prior authority but does
+  not silently grant or execute it; operators use the explicit preflight command
+  named `forge-core restore preflight` and the apply command named `forge-core restore apply`;
 - `reinitialize_as_new` abandons prior authority and creates unrelated authority.
-  It is deferred, has no apply argv, requires explicit operator confirmation, and
-  requires a new project identity and authority location.
+  It remains deferred, has no apply argv, requires explicit operator confirmation,
+  and requires a new project identity and authority location.
 
 `start`, repeated agent sessions, and `project init` never restore, reinitialize,
 or normalize linked missing/partial state. Fresh initialization also rejects
@@ -327,11 +328,26 @@ concurrent link is never overwritten or seeded. These guarantees cover static
 substitution and cooperating initializers. As with all local confinement, a
 hostile process under the same OS principal can replace reserved paths after
 validation; isolate hostile tenants as described in the
-[security boundary](#security-boundary). Forge does not yet ship the required
-complete-state backup/verify/restore or durable reinitialize plan/apply
-operation, so preserve the coordinated backup and obtain an explicit recovery
-plan rather than copying individual files. Existing typed recovery commands are
-valid only when their authority state is present and inspectable:
+[security boundary](#security-boundary).
+
+The public C2.2 source owns complete-state backup verification and restoration.
+Use one configured authority identity throughout, keep public registries with the
+archive, and keep every external broker private key in its owner-specific backup
+procedure rather than Forge state or Forge backups:
+
+```bash
+forge-core backup create --root <project> --archive <path> --authority <configured-id>
+forge-core backup verify --root <project> --archive <path> --authority <configured-id>
+forge-core restore preflight --root <project> --archive <path> --authority <configured-id>
+forge-core restore apply --root <project> --archive <path> --authority <configured-id>
+```
+
+These source paths and their adversarial test targets compile. Runtime execution,
+interruption and mixed-version campaigns, failure injection, platform matrices,
+hosted CI, release, and field evidence remain pending. Durable
+reinitialize-as-new plan/apply is still a separate open operation. Existing typed
+recovery commands remain valid only when their authority state is present and
+inspectable:
 
 ```bash
 forge-core start --root <project> --json

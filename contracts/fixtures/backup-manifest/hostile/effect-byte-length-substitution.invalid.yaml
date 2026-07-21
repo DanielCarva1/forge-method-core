@@ -211,6 +211,20 @@
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
+        "material": "domain_pack_generation_catalog",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 41,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_catalog",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/catalog.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 42,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
         "byte_length": 23,
         "entry_type": "regular_file",
         "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/lock.yaml",
@@ -532,7 +546,6 @@
       "mcp_private_keys"
     ],
     "format": "forge_project_state_backup_v1",
-    "manifest_set_digest": "sha256:0612583e706c14b32c7a343d404f558523e8ed0a281b7c609aebab4f52afc4aa",
     "project": {
       "archive_layout": {
         "project_link_archive_path": "project/.forge-method.yaml",
@@ -694,7 +707,8 @@
       "release_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "release_id": "workflow-governance.release.v1",
       "release_version": "1.0.0"
-    }
+    },
+    "manifest_set_digest": "sha256:c3214f9dcb3661825128807428931e969e140acc798098f9ae33865a50f07c88"
   },
   "schema_version": "forge_project_state_backup_manifest_v1"
 }

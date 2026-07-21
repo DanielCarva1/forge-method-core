@@ -1,8 +1,15 @@
 use forge_core_contracts::*;
 use forge_core_decisions::resolve_domain_packs;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 fn digest(seed: u64) -> String {
     format!("sha256:{seed:064x}")
+}
+
+fn canonical_digest<T: Serialize>(value: &T) -> String {
+    let bytes = serde_json_canonicalizer::to_vec(value).expect("canonical JSON");
+    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 fn p6a_request() -> DomainPackCompositionRequestDocument {
@@ -47,6 +54,63 @@ fn candidate(version: &str, seed: u64) -> DomainPackResolutionCandidate {
     }
 }
 
+fn descriptor(
+    kind: DomainPackRemoteArtifactKind,
+    binding: DomainPackArtifactBinding,
+    media_type: DomainPackRemoteArtifactMediaType,
+) -> DomainPackRemoteArtifactDescriptor {
+    DomainPackRemoteArtifactDescriptor {
+        kind,
+        object_path: RepoPath(format!(
+            "objects/sha256/{}",
+            &binding.raw_sha256["sha256:".len()..]
+        )),
+        binding,
+        // The inherited P6 fixture has synthetic SHA-256 pins rather than
+        // retained bytes. This is a positive nonzero descriptor bound to its
+        // exact package pin; remote byte verification owns the actual size.
+        byte_length: 32,
+        media_type,
+    }
+}
+
+fn record_artifacts(package: &DomainPackPackageBinding) -> DomainPackRegistryArtifactSet {
+    let content = DomainPackArtifactBinding {
+        artifact_ref: package.content.content_ref.clone(),
+        raw_sha256: package.content.raw_sha256.clone(),
+        canonical_sha256: package.content.canonical_sha256.clone(),
+    };
+    DomainPackRegistryArtifactSet {
+        manifest: descriptor(
+            DomainPackRemoteArtifactKind::Manifest,
+            package.manifest.clone(),
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        content: descriptor(
+            DomainPackRemoteArtifactKind::Content,
+            content,
+            DomainPackRemoteArtifactMediaType::ApplicationYaml,
+        ),
+        license: descriptor(
+            DomainPackRemoteArtifactKind::License,
+            package.license.clone(),
+            DomainPackRemoteArtifactMediaType::TextPlain,
+        ),
+        fixtures: package
+            .fixtures
+            .iter()
+            .cloned()
+            .map(|binding| {
+                descriptor(
+                    DomainPackRemoteArtifactKind::Fixture,
+                    binding,
+                    DomainPackRemoteArtifactMediaType::ApplicationYaml,
+                )
+            })
+            .collect(),
+    }
+}
+
 fn record(candidate: &DomainPackResolutionCandidate) -> DomainPackRegistryPackageRecord {
     DomainPackRegistryPackageRecord {
         identity: candidate
@@ -56,15 +120,16 @@ fn record(candidate: &DomainPackResolutionCandidate) -> DomainPackRegistryPackag
             .identity
             .clone(),
         package_digest: candidate.package.package_digest.clone(),
-        manifest_digest: candidate.package.manifest.canonical_sha256.clone(),
-        content_digest: candidate.package.content.canonical_sha256.clone(),
-        license_digest: candidate.package.license.canonical_sha256.clone(),
+        manifest_digest: candidate.package.manifest.raw_sha256.clone(),
+        content_digest: candidate.package.content.raw_sha256.clone(),
+        license_digest: candidate.package.license.raw_sha256.clone(),
         fixture_digests: candidate
             .package
             .fixtures
             .iter()
-            .map(|fixture| fixture.canonical_sha256.clone())
+            .map(|fixture| fixture.raw_sha256.clone())
             .collect(),
+        artifacts: record_artifacts(&candidate.package),
         namespace_grant_id: StableId("grant.fixture".to_owned()),
         publisher_credential_id: StableId("credential.fixture".to_owned()),
         publisher_signature_hex: "00".repeat(64),
@@ -98,6 +163,13 @@ fn registry(candidates: &[DomainPackResolutionCandidate]) -> DomainPackSupplyCha
                 namespace_prefix: StableId("sample".to_owned()),
                 valid_from_unix: 0,
                 valid_until_unix: 300,
+            }],
+            mirrors: vec![DomainPackRegistryMirror {
+                mirror_id: StableId("mirror.resolution.fixture".to_owned()),
+                priority: 0,
+                transport: DomainPackRegistryMirrorTransport::Https {
+                    base_url: "https://registry.example.invalid/domain-packs".to_owned(),
+                },
             }],
             packages: candidates.iter().map(record).collect(),
             revocations: Vec::new(),
@@ -161,48 +233,50 @@ fn exact_lock(
         .domain_pack_manifest
         .identity
         .clone();
+    let payload = DomainPackExactLockPayload {
+        project_id: request.domain_pack_resolution_request.project_id.clone(),
+        core: request.domain_pack_resolution_request.core.clone(),
+        requirements_digest: digest(101),
+        roots: request.domain_pack_resolution_request.roots.clone(),
+        registry_snapshot_digest: digest(9_000),
+        reviewer_registry_digest: digest(9_001),
+        reviewed_registry_digest: digest(9_002),
+        trust_policy_digest: digest(102),
+        capability_registry_digest: digest(103),
+        sandbox_policy_digest: digest(104),
+        resolution_digest: digest(105),
+        composition_digest: digest(106),
+        unresolved_composition_gaps: vec![],
+        packages: vec![DomainPackLockedPackage {
+            identity,
+            package_digest: candidate.package.package_digest.clone(),
+            manifest_binding: candidate.package.manifest.clone(),
+            content_binding: candidate.package.content.clone(),
+            license_binding: candidate.package.license.clone(),
+            fixture_bindings: candidate.package.fixtures.clone(),
+            namespace_grant_id: StableId("grant.fixture".to_owned()),
+            registry_record_digest: candidate.registry_record_digest.clone().unwrap(),
+            source_assurance: DomainPackSourceAssurance::SupplyChainVerified,
+            semantic_assurance:
+                forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Reviewed,
+            reviewed_entry_digest: Some(digest(9_003)),
+            promotion_authorization_digest: Some(digest(9_004)),
+            dependencies: candidate
+                .input
+                .manifest
+                .domain_pack_manifest
+                .dependencies
+                .clone(),
+            deterministic_order: 0,
+        }],
+        verified_capability_bindings: Vec::new(),
+        unresolved_capability_gaps: Vec::new(),
+    };
     DomainPackExactLockDocument {
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
         domain_pack_exact_lock: DomainPackExactLock {
-            payload: DomainPackExactLockPayload {
-                project_id: request.domain_pack_resolution_request.project_id.clone(),
-                core: request.domain_pack_resolution_request.core.clone(),
-                requirements_digest: digest(101),
-                roots: request.domain_pack_resolution_request.roots.clone(),
-                registry_snapshot_digest: digest(9_000),
-                reviewer_registry_digest: digest(9_001),
-                reviewed_registry_digest: digest(9_002),
-                trust_policy_digest: digest(102),
-                capability_registry_digest: digest(103),
-                sandbox_policy_digest: digest(104),
-                resolution_digest: digest(105),
-                composition_digest: digest(106),
-                unresolved_composition_gaps: vec![],
-                packages: vec![DomainPackLockedPackage {
-                    identity,
-                    package_digest: candidate.package.package_digest.clone(),
-                    manifest_binding: candidate.package.manifest.clone(),
-                    content_binding: candidate.package.content.clone(),
-                    license_binding: candidate.package.license.clone(),
-                    fixture_bindings: candidate.package.fixtures.clone(),
-                    namespace_grant_id: StableId("grant.fixture".to_owned()),
-                    registry_record_digest: candidate.registry_record_digest.clone().unwrap(),
-                    source_assurance: DomainPackSourceAssurance::SupplyChainVerified,
-                    semantic_assurance: forge_core_contracts::domain_pack_learning::DomainPackSemanticAssurance::Reviewed,
-                    reviewed_entry_digest: Some(digest(9_003)),
-                    promotion_authorization_digest: Some(digest(9_004)),
-                    dependencies: candidate
-                        .input
-                        .manifest
-                        .domain_pack_manifest
-                        .dependencies
-                        .clone(),
-                    deterministic_order: 0,
-                }],
-                verified_capability_bindings: Vec::new(),
-                unresolved_capability_gaps: Vec::new(),
-            },
-            lock_digest: digest(107),
+            lock_digest: canonical_digest(&payload),
+            payload,
         },
     }
 }
@@ -329,6 +403,60 @@ fn compatible_lock_is_preserved_except_for_explicit_upgrade() {
             .version,
         "2.0.0"
     );
+}
+
+#[test]
+fn same_project_current_lock_permits_changed_target_core() {
+    let candidate = candidate("1.0.0", 1);
+    let registry = registry(std::slice::from_ref(&candidate));
+    let mut rebase = request(
+        vec![candidate.clone()],
+        vec![root(
+            "^1",
+            DomainPackResolutionRootReason::ExistingProjectRoot,
+        )],
+    );
+    rebase.domain_pack_resolution_request.current_lock = Some(exact_lock(&rebase, &candidate));
+    rebase.domain_pack_resolution_request.core.bundle_digest = digest(201);
+    rebase.domain_pack_resolution_request.core.policy_set_digest = digest(202);
+
+    let resolved = resolve_domain_packs(&rebase, &registry);
+
+    assert_eq!(
+        resolved.domain_pack_resolution_projection.status,
+        DomainPackResolutionStatus::Resolved
+    );
+    assert!(resolved.domain_pack_resolution_projection.issues.is_empty());
+}
+
+#[test]
+fn different_project_current_lock_is_rejected() {
+    let candidate = candidate("1.0.0", 1);
+    let registry = registry(std::slice::from_ref(&candidate));
+    let mut request = request(
+        vec![candidate.clone()],
+        vec![root(
+            "^1",
+            DomainPackResolutionRootReason::ExistingProjectRoot,
+        )],
+    );
+    let mut lock = exact_lock(&request, &candidate);
+    lock.domain_pack_exact_lock.payload.project_id = StableId("other.project".to_owned());
+    lock.domain_pack_exact_lock.lock_digest =
+        canonical_digest(&lock.domain_pack_exact_lock.payload);
+    request.domain_pack_resolution_request.current_lock = Some(lock);
+
+    let blocked = resolve_domain_packs(&request, &registry);
+
+    assert_eq!(
+        blocked.domain_pack_resolution_projection.status,
+        DomainPackResolutionStatus::Blocked
+    );
+    assert!(blocked
+        .domain_pack_resolution_projection
+        .issues
+        .iter()
+        .any(|issue| issue.code == DomainPackResolutionIssueCode::CurrentLockMismatch));
 }
 
 #[test]

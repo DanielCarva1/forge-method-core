@@ -19,7 +19,7 @@ operation_contract:
     next_operation: null
     host_action: "show_status"
     phase: "4-build-verify"
-    workflow: "build-story"
+    workflow: "quick-dev"
     action: "story_already_done"
   authority:
     mutation_policy: "forbidden"

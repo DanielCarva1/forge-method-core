@@ -1,0 +1,89 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C2.3"
+status: "implemented"
+slice: "state-loss-and-install-lifecycle"
+title: "Implement the owned product lifecycle"
+intent: >-
+  Provide one explicit idempotent setup, status, doctor, verified immutable
+  install/update, rollback, and product-owned uninstall surface that ordinary
+  users can operate without editing project YAML and without moving project or
+  external-key authority into installation state.
+
+related_story_ids:
+  - "C2.3.work.1"
+  - "FRUST-061"
+  - "C2.3.work.3"
+  - "GAP-002.reinitialize-as-new"
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/backlog/rust-only-core-backlog.yaml#FRUST-061"
+  - "contracts/policies/installer-trust-and-distribution-boundary.yaml"
+  - "contracts/policies/release-artifact-verification-boundary.yaml"
+  - "contracts/spec/product-lifecycle-v0.yaml"
+
+owned_files:
+  - "contracts/spec/product-lifecycle-v0.yaml"
+  - "contracts/stories/C2.3-owned-product-lifecycle.yaml"
+  - "docs/product-lifecycle.md"
+  - "docs/fixtures/product-lifecycle-v0/valid/release.yaml"
+  - "docs/fixtures/product-lifecycle-v0/valid/assets/forge-core"
+  - "docs/fixtures/product-lifecycle-v0/valid/assets/codex-config.json"
+  - "crates/forge-core-contracts/src/product_lifecycle.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-command-surface/src/lib.rs"
+  - "crates/forge-core-cli/Cargo.toml"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/command_registry.rs"
+  - "crates/forge-core-cli/src/product_lifecycle_cmd.rs"
+  - "crates/forge-core-cli/src/project_reinitialize_cmd.rs"
+  - "crates/forge-core-store/src/product_lifecycle.rs"
+  - "crates/forge-core-store/src/project_reinitialize.rs"
+
+constraints:
+  - "Every lifecycle command receives an explicit install root; consumer repositories, Project Links, and Forge sidecars are never used as an inferred lifecycle root."
+  - "Setup may create a fresh root or reuse the exact ownership marker, but it rejects a nonempty unmarked root rather than claiming unrelated files."
+  - "Release documents are closed candidate data with bounded typed change and asset records, safe relative paths, one exact lowercase SHA-256 grammar, and exactly one core binary."
+  - "Stable distribution is allowed, canary requires explicit opt-in, and dev is rejected for general installation through the existing distribution-admission policy."
+  - "The existing local artifact verifier is reused, then the exact no-follow bytes to be installed are independently rehashed before publication."
+  - "Installation generations are content addressed by canonical release digest and published from a fresh staging directory before active state changes."
+  - "Install retry is idempotent, same-version content drift conflicts, update downgrade is rejected, and the prior working generation remains available for verified rollback."
+  - "Status and doctor report exact host-configuration state without selecting, supporting, releasing, or field-verifying a host."
+  - "Uninstall deletes only exact product-owned regular files whose digest remains unchanged and removes directories only when empty; modified and unknown files are preserved."
+  - "Consumer projects, sidecars, operator anchors, backups, restore receipts, external registries, signing keys, trust roots, and private keys remain outside lifecycle custody."
+  - "Private external broker keys must remain in their owner-specific backup procedure and must never be copied into Forge state or Forge backups."
+  - "Lifecycle release, state, and receipt deserialization grants no claim, mutation, phase, release, signing, trust, private-key, distribution, install, activation, protected-anchor, or host-selection authority."
+  - "selected_host remains none"
+
+acceptance_criteria:
+  - "The public command surface exposes setup, status, doctor, install, update, rollback, and uninstall with shared envelope output."
+  - "An ordinary user can initialize and diagnose the explicit product root without editing YAML or consumer project state."
+  - "A verified release bundle installs into an immutable generation and returns typed release notes and exact host-configuration observations."
+  - "Exact retries append no generation, updates reject downgrade and same-version drift, and rollback verifies the complete prior inventory before activation."
+  - "Uninstall preserves unknown and operator-modified files plus all consumer project, sidecar, anchor, backup, and external-key authority state."
+  - "Focused source tests cover setup idempotence and unmanaged-root refusal, lifecycle transitions, exact retry, rollback, uninstall preservation, and unknown-field authority injection."
+
+checks:
+  passed:
+    - "cargo check --locked -p forge-core-contracts --all-targets"
+    - "cargo check --locked -p forge-core-store --all-targets"
+    - "cargo check --locked -p forge-core-command-surface --all-targets"
+    - "cargo check --locked -p forge-core-cli --all-targets"
+  candidate_reinitialize_compile_feedback:
+    - "cargo check --locked --all-targets -p forge-core-contracts -p forge-core-store -p forge-core-command-surface -p forge-core-cli -p forge-core-validate"
+    - "Passed after the project_reinitialize.rs ownership repair; this is compile-only source feedback, not operational plan/apply acceptance."
+  deferred:
+    - "Rust test execution"
+    - "C2.4 interrupted and mixed-version lifecycle corpus"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, downloaded-asset verification, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "GAP-002 retained ProjectLinkCas and public plan/apply dispatch are source-complete with exact plan-derived confirmation, predecessor lifetime anchoring, unrelated-destination reservation, successor CAS, operation-scoped plan/WAL/receipt records, and retry verification. Runtime interruption/retry and failure-injection evidence remain deferred; the path must not be described as installation, activation, lifecycle, admission, signing, trust, host-selection, or private-key authority."
+  - "FRUST-051 and FRUST-052 delegated OCSP authority source is reconciled separately within the wider C2.3 campaign."
+  - "C2.4 source contains the partial-setup, stale-config, interrupted-update, downgrade, wrapper-mismatch, retained-state-uninstall, backup-interruption, and replacement-machine corpus; executing that corpus remains deferred to stabilization."
+  - "FRUST-060's common host conformance testkit is owned by forge-core-validate; this story does not select a first host."
+  - "C3.2-C3.4 own cumulative runtime stabilization, hosted CI, publication, independent verification, downloaded-asset checks, and field evidence after every remaining source story compiles."

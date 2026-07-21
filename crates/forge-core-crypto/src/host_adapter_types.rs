@@ -87,6 +87,7 @@ pub struct HostAdapterCommand {
     pub authority_class: HostAdapterAuthorityClass,
     pub json_supported: bool,
     pub required_contracts: Vec<String>,
+    pub setup_gaps: Vec<HostAdapterSetupGap>,
     pub safe_auto_invocation_triggers: Vec<HostAdapterAutoTrigger>,
     pub output_treatment: Vec<HostAdapterOutputTreatment>,
     pub policy_refs: Vec<String>,
@@ -807,6 +808,57 @@ pub struct HostAdapterCertificateOcspStatusVerificationInput {
     pub expected_nonce_hex: Option<OcspNonceHex>,
 }
 
+/// Caller-supplied, offline material for a delegated OCSP responder.
+///
+/// The chain is ordered from the responder certificate's immediate issuer
+/// toward, but not including, the target certificate's supplied issuer. An
+/// empty chain therefore means the supplied issuer directly issued the
+/// responder certificate. No certificate is discovered or fetched.
+#[derive(Debug, Clone)]
+pub struct HostAdapterOcspDelegatedResponderMaterial {
+    pub certificate_path: PathBuf,
+    pub issuer_chain_certificate_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterOcspResponderAuthorityMode {
+    DirectIssuer,
+    DelegatedResponder,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterOcspResponderIdMode {
+    ByName,
+    ByKey,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterOcspResponderAuthorityCheck {
+    PolicyDeclaredIssuer,
+    ResponderId,
+    ResponseSignature,
+    ExactIssuerPath,
+    ResponderValidity,
+    IssuerPathValidity,
+    OcspSigningExtendedKeyUsage,
+}
+
+/// Identity and supplied-path evidence for the single key authorized to sign
+/// a `BasicOCSPResponse`.
+#[derive(Debug, Clone, Serialize)]
+pub struct HostAdapterOcspResponderAuthorityIdentity {
+    pub mode: HostAdapterOcspResponderAuthorityMode,
+    pub responder_id_mode: HostAdapterOcspResponderIdMode,
+    pub subject: String,
+    pub public_key_sha1_hex: String,
+    pub certificate_path: String,
+    pub issuer_chain_certificate_paths: Vec<String>,
+    pub verified_checks: Vec<HostAdapterOcspResponderAuthorityCheck>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterCertificateOcspStatusVerification {
     pub status: HostAdapterCertificateOcspStatusVerificationStatus,
@@ -821,7 +873,11 @@ pub struct HostAdapterCertificateOcspStatusVerification {
     pub certificate_serial_hex: Option<String>,
     pub issuer_subject: Option<String>,
     pub ocsp_response_status: Option<String>,
+    /// Compatibility label for existing host consumers.
     pub responder_authority: Option<String>,
+    /// Typed identity for the exactly one responder key selected after all
+    /// issuer/path, validity, EKU, responderID, and signature checks pass.
+    pub responder_authority_identity: Option<HostAdapterOcspResponderAuthorityIdentity>,
     pub ocsp_produced_at_unix: Option<i64>,
     pub ocsp_this_update_unix: Option<i64>,
     pub ocsp_next_update_unix: Option<i64>,
@@ -834,6 +890,24 @@ pub struct HostAdapterCertificateOcspStatusVerification {
     pub inference_boundary: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterSetupGap {
+    MissingExecutable,
+    MissingAdapter,
+    UnsupportedHostVersion,
+    InvalidConfiguration,
+    MissingRequiredContract,
+    ExactHostExecutionUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterEvidenceProjection {
+    OcspResponderAuthorityIdentity,
+    OcspVerifiedAuthorityEvidence,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterProjectedCommand {
     pub name: String,
@@ -841,8 +915,12 @@ pub struct HostAdapterProjectedCommand {
     pub canonical_usage: String,
     pub title: String,
     pub description: String,
+    pub command_kind: HostAdapterCommandKind,
     pub mutation_class: HostAdapterMutationClass,
     pub authority_class: HostAdapterAuthorityClass,
+    pub required_contracts: Vec<String>,
+    pub setup_gaps: Vec<HostAdapterSetupGap>,
+    pub evidence_projection: Vec<HostAdapterEvidenceProjection>,
     pub safe_auto_invocation_triggers: Vec<HostAdapterAutoTrigger>,
     pub output_treatment: Vec<HostAdapterOutputTreatment>,
     pub mcp_tool: Option<HostAdapterMcpToolProjection>,

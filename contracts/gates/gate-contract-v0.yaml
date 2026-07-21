@@ -1,7 +1,7 @@
 schema_version: "0.1"
 contract: "gate_contract"
 status: "draft"
-purpose: "Represent validation gates with explicit scope so lane-local evidence cannot be mistaken for product-area, integration, or release authority."
+purpose: "Represent validation gates with explicit scope so lane-local evidence cannot be mistaken for product-area, integration, destructive, release, or authority-transition approval."
 design_rules:
   - id: "scope_is_authority_boundary"
     rule: "A gate only authorizes mutations at its own scope or narrower; it never promotes itself to integration or release."
@@ -9,6 +9,8 @@ design_rules:
     rule: "Release readiness requires release-scoped gate evidence, not lane or product-area pass status."
   - id: "integration_requires_integration_gate"
     rule: "Cross-lane merge/integration requires integration-scoped evidence."
+  - id: "protected_boundaries_require_exact_scope"
+    rule: "Destructive effects and authority transitions require destructive- and authority-scoped gate evidence respectively; one protected scope cannot substitute for another."
   - id: "gate_is_read_authority"
     rule: "OperationContract reads GateContract results; gate operation produces or updates GateContract results."
 rust_compatibility:
@@ -21,7 +23,9 @@ enums:
     - "lane"
     - "product_area"
     - "integration"
+    - "destructive"
     - "release"
+    - "authority"
   status:
     - "pass"
     - "fail"
@@ -73,3 +77,5 @@ failure_modes_prevented:
   - "product-area pass is treated as release approval"
   - "agent marks ready without the correct gate scope"
   - "cross-lane conflict escapes because only lane gates ran"
+  - "a release gate substitutes for destructive-effect or authority-transition review"
+  - "a candidate boundary declaration is treated as gate authority"

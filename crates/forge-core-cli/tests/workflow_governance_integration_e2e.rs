@@ -5,31 +5,31 @@ use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
     workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
-    AttestationInput, CanonicalIntent, PrincipalCredentialStatus, PrincipalRegistryContract,
-    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowApplicabilityAuthorizationRequest,
-    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
-    WorkflowEvidenceAuthorizationRequest, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
-    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    AuthorizedWorkflowBrokerControlPlane, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
+    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
-use forge_core_contracts::operation::CallerRole;
 use forge_core_contracts::{
-    PrincipalId, ReadinessTarget, RuntimeKind, StableId, WorkflowBrokerHostInteractionKind,
-    WorkflowBrokerNativeHostProvenance, WorkflowContentAddressedReference,
-    WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceOutcome,
-    WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
+    workflow_broker_expected_audience, PrincipalId, RuntimeKind, StableId,
+    WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
+    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
+    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
+    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
-use forge_core_store::sha256_content_hash;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Output;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const WORKFLOW_AUDIENCE: &str = "forge-core:workflow:cli-e2e";
-const HUMAN_CREDENTIAL: &str = "credential.workflow.cli-e2e-human";
+const PROJECT_ID: &str = "app";
+const WORKFLOW_ID: &str = "workflow.governance";
+const HUMAN_BROKER_ISSUER: &str = "broker.workflow.cli-e2e-human";
+const HUMAN_BROKER_PRINCIPAL: &str = "principal.workflow.cli-e2e-human";
 
 fn bin() -> Command {
     Command::cargo_bin("forge-core").expect("forge-core binary")
@@ -122,81 +122,192 @@ fn assert_ok(output: &Output) -> Value {
     envelope
 }
 
-struct SignedCliAuthority {
+struct StrictHumanBroker {
     key: SigningKey,
+    audience: String,
+    host_binding: WorkflowBrokerHostBinding,
 }
 
-impl SignedCliAuthority {
+impl StrictHumanBroker {
     fn install(consumer: &Consumer) -> Self {
-        let key = SigningKey::from_bytes(&[81; 32]);
-        let document = PrincipalRegistryDocument {
-            schema_version: PRINCIPAL_REGISTRY_SCHEMA_VERSION.to_owned(),
-            principal_registry: PrincipalRegistryContract {
-                audience: WORKFLOW_AUDIENCE.to_owned(),
-                principals: vec![PrincipalRegistryEntry {
-                    credential_id: HUMAN_CREDENTIAL.to_owned(),
-                    principal_id: PrincipalId("principal.workflow.cli-e2e-human".to_owned()),
-                    agent_id: StableId("agent.workflow.cli-e2e-human-console".to_owned()),
-                    role: CallerRole::Human,
-                    public_key_hex: hex(&key.verifying_key().to_bytes()),
-                    allowed_tools: vec![StableId("workflow".to_owned())],
-                    authority_grants: [
-                        "workflow.applicability.assess",
-                        "workflow.evidence.authorize_human",
-                    ]
-                    .into_iter()
-                    .map(|grant| StableId(grant.to_owned()))
-                    .collect(),
-                    status: PrincipalCredentialStatus::Active,
-                }],
-            },
+        let key = SigningKey::from_bytes(&[83; 32]);
+        let admin_key = SigningKey::from_bytes(&[84; 32]);
+        let project_id = StableId(PROJECT_ID.to_owned());
+        let workflow_id = StableId(WORKFLOW_ID.to_owned());
+        let audience = workflow_broker_expected_audience(&project_id, &workflow_id);
+        let host_binding = WorkflowBrokerHostBinding {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.integration-e2e".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            host_installation_id: StableId("host.installation.integration-e2e".to_owned()),
+            protocol_version: "workflow-host-origin-v1".to_owned(),
         };
+        let enrolled_at = now().saturating_sub(60);
+        let mut credentials = vec![
+            WorkflowBrokerPublicCredentialMetadata {
+                credential_id: StableId("credential.workflow.cli-e2e-admin".to_owned()),
+                broker_id: StableId("broker.workflow.cli-e2e-admin".to_owned()),
+                subject_id: StableId("administrator.workflow.cli-e2e".to_owned()),
+                purpose: WorkflowBrokerCredentialPurpose::RegistryAdministrator,
+                profile: WorkflowBrokerCredentialProfile::Administrator,
+                algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+                public_key_hex: hex(&admin_key.verifying_key().to_bytes()),
+                key_generation: 1,
+                status: WorkflowBrokerCredentialStatus::Active,
+                custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+                host_binding: host_binding.clone(),
+                allowed_operations: Vec::new(),
+                not_before_unix: enrolled_at,
+                revoked_at_unix: None,
+                predecessor_credential_id: None,
+                enrollment_operation_id: StableId(
+                    "admin.operation.workflow.cli-e2e-genesis".to_owned(),
+                ),
+                revocation_operation_id: None,
+            },
+            WorkflowBrokerPublicCredentialMetadata {
+                credential_id: StableId("credential.workflow.cli-e2e-human".to_owned()),
+                broker_id: StableId("broker.installation.workflow.cli-e2e-human".to_owned()),
+                subject_id: StableId(HUMAN_BROKER_ISSUER.to_owned()),
+                purpose: WorkflowBrokerCredentialPurpose::EventIssuer,
+                profile: WorkflowBrokerCredentialProfile::Human,
+                algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+                public_key_hex: hex(&key.verifying_key().to_bytes()),
+                key_generation: 1,
+                status: WorkflowBrokerCredentialStatus::Active,
+                custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+                host_binding: host_binding.clone(),
+                allowed_operations: vec![
+                    WorkflowBrokerBoundOperation::Applicability,
+                    WorkflowBrokerBoundOperation::Evidence,
+                    WorkflowBrokerBoundOperation::IntentRevision,
+                ],
+                not_before_unix: enrolled_at,
+                revoked_at_unix: None,
+                predecessor_credential_id: None,
+                enrollment_operation_id: StableId(
+                    "admin.operation.workflow.cli-e2e-genesis".to_owned(),
+                ),
+                revocation_operation_id: None,
+            },
+        ];
+        credentials.sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+        let document = WorkflowBrokerPublicRegistryDocument {
+            schema_version: WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION.to_owned(),
+            audience: audience.clone(),
+            project_id: project_id.clone(),
+            workflow_id: workflow_id.clone(),
+            registry_generation: 1,
+            previous_registry_digest: None,
+            required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
+            credentials,
+        };
+        AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+            document.clone(),
+            &audience,
+            &project_id,
+            &workflow_id,
+        )
+        .expect("strict broker registry fixture");
         let path = consumer
             .state
             .parent()
             .expect("operator root")
-            .join("operator/workflow-principal-registry.yaml");
+            .join("operator/workflow-broker-registry.yaml");
         fs::create_dir_all(path.parent().expect("registry parent")).expect("registry directory");
         fs::write(
             path,
-            yaml_serde::to_string(&document).expect("registry YAML"),
+            yaml_serde::to_string(&document).expect("strict broker registry YAML"),
         )
-        .expect("trusted principal registry");
-        Self { key }
+        .expect("preconfigured external broker registry");
+        Self {
+            key,
+            audience,
+            host_binding,
+        }
     }
 
-    fn attestation<T: Serialize>(&self, action: &str, request: &T) -> AttestationInput {
+    fn apply(
+        &self,
+        consumer: &Consumer,
+        packet: &Value,
+        semantic_input: WorkflowBrokerSemanticInput,
+        label: &str,
+    ) -> Value {
         static NONCE: AtomicU64 = AtomicU64::new(0);
-        let issued = i64::try_from(now()).expect("i64 clock");
-        let mut attestation = AttestationInput {
-            credential_id: Some(HUMAN_CREDENTIAL.to_owned()),
-            audience: Some(WORKFLOW_AUDIENCE.to_owned()),
-            execution_intent_digest: None,
-            nonce: format!(
-                "workflow-cli-e2e-{action}-{issued}-{}",
-                NONCE.fetch_add(1, Ordering::SeqCst)
+        let sequence = NONCE.fetch_add(1, Ordering::SeqCst);
+        let issued = now();
+        let mut envelope = WorkflowBrokerEventEnvelope {
+            schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+            audience: self.audience.clone(),
+            issuer_id: StableId(HUMAN_BROKER_ISSUER.to_owned()),
+            issuer_profile: WorkflowBrokerIssuerProfile::Human,
+            origin_principal_id: PrincipalId(HUMAN_BROKER_PRINCIPAL.to_owned()),
+            separation_domain: StableId("human-session.workflow.cli-e2e".to_owned()),
+            event_kind: semantic_input.kind(),
+            project_id: StableId(
+                packet["binding"]["project_id"]
+                    .as_str()
+                    .expect("packet project id")
+                    .to_owned(),
             ),
-            ts: issued,
-            signature: String::new(),
-            public_key_hex: hex(&self.key.verifying_key().to_bytes()),
-        };
-        let intent = CanonicalIntent {
-            tool: "workflow".to_owned(),
-            arguments: serde_json::json!({
-                "action": action,
-                "request": serde_json::to_value(request).expect("request JSON"),
+            action_packet_digest: packet["packet_digest"]
+                .as_str()
+                .expect("packet digest")
+                .to_owned(),
+            semantic_input,
+            native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+                host_kind: self.host_binding.host_kind,
+                host_version: self.host_binding.host_version.clone(),
+                adapter_id: self.host_binding.adapter_id.clone(),
+                adapter_version: self.host_binding.adapter_version.clone(),
+                interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+                host_event_ref: format!("host-event-{label}-{sequence:04}"),
+                host_session_ref: "host-session-workflow-cli-e2e".to_owned(),
+                host_interaction_ref: format!("host-interaction-{label}-{sequence:04}"),
+                host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+                host_observed_at_unix: issued,
             }),
-            credential_id: attestation.credential_id.clone(),
-            audience: attestation.audience.clone(),
-            execution_intent_digest: None,
-            nonce: attestation.nonce.clone(),
-            ts: attestation.ts,
+            issued_at_unix: issued,
+            // The full workspace runs several process-heavy E2Es concurrently;
+            // use the longest envelope lifetime admitted by production policy.
+            expires_at_unix: issued + 300,
+            nonce: format!("workflow-cli-e2e-{label}-{issued}-{sequence}"),
+            signature: String::new(),
         };
-        attestation.signature = hex(&self
+        let provenance = envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("native host provenance");
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &envelope.project_id,
+            &envelope.action_packet_digest,
+            &envelope.semantic_input,
+        )
+        .expect("host event descriptor digest");
+        envelope.signature = hex(&self
             .key
-            .sign(&intent.canonical_bytes().expect("canonical intent"))
+            .sign(&workflow_broker_event_signing_bytes(&envelope).expect("event signing bytes"))
             .to_bytes());
-        attestation
+        let path = consumer.write_json(&format!("{label}-{sequence}.json"), &envelope);
+        let root = consumer.app.display().to_string();
+        assert_ok(
+            &bin()
+                .args([
+                    "workflow",
+                    "action",
+                    "apply",
+                    "--root",
+                    &root,
+                    "--origin-envelope-file",
+                    &path.display().to_string(),
+                    "--json",
+                ])
+                .output()
+                .expect("apply strict broker action"),
+        )
     }
 }
 
@@ -223,28 +334,13 @@ fn required_str<'a>(value: &'a Value, field: &str) -> &'a str {
         .unwrap_or_else(|| panic!("guidance field '{field}' must be a string: {value:#}"))
 }
 
-fn required_u64(value: &Value, field: &str) -> u64 {
-    value[field]
-        .as_u64()
-        .unwrap_or_else(|| panic!("guidance field '{field}' must be an integer: {value:#}"))
-}
-
-fn basis_digest(root: &Path, refs: &[String]) -> String {
-    let mut basis = refs
+fn action_packet<'a>(packet_set: &'a Value, kind: &str) -> &'a Value {
+    packet_set["data"]["packets"]
+        .as_array()
+        .expect("action packet list")
         .iter()
-        .map(|subject_ref| WorkflowContentAddressedReference {
-            subject_ref: subject_ref.replace('\\', "/"),
-            subject_digest: sha256_content_hash(
-                &fs::read(root.join(subject_ref)).expect("applicability basis"),
-            ),
-        })
-        .collect::<Vec<_>>();
-    basis.sort_by(|left, right| {
-        left.subject_ref
-            .cmp(&right.subject_ref)
-            .then_with(|| left.subject_digest.cmp(&right.subject_digest))
-    });
-    sha256_content_hash(&serde_json_canonicalizer::to_vec(&basis).expect("canonical basis"))
+        .find(|packet| packet["authorization_kind"] == kind)
+        .unwrap_or_else(|| panic!("missing {kind} action packet: {packet_set:#}"))
 }
 
 #[test]
@@ -393,34 +489,10 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
         .expect("provision one-call credential");
     assert_ok(&provisioned);
 
-    let broker_key = SigningKey::from_bytes(&[83; 32]);
-    let broker_public = consumer.parent.join("one-call-human-broker.pub");
-    let broker_ceremony = consumer.parent.join("one-call-human-broker-ceremony.md");
-    fs::write(&broker_public, hex(&broker_key.verifying_key().to_bytes()))
-        .expect("broker public key");
-    fs::write(&broker_ceremony, "external human broker enrollment\n").expect("broker ceremony");
-    let trusted = bin()
-        .args([
-            "workflow",
-            "broker",
-            "trust",
-            "--root",
-            &root,
-            "--issuer-id",
-            "broker.workflow.one-call-human",
-            "--profile",
-            "human",
-            "--public-key-file",
-            &broker_public.display().to_string(),
-            "--ceremony-ref",
-            "operator://ceremony/one-call-human",
-            "--ceremony-file",
-            &broker_ceremony.display().to_string(),
-            "--json",
-        ])
-        .output()
-        .expect("trust one-call human broker");
-    let trusted = assert_ok(&trusted);
+    // Simulate the public registry already provisioned by a selected-host
+    // adapter. The fixture writes only public metadata; both private keys remain
+    // in memory and no Forge command is granted genesis trust authority.
+    let broker = StrictHumanBroker::install(&consumer);
 
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
     let human_packet = packet_set["data"]["packets"]
@@ -429,9 +501,6 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
         .first()
         .expect("fresh discovery exposes the human intent packet");
     assert_eq!(human_packet["authorization_kind"], "intent_revision");
-    let human_packet_digest = human_packet["packet_digest"]
-        .as_str()
-        .expect("human packet digest");
     let fake_request = consumer.write_json("intent-local-request.json", &serde_json::json!({}));
     let rejected_local_human = bin()
         .args([
@@ -451,29 +520,16 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
         .output()
         .expect("reject local intent signing");
     assert!(!rejected_local_human.status.success());
-    assert!(String::from_utf8_lossy(&rejected_local_human.stdout)
-        .contains("external human-broker envelope"));
+    let rejected_local_human = String::from_utf8_lossy(&rejected_local_human.stdout);
+    assert!(
+        rejected_local_human.contains("Reusable attestation signing is intentionally unavailable")
+    );
+    assert!(!rejected_local_human.contains("credential sign --root"));
 
-    let issued = now();
-    let mut intent_envelope = WorkflowBrokerEventEnvelope {
-        schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
-        audience: trusted["data"]["audience"]
-            .as_str()
-            .expect("broker audience")
-            .to_owned(),
-        issuer_id: StableId("broker.workflow.one-call-human".to_owned()),
-        issuer_profile: WorkflowBrokerIssuerProfile::Human,
-        origin_principal_id: PrincipalId("principal.workflow.one-call-human".to_owned()),
-        separation_domain: StableId("human-session.one-call".to_owned()),
-        event_kind: forge_core_authority::WorkflowBrokerEventKind::IntentRevision,
-        project_id: StableId(
-            human_packet["binding"]["project_id"]
-                .as_str()
-                .expect("packet project id")
-                .to_owned(),
-        ),
-        action_packet_digest: human_packet_digest.to_owned(),
-        semantic_input: WorkflowBrokerSemanticInput::IntentRevision {
+    broker.apply(
+        &consumer,
+        human_packet,
+        WorkflowBrokerSemanticInput::IntentRevision {
             desired_outcome: "Exercise the permitted local action lane".to_owned(),
             constraints: Vec::new(),
             preferences: Vec::new(),
@@ -482,55 +538,8 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
             conversation_ref: "conversation://workflow/one-call".to_owned(),
             conversation_digest: format!("sha256:{}", "7".repeat(64)),
         },
-        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
-            host_kind: RuntimeKind::ForgeStandalone,
-            host_version: "0.12.0".to_owned(),
-            adapter_id: StableId("adapter.forge-standalone.integration-e2e".to_owned()),
-            adapter_version: "0.1.0".to_owned(),
-            interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
-            host_event_ref: "host-event-workflow-one-call-0001".to_owned(),
-            host_session_ref: "host-session-workflow-one-call-0001".to_owned(),
-            host_interaction_ref: "host-interaction-workflow-one-call-0001".to_owned(),
-            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
-            host_observed_at_unix: issued,
-        }),
-        issued_at_unix: issued,
-        expires_at_unix: issued + 120,
-        nonce: "workflow-one-call-human-intent-0001".to_owned(),
-        signature: String::new(),
-    };
-    let provenance = intent_envelope
-        .native_host_provenance
-        .as_mut()
-        .expect("native host provenance");
-    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
-        provenance,
-        &intent_envelope.project_id,
-        &intent_envelope.action_packet_digest,
-        &intent_envelope.semantic_input,
-    )
-    .expect("host descriptor digest");
-    intent_envelope.signature = hex(&broker_key
-        .sign(
-            &workflow_broker_event_signing_bytes(&intent_envelope)
-                .expect("human intent signing bytes"),
-        )
-        .to_bytes());
-    let intent_path = consumer.write_json("human-intent-envelope.json", &intent_envelope);
-    let intent_applied = bin()
-        .args([
-            "workflow",
-            "intent",
-            "record",
-            "--root",
-            &root,
-            "--origin-envelope-file",
-            &intent_path.display().to_string(),
-            "--json",
-        ])
-        .output()
-        .expect("record external human intent");
-    assert_ok(&intent_applied);
+        "human-intent",
+    );
 
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
 
@@ -589,57 +598,53 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
 }
 
 #[test]
-// One uninterrupted multiprocess flow keeps every request, signed attestation,
-// and replacement-agent assertion visibly bound to the preceding CLI output.
+// One uninterrupted multiprocess flow keeps every strict broker envelope and
+// replacement-agent assertion visibly bound to the preceding CLI output.
 #[allow(clippy::too_many_lines)]
 fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     let consumer = Consumer::new();
-    let authority = SignedCliAuthority::install(&consumer);
     let initialized = assert_ok(&consumer.run(&["init"]));
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
+    let broker = StrictHumanBroker::install(&consumer);
+    let packet_set = assert_ok(&consumer.run(&["action-packets"]));
+    let intent_packet = action_packet(&packet_set, "intent_revision");
+    broker.apply(
+        &consumer,
+        intent_packet,
+        WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome: "Complete the governed workflow".to_owned(),
+            constraints: Vec::new(),
+            preferences: Vec::new(),
+            unacceptable_outcomes: Vec::new(),
+            uncertainties: Vec::new(),
+            conversation_ref: "conversation://workflow/signed-cli-flow".to_owned(),
+            conversation_digest: format!("sha256:{}", "8".repeat(64)),
+        },
+        "initial-human-intent",
+    );
 
     let discover = assert_ok(&consumer.run(&["next"]));
-    let discover = &discover["data"];
     assert_eq!(
-        discover["selected_policy_ref"],
+        discover["data"]["selected_policy_ref"],
         "policy.workflow.discover-intent"
     );
-    let observed = now();
-    let evidence_request = WorkflowEvidenceAuthorizationRequest {
-        project_id: StableId(required_str(discover, "project_id").to_owned()),
-        policy_bundle_digest: required_str(discover, "bundle_digest").to_owned(),
-        policy_ref: StableId(required_str(discover, "selected_policy_ref").to_owned()),
-        claim_ref: StableId("claim.workflow.discover-intent.intent-grounded".to_owned()),
-        evaluator_ref: StableId("evaluator.workflow.discover-intent.intent-review".to_owned()),
-        provider: WorkflowEvaluatorProvider::AuthorizedHuman,
-        kind: WorkflowEvidenceKind::HumanAcceptance,
-        strength: WorkflowEvidenceStrength::AuthoritativeAcceptance,
-        outcome: WorkflowEvidenceOutcome::Pass,
-        subject_kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
-        subject_ref: required_str(discover, "project_id").to_owned(),
-        subject_digest: required_str(discover, "snapshot_digest").to_owned(),
-        scenario_digest: sha256_content_hash(b"cli-e2e:accepted-product-intent"),
-        state_version: required_u64(discover, "state_version"),
-        current_phase: StableId(required_str(discover, "current_phase").to_owned()),
-        snapshot_digest: required_str(discover, "snapshot_digest").to_owned(),
-        ledger_head_digest: required_str(discover, "ledger_head_digest").to_owned(),
-        readiness_target: ReadinessTarget::Explore,
-        observed_at_unix: observed,
-        expires_at_unix: Some(observed + 3_600),
-    };
-    let evidence_attestation = authority.attestation("evidence_authorize", &evidence_request);
-    let evidence_request_path = consumer.write_json("evidence-request.json", &evidence_request);
-    let evidence_attestation_path =
-        consumer.write_json("evidence-attestation.json", &evidence_attestation);
-    let evidence_request_arg = evidence_request_path.display().to_string();
-    let evidence_attestation_arg = evidence_attestation_path.display().to_string();
-    assert_ok(&consumer.run(&[
-        "evidence-authorize",
-        "--request-file",
-        &evidence_request_arg,
-        "--attestation-file",
-        &evidence_attestation_arg,
-    ]));
+    let packet_set = assert_ok(&consumer.run(&["action-packets"]));
+    let evidence_packet = action_packet(&packet_set, "evidence");
+    assert_eq!(
+        evidence_packet["input_contract"]["claim_ref"],
+        "claim.workflow.discover-intent.intent-grounded"
+    );
+    broker.apply(
+        &consumer,
+        evidence_packet,
+        WorkflowBrokerSemanticInput::Evidence {
+            outcome: WorkflowEvidenceOutcome::Pass,
+            subject_kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
+            subject_ref: required_str(&discover["data"], "project_id").to_owned(),
+            scenario_ref: "README.md".to_owned(),
+        },
+        "discover-evidence",
+    );
 
     // Every invocation starts a fresh forge-core process. Full guidance
     // equality proves operational recovery rather than digest-only continuity.
@@ -666,40 +671,21 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     let resumed_applicability = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(resumed_applicability["data"], applicability["data"]);
 
-    let applicability = &applicability["data"];
-    let basis_refs = vec!["README.md".to_owned()];
-    let applicability_observed = now();
-    let applicability_request = WorkflowApplicabilityAuthorizationRequest {
-        project_id: StableId(required_str(applicability, "project_id").to_owned()),
-        policy_bundle_digest: required_str(applicability, "bundle_digest").to_owned(),
-        policy_ref: StableId(required_str(applicability, "selected_policy_ref").to_owned()),
-        state_version: required_u64(applicability, "state_version"),
-        current_phase: StableId(required_str(applicability, "current_phase").to_owned()),
-        snapshot_digest: required_str(applicability, "snapshot_digest").to_owned(),
-        ledger_head_digest: required_str(applicability, "ledger_head_digest").to_owned(),
-        applicable: true,
-        evaluator_ref: StableId("evaluator.workflow.applicability.human".to_owned()),
-        authority_scope: StableId("workflow.applicability.assess".to_owned()),
-        basis_digest: basis_digest(&consumer.app, &basis_refs),
-        basis_refs,
-        observed_at_unix: applicability_observed,
-        expires_at_unix: applicability_observed + 3_600,
-    };
-    let applicability_attestation =
-        authority.attestation("applicability_assess", &applicability_request);
-    let applicability_request_path =
-        consumer.write_json("applicability-request.json", &applicability_request);
-    let applicability_attestation_path =
-        consumer.write_json("applicability-attestation.json", &applicability_attestation);
-    let applicability_request_arg = applicability_request_path.display().to_string();
-    let applicability_attestation_arg = applicability_attestation_path.display().to_string();
-    assert_ok(&consumer.run(&[
-        "applicability-authorize",
-        "--request-file",
-        &applicability_request_arg,
-        "--attestation-file",
-        &applicability_attestation_arg,
-    ]));
+    let packet_set = assert_ok(&consumer.run(&["action-packets"]));
+    let applicability_packet = action_packet(&packet_set, "applicability");
+    assert_eq!(
+        applicability_packet["binding"]["policy_ref"],
+        "policy.workflow.domain-scan"
+    );
+    broker.apply(
+        &consumer,
+        applicability_packet,
+        WorkflowBrokerSemanticInput::Applicability {
+            applicable: true,
+            basis_refs: vec!["README.md".to_owned()],
+        },
+        "domain-scan-applicability",
+    );
 
     let capability_gap = assert_ok(&consumer.run(&["next"]));
     assert_eq!(
@@ -754,9 +740,12 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.contains("workflow next"));
     assert!(text.contains("workflow resume"));
-    assert!(text.contains("workflow applicability-authorize"));
-    assert!(text.contains("workflow capability-authorize"));
-    assert!(text.contains("workflow evidence-authorize"));
+    assert!(text.contains("workflow action authorize"));
+    assert!(text.contains("workflow action apply"));
+    assert!(text.contains("workflow intent record"));
+    assert!(!text.contains("workflow applicability-authorize"));
+    assert!(!text.contains("workflow capability-authorize"));
+    assert!(!text.contains("workflow evidence-authorize"));
     assert!(!text.contains("workflow observe-artifact"));
     assert!(!text.contains("--principal-registry"));
     assert!(!text.contains("--workflow"));

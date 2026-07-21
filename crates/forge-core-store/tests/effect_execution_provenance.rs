@@ -249,3 +249,81 @@ fn torn_effect_tail_is_repaired_before_incomplete_effect_rollback() {
     drop(lock);
     fs::remove_dir_all(root).expect("cleanup");
 }
+
+#[cfg(unix)]
+#[test]
+fn retained_effect_lock_on_a_rejects_replacement_b_before_any_publication() {
+    let root = temp_root("retained-a-replaced-by-b");
+    fs::create_dir_all(root.join(".forge-method/wal")).expect("A WAL parent");
+    fs::write(wal_path(&root), b"{\"torn\":").expect("A torn WAL");
+    let lock = acquire_effect_store_lock(&root, LOCK_REF).expect("lock A");
+    let displaced = root.with_extension("authority-a");
+    fs::rename(&root, &displaced).expect("move A aside");
+    fs::create_dir_all(root.join(".forge-method/wal")).expect("B WAL parent");
+    fs::create_dir_all(root.join("out")).expect("B target parent");
+    let b_wal = b"{\"replacement_b\":";
+    fs::write(wal_path(&root), b_wal).expect("B torn WAL");
+
+    assert!(repair_effect_wal_tail_under_lock(&root, &lock, LOCK_REF, WAL_REF).is_err());
+    assert!(pending_effect_replay_commits_under_lock(&root, &lock, LOCK_REF, WAL_REF).is_err());
+    let application = apply_file_effect_transaction_with_provenance_under_lock(
+        &root,
+        &lock,
+        LOCK_REF,
+        &effect(),
+        &[payload()],
+        WAL_REF,
+        "tx-replacement-b",
+        EffectExecutionProvenance::new(json!({"schema_version": "0.1"})).expect("provenance"),
+        binding(),
+    );
+    assert_eq!(application.status, EffectApplicationStatus::Blocked);
+    assert_eq!(fs::read(wal_path(&root)).expect("B WAL unchanged"), b_wal);
+    assert!(
+        !root.join(TARGET_REF).exists(),
+        "replacement B must not receive target write"
+    );
+    assert_eq!(
+        fs::read(wal_path(&displaced)).expect("A WAL unchanged"),
+        b"{\"torn\":"
+    );
+    assert!(
+        !displaced.join(TARGET_REF).exists(),
+        "A must not publish after scope refusal"
+    );
+
+    drop(lock);
+    fs::remove_dir_all(root).expect("cleanup B");
+    fs::remove_dir_all(displaced).expect("cleanup A");
+}
+
+#[cfg(unix)]
+#[test]
+fn retained_effect_lock_rejects_unlinked_and_recreated_lock_file() {
+    let root = temp_root("recreated-effect-lock");
+    fs::create_dir_all(root.join(".forge-method/wal")).expect("WAL parent");
+    let torn = b"{\"torn\":";
+    fs::write(wal_path(&root), torn).expect("torn WAL");
+    let lock = acquire_effect_store_lock(&root, LOCK_REF).expect("original lock");
+    fs::remove_file(root.join(LOCK_REF)).expect("unlink held lock inode");
+    fs::write(root.join(LOCK_REF), b"replacement").expect("recreate lock path");
+
+    assert!(repair_effect_wal_tail_under_lock(&root, &lock, LOCK_REF, WAL_REF).is_err());
+    let application = apply_file_effect_transaction_with_provenance_under_lock(
+        &root,
+        &lock,
+        LOCK_REF,
+        &effect(),
+        &[payload()],
+        WAL_REF,
+        "tx-recreated-lock",
+        EffectExecutionProvenance::new(json!({"schema_version": "0.1"})).expect("provenance"),
+        binding(),
+    );
+    assert_eq!(application.status, EffectApplicationStatus::Blocked);
+    assert_eq!(fs::read(wal_path(&root)).expect("WAL unchanged"), torn);
+    assert!(!root.join(TARGET_REF).exists());
+
+    drop(lock);
+    fs::remove_dir_all(root).expect("cleanup");
+}

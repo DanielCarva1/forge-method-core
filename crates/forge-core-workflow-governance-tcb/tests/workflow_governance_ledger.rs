@@ -1,9 +1,21 @@
+use forge_core_contracts::gate::GateStatus;
+use forge_core_contracts::request::RequestStatus;
 use forge_core_contracts::{
-    PhaseAdvancedEvent, ProjectImportedEvent, ReleaseUpgradedEvent, StableId,
-    WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
-    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
-    WorkflowReleaseRegistryProvenance, WorkflowRuntimeBundleIdentity,
+    CoordinationMutationHandoff, CoordinationRequestState, CoordinationStateAppliedEvent,
+    CoordinationStateRecord, Phase, PhaseAdvancedEvent, PostBuildVerifyAdmittedGateResult,
+    PostBuildVerifyContinuityBinding, PostBuildVerifyEpisode, PostBuildVerifyEpisodeAppliedEvent,
+    PostBuildVerifyEpisodeAuthority, PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome,
+    PostBuildVerifyEvolutionIdentity, PostBuildVerifyEvolutionStatus,
+    PostBuildVerifyEvolutionTrigger, PostBuildVerifyGateKind, PostBuildVerifyPolicyReference,
+    PostBuildVerifyPolicyRole, PostBuildVerifyRollbackBaseline, ProjectImportedEvent,
+    ReleaseUpgradedEvent, RepoPath, RequestContractDocument, StableId,
+    WorkflowContentAddressedReference, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
+    WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryProvenance,
+    WorkflowRuntimeBundleIdentity, POST_BUILD_VERIFY_EPISODE_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     append_workflow_governance_event_tcb, initialize_workflow_governance_ledger_tcb,
@@ -100,12 +112,164 @@ fn imported() -> WorkflowGovernanceEvent {
     })
 }
 
-fn advanced(index: usize) -> WorkflowGovernanceEvent {
+fn advanced_between(from_phase: &str, to_phase: &str, index: usize) -> WorkflowGovernanceEvent {
     WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
-        from_phase: Some(id("discover")),
-        to_phase: id("define"),
+        from_phase: Some(id(from_phase)),
+        to_phase: id(to_phase),
         snapshot_digest: format!("sha256:snapshot-{index}"),
     })
+}
+
+fn advanced(index: usize) -> WorkflowGovernanceEvent {
+    advanced_between("discover", "define", index)
+}
+
+fn post_build_verify_imported() -> WorkflowGovernanceEvent {
+    WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+        source_ref: "project/state.yaml".to_owned(),
+        source_digest: named_digest("source"),
+        snapshot_digest: named_digest("snapshot"),
+        initial_phase: id("4-build-verify"),
+    })
+}
+
+fn episode_reference(name: &str, digest: String) -> WorkflowContentAddressedReference {
+    WorkflowContentAddressedReference {
+        subject_ref: name.to_owned(),
+        subject_digest: digest,
+    }
+}
+
+fn episode_policies() -> Vec<PostBuildVerifyPolicyReference> {
+    [
+        (PostBuildVerifyPolicyRole::Readiness, "release-readiness"),
+        (PostBuildVerifyPolicyRole::ReadyRelease, "ready-release"),
+        (
+            PostBuildVerifyPolicyRole::RealityEvidence,
+            "reality-evidence",
+        ),
+        (
+            PostBuildVerifyPolicyRole::ContextRecovery,
+            "context-recovery",
+        ),
+        (PostBuildVerifyPolicyRole::EvolveProject, "evolve-project"),
+    ]
+    .into_iter()
+    .map(|(role, name)| PostBuildVerifyPolicyReference {
+        role,
+        policy_id: id(name),
+        policy_ref: RepoPath(format!("contracts/{name}.yaml")),
+    })
+    .collect()
+}
+
+fn sync_episode_snapshot(event: &mut PostBuildVerifyEpisodeAppliedEvent) {
+    let release_digest = event.release_subject.release_digest.clone();
+    let snapshot = episode_reference("build-verify/current", event.snapshot_digest.clone());
+    let mut document = PostBuildVerifyEpisodeDocument {
+        schema_version: POST_BUILD_VERIFY_EPISODE_SCHEMA_VERSION.to_owned(),
+        post_build_verify_episode: PostBuildVerifyEpisode {
+            episode_id: event.episode_id.clone(),
+            generation: event.generation,
+            previous_episode_digest: event.previous_episode_digest.clone(),
+            authority: PostBuildVerifyEpisodeAuthority::CandidateOnly,
+            release_subject: event.release_subject.clone(),
+            build_verify_snapshot: snapshot.clone(),
+            rollback_baseline: PostBuildVerifyRollbackBaseline::BuildVerifySnapshot { snapshot },
+            policy_references: episode_policies(),
+            deployment_observations: Vec::new(),
+            operational_evidence: Vec::new(),
+            feedback: Vec::new(),
+            intake: Vec::new(),
+            evolution: PostBuildVerifyEvolutionIdentity {
+                evolution_episode_id: id("evolution.release.current"),
+                generation: event.generation,
+                release_digest,
+                status: PostBuildVerifyEvolutionStatus::Dormant,
+                trigger: PostBuildVerifyEvolutionTrigger::PlannedFollowUp,
+                proposed_entry_phase: Phase::Plan,
+                continuity_subject: episode_reference(
+                    "continuity/evolution.current",
+                    named_digest("continuity-evolution"),
+                ),
+            },
+            continuity: PostBuildVerifyContinuityBinding {
+                context_recovery_subject: episode_reference(
+                    "recovery/release.current",
+                    named_digest("context-recovery"),
+                ),
+                next_action_ref: id("action.monitor-release"),
+            },
+            episode_digest: String::new(),
+        },
+    };
+    let digest = document.episode_digest().expect("episode canonicalizes");
+    document
+        .post_build_verify_episode
+        .episode_digest
+        .clone_from(&digest);
+    event.episode_digest = digest;
+    event.episode_snapshot = Some(document);
+}
+
+fn post_build_verify_event(head: &str, state_version: u64) -> PostBuildVerifyEpisodeAppliedEvent {
+    let mut event = PostBuildVerifyEpisodeAppliedEvent {
+        episode_id: id("episode.release.current"),
+        generation: 1,
+        previous_episode_digest: None,
+        episode_digest: named_digest("episode"),
+        release_subject: release_identity("1.0.0"),
+        decision_digest: named_digest("decision"),
+        from_phase: id("4-build-verify"),
+        to_phase: Some(id("5-ready-operate")),
+        outcome: PostBuildVerifyEpisodeOutcome::AdvancedToReadyOperate,
+        snapshot_digest: named_digest("snapshot"),
+        prior_ledger_head_digest: head.to_owned(),
+        prior_state_version: state_version,
+        admitted_gate: Some(PostBuildVerifyAdmittedGateResult {
+            kind: PostBuildVerifyGateKind::Readiness,
+            status: GateStatus::Pass,
+            effective_bundle_digest: named_digest("effective-bundle"),
+        }),
+        episode_snapshot: None,
+    };
+    sync_episode_snapshot(&mut event);
+    event
+}
+
+fn coordination_request_document() -> RequestContractDocument {
+    yaml_serde::from_str(include_str!(
+        "../../../contracts/requests/worker-state-transition-request.yaml"
+    ))
+    .expect("request fixture")
+}
+
+fn coordination_request_state(
+    status: RequestStatus,
+    previous_status: Option<RequestStatus>,
+    actor: &str,
+) -> CoordinationStateRecord {
+    let mut request = coordination_request_document();
+    request.request_contract.status = status;
+    CoordinationStateRecord::Request(CoordinationRequestState {
+        request,
+        previous_status,
+        actor_agent_id: id(actor),
+        response_evidence_refs: vec!["contracts/gates/story-ready-lane-gate.yaml".to_owned()],
+        mutation_handoff: None,
+    })
+}
+
+fn coordination_event(
+    head: &str,
+    state_version: u64,
+    state: CoordinationStateRecord,
+) -> CoordinationStateAppliedEvent {
+    CoordinationStateAppliedEvent {
+        prior_ledger_head_digest: head.to_owned(),
+        prior_state_version: state_version,
+        state,
+    }
 }
 
 fn temp_root(name: &str) -> PathBuf {
@@ -259,6 +423,68 @@ fn initialize_append_and_recover_ordered_chain() {
 }
 
 #[test]
+fn retained_guard_snapshots_exact_wal_and_projection_without_relocking() {
+    let root = temp_root("raw-snapshot");
+    let first = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let guard = lock_workflow_governance_ledger_tcb(&root).expect("retain producer lock");
+
+    let snapshot = guard.snapshot_raw_wal().expect("snapshot exact WAL");
+    assert_eq!(
+        snapshot.raw_wal_bytes().expect("present WAL"),
+        fs::read(wal_path(&root)).expect("read WAL").as_slice()
+    );
+    assert_eq!(snapshot.projection().records, vec![first]);
+    assert!(matches!(
+        lock_workflow_governance_ledger_tcb(&root),
+        Err(WorkflowGovernanceLedgerError::Lock { .. })
+    ));
+
+    drop(guard);
+    lock_workflow_governance_ledger_tcb(&root)
+        .expect("dropping retained guard releases producer lock");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+#[cfg(unix)]
+#[test]
+fn raw_wal_snapshot_rejects_renamed_symlink_namespace_substitution() {
+    let root = temp_root("raw-wal-symlink");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let guard = lock_workflow_governance_ledger_tcb(&root).expect("retain producer lock");
+    let path = wal_path(&root);
+    let moved = path.with_extension("ndjson.moved");
+    fs::rename(&path, &moved).expect("rename WAL");
+    std::os::unix::fs::symlink(&moved, &path).expect("substitute WAL symlink");
+
+    guard
+        .snapshot_raw_wal()
+        .expect_err("no-follow snapshot must reject WAL symlink substitution");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn raw_wal_snapshot_rejects_state_root_rename_and_replacement() {
+    let root = temp_root("raw-wal-root-swap");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize original WAL");
+    let replacement = temp_root("raw-wal-root-replacement");
+    initialize_workflow_governance_ledger_tcb(&replacement, &identity(), 0, imported())
+        .expect("initialize replacement WAL");
+    let guard = lock_workflow_governance_ledger_tcb(&root).expect("pin original root");
+    let moved = root.with_extension("moved");
+    fs::rename(&root, &moved).expect("rename guarded root");
+    fs::rename(&replacement, &root).expect("install well-formed replacement root");
+
+    guard
+        .snapshot_raw_wal()
+        .expect_err("snapshot must reject a replacement root outside the retained lock namespace");
+    drop(guard);
+    fs::remove_dir_all(root).expect("remove replacement root");
+    fs::remove_dir_all(moved).expect("remove original moved root");
+}
+#[test]
 fn batch_commits_two_events_together_and_exposes_prepared_projection() {
     let root = temp_root("batch-two-events");
     let first = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
@@ -272,7 +498,9 @@ fn batch_commits_two_events_together_and_exposes_prepared_projection() {
     let second = batch.push_event(1, advanced(1)).expect("prepare second");
     assert_eq!(batch.projection().records.len(), 2);
     assert_eq!(batch.projection().head_digest, Some(second.record_digest));
-    let third = batch.push_event(2, advanced(2)).expect("prepare third");
+    let third = batch
+        .push_event(2, advanced_between("define", "plan", 2))
+        .expect("prepare third");
     assert_eq!(batch.projection().records.len(), 3);
     assert_eq!(batch.projection().head_digest, Some(third.record_digest));
     assert_eq!(
@@ -914,6 +1142,476 @@ fn recovery_rejects_project_bundle_and_state_regression_even_when_rehashed() {
 }
 
 #[test]
+fn generic_append_cannot_smuggle_a_post_build_verify_episode() {
+    let root = temp_root("episode-generic-authority");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+    let event = post_build_verify_event(&head, 0);
+
+    assert!(matches!(
+        ledger.append_unchecked_tcb_event(
+            &head,
+            &identity(),
+            1,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event),
+        ),
+        Err(WorkflowGovernanceLedgerError::PostBuildVerifyEpisodeRequiresDedicatedAuthority)
+    ));
+    drop(ledger);
+    assert_eq!(
+        recover_workflow_governance_ledger(&root)
+            .expect("recover unchanged ledger")
+            .records
+            .len(),
+        1
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn dedicated_episode_route_starts_and_retains_the_zero_eight_epoch() {
+    let root = temp_root("episode-zero-eight");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+    let event = post_build_verify_event(&head, 0);
+    let record = ledger
+        .apply_post_build_verify_episode_unchecked_tcb(&head, &identity(), 1, event.clone())
+        .expect("apply dedicated episode route");
+    assert_eq!(
+        record.event,
+        WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event)
+    );
+
+    let successor = WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+        from_phase: Some(id("5-ready-operate")),
+        to_phase: id("6-evolve"),
+        snapshot_digest: named_digest("snapshot-evolve"),
+    });
+    ledger
+        .append_unchecked_tcb_event(&record.record_digest, &identity(), 2, successor)
+        .expect("append successor in retained epoch");
+    drop(ledger);
+
+    let documents = read_documents(&root);
+    assert_eq!(documents.len(), 3);
+    assert_eq!(
+        documents[1].schema_version,
+        WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION
+    );
+    assert_eq!(
+        documents[2].schema_version,
+        WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION
+    );
+    recover_workflow_governance_ledger(&root).expect("recover 0.8 history");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn episode_route_rejects_stale_bindings_malformed_gate_and_broken_generation() {
+    let root = temp_root("episode-invalid");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+
+    assert!(matches!(
+        ledger.apply_post_build_verify_episode_unchecked_tcb(
+            &named_digest("stale-head"),
+            &identity(),
+            1,
+            post_build_verify_event(&head, 0),
+        ),
+        Err(WorkflowGovernanceLedgerError::HeadMismatch { .. })
+    ));
+
+    assert!(matches!(
+        ledger.apply_post_build_verify_episode_unchecked_tcb(
+            &head,
+            &identity(),
+            2,
+            post_build_verify_event(&head, 0),
+        ),
+        Err(
+            WorkflowGovernanceLedgerError::PostBuildVerifyEpisodeInvalid {
+                reason: "episode route state version is not contiguous"
+            }
+        )
+    ));
+
+    let mut wrong_phase = post_build_verify_event(&head, 0);
+    wrong_phase.from_phase = id("5-ready-operate");
+    assert!(matches!(
+        ledger.apply_post_build_verify_episode_unchecked_tcb(&head, &identity(), 1, wrong_phase,),
+        Err(WorkflowGovernanceLedgerError::PostBuildVerifyEpisodeInvalid { .. })
+    ));
+
+    let mut malformed_gate = post_build_verify_event(&head, 0);
+    malformed_gate.admitted_gate.as_mut().expect("gate").status = GateStatus::Fail;
+    assert!(matches!(
+        ledger
+            .apply_post_build_verify_episode_unchecked_tcb(&head, &identity(), 1, malformed_gate,),
+        Err(
+            WorkflowGovernanceLedgerError::PostBuildVerifyEpisodeInvalid {
+                reason: "episode outcome, phase transition, or admitted gate is invalid"
+            }
+        )
+    ));
+
+    let mut broken_generation = post_build_verify_event(&head, 0);
+    broken_generation.generation = 2;
+    broken_generation.previous_episode_digest = Some(named_digest("missing-predecessor"));
+    sync_episode_snapshot(&mut broken_generation);
+    assert!(matches!(
+        ledger.apply_post_build_verify_episode_unchecked_tcb(
+            &head,
+            &identity(),
+            1,
+            broken_generation,
+        ),
+        Err(
+            WorkflowGovernanceLedgerError::PostBuildVerifyEpisodeInvalid {
+                reason: "episode generation does not extend the exact predecessor"
+            }
+        )
+    ));
+    drop(ledger);
+    assert_eq!(
+        recover_workflow_governance_ledger(&root)
+            .expect("recover unchanged ledger")
+            .records
+            .len(),
+        1
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn follow_on_episode_preserves_phase_and_extends_exact_predecessor() {
+    let root = temp_root("episode-follow-on");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+    let first = post_build_verify_event(&head, 0);
+    let first_record = ledger
+        .apply_post_build_verify_episode_unchecked_tcb(&head, &identity(), 1, first.clone())
+        .expect("advance to ready-operate");
+
+    let mut follow_on = post_build_verify_event(&first_record.record_digest, 1);
+    follow_on.generation = 2;
+    follow_on.previous_episode_digest = Some(first.episode_digest);
+    follow_on.episode_digest = named_digest("episode-rollback");
+    follow_on.from_phase = id("5-ready-operate");
+    follow_on.to_phase = None;
+    follow_on.outcome = PostBuildVerifyEpisodeOutcome::RollbackAssessmentOpened;
+    follow_on.admitted_gate = None;
+    sync_episode_snapshot(&mut follow_on);
+    let follow_on_record = ledger
+        .apply_post_build_verify_episode_unchecked_tcb(
+            &first_record.record_digest,
+            &identity(),
+            2,
+            follow_on.clone(),
+        )
+        .expect("open rollback assessment");
+    assert_eq!(
+        follow_on_record.event,
+        WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(follow_on.clone())
+    );
+    assert!(follow_on.to_phase.is_none());
+    assert!(follow_on.admitted_gate.is_none());
+
+    let mut evolve = post_build_verify_event(&follow_on_record.record_digest, 2);
+    evolve.generation = 3;
+    evolve.previous_episode_digest = Some(follow_on.episode_digest);
+    evolve.episode_digest = named_digest("episode-evolve");
+    evolve.from_phase = id("5-ready-operate");
+    evolve.to_phase = Some(id("6-evolve"));
+    evolve.outcome = PostBuildVerifyEpisodeOutcome::AdvancedToEvolve;
+    evolve.admitted_gate = Some(PostBuildVerifyAdmittedGateResult {
+        kind: PostBuildVerifyGateKind::Release,
+        status: GateStatus::Pass,
+        effective_bundle_digest: named_digest("effective-bundle"),
+    });
+    sync_episode_snapshot(&mut evolve);
+    ledger
+        .apply_post_build_verify_episode_unchecked_tcb(
+            &follow_on_record.record_digest,
+            &identity(),
+            3,
+            evolve,
+        )
+        .expect("follow-on retained ready-operate phase");
+    drop(ledger);
+    recover_workflow_governance_ledger(&root).expect("recover exact episode chain");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn distinct_episode_identity_can_start_at_generation_one() {
+    let root = temp_root("episode-distinct-generation");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+    let first = post_build_verify_event(&head, 0);
+    let first_record = ledger
+        .apply_post_build_verify_episode_unchecked_tcb(&head, &identity(), 1, first)
+        .expect("advance first episode to ready-operate");
+
+    let mut distinct = post_build_verify_event(&first_record.record_digest, 1);
+    distinct.episode_id = id("episode.release.current.rollback");
+    distinct.episode_digest = named_digest("episode-distinct-rollback");
+    distinct.from_phase = id("5-ready-operate");
+    distinct.to_phase = None;
+    distinct.outcome = PostBuildVerifyEpisodeOutcome::RollbackAssessmentOpened;
+    distinct.admitted_gate = None;
+    sync_episode_snapshot(&mut distinct);
+    ledger
+        .apply_post_build_verify_episode_unchecked_tcb(
+            &first_record.record_digest,
+            &identity(),
+            2,
+            distinct,
+        )
+        .expect("start distinct episode at generation one");
+    drop(ledger);
+    recover_workflow_governance_ledger(&root).expect("recover distinct episode identities");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn recovery_keeps_historical_zero_seven_episode_summaries_readable() {
+    let root = temp_root("historical-zero-seven-episode");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, post_build_verify_imported())
+        .expect("initialize");
+    let mut documents = read_documents(&root);
+    let head = documents[0]
+        .workflow_governance_receipt
+        .record_digest
+        .clone();
+    let mut event = post_build_verify_event(&head, 0);
+    event.episode_snapshot = None;
+    let mut record = WorkflowGovernanceLedgerRecord {
+        record_id: id("historical-zero-seven-episode"),
+        sequence: 2,
+        project_id: identity().project_id,
+        bundle_id: identity().bundle_id,
+        bundle_digest: identity().bundle_digest,
+        state_version: 1,
+        previous_record_digest: Some(head),
+        record_digest: String::new(),
+        recorded_at_unix: 1,
+        event: WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event),
+    };
+    record.record_digest = workflow_governance_record_digest(&record).expect("record digest");
+    documents.push(WorkflowGovernanceReceiptDocument {
+        schema_version: WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION.to_owned(),
+        workflow_governance_receipt: record,
+    });
+    write_documents(&root, &documents);
+
+    let projection = recover_workflow_governance_ledger(&root).expect("recover historical 0.7");
+    assert!(matches!(
+        &projection.records[1].event,
+        WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event)
+            if event.episode_snapshot.is_none()
+    ));
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn generic_append_rejects_coordination_state() {
+    let root = temp_root("generic-coordination-rejected");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let head = projection.head_digest.expect("head");
+    let event = coordination_event(
+        &head,
+        0,
+        coordination_request_state(RequestStatus::Pending, None, "cursor-worker-1"),
+    );
+
+    assert!(matches!(
+        ledger.append_unchecked_tcb_event(
+            &head,
+            &identity(),
+            1,
+            WorkflowGovernanceEvent::CoordinationStateApplied(event),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateRequiresDedicatedAuthority)
+    ));
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn coordination_request_lifecycle_is_owner_bound_immutable_and_terminal() {
+    let root = temp_root("coordination-request-lifecycle");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&root).expect("lock");
+    let projection = ledger.recover().expect("recover");
+    let genesis_head = projection.head_digest.expect("head");
+
+    let pending = coordination_request_state(RequestStatus::Pending, None, "cursor-worker-1");
+    let pending_record = ledger
+        .apply_coordination_state_unchecked_tcb(
+            &genesis_head,
+            &identity(),
+            1,
+            coordination_event(&genesis_head, 0, pending),
+        )
+        .expect("sender appends pending request");
+
+    let wrong_actor = coordination_request_state(
+        RequestStatus::Accepted,
+        Some(RequestStatus::Pending),
+        "cursor-worker-1",
+    );
+    assert!(matches!(
+        ledger.apply_coordination_state_unchecked_tcb(
+            &pending_record.record_digest,
+            &identity(),
+            2,
+            coordination_event(&pending_record.record_digest, 1, wrong_actor),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateInvalid {
+            reason: "request status does not extend the exact durable predecessor"
+        })
+    ));
+
+    let mut changed = coordination_request_state(
+        RequestStatus::Accepted,
+        Some(RequestStatus::Pending),
+        "codex-main",
+    );
+    let CoordinationStateRecord::Request(changed) = &mut changed else {
+        unreachable!();
+    };
+    changed.request.request_contract.requested_operation = id("invented-operation");
+    assert!(matches!(
+        ledger.apply_coordination_state_unchecked_tcb(
+            &pending_record.record_digest,
+            &identity(),
+            2,
+            coordination_event(
+                &pending_record.record_digest,
+                1,
+                CoordinationStateRecord::Request(changed.clone()),
+            ),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateInvalid {
+            reason: "request transition changed immutable request fields"
+        })
+    ));
+
+    let accepted = coordination_request_state(
+        RequestStatus::Accepted,
+        Some(RequestStatus::Pending),
+        "codex-main",
+    );
+    let accepted_record = ledger
+        .apply_coordination_state_unchecked_tcb(
+            &pending_record.record_digest,
+            &identity(),
+            2,
+            coordination_event(&pending_record.record_digest, 1, accepted),
+        )
+        .expect("driver accepts request");
+
+    let duplicate_transition = coordination_request_state(
+        RequestStatus::Accepted,
+        Some(RequestStatus::Accepted),
+        "codex-main",
+    );
+    assert!(matches!(
+        ledger.apply_coordination_state_unchecked_tcb(
+            &accepted_record.record_digest,
+            &identity(),
+            3,
+            coordination_event(&accepted_record.record_digest, 2, duplicate_transition),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateInvalid {
+            reason: "request status does not extend the exact durable predecessor"
+        })
+    ));
+
+    let missing_handoff = coordination_request_state(
+        RequestStatus::Applied,
+        Some(RequestStatus::Accepted),
+        "codex-main",
+    );
+    assert!(matches!(
+        ledger.apply_coordination_state_unchecked_tcb(
+            &accepted_record.record_digest,
+            &identity(),
+            3,
+            coordination_event(&accepted_record.record_digest, 2, missing_handoff),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateInvalid {
+            reason: "driver-applied request is missing its authority/effect handoff evidence"
+        })
+    ));
+
+    let mut applied = coordination_request_state(
+        RequestStatus::Applied,
+        Some(RequestStatus::Accepted),
+        "codex-main",
+    );
+    let CoordinationStateRecord::Request(applied_request) = &mut applied else {
+        unreachable!();
+    };
+    applied_request.mutation_handoff = Some(CoordinationMutationHandoff {
+        driver_agent_id: id("codex-main"),
+        requested_operation: id("apply_transition"),
+        claim_contract_ref: RepoPath("contracts/claims/driver-active-claim.yaml".to_owned()),
+        authority_refs: vec!["contracts/gates/story-ready-lane-gate.yaml".to_owned()],
+        effect_contract_refs: vec!["contracts/effects/story-artifact-write-effect.yaml".to_owned()],
+    });
+    let applied_record = ledger
+        .apply_coordination_state_unchecked_tcb(
+            &accepted_record.record_digest,
+            &identity(),
+            3,
+            coordination_event(&accepted_record.record_digest, 2, applied),
+        )
+        .expect("driver applies with evidence-only handoff");
+
+    let terminal_rewrite = coordination_request_state(
+        RequestStatus::Rejected,
+        Some(RequestStatus::Applied),
+        "codex-main",
+    );
+    assert!(matches!(
+        ledger.apply_coordination_state_unchecked_tcb(
+            &applied_record.record_digest,
+            &identity(),
+            4,
+            coordination_event(&applied_record.record_digest, 3, terminal_rewrite),
+        ),
+        Err(WorkflowGovernanceLedgerError::CoordinationStateInvalid {
+            reason: "request status does not extend the exact durable predecessor"
+        })
+    ));
+
+    drop(ledger);
+    recover_workflow_governance_ledger(&root).expect("recover coordination lifecycle");
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn oversized_ledger_fails_before_unbounded_read() {
     let root = temp_root("capacity");
     let path = wal_path(&root);
@@ -938,8 +1636,10 @@ fn record_count_capacity_is_enforced_on_an_otherwise_valid_chain() {
     for index in 1..=10_001_u64 {
         let event = if index == 1 {
             imported()
+        } else if index % 2 == 0 {
+            advanced_between("discover", "define", usize::try_from(index).expect("index"))
         } else {
-            advanced(usize::try_from(index).expect("index"))
+            advanced_between("define", "discover", usize::try_from(index).expect("index"))
         };
         let mut record = WorkflowGovernanceLedgerRecord {
             record_id: id(&format!("r{index}")),
@@ -1001,8 +1701,14 @@ fn concurrent_under_lock_appends_are_serialized_without_lost_updates() {
                 .expect("acquire lock within bounded retry window");
             let projection = ledger.recover().expect("recover under lock");
             let head = projection.head_digest.expect("initialized head");
+            let state_version = projection.next_state_version;
+            let event = if projection.records.len() % 2 == 1 {
+                advanced_between("discover", "define", index + 1)
+            } else {
+                advanced_between("define", "discover", index + 1)
+            };
             ledger
-                .append_unchecked_tcb_event(&head, &identity(), 1, advanced(index + 1))
+                .append_unchecked_tcb_event(&head, &identity(), state_version, event)
                 .expect("serialized append")
         }));
     }

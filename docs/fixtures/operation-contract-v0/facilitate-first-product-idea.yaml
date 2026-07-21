@@ -19,7 +19,7 @@ operation_contract:
     next_operation: null
     host_action: "request_confirmation"
     phase: "1-discovery"
-    workflow: "discover-intent"
+    workflow: "guidance-engine"
     action: "ask_first_question"
   authority:
     mutation_policy: "forbidden"

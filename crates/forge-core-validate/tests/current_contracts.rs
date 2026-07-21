@@ -137,7 +137,7 @@ fn validates_current_operation_fixtures() {
         count += 1;
     }
 
-    assert_eq!(count, 23);
+    assert_eq!(count, 24);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn validates_current_claim_completion_and_gate_instances() {
         "contracts/gates",
         "gate-contract-v0.yaml",
         validate_gate,
-        5,
+        7,
     );
 }
 
@@ -278,7 +278,7 @@ fn validates_current_cross_file_references_with_pure_index() {
         "gate-contract-v0.yaml",
         &index,
         validate_gate_cross_references,
-        5,
+        7,
     );
     assert_cross_ref_instances::<RequestContractDocument, _>(
         "contracts/requests",

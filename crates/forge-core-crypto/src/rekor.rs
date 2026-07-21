@@ -338,6 +338,7 @@ fn rfc6962_leaf_hash(entry: &[u8]) -> String {
     hex_sha256(&content)
 }
 
+#[allow(clippy::manual_is_multiple_of)] // `is_multiple_of` is unstable on the Rust 1.85 MSRV.
 pub(crate) fn verify_merkle_inclusion(
     leaf_hash: &str,
     hashes: &[String],
@@ -385,6 +386,7 @@ fn hash_merkle_node(left: &str, right: &str) -> String {
     hex_sha256(&content)
 }
 
+#[allow(clippy::manual_is_multiple_of)] // `is_multiple_of` is unstable on the Rust 1.85 MSRV.
 fn hex_to_bytes(value: &str) -> Option<Vec<u8>> {
     let value = normalize_sha256_display(value);
     if value.len() % 2 != 0 || !value.chars().all(|item| item.is_ascii_hexdigit()) {

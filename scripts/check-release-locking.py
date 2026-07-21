@@ -31,6 +31,8 @@ class Step(NamedTuple):
     line: int
     run: str | None
     uses: str | None
+    condition: str | None
+    continue_on_error: str | None
 
 
 class Job(NamedTuple):
@@ -38,6 +40,8 @@ class Job(NamedTuple):
     name: str
     needs: tuple[str, ...]
     uses: str | None
+    condition: str | None
+    continue_on_error: str | None
     steps: tuple[Step, ...]
 
 
@@ -45,8 +49,8 @@ class Job(NamedTuple):
 # of the byte commitment, complete semantic manifest, and independently modeled
 # graph edges. Authorizing candidate byte/graph digests cannot bypass the fixed
 # manifest governed below.
-EXPECTED_WORKFLOW_SHA256 = "aa7d30cbb4b54a992661c4683d4aa9ba618a1caad877a9dcdc2ef3eb6e52e654"
-EXPECTED_GRAPH_SHA256 = "a9647fae81a3ca378706fdfe226908eaf34d4ce41b85317096ee036e575dde4d"
+EXPECTED_WORKFLOW_SHA256 = "9c4b7e8c74624e77cc6fff05e068aaa64ef683ca3bc533912ac14e447406f160"
+EXPECTED_GRAPH_SHA256 = "c849b8693d6a5a6e3e93148975802c9189696a17e2925080c9cb2b99c46271c2"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
@@ -59,6 +63,23 @@ SBOM_WRAPPER_ARGV = (
     "--format", "json", "--manifest-path", "crates/forge-core-cli/Cargo.toml",
     "--override-filename", "forge-core-$VERSION.cdx",
 )
+ARM64_SMOKE_STEP = ("arm64-linux-smoke", "Smoke extracted Linux ARM64 release install")
+ARM64_SMOKE_ARGV = (
+    "python", "scripts/smoke-release-install.py",
+    "--archive", "arm64-release-assets/forge-core-aarch64-linux.tar.gz",
+    "--version", "${{ needs.metadata.outputs.version }}",
+    "--binary-name", "forge-core", "--wrapper-name", "forge",
+    "--expected-host-arch", "aarch64", "--command-timeout-seconds", "60",
+)
+RELEASE_SET_STEP = ("release", "Build and verify deterministic release-set manifest")
+FINAL_RELEASE_SET_STEP = ("release", "Require exact final release asset set")
+RELEASE_SET_ARCHIVE_ARGV = (
+    "--archive", "forge-core-x86_64-linux.tar.gz",
+    "--archive", "forge-core-aarch64-linux.tar.gz",
+    "--archive", "forge-core-x86_64-macos.tar.gz",
+    "--archive", "forge-core-aarch64-macos.tar.gz",
+    "--archive", "forge-core-x86_64-windows.zip",
+)
 
 # Every repository executable reached from a release `run` step is closed by
 # path and content. The checker module is the running trust root, so it is not
@@ -66,17 +87,19 @@ SBOM_WRAPPER_ARGV = (
 # included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
-    "scripts/test-release-locking.py": "cdd8a29ea1e9b5e79a6494508add01c8b2312e858d31fd0dbdb8f61a7a1a3e80",
+    "scripts/test-release-locking.py": "00c29eecc6f39f72735829ba562fb5f7455a244f7500aed4f064199d4b96b24f",
     "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
-    "scripts/smoke-release-install.py": "6fa71b14db1fb27c69f7393ee81f4f1a19456fb5ce852310f3b38cae62cc3013",
+    "scripts/smoke-release-install.py": "a8ef321a1e9289e93d187d5d4fa1a390dfcdcf9a426da5db7b5ecc6891a31be1",
+    "scripts/build-release-set-manifest.py": "ca00140321cb565af9694b39729dc7fb3156140b41d4293d910bc5aff1196d83",
+    "scripts/test-release-set-manifest.py": "466d73c1a2afafdaa240fbedf777969db58dcad0dd10b4d9ceeb7b0c3d975a7b",
     "distribution/forge": "6b151926a6b69e514d6542ff93974c1251f9a597a246ab49d8c04649f8a5f25b",
     "distribution/forge.cmd": "408e1172fcfda87b70956ddefda9798c6246419ad099763c22401638021bce38",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
-    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "4bf79afdf1fe16eee13b174337dd5b9d3d917142eb08e67f5c4b014f5b663eeb",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "de35d329e497b40bbe0071983a51d16f00760429bef9b7058580a4d773312c5d",
 }
 
 # Only these reviewed release payloads use Git's `text:auto` checkout policy.
@@ -90,12 +113,17 @@ GIT_TEXT_GOVERNED_FILES = frozenset({
 DIRECT_LOCAL_SCRIPTS = {
     ("metadata", "Test release lock enforcement"): {"scripts/test-release-locking.py"},
     ("metadata", "Test deterministic archive tooling"): {"scripts/test-release-archive.py"},
+    ("metadata", "Test deterministic release-set tooling"): {
+        "scripts/test-release-set-manifest.py"
+    },
     ("build", "Build and verify deterministic release archive"): {
         "scripts/build-release-archive.py", "scripts/check-release-archive.py"
     },
     ("build", "Smoke extracted native release install"): {"scripts/smoke-release-install.py"},
+    ARM64_SMOKE_STEP: {"scripts/smoke-release-install.py"},
     ("release", "Re-verify archive manifests and checksums"): {"scripts/check-release-archive.py"},
     SBOM_STEP: {"scripts/run-release-locked-sbom.py"},
+    RELEASE_SET_STEP: {"scripts/build-release-set-manifest.py"},
 }
 
 # Reviewed transitive local executable/read graph. Contents are committed above;
@@ -114,6 +142,8 @@ TRANSITIVE_LOCAL_GRAPH = {
         "scripts/check-release-archive.py",
         "distribution/forge",
     },
+    "scripts/test-release-set-manifest.py": {"scripts/build-release-set-manifest.py"},
+    "scripts/build-release-set-manifest.py": set(),
     "scripts/build-release-archive.py": {"distribution/forge", "distribution/forge.cmd"},
     "scripts/smoke-release-install.py": {
         "scripts/check-release-archive.py",
@@ -413,7 +443,7 @@ def parse_workflow(source: str) -> list[Step]:
                 candidates.append((match.group(1), match.group(2) or "", field_index))
 
         for key, value, field_index in candidates:
-            if key not in {"name", "run", "uses"}:
+            if key not in {"name", "run", "uses", "if", "continue-on-error"}:
                 continue
             if key in fields:
                 raise ReleaseLockError(f"workflow:{field_index + 1}: duplicate step key {key!r}")
@@ -436,8 +466,15 @@ def parse_workflow(source: str) -> list[Step]:
         if job is None:
             raise ReleaseLockError(f"workflow:{start + 1}: step is outside a job")
         steps.append(
-            Step(job, fields["name"][0], start + 1,
-                 fields.get("run", (None, 0))[0], fields.get("uses", (None, 0))[0])
+            Step(
+                job,
+                fields["name"][0],
+                start + 1,
+                fields.get("run", (None, 0))[0],
+                fields.get("uses", (None, 0))[0],
+                fields.get("if", (None, 0))[0],
+                fields.get("continue-on-error", (None, 0))[0],
+            )
         )
         index = end
 
@@ -478,13 +515,19 @@ def parse_graph(source: str) -> tuple[Job, ...]:
         fields: dict[str, str] = {}
         for index in range(start + 1, end):
             match = re.match(r"^    ([A-Za-z_][A-Za-z0-9_-]*):(?:\s*(.*))?$", lines[index])
-            if match is None or match.group(1) not in {"name", "needs", "uses"}:
+            if match is None or match.group(1) not in {
+                "name", "needs", "uses", "if", "continue-on-error"
+            }:
                 continue
             field = match.group(1)
             if field in fields:
                 raise ReleaseLockError(f"workflow:{index + 1}: duplicate job field {field!r}")
             value = match.group(2) or ""
-            fields[field] = value.strip() if field == "needs" else _scalar(value, f"workflow:{index + 1}")
+            fields[field] = (
+                value.strip()
+                if field == "needs"
+                else _scalar(value, f"workflow:{index + 1}")
+            )
         name = fields.get("name", "")
         if not name:
             raise ReleaseLockError(f"workflow:{start + 1}: every release job needs an exact name")
@@ -505,7 +548,17 @@ def parse_graph(source: str) -> tuple[Job, ...]:
             raise ReleaseLockError(
                 f"workflow:{start + 1}: job must have exactly one of steps or job-level uses"
             )
-        jobs.append(Job(key, name, needs, job_uses, steps))
+        jobs.append(
+            Job(
+                key,
+                name,
+                needs,
+                job_uses,
+                fields["if"] if "if" in fields else None,
+                fields["continue-on-error"] if "continue-on-error" in fields else None,
+                steps,
+            )
+        )
     keys = [job.key for job in jobs]
     if len(keys) != len(set(keys)):
         raise ReleaseLockError("release workflow contains duplicate jobs")
@@ -528,8 +581,16 @@ def graph_digest(source: str) -> str:
                 "name": job.name,
                 "needs": list(job.needs),
                 "uses": job.uses,
+                "if": job.condition,
+                "continue-on-error": job.continue_on_error,
                 "steps": [
-                    {"name": step.name, "run": step.run, "uses": step.uses}
+                    {
+                        "name": step.name,
+                        "run": step.run,
+                        "uses": step.uses,
+                        "if": step.condition,
+                        "continue-on-error": step.continue_on_error,
+                    }
                     for step in job.steps
                 ],
             }
@@ -676,11 +737,13 @@ def find_invocations(body: str, line: int = 1) -> list[Invocation]:
     return invocations
 
 
-def _script_command(body: str, script: str) -> tuple[str, ...]:
+def _script_commands(body: str, script: str) -> tuple[tuple[str, ...], ...]:
     lines = body.splitlines()
-    for index, line in enumerate(lines):
+    commands: list[tuple[str, ...]] = []
+    for start, line in enumerate(lines):
         if script not in line:
             continue
+        index = start
         command = line.strip()
         while command.endswith("\\"):
             command = command[:-1] + " "
@@ -689,10 +752,19 @@ def _script_command(body: str, script: str) -> tuple[str, ...]:
                 raise ReleaseLockError(f"unterminated command for {script}")
             command += lines[index].strip()
         try:
-            return tuple(shlex.split(command, posix=True))
+            commands.append(tuple(shlex.split(command, posix=True)))
         except ValueError as error:
             raise ReleaseLockError(f"ambiguous command for {script}: {error}") from error
-    raise ReleaseLockError(f"missing exact local command for {script}")
+    if not commands:
+        raise ReleaseLockError(f"missing exact local command for {script}")
+    return tuple(commands)
+
+
+def _script_command(body: str, script: str) -> tuple[str, ...]:
+    commands = _script_commands(body, script)
+    if len(commands) != 1:
+        raise ReleaseLockError(f"expected one exact local command for {script}")
+    return commands[0]
 
 
 def _require_descriptor_primitives() -> None:
@@ -848,10 +920,10 @@ def _check_graph_security(source: str, jobs: tuple[Job, ...]) -> None:
     immutable_ref = "ref: ${{ needs.metadata.outputs.commit_sha }}"
     ref_keys = re.findall(r"^\s+ref:\s*.+$", source, re.MULTILINE)
     if (
-        source.count(checkout_use) != 3
+        source.count(checkout_use) != 4
         or ref_keys.count("          " + metadata_ref) != 1
-        or ref_keys.count("          " + immutable_ref) != 2
-        or len(ref_keys) != 3
+        or ref_keys.count("          " + immutable_ref) != 3
+        or len(ref_keys) != 4
     ):
         raise ReleaseLockError(
             "checkout refs are not closed: metadata selects the requested tag and "
@@ -885,6 +957,113 @@ def _check_graph_security(source: str, jobs: tuple[Job, ...]) -> None:
                 raise ReleaseLockError(f"remote action/workflow is not immutable: {uses}")
 
 
+def _job_source(source: str, key: str) -> str:
+    match = re.search(
+        rf"^  {re.escape(key)}:\s*$([\s\S]*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)",
+        source,
+        re.MULTILINE,
+    )
+    if match is None:
+        raise ReleaseLockError(f"missing exact release job {key!r}")
+    return match.group(0)
+
+
+def _is_fail_closed(continue_on_error: str | None) -> bool:
+    """Return whether a modeled workflow node propagates failure."""
+    return continue_on_error is None or continue_on_error == "false"
+
+
+def _check_arm64_smoke(source: str, jobs: tuple[Job, ...]) -> None:
+    matrix_match = re.search(
+        r"          - target: aarch64-unknown-linux-gnu\n"
+        r"(?P<body>(?:            .+\n)+?)"
+        r"(?=          - target:)",
+        source,
+    )
+    if matrix_match is None:
+        raise ReleaseLockError("Linux ARM64 cross-build matrix member is missing")
+    matrix_lines = set(matrix_match.group("body").splitlines())
+    required_matrix = {
+        "            runner: ubuntu-latest",
+        "            expected-arch: x86_64",
+        "            archive: forge-core-aarch64-linux.tar.gz",
+        "            can_smoke: true # executed after packaging on the bounded native ARM64 smoke runner",
+        "            native_release: false",
+    }
+    if not required_matrix <= matrix_lines or any(
+        line.strip() == "can_smoke: false" for line in matrix_lines
+    ):
+        raise ReleaseLockError(
+            "Linux ARM64 must retain locked x86_64 cross-build resolution and can_smoke=true"
+        )
+
+    by_key = {job.key: job for job in jobs}
+    smoke_job = by_key.get("arm64-linux-smoke")
+    if smoke_job is None or smoke_job.needs != ("metadata", "build"):
+        raise ReleaseLockError("native Linux ARM64 smoke must depend exactly on metadata and build")
+    release = by_key.get("release")
+    if release is None or release.needs != ("metadata", "build", "arm64-linux-smoke"):
+        raise ReleaseLockError("publication must be gated by successful Linux ARM64 smoke")
+    job_source = _job_source(source, "arm64-linux-smoke")
+    required_job_tokens = (
+        "    runs-on: ubuntu-24.04-arm\n",
+        "    timeout-minutes: 10\n",
+        "          name: forge-core-aarch64-linux.tar.gz\n",
+        "          path: arm64-release-assets\n",
+        '          test "$(uname -s)" = Linux\n',
+        '          test "$(uname -m)" = aarch64\n',
+    )
+    if any(job_source.count(token) != 1 for token in required_job_tokens):
+        raise ReleaseLockError("bounded native Linux ARM64 runner setup or artifact boundary drifted")
+    if smoke_job.condition is not None:
+        raise ReleaseLockError("Linux ARM64 smoke job may not be conditionally bypassed")
+    if not _is_fail_closed(smoke_job.continue_on_error):
+        raise ReleaseLockError("Linux ARM64 smoke job must propagate failure")
+    step = next((item for item in smoke_job.steps if (item.job, item.name) == ARM64_SMOKE_STEP), None)
+    if step is None or step.run is None:
+        raise ReleaseLockError("Linux ARM64 extracted-install smoke step is missing")
+    if step.condition is not None:
+        raise ReleaseLockError("Linux ARM64 extracted-install smoke step may not be conditional")
+    if not _is_fail_closed(step.continue_on_error):
+        raise ReleaseLockError("Linux ARM64 extracted-install smoke step must propagate failure")
+    if _script_command(step.run, "scripts/smoke-release-install.py") != ARM64_SMOKE_ARGV:
+        raise ReleaseLockError("Linux ARM64 smoke does not use the exact extracted-install source argv")
+
+
+def _check_release_set_step(by_identity: dict[tuple[str, str], Step]) -> None:
+    step = by_identity.get(RELEASE_SET_STEP)
+    if step is None or step.run is None:
+        raise ReleaseLockError("deterministic release-set build and verification step is missing")
+    if step.condition is not None:
+        raise ReleaseLockError("release-set build and verification step may not be conditional")
+    if not _is_fail_closed(step.continue_on_error):
+        raise ReleaseLockError("release-set build and verification step must propagate failure")
+    identity_argv = (
+        "--assets-dir", "release-assets",
+        "--version", "$VERSION",
+        "--tag", "$RELEASE_TAG",
+        "--source-commit", "$SOURCE_COMMIT",
+        *RELEASE_SET_ARCHIVE_ARGV,
+    )
+    expected = (
+        ("python", "scripts/build-release-set-manifest.py", "build", *identity_argv),
+        ("python", "scripts/build-release-set-manifest.py", "verify", *identity_argv),
+    )
+    actual = _script_commands(step.run, "scripts/build-release-set-manifest.py")
+    if actual != expected:
+        raise ReleaseLockError(
+            "release-set manifest must be built and verified with exact identity and ordered archives"
+        )
+
+    final_step = by_identity.get(FINAL_RELEASE_SET_STEP)
+    if final_step is None or final_step.run is None:
+        raise ReleaseLockError("exact final release asset-set step is missing")
+    if final_step.condition is not None:
+        raise ReleaseLockError("exact final release asset-set step may not be conditional")
+    if not _is_fail_closed(final_step.continue_on_error):
+        raise ReleaseLockError("exact final release asset-set step must propagate failure")
+
+
 def _check_source_bound(
     source: str,
     *,
@@ -909,6 +1088,8 @@ def _check_source_bound(
     steps = [step for job in jobs for step in job.steps]
     by_identity = {(step.job, step.name): step for step in steps}
     _check_graph_security(source, jobs)
+    _check_arm64_smoke(source, jobs)
+    _check_release_set_step(by_identity)
 
     actual_direct: dict[tuple[str, str], set[str]] = {}
     scanned: list[Invocation] = []

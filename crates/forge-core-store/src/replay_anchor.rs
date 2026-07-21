@@ -8,7 +8,7 @@
 //! an actor that can roll back both stores from presenting a consistent past.
 
 use crate::replay_wal::{
-    recover_replay_wal, replay_wal_manifest_path, replay_wal_path, ReplayWalError,
+    capture_replay_authority, capture_replay_authority_under_boundary, ReplayWalError,
 };
 use fs4::FileExt;
 use serde::{Deserialize, Serialize};
@@ -88,19 +88,27 @@ impl ReplayAnchorSnapshot {
 /// no verification/success bit and grants no authority outside that exact file.
 pub(crate) struct ReplayAnchorRetainedLock {
     file: File,
+    boundary: crate::producer_quiescence::BoundaryLease,
+    lock_identity: crate::retained_dir::RetainedFileIdentity,
     state_root: PathBuf,
     anchor_path: PathBuf,
-    lock_path: PathBuf,
 }
 
 impl ReplayAnchorRetainedLock {
     fn validate(&self, state_root: &Path, anchor_path: &Path) -> Result<(), ReplayAnchorError> {
+        self.boundary
+            .validate_root(state_root)
+            .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
         let actual_root = canonical_state_root(state_root)?;
         let actual_anchor = validated_external_anchor_path(&actual_root, anchor_path, true)?;
         let actual_lock = anchor_lock_path(&actual_anchor)?;
+        let current_lock_identity = OpenOptions::new()
+            .read(true)
+            .open(&actual_lock)
+            .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
         if actual_root != self.state_root
             || actual_anchor != self.anchor_path
-            || fs::canonicalize(&actual_lock).ok().as_ref() != Some(&self.lock_path)
+            || !current_lock_identity.is_ok_and(|identity| identity == self.lock_identity)
         {
             return Err(ReplayAnchorError::Invalid(format!(
                 "retained lock protects {}, not requested anchor {}",
@@ -123,7 +131,22 @@ pub(crate) fn acquire_replay_anchor_retained_lock(
     state_root: &Path,
     anchor_path: &Path,
 ) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
-    acquire_replay_anchor_retained_lock_inner(state_root, anchor_path, true)
+    let boundary = crate::producer_quiescence::admit_producer(state_root)
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
+    acquire_replay_anchor_retained_lock_under_boundary(&boundary, state_root, anchor_path)
+}
+
+pub(crate) fn acquire_replay_anchor_retained_lock_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+    anchor_path: &Path,
+) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
+    acquire_replay_anchor_retained_lock_inner_under_boundary(
+        boundary,
+        state_root,
+        anchor_path,
+        true,
+    )
 }
 
 /// Read and validate the matching anchor without reacquiring its retained lock.
@@ -159,6 +182,8 @@ pub fn provision_replay_anchor(
             "deployment_id must not be blank".to_owned(),
         ));
     }
+    let _producer = crate::producer_quiescence::admit_producer(state_root.as_ref())
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
     let state_root = canonical_state_root(state_root.as_ref())?;
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path.as_ref(), false)?;
     let head = capture_replay_head(&state_root)?;
@@ -205,6 +230,30 @@ pub fn verify_replay_anchor(
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path.as_ref(), true)?;
     let anchor = read_anchor(&anchor_path)?;
     let current = capture_replay_head_with_bytes(&state_root)?;
+    verify_captured_replay_anchor(anchor_path, anchor, current)
+}
+
+/// Verify replay authority while retaining the caller's producer boundary and
+/// exact external-anchor lock. This avoids a forbidden process-local producer
+/// admission after host quiescence has already been acquired.
+pub(crate) fn verify_replay_anchor_under_retained_lock(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+    anchor_path: &Path,
+    guard: &ReplayAnchorRetainedLock,
+) -> Result<ReplayAnchorVerification, ReplayAnchorError> {
+    let state_root = canonical_state_root(state_root)?;
+    let (anchor, _) =
+        snapshot_replay_anchor_under_retained_lock(&state_root, anchor_path, guard)?.into_parts();
+    let current = capture_replay_head_with_bytes_under_boundary(boundary, &state_root)?;
+    verify_captured_replay_anchor(guard.anchor_path.clone(), anchor, current)
+}
+
+fn verify_captured_replay_anchor(
+    anchor_path: PathBuf,
+    anchor: ReplayAnchorDocument,
+    current: CapturedReplayHead,
+) -> Result<ReplayAnchorVerification, ReplayAnchorError> {
     let status = compare_anchor(&anchor, &current.head, &current.wal_bytes)?;
     Ok(ReplayAnchorVerification {
         status,
@@ -258,6 +307,8 @@ fn advance_replay_anchor_inner(
     anchor_path: &Path,
     expected_deployment_id: Option<&str>,
 ) -> Result<ReplayAnchorAdvance, ReplayAnchorError> {
+    let _producer = crate::producer_quiescence::admit_producer(state_root)
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
     let state_root = canonical_state_root(state_root)?;
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path, true)?;
     for attempt in 0..ADVANCE_RETRIES {
@@ -306,6 +357,7 @@ fn advance_replay_anchor_inner(
                     previous_anchor_digest,
                     head: current.head,
                 };
+                lock.validate(&state_root, &anchor_path)?;
                 write_anchor_replace(&anchor_path, &updated)?;
                 return Ok(ReplayAnchorAdvance {
                     changed: true,
@@ -331,21 +383,31 @@ fn capture_replay_head(state_root: &Path) -> Result<ReplayWalHead, ReplayAnchorE
 fn capture_replay_head_with_bytes(
     state_root: &Path,
 ) -> Result<CapturedReplayHead, ReplayAnchorError> {
-    let recovery = recover_replay_wal(state_root, false).map_err(ReplayAnchorError::Replay)?;
+    let authority = capture_replay_authority(state_root).map_err(ReplayAnchorError::Replay)?;
+    captured_replay_head(authority)
+}
+
+fn capture_replay_head_with_bytes_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+) -> Result<CapturedReplayHead, ReplayAnchorError> {
+    let authority = capture_replay_authority_under_boundary(boundary, state_root)
+        .map_err(ReplayAnchorError::Replay)?;
+    captured_replay_head(authority)
+}
+
+fn captured_replay_head(
+    (recovery, wal_bytes, manifest_bytes): (crate::replay_wal::ReplayWalRecovery, Vec<u8>, Vec<u8>),
+) -> Result<CapturedReplayHead, ReplayAnchorError> {
     if !recovery.is_clean() {
         return Err(ReplayAnchorError::Invalid(format!(
             "replay WAL stopped at {:?}",
             recovery.stop_reason
         )));
     }
-    let wal_path = replay_wal_path(state_root);
-    let wal_bytes = fs::read(&wal_path).map_err(|error| io_error(&wal_path, &error))?;
     if u64::try_from(wal_bytes.len()).unwrap_or(u64::MAX) != recovery.last_good_offset {
         return Err(ReplayAnchorError::ConcurrentDrift);
     }
-    let manifest_path = replay_wal_manifest_path(state_root);
-    let manifest_bytes =
-        fs::read(&manifest_path).map_err(|error| io_error(&manifest_path, &error))?;
     Ok(CapturedReplayHead {
         head: ReplayWalHead {
             manifest_digest: sha256(&manifest_bytes),
@@ -511,6 +573,24 @@ fn acquire_replay_anchor_retained_lock_inner(
     anchor_path: &Path,
     must_exist: bool,
 ) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
+    let boundary = crate::producer_quiescence::admit_producer(state_root)
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
+    acquire_replay_anchor_retained_lock_inner_under_boundary(
+        &boundary,
+        state_root,
+        anchor_path,
+        must_exist,
+    )
+}
+
+fn acquire_replay_anchor_retained_lock_inner_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+    anchor_path: &Path,
+    must_exist: bool,
+) -> Result<ReplayAnchorRetainedLock, ReplayAnchorError> {
+    let boundary = crate::producer_quiescence::BoundaryLease::from_boundary(boundary, state_root)
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
     let state_root = canonical_state_root(state_root)?;
     let anchor_path = validated_external_anchor_path(&state_root, anchor_path, must_exist)?;
     let lock_path = anchor_lock_path(&anchor_path)?;
@@ -522,13 +602,17 @@ fn acquire_replay_anchor_retained_lock_inner(
         .open(&lock_path)
         .map_err(|error| io_error(&lock_path, &error))?;
     FileExt::lock(&file).map_err(|error| io_error(&lock_path, &error))?;
-    let canonical_lock =
-        fs::canonicalize(&lock_path).map_err(|error| io_error(&lock_path, &error))?;
+    let lock_identity = crate::retained_dir::RetainedDirectory::identity_of(&file)
+        .map_err(|error| io_error(&lock_path, &error))?;
+    boundary
+        .validate_root(&state_root)
+        .map_err(|source| ReplayAnchorError::Invalid(source.to_string()))?;
     Ok(ReplayAnchorRetainedLock {
         file,
+        boundary,
+        lock_identity,
         state_root,
         anchor_path,
-        lock_path: canonical_lock,
     })
 }
 
@@ -759,5 +843,31 @@ mod tests {
         drop(guard);
         FileExt::try_lock(&second).expect("drop must release lock");
         FileExt::unlock(&second).expect("unlock second handle");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_anchor_on_a_rejects_replacement_b_before_snapshot() {
+        let root = TestDir::new("state-replaced");
+        let protected = TestDir::new("protected-replaced");
+        initialize_replay_wal(&root.0).expect("initialize A");
+        let anchor = protected.0.join("replay-anchor.json");
+        provision_replay_anchor(&root.0, &anchor, "deployment-a").expect("provision anchor");
+        let guard =
+            acquire_replay_anchor_retained_lock(&root.0, &anchor).expect("lock anchor on A");
+        let anchor_before = fs::read(&anchor).expect("read anchor");
+        let displaced = root.0.with_extension("inode-a");
+        fs::rename(&root.0, &displaced).expect("displace A");
+        fs::create_dir_all(root.0.join("locks")).expect("create B locks");
+
+        assert!(snapshot_replay_anchor_under_retained_lock(&root.0, &anchor, &guard).is_err());
+        assert_eq!(
+            fs::read(&anchor).expect("read unchanged anchor"),
+            anchor_before
+        );
+
+        drop(guard);
+        fs::remove_dir_all(&root.0).expect("remove B");
+        fs::rename(displaced, &root.0).expect("restore A");
     }
 }

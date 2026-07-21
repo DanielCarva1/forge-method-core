@@ -447,6 +447,7 @@ impl std::error::Error for TrustedSnapshotBuildError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use forge_core_store::claim_wal::{append_claim_wal_record, ClaimWalOperation};
     use std::fs;
 
     fn repo_root() -> PathBuf {
@@ -461,6 +462,8 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("contracts/effects")).expect("project tree");
         fs::create_dir_all(root.join("contracts/assurance")).expect("assurance tree");
+        fs::create_dir_all(root.join("contracts/claims")).expect("claim tree");
+        fs::create_dir_all(root.join("contracts/gates")).expect("gate tree");
         fs::create_dir_all(root.join("state")).expect("state tree");
         root
     }
@@ -502,6 +505,27 @@ mod tests {
             root.join("contracts/effects/file-delete-restore-inverse-effect.yaml"),
         )
         .expect("copy effect");
+        let claim_text =
+            fs::read_to_string(source.join("contracts/claims/story-v2-010-active-claim.yaml"))
+                .expect("claim fixture");
+        fs::write(
+            root.join("contracts/claims/story-v2-010-active-claim.yaml"),
+            &claim_text,
+        )
+        .expect("copy claim");
+        let claim: ClaimContractDocument = yaml_serde::from_str(&claim_text).expect("typed claim");
+        append_claim_wal_record(
+            root.join("state"),
+            ClaimWalOperation::Acquire,
+            &claim.claim_contract,
+            "2026-07-20T00:00:00Z",
+        )
+        .expect("append authoritative claim");
+        fs::copy(
+            source.join("contracts/gates/destructive-review-pass-gate.yaml"),
+            root.join("contracts/gates/destructive-review-pass-gate.yaml"),
+        )
+        .expect("copy gate");
         let output = build_trusted_execution_snapshot(
             &root,
             root.join("state"),
@@ -521,8 +545,8 @@ mod tests {
             },
         )
         .expect("generated snapshot");
-        assert_eq!(output.claim_count, 0);
-        assert_eq!(output.gate_count, 0);
+        assert_eq!(output.claim_count, 1);
+        assert_eq!(output.gate_count, 1);
         assert_eq!(
             output
                 .snapshot

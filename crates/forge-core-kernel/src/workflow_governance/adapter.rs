@@ -6,7 +6,7 @@
 
 // Opaque authorization and completion capabilities are intentionally consumed
 // by value so callers cannot reuse them after a durable transition.
-#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
 
 use super::{
     admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
@@ -23,32 +23,46 @@ use forge_core_authority::workflow_authority::{
     WORKFLOW_APPLICABILITY_AUTHORITY_SCOPE, WORKFLOW_APPLICABILITY_EVALUATOR_REF,
     WORKFLOW_CAPABILITY_AUTHORITY_SCOPE,
 };
+#[cfg(test)]
+use forge_core_authority::workflow_origin_broker::WorkflowBrokerIssuerStatus;
 use forge_core_authority::{
-    AuthorizedPrincipalAudit, AuthorizedPrincipalRegistry, AuthorizedWorkflowBrokerRegistry,
+    AuthorizedPrincipalAudit, AuthorizedPrincipalRegistry, AuthorizedWorkflowBrokerControlPlane,
+    AuthorizedWorkflowBrokerRegistry, HistoricallyVerifiedBoundWorkflowBrokerEvent,
     HistoricallyVerifiedWorkflowBrokerEvent, PrincipalCredentialStatus, PrincipalRegistryDocument,
-    VerifiedWorkflowApplicabilityAuthorization, VerifiedWorkflowBrokerEvent,
-    VerifiedWorkflowBrokerEventAudit, VerifiedWorkflowCapabilityAuthorization,
-    VerifiedWorkflowDecisionAuthorization, VerifiedWorkflowEvidenceAuthorization,
-    VerifiedWorkflowSignalAuthorization, VerifiedWorkflowWaiverAuthorization,
-    WorkflowApplicabilityAuthorizationRequest, WorkflowAuthorizationKind, WorkflowBrokerEventKind,
-    WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus, WorkflowBrokerRegistryDocument,
-    WorkflowBrokerSemanticInput, WorkflowCapabilityAuthorizationRequest,
-    WorkflowDecisionAuthorizationRequest, WorkflowEvidenceAuthorizationRequest,
-    WorkflowSignalAuthorizationRequest, WorkflowWaiverAuthorizationRequest, WorkflowWaiverSubject,
+    VerifiedBoundWorkflowBrokerEvent, VerifiedWorkflowApplicabilityAuthorization,
+    VerifiedWorkflowBrokerEvent, VerifiedWorkflowBrokerEventAudit,
+    VerifiedWorkflowCapabilityAuthorization, VerifiedWorkflowDecisionAuthorization,
+    VerifiedWorkflowEvidenceAuthorization, VerifiedWorkflowSignalAuthorization,
+    VerifiedWorkflowWaiverAuthorization, WorkflowApplicabilityAuthorizationRequest,
+    WorkflowAuthorizationKind, WorkflowBrokerEventKind, WorkflowBrokerIssuerProfile,
+    WorkflowBrokerRegistryDocument, WorkflowBrokerSemanticInput,
+    WorkflowCapabilityAuthorizationRequest, WorkflowDecisionAuthorizationRequest,
+    WorkflowEvidenceAuthorizationRequest, WorkflowSignalAuthorizationRequest,
+    WorkflowWaiverAuthorizationRequest, WorkflowWaiverSubject,
 };
+use forge_core_contracts::completion::CompletionStatus;
+use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::operation::CallerRole;
+use forge_core_contracts::recovery::{HealthStatus, RecoveryAction};
+use forge_core_contracts::request::{DependencyKind, RequestStatus};
 use forge_core_contracts::workflow_governance::{
     BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, WorkflowBrokerOriginProfile,
 };
 use forge_core_contracts::{
-    ApplicabilityAssessedEvent, CapabilityProbedEvent, ContinuityRecordedEvent,
+    ApplicabilityAssessedEvent, CapabilityProbedEvent, ClaimContract, ContinuityRecordedEvent,
+    CoordinationCompletionState, CoordinationHealthRecoveryState, CoordinationMutationHandoff,
+    CoordinationRequestState, CoordinationStateAppliedEvent, CoordinationStateRecord,
     CoreDomainPackRebasedEvent, DecisionAlternative, DecisionResolvedEvent,
     DomainPackCompositionGap, DomainPackCoreBinding, DomainPackLifecycleOperation,
     DomainPackRebasePlanDocument, DomainPackRebasePlanInput, DurableAssuranceEpistemicState,
     DurableAssuranceProjection, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent,
-    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget,
-    ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
-    WaiverAuthorizedEvent, WorkflowAssuranceClaimRole, WorkflowCapabilityProbeKind,
+    PolicyCompletedEvent, PostBuildVerifyAdmittedGateResult, PostBuildVerifyEpisodeAppliedEvent,
+    PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
+    PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent,
+    SignalChangedEvent, StableId, UniversalAssuranceLens, WaiverAuthorizedEvent,
+    WorkflowAssuranceClaimRole, WorkflowBrokerCredentialStatus,
+    WorkflowBrokerExternalSetupBlockReason, WorkflowBrokerExternalSetupState,
+    WorkflowBrokerPublicRegistryDocument, WorkflowCapabilityProbeKind,
     WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
     WorkflowContentAddressedReference, WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider,
     WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
@@ -67,24 +81,33 @@ use forge_core_contracts::{
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    find_entry, load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
-    project_durable_assurance, project_governed_durable_assurance,
-    project_legacy_workflow_compatibility, simulate_workflow_governance,
+    evaluate_post_build_verify_episode, evaluate_transition, find_entry, is_live,
+    load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase, project_durable_assurance,
+    project_governed_durable_assurance, project_legacy_workflow_compatibility, rfc3339_to_unix,
+    route_post_build_verify_episode, simulate_workflow_governance,
     validate_representative_slice_definition, verify_domain_pack_rebase_plan,
-    workflow_human_intent_digest, AssuranceProjectionError, DomainPackRebasePlanError,
+    workflow_human_intent_digest, AssuranceProjectionError, DomainPackRebasePlanError, GateKind,
     GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
     GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
-    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection, WorkflowClaimResultStatus,
-    WorkflowGovernanceRejection, WorkflowGovernanceSimulation, WorkflowGovernanceStatus,
+    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
+    PostBuildVerifyEpisodeRuntimeRoute, ProvidedGateResult, TransitionDecision, TransitionRequest,
+    WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
+    WorkflowGovernanceStatus,
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle, AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
     LockedDomainPackLifecycle,
 };
-use forge_core_store::sha256_content_hash;
+use forge_core_store::claim_wal::{
+    project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
+};
 use forge_core_store::workflow_action_replay::{
     begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
     workflow_action_replay_origin_fingerprint, WorkflowActionReplayError,
+};
+use forge_core_store::{sha256_content_hash, ReferenceIndexBuilder};
+use forge_core_validate::{
+    validate_completion, validate_health_recovery, validate_request, ReferenceIndex, ReferenceKind,
 };
 use forge_core_workflow_governance_tcb::{
     domain_pack_receipt_carryover, lock_workflow_governance_ledger_tcb,
@@ -300,6 +323,9 @@ pub struct WorkflowAuthorizationActionPacketSet {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowAuthorizationRegistrySetupStatus {
     Missing,
+    /// A frozen legacy registry remains admissible only for exact replay repair;
+    /// it cannot authorize a new workflow mutation.
+    LegacyRecoveryOnly,
     NoActiveIssuer,
     Ready,
 }
@@ -312,15 +338,17 @@ pub struct WorkflowAuthorizationRegistrySetup {
 }
 
 /// Machine-actionable authority setup gap returned directly by `workflow
-/// next`. The argv is an exact command shape with explicit placeholders only
-/// for operator-owned public enrollment inputs; Forge never asks an agent for
-/// a broker private key or hand-authored authorization document.
+/// next`. An argv is emitted only when the external selected-host dependency is
+/// available and the command can round-trip through the strict broker parser.
+/// A blocked external setup emits no executable suggestion; Forge never asks an
+/// agent to fabricate a private key, trust anchor, or native authorization.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowAuthorizationSetupGap {
     pub code: WorkflowAuthorizationSetupGapCode,
     pub summary: String,
     pub accepted_profiles: Vec<WorkflowBrokerIssuerProfile>,
+    pub external_setup: WorkflowBrokerExternalSetupState,
     pub setup_argv: Vec<String>,
     pub required_operator_inputs: Vec<String>,
 }
@@ -329,6 +357,7 @@ pub struct WorkflowAuthorizationSetupGap {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowAuthorizationSetupGapCode {
     BrokerRegistryMissing,
+    BrokerRegistryLegacyRecoveryOnly,
     BrokerRegistryNoActiveIssuer,
 }
 
@@ -536,6 +565,88 @@ pub struct WorkflowGovernanceProjectAdapter {
     binding: WorkflowGovernanceProjectBinding,
 }
 
+/// Exact compare-and-swap bindings required to consume one candidate-only C5.1
+/// episode. The document remains data; only the successful kernel operation can
+/// produce the durable applied record.
+pub struct PostBuildVerifyEpisodeApplyRequest<'a> {
+    pub document: &'a PostBuildVerifyEpisodeDocument,
+    pub expected_snapshot_digest: &'a str,
+    pub expected_ledger_head_digest: &'a str,
+    pub expected_state_version: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyEpisodeApplyReceipt {
+    pub outcome: PostBuildVerifyEpisodeOutcome,
+    pub record: WorkflowGovernanceLedgerRecord,
+}
+
+/// Exact compare-and-swap request for one kernel-validated coordination update.
+/// The serialized contracts remain data and cannot invoke this operation.
+pub struct CoordinationStateApplyRequest<'a> {
+    pub state: &'a CoordinationStateRecord,
+    pub expected_ledger_head_digest: &'a str,
+    pub expected_state_version: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationStateApplyReceipt {
+    pub record: WorkflowGovernanceLedgerRecord,
+    pub appended: bool,
+}
+
+/// Complete C5.3 episode recovered from one `0.8` ledger record. This is a
+/// read-only projection and does not recreate the consumed phase admission.
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplacementEpisodeProjection {
+    pub document: PostBuildVerifyEpisodeDocument,
+    pub outcome: PostBuildVerifyEpisodeOutcome,
+    pub from_phase: StableId,
+    pub to_phase: Option<StableId>,
+    pub decision_digest: String,
+    pub ledger_record_digest: String,
+    pub state_version: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplacementClaimLiveness {
+    Live,
+    Expired,
+    NonActive,
+}
+
+/// Authority-free claim snapshot joined while the claim-WAL retained recovery
+/// lock is held. Returning this value releases that lock and carries no claim.
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplacementClaimProjection {
+    pub claim: ClaimContract,
+    pub last_sequence: u64,
+    pub liveness: ReplacementClaimLiveness,
+}
+
+/// Exact fresh-process reconstruction across the workflow ledger and claim WAL.
+/// Every member is audit/recovery data only; no opaque kernel capability is
+/// serialized or returned.
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplacementContinuityProjection {
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+    pub current_phase: StableId,
+    pub active_release: WorkflowGovernanceReleaseIdentity,
+    pub active_episode_id: StableId,
+    pub episodes_by_id: BTreeMap<String, ReplacementEpisodeProjection>,
+    pub requests_by_id: BTreeMap<String, CoordinationRequestState>,
+    pub completions_by_task_id: BTreeMap<String, CoordinationCompletionState>,
+    pub health_recovery_by_runtime_id: BTreeMap<String, CoordinationHealthRecoveryState>,
+    pub claims_by_id: BTreeMap<String, ReplacementClaimProjection>,
+}
+
 /// Retains the Domain Pack lifecycle lock until the complete workflow
 /// transaction ends. This enforces the global lifecycle -> workflow-ledger
 /// lock order even for projects that currently have no active generation.
@@ -666,6 +777,246 @@ impl WorkflowGovernanceProjectAdapter {
     #[must_use]
     pub const fn binding(&self) -> &WorkflowGovernanceProjectBinding {
         &self.binding
+    }
+
+    /// Admit and atomically record one exact C5.2 route from a candidate-only
+    /// post-BuildVerify episode.
+    ///
+    /// Forward advancement requires the complete current phase policy boundary,
+    /// governed assurance, and the hard transition gate to pass. Rollback and
+    /// evolution-triage outcomes record a typed durable episode without changing
+    /// phase. The caller cannot construct or serialize admission authority.
+    pub fn apply_post_build_verify_episode(
+        &self,
+        request: PostBuildVerifyEpisodeApplyRequest<'_>,
+    ) -> Result<PostBuildVerifyEpisodeApplyReceipt, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+
+        let head = projection
+            .head_digest
+            .as_deref()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        let snapshot = project_snapshot_digest(&self.binding.project_root)?;
+        if request.expected_ledger_head_digest != head {
+            return Err(
+                WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(
+                    "ledger head",
+                ),
+            );
+        }
+        if request.expected_state_version != state_version {
+            return Err(
+                WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(
+                    "state version",
+                ),
+            );
+        }
+        if request.expected_snapshot_digest != snapshot {
+            return Err(
+                WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(
+                    "project snapshot",
+                ),
+            );
+        }
+
+        let episode = &request.document.post_build_verify_episode;
+        if episode.release_subject != *admitted.release()
+            || episode.build_verify_snapshot.subject_digest != snapshot
+        {
+            return Err(
+                WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(
+                    "release subject or BuildVerify snapshot",
+                ),
+            );
+        }
+        let current = current_phase(&projection)?;
+        let current_phase_value = Phase::parse(&current.0)
+            .ok_or_else(|| WorkflowGovernanceAdapterError::InvalidPhase(current.0.clone()))?;
+        let route = route_post_build_verify_episode(request.document, current_phase_value)
+            .map_err(|_| WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeRouteInvalid)?;
+        let decision = evaluate_post_build_verify_episode(request.document);
+
+        let (outcome, to_phase, admitted_gate) = match route {
+            PostBuildVerifyEpisodeRuntimeRoute::AdvanceToReadyOperate => {
+                self.require_post_build_verify_gate(
+                    &effective,
+                    &projection,
+                    now,
+                    current_phase_value,
+                    Phase::ReadyOperate,
+                    &snapshot,
+                    GateKind::Readiness,
+                )?;
+                (
+                    PostBuildVerifyEpisodeOutcome::AdvancedToReadyOperate,
+                    Some(StableId(Phase::ReadyOperate.to_string())),
+                    Some(PostBuildVerifyAdmittedGateResult {
+                        kind: PostBuildVerifyGateKind::Readiness,
+                        status: GateStatus::Pass,
+                        effective_bundle_digest: effective
+                            .identity()
+                            .effective_runtime_bundle
+                            .bundle_digest
+                            .clone(),
+                    }),
+                )
+            }
+            PostBuildVerifyEpisodeRuntimeRoute::AdvanceToEvolve => {
+                self.require_post_build_verify_gate(
+                    &effective,
+                    &projection,
+                    now,
+                    current_phase_value,
+                    Phase::Evolve,
+                    &snapshot,
+                    GateKind::Release,
+                )?;
+                (
+                    PostBuildVerifyEpisodeOutcome::AdvancedToEvolve,
+                    Some(StableId(Phase::Evolve.to_string())),
+                    Some(PostBuildVerifyAdmittedGateResult {
+                        kind: PostBuildVerifyGateKind::Release,
+                        status: GateStatus::Pass,
+                        effective_bundle_digest: effective
+                            .identity()
+                            .effective_runtime_bundle
+                            .bundle_digest
+                            .clone(),
+                    }),
+                )
+            }
+            PostBuildVerifyEpisodeRuntimeRoute::OpenRollbackAssessment => (
+                PostBuildVerifyEpisodeOutcome::RollbackAssessmentOpened,
+                None,
+                None,
+            ),
+            PostBuildVerifyEpisodeRuntimeRoute::OpenEvolutionTriage => (
+                PostBuildVerifyEpisodeOutcome::EvolutionTriageOpened,
+                None,
+                None,
+            ),
+        };
+        let next_state_version = state_version
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
+        let event = PostBuildVerifyEpisodeAppliedEvent {
+            episode_id: episode.episode_id.clone(),
+            generation: episode.generation,
+            previous_episode_digest: episode.previous_episode_digest.clone(),
+            episode_digest: episode.episode_digest.clone(),
+            release_subject: episode.release_subject.clone(),
+            decision_digest: decision.decision_digest,
+            from_phase: current,
+            to_phase,
+            outcome,
+            snapshot_digest: snapshot,
+            prior_ledger_head_digest: head.to_owned(),
+            prior_state_version: state_version,
+            admitted_gate,
+            episode_snapshot: Some(request.document.clone()),
+        };
+        let identity = self.identity(admitted);
+        let record = ledger.apply_post_build_verify_episode_unchecked_tcb(
+            head,
+            &identity,
+            next_state_version,
+            event,
+        )?;
+        Ok(PostBuildVerifyEpisodeApplyReceipt { outcome, record })
+    }
+
+    /// Validate and atomically append one Request, Completion, or `HealthRecovery`
+    /// projection. Contract bytes never carry the retained claim/ledger locks or
+    /// any mutation, claim, phase, release, signing, trust, or lifecycle authority.
+    pub fn apply_coordination_state(
+        &self,
+        request: CoordinationStateApplyRequest<'_>,
+    ) -> Result<CoordinationStateApplyReceipt, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
+        let now = i64::try_from(unix_time()?)
+            .map_err(|_| WorkflowGovernanceAdapterError::ClockOverflow)?;
+        let reference_index = coordination_reference_index(&self.binding.project_root)?;
+        let claim_projection = project_claim_wal_clean(&self.binding.state_root)?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+
+        if let Some(record) = exact_coordination_retry(
+            &projection,
+            request.state,
+            request.expected_ledger_head_digest,
+            request.expected_state_version,
+        ) {
+            return Ok(CoordinationStateApplyReceipt {
+                record: record.clone(),
+                appended: false,
+            });
+        }
+
+        let head = projection
+            .head_digest
+            .as_deref()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        if request.expected_ledger_head_digest != head
+            || request.expected_state_version != state_version
+        {
+            return Err(WorkflowGovernanceAdapterError::CoordinationCasMismatch);
+        }
+        validate_coordination_kernel_state(
+            request.state,
+            &projection,
+            &claim_projection,
+            &reference_index,
+            state_version,
+            now,
+        )?;
+
+        let identity = projection
+            .active_identity()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let next_state_version = state_version
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
+        let event = CoordinationStateAppliedEvent {
+            prior_ledger_head_digest: head.to_owned(),
+            prior_state_version: state_version,
+            state: request.state.clone(),
+        };
+        let record = ledger.apply_coordination_state_unchecked_tcb(
+            head,
+            &identity,
+            next_state_version,
+            event,
+        )?;
+        Ok(CoordinationStateApplyReceipt {
+            record,
+            appended: true,
+        })
+    }
+
+    /// Reconstruct the exact replacement-agent state from fresh durable reads.
+    /// Historical `0.7` episode summaries fail closed because they cannot recover
+    /// the rollback baseline, observations, intake, evolution identity, or next action.
+    pub fn recover_replacement_continuity(
+        &self,
+    ) -> Result<ReplacementContinuityProjection, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
+        let now = i64::try_from(unix_time()?)
+            .map_err(|_| WorkflowGovernanceAdapterError::ClockOverflow)?;
+        let claim_projection = project_claim_wal_clean(&self.binding.state_root)?;
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        project_replacement_continuity(&projection, &claim_projection, now)
     }
 
     /// Create the first durable project-import receipt. The initial phase is a
@@ -874,17 +1225,40 @@ impl WorkflowGovernanceProjectAdapter {
         Ok(prepared)
     }
 
-    /// Apply one separately verified broker-origin answer as an atomic action
-    /// plus provenance companion, guarded by the dedicated replay WAL.
-    ///
-    /// # Errors
-    /// Fails closed for stale packets, profile/boundary mismatch, broker
-    /// registry rotation, replay conflict, project drift, or indeterminate
-    /// ledger/replay recovery.
-    pub fn apply_verified_broker_action(
+    /// Unit-test seam for the frozen legacy authority. Production callers have
+    /// no unbound live-mutation API: only a strict control-plane capability may
+    /// enter the append path below.
+    #[cfg(test)]
+    fn apply_verified_broker_action(
         &self,
         verified: VerifiedWorkflowBrokerEvent,
         now: u64,
+    ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
+        self.apply_verified_broker_action_inner(verified, now, None, None)
+    }
+
+    /// Apply a strict control-plane capability while retaining the exact admitted
+    /// registry digest and rotation-stable native interaction replay identity.
+    pub fn apply_verified_bound_broker_action(
+        &self,
+        verified: VerifiedBoundWorkflowBrokerEvent,
+        now: u64,
+    ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
+        let (verified, bound) = verified.into_parts();
+        self.apply_verified_broker_action_inner(
+            verified,
+            now,
+            Some(bound.registry_digest),
+            Some(bound.native_interaction_replay_digest),
+        )
+    }
+
+    fn apply_verified_broker_action_inner(
+        &self,
+        verified: VerifiedWorkflowBrokerEvent,
+        now: u64,
+        admitted_registry_digest: Option<String>,
+        stable_replay_origin_id: Option<String>,
     ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
         if now == 0 {
             return Err(WorkflowGovernanceAdapterError::Clock);
@@ -892,6 +1266,11 @@ impl WorkflowGovernanceProjectAdapter {
         let (semantic_input, audit) = verified.into_parts();
         if audit.project_id != self.binding.project_id {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        if let Some(expected) = admitted_registry_digest.as_deref() {
+            if self.current_trusted_broker_registry_digest()?.as_deref() != Some(expected) {
+                return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+            }
         }
 
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
@@ -903,10 +1282,15 @@ impl WorkflowGovernanceProjectAdapter {
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
-        let replay_origin_id = broker_replay_origin_id(&audit)?;
-        if let Some((action_record, origin_record)) =
-            matching_broker_origin_retry(&projection, &audit)?
-        {
+        let replay_origin_id = stable_replay_origin_id
+            .clone()
+            .map_or_else(|| broker_replay_origin_id(&audit), Ok)?;
+        if let Some((action_record, origin_record)) = matching_broker_origin_retry(
+            &projection,
+            &audit,
+            admitted_registry_digest.as_deref(),
+            stable_replay_origin_id.as_deref(),
+        )? {
             let replay_repaired = ensure_broker_replay_committed(
                 &self.binding.state_root,
                 &audit.action_packet_digest,
@@ -941,6 +1325,12 @@ impl WorkflowGovernanceProjectAdapter {
                         self.trusted_broker_registry_path().display()
                     ),
                 })?;
+        if admitted_registry_digest
+            .as_deref()
+            .is_some_and(|expected| expected != broker_registry_digest.as_str())
+        {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
 
         let guidance = self.guidance_from_projection(
             &registry,
@@ -1041,9 +1431,14 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let origin_event = WorkflowGovernanceEvent::BrokerOriginApplied(
-            broker_origin_applied_event(&packet, &audit, &broker_registry_digest, &action_record),
-        );
+        let origin_event =
+            WorkflowGovernanceEvent::BrokerOriginApplied(broker_origin_applied_event(
+                &packet,
+                &audit,
+                &broker_registry_digest,
+                stable_replay_origin_id.as_deref(),
+                &action_record,
+            ));
         let origin_record = batch.push_event(packet.binding.state_version, origin_event)?;
         let phase_advanced_record = if phase_may_advance {
             self.plan_phase_advance(&effective, batch.projection(), commit_now)?
@@ -1115,6 +1510,30 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         verified: HistoricallyVerifiedWorkflowBrokerEvent,
     ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
+        self.recover_historically_verified_broker_action_inner(verified, None, None)
+    }
+
+    /// Repair replay state for a strict control-plane event using its
+    /// rotation-stable native interaction identity. This path still cannot append
+    /// a governance event.
+    pub fn recover_historically_verified_bound_broker_action(
+        &self,
+        verified: HistoricallyVerifiedBoundWorkflowBrokerEvent,
+    ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
+        let (verified, bound) = verified.into_parts();
+        self.recover_historically_verified_broker_action_inner(
+            verified,
+            Some(bound.registry_digest),
+            Some(bound.native_interaction_replay_digest),
+        )
+    }
+
+    fn recover_historically_verified_broker_action_inner(
+        &self,
+        verified: HistoricallyVerifiedWorkflowBrokerEvent,
+        admitted_registry_digest: Option<String>,
+        stable_replay_origin_id: Option<String>,
+    ) -> Result<WorkflowBrokerActionReceipt, WorkflowGovernanceAdapterError> {
         let (_, audit) = verified.into_parts();
         if audit.project_id != self.binding.project_id {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
@@ -1132,12 +1551,19 @@ impl WorkflowGovernanceProjectAdapter {
         if active_effective != *effective.identity() {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
-        let (action_record, origin_record) = matching_broker_origin_retry(&projection, &audit)?
-            .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+        let (action_record, origin_record) = matching_broker_origin_retry(
+            &projection,
+            &audit,
+            admitted_registry_digest.as_deref(),
+            stable_replay_origin_id.as_deref(),
+        )?
+        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+        let replay_origin_id =
+            stable_replay_origin_id.map_or_else(|| broker_replay_origin_id(&audit), Ok)?;
         let replay_repaired = ensure_broker_replay_committed(
             &self.binding.state_root,
             &audit.action_packet_digest,
-            &broker_replay_origin_id(&audit)?,
+            &replay_origin_id,
             &action_record.record_digest,
         )?;
         let next = self.guidance_from_projection(
@@ -3080,13 +3506,37 @@ impl WorkflowGovernanceProjectAdapter {
                 source: format!("cannot read {}: {error}", path.display()),
             }
         })?;
+        let expected_audience = self.expected_broker_audience();
+        if let Ok(document) = yaml_serde::from_str::<WorkflowBrokerPublicRegistryDocument>(&raw) {
+            let control = AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+                document.clone(),
+                &expected_audience,
+                &self.binding.project_id,
+                &StableId("workflow.governance".to_owned()),
+            )
+            .map_err(|error| WorkflowGovernanceAdapterError::TrustedRegistry {
+                source: format!("{} is invalid: {error}", path.display()),
+            })?;
+            let setup = if document.credentials.iter().any(|credential| {
+                credential.purpose
+                    == forge_core_contracts::WorkflowBrokerCredentialPurpose::EventIssuer
+                    && credential.status == WorkflowBrokerCredentialStatus::Active
+            }) {
+                WorkflowAuthorizationRegistrySetupStatus::Ready
+            } else {
+                WorkflowAuthorizationRegistrySetupStatus::NoActiveIssuer
+            };
+            return Ok(TrustedBrokerRegistryState {
+                digest: Some(control.registry_digest().to_owned()),
+                setup,
+            });
+        }
         let document: WorkflowBrokerRegistryDocument =
             yaml_serde::from_str(&raw).map_err(|error| {
                 WorkflowGovernanceAdapterError::TrustedRegistry {
                     source: format!("cannot parse {}: {error}", path.display()),
                 }
             })?;
-        let expected_audience = self.expected_broker_audience();
         AuthorizedWorkflowBrokerRegistry::from_document_for_audience(
             document.clone(),
             &expected_audience,
@@ -3094,15 +3544,10 @@ impl WorkflowGovernanceProjectAdapter {
         .map_err(|error| WorkflowGovernanceAdapterError::TrustedRegistry {
             source: format!("{} is invalid: {error}", path.display()),
         })?;
-        let setup = if document
-            .issuers
-            .iter()
-            .any(|issuer| issuer.status == WorkflowBrokerIssuerStatus::Active)
-        {
-            WorkflowAuthorizationRegistrySetupStatus::Ready
-        } else {
-            WorkflowAuthorizationRegistrySetupStatus::NoActiveIssuer
-        };
+        // A legacy registry remains readable so exact historical replay repair
+        // can verify frozen v0.1 evidence. Its active issuers are deliberately
+        // not advertised as live setup authority.
+        let setup = WorkflowAuthorizationRegistrySetupStatus::LegacyRecoveryOnly;
         let canonical = serde_json_canonicalizer::to_vec(&document)
             .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
         Ok(TrustedBrokerRegistryState {
@@ -3483,24 +3928,50 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
     }
 
-    fn plan_phase_advance(
+    fn require_post_build_verify_gate(
         &self,
         effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
-    ) -> Result<Option<(u64, WorkflowGovernanceEvent)>, WorkflowGovernanceAdapterError> {
-        let current = current_phase(projection)?;
-        let Some(current_phase_value) = Phase::parse(&current.0) else {
-            return Err(WorkflowGovernanceAdapterError::InvalidPhase(current.0));
-        };
-        let snapshot = project_snapshot_digest(&self.binding.project_root)?;
+        from: Phase,
+        to: Phase,
+        snapshot: &str,
+        gate_kind: GateKind,
+    ) -> Result<(), WorkflowGovernanceAdapterError> {
+        if !self.phase_boundary_admitted(effective, projection, now, from, snapshot)? {
+            return Err(WorkflowGovernanceAdapterError::PostBuildVerifyGateNotAdmitted);
+        }
+        let gates = [ProvidedGateResult {
+            gate_kind,
+            status: GateStatus::Pass,
+        }];
+        if evaluate_transition(&TransitionRequest {
+            from,
+            to,
+            gates: &gates,
+            waiver: None,
+        }) != TransitionDecision::Allowed
+        {
+            return Err(WorkflowGovernanceAdapterError::PostBuildVerifyGateNotAdmitted);
+        }
+        Ok(())
+    }
+
+    fn phase_boundary_admitted(
+        &self,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+        now: u64,
+        current_phase_value: Phase,
+        snapshot: &str,
+    ) -> Result<bool, WorkflowGovernanceAdapterError> {
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
         let trusted_broker_registry_digest = self.current_trusted_broker_registry_state()?.digest;
         let derived = derive_receipts(
             effective.document(),
             projection,
             &self.binding.project_root,
-            &snapshot,
+            snapshot,
             now,
             trusted_registry_digest.as_deref(),
             trusted_broker_registry_digest.as_deref(),
@@ -3552,7 +4023,7 @@ impl WorkflowGovernanceProjectAdapter {
                     projection,
                     &base,
                     &self.binding.project_root,
-                    &snapshot,
+                    snapshot,
                     boundary_target,
                     now,
                     trusted_registry_digest.as_deref(),
@@ -3569,21 +4040,34 @@ impl WorkflowGovernanceProjectAdapter {
         } else {
             None
         };
-        if !phase_advance_allowed_by_assurance(
+        Ok(phase_advance_allowed_by_assurance(
             governed_assurance.as_ref(),
             phase_done,
             assurance_is_enforced,
-        ) {
+        ))
+    }
+
+    fn plan_phase_advance(
+        &self,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+        now: u64,
+    ) -> Result<Option<(u64, WorkflowGovernanceEvent)>, WorkflowGovernanceAdapterError> {
+        let current = current_phase(projection)?;
+        let Some(current_phase_value) = Phase::parse(&current.0) else {
+            return Err(WorkflowGovernanceAdapterError::InvalidPhase(current.0));
+        };
+        let snapshot = project_snapshot_digest(&self.binding.project_root)?;
+        if !self.phase_boundary_admitted(
+            effective,
+            projection,
+            now,
+            current_phase_value,
+            &snapshot,
+        )? {
             return Ok(None);
         }
-        let next = match current_phase_value {
-            Phase::Discovery => Some(Phase::Specification),
-            Phase::Specification => Some(Phase::Plan),
-            Phase::Plan => Some(Phase::BuildVerify),
-            // P5c ends at release readiness. Retaining build-verify lets a
-            // replacement agent resume a typed terminal projection.
-            _ => None,
-        };
+        let next = automatic_phase_successor(current_phase_value);
         let Some(next) = next else {
             return Ok(None);
         };
@@ -3598,6 +4082,17 @@ impl WorkflowGovernanceProjectAdapter {
             snapshot_digest: snapshot,
         });
         Ok(Some((state_version, event)))
+    }
+}
+
+fn automatic_phase_successor(current: Phase) -> Option<Phase> {
+    match current {
+        Phase::Discovery => Some(Phase::Specification),
+        Phase::Specification => Some(Phase::Plan),
+        Phase::Plan => Some(Phase::BuildVerify),
+        // Automatic P5c advancement ends at release readiness. Only the exact
+        // C5.2 episode admission boundary may cross this point.
+        _ => None,
     }
 }
 
@@ -3864,6 +4359,13 @@ pub enum WorkflowGovernanceAdapterError {
     PolicyIncomplete,
     PolicyAlreadyCompleted,
     CompletionDrift,
+    PostBuildVerifyEpisodeBindingMismatch(&'static str),
+    PostBuildVerifyEpisodeRouteInvalid,
+    PostBuildVerifyGateNotAdmitted,
+    CoordinationCasMismatch,
+    CoordinationInvalid(String),
+    ClaimProjection(String),
+    ReplacementContinuityUnavailable(&'static str),
     FoundationalReceiptRevocation,
     StateVersionOverflow,
     Clock,
@@ -3948,6 +4450,28 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
                 f.write_str("the governed phase is already complete")
             }
             Self::CompletionDrift => f.write_str("governed completion drifted during late recheck; refresh and retry from new guidance"),
+            Self::PostBuildVerifyEpisodeBindingMismatch(field) => write!(
+                f,
+                "post-BuildVerify episode does not match the exact current {field}"
+            ),
+            Self::PostBuildVerifyEpisodeRouteInvalid => f.write_str(
+                "post-BuildVerify candidate does not describe a valid route for the current phase",
+            ),
+            Self::PostBuildVerifyGateNotAdmitted => f.write_str(
+                "post-BuildVerify phase advancement is blocked by the admitted gate or current assurance boundary",
+            ),
+            Self::CoordinationCasMismatch => f.write_str(
+                "coordination update CAS failed; refresh the ledger head and state version",
+            ),
+            Self::CoordinationInvalid(reason) => {
+                write!(f, "coordination state is invalid: {reason}")
+            }
+            Self::ClaimProjection(reason) => {
+                write!(f, "claim WAL projection failed: {reason}")
+            }
+            Self::ReplacementContinuityUnavailable(reason) => {
+                write!(f, "replacement continuity is unavailable: {reason}")
+            }
             Self::FoundationalReceiptRevocation => f.write_str("the foundational project-import receipt cannot be revoked"),
             Self::StateVersionOverflow => f.write_str("governance state version overflow"),
             Self::Clock => f.write_str("system clock is before Unix epoch"),
@@ -5196,6 +5720,551 @@ fn select_policy<'a>(
         .ok_or(WorkflowGovernanceAdapterError::NoEligiblePolicy)
 }
 
+fn project_replacement_continuity(
+    projection: &WorkflowGovernanceLedgerProjection,
+    claim_projection: &ClaimWalProjection,
+    now: i64,
+) -> Result<ReplacementContinuityProjection, WorkflowGovernanceAdapterError> {
+    let head = projection
+        .head_digest
+        .clone()
+        .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+    let state_version = projection.current_state_version().unwrap_or_default();
+    let current_phase = current_phase(projection)?;
+    let active_release = projected_active_release(projection).ok_or(
+        WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+            "active release identity is absent",
+        ),
+    )?;
+
+    let mut episodes_by_id = BTreeMap::new();
+    let mut requests_by_id = BTreeMap::new();
+    let mut completions_by_task_id = BTreeMap::new();
+    let mut health_recovery_by_runtime_id = BTreeMap::new();
+    let mut active_episode_id = None;
+    for record in &projection.records {
+        match &record.event {
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event) => {
+                if let Some(document) = event.episode_snapshot.as_ref() {
+                    episodes_by_id.insert(
+                        event.episode_id.0.clone(),
+                        ReplacementEpisodeProjection {
+                            document: document.clone(),
+                            outcome: event.outcome,
+                            from_phase: event.from_phase.clone(),
+                            to_phase: event.to_phase.clone(),
+                            decision_digest: event.decision_digest.clone(),
+                            ledger_record_digest: record.record_digest.clone(),
+                            state_version: record.state_version,
+                        },
+                    );
+                    if event.release_subject == active_release {
+                        active_episode_id = Some(event.episode_id.clone());
+                    }
+                }
+            }
+            WorkflowGovernanceEvent::CoordinationStateApplied(event) => match &event.state {
+                CoordinationStateRecord::Request(state) => {
+                    requests_by_id
+                        .insert(state.request.request_contract.id.0.clone(), state.clone());
+                }
+                CoordinationStateRecord::Completion(state) => {
+                    completions_by_task_id.insert(
+                        state.completion.completion_contract.task.task_id.0.clone(),
+                        state.clone(),
+                    );
+                }
+                CoordinationStateRecord::HealthRecovery(state) => {
+                    health_recovery_by_runtime_id.insert(
+                        state
+                            .recovery
+                            .health_recovery_contract
+                            .runtime
+                            .agent_id
+                            .0
+                            .clone(),
+                        state.clone(),
+                    );
+                }
+            },
+            _ => {}
+        }
+    }
+    let active_episode_id = active_episode_id.ok_or(
+        WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+            "no complete episode snapshot binds the active release",
+        ),
+    )?;
+    let claims_by_id = claim_projection
+        .latest_by_claim_id
+        .iter()
+        .map(|(id, projected)| {
+            let liveness = if claim_projection.active_by_claim_id.contains_key(id) {
+                if is_live(&projected.claim_contract, now) {
+                    ReplacementClaimLiveness::Live
+                } else {
+                    ReplacementClaimLiveness::Expired
+                }
+            } else {
+                ReplacementClaimLiveness::NonActive
+            };
+            (
+                id.clone(),
+                ReplacementClaimProjection {
+                    claim: projected.claim_contract.clone(),
+                    last_sequence: projected.last_seq,
+                    liveness,
+                },
+            )
+        })
+        .collect();
+
+    Ok(ReplacementContinuityProjection {
+        ledger_head_digest: head,
+        state_version,
+        current_phase,
+        active_release,
+        active_episode_id,
+        episodes_by_id,
+        requests_by_id,
+        completions_by_task_id,
+        health_recovery_by_runtime_id,
+        claims_by_id,
+    })
+}
+
+fn coordination_reference_index(
+    project_root: &Path,
+) -> Result<ReferenceIndex, WorkflowGovernanceAdapterError> {
+    let mut embedded_refs = forge_core_decisions::embedded_yaml_paths();
+    embedded_refs.extend(
+        forge_core_decisions::catalog::embedded_frozen_legacy_workflow_source_bytes()
+            .into_iter()
+            .map(|(path, _)| path.0),
+    );
+    ReferenceIndexBuilder::new()
+        .with_known_embedded_refs(embedded_refs)
+        .build(project_root)
+        .map_err(|error| {
+            WorkflowGovernanceAdapterError::CoordinationInvalid(format!(
+                "coordination reference index failed: {error}"
+            ))
+        })
+}
+
+fn project_claim_wal_clean(
+    state_root: &Path,
+) -> Result<ClaimWalProjection, WorkflowGovernanceAdapterError> {
+    project_claim_wal(
+        state_root,
+        &ClaimWalProjectionOptions {
+            repair: false,
+            stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+        },
+    )
+    .map_err(|error| WorkflowGovernanceAdapterError::ClaimProjection(error.to_string()))
+}
+
+fn exact_coordination_retry<'a>(
+    projection: &'a WorkflowGovernanceLedgerProjection,
+    state: &CoordinationStateRecord,
+    expected_head: &str,
+    expected_state_version: u64,
+) -> Option<&'a WorkflowGovernanceLedgerRecord> {
+    projection.records.iter().rev().find(|record| {
+        matches!(
+            &record.event,
+            WorkflowGovernanceEvent::CoordinationStateApplied(event)
+                if &event.state == state
+                    && event.prior_ledger_head_digest == expected_head
+                    && event.prior_state_version == expected_state_version
+        )
+    })
+}
+
+fn validate_coordination_kernel_state(
+    state: &CoordinationStateRecord,
+    ledger: &WorkflowGovernanceLedgerProjection,
+    claims: &ClaimWalProjection,
+    reference_index: &ReferenceIndex,
+    state_version: u64,
+    now: i64,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    match state {
+        CoordinationStateRecord::Request(request) => {
+            let report = validate_request(&request.request);
+            if report.has_errors() {
+                return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                    format!(
+                        "request contract validation failed: {:?}",
+                        report.diagnostics()
+                    ),
+                ));
+            }
+            validate_request_coordination(request, ledger, claims, reference_index, now)
+        }
+        CoordinationStateRecord::Completion(completion) => {
+            let report = validate_completion(&completion.completion);
+            if report.has_errors() {
+                return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                    format!(
+                        "completion contract validation failed: {:?}",
+                        report.diagnostics()
+                    ),
+                ));
+            }
+            validate_completion_coordination(completion, ledger, claims, state_version, now)
+        }
+        CoordinationStateRecord::HealthRecovery(recovery) => {
+            let report = validate_health_recovery(&recovery.recovery);
+            if report.has_errors() {
+                return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                    format!(
+                        "health-recovery contract validation failed: {:?}",
+                        report.diagnostics()
+                    ),
+                ));
+            }
+            validate_recovery_coordination(recovery, ledger, claims, now)
+        }
+    }
+}
+
+fn latest_request_by_reference<'a>(
+    projection: &'a WorkflowGovernanceLedgerProjection,
+    reference: &str,
+) -> Option<&'a CoordinationRequestState> {
+    projection.records.iter().rev().find_map(|record| {
+        let WorkflowGovernanceEvent::CoordinationStateApplied(event) = &record.event else {
+            return None;
+        };
+        let CoordinationStateRecord::Request(state) = &event.state else {
+            return None;
+        };
+        let request = &state.request.request_contract;
+        (request.id.0 == reference).then_some(state)
+    })
+}
+
+fn active_claim_by_reference<'a>(
+    claims: &'a ClaimWalProjection,
+    reference: &str,
+) -> Option<&'a ClaimContract> {
+    claims
+        .active_by_claim_id
+        .get(reference)
+        .map(|projected| &projected.claim_contract)
+}
+
+fn validate_request_coordination(
+    state: &CoordinationRequestState,
+    ledger: &WorkflowGovernanceLedgerProjection,
+    claims: &ClaimWalProjection,
+    reference_index: &ReferenceIndex,
+    now: i64,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    let request = &state.request.request_contract;
+    for dependency in &request.payload.dependency_refs {
+        if dependency.reference.trim().is_empty() {
+            return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "request dependency reference is blank".to_owned(),
+            ));
+        }
+        match dependency.kind {
+            DependencyKind::Request => {
+                if latest_request_by_reference(ledger, &dependency.reference).is_none() {
+                    return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                        format!("request dependency {} is not durable", dependency.reference),
+                    ));
+                }
+            }
+            DependencyKind::Claim => {
+                let claim =
+                    active_claim_by_reference(claims, &dependency.reference).ok_or_else(|| {
+                        WorkflowGovernanceAdapterError::CoordinationInvalid(format!(
+                            "claim dependency {} is not active",
+                            dependency.reference
+                        ))
+                    })?;
+                if !is_live(claim, now) {
+                    return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                        format!("claim dependency {} is expired", dependency.reference),
+                    ));
+                }
+            }
+            DependencyKind::Gate
+            | DependencyKind::Effect
+            | DependencyKind::RuntimeHandoff
+            | DependencyKind::Decision => {
+                let expected = match dependency.kind {
+                    DependencyKind::Gate => ReferenceKind::GateContract,
+                    DependencyKind::Effect => ReferenceKind::ToolEffectContract,
+                    DependencyKind::RuntimeHandoff => ReferenceKind::RuntimeHandoffContract,
+                    DependencyKind::Decision => ReferenceKind::DecisionCloseContract,
+                    DependencyKind::Request | DependencyKind::Claim => unreachable!(),
+                };
+                if reference_index.kind_of(&dependency.reference) != Some(expected) {
+                    return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                        format!(
+                            "request dependency {} does not resolve as {:?}",
+                            dependency.reference, expected
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    let deadline = request
+        .deadline
+        .as_ref()
+        .or(request.response.deadline.as_ref());
+    let deadline_unix = deadline
+        .map(|value| {
+            rfc3339_to_unix(value).ok_or_else(|| {
+                WorkflowGovernanceAdapterError::CoordinationInvalid(
+                    "request deadline is not strict RFC3339 UTC".to_owned(),
+                )
+            })
+        })
+        .transpose()?;
+    if request.status == RequestStatus::Expired {
+        if deadline_unix.is_none_or(|deadline| now < deadline) {
+            return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "request cannot expire before its durable deadline".to_owned(),
+            ));
+        }
+    } else if matches!(
+        request.status,
+        RequestStatus::Pending | RequestStatus::Accepted
+    ) && deadline_unix.is_some_and(|deadline| now >= deadline)
+    {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "past-deadline request must be recorded as expired".to_owned(),
+        ));
+    }
+
+    if request.status != RequestStatus::Pending {
+        if request.status != RequestStatus::Accepted
+            && !request.response.allowed_statuses.contains(&request.status)
+        {
+            return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "request transition status is not allowed by its response contract".to_owned(),
+            ));
+        }
+        if request.response.required
+            && request
+                .response
+                .required_evidence_refs
+                .iter()
+                .any(|required| {
+                    !state
+                        .response_evidence_refs
+                        .iter()
+                        .any(|found| found == required)
+                })
+        {
+            return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "request response is missing required evidence".to_owned(),
+            ));
+        }
+    }
+
+    if let Some(handoff) = state.mutation_handoff.as_ref() {
+        validate_request_mutation_handoff(
+            handoff,
+            request.target_driver.0.as_str(),
+            claims,
+            reference_index,
+            now,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_request_mutation_handoff(
+    handoff: &CoordinationMutationHandoff,
+    target_driver: &str,
+    claims: &ClaimWalProjection,
+    reference_index: &ReferenceIndex,
+    now: i64,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    let claim =
+        active_claim_by_reference(claims, &handoff.claim_contract_ref.0).ok_or_else(|| {
+            WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "mutation handoff does not reference an active claim".to_owned(),
+            )
+        })?;
+    if !is_live(claim, now) || claim.claim.claimant_agent_id.0 != target_driver {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "mutation handoff claim is expired or owned by another agent".to_owned(),
+        ));
+    }
+    if let Some(reference) = handoff.effect_contract_refs.iter().find(|reference| {
+        reference_index.kind_of(reference) != Some(ReferenceKind::ToolEffectContract)
+    }) {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            format!("mutation handoff effect {reference} is not an exact ToolEffectContract"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_completion_coordination(
+    state: &CoordinationCompletionState,
+    ledger: &WorkflowGovernanceLedgerProjection,
+    claims: &ClaimWalProjection,
+    state_version: u64,
+    now: i64,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    let completion = &state.completion.completion_contract;
+    if completion.status.checked_at_state_version != state_version {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "completion proof was checked against a stale state version".to_owned(),
+        ));
+    }
+    if completion.status.value == CompletionStatus::Invalidated
+        || completion.invalidation.invalidated_by.is_some()
+        || completion.invalidation.invalidated_at.is_some()
+        || completion.invalidation.reason_code.is_some()
+    {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "invalidated completion cannot be applied".to_owned(),
+        ));
+    }
+    if ledger.records.iter().any(|record| {
+        matches!(
+            &record.event,
+            WorkflowGovernanceEvent::CoordinationStateApplied(event)
+                if matches!(
+                    &event.state,
+                    CoordinationStateRecord::Completion(previous)
+                        if previous.completion.completion_contract.task.task_id == completion.task.task_id
+                            && previous != state
+                )
+        )
+    }) {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "task already has a conflicting durable completion".to_owned(),
+        ));
+    }
+    let claim_ref = completion
+        .claim
+        .claim_contract_ref
+        .as_ref()
+        .ok_or_else(|| {
+            WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "completion is missing its claim reference".to_owned(),
+            )
+        })?;
+    let claim = active_claim_by_reference(claims, &claim_ref.0).ok_or_else(|| {
+        WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "completion claim is not active".to_owned(),
+        )
+    })?;
+    if claim.id.0 != state.applied_claim_id.0
+        || !is_live(claim, now)
+        || completion.claim.claim_expires_at.as_deref() != Some(claim.lease.expires_at.as_str())
+        || completion.status.changed_by != claim.claim.claimant_agent_id
+    {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "completion does not match the exact live claimant and lease".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_recovery_coordination(
+    state: &CoordinationHealthRecoveryState,
+    ledger: &WorkflowGovernanceLedgerProjection,
+    claims: &ClaimWalProjection,
+    now: i64,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    let recovery = &state.recovery.health_recovery_contract;
+    let request = recovery
+        .recovery
+        .request_ref
+        .as_ref()
+        .map(|reference| latest_request_by_reference(ledger, &reference.0))
+        .transpose_option("health recovery request is not durable")?;
+    let claim = recovery
+        .recovery
+        .claim_ref
+        .as_ref()
+        .map(|reference| active_claim_by_reference(claims, &reference.0))
+        .transpose_option("health recovery claim is not active")?;
+    if claim.is_some_and(|claim| !is_live(claim, now)) {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "health recovery claim is expired".to_owned(),
+        ));
+    }
+    if matches!(
+        recovery.status,
+        HealthStatus::Stalled | HealthStatus::Crashed
+    ) && recovery.recovery.automatic_allowed
+    {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "stalled or crashed runtime cannot be silently reassigned".to_owned(),
+        ));
+    }
+    if matches!(
+        recovery.recovery.action,
+        RecoveryAction::HandoffToDriver | RecoveryAction::ReclaimAfterReview
+    ) && (request.is_none() || claim.is_none())
+    {
+        return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+            "reviewed handoff/reclaim requires exact durable request and claim references"
+                .to_owned(),
+        ));
+    }
+    if let Some(request) = request {
+        if state.actor_agent_id != request.request.request_contract.target_driver {
+            return Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                "health recovery actor is not the request target driver".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+trait TransposeCoordinationOption<T> {
+    fn transpose_option(
+        self,
+        message: &'static str,
+    ) -> Result<Option<T>, WorkflowGovernanceAdapterError>;
+}
+
+impl<T> TransposeCoordinationOption<T> for Option<Option<T>> {
+    fn transpose_option(
+        self,
+        message: &'static str,
+    ) -> Result<Option<T>, WorkflowGovernanceAdapterError> {
+        match self {
+            Some(Some(value)) => Ok(Some(value)),
+            Some(None) => Err(WorkflowGovernanceAdapterError::CoordinationInvalid(
+                message.to_owned(),
+            )),
+            None => Ok(None),
+        }
+    }
+}
+
+fn projected_active_release(
+    projection: &WorkflowGovernanceLedgerProjection,
+) -> Option<WorkflowGovernanceReleaseIdentity> {
+    projection
+        .records
+        .iter()
+        .rev()
+        .find_map(|record| match &record.event {
+            WorkflowGovernanceEvent::ReleaseUpgraded(event) => Some(event.to_release.clone()),
+            WorkflowGovernanceEvent::CoreDomainPackRebased(event) => {
+                Some(event.release_transition.to_release.clone())
+            }
+            _ => None,
+        })
+}
+
 fn current_phase(
     projection: &WorkflowGovernanceLedgerProjection,
 ) -> Result<StableId, WorkflowGovernanceAdapterError> {
@@ -5209,6 +6278,11 @@ fn current_phase(
                 phase = Some(event.initial_phase.clone());
             }
             WorkflowGovernanceEvent::PhaseAdvanced(event) => phase = Some(event.to_phase.clone()),
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event) => {
+                if let Some(to_phase) = event.to_phase.as_ref() {
+                    phase = Some(to_phase.clone());
+                }
+            }
             _ => {}
         }
     }
@@ -5679,6 +6753,7 @@ fn broker_origin_applied_event(
     packet: &WorkflowAuthorizationActionPacket,
     audit: &VerifiedWorkflowBrokerEventAudit,
     broker_registry_digest: &str,
+    native_interaction_replay_digest: Option<&str>,
     action_record: &WorkflowGovernanceLedgerRecord,
 ) -> BrokerOriginAppliedEvent {
     BrokerOriginAppliedEvent {
@@ -5698,6 +6773,7 @@ fn broker_origin_applied_event(
         signature_fingerprint: audit.signature_fingerprint.clone(),
         enrollment_ceremony_digest: audit.enrollment_ceremony_digest.clone(),
         broker_registry_digest: broker_registry_digest.to_owned(),
+        native_interaction_replay_digest: native_interaction_replay_digest.map(str::to_owned),
         issued_at_unix: audit.issued_at_unix,
         expires_at_unix: audit.expires_at_unix,
         native_host_provenance: audit.native_host_provenance.clone(),
@@ -5726,6 +6802,8 @@ fn broker_native_replay_tuple_matches(
 fn matching_broker_origin_retry(
     projection: &WorkflowGovernanceLedgerProjection,
     audit: &VerifiedWorkflowBrokerEventAudit,
+    admitted_registry_digest: Option<&str>,
+    native_interaction_replay_digest: Option<&str>,
 ) -> Result<
     Option<(
         WorkflowGovernanceLedgerRecord,
@@ -5733,6 +6811,11 @@ fn matching_broker_origin_retry(
     )>,
     WorkflowGovernanceAdapterError,
 > {
+    let strict_replay_digest = match (admitted_registry_digest, native_interaction_replay_digest) {
+        (Some(_), Some(replay_digest)) => Some(replay_digest),
+        (None, None) => None,
+        _ => return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch),
+    };
     for origin_record in &projection.records {
         let WorkflowGovernanceEvent::BrokerOriginApplied(origin) = &origin_record.event else {
             continue;
@@ -5744,7 +6827,15 @@ fn matching_broker_origin_retry(
             && origin.origin_principal_id == audit.origin_principal_id
             && origin.separation_domain == audit.separation_domain;
         let native_tuple_matches = broker_native_replay_tuple_matches(origin, audit);
-        if !packet_matches && !event_matches && !origin_identity_matches && !native_tuple_matches {
+        let stable_replay_matches = native_interaction_replay_digest.is_some_and(|expected| {
+            origin.native_interaction_replay_digest.as_deref() == Some(expected)
+        });
+        if !packet_matches
+            && !event_matches
+            && !origin_identity_matches
+            && !native_tuple_matches
+            && !stable_replay_matches
+        {
             continue;
         }
         let profile = match audit.issuer_profile {
@@ -5752,6 +6843,23 @@ fn matching_broker_origin_retry(
             WorkflowBrokerIssuerProfile::Reviewer => WorkflowBrokerOriginProfile::Reviewer,
             WorkflowBrokerIssuerProfile::Runtime => WorkflowBrokerOriginProfile::Runtime,
         };
+        // The durable companion keeps the registry digest that originally
+        // admitted the event. An exact response-loss retry may be reverified by
+        // a later registry generation that retains the historical credential,
+        // so rotation-stable replay identity—not the caller's current registry
+        // digest—joins the otherwise exact signed audit coordinates.
+        let strict_binding_matches = strict_replay_digest.map_or_else(
+            || origin.native_interaction_replay_digest.is_none(),
+            |replay_digest| {
+                origin.native_interaction_replay_digest.as_deref() == Some(replay_digest)
+            },
+        );
+        // Revocation necessarily changes the retained credential metadata digest.
+        // Strict recovery has already revalidated that retained history and is
+        // joined to the durable origin by the stable native replay digest; the
+        // frozen legacy path still requires its exact enrollment digest.
+        let credential_history_matches = strict_replay_digest.is_some()
+            || origin.enrollment_ceremony_digest == audit.enrollment_ceremony_digest;
         let exact_match = packet_matches
             && event_matches
             && origin.origin_principal_id == audit.origin_principal_id
@@ -5761,13 +6869,16 @@ fn matching_broker_origin_retry(
             && origin.issuer_profile == profile
             && origin.public_key_fingerprint == audit.public_key_fingerprint
             && origin.signature_fingerprint == audit.signature_fingerprint
-            && origin.enrollment_ceremony_digest == audit.enrollment_ceremony_digest
+            && credential_history_matches
             && origin.native_host_provenance == audit.native_host_provenance
             && origin.issued_at_unix == audit.issued_at_unix
-            && origin.expires_at_unix == audit.expires_at_unix;
+            && origin.expires_at_unix == audit.expires_at_unix
+            && strict_binding_matches;
         if !exact_match {
-            if native_tuple_matches {
-                let replay_origin_id = broker_replay_origin_id(audit)?;
+            if stable_replay_matches || native_tuple_matches {
+                let replay_origin_id = native_interaction_replay_digest
+                    .map(str::to_owned)
+                    .map_or_else(|| broker_replay_origin_id(audit), Ok)?;
                 return Err(WorkflowGovernanceAdapterError::ActionReplay(
                     WorkflowActionReplayError::OriginReplayConflict {
                         origin_event_id_hash: workflow_action_replay_origin_fingerprint(
@@ -6897,7 +8008,7 @@ fn evidence_action_contract(
 }
 
 fn authorization_setup_gaps(
-    project_root: &Path,
+    _project_root: &Path,
     broker_status: WorkflowAuthorizationRegistrySetupStatus,
     packets: &[WorkflowAuthorizationActionPacket],
 ) -> Vec<WorkflowAuthorizationSetupGap> {
@@ -6905,6 +8016,10 @@ fn authorization_setup_gaps(
         WorkflowAuthorizationRegistrySetupStatus::Missing => (
             WorkflowAuthorizationSetupGapCode::BrokerRegistryMissing,
             "the project has no external workflow broker registry",
+        ),
+        WorkflowAuthorizationRegistrySetupStatus::LegacyRecoveryOnly => (
+            WorkflowAuthorizationSetupGapCode::BrokerRegistryLegacyRecoveryOnly,
+            "the project has only a frozen legacy broker registry that is recovery-only",
         ),
         WorkflowAuthorizationRegistrySetupStatus::NoActiveIssuer => (
             WorkflowAuthorizationSetupGapCode::BrokerRegistryNoActiveIssuer,
@@ -6938,33 +8053,18 @@ fn authorization_setup_gaps(
     .map(|(_, profile, profile_label)| WorkflowAuthorizationSetupGap {
         code,
         summary: format!(
-            "{state_label}; enroll an operator-owned {profile_label} broker before applying the corresponding action packet"
+            "{state_label}; {profile_label} broker setup is blocked because selected_host is unresolved and no preconfigured external operator trust anchor is available"
         ),
         accepted_profiles: vec![profile],
-        setup_argv: vec![
-            "forge-core".to_owned(),
-            "workflow".to_owned(),
-            "broker".to_owned(),
-            "trust".to_owned(),
-            "--root".to_owned(),
-            project_root.display().to_string(),
-            "--issuer-id".to_owned(),
-            format!("<broker-{profile_label}-issuer-id>"),
-            "--profile".to_owned(),
-            profile_label.to_owned(),
-            "--public-key-file".to_owned(),
-            format!("<broker-{profile_label}-public-key-file>"),
-            "--ceremony-ref".to_owned(),
-            format!("<broker-{profile_label}-ceremony-ref>"),
-            "--ceremony-file".to_owned(),
-            format!("<broker-{profile_label}-ceremony-file>"),
-            "--json".to_owned(),
-        ],
+        external_setup: WorkflowBrokerExternalSetupState::Blocked {
+            reason: WorkflowBrokerExternalSetupBlockReason::SelectedHostUnavailable,
+        },
+        setup_argv: Vec::new(),
         required_operator_inputs: vec![
-            "issuer_id".to_owned(),
-            "public_key_file".to_owned(),
-            "ceremony_ref".to_owned(),
-            "ceremony_file".to_owned(),
+            "selected_host_adapter".to_owned(),
+            "external_operator_trust_anchor".to_owned(),
+            "strict_registry_file".to_owned(),
+            "signed_native_admin_authorization".to_owned(),
         ],
     })
     .collect()
@@ -7215,11 +8315,13 @@ fn content_addressed_basis_digest(
     Ok(sha256_content_hash(&canonical))
 }
 
-fn replay_locked_commit_time(_state_root: &Path) -> Result<u64, WorkflowGovernanceAdapterError> {
+fn replay_locked_commit_time(state_root: &Path) -> Result<u64, WorkflowGovernanceAdapterError> {
     let now = unix_time()?;
+    #[cfg(not(test))]
+    let _ = state_root;
     #[cfg(test)]
     {
-        let marker = _state_root.join(TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER);
+        let marker = state_root.join(TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER);
         if marker.is_file() {
             fs::remove_file(&marker)
                 .expect("test expiry marker must be consumed after replay lock acquisition");
@@ -7367,10 +8469,25 @@ mod tests {
         workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
         WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerEventEnvelope,
         WorkflowBrokerFreshnessPolicy, WorkflowBrokerIssuerEntry, WorkflowBrokerReplayKey,
-        WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION,
+        WorkflowBrokerVerificationContext, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+        WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION,
     };
+    use forge_core_contracts::request::DependencyRef;
     use forge_core_contracts::{
-        RuntimeKind, WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+        ClaimContractDocument, CompletionContractDocument, HealthRecoveryContractDocument,
+        PostBuildVerifyContinuityBinding, PostBuildVerifyEpisode, PostBuildVerifyEpisodeAuthority,
+        PostBuildVerifyEvolutionIdentity, PostBuildVerifyEvolutionStatus,
+        PostBuildVerifyEvolutionTrigger, PostBuildVerifyPolicyReference, PostBuildVerifyPolicyRole,
+        PostBuildVerifyRollbackBaseline, RepoPath, RequestContractDocument, RuntimeKind,
+        WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
+        WorkflowBrokerCredentialPurpose, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
+        WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+        WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
+        POST_BUILD_VERIFY_EPISODE_SCHEMA_VERSION, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
+        WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+    };
+    use forge_core_store::claim_wal::{
+        ClaimWalOperation, ClaimWalRecovery, ClaimWalStopReason, ProjectedClaim,
     };
     use forge_core_store::workflow_action_replay::WorkflowActionReplayState;
     use std::fmt::Write as _;
@@ -7385,6 +8502,283 @@ mod tests {
         let root = root.canonicalize().expect("canonical temp");
         let state = root.join(".forge-method");
         (root, state)
+    }
+
+    fn coordination_request_document() -> RequestContractDocument {
+        yaml_serde::from_str(include_str!(
+            "../../../../contracts/requests/worker-state-transition-request.yaml"
+        ))
+        .expect("request fixture")
+    }
+
+    fn coordination_completion_document() -> CompletionContractDocument {
+        yaml_serde::from_str(include_str!(
+            "../../../../contracts/completion/story-done-completion.yaml"
+        ))
+        .expect("completion fixture")
+    }
+
+    fn coordination_recovery_document() -> HealthRecoveryContractDocument {
+        yaml_serde::from_str(include_str!(
+            "../../../../contracts/recovery/runtime-crashed-recovery.yaml"
+        ))
+        .expect("health recovery fixture")
+    }
+
+    fn coordination_claim_document() -> ClaimContractDocument {
+        yaml_serde::from_str(include_str!(
+            "../../../../contracts/claims/driver-active-claim.yaml"
+        ))
+        .expect("claim fixture")
+    }
+
+    fn coordination_reference_fixture() -> ReferenceIndex {
+        let mut index = ReferenceIndex::new();
+        index.insert(
+            "contracts/gates/story-ready-lane-gate.yaml",
+            ReferenceKind::GateContract,
+        );
+        index.insert(
+            "contracts/effects/story-artifact-write-effect.yaml",
+            ReferenceKind::ToolEffectContract,
+        );
+        index
+    }
+
+    fn claim_projection(entries: Vec<(ClaimContract, bool)>) -> ClaimWalProjection {
+        let mut latest_by_claim_id = BTreeMap::new();
+        let mut active_by_claim_id = BTreeMap::new();
+        let mut released_by_claim_id = BTreeMap::new();
+        let mut claims = Vec::new();
+        for (index, (claim, active)) in entries.into_iter().enumerate() {
+            let sequence = u64::try_from(index).expect("claim index fits u64") + 1;
+            let projected = ProjectedClaim {
+                claim_contract: claim.clone(),
+                last_seq: sequence,
+                last_operation: if active {
+                    ClaimWalOperation::Acquire
+                } else {
+                    ClaimWalOperation::Release
+                },
+                recorded_at: "2026-06-25T00:05:00Z".to_owned(),
+                wal_offset: sequence * 100,
+            };
+            if active {
+                active_by_claim_id.insert(claim.id.0.clone(), projected.clone());
+            } else {
+                released_by_claim_id.insert(claim.id.0.clone(), projected.clone());
+            }
+            latest_by_claim_id.insert(claim.id.0.clone(), projected);
+            claims.push(claim);
+        }
+        ClaimWalProjection {
+            recovery: ClaimWalRecovery {
+                wal_path: PathBuf::from("claims.fmw1"),
+                records: Vec::new(),
+                checkpoint: None,
+                last_observed_seq: u64::try_from(claims.len()).expect("claim count fits u64"),
+                valid_record_count: claims.len(),
+                last_good_offset: 0,
+                original_len: 0,
+                repaired: false,
+                stop_reason: ClaimWalStopReason::CleanEof,
+                retained_authority: None,
+            },
+            last_applied_seq: u64::try_from(claims.len()).expect("claim count fits u64"),
+            applied_records: claims.len(),
+            claims,
+            latest_by_claim_id,
+            active_by_claim_id,
+            released_by_claim_id,
+            handoff_recorded_by_claim_id: BTreeMap::new(),
+            active_claim_ids_by_agent: BTreeMap::new(),
+            active_claim_ids_by_scope: BTreeMap::new(),
+            active_claim_ids_by_path: BTreeMap::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn empty_claim_projection() -> ClaimWalProjection {
+        claim_projection(Vec::new())
+    }
+
+    fn coordination_record(
+        sequence: u64,
+        state_version: u64,
+        event: WorkflowGovernanceEvent,
+    ) -> WorkflowGovernanceLedgerRecord {
+        WorkflowGovernanceLedgerRecord {
+            record_id: StableId(format!("record.coordination.{sequence}")),
+            sequence,
+            project_id: StableId("project.coordination".to_owned()),
+            bundle_id: StableId("bundle.coordination".to_owned()),
+            bundle_digest: format!("sha256:{}", "b".repeat(64)),
+            state_version,
+            previous_record_digest: (sequence > 1).then(|| format!("sha256:{:064x}", sequence - 1)),
+            record_digest: format!("sha256:{sequence:064x}"),
+            recorded_at_unix: sequence,
+            event,
+        }
+    }
+
+    fn coordination_state_record(
+        sequence: u64,
+        state_version: u64,
+        prior_head: &str,
+        prior_state_version: u64,
+        state: CoordinationStateRecord,
+    ) -> WorkflowGovernanceLedgerRecord {
+        coordination_record(
+            sequence,
+            state_version,
+            WorkflowGovernanceEvent::CoordinationStateApplied(CoordinationStateAppliedEvent {
+                prior_ledger_head_digest: prior_head.to_owned(),
+                prior_state_version,
+                state,
+            }),
+        )
+    }
+
+    fn coordination_projection(
+        records: Vec<WorkflowGovernanceLedgerRecord>,
+    ) -> WorkflowGovernanceLedgerProjection {
+        let next_sequence = records.last().map_or(1, |record| record.sequence + 1);
+        let next_state_version = records.last().map_or(0, |record| record.state_version + 1);
+        let head_digest = records.last().map(|record| record.record_digest.clone());
+        WorkflowGovernanceLedgerProjection {
+            records,
+            head_digest,
+            next_sequence,
+            next_state_version,
+        }
+    }
+
+    fn coordination_request_state(status: RequestStatus) -> CoordinationRequestState {
+        let mut request = coordination_request_document();
+        request.request_contract.status = status;
+        CoordinationRequestState {
+            actor_agent_id: if status == RequestStatus::Pending {
+                request.request_contract.sender_agent_id.clone()
+            } else {
+                request.request_contract.target_driver.clone()
+            },
+            previous_status: match status {
+                RequestStatus::Pending => None,
+                RequestStatus::Accepted => Some(RequestStatus::Pending),
+                _ => Some(RequestStatus::Accepted),
+            },
+            response_evidence_refs: if status == RequestStatus::Pending {
+                Vec::new()
+            } else {
+                request
+                    .request_contract
+                    .response
+                    .required_evidence_refs
+                    .clone()
+            },
+            request,
+            mutation_handoff: None,
+        }
+    }
+
+    fn coordination_completion_state(
+        state_version: u64,
+        claim: &ClaimContract,
+    ) -> CoordinationCompletionState {
+        let mut completion = coordination_completion_document();
+        completion
+            .completion_contract
+            .status
+            .checked_at_state_version = state_version;
+        completion.completion_contract.status.changed_by = claim.claim.claimant_agent_id.clone();
+        completion.completion_contract.claim.claim_contract_ref =
+            Some(RepoPath(claim.id.0.clone()));
+        completion.completion_contract.claim.claim_expires_at =
+            Some(claim.lease.expires_at.clone());
+        CoordinationCompletionState {
+            completion,
+            applied_claim_id: StableId(claim.id.0.clone()),
+        }
+    }
+
+    fn coordination_recovery_state(
+        request_id: &str,
+        claim_id: &str,
+    ) -> CoordinationHealthRecoveryState {
+        let mut recovery = coordination_recovery_document();
+        recovery.health_recovery_contract.recovery.action = RecoveryAction::HandoffToDriver;
+        recovery.health_recovery_contract.recovery.request_ref =
+            Some(RepoPath(request_id.to_owned()));
+        recovery.health_recovery_contract.recovery.claim_ref = Some(RepoPath(claim_id.to_owned()));
+        CoordinationHealthRecoveryState {
+            actor_agent_id: StableId("codex-main".to_owned()),
+            recovery,
+        }
+    }
+
+    fn episode_reference(name: &str, digest_byte: char) -> WorkflowContentAddressedReference {
+        WorkflowContentAddressedReference {
+            subject_ref: name.to_owned(),
+            subject_digest: format!("sha256:{}", digest_byte.to_string().repeat(64)),
+        }
+    }
+
+    fn replacement_episode_document(
+        release: WorkflowGovernanceReleaseIdentity,
+    ) -> PostBuildVerifyEpisodeDocument {
+        let build_verify_snapshot = episode_reference("build-verify/current", '1');
+        let policy_references = [
+            PostBuildVerifyPolicyRole::Readiness,
+            PostBuildVerifyPolicyRole::ReadyRelease,
+            PostBuildVerifyPolicyRole::RealityEvidence,
+            PostBuildVerifyPolicyRole::ContextRecovery,
+            PostBuildVerifyPolicyRole::EvolveProject,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, role)| PostBuildVerifyPolicyReference {
+            role,
+            policy_id: StableId(format!("policy.post-build-verify.{index}")),
+            policy_ref: RepoPath(format!("contracts/policies/post-build-verify-{index}.yaml")),
+        })
+        .collect();
+        let mut document = PostBuildVerifyEpisodeDocument {
+            schema_version: POST_BUILD_VERIFY_EPISODE_SCHEMA_VERSION.to_owned(),
+            post_build_verify_episode: PostBuildVerifyEpisode {
+                episode_id: StableId("episode.release.target".to_owned()),
+                generation: 1,
+                previous_episode_digest: None,
+                authority: PostBuildVerifyEpisodeAuthority::CandidateOnly,
+                release_subject: release.clone(),
+                build_verify_snapshot: build_verify_snapshot.clone(),
+                rollback_baseline: PostBuildVerifyRollbackBaseline::BuildVerifySnapshot {
+                    snapshot: build_verify_snapshot,
+                },
+                policy_references,
+                deployment_observations: Vec::new(),
+                operational_evidence: Vec::new(),
+                feedback: Vec::new(),
+                intake: Vec::new(),
+                evolution: PostBuildVerifyEvolutionIdentity {
+                    evolution_episode_id: StableId("evolution.release.target".to_owned()),
+                    generation: 1,
+                    release_digest: release.release_digest.clone(),
+                    status: PostBuildVerifyEvolutionStatus::Dormant,
+                    trigger: PostBuildVerifyEvolutionTrigger::PlannedFollowUp,
+                    proposed_entry_phase: Phase::Plan,
+                    continuity_subject: episode_reference("continuity/evolution", '2'),
+                },
+                continuity: PostBuildVerifyContinuityBinding {
+                    context_recovery_subject: episode_reference("continuity/recovery", '3'),
+                    next_action_ref: StableId("action.monitor-release".to_owned()),
+                },
+                episode_digest: String::new(),
+            },
+        };
+        let digest = document.episode_digest().expect("episode canonicalizes");
+        document.post_build_verify_episode.episode_digest = digest;
+        assert!(document.validate().is_empty());
+        document
     }
 
     fn hex(bytes: &[u8]) -> String {
@@ -7415,6 +8809,189 @@ mod tests {
             host_interaction_ref: format!("host-interaction-{nonce}"),
             host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
             host_observed_at_unix: issued_at_unix,
+        }
+    }
+
+    fn strict_test_host_binding() -> WorkflowBrokerHostBinding {
+        WorkflowBrokerHostBinding {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.kernel-test".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            host_installation_id: StableId("host.installation.kernel-test".to_owned()),
+            protocol_version: "workflow-host-origin-v1".to_owned(),
+        }
+    }
+
+    fn strict_test_event_credential(
+        credential_id: &str,
+        broker_id: &str,
+        issuer_id: &str,
+        profile: WorkflowBrokerCredentialProfile,
+        operation: WorkflowBrokerBoundOperation,
+        generation: u64,
+        key: &SigningKey,
+        not_before_unix: u64,
+        enrollment_operation_id: &str,
+    ) -> WorkflowBrokerPublicCredentialMetadata {
+        WorkflowBrokerPublicCredentialMetadata {
+            credential_id: StableId(credential_id.to_owned()),
+            broker_id: StableId(broker_id.to_owned()),
+            subject_id: StableId(issuer_id.to_owned()),
+            purpose: WorkflowBrokerCredentialPurpose::EventIssuer,
+            profile,
+            algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+            public_key_hex: hex(key.verifying_key().as_bytes()),
+            key_generation: generation,
+            status: WorkflowBrokerCredentialStatus::Active,
+            custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+            host_binding: strict_test_host_binding(),
+            allowed_operations: vec![operation],
+            not_before_unix,
+            revoked_at_unix: None,
+            predecessor_credential_id: None,
+            enrollment_operation_id: StableId(enrollment_operation_id.to_owned()),
+            revocation_operation_id: None,
+        }
+    }
+
+    fn strict_test_registry(
+        adapter: &WorkflowGovernanceProjectAdapter,
+        human_key: &SigningKey,
+        runtime_key: &SigningKey,
+        now: u64,
+    ) -> AuthorizedWorkflowBrokerControlPlane {
+        let admin_key = SigningKey::from_bytes(&[53_u8; 32]);
+        let not_before_unix = now.saturating_sub(600).max(1);
+        let admin = WorkflowBrokerPublicCredentialMetadata {
+            credential_id: StableId("credential.admin.1".to_owned()),
+            broker_id: StableId("broker.admin.stable".to_owned()),
+            subject_id: StableId("administrator.operator.test".to_owned()),
+            purpose: WorkflowBrokerCredentialPurpose::RegistryAdministrator,
+            profile: WorkflowBrokerCredentialProfile::Administrator,
+            algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+            public_key_hex: hex(admin_key.verifying_key().as_bytes()),
+            key_generation: 1,
+            status: WorkflowBrokerCredentialStatus::Active,
+            custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+            host_binding: strict_test_host_binding(),
+            allowed_operations: Vec::new(),
+            not_before_unix,
+            revoked_at_unix: None,
+            predecessor_credential_id: None,
+            enrollment_operation_id: StableId("admin.operation.genesis".to_owned()),
+            revocation_operation_id: None,
+        };
+        let human = strict_test_event_credential(
+            "credential.human.1",
+            "broker.human.stable",
+            "broker.human.test",
+            WorkflowBrokerCredentialProfile::Human,
+            WorkflowBrokerBoundOperation::IntentRevision,
+            1,
+            human_key,
+            not_before_unix,
+            "admin.operation.genesis",
+        );
+        let runtime = strict_test_event_credential(
+            "credential.runtime.1",
+            "broker.runtime.stable",
+            "broker.runtime.test",
+            WorkflowBrokerCredentialProfile::Runtime,
+            WorkflowBrokerBoundOperation::Signal,
+            1,
+            runtime_key,
+            not_before_unix,
+            "admin.operation.genesis",
+        );
+        let mut credentials = vec![admin, human, runtime];
+        credentials.sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+        let document = WorkflowBrokerPublicRegistryDocument {
+            schema_version: WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION.to_owned(),
+            audience: adapter.expected_broker_audience(),
+            project_id: adapter.binding.project_id.clone(),
+            workflow_id: StableId("workflow.governance".to_owned()),
+            registry_generation: 1,
+            previous_registry_digest: None,
+            required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
+            credentials,
+        };
+        let control = AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+            document.clone(),
+            &document.audience,
+            &document.project_id,
+            &document.workflow_id,
+        )
+        .expect("strict broker registry");
+        let path = adapter.trusted_broker_registry_path();
+        fs::create_dir_all(path.parent().expect("broker registry parent"))
+            .expect("broker registry parent");
+        fs::write(
+            path,
+            yaml_serde::to_string(&document).expect("strict broker registry YAML"),
+        )
+        .expect("strict broker registry");
+        control
+    }
+
+    fn rotate_strict_runtime_registry(
+        adapter: &WorkflowGovernanceProjectAdapter,
+        current: &AuthorizedWorkflowBrokerControlPlane,
+        replacement_key: &SigningKey,
+        now: u64,
+    ) -> AuthorizedWorkflowBrokerControlPlane {
+        let operation_id = StableId("admin.operation.rotate.runtime.2".to_owned());
+        let mut document = current.document().clone();
+        document.registry_generation = 2;
+        document.previous_registry_digest = Some(current.registry_digest().to_owned());
+        let predecessor = document
+            .credentials
+            .iter_mut()
+            .find(|credential| credential.credential_id.0 == "credential.runtime.1")
+            .expect("runtime predecessor");
+        predecessor.status = WorkflowBrokerCredentialStatus::Revoked;
+        predecessor.revoked_at_unix = Some(now);
+        predecessor.revocation_operation_id = Some(operation_id.clone());
+        let mut replacement = strict_test_event_credential(
+            "credential.runtime.2",
+            "broker.runtime.stable",
+            "broker.runtime.rotated",
+            WorkflowBrokerCredentialProfile::Runtime,
+            WorkflowBrokerBoundOperation::Signal,
+            2,
+            replacement_key,
+            now,
+            &operation_id.0,
+        );
+        replacement.predecessor_credential_id = Some(StableId("credential.runtime.1".to_owned()));
+        document.credentials.push(replacement);
+        document
+            .credentials
+            .sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+        let control = AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+            document.clone(),
+            &document.audience,
+            &document.project_id,
+            &document.workflow_id,
+        )
+        .expect("rotated strict broker registry");
+        fs::write(
+            adapter.trusted_broker_registry_path(),
+            yaml_serde::to_string(&document).expect("rotated strict broker registry YAML"),
+        )
+        .expect("rotated strict broker registry");
+        control
+    }
+
+    fn strict_verification_context(
+        adapter: &WorkflowGovernanceProjectAdapter,
+        operation: WorkflowBrokerBoundOperation,
+    ) -> WorkflowBrokerVerificationContext {
+        WorkflowBrokerVerificationContext {
+            audience: adapter.expected_broker_audience(),
+            project_id: adapter.binding.project_id.clone(),
+            workflow_id: StableId("workflow.governance".to_owned()),
+            operation,
         }
     }
 
@@ -7760,6 +9337,664 @@ mod tests {
                 prior_ledger_head_digest: format!("sha256:{}", "4".repeat(64)),
             }),
         }
+    }
+
+    #[test]
+    fn coordination_dependencies_require_exact_typed_durable_ids() {
+        let durable_request = coordination_request_state(RequestStatus::Pending);
+        let durable_request_id = durable_request.request.request_contract.id.0.clone();
+        let durable_request_schema = durable_request
+            .request
+            .request_contract
+            .contract_ref
+            .0
+            .clone();
+        let ledger = coordination_projection(vec![coordination_state_record(
+            1,
+            1,
+            &format!("sha256:{}", "0".repeat(64)),
+            0,
+            CoordinationStateRecord::Request(durable_request),
+        )]);
+        let mut claim = coordination_claim_document().claim_contract;
+        claim.lease.expires_at = "2026-06-25T00:30:00Z".to_owned();
+        let claim_id = claim.id.0.clone();
+        let claim_schema = claim.contract_ref.0.clone();
+        let claims = claim_projection(vec![(claim, true)]);
+        let index = coordination_reference_fixture();
+        let now = rfc3339_to_unix("2026-06-25T00:10:00Z").expect("fixed clock");
+
+        let mut dependent = coordination_request_state(RequestStatus::Pending);
+        dependent.request.request_contract.payload.dependency_refs = vec![DependencyRef {
+            kind: DependencyKind::Request,
+            reference: durable_request_id,
+        }];
+        assert!(validate_request_coordination(&dependent, &ledger, &claims, &index, now).is_ok());
+
+        dependent.request.request_contract.payload.dependency_refs[0].reference =
+            durable_request_schema;
+        assert!(matches!(
+            validate_request_coordination(&dependent, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        dependent.request.request_contract.payload.dependency_refs = vec![DependencyRef {
+            kind: DependencyKind::Claim,
+            reference: claim_id,
+        }];
+        assert!(validate_request_coordination(&dependent, &ledger, &claims, &index, now).is_ok());
+
+        dependent.request.request_contract.payload.dependency_refs[0].reference = claim_schema;
+        assert!(matches!(
+            validate_request_coordination(&dependent, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        dependent.request.request_contract.payload.dependency_refs = vec![DependencyRef {
+            kind: DependencyKind::Gate,
+            reference: "contracts/effects/story-artifact-write-effect.yaml".to_owned(),
+        }];
+        assert!(matches!(
+            validate_request_coordination(&dependent, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn coordination_request_deadlines_evidence_and_handoff_fail_closed() {
+        let ledger = coordination_projection(Vec::new());
+        let mut claim = coordination_claim_document().claim_contract;
+        claim.lease.expires_at = "2026-06-25T00:30:00Z".to_owned();
+        let claims = claim_projection(vec![(claim.clone(), true)]);
+        let index = coordination_reference_fixture();
+        let now = rfc3339_to_unix("2026-06-25T00:10:00Z").expect("fixed clock");
+
+        let mut accepted = coordination_request_state(RequestStatus::Accepted);
+        accepted.response_evidence_refs.clear();
+        assert!(matches!(
+            validate_coordination_kernel_state(
+                &CoordinationStateRecord::Request(accepted),
+                &ledger,
+                &claims,
+                &index,
+                0,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut overdue = coordination_request_state(RequestStatus::Pending);
+        overdue.request.request_contract.deadline = Some("2026-06-25T00:10:00Z".to_owned());
+        assert!(matches!(
+            validate_request_coordination(&overdue, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut early_expiration = coordination_request_state(RequestStatus::Expired);
+        early_expiration.request.request_contract.deadline =
+            Some("2026-06-25T00:20:00Z".to_owned());
+        assert!(matches!(
+            validate_request_coordination(&early_expiration, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut applied = coordination_request_state(RequestStatus::Applied);
+        applied.mutation_handoff = Some(CoordinationMutationHandoff {
+            driver_agent_id: applied.request.request_contract.target_driver.clone(),
+            requested_operation: applied.request.request_contract.requested_operation.clone(),
+            claim_contract_ref: RepoPath(claim.id.0.clone()),
+            authority_refs: vec!["contracts/gates/story-ready-lane-gate.yaml".to_owned()],
+            effect_contract_refs: vec![
+                "contracts/effects/story-artifact-write-effect.yaml".to_owned()
+            ],
+        });
+        assert!(validate_request_coordination(&applied, &ledger, &claims, &index, now).is_ok());
+
+        applied
+            .mutation_handoff
+            .as_mut()
+            .expect("handoff")
+            .claim_contract_ref = claim.contract_ref.clone();
+        assert!(matches!(
+            validate_request_coordination(&applied, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        applied
+            .mutation_handoff
+            .as_mut()
+            .expect("handoff")
+            .claim_contract_ref = RepoPath(claim.id.0.clone());
+        applied
+            .mutation_handoff
+            .as_mut()
+            .expect("handoff")
+            .effect_contract_refs = vec!["contracts/gates/story-ready-lane-gate.yaml".to_owned()];
+        assert!(matches!(
+            validate_request_coordination(&applied, &ledger, &claims, &index, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn coordination_completion_requires_exact_live_claim_state_and_unique_task() {
+        let mut claim = coordination_claim_document().claim_contract;
+        claim.lease.expires_at = "2026-06-25T00:30:00Z".to_owned();
+        let claims = claim_projection(vec![(claim.clone(), true)]);
+        let now = rfc3339_to_unix("2026-06-25T00:10:00Z").expect("fixed clock");
+        let state_version = 31;
+        let valid = coordination_completion_state(state_version, &claim);
+        let empty_ledger = coordination_projection(Vec::new());
+        assert!(validate_completion_coordination(
+            &valid,
+            &empty_ledger,
+            &claims,
+            state_version,
+            now,
+        )
+        .is_ok());
+
+        let mut missing_claim = valid.clone();
+        missing_claim
+            .completion
+            .completion_contract
+            .claim
+            .claim_contract_ref = None;
+        assert!(matches!(
+            validate_completion_coordination(
+                &missing_claim,
+                &empty_ledger,
+                &claims,
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut schema_claim = valid.clone();
+        schema_claim
+            .completion
+            .completion_contract
+            .claim
+            .claim_contract_ref = Some(claim.contract_ref.clone());
+        assert!(matches!(
+            validate_completion_coordination(
+                &schema_claim,
+                &empty_ledger,
+                &claims,
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        assert!(matches!(
+            validate_completion_coordination(
+                &valid,
+                &empty_ledger,
+                &claims,
+                state_version + 1,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut invalidated = valid.clone();
+        invalidated
+            .completion
+            .completion_contract
+            .invalidation
+            .invalidated_by = Some(StableId("reviewer".to_owned()));
+        assert!(matches!(
+            validate_completion_coordination(
+                &invalidated,
+                &empty_ledger,
+                &claims,
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut wrong_lease = valid.clone();
+        wrong_lease
+            .completion
+            .completion_contract
+            .claim
+            .claim_expires_at = Some("2026-06-25T00:29:59Z".to_owned());
+        assert!(matches!(
+            validate_completion_coordination(
+                &wrong_lease,
+                &empty_ledger,
+                &claims,
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let previous = coordination_state_record(
+            1,
+            state_version,
+            &format!("sha256:{}", "0".repeat(64)),
+            state_version - 1,
+            CoordinationStateRecord::Completion(valid.clone()),
+        );
+        let ledger_with_completion = coordination_projection(vec![previous]);
+        let mut conflicting = valid.clone();
+        conflicting.completion.completion_contract.id =
+            StableId("completion.conflicting".to_owned());
+        assert!(matches!(
+            validate_completion_coordination(
+                &conflicting,
+                &ledger_with_completion,
+                &claims,
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut no_proof = valid;
+        no_proof.completion.completion_contract.proof_refs.clear();
+        assert!(matches!(
+            validate_coordination_kernel_state(
+                &CoordinationStateRecord::Completion(no_proof),
+                &empty_ledger,
+                &claims,
+                &coordination_reference_fixture(),
+                state_version,
+                now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn coordination_recovery_requires_reviewed_exact_durable_joins() {
+        let request = coordination_request_state(RequestStatus::Pending);
+        let request_id = request.request.request_contract.id.0.clone();
+        let request_schema = request.request.request_contract.contract_ref.0.clone();
+        let ledger = coordination_projection(vec![coordination_state_record(
+            1,
+            1,
+            &format!("sha256:{}", "0".repeat(64)),
+            0,
+            CoordinationStateRecord::Request(request),
+        )]);
+        let mut claim = coordination_claim_document().claim_contract;
+        claim.lease.expires_at = "2026-06-25T00:30:00Z".to_owned();
+        let claim_id = claim.id.0.clone();
+        let claims = claim_projection(vec![(claim.clone(), true)]);
+        let now = rfc3339_to_unix("2026-06-25T00:10:00Z").expect("fixed clock");
+
+        let valid = coordination_recovery_state(&request_id, &claim_id);
+        assert!(validate_recovery_coordination(&valid, &ledger, &claims, now).is_ok());
+
+        let mut request_schema_ref = valid.clone();
+        request_schema_ref
+            .recovery
+            .health_recovery_contract
+            .recovery
+            .request_ref = Some(RepoPath(request_schema));
+        assert!(matches!(
+            validate_recovery_coordination(&request_schema_ref, &ledger, &claims, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut claim_schema_ref = valid.clone();
+        claim_schema_ref
+            .recovery
+            .health_recovery_contract
+            .recovery
+            .claim_ref = Some(claim.contract_ref.clone());
+        assert!(matches!(
+            validate_recovery_coordination(&claim_schema_ref, &ledger, &claims, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut wrong_actor = valid.clone();
+        wrong_actor.actor_agent_id = StableId("worker.other".to_owned());
+        assert!(matches!(
+            validate_recovery_coordination(&wrong_actor, &ledger, &claims, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut automatic = valid.clone();
+        automatic
+            .recovery
+            .health_recovery_contract
+            .recovery
+            .automatic_allowed = true;
+        automatic
+            .recovery
+            .health_recovery_contract
+            .recovery
+            .requires_review = false;
+        assert!(matches!(
+            validate_recovery_coordination(&automatic, &ledger, &claims, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let mut missing_refs = valid;
+        missing_refs
+            .recovery
+            .health_recovery_contract
+            .recovery
+            .request_ref = None;
+        assert!(matches!(
+            validate_recovery_coordination(&missing_refs, &ledger, &claims, now),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+
+        let expired_now = rfc3339_to_unix("2026-06-25T00:31:00Z").expect("fixed clock");
+        assert!(matches!(
+            validate_recovery_coordination(
+                &coordination_recovery_state(&request_id, &claim_id),
+                &ledger,
+                &claims,
+                expired_now,
+            ),
+            Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
+        ));
+    }
+
+    #[test]
+    fn coordination_exact_retry_matches_state_and_original_cas() {
+        let state =
+            CoordinationStateRecord::Request(coordination_request_state(RequestStatus::Pending));
+        let prior_head = format!("sha256:{}", "a".repeat(64));
+        let record = coordination_state_record(1, 8, &prior_head, 7, state.clone());
+        let projection = coordination_projection(vec![record.clone()]);
+
+        assert_eq!(
+            exact_coordination_retry(&projection, &state, &prior_head, 7),
+            Some(&record)
+        );
+        assert!(exact_coordination_retry(&projection, &state, &prior_head, 8).is_none());
+        assert!(exact_coordination_retry(
+            &projection,
+            &state,
+            &format!("sha256:{}", "b".repeat(64)),
+            7,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn replacement_projection_recovers_latest_complete_authority_free_state() {
+        let imported = coordination_record(
+            1,
+            0,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                source_ref: "project/root".to_owned(),
+                source_digest: format!("sha256:{}", "1".repeat(64)),
+                snapshot_digest: format!("sha256:{}", "2".repeat(64)),
+                initial_phase: StableId("4-build-verify".to_owned()),
+            }),
+        );
+        let mut release = release_record(
+            WorkflowReceiptCarryover::InvalidateAll,
+            &format!("sha256:{}", "3".repeat(64)),
+            &format!("sha256:{}", "4".repeat(64)),
+        );
+        let WorkflowGovernanceEvent::ReleaseUpgraded(release_event) = &release.event else {
+            unreachable!();
+        };
+        let active_release = release_event.to_release.clone();
+        release.sequence = 2;
+        release.previous_record_digest = Some(imported.record_digest.clone());
+
+        let first_document = replacement_episode_document(active_release.clone());
+        let first_episode = PostBuildVerifyEpisodeAppliedEvent {
+            episode_id: first_document.post_build_verify_episode.episode_id.clone(),
+            generation: 1,
+            previous_episode_digest: None,
+            episode_digest: first_document
+                .post_build_verify_episode
+                .episode_digest
+                .clone(),
+            release_subject: active_release.clone(),
+            decision_digest: format!("sha256:{}", "5".repeat(64)),
+            from_phase: StableId("4-build-verify".to_owned()),
+            to_phase: Some(StableId("5-ready-operate".to_owned())),
+            outcome: PostBuildVerifyEpisodeOutcome::AdvancedToReadyOperate,
+            snapshot_digest: first_document
+                .post_build_verify_episode
+                .build_verify_snapshot
+                .subject_digest
+                .clone(),
+            prior_ledger_head_digest: release.record_digest.clone(),
+            prior_state_version: release.state_version,
+            admitted_gate: None,
+            episode_snapshot: Some(first_document.clone()),
+        };
+        let first_episode_record = coordination_record(
+            3,
+            2,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(first_episode),
+        );
+
+        let mut second_document = first_document;
+        let previous_episode_digest = second_document
+            .post_build_verify_episode
+            .episode_digest
+            .clone();
+        second_document.post_build_verify_episode.generation = 2;
+        second_document
+            .post_build_verify_episode
+            .previous_episode_digest = Some(previous_episode_digest.clone());
+        second_document
+            .post_build_verify_episode
+            .continuity
+            .next_action_ref = StableId("action.review-feedback".to_owned());
+        second_document.post_build_verify_episode.episode_digest = String::new();
+        second_document.post_build_verify_episode.episode_digest = second_document
+            .episode_digest()
+            .expect("follow-on episode canonicalizes");
+        assert!(second_document.validate().is_empty());
+        let second_episode = PostBuildVerifyEpisodeAppliedEvent {
+            episode_id: second_document.post_build_verify_episode.episode_id.clone(),
+            generation: 2,
+            previous_episode_digest: Some(previous_episode_digest),
+            episode_digest: second_document
+                .post_build_verify_episode
+                .episode_digest
+                .clone(),
+            release_subject: active_release.clone(),
+            decision_digest: format!("sha256:{}", "6".repeat(64)),
+            from_phase: StableId("5-ready-operate".to_owned()),
+            to_phase: None,
+            outcome: PostBuildVerifyEpisodeOutcome::EvolutionTriageOpened,
+            snapshot_digest: second_document
+                .post_build_verify_episode
+                .build_verify_snapshot
+                .subject_digest
+                .clone(),
+            prior_ledger_head_digest: first_episode_record.record_digest.clone(),
+            prior_state_version: first_episode_record.state_version,
+            admitted_gate: None,
+            episode_snapshot: Some(second_document.clone()),
+        };
+        let second_episode_record = coordination_record(
+            4,
+            3,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(second_episode),
+        );
+
+        let mut request = coordination_request_state(RequestStatus::Applied);
+        let mut live_claim = coordination_claim_document().claim_contract;
+        live_claim.lease.expires_at = "2026-06-25T00:30:00Z".to_owned();
+        request.mutation_handoff = Some(CoordinationMutationHandoff {
+            driver_agent_id: request.request.request_contract.target_driver.clone(),
+            requested_operation: request.request.request_contract.requested_operation.clone(),
+            claim_contract_ref: RepoPath(live_claim.id.0.clone()),
+            authority_refs: vec!["contracts/gates/story-ready-lane-gate.yaml".to_owned()],
+            effect_contract_refs: vec![
+                "contracts/effects/story-artifact-write-effect.yaml".to_owned()
+            ],
+        });
+        let request_id = request.request.request_contract.id.0.clone();
+        let request_record = coordination_state_record(
+            5,
+            4,
+            &second_episode_record.record_digest,
+            second_episode_record.state_version,
+            CoordinationStateRecord::Request(request),
+        );
+        let completion = coordination_completion_state(4, &live_claim);
+        let task_id = completion
+            .completion
+            .completion_contract
+            .task
+            .task_id
+            .0
+            .clone();
+        let completion_record = coordination_state_record(
+            6,
+            5,
+            &request_record.record_digest,
+            request_record.state_version,
+            CoordinationStateRecord::Completion(completion),
+        );
+        let recovery = coordination_recovery_state(&request_id, &live_claim.id.0);
+        let runtime_id = recovery
+            .recovery
+            .health_recovery_contract
+            .runtime
+            .agent_id
+            .0
+            .clone();
+        let recovery_record = coordination_state_record(
+            7,
+            6,
+            &completion_record.record_digest,
+            completion_record.state_version,
+            CoordinationStateRecord::HealthRecovery(recovery),
+        );
+        let projection = coordination_projection(vec![
+            imported,
+            release,
+            first_episode_record,
+            second_episode_record,
+            request_record,
+            completion_record,
+            recovery_record,
+        ]);
+
+        let mut expired_claim = live_claim.clone();
+        expired_claim.id = forge_core_contracts::ClaimId("claim.driver.expired".to_owned());
+        expired_claim.lease.expires_at = "2026-06-25T00:05:00Z".to_owned();
+        let mut non_active_claim = live_claim.clone();
+        non_active_claim.id = forge_core_contracts::ClaimId("claim.driver.released".to_owned());
+        let claims = claim_projection(vec![
+            (live_claim.clone(), true),
+            (expired_claim.clone(), true),
+            (non_active_claim.clone(), false),
+        ]);
+        let now = rfc3339_to_unix("2026-06-25T00:10:00Z").expect("fixed clock");
+        let replacement =
+            project_replacement_continuity(&projection, &claims, now).expect("replacement state");
+
+        assert_eq!(replacement.active_release, active_release);
+        assert_eq!(replacement.current_phase.0, "5-ready-operate");
+        assert_eq!(replacement.state_version, 6);
+        assert_eq!(replacement.requests_by_id.len(), 1);
+        assert!(replacement.requests_by_id.contains_key(&request_id));
+        assert!(replacement.completions_by_task_id.contains_key(&task_id));
+        assert!(replacement
+            .health_recovery_by_runtime_id
+            .contains_key(&runtime_id));
+        let episode = replacement
+            .episodes_by_id
+            .get(&replacement.active_episode_id.0)
+            .expect("active episode");
+        assert_eq!(episode.document.post_build_verify_episode.generation, 2);
+        assert_eq!(episode.state_version, 3);
+        assert_eq!(
+            replacement.claims_by_id[&live_claim.id.0].liveness,
+            ReplacementClaimLiveness::Live
+        );
+        assert_eq!(
+            replacement.claims_by_id[&expired_claim.id.0].liveness,
+            ReplacementClaimLiveness::Expired
+        );
+        assert_eq!(
+            replacement.claims_by_id[&non_active_claim.id.0].liveness,
+            ReplacementClaimLiveness::NonActive
+        );
+
+        let serialized = serde_json::to_string(&replacement).expect("serialize projection");
+        for forbidden in [
+            "retained_authority",
+            "mutation_authority",
+            "phase_authority",
+            "release_authority",
+            "signing_key",
+            "private_key",
+            "selected_host",
+        ] {
+            assert!(!serialized.contains(forbidden), "found {forbidden}");
+        }
+    }
+
+    #[test]
+    fn replacement_projection_rejects_historical_summary_without_snapshot() {
+        let imported = coordination_record(
+            1,
+            0,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                source_ref: "project/root".to_owned(),
+                source_digest: format!("sha256:{}", "1".repeat(64)),
+                snapshot_digest: format!("sha256:{}", "2".repeat(64)),
+                initial_phase: StableId("4-build-verify".to_owned()),
+            }),
+        );
+        let release = release_record(
+            WorkflowReceiptCarryover::InvalidateAll,
+            &format!("sha256:{}", "3".repeat(64)),
+            &format!("sha256:{}", "4".repeat(64)),
+        );
+        let WorkflowGovernanceEvent::ReleaseUpgraded(release_event) = &release.event else {
+            unreachable!();
+        };
+        let release_subject = release_event.to_release.clone();
+        let document = replacement_episode_document(release_subject.clone());
+        let summary = coordination_record(
+            3,
+            2,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(
+                PostBuildVerifyEpisodeAppliedEvent {
+                    episode_id: document.post_build_verify_episode.episode_id,
+                    generation: document.post_build_verify_episode.generation,
+                    previous_episode_digest: None,
+                    episode_digest: document.post_build_verify_episode.episode_digest,
+                    release_subject,
+                    decision_digest: format!("sha256:{}", "5".repeat(64)),
+                    from_phase: StableId("4-build-verify".to_owned()),
+                    to_phase: Some(StableId("5-ready-operate".to_owned())),
+                    outcome: PostBuildVerifyEpisodeOutcome::AdvancedToReadyOperate,
+                    snapshot_digest: document
+                        .post_build_verify_episode
+                        .build_verify_snapshot
+                        .subject_digest,
+                    prior_ledger_head_digest: release.record_digest.clone(),
+                    prior_state_version: release.state_version,
+                    admitted_gate: None,
+                    episode_snapshot: None,
+                },
+            ),
+        );
+        let projection = coordination_projection(vec![imported, release, summary]);
+
+        assert!(matches!(
+            project_replacement_continuity(&projection, &empty_claim_projection(), 0),
+            Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "no complete episode snapshot binds the active release"
+                )
+            )
+        ));
     }
 
     #[test]
@@ -8230,6 +10465,115 @@ mod tests {
     }
 
     #[test]
+    fn automatic_phase_advancement_stops_before_post_build_verify_routes() {
+        assert_eq!(
+            automatic_phase_successor(Phase::Discovery),
+            Some(Phase::Specification)
+        );
+        assert_eq!(
+            automatic_phase_successor(Phase::Specification),
+            Some(Phase::Plan)
+        );
+        assert_eq!(
+            automatic_phase_successor(Phase::Plan),
+            Some(Phase::BuildVerify)
+        );
+        assert_eq!(automatic_phase_successor(Phase::BuildVerify), None);
+        assert_eq!(automatic_phase_successor(Phase::ReadyOperate), None);
+        assert_eq!(automatic_phase_successor(Phase::Evolve), None);
+    }
+
+    #[test]
+    fn admitted_episode_projection_changes_phase_only_with_an_explicit_target() {
+        let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
+        let record =
+            |sequence: u64, event: WorkflowGovernanceEvent| WorkflowGovernanceLedgerRecord {
+                record_id: StableId(format!("record.{sequence}")),
+                sequence,
+                project_id: StableId("project.test".to_owned()),
+                bundle_id: StableId("bundle.test".to_owned()),
+                bundle_digest: digest('a'),
+                state_version: sequence - 1,
+                previous_record_digest: (sequence > 1).then(|| digest('b')),
+                record_digest: digest('c'),
+                recorded_at_unix: 1,
+                event,
+            };
+        let release = WorkflowGovernanceReleaseIdentity {
+            lineage_id: StableId("lineage.test".to_owned()),
+            release_id: StableId("release.test".to_owned()),
+            release_version: "1.0.0".to_owned(),
+            release_digest: digest('d'),
+        };
+        let imported = record(
+            1,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                source_ref: "project/state.yaml".to_owned(),
+                source_digest: digest('e'),
+                snapshot_digest: digest('f'),
+                initial_phase: StableId(Phase::BuildVerify.to_string()),
+            }),
+        );
+        let advanced = record(
+            2,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(
+                PostBuildVerifyEpisodeAppliedEvent {
+                    episode_id: StableId("episode.ready".to_owned()),
+                    generation: 1,
+                    previous_episode_digest: None,
+                    episode_digest: digest('1'),
+                    release_subject: release.clone(),
+                    decision_digest: digest('2'),
+                    from_phase: StableId(Phase::BuildVerify.to_string()),
+                    to_phase: Some(StableId(Phase::ReadyOperate.to_string())),
+                    outcome: PostBuildVerifyEpisodeOutcome::AdvancedToReadyOperate,
+                    snapshot_digest: digest('f'),
+                    prior_ledger_head_digest: digest('c'),
+                    prior_state_version: 0,
+                    admitted_gate: Some(PostBuildVerifyAdmittedGateResult {
+                        kind: PostBuildVerifyGateKind::Readiness,
+                        status: GateStatus::Pass,
+                        effective_bundle_digest: digest('3'),
+                    }),
+                    episode_snapshot: None,
+                },
+            ),
+        );
+        let follow_on = record(
+            3,
+            WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(
+                PostBuildVerifyEpisodeAppliedEvent {
+                    episode_id: StableId("episode.rollback".to_owned()),
+                    generation: 2,
+                    previous_episode_digest: Some(digest('1')),
+                    episode_digest: digest('4'),
+                    release_subject: release,
+                    decision_digest: digest('5'),
+                    from_phase: StableId(Phase::ReadyOperate.to_string()),
+                    to_phase: None,
+                    outcome: PostBuildVerifyEpisodeOutcome::RollbackAssessmentOpened,
+                    snapshot_digest: digest('f'),
+                    prior_ledger_head_digest: digest('c'),
+                    prior_state_version: 1,
+                    admitted_gate: None,
+                    episode_snapshot: None,
+                },
+            ),
+        );
+        let projection = WorkflowGovernanceLedgerProjection {
+            records: vec![imported, advanced, follow_on],
+            head_digest: Some(digest('c')),
+            next_sequence: 4,
+            next_state_version: 3,
+        };
+
+        assert_eq!(
+            current_phase(&projection).expect("episode phase projection"),
+            StableId(Phase::ReadyOperate.to_string())
+        );
+    }
+
+    #[test]
     fn unknown_assurance_blocks_phase_even_when_legacy_phase_is_otherwise_done() {
         let (root, state) = temp_project("unknown-assurance-phase-boundary");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -8421,21 +10765,54 @@ mod tests {
                 WorkflowAuthorizationSetupGapCode::BrokerRegistryMissing
             );
             assert_eq!(
-                gap.setup_argv.first().map(String::as_str),
-                Some("forge-core")
+                gap.external_setup,
+                WorkflowBrokerExternalSetupState::Blocked {
+                    reason: WorkflowBrokerExternalSetupBlockReason::SelectedHostUnavailable,
+                }
             );
-            assert!(gap
-                .setup_argv
-                .windows(2)
-                .any(|pair| { pair[0] == "--root" && pair[1] == root.display().to_string() }));
+            assert!(gap.setup_argv.is_empty());
+            assert_eq!(
+                gap.required_operator_inputs,
+                vec![
+                    "selected_host_adapter".to_owned(),
+                    "external_operator_trust_anchor".to_owned(),
+                    "strict_registry_file".to_owned(),
+                    "signed_native_admin_authorization".to_owned(),
+                ]
+            );
             let serialized = serde_json::to_string(gap).expect("gap JSON");
-            assert!(!serialized.contains("private_key"));
-            assert!(!serialized.contains("request-file"));
-            assert!(!serialized.contains("attestation"));
+            for forbidden in [
+                "private_key",
+                "request-file",
+                "attestation",
+                "--issuer-id",
+                "--public-key-file",
+                "--ceremony-ref",
+                "--ceremony-file",
+            ] {
+                assert!(
+                    !serialized.contains(forbidden),
+                    "obsolete setup field {forbidden}"
+                );
+            }
         }
 
         let key = SigningKey::from_bytes(&[31_u8; 32]);
         let mut document = install_runtime_broker_registry(&adapter, &key);
+        let legacy = adapter.next().expect("legacy broker guidance");
+        assert_eq!(
+            legacy.authorization.registry_setup.broker_registry,
+            WorkflowAuthorizationRegistrySetupStatus::LegacyRecoveryOnly
+        );
+        assert!(legacy.authorization.setup_gaps.iter().all(|gap| {
+            gap.code == WorkflowAuthorizationSetupGapCode::BrokerRegistryLegacyRecoveryOnly
+                && gap.external_setup
+                    == (WorkflowBrokerExternalSetupState::Blocked {
+                        reason: WorkflowBrokerExternalSetupBlockReason::SelectedHostUnavailable,
+                    })
+                && gap.setup_argv.is_empty()
+        }));
+
         document.issuers[0].status = WorkflowBrokerIssuerStatus::Revoked;
         fs::write(
             adapter.trusted_broker_registry_path(),
@@ -8446,7 +10823,7 @@ mod tests {
         let revoked = adapter.next().expect("revoked broker guidance");
         assert_eq!(
             revoked.authorization.registry_setup.broker_registry,
-            WorkflowAuthorizationRegistrySetupStatus::NoActiveIssuer
+            WorkflowAuthorizationRegistrySetupStatus::LegacyRecoveryOnly
         );
         assert!(!revoked.authorization.action_packets.is_empty());
         assert!(revoked
@@ -8455,7 +10832,12 @@ mod tests {
             .iter()
             .all(|packet| { packet.binding.trusted_broker_registry_digest.is_some() }));
         assert!(revoked.authorization.setup_gaps.iter().all(|gap| {
-            gap.code == WorkflowAuthorizationSetupGapCode::BrokerRegistryNoActiveIssuer
+            gap.code == WorkflowAuthorizationSetupGapCode::BrokerRegistryLegacyRecoveryOnly
+                && gap.external_setup
+                    == (WorkflowBrokerExternalSetupState::Blocked {
+                        reason: WorkflowBrokerExternalSetupBlockReason::SelectedHostUnavailable,
+                    })
+                && gap.setup_argv.is_empty()
         }));
 
         document.audience = "forge-core:workflow:project.other".to_owned();
@@ -9025,9 +11407,10 @@ mod tests {
 
         let ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger after failure");
         let projection = ledger.recover().expect("recover durable companions");
-        let (durable_action, durable_origin) = matching_broker_origin_retry(&projection, &audit)
-            .expect("match durable broker origin")
-            .expect("ledger commit must survive replay failure");
+        let (durable_action, durable_origin) =
+            matching_broker_origin_retry(&projection, &audit, None, None)
+                .expect("match durable broker origin")
+                .expect("ledger commit must survive replay failure");
         drop(ledger);
         let historical = AuthorizedWorkflowBrokerRegistry::from_document(broker_document.clone())
             .expect("historical registry")
@@ -9064,6 +11447,249 @@ mod tests {
             replay_after_repair,
             "exact retry after repair must not append again"
         );
+    }
+
+    #[test]
+    fn strict_replay_digest_blocks_rotated_reuse_after_post_ledger_crash() {
+        let (root, state) = temp_project("strict-replay-crash-rotation");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.broker-apply".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize with replay");
+        let human_key = SigningKey::from_bytes(&[61_u8; 32]);
+        let runtime_key = SigningKey::from_bytes(&[62_u8; 32]);
+        let replacement_key = SigningKey::from_bytes(&[63_u8; 32]);
+        let now = unix_time().expect("clock");
+        let strict = strict_test_registry(&adapter, &human_key, &runtime_key, now);
+        let intent_packets = adapter.action_packets_at(now).expect("intent packet set");
+        let intent_envelope = signed_intent_envelope(
+            &intent_packets.project_id,
+            &intent_packets.packets[0],
+            &human_key,
+            now,
+            "strict-intent-native-interaction-0001",
+            "Build a dependable governed product",
+        );
+        let intent_context =
+            strict_verification_context(&adapter, WorkflowBrokerBoundOperation::IntentRevision);
+        let verified_intent = strict
+            .verify_bound_event(
+                intent_envelope,
+                &intent_context,
+                i64::try_from(now).expect("clock fits i64"),
+                WorkflowBrokerFreshnessPolicy::default(),
+            )
+            .expect("strict intent event");
+        adapter
+            .apply_verified_bound_broker_action(verified_intent, now)
+            .expect("apply strict intent");
+
+        let packets = adapter.action_packets_at(now).expect("signal packets");
+        let packet = packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Activate,
+                        ..
+                    }
+                )
+            })
+            .expect("activation signal packet");
+        let envelope = signed_signal_envelope(
+            &packets.project_id,
+            packet,
+            &runtime_key,
+            now,
+            "strict-runtime-native-interaction-0001",
+        );
+        let signal_context =
+            strict_verification_context(&adapter, WorkflowBrokerBoundOperation::Signal);
+        let verified = strict
+            .verify_bound_event(
+                envelope.clone(),
+                &signal_context,
+                i64::try_from(now).expect("clock fits i64"),
+                WorkflowBrokerFreshnessPolicy::default(),
+            )
+            .expect("strict signal event");
+        let bound_audit = verified.audit().clone();
+        let event_audit = verified.verified().audit().clone();
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let replay_wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let replay_before = fs::read(&replay_wal).expect("replay WAL before strict failure");
+        fs::write(state.join(TEST_REPLAY_APPEND_FAILURE_MARKER), b"fail\n")
+            .expect("arm strict replay append failpoint");
+
+        assert!(matches!(
+            adapter.apply_verified_bound_broker_action(verified, now),
+            Err(WorkflowGovernanceAdapterError::ActionReplay(
+                WorkflowActionReplayError::WriteWal { .. }
+            ))
+        ));
+        let ledger = lock_workflow_governance_ledger_tcb(&state).expect("strict ledger");
+        let projection = ledger.recover().expect("strict durable projection");
+        let durable_origin = projection
+            .records
+            .iter()
+            .find_map(|record| match &record.event {
+                WorkflowGovernanceEvent::BrokerOriginApplied(origin)
+                    if origin.broker_event_digest == event_audit.event_digest =>
+                {
+                    Some((record.clone(), origin.clone()))
+                }
+                _ => None,
+            })
+            .expect("strict durable origin companion");
+        assert_eq!(
+            durable_origin.1.native_interaction_replay_digest.as_deref(),
+            Some(bound_audit.native_interaction_replay_digest.as_str()),
+            "the rotation-stable replay identity must survive the ledger/replay crash gap"
+        );
+        drop(ledger);
+
+        let replay_backup = state.join(TEST_REPLAY_APPEND_FAILURE_BACKUP);
+        fs::remove_dir(&replay_wal).expect("remove blocking strict replay directory");
+        fs::rename(&replay_backup, &replay_wal).expect("restore strict replay WAL");
+        fs::remove_file(state.join(TEST_REPLAY_APPEND_FAILURE_MARKER))
+            .expect("disarm strict replay failpoint");
+        assert_eq!(
+            fs::read(&replay_wal).expect("restored strict replay WAL"),
+            replay_before
+        );
+
+        let rotated_at = now.checked_add(1).expect("clock increment");
+        let rotated =
+            rotate_strict_runtime_registry(&adapter, &strict, &replacement_key, rotated_at);
+        let next_packets = adapter
+            .action_packets_at(rotated_at)
+            .expect("packets after strict durable action");
+        let next_packet = next_packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Activate,
+                        ..
+                    }
+                )
+            })
+            .expect("rotated signal packet");
+        let mut reused_envelope = signed_signal_envelope(
+            &next_packets.project_id,
+            next_packet,
+            &replacement_key,
+            rotated_at,
+            "strict-runtime-native-interaction-rotated-nonce-0002",
+        );
+        reused_envelope.issuer_id = StableId("broker.runtime.rotated".to_owned());
+        let durable_provenance = envelope
+            .native_host_provenance
+            .as_ref()
+            .expect("durable strict native provenance");
+        let reused_provenance = reused_envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("reused strict native provenance");
+        reused_provenance.host_event_ref = durable_provenance.host_event_ref.clone();
+        reused_provenance.host_session_ref = durable_provenance.host_session_ref.clone();
+        reused_provenance.host_interaction_ref = durable_provenance.host_interaction_ref.clone();
+        seal_test_host_descriptor(&mut reused_envelope);
+        reused_envelope.signature = hex(&replacement_key
+            .sign(
+                &workflow_broker_event_signing_bytes(&reused_envelope)
+                    .expect("rotated broker signing bytes"),
+            )
+            .to_bytes());
+        let rotated_verified = rotated
+            .verify_bound_event(
+                reused_envelope.clone(),
+                &signal_context,
+                i64::try_from(rotated_at).expect("clock fits i64"),
+                WorkflowBrokerFreshnessPolicy::default(),
+            )
+            .expect("rotated strict signal event");
+        assert_eq!(
+            rotated_verified.audit().native_interaction_replay_digest,
+            bound_audit.native_interaction_replay_digest
+        );
+        assert_ne!(
+            rotated_verified.audit().registry_digest,
+            bound_audit.registry_digest
+        );
+        assert_ne!(
+            rotated_verified.audit().credential_generation,
+            bound_audit.credential_generation
+        );
+        assert_ne!(
+            rotated_verified.verified().audit().issuer_id,
+            event_audit.issuer_id
+        );
+        assert_ne!(
+            rotated_verified.verified().audit().action_packet_digest,
+            event_audit.action_packet_digest
+        );
+        assert_ne!(reused_envelope.nonce, envelope.nonce);
+
+        let workflow_before_conflict =
+            fs::read(&workflow_wal).expect("workflow WAL before strict rotation conflict");
+        let replay_before_conflict =
+            fs::read(&replay_wal).expect("replay WAL before strict rotation conflict");
+        assert!(matches!(
+            adapter.apply_verified_bound_broker_action(rotated_verified, rotated_at),
+            Err(WorkflowGovernanceAdapterError::ActionReplay(
+                WorkflowActionReplayError::OriginReplayConflict { .. }
+            ))
+        ));
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after strict rotation conflict"),
+            workflow_before_conflict,
+            "issuer, packet, nonce, and credential rotation reuse must fail before ledger append"
+        );
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after strict rotation conflict"),
+            replay_before_conflict,
+            "ledger conflict detection must not fabricate replay state"
+        );
+
+        let historical = rotated
+            .verify_bound_event_for_recovery(envelope.clone(), &signal_context)
+            .expect("current rotated registry retains historical event authority");
+        assert_ne!(
+            historical.audit().registry_digest,
+            durable_origin.1.broker_registry_digest,
+            "recovery must preserve the durable admitting registry while accepting current retained history"
+        );
+        let repaired = adapter
+            .recover_historically_verified_bound_broker_action(historical)
+            .expect("repair strict replay through the current rotated registry");
+        assert_eq!(repaired.origin_record, durable_origin.0);
+        assert!(repaired.replay_commit_repaired);
+        let replay_after_repair = fs::read(&replay_wal).expect("strict replay after repair");
+        assert_ne!(replay_after_repair, replay_before);
+
+        let exact_retry = rotated
+            .verify_bound_event_for_recovery(envelope, &signal_context)
+            .expect("current rotated registry verifies the idempotent retry");
+        let retried = adapter
+            .recover_historically_verified_bound_broker_action(exact_retry)
+            .expect("idempotent strict historical retry");
+        assert!(!retried.replay_commit_repaired);
+        assert_eq!(
+            fs::read(&replay_wal).expect("strict replay after exact retry"),
+            replay_after_repair
+        );
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup fixture");
     }
 
     #[test]
@@ -9361,6 +11987,7 @@ mod tests {
                 signature_fingerprint: format!("sha256:{}", "4".repeat(64)),
                 enrollment_ceremony_digest: format!("sha256:{}", "5".repeat(64)),
                 broker_registry_digest: broker_registry_digest.clone(),
+                native_interaction_replay_digest: None,
                 issued_at_unix: 10,
                 expires_at_unix: 120,
                 native_host_provenance: None,

@@ -18,13 +18,20 @@
 //! `Err(GateRejection)` to block the WAL append.
 
 use std::collections::HashSet;
+#[cfg(test)]
 use std::fs;
 use std::path::PathBuf;
 
 use forge_core_contracts::operation::AutonomyMode;
-use forge_core_contracts::{ClaimContract, FieldEvidenceRegistry, Phase, RepoPath, StableId};
-use forge_core_decisions::{check_write_against_claims, WriteCheck};
-use forge_core_store::{append_trace_event, collect_validation_yaml_documents};
+use forge_core_contracts::{
+    ClaimContract, FieldEvidenceRegistry, OperationContractDocument, Phase, RepoPath, StableId,
+    ToolEffectContractDocument,
+};
+use forge_core_decisions::{
+    check_write_against_claims, evaluate_funnel_operation, load_accepted_funnel_autonomy_policy,
+    FunnelOperationDecision, FunnelOperationDisposition, WriteCheck,
+};
+use forge_core_store::collect_validation_yaml_documents;
 use forge_core_trace::{
     TraceActor, TraceAuthority, TraceCost, TraceEvent, TraceEventKind, TraceRef, TraceRisk,
     TraceRiskLevel,
@@ -34,7 +41,7 @@ use forge_core_validate::risk_audit::{
 };
 use forge_core_validate::{validate_yaml_citation_references, DiagnosticSeverity};
 
-use crate::gate::{GateRejection, OperationGate};
+use crate::gate::{GateEvaluationContext, GateRejection, OperationGate};
 use crate::planning::RuntimePlan;
 
 // ---------------------------------------------------------------------------
@@ -53,8 +60,6 @@ pub struct RiskAuditGate {
     pub ruleset: RiskAuditRuleSet,
     /// Repo root to walk for audit targets.
     pub project_root: PathBuf,
-    /// State root (the `.forge-method` parent) where trace events persist.
-    pub trace_state_root: PathBuf,
     /// Trace identity. `run_id` / `recorded_at` distinguish one audit pass.
     pub trace_id: String,
     pub run_id: String,
@@ -64,7 +69,11 @@ pub struct RiskAuditGate {
 }
 
 impl OperationGate for RiskAuditGate {
-    fn evaluate(&self, _plan: &RuntimePlan) -> Result<(), GateRejection> {
+    fn evaluate(
+        &self,
+        _plan: &RuntimePlan,
+        context: &GateEvaluationContext<'_>,
+    ) -> Result<(), GateRejection> {
         // 1) Structural validation of the rule set. If the rule set is
         //    malformed, emit trace + reject without walking the tree.
         let structure_report = validate_risk_audit_rule_set(&self.ruleset);
@@ -78,7 +87,7 @@ impl OperationGate for RiskAuditGate {
                     |d| format!("{}: {}", d.path, d.message),
                 );
             let count = structure_report.diagnostics().len();
-            self.emit_trace(count, 0, 0, Some(&first_error));
+            self.emit_trace(context, count, 0, 0, Some(&first_error));
             return Err(structural_rejection(&first_error, count));
         }
         // 2) Walk the tree and run the evaluator.
@@ -88,7 +97,7 @@ impl OperationGate for RiskAuditGate {
                 // The walk itself failed — treat as a structural/config
                 // rejection so the mutation is blocked. Emit a trace.
                 let message = format!("risk-audit collect_targets: {source}");
-                self.emit_trace(1, 0, 0, Some(&message));
+                self.emit_trace(context, 1, 0, 0, Some(&message));
                 return Err(GateRejection::RiskAuditFailed {
                     error_count: 1,
                     finding_paths: vec![message],
@@ -99,7 +108,7 @@ impl OperationGate for RiskAuditGate {
         let findings = evaluate_risk_audit(&self.ruleset, &targets);
         let error_count = findings.error_count();
         let warning_count = findings.warning_count();
-        self.emit_trace(error_count, warning_count, target_count, None);
+        self.emit_trace(context, error_count, warning_count, target_count, None);
         if findings.has_errors() {
             let finding_paths: Vec<String> = findings
                 .diagnostics()
@@ -126,6 +135,7 @@ impl RiskAuditGate {
     /// and never change the gate outcome.
     fn emit_trace(
         &self,
+        operation: &GateEvaluationContext<'_>,
         error_count: usize,
         warning_count: usize,
         target_count: usize,
@@ -144,9 +154,8 @@ impl RiskAuditGate {
             target_count,
             structural_error,
         );
-        let _ = fs::create_dir_all(&self.trace_state_root);
         for event in &events {
-            if let Err(source) = append_trace_event(&self.trace_state_root, event) {
+            if let Err(source) = operation.append_trace_event(event) {
                 eprintln!("forge-core: risk-audit trace append failed (non-fatal): {source}");
             }
         }
@@ -185,7 +194,11 @@ pub struct CitationGate {
 }
 
 impl OperationGate for CitationGate {
-    fn evaluate(&self, _plan: &RuntimePlan) -> Result<(), GateRejection> {
+    fn evaluate(
+        &self,
+        _plan: &RuntimePlan,
+        _context: &GateEvaluationContext<'_>,
+    ) -> Result<(), GateRejection> {
         let documents = collect_validation_yaml_documents(&self.project_root);
         let report = validate_yaml_citation_references(
             &documents.documents,
@@ -325,7 +338,11 @@ pub struct ClaimCoverageGate {
 }
 
 impl OperationGate for ClaimCoverageGate {
-    fn evaluate(&self, plan: &RuntimePlan) -> Result<(), GateRejection> {
+    fn evaluate(
+        &self,
+        plan: &RuntimePlan,
+        _context: &GateEvaluationContext<'_>,
+    ) -> Result<(), GateRejection> {
         if self.targets.is_empty() {
             // Read-only operation: nothing to claim-cover.
             return Ok(());
@@ -405,7 +422,11 @@ pub struct PhaseGate {
 }
 
 impl OperationGate for PhaseGate {
-    fn evaluate(&self, plan: &RuntimePlan) -> Result<(), GateRejection> {
+    fn evaluate(
+        &self,
+        plan: &RuntimePlan,
+        _context: &GateEvaluationContext<'_>,
+    ) -> Result<(), GateRejection> {
         let durable_mutation = matches!(
             plan.autonomy_mode,
             AutonomyMode::Execute | AutonomyMode::Repair
@@ -433,9 +454,90 @@ impl OperationGate for PhaseGate {
     }
 }
 
+/// The execution-boundary consumer of the accepted funnel-autonomy policy.
+///
+/// The gate owns the exact operation and effect documents admitted by the CLI,
+/// then loads the same embedded accepted policy used by Guide and planning.
+/// Policy data and operation boundary declarations remain descriptive: this
+/// gate can only reject execution and cannot mint mutation, phase, release,
+/// signing, private-key, or host-selection authority.
+#[derive(Debug, Clone)]
+pub struct FunnelAutonomyGate {
+    operation: OperationContractDocument,
+    effects: Vec<ToolEffectContractDocument>,
+}
+
+impl FunnelAutonomyGate {
+    #[must_use]
+    pub fn new(
+        operation: &OperationContractDocument,
+        effects: &[ToolEffectContractDocument],
+    ) -> Self {
+        Self {
+            operation: operation.clone(),
+            effects: effects.to_vec(),
+        }
+    }
+
+    fn decision(&self) -> Result<FunnelOperationDecision, GateRejection> {
+        let policy =
+            load_accepted_funnel_autonomy_policy().map_err(|rejection| GateRejection::Custom {
+                code: "funnel_policy_unavailable".to_string(),
+                message: rejection
+                    .issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.path, issue.message))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            })?;
+        evaluate_funnel_operation(policy, &self.operation.operation_contract, &self.effects)
+            .map_err(|rejection| GateRejection::Custom {
+                code: "funnel_policy_invalid".to_string(),
+                message: rejection
+                    .issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.path, issue.message))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            })
+    }
+}
+
+impl OperationGate for FunnelAutonomyGate {
+    fn evaluate(
+        &self,
+        _plan: &RuntimePlan,
+        _context: &GateEvaluationContext<'_>,
+    ) -> Result<(), GateRejection> {
+        let decision = self.decision()?;
+        if decision.disposition == FunnelOperationDisposition::Proceed {
+            return Ok(());
+        }
+        let code = match decision.disposition {
+            FunnelOperationDisposition::Proceed => unreachable!(),
+            FunnelOperationDisposition::ReviewRequired => "funnel_review_required",
+            FunnelOperationDisposition::GateRequired => "funnel_gate_required",
+            FunnelOperationDisposition::Blocked => "funnel_operation_blocked",
+        };
+        Err(GateRejection::Custom {
+            code: code.to_string(),
+            message: format!(
+                "accepted funnel-autonomy policy rejected operation; reasons: {:?}",
+                decision.reasons
+            ),
+        })
+    }
+
+    fn name(&self) -> &'static str {
+        "funnel-autonomy"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use forge_core_validate::risk_audit::{
         RiskAuditRule, RiskAuditRuleSet, RISK_AUDIT_SCHEMA_VERSION,
     };
@@ -461,14 +563,27 @@ mod tests {
         }
     }
 
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn temp_dir(label: &str) -> PathBuf {
+        let nonce = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "forge-core-kernel-gate-{label}-{}",
+            "forge-core-kernel-gate-{label}-{}-{nonce}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create temp root");
         path
+    }
+
+    fn evaluate_gate(gate: &dyn OperationGate, plan: &RuntimePlan) -> Result<(), GateRejection> {
+        let state_root = temp_dir("evaluation-state").join(".forge-method");
+        fs::create_dir_all(&state_root).expect("create state root");
+        let admission =
+            forge_core_store::producer_quiescence::admit_effect_producer(&state_root, false)
+                .expect("admit test effect producer");
+        let context = GateEvaluationContext::new(&state_root, &admission);
+        gate.evaluate(plan, &context)
     }
 
     #[test]
@@ -479,7 +594,6 @@ mod tests {
         let gate = RiskAuditGate {
             ruleset,
             project_root: root.clone(),
-            trace_state_root: root.join(".forge-method"),
             trace_id: "trace.1".to_string(),
             run_id: "run.1".to_string(),
             recorded_at: "2026-07-02T00:00:00Z".to_string(),
@@ -487,7 +601,7 @@ mod tests {
         };
         // A stub plan is enough — the gate ignores the plan body.
         let plan = stub_plan();
-        assert!(gate.evaluate(&plan).is_ok());
+        assert!(evaluate_gate(&gate, &plan).is_ok());
     }
 
     #[test]
@@ -500,14 +614,13 @@ mod tests {
         let gate = RiskAuditGate {
             ruleset,
             project_root: root,
-            trace_state_root: std::env::temp_dir(),
             trace_id: "trace.2".to_string(),
             run_id: "run.2".to_string(),
             recorded_at: "2026-07-02T00:00:00Z".to_string(),
             rule_set_ref: "rules.yaml".to_string(),
         };
         let plan = stub_plan();
-        let rejection = gate.evaluate(&plan).expect_err("should reject");
+        let rejection = evaluate_gate(&gate, &plan).expect_err("should reject");
         match rejection {
             GateRejection::RiskAuditFailed {
                 error_count,
@@ -527,7 +640,6 @@ mod tests {
         let gate = RiskAuditGate {
             ruleset: empty_ruleset(),
             project_root: root,
-            trace_state_root: std::env::temp_dir(),
             trace_id: "trace.3".to_string(),
             run_id: "run.3".to_string(),
             recorded_at: "2026-07-02T00:00:00Z".to_string(),
@@ -535,7 +647,7 @@ mod tests {
         };
         let plan = stub_plan();
         assert!(matches!(
-            gate.evaluate(&plan),
+            evaluate_gate(&gate, &plan),
             Err(GateRejection::RiskAuditFailed { .. })
         ));
     }
@@ -549,7 +661,7 @@ mod tests {
             runtime_ids: HashSet::new(),
         };
         let plan = stub_plan();
-        assert!(gate.evaluate(&plan).is_ok());
+        assert!(evaluate_gate(&gate, &plan).is_ok());
     }
 
     /// Minimal empty `FieldEvidenceRegistry` for tests (the struct does not
@@ -601,6 +713,10 @@ mod tests {
             gate_status: OperationGateStatus::Pass,
             human_input_requirement: HumanInputRequirement::None,
             prompt: None,
+            funnel_disposition: FunnelOperationDisposition::Proceed,
+            funnel_phase_profile: None,
+            funnel_reasons: Vec::new(),
+            protected_boundaries: Vec::new(),
             command_refs: Vec::new(),
             effect_contract_refs: Vec::new(),
             reasons: Vec::new(),
@@ -626,7 +742,10 @@ mod tests {
             current_phase: Phase::Discovery,
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Observe);
-        assert!(gate.evaluate(&plan).is_ok(), "Observe in Discovery passes");
+        assert!(
+            evaluate_gate(&gate, &plan).is_ok(),
+            "Observe in Discovery passes"
+        );
     }
 
     #[test]
@@ -637,9 +756,7 @@ mod tests {
             current_phase: Phase::Discovery,
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
-        let err = gate
-            .evaluate(&plan)
-            .expect_err("Execute in Discovery blocks");
+        let err = evaluate_gate(&gate, &plan).expect_err("Execute in Discovery blocks");
         match err {
             GateRejection::Custom { code, .. } => {
                 assert_eq!(code, "phase_blocks_mutation");
@@ -655,7 +772,7 @@ mod tests {
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
         assert!(
-            gate.evaluate(&plan).is_ok(),
+            evaluate_gate(&gate, &plan).is_ok(),
             "Execute in BuildVerify passes"
         );
     }
@@ -670,7 +787,10 @@ mod tests {
             now_unix: 0,
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
-        assert!(gate.evaluate(&plan).is_ok(), "no targets = no claim needed");
+        assert!(
+            evaluate_gate(&gate, &plan).is_ok(),
+            "no targets = no claim needed"
+        );
     }
 
     #[test]
@@ -684,7 +804,7 @@ mod tests {
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Observe);
         assert!(
-            gate.evaluate(&plan).is_ok(),
+            evaluate_gate(&gate, &plan).is_ok(),
             "Observe mode does not require claim coverage"
         );
     }
@@ -700,14 +820,71 @@ mod tests {
             now_unix: 0,
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
-        let err = gate
-            .evaluate(&plan)
-            .expect_err("Execute on ungoverned target blocks");
+        let err = evaluate_gate(&gate, &plan).expect_err("Execute on ungoverned target blocks");
         match err {
             GateRejection::Custom { code, .. } => {
                 assert_eq!(code, "claim_coverage_missing");
             }
             other => panic!("expected claim_coverage_missing, got {other:?}"),
         }
+    }
+
+    fn mechanical_operation() -> OperationContractDocument {
+        yaml_serde::from_str(include_str!(
+            "../../../docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml"
+        ))
+        .expect("mechanical operation fixture")
+    }
+
+    #[test]
+    fn funnel_gate_accepts_claimed_gated_mechanical_operation() {
+        let operation = mechanical_operation();
+        let gate = FunnelAutonomyGate::new(&operation, &[]);
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        assert!(evaluate_gate(&gate, &plan).is_ok());
+    }
+
+    #[test]
+    fn funnel_gate_blocks_undeclared_destructive_effect() {
+        let operation = mechanical_operation();
+        let effect: ToolEffectContractDocument = yaml_serde::from_str(include_str!(
+            "../../../contracts/effects/destructive-file-delete-with-inverse-effect.yaml"
+        ))
+        .expect("destructive effect fixture");
+        let gate = FunnelAutonomyGate::new(&operation, &[effect]);
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        let rejection = evaluate_gate(&gate, &plan).expect_err("undeclared boundary must block");
+        assert!(matches!(
+            rejection,
+            GateRejection::Custom { ref code, .. } if code == "funnel_operation_blocked"
+        ));
+    }
+
+    #[test]
+    fn funnel_gate_requires_release_boundary_gate() {
+        let mut operation = mechanical_operation();
+        operation.operation_contract.authority.side_effect_policy =
+            forge_core_contracts::operation::OperationSideEffectPolicy::Publish;
+        let gate = FunnelAutonomyGate::new(&operation, &[]);
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        let rejection = evaluate_gate(&gate, &plan).expect_err("release gate must be present");
+        assert!(matches!(
+            rejection,
+            GateRejection::Custom { ref code, .. } if code == "funnel_gate_required"
+        ));
+    }
+
+    #[test]
+    fn funnel_gate_requires_authority_boundary_gate() {
+        let mut operation = mechanical_operation();
+        operation.operation_contract.risk_boundaries =
+            vec![forge_core_contracts::operation::OperationRiskBoundary::Authority];
+        let gate = FunnelAutonomyGate::new(&operation, &[]);
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        let rejection = evaluate_gate(&gate, &plan).expect_err("authority gate must be present");
+        assert!(matches!(
+            rejection,
+            GateRejection::Custom { ref code, .. } if code == "funnel_gate_required"
+        ));
     }
 }

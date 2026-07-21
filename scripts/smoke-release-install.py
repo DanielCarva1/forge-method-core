@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
+import platform
 import stat
 import subprocess
 import tempfile
@@ -50,8 +51,21 @@ def extract_checked_members(archive: Path, destination: Path) -> dict[str, Path]
     return extracted
 
 
-def run(command: list[str], label: str) -> subprocess.CompletedProcess[str]:
-    completed = subprocess.run(command, text=True, capture_output=True, check=False)
+def run(
+    command: list[str], label: str, timeout_seconds: int
+) -> subprocess.CompletedProcess[str]:
+    try:
+        completed = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise InstallSmokeError(
+            f"{label} exceeded bounded {timeout_seconds}-second execution window"
+        ) from error
     if completed.returncode != 0:
         raise InstallSmokeError(
             f"{label} failed with exit {completed.returncode}\n"
@@ -69,14 +83,16 @@ def wrapper_command(wrapper: Path, arguments: list[str]) -> list[str]:
     return ["cmd.exe", "/d", "/s", "/c", command_line]
 
 
-def require_version(command: list[str], expected: str, label: str) -> None:
-    actual = run(command, label).stdout.strip()
+def require_version(
+    command: list[str], expected: str, label: str, timeout_seconds: int
+) -> None:
+    actual = run(command, label, timeout_seconds).stdout.strip()
     if actual != expected:
         raise InstallSmokeError(f"{label}: expected {expected!r}, got {actual!r}")
 
 
-def require_ok_json(command: list[str], label: str) -> dict:
-    completed = run(command, label)
+def require_ok_json(command: list[str], label: str, timeout_seconds: int) -> dict:
+    completed = run(command, label, timeout_seconds)
     try:
         envelope = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
@@ -87,6 +103,14 @@ def require_ok_json(command: list[str], label: str) -> dict:
 
 
 def smoke(args: argparse.Namespace) -> None:
+    actual_arch = platform.machine().casefold()
+    expected_arch = args.expected_host_arch.casefold()
+    if actual_arch != expected_arch:
+        raise InstallSmokeError(
+            f"host architecture boundary mismatch: expected {expected_arch!r}, got {actual_arch!r}"
+        )
+    if not 1 <= args.command_timeout_seconds <= 300:
+        raise InstallSmokeError("command timeout must be between 1 and 300 seconds")
     expected_version = f"forge-core {args.version}"
     with tempfile.TemporaryDirectory(prefix="forge-release-install-") as directory:
         root = Path(directory)
@@ -101,9 +125,17 @@ def smoke(args: argparse.Namespace) -> None:
                 "archive lacks requested executable members: "
                 f"binary={args.binary_name!r}, wrapper={args.wrapper_name!r}"
             )
-        require_version([str(binary), "--version"], expected_version, "packaged binary --version")
         require_version(
-            wrapper_command(wrapper, ["--version"]), expected_version, "packaged wrapper --version"
+            [str(binary), "--version"],
+            expected_version,
+            "packaged binary --version",
+            args.command_timeout_seconds,
+        )
+        require_version(
+            wrapper_command(wrapper, ["--version"]),
+            expected_version,
+            "packaged wrapper --version",
+            args.command_timeout_seconds,
         )
 
         project = root / "consumer project"
@@ -117,7 +149,11 @@ def smoke(args: argparse.Namespace) -> None:
             (["workflow", "next", *root_args], "workflow next"),
         ]
         for command_args, label in journey:
-            require_ok_json(wrapper_command(wrapper, command_args), label)
+            require_ok_json(
+                wrapper_command(wrapper, command_args),
+                label,
+                args.command_timeout_seconds,
+            )
 
     print(
         f"smoked extracted {args.archive}: binary and wrapper version plus "
@@ -131,6 +167,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--binary-name", required=True)
     result.add_argument("--wrapper-name", required=True)
     result.add_argument("--version", required=True)
+    result.add_argument("--expected-host-arch", required=True)
+    result.add_argument("--command-timeout-seconds", type=int, default=60)
     return result
 
 

@@ -53,6 +53,24 @@ fn canonical_digest<T: Serialize>(value: &T) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
+fn remote_descriptor(
+    kind: DomainPackRemoteArtifactKind,
+    binding: DomainPackArtifactBinding,
+    raw_bytes: &[u8],
+) -> DomainPackRemoteArtifactDescriptor {
+    let token = binding
+        .raw_sha256
+        .strip_prefix("sha256:")
+        .expect("fixture binding has sha256 prefix");
+    DomainPackRemoteArtifactDescriptor {
+        kind,
+        object_path: RepoPath(format!("objects/sha256/{token}")),
+        binding,
+        byte_length: u64::try_from(raw_bytes.len()).expect("fixture byte length"),
+        media_type: DomainPackRemoteArtifactMediaType::ApplicationYaml,
+    }
+}
+
 fn learning_digest(label: &str) -> String {
     format!("{:x}", Sha256::digest(label.as_bytes()))
 }
@@ -150,19 +168,69 @@ impl Fixture {
                 default_disposition: DomainPackTrustDisposition::Reject,
             },
         };
-        let mut record = DomainPackRegistryPackageRecord {
-            identity: manifest.identity.clone(),
-            package_digest: package_digest.clone(),
-            manifest_digest: authored.manifest_binding.canonical_sha256.clone(),
-            content_digest: manifest.content.canonical_sha256.clone(),
-            license_digest: manifest.provenance.license_text.canonical_sha256.clone(),
-            fixture_digests: authored
+        let manifest_raw =
+            fs::read(repo_root().join("docs/fixtures/domain-pack-v0/manifests/foundation.yaml"))
+                .expect("raw manifest");
+        let content_raw =
+            fs::read(repo_root().join("docs/fixtures/domain-pack-v0/content/foundation.yaml"))
+                .expect("raw content");
+        let license_raw = fs::read(
+            repo_root().join("docs/fixtures/domain-pack-v0/artifacts/license-notice.yaml"),
+        )
+        .expect("raw license");
+        let representative_raw = fs::read(
+            repo_root()
+                .join("docs/fixtures/domain-pack-v0/artifacts/foundation-representative.yaml"),
+        )
+        .expect("raw representative fixture");
+        let content_binding = DomainPackArtifactBinding {
+            artifact_ref: manifest.content.content_ref.clone(),
+            raw_sha256: manifest.content.raw_sha256.clone(),
+            canonical_sha256: manifest.content.canonical_sha256.clone(),
+        };
+        let artifacts = DomainPackRegistryArtifactSet {
+            manifest: remote_descriptor(
+                DomainPackRemoteArtifactKind::Manifest,
+                authored.manifest_binding.clone(),
+                &manifest_raw,
+            ),
+            content: remote_descriptor(
+                DomainPackRemoteArtifactKind::Content,
+                content_binding.clone(),
+                &content_raw,
+            ),
+            license: remote_descriptor(
+                DomainPackRemoteArtifactKind::License,
+                manifest.provenance.license_text.clone(),
+                &license_raw,
+            ),
+            fixtures: authored
                 .content
                 .domain_pack_content
                 .fixtures
                 .iter()
-                .map(|fixture| fixture.artifact.canonical_sha256.clone())
+                .zip([representative_raw.as_slice()])
+                .map(|(fixture, raw)| {
+                    remote_descriptor(
+                        DomainPackRemoteArtifactKind::Fixture,
+                        fixture.artifact.clone(),
+                        raw,
+                    )
+                })
                 .collect(),
+        };
+        let mut record = DomainPackRegistryPackageRecord {
+            identity: manifest.identity.clone(),
+            package_digest: package_digest.clone(),
+            manifest_digest: artifacts.manifest.binding.raw_sha256.clone(),
+            content_digest: artifacts.content.binding.raw_sha256.clone(),
+            license_digest: artifacts.license.binding.raw_sha256.clone(),
+            fixture_digests: artifacts
+                .fixtures
+                .iter()
+                .map(|fixture| fixture.binding.raw_sha256.clone())
+                .collect(),
+            artifacts,
             namespace_grant_id: namespace_grant_id.clone(),
             publisher_credential_id: credential_id.clone(),
             publisher_signature_hex: "00".repeat(64),
@@ -199,6 +267,13 @@ impl Fixture {
                     namespace_prefix: id("sample"),
                     valid_from_unix: now.saturating_sub(3_600),
                     valid_until_unix: now + 3_600,
+                }],
+                mirrors: vec![DomainPackRegistryMirror {
+                    mirror_id: id("mirror.operator.fixture"),
+                    priority: 0,
+                    transport: DomainPackRegistryMirrorTransport::OperatorProvisionedLocal {
+                        location_id: id("location.operator.fixture"),
+                    },
                 }],
                 packages: vec![record.clone()],
                 revocations: Vec::new(),
@@ -490,6 +565,51 @@ impl Fixture {
                 .expect("changed reviewed entry digest");
         }
         resign_reviewed_registry(&mut changed.reviewed_registry);
+        changed
+    }
+
+    /// Produce a freshly signed current catalog that carries an exact revocation
+    /// fact for the otherwise byte-identical historical record. Tests use a fresh
+    /// anchor for this head, so it remains a valid generation-one current view.
+    fn with_current_supply_chain_revocation(&self) -> Self {
+        let mut changed = self.clone();
+        let record_digest = changed.resolved.registry_record_digest.clone();
+        {
+            let registry = &mut changed.snapshot.domain_pack_supply_chain_registry;
+            registry.revocations = vec![DomainPackPackageRevocation {
+                record_digest,
+                reason: DomainPackRevocationReason::PackageTamper,
+                explanation: "current signed package revocation".to_owned(),
+                revoked_at_unix: registry.issued_at_unix,
+            }];
+            registry.snapshot_digest = digest('0');
+            registry.signatures.clear();
+        }
+        changed
+            .snapshot
+            .domain_pack_supply_chain_registry
+            .snapshot_digest = domain_pack_registry_snapshot_digest(&changed.snapshot)
+            .expect("revoked supply-chain snapshot digest");
+        for (key_id, key) in [
+            (id("registry.key.a"), SigningKey::from_bytes(&[1_u8; 32])),
+            (id("registry.key.b"), SigningKey::from_bytes(&[2_u8; 32])),
+        ] {
+            let bytes = domain_pack_registry_signing_bytes(
+                &changed.snapshot,
+                &key_id,
+                DomainPackRegistryTrustRole::RegistrySigner,
+            )
+            .expect("revoked registry signing bytes");
+            changed
+                .snapshot
+                .domain_pack_supply_chain_registry
+                .signatures
+                .push(DomainPackRegistrySignature {
+                    signer_key_id: key_id,
+                    role: DomainPackRegistryTrustRole::RegistrySigner,
+                    signature_hex: hex(&key.sign(&bytes).to_bytes()),
+                });
+        }
         changed
     }
 }
@@ -1106,9 +1226,21 @@ fn integrated_remove_preflight(
         .issues
         .is_empty());
 
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_secs();
+    let registry_snapshot_digest =
+        verify_domain_pack_supply_chain_snapshot(&base_inputs.trust_policy, &fixture.snapshot, now)
+            .expect("fresh remove supply-chain proof")
+            .snapshot_digest()
+            .to_owned();
     let mut resolution_request = base_inputs.resolution_request.clone();
     let request = &mut resolution_request.domain_pack_resolution_request;
     request.request_id = id("resolution.integrated-remove");
+    request
+        .registry_snapshot_digest
+        .clone_from(&registry_snapshot_digest);
     request.roots.clear();
     request.candidates.clear();
     request.current_lock = Some(previous_lock.clone());
@@ -1154,6 +1286,7 @@ fn integrated_remove_preflight(
             .clone(),
     };
     let mut payload = previous_lock.domain_pack_exact_lock.payload.clone();
+    payload.registry_snapshot_digest = registry_snapshot_digest;
     payload.requirements_digest = canonical_digest(&requirements);
     payload.roots.clear();
     payload.reviewer_registry_digest.clone_from(
@@ -1405,7 +1538,9 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
         .content
         .canonical_sha256
         .clone_from(&content_canonical_sha256);
-    raw.content_binding.raw_sha256 = content_raw_sha256;
+    raw.content_binding
+        .raw_sha256
+        .clone_from(&content_raw_sha256);
     raw.content_binding
         .canonical_sha256
         .clone_from(&content_canonical_sha256);
@@ -1418,8 +1553,18 @@ fn versioned_upgrade_fixture(base: &Fixture, version: &str) -> (Fixture, RawArti
     record.package_digest.clone_from(&package_digest);
     record
         .manifest_digest
-        .clone_from(&manifest_binding.canonical_sha256);
-    record.content_digest.clone_from(&content_canonical_sha256);
+        .clone_from(&manifest_binding.raw_sha256);
+    record.content_digest.clone_from(&content_raw_sha256);
+    record.artifacts.manifest = remote_descriptor(
+        DomainPackRemoteArtifactKind::Manifest,
+        manifest_binding.clone(),
+        &raw.manifest,
+    );
+    record.artifacts.content = remote_descriptor(
+        DomainPackRemoteArtifactKind::Content,
+        raw.content_binding.clone(),
+        &raw.content,
+    );
     record.publisher_signature_hex = "00".repeat(64);
     record.record_digest = digest('0');
     record.record_digest =
@@ -1961,6 +2106,28 @@ fn install_upgrade_remove_and_rollback_reject_semantically_incompatible_intent()
             DomainPackLifecycleOperation::Rollback {
                 target_receipt_digest: install.domain_pack_lifecycle_receipt.receipt_digest.clone(),
                 target_lock_digest: digest('b'),
+            },
+        ),
+        (
+            "rebase-core-unchanged",
+            DomainPackLifecycleOperation::RebaseCore {
+                target_release_id: id("release.core.unchanged"),
+                expected_from_core_digest: base
+                    .domain_pack_lifecycle_preflight
+                    .proposed_lock
+                    .domain_pack_exact_lock
+                    .payload
+                    .core
+                    .bundle_digest
+                    .clone(),
+                target_core_digest: base
+                    .domain_pack_lifecycle_preflight
+                    .proposed_lock
+                    .domain_pack_exact_lock
+                    .payload
+                    .core
+                    .bundle_digest
+                    .clone(),
             },
         ),
     ];
@@ -2544,6 +2711,62 @@ fn revoked_review_blocks_rollback_but_does_not_trap_removal() {
 }
 
 #[test]
+fn current_supply_chain_revocation_allows_removal_but_blocks_reactivation_and_rollback() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let revoked = fixture.with_current_supply_chain_revocation();
+    let root = temp_state_root("current-supply-chain-revocation");
+    let (install, base, inputs) = commit_integrated_install(&root, &fixture, &raw);
+    let target_receipt_digest = install.domain_pack_lifecycle_receipt.receipt_digest.clone();
+    let target_lock_digest = install
+        .domain_pack_lifecycle_receipt
+        .to_state
+        .active_lock_digest
+        .clone();
+
+    // A current supply-chain revocation must never trap an already-active package:
+    // removal commits an empty current lock while preserving historical evidence.
+    commit_integrated_remove(&root, &revoked, &inputs);
+
+    let error = attempt_variant(
+        &root,
+        &revoked,
+        &raw,
+        &base,
+        &inputs,
+        DomainPackLifecycleOperation::Install {
+            root: coordinate(&fixture),
+        },
+        "reinstall-current-supply-chain-revoked",
+    )
+    .expect_err("current cumulative supply-chain revocation blocks reactivation");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    let error = attempt_variant(
+        &root,
+        &revoked,
+        &raw,
+        &base,
+        &inputs,
+        DomainPackLifecycleOperation::Rollback {
+            target_receipt_digest,
+            target_lock_digest,
+        },
+        "rollback-current-supply-chain-revoked",
+    )
+    .expect_err("current supply-chain revocation blocks historical rollback reactivation");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::PreflightBlocked { .. }
+    ));
+
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
 fn persisted_generation_object_and_crosslink_tamper_block_state_load() {
     let fixture = Fixture::new();
     let raw = RawArtifactFixture::new(&fixture);
@@ -2994,6 +3217,393 @@ fn admitted_generation_revalidation_blocks_stale_state_and_uninitialized_state()
 }
 
 #[test]
+fn retained_guard_projects_complete_exact_raw_lifecycle_inventory_without_relocking() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("raw-lifecycle-inventory");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("retain producer lock");
+    let inventory = lifecycle.raw_inventory().expect("capture raw inventory");
+    let paths = inventory
+        .files()
+        .iter()
+        .map(forge_core_domain_pack_tcb::DomainPackRawLifecycleFile::relative_path)
+        .collect::<Vec<_>>();
+    assert!(paths.contains(&DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH));
+    assert!(paths.iter().any(|path| path.contains("/ledger/")));
+    assert!(paths.iter().any(|path| path.contains("/generations/")));
+    assert!(paths.iter().any(|path| path.contains("/receipts/")));
+    assert!(paths.iter().any(|path| path.contains("/objects/")));
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|path| path.ends_with("/generation.yaml"))
+            .count(),
+        2
+    );
+    assert_eq!(
+        paths
+            .iter()
+            .filter(|path| path.contains("/ledger/"))
+            .count(),
+        2
+    );
+    assert!(paths.windows(2).all(|pair| pair[0] < pair[1]));
+    for file in inventory.files() {
+        assert_eq!(
+            file.raw_bytes(),
+            fs::read(root.join(file.relative_path()))
+                .expect("inventory path exists")
+                .as_slice(),
+            "{} must preserve exact bytes",
+            file.relative_path()
+        );
+    }
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("raw inventory owner retains the exact producer lock");
+
+    drop(lifecycle);
+    lock_domain_pack_lifecycle(&root).expect("dropping owner releases lifecycle lock");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+#[test]
+fn historical_inventory_rejects_manifest_object_omission_after_two_generations() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("historical-object-omission");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+
+    let manifest_path = generation_directories(&root)[0].join("generation.yaml");
+    let text = fs::read_to_string(&manifest_path).expect("historical manifest");
+    let mut manifest: serde_json::Value = yaml_serde::from_str(&text).expect("parse manifest");
+    let objects = manifest
+        .get_mut("object_raw_digests")
+        .and_then(serde_json::Value::as_array_mut)
+        .expect("object digest array");
+    assert!(
+        objects.pop().is_some(),
+        "install generation references objects"
+    );
+    fs::write(
+        &manifest_path,
+        yaml_serde::to_string(&manifest).expect("encode omitted manifest"),
+    )
+    .expect("omit historical object digest");
+
+    let lifecycle =
+        lock_domain_pack_lifecycle(&root).expect("active generation remains independently valid");
+    lifecycle
+        .raw_inventory()
+        .expect_err("historical manifest cannot redefine the complete object closure");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn historical_inventory_rejects_omitted_replay_input() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("historical-replay-input-omission");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+    fs::remove_file(generation_directories(&root)[0].join("resolution-request.yaml"))
+        .expect("omit retained replay input");
+
+    lock_domain_pack_lifecycle(&root)
+        .expect("active generation remains valid")
+        .raw_inventory()
+        .expect_err("historical authority requires complete deterministic replay inputs");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+#[test]
+fn historical_inventory_rejects_receipt_state_discontinuity_after_rehash() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("historical-receipt-continuity");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+    commit_integrated_reinstall(&root, &fixture, &raw);
+
+    let generation = generation_directories(&root)[1].clone();
+    let receipt_path = generation.join("receipt.yaml");
+    let mut receipt: DomainPackLifecycleReceiptDocument =
+        yaml_serde::from_str(&fs::read_to_string(&receipt_path).expect("historical receipt"))
+            .expect("parse receipt");
+    let body = &mut receipt.domain_pack_lifecycle_receipt;
+    let old_digest = body.receipt_digest.clone();
+    body.from_state = None;
+    body.receipt_digest.clear();
+    body.receipt_digest = canonical_digest(body);
+    let new_digest = body.receipt_digest.clone();
+    fs::write(
+        &receipt_path,
+        yaml_serde::to_string(&receipt).expect("serialize rehashed receipt"),
+    )
+    .expect("write rehashed receipt");
+
+    let manifest_path = generation.join("generation.yaml");
+    let mut manifest: serde_json::Value =
+        yaml_serde::from_str(&fs::read_to_string(&manifest_path).expect("manifest"))
+            .expect("parse manifest");
+    manifest["receipt_digest"] = serde_json::Value::String(new_digest.clone());
+    fs::write(
+        &manifest_path,
+        yaml_serde::to_string(&manifest).expect("serialize manifest"),
+    )
+    .expect("write manifest");
+
+    let receipts = root.join("domain-packs/receipts");
+    fs::remove_file(receipts.join(format!("{}.yaml", old_digest.trim_start_matches("sha256:"))))
+        .expect("remove old committed receipt");
+    fs::write(
+        receipts.join(format!("{}.yaml", new_digest.trim_start_matches("sha256:"))),
+        yaml_serde::to_string(&receipt).expect("serialize committed receipt"),
+    )
+    .expect("write rehashed committed receipt");
+
+    lock_domain_pack_lifecycle(&root)
+        .expect("active generation remains valid")
+        .raw_inventory()
+        .expect_err("a self-consistent receipt cannot sever prior to-state continuity");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+#[test]
+fn historical_inventory_rejects_every_corrupt_authority_sidecar() {
+    for sidecar in ["lock.yaml", "preflight.yaml", "compatibility.yaml"] {
+        let fixture = Fixture::new();
+        let raw = RawArtifactFixture::new(&fixture);
+        let root = temp_state_root(&format!("historical-corrupt-{sidecar}"));
+        let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+        commit_integrated_remove(&root, &fixture, &install_inputs);
+
+        let path = generation_directories(&root)[0].join(sidecar);
+        let mut bytes = fs::read(&path).expect("historical sidecar");
+        bytes.extend_from_slice(b"forged_field: true\n");
+        fs::write(&path, bytes).expect("corrupt historical sidecar");
+
+        let lifecycle = lock_domain_pack_lifecycle(&root)
+            .expect("active generation remains independently valid");
+        lifecycle
+            .raw_inventory()
+            .expect_err("every historical authority sidecar must be parsed and bound");
+        fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn historical_inventory_rejects_field_by_field_derivation_input_tampering() {
+    let cases = [
+        (
+            "catalog.yaml",
+            "/schema_version",
+            serde_json::json!("forge.domain-pack.acquisition.v999"),
+        ),
+        (
+            "catalog.yaml",
+            "/forge_core_version",
+            serde_json::json!("99.0.0"),
+        ),
+        (
+            "catalog.yaml",
+            "/registry/domain_pack_supply_chain_registry/registry_version",
+            serde_json::json!("999.0.0"),
+        ),
+        (
+            "composition-request.yaml",
+            "/domain_pack_composition_request/request_id",
+            serde_json::json!("forged-request"),
+        ),
+        (
+            "composition-request.yaml",
+            "/domain_pack_composition_request/authority",
+            serde_json::json!("forged_authority"),
+        ),
+        (
+            "composition-request.yaml",
+            "/domain_pack_composition_request/forge_core_version",
+            serde_json::json!("99.0.0"),
+        ),
+        (
+            "composition-request.yaml",
+            "/domain_pack_composition_request/core/bundle_digest",
+            serde_json::json!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        ),
+        (
+            "composition-request.yaml",
+            "/domain_pack_composition_request/candidates/0/manifest_binding/raw_sha256",
+            serde_json::json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        ),
+        (
+            "trust-input.yaml",
+            "/project_id",
+            serde_json::json!("forged-project"),
+        ),
+        (
+            "trust-input.yaml",
+            "/selected/0/structurally_valid",
+            serde_json::json!(false),
+        ),
+        (
+            "trust-input.yaml",
+            "/selected/0/package/registry_record_digest",
+            serde_json::json!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
+        ),
+        (
+            "trust-input.yaml",
+            "/trust_policy/policy_id",
+            serde_json::json!("forged-policy"),
+        ),
+        (
+            "trust-input.yaml",
+            "/capability_registry/registry_id",
+            serde_json::json!("forged-registry"),
+        ),
+        (
+            "trust-input.yaml",
+            "/capability_registry/bindings/0/implementation_digest",
+            serde_json::json!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
+        ),
+        (
+            "trust-input.yaml",
+            "/selected/0/capability_demands/0/capability_ref",
+            serde_json::json!("forged-capability"),
+        ),
+        (
+            "trust-input.yaml",
+            "/sandbox_policy/policy_id",
+            serde_json::json!("forged-sandbox"),
+        ),
+    ];
+    for (index, (sidecar, pointer, replacement)) in cases.into_iter().enumerate() {
+        let fixture = Fixture::new();
+        let raw = RawArtifactFixture::new(&fixture);
+        let root = temp_state_root(&format!("historical-rebase-field-{index}"));
+        let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+        commit_integrated_remove(&root, &fixture, &install_inputs);
+
+        let path = generation_directories(&root)[0].join(sidecar);
+        let text = fs::read_to_string(&path).expect("historical rebase sidecar");
+        let mut value: serde_json::Value = yaml_serde::from_str(&text).expect("parse sidecar");
+        *value
+            .pointer_mut(pointer)
+            .unwrap_or_else(|| panic!("fixture field {pointer} must exist")) = replacement;
+        fs::write(
+            &path,
+            yaml_serde::to_string(&value).expect("serialize tampered sidecar"),
+        )
+        .expect("write tampered sidecar");
+
+        lock_domain_pack_lifecycle(&root)
+            .expect("active generation remains independently valid")
+            .raw_inventory()
+            .expect_err("every historical rebase input field must remain cross-bound");
+        fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn historical_inventory_rejects_state_root_rename_and_replacement() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("raw-lifecycle-root-swap");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+    let replacement_root = temp_state_root("raw-lifecycle-root-replacement");
+    commit_integrated_install(&replacement_root, &fixture, &raw);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("pin original lifecycle root");
+    let moved = root.with_extension("moved");
+    fs::rename(&root, &moved).expect("rename guarded lifecycle root");
+    fs::rename(&replacement_root, &root).expect("install well-formed replacement lifecycle root");
+
+    lifecycle
+        .raw_inventory()
+        .expect_err("inventory must reject a replacement root outside the retained lock namespace");
+    drop(lifecycle);
+    fs::remove_dir_all(root.parent().expect("original project root")).expect("cleanup original");
+    fs::remove_dir_all(replacement_root.parent().expect("replacement project root"))
+        .expect("cleanup replacement project");
+}
+
+#[cfg(unix)]
+#[test]
+fn historical_inventory_rejects_rename_to_symlink_namespace_substitution() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("historical-sidecar-symlink");
+    let (_, _, install_inputs) = commit_integrated_install(&root, &fixture, &raw);
+    commit_integrated_remove(&root, &fixture, &install_inputs);
+
+    let lock_path = generation_directories(&root)[0].join("lock.yaml");
+    let moved = lock_path.with_extension("yaml.moved");
+    fs::rename(&lock_path, &moved).expect("rename checked sidecar");
+    std::os::unix::fs::symlink(&moved, &lock_path).expect("substitute symlink");
+
+    let lifecycle =
+        lock_domain_pack_lifecycle(&root).expect("active generation remains independently valid");
+    lifecycle
+        .raw_inventory()
+        .expect_err("no-follow snapshot must reject renamed symlink substitution");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+#[test]
+fn missing_active_pointer_fails_closed_when_lifecycle_residue_exists() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("missing-active-pointer-residue");
+    commit_integrated_install(&root, &fixture, &raw);
+    fs::remove_file(root.join("domain-packs/active.lock.yaml")).expect("remove only pointer");
+
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("ledger, receipt, generation, and object residue cannot become core-only");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn absent_pointer_residue_aba_is_rejected_without_touching_displaced_namespace() {
+    let root = temp_state_root("absent-pointer-residue-aba");
+    fs::create_dir_all(root.join("domain-packs")).expect("create empty authority A");
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock empty authority A");
+    let authority_a = root.join("domain-packs");
+    let snapshot = |directory: &Path| {
+        let mut entries = fs::read_dir(directory)
+            .expect("read authority A")
+            .map(|entry| {
+                let entry = entry.expect("authority A entry");
+                let path = entry.path();
+                (entry.file_name(), fs::read(path).expect("authority A file"))
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        entries
+    };
+    let before_displacement = snapshot(&authority_a);
+    let displaced = root.join("domain-packs-a");
+    fs::rename(&authority_a, &displaced).expect("displace authority A");
+    fs::create_dir_all(root.join("domain-packs/generations")).expect("create replacement B");
+    fs::write(root.join("domain-packs/generations/residue"), b"hostile-b")
+        .expect("write replacement residue");
+
+    lifecycle
+        .verified_core_only_view()
+        .expect_err("replacement namespace residue cannot be accepted as core-only");
+    assert_eq!(
+        snapshot(&displaced),
+        before_displacement,
+        "descriptor-relative validation must not modify displaced authority A"
+    );
+    assert_eq!(
+        fs::read(root.join("domain-packs/generations/residue")).expect("replacement unchanged"),
+        b"hostile-b"
+    );
+
+    drop(lifecycle);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+#[test]
 fn verified_core_only_view_borrows_the_retained_lifecycle_lock() {
     let root = temp_state_root("verified-core-only-lifecycle");
     let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock empty lifecycle");
@@ -3006,4 +3616,753 @@ fn verified_core_only_view_borrows_the_retained_lifecycle_lock() {
     drop(lifecycle);
     lock_domain_pack_lifecycle(&root).expect("dropping core-only owner releases lock");
     fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn independent_completion_selector_binds_exact_record_parent_and_pointer() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("independent-lifecycle-completion");
+    let project_root = root.parent().expect("project root");
+    fs::write(
+        project_root.join("governed-project-input.txt"),
+        b"exact governed project bytes",
+    )
+    .expect("write governed input");
+
+    commit_integrated_install(&root, &fixture, &raw);
+    let generation = generation_directories(&root)
+        .into_iter()
+        .next()
+        .expect("committed generation");
+    let record_path = generation.join("completion.record");
+    let selector_path = generation.join("completion.selector");
+    let record_bytes = fs::read(&record_path).expect("canonical completion record");
+    let selector_bytes = fs::read(&selector_path).expect("canonical completion selector");
+    let record: serde_json::Value =
+        serde_json::from_slice(&record_bytes).expect("parse completion record");
+    let selector: serde_json::Value =
+        serde_json::from_slice(&selector_bytes).expect("parse completion selector");
+    assert_eq!(
+        selector["record_digest"],
+        serde_json::Value::String(format!("sha256:{}", hex(&Sha256::digest(&record_bytes))))
+    );
+    assert_eq!(
+        selector["record_byte_length"],
+        serde_json::Value::from(u64::try_from(record_bytes.len()).expect("record length fits u64"))
+    );
+    for field in ["record_anchor", "parent_anchor"] {
+        assert!(selector[field]["anchor_relative_path"]
+            .as_str()
+            .is_some_and(|path| path.starts_with(".forge-lifecycle-anchors/")));
+        assert!(selector[field]["nonce"]
+            .as_str()
+            .is_some_and(|nonce| nonce.len() == 64));
+    }
+    assert_eq!(record["previous_pointer"], serde_json::Value::Null);
+    assert!(record.get("completion_record_digest").is_none());
+    assert!(record.get("completion_file_identity_digest").is_none());
+    assert!(record.get("completion_parent_identity_digest").is_none());
+    assert_eq!(
+        record["operation_nonce"]
+            .as_str()
+            .expect("operation nonce")
+            .len(),
+        64
+    );
+    assert!(record["project_snapshot_digest"]
+        .as_str()
+        .is_some_and(|digest| digest.starts_with("sha256:")));
+    let pointer_bytes = fs::read(root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH))
+        .expect("installed active pointer");
+    assert_eq!(
+        record["installed_pointer"]["raw_digest"],
+        serde_json::Value::String(format!("sha256:{}", hex(&Sha256::digest(&pointer_bytes))))
+    );
+    assert_eq!(
+        record["installed_pointer"]["anchor"]["content_digest"],
+        record["installed_pointer"]["raw_digest"]
+    );
+    assert!(record["materials"]
+        .as_array()
+        .expect("immutable material inventory")
+        .iter()
+        .all(|entry| entry["anchor"]["content_digest"] == entry["raw_digest"]));
+
+    let displaced = record_path.with_extension("record.displaced");
+    fs::rename(&record_path, &displaced).expect("displace selected completion record");
+    fs::write(&record_path, &record_bytes).expect("install byte-identical record replacement");
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("byte-identical completion record replacement must fail closed");
+
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn hidden_or_tampered_completion_selector_fails_closed() {
+    for mode in ["hidden", "tampered"] {
+        let fixture = Fixture::new();
+        let raw = RawArtifactFixture::new(&fixture);
+        let root = temp_state_root(&format!("completion-selector-{mode}"));
+        commit_integrated_install(&root, &fixture, &raw);
+        let selector_path = generation_directories(&root)[0].join("completion.selector");
+        if mode == "hidden" {
+            fs::remove_file(&selector_path).expect("hide completion selector");
+        } else {
+            let mut selector = fs::read(&selector_path).expect("completion selector");
+            selector.push(b' ');
+            fs::write(&selector_path, selector).expect("tamper completion selector");
+        }
+        lock_domain_pack_lifecycle(&root)
+            .expect_err("hidden or non-canonical completion selector must fail closed");
+        fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+    }
+}
+
+#[test]
+fn completion_selector_rollback_and_byte_identical_pointer_replacement_fail_closed() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+
+    let rollback_root = temp_state_root("completion-selector-rollback");
+    let (_, _, install_inputs) = commit_integrated_install(&rollback_root, &fixture, &raw);
+    commit_integrated_remove(&rollback_root, &fixture, &install_inputs);
+    let generations = generation_directories(&rollback_root);
+    let old_selector =
+        fs::read(generations[0].join("completion.selector")).expect("old completion selector");
+    let current_selector = generations[1].join("completion.selector");
+    fs::rename(
+        &current_selector,
+        current_selector.with_extension("selector.displaced"),
+    )
+    .expect("displace current selector");
+    fs::write(&current_selector, old_selector).expect("roll back selector bytes");
+    lock_domain_pack_lifecycle(&rollback_root)
+        .expect_err("an old selector cannot authorize the current active generation");
+    fs::remove_dir_all(rollback_root.parent().expect("project root")).expect("cleanup");
+
+    let pointer_root = temp_state_root("completion-pointer-identical-replacement");
+    commit_integrated_install(&pointer_root, &fixture, &raw);
+    let pointer_path = pointer_root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH);
+    let pointer_bytes = fs::read(&pointer_path).expect("active pointer bytes");
+    fs::rename(&pointer_path, pointer_path.with_extension("yaml.displaced"))
+        .expect("displace active pointer");
+    fs::write(&pointer_path, pointer_bytes).expect("install byte-identical active pointer");
+    lock_domain_pack_lifecycle(&pointer_root)
+        .expect_err("byte-identical active-pointer replacement must fail its lifetime anchor");
+    fs::remove_dir_all(pointer_root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn retained_completion_guard_rejects_byte_identical_selector_substitution() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("retained-completion-selector-substitution");
+    let project_file = root
+        .parent()
+        .expect("project root")
+        .join("retained-project-input.txt");
+    fs::write(&project_file, b"retained exact project bytes").expect("write project input");
+    commit_integrated_install(&root, &fixture, &raw);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("retain selected completion");
+    let selector_path = generation_directories(&root)[0].join("completion.selector");
+    let selector_bytes = fs::read(&selector_path).expect("completion selector bytes");
+    fs::rename(
+        &selector_path,
+        selector_path.with_extension("selector.displaced"),
+    )
+    .expect("displace retained selector");
+    fs::write(&selector_path, selector_bytes).expect("install byte-identical selector");
+
+    lifecycle
+        .raw_inventory()
+        .expect_err("retained selector handle must reject byte-identical substitution");
+    drop(lifecycle);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn lifecycle_absence_revalidation_rejects_create_delete_aba() {
+    let root = temp_state_root("lifecycle-absence-aba");
+    let lock =
+        forge_core_store::acquire_effect_store_lock(&root, "locks/domain-packs.lifecycle.lock")
+            .expect("lifecycle effect lock");
+    let store = lock
+        .into_domain_pack_lifecycle_store()
+        .expect("retained lifecycle Store");
+    let session = store
+        .reconcile_active_pointer(64 * 1024)
+        .expect("reconcile absent active pointer");
+    let expected = store
+        .consume_reconciled_active_pointer(session)
+        .expect("transfer exact absence claim");
+    let pointer = root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH);
+
+    fs::remove_file(&pointer).expect("remove Store absence placeholder");
+    fs::write(&pointer, b"transient attacker pointer\n").expect("create transient pointer");
+    fs::remove_file(&pointer).expect("delete transient pointer");
+
+    store
+        .revalidate_expected_active_pointer(&expected)
+        .expect_err("create-delete ABA must invalidate lifecycle absence authority");
+    drop(expected);
+    drop(store);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn lifecycle_load_transfers_the_original_reconciliation_session_authority() {
+    let source = include_str!("../src/lib.rs");
+    let start = source
+        .find("fn load_current_state_under_lock(")
+        .expect("lifecycle state loader source");
+    let end = source[start..]
+        .find("fn load_state_under_lock(")
+        .map(|offset| start + offset)
+        .expect("lifecycle state loader boundary");
+    let loader = &source[start..end];
+    assert!(loader.contains("store.consume_reconciled_active_pointer(session)?"));
+    assert!(!loader.contains("retain_expected_active_pointer"));
+    assert!(!loader.contains("read_optional("));
+    assert!(!loader.contains("session.read_exact()"));
+
+    let lock_start = source
+        .find("pub fn lock_domain_pack_lifecycle(")
+        .expect("lifecycle lock source");
+    let lock_end = source[lock_start..]
+        .find("impl LockedDomainPackLifecycle")
+        .map(|offset| lock_start + offset)
+        .expect("lifecycle lock boundary");
+    let lock = &source[lock_start..lock_end];
+    assert!(lock.contains("let (loaded, recovery, active_pointer_authority) ="));
+    assert!(!lock.contains("retain_expected_active_pointer"));
+    assert!(!lock.contains("take_active_pointer_witness"));
+
+    let store = include_str!("../../forge-core-store/src/retained_lifecycle.rs");
+    assert!(store.contains("session.consume_reconciled_leaf("));
+    assert!(store.contains("reconciled_binding: Some(reconciled_binding)"));
+    let crash = include_str!("../../forge-core-store/src/retained_crash_replace.rs");
+    let transfer_start = crash
+        .find("pub(crate) fn consume_reconciled_leaf(")
+        .expect("crash reconciliation transfer source");
+    let transfer_end = crash[transfer_start..]
+        .find("/// Consume this session as one exact read.")
+        .map(|offset| transfer_start + offset)
+        .expect("crash reconciliation transfer boundary");
+    let transfer = &crash[transfer_start..transfer_end];
+    assert!(transfer.contains("target: self.target"));
+    assert!(!transfer.contains("open_leaf_"));
+    assert!(!transfer.contains("read_file_"));
+}
+
+#[test]
+fn fresh_lifecycle_load_rejects_byte_identical_project_replacement() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("fresh-project-identical-replacement");
+    let project_file = root
+        .parent()
+        .expect("project root")
+        .join("fresh-project-input.txt");
+    fs::write(&project_file, b"fresh exact project bytes").expect("write project input");
+    commit_integrated_install(&root, &fixture, &raw);
+    fs::rename(&project_file, project_file.with_extension("txt.displaced"))
+        .expect("displace committed project file");
+    fs::write(&project_file, b"fresh exact project bytes")
+        .expect("install byte-identical project replacement");
+
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("fresh lifecycle load must reject byte-identical project replacement");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn retained_project_guard_rejects_byte_identical_project_replacement() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("retained-project-identical-replacement");
+    let project_file = root
+        .parent()
+        .expect("project root")
+        .join("retained-project-input.txt");
+    fs::write(&project_file, b"retained exact project bytes").expect("write project input");
+    commit_integrated_install(&root, &fixture, &raw);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("retain exact project tree");
+    fs::rename(&project_file, project_file.with_extension("txt.displaced"))
+        .expect("displace retained project file");
+    fs::write(&project_file, b"retained exact project bytes")
+        .expect("install byte-identical project replacement");
+
+    lifecycle
+        .raw_inventory()
+        .expect_err("retained project capability must reject byte-identical replacement");
+    drop(lifecycle);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn completion_record_tamper_fails_closed() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("completion-record-tamper");
+    commit_integrated_install(&root, &fixture, &raw);
+    let record_path = generation_directories(&root)[0].join("completion.record");
+    let mut record = fs::read(&record_path).expect("completion record");
+    record.push(b' ');
+    fs::write(&record_path, record).expect("tamper canonical record bytes");
+
+    lock_domain_pack_lifecycle(&root)
+        .expect_err("non-canonical completion record must fail closed");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn initialized_candidate_rejects_stale_generation_active_lock_and_lifecycle_head_independently() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("initialized-stale-exact-cas");
+    commit_integrated_install(&root, &fixture, &raw);
+    let project_root = root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock initialized lifecycle");
+    let current = expected_from_projection(lifecycle.projection(), &project_digest);
+    let DomainPackExpectedLifecycleState::Initialized {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    } = current
+    else {
+        panic!("installed lifecycle must project initialized state");
+    };
+    let current = DomainPackInitializedProjectStateBinding {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    };
+    let exact_intent = |expected_state| DomainPackInitializedProjectIntentDocument {
+        schema_version: DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION.to_owned(),
+        domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent {
+            intent_id: id("intent.initialized.remove"),
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            project_id: id("project.domain-pack.test"),
+            principal_id: id("principal.operator"),
+            expected_state,
+            operation: DomainPackInitializedProjectOperation::Remove {
+                pack: coordinate(&fixture),
+            },
+        },
+    };
+    let source = lifecycle
+        .initialized_project_source(&exact_intent(current.clone()))
+        .expect("exact initialized state derives retained candidate source");
+    assert_eq!(source.expected_state, current);
+    let stale_cases = [
+        (
+            "generation",
+            DomainPackInitializedProjectStateBinding {
+                generation: current.generation + 1,
+                ..current.clone()
+            },
+        ),
+        (
+            "active-lock",
+            DomainPackInitializedProjectStateBinding {
+                active_lock_digest: digest('d'),
+                ..current.clone()
+            },
+        ),
+        (
+            "lifecycle-head",
+            DomainPackInitializedProjectStateBinding {
+                lifecycle_head_digest: digest('e'),
+                ..current.clone()
+            },
+        ),
+    ];
+
+    for (label, stale) in stale_cases {
+        let error = lifecycle
+            .initialized_project_source(&exact_intent(stale))
+            .expect_err("stale initialized CAS must fail before derivation");
+        assert!(
+            matches!(
+                error,
+                DomainPackLifecycleStoreError::StaleExpectedState { .. }
+            ),
+            "{label} drift returned {error}"
+        );
+    }
+
+    drop(lifecycle);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn initialized_candidate_source_rejects_tampered_retained_acquisition_catalog() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("initialized-tampered-catalog");
+    commit_integrated_install(&root, &fixture, &raw);
+    let project_root = root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock initialized lifecycle");
+    let expected = expected_from_projection(lifecycle.projection(), &project_digest);
+    let DomainPackExpectedLifecycleState::Initialized {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    } = expected
+    else {
+        panic!("installed lifecycle must project initialized state");
+    };
+    let intent = DomainPackInitializedProjectIntentDocument {
+        schema_version: DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION.to_owned(),
+        domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent {
+            intent_id: id("intent.initialized.catalog-tamper"),
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            project_id: id("project.domain-pack.test"),
+            principal_id: id("principal.operator"),
+            expected_state: DomainPackInitializedProjectStateBinding {
+                generation,
+                active_lock_digest,
+                lifecycle_head_digest,
+                project_snapshot_digest,
+            },
+            operation: DomainPackInitializedProjectOperation::Remove {
+                pack: coordinate(&fixture),
+            },
+        },
+    };
+    let catalog_path = generation_directories(&root)[0].join("catalog.yaml");
+    let mut catalog: serde_json::Value = yaml_serde::from_str(
+        &fs::read_to_string(&catalog_path).expect("retained acquisition catalog"),
+    )
+    .expect("parse retained acquisition catalog");
+    catalog["schema_version"] = serde_json::json!("forge.domain-pack.acquisition.v999");
+    fs::write(
+        &catalog_path,
+        yaml_serde::to_string(&catalog).expect("serialize tampered catalog"),
+    )
+    .expect("tamper retained acquisition catalog");
+
+    let error = lifecycle
+        .initialized_project_source(&intent)
+        .expect_err("tampered retained catalog must not provide initialized derivation source");
+    assert!(
+        matches!(
+            error,
+            DomainPackLifecycleStoreError::PreflightBlocked { .. }
+        ),
+        "unexpected retained catalog result: {error}"
+    );
+
+    drop(lifecycle);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn initialized_candidate_source_rejects_project_snapshot_drift() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("initialized-stale-project-snapshot");
+    commit_integrated_install(&root, &fixture, &raw);
+    let project_root = root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock initialized lifecycle");
+    let expected = expected_from_projection(lifecycle.projection(), &project_digest);
+    let DomainPackExpectedLifecycleState::Initialized {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    } = expected
+    else {
+        panic!("installed lifecycle must project initialized state");
+    };
+    let intent = DomainPackInitializedProjectIntentDocument {
+        schema_version: DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION.to_owned(),
+        domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent {
+            intent_id: id("intent.initialized.snapshot-drift"),
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            project_id: id("project.domain-pack.test"),
+            principal_id: id("principal.operator"),
+            expected_state: DomainPackInitializedProjectStateBinding {
+                generation,
+                active_lock_digest,
+                lifecycle_head_digest,
+                project_snapshot_digest,
+            },
+            operation: DomainPackInitializedProjectOperation::Remove {
+                pack: coordinate(&fixture),
+            },
+        },
+    };
+
+    fs::write(
+        project_root.join("project.txt"),
+        b"project changed after initialized derivation\n",
+    )
+    .expect("mutate project after intent capture");
+    let error = lifecycle
+        .initialized_project_source(&intent)
+        .expect_err("project drift must invalidate initialized derivation source");
+    assert!(
+        matches!(
+            error,
+            DomainPackLifecycleStoreError::StaleExpectedState { .. }
+        ),
+        "unexpected project drift result: {error}"
+    );
+
+    drop(lifecycle);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn initialized_project_source_exposes_all_five_operations_without_granting_authority() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("initialized-all-operation-sources");
+    let (install, _, inputs) = commit_integrated_install(&root, &fixture, &raw);
+    let _remove = commit_integrated_remove(&root, &fixture, &inputs);
+    let project_root = root.parent().expect("project root");
+    let project_digest = current_project_snapshot_digest(project_root);
+    let lifecycle = lock_domain_pack_lifecycle(&root).expect("lock initialized lifecycle");
+    let expected = expected_from_projection(lifecycle.projection(), &project_digest);
+    let DomainPackExpectedLifecycleState::Initialized {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    } = expected
+    else {
+        panic!("installed lifecycle must project initialized state");
+    };
+    let expected_state = DomainPackInitializedProjectStateBinding {
+        generation,
+        active_lock_digest,
+        lifecycle_head_digest,
+        project_snapshot_digest,
+    };
+    let selection = DomainPackInitializedProjectCandidateSelection {
+        acquisition_id: id("acquisition.initialized.source"),
+        assurance_binding: DurableAssuranceEpochBinding {
+            project_id: id("project.domain-pack.test"),
+            assurance_epoch: 1,
+            intent_id: id("assurance.intent.initialized.source"),
+            intent_revision: 1,
+            intent_digest: digest('1'),
+            accepted_record_digest: digest('2'),
+            accepted_sequence: 1,
+            accepted_state_version: 1,
+            snapshot_digest: expected_state.project_snapshot_digest.clone(),
+            ledger_head_before_acceptance: digest('3'),
+        },
+        discovery_projection_digest: digest('4'),
+        demand_digest: digest('5'),
+        candidate_id: id("candidate.initialized.source"),
+        requirement_ref: id("requirement.initialized.source"),
+        approval: DomainPackCandidateApprovalRequirement::ExplicitOperatorApprovalRequired,
+    };
+    let core_digest = lifecycle
+        .projection()
+        .active_lock
+        .as_ref()
+        .expect("active lock")
+        .domain_pack_exact_lock
+        .payload
+        .core
+        .bundle_digest
+        .clone();
+    let operations = [
+        DomainPackInitializedProjectOperation::Install {
+            selection: selection.clone(),
+        },
+        DomainPackInitializedProjectOperation::Upgrade {
+            pack: coordinate(&fixture),
+            expected_from: fixture.resolved.identity.version.clone(),
+            target_requirement: "=2.0.0".to_owned(),
+            required_content_digest: None,
+            selection,
+        },
+        DomainPackInitializedProjectOperation::Rollback {
+            target_receipt_digest: install.domain_pack_lifecycle_receipt.receipt_digest,
+            target_lock_digest: install
+                .domain_pack_lifecycle_receipt
+                .to_state
+                .active_lock_digest,
+        },
+        DomainPackInitializedProjectOperation::Remove {
+            pack: coordinate(&fixture),
+        },
+        DomainPackInitializedProjectOperation::RebaseCore {
+            target_release_id: id("release.core.source"),
+            expected_from_core_digest: core_digest.clone(),
+            target_core_digest: core_digest,
+        },
+    ];
+
+    for (index, operation) in operations.into_iter().enumerate() {
+        let intent = DomainPackInitializedProjectIntentDocument {
+            schema_version: DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION.to_owned(),
+            domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent {
+                intent_id: id(&format!("intent.initialized.source.{index}")),
+                authority: DomainPackCandidateAuthority::CandidateOnly,
+                project_id: id("project.domain-pack.test"),
+                principal_id: id("principal.operator"),
+                expected_state: expected_state.clone(),
+                operation: operation.clone(),
+            },
+        };
+        let source = lifecycle
+            .initialized_project_source(&intent)
+            .expect("exact high-level operation exposes derivation source");
+        assert_eq!(source.expected_state, expected_state);
+        assert_eq!(
+            source.active_lock.domain_pack_exact_lock.lock_digest,
+            expected_state.active_lock_digest
+        );
+        assert_eq!(
+            intent.domain_pack_initialized_project_intent.operation,
+            operation
+        );
+    }
+
+    drop(lifecycle);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn initialized_project_intent_wire_preserves_all_operations_exact_cas_and_explicit_approval() {
+    let expected_state = DomainPackInitializedProjectStateBinding {
+        generation: 7,
+        active_lock_digest: digest('a'),
+        lifecycle_head_digest: digest('b'),
+        project_snapshot_digest: digest('c'),
+    };
+    let selection = DomainPackInitializedProjectCandidateSelection {
+        acquisition_id: id("acquisition.initialized"),
+        assurance_binding: DurableAssuranceEpochBinding {
+            project_id: id("project.domain-pack.test"),
+            assurance_epoch: 3,
+            intent_id: id("assurance.intent.initialized"),
+            intent_revision: 2,
+            intent_digest: digest('1'),
+            accepted_record_digest: digest('2'),
+            accepted_sequence: 9,
+            accepted_state_version: 11,
+            snapshot_digest: expected_state.project_snapshot_digest.clone(),
+            ledger_head_before_acceptance: digest('3'),
+        },
+        discovery_projection_digest: digest('4'),
+        demand_digest: digest('5'),
+        candidate_id: id("candidate.initialized.exact"),
+        requirement_ref: id("requirement.initialized.exact"),
+        approval: DomainPackCandidateApprovalRequirement::ExplicitOperatorApprovalRequired,
+    };
+    let pack = DomainPackCoordinate {
+        publisher: id("forge.fixture"),
+        name: id("foundation.pack"),
+    };
+    let operations = [
+        DomainPackInitializedProjectOperation::Install {
+            selection: selection.clone(),
+        },
+        DomainPackInitializedProjectOperation::Upgrade {
+            pack: pack.clone(),
+            expected_from: "1.0.0".to_owned(),
+            target_requirement: "=2.0.0".to_owned(),
+            required_content_digest: Some(digest('6')),
+            selection,
+        },
+        DomainPackInitializedProjectOperation::Rollback {
+            target_receipt_digest: digest('7'),
+            target_lock_digest: digest('8'),
+        },
+        DomainPackInitializedProjectOperation::Remove { pack },
+        DomainPackInitializedProjectOperation::RebaseCore {
+            target_release_id: id("release.core.next"),
+            expected_from_core_digest: digest('9'),
+            target_core_digest: digest('d'),
+        },
+    ];
+
+    for (index, operation) in operations.into_iter().enumerate() {
+        let document = DomainPackInitializedProjectIntentDocument {
+            schema_version: DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION.to_owned(),
+            domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent {
+                intent_id: id(&format!("intent.initialized.{index}")),
+                authority: DomainPackCandidateAuthority::CandidateOnly,
+                project_id: id("project.domain-pack.test"),
+                principal_id: id("principal.operator"),
+                expected_state: expected_state.clone(),
+                operation,
+            },
+        };
+        let encoded = yaml_serde::to_string(&document).expect("serialize initialized intent");
+        let decoded: DomainPackInitializedProjectIntentDocument =
+            yaml_serde::from_str(&encoded).expect("deserialize initialized intent");
+        assert_eq!(decoded, document);
+        assert_eq!(
+            decoded.domain_pack_initialized_project_intent.authority,
+            DomainPackCandidateAuthority::CandidateOnly
+        );
+        assert_eq!(
+            decoded
+                .domain_pack_initialized_project_intent
+                .expected_state,
+            expected_state
+        );
+        match &decoded.domain_pack_initialized_project_intent.operation {
+            DomainPackInitializedProjectOperation::Install { selection }
+            | DomainPackInitializedProjectOperation::Upgrade { selection, .. } => assert_eq!(
+                selection.approval,
+                DomainPackCandidateApprovalRequirement::ExplicitOperatorApprovalRequired
+            ),
+            DomainPackInitializedProjectOperation::Rollback { .. }
+            | DomainPackInitializedProjectOperation::Remove { .. }
+            | DomainPackInitializedProjectOperation::RebaseCore { .. } => {}
+        }
+    }
+}
+
+#[test]
+fn initialized_project_state_wire_keeps_each_stale_binding_distinct() {
+    let current = DomainPackInitializedProjectStateBinding {
+        generation: 12,
+        active_lock_digest: digest('a'),
+        lifecycle_head_digest: digest('b'),
+        project_snapshot_digest: digest('c'),
+    };
+    let stale = [
+        DomainPackInitializedProjectStateBinding {
+            generation: current.generation + 1,
+            ..current.clone()
+        },
+        DomainPackInitializedProjectStateBinding {
+            active_lock_digest: digest('d'),
+            ..current.clone()
+        },
+        DomainPackInitializedProjectStateBinding {
+            lifecycle_head_digest: digest('e'),
+            ..current.clone()
+        },
+        DomainPackInitializedProjectStateBinding {
+            project_snapshot_digest: digest('f'),
+            ..current.clone()
+        },
+    ];
+
+    for binding in stale {
+        assert_ne!(binding, current);
+        let encoded = yaml_serde::to_string(&binding).expect("serialize stale binding");
+        let decoded: DomainPackInitializedProjectStateBinding =
+            yaml_serde::from_str(&encoded).expect("deserialize stale binding");
+        assert_eq!(decoded, binding);
+    }
 }

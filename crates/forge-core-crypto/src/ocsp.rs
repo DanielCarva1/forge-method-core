@@ -21,8 +21,10 @@ use rasn::types::ObjectIdentifier as RasnObjectIdentifier;
 use rasn_ocsp::{BasicOcspResponse, CertId, CertStatus, OcspResponse, ResponderId, SingleResponse};
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
+use std::collections::HashSet;
 use x509_parser::certificate::X509Certificate;
-use x509_parser::x509::AlgorithmIdentifier as X509AlgorithmIdentifier;
+use x509_parser::extensions::ParsedExtension;
+use x509_parser::x509::{AlgorithmIdentifier as X509AlgorithmIdentifier, X509Name};
 use zeroize::Zeroizing;
 
 use crate::hashing::hex_bytes;
@@ -66,10 +68,12 @@ pub(crate) fn decode_basic_ocsp_response(
     }
 }
 
-/// Verify that the basic OCSP response signature was produced by the issuer.
-pub(crate) fn verify_basic_ocsp_signature_with_issuer(
+/// Verify that the basic OCSP response signature was produced by the selected
+/// responder certificate. The caller must authorize that certificate before
+/// invoking this helper.
+pub(crate) fn verify_basic_ocsp_signature_with_certificate(
     basic_response: &BasicOcspResponse,
-    issuer: &X509Certificate<'_>,
+    responder: &X509Certificate<'_>,
     verified_evidence: &mut Vec<String>,
     reasons: &mut Vec<String>,
 ) -> bool {
@@ -123,7 +127,7 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
     };
 
     match x509_parser::verify::verify_signature(
-        issuer.public_key(),
+        responder.public_key(),
         &algorithm,
         &signature,
         &tbs_der,
@@ -140,6 +144,16 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
     }
 }
 
+/// Compatibility wrapper for direct-issuer OCSP responses.
+pub(crate) fn verify_basic_ocsp_signature_with_issuer(
+    basic_response: &BasicOcspResponse,
+    issuer: &X509Certificate<'_>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> bool {
+    verify_basic_ocsp_signature_with_certificate(basic_response, issuer, verified_evidence, reasons)
+}
+
 /// Check whether the OCSP responder ID matches the issuer certificate.
 pub(crate) fn ocsp_responder_id_matches_issuer(
     responder_id: &ResponderId,
@@ -149,7 +163,7 @@ pub(crate) fn ocsp_responder_id_matches_issuer(
 ) -> bool {
     match responder_id {
         ResponderId::ByName(name) => match rasn::der::encode(name) {
-            Ok(name_der) if name_der == issuer.subject().as_raw() => {
+            Ok(name_der) if distinguished_names_match(&name_der, issuer.subject()) => {
                 verified_evidence.push("ocsp_status_responder_name_matches_issuer".to_string());
                 true
             }
@@ -167,6 +181,335 @@ pub(crate) fn ocsp_responder_id_matches_issuer(
             } else {
                 false
             }
+        }
+    }
+}
+
+/// Check whether the responder ID matches an already-authorized responder
+/// certificate, returning the identity form that matched.
+pub(crate) fn ocsp_responder_id_matches_certificate(
+    responder_id: &ResponderId,
+    responder: &X509Certificate<'_>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<crate::host_adapter_types::HostAdapterOcspResponderIdMode> {
+    use crate::host_adapter_types::HostAdapterOcspResponderIdMode;
+
+    match responder_id {
+        ResponderId::ByName(name) => match rasn::der::encode(name) {
+            Ok(name_der) if distinguished_names_match(&name_der, responder.subject()) => {
+                verified_evidence
+                    .push("ocsp_status_responder_name_matches_selected_certificate".to_string());
+                Some(HostAdapterOcspResponderIdMode::ByName)
+            }
+            Ok(_) => {
+                reasons.push("ocsp_status_responder_name_mismatch".to_string());
+                None
+            }
+            Err(err) => {
+                reasons.push(format!("ocsp_status_responder_name_encode_failed:{err}"));
+                None
+            }
+        },
+        ResponderId::ByKey(key_hash) => {
+            let responder_key_hash =
+                sha1_digest(responder.public_key().subject_public_key.data.as_ref());
+            if key_hash.as_ref() == responder_key_hash.as_slice() {
+                verified_evidence
+                    .push("ocsp_status_responder_key_matches_selected_certificate".to_string());
+                Some(HostAdapterOcspResponderIdMode::ByKey)
+            } else {
+                reasons.push("ocsp_status_responder_key_mismatch".to_string());
+                None
+            }
+        }
+    }
+}
+
+/// Return the RFC 6960 responder key hash used by responderID byKey.
+pub(crate) fn ocsp_responder_public_key_sha1_hex(responder: &X509Certificate<'_>) -> String {
+    hex_bytes(&sha1_digest(
+        responder.public_key().subject_public_key.data.as_ref(),
+    ))
+}
+
+fn distinguished_names_match(encoded_name: &[u8], certificate_name: &X509Name<'_>) -> bool {
+    let Ok((remaining, responder_name)) = X509Name::from_der(encoded_name) else {
+        return false;
+    };
+    remaining.is_empty()
+        && normalized_distinguished_name(&responder_name)
+            == normalized_distinguished_name(certificate_name)
+}
+
+fn normalized_distinguished_name(name: &X509Name<'_>) -> Vec<Vec<(String, String)>> {
+    name.iter_rdn()
+        .map(|rdn| {
+            let mut attributes = rdn
+                .iter()
+                .map(|attribute| {
+                    let value = attribute.as_str().map_or_else(
+                        |_| hex_bytes(attribute.as_slice()),
+                        normalize_directory_string,
+                    );
+                    (attribute.attr_type().to_id_string(), value)
+                })
+                .collect::<Vec<_>>();
+            attributes.sort_unstable();
+            attributes
+        })
+        .collect()
+}
+
+fn normalize_directory_string(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Validate supplied delegated-responder authority before its key can verify a
+/// `BasicOCSPResponse`. The supplied chain is exact and ordered from the
+/// responder's immediate issuer toward, but excluding, the target issuer.
+pub(crate) fn verify_delegated_ocsp_responder_authority(
+    basic_response: &BasicOcspResponse,
+    responder: &X509Certificate<'_>,
+    issuer_chain: &[X509Certificate<'_>],
+    target_issuer: &X509Certificate<'_>,
+    verification_time_unix: i64,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<crate::host_adapter_types::HostAdapterOcspResponderIdMode> {
+    let reason_count_before = reasons.len();
+    let responder_validity = responder.validity();
+    if verification_time_unix >= responder_validity.not_before.timestamp()
+        && verification_time_unix <= responder_validity.not_after.timestamp()
+    {
+        verified_evidence
+            .push("ocsp_status_delegated_responder_valid_at_verification_time".to_string());
+    } else {
+        reasons.push("ocsp_status_delegated_responder_not_valid_at_verification_time".to_string());
+    }
+
+    match responder.extended_key_usage() {
+        Ok(Some(eku)) if eku.value.ocsp_signing => {
+            verified_evidence.push("ocsp_status_delegated_responder_ocsp_signing_eku".to_string());
+        }
+        Ok(Some(_)) => {
+            reasons.push("ocsp_status_delegated_responder_ocsp_signing_eku_missing".to_string());
+        }
+        Ok(None) => reasons.push("ocsp_status_delegated_responder_eku_missing".to_string()),
+        Err(err) => reasons.push(format!("ocsp_status_delegated_responder_eku_invalid:{err}")),
+    }
+
+    match responder.key_usage() {
+        Ok(Some(usage)) if usage.value.digital_signature() => verified_evidence
+            .push("ocsp_status_delegated_responder_digital_signature_usage".to_string()),
+        Ok(Some(_)) => reasons
+            .push("ocsp_status_delegated_responder_digital_signature_usage_missing".to_string()),
+        Ok(None) => {
+            verified_evidence.push("ocsp_status_delegated_responder_key_usage_absent".to_string());
+        }
+        Err(err) => reasons.push(format!(
+            "ocsp_status_delegated_responder_key_usage_invalid:{err}"
+        )),
+    }
+
+    validate_ocsp_path_certificate_extensions(responder, "delegated_responder", 0, reasons);
+
+    if let Some(certs) = basic_response.certs.as_ref() {
+        if certs.len() == 1 {
+            match rasn::der::encode(&certs[0]) {
+                Ok(embedded_der) if embedded_der == responder.as_raw() => verified_evidence.push(
+                    "ocsp_status_embedded_responder_certificate_matches_supplied".to_string(),
+                ),
+                Ok(_) => {
+                    reasons.push("ocsp_status_embedded_responder_certificate_mismatch".to_string());
+                }
+                Err(err) => reasons.push(format!(
+                    "ocsp_status_embedded_responder_certificate_encode_failed:{err}"
+                )),
+            }
+        } else {
+            reasons
+                .push("ocsp_status_embedded_responder_certificate_count_unsupported".to_string());
+        }
+    } else {
+        verified_evidence
+            .push("ocsp_status_responder_certificate_supplied_out_of_band".to_string());
+    }
+
+    if issuer_chain
+        .iter()
+        .any(|certificate| certificate.as_raw() == responder.as_raw())
+        || issuer_chain.iter().enumerate().any(|(index, certificate)| {
+            issuer_chain
+                .iter()
+                .skip(index + 1)
+                .any(|other| other.as_raw() == certificate.as_raw())
+        })
+    {
+        reasons.push("ocsp_status_delegated_responder_path_duplicate_certificate".to_string());
+    }
+    if issuer_chain
+        .iter()
+        .any(|certificate| certificate.as_raw() == target_issuer.as_raw())
+    {
+        reasons.push("ocsp_status_delegated_responder_path_includes_terminal_issuer".to_string());
+    }
+
+    let mut child = responder;
+    for (index, chain_issuer) in issuer_chain.iter().enumerate() {
+        let subordinate_ca_count = issuer_chain[..index]
+            .iter()
+            .filter(|certificate| certificate.subject() != certificate.issuer())
+            .count();
+        verify_ocsp_responder_path_link(
+            child,
+            chain_issuer,
+            index,
+            subordinate_ca_count,
+            verification_time_unix,
+            verified_evidence,
+            reasons,
+        );
+        child = chain_issuer;
+    }
+    let subordinate_ca_count = issuer_chain
+        .iter()
+        .filter(|certificate| certificate.subject() != certificate.issuer())
+        .count();
+    verify_ocsp_responder_path_link(
+        child,
+        target_issuer,
+        issuer_chain.len(),
+        subordinate_ca_count,
+        verification_time_unix,
+        verified_evidence,
+        reasons,
+    );
+
+    let responder_id_mode = ocsp_responder_id_matches_certificate(
+        &basic_response.tbs_response_data.responder_id,
+        responder,
+        verified_evidence,
+        reasons,
+    );
+    if responder_id_mode.is_some() && reasons.len() == reason_count_before {
+        responder_id_mode
+    } else {
+        None
+    }
+}
+
+fn verify_ocsp_responder_path_link(
+    child: &X509Certificate<'_>,
+    issuer: &X509Certificate<'_>,
+    index: usize,
+    subordinate_ca_count: usize,
+    verification_time_unix: i64,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) {
+    if child.issuer() == issuer.subject() {
+        verified_evidence.push(format!(
+            "ocsp_status_delegated_path_issuer_subject_match_{index}"
+        ));
+    } else {
+        reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_subject_mismatch_{index}"
+        ));
+    }
+    match child.verify_signature(Some(issuer.public_key())) {
+        Ok(()) => verified_evidence.push(format!(
+            "ocsp_status_delegated_path_signature_verified_{index}"
+        )),
+        Err(err) => reasons.push(format!(
+            "ocsp_status_delegated_path_signature_failed_{index}:{err}"
+        )),
+    }
+
+    let validity = issuer.validity();
+    if verification_time_unix >= validity.not_before.timestamp()
+        && verification_time_unix <= validity.not_after.timestamp()
+    {
+        verified_evidence.push(format!("ocsp_status_delegated_path_issuer_valid_{index}"));
+    } else {
+        reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_not_valid_{index}"
+        ));
+    }
+
+    match issuer.basic_constraints() {
+        Ok(Some(constraints)) if constraints.value.ca => {
+            verified_evidence.push(format!("ocsp_status_delegated_path_issuer_ca_{index}"));
+            if constraints
+                .value
+                .path_len_constraint
+                .is_some_and(|limit| subordinate_ca_count > limit as usize)
+            {
+                reasons.push(format!(
+                    "ocsp_status_delegated_path_length_exceeded_{index}"
+                ));
+            }
+        }
+        Ok(Some(_)) => reasons.push(format!("ocsp_status_delegated_path_issuer_not_ca_{index}")),
+        Ok(None) => reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_basic_constraints_missing_{index}"
+        )),
+        Err(err) => reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_basic_constraints_invalid_{index}:{err}"
+        )),
+    }
+    validate_ocsp_path_certificate_extensions(
+        issuer,
+        &format!("delegated_path_issuer_{index}"),
+        subordinate_ca_count,
+        reasons,
+    );
+
+    match issuer.key_usage() {
+        Ok(Some(usage)) if usage.value.key_cert_sign() => verified_evidence.push(format!(
+            "ocsp_status_delegated_path_issuer_key_cert_sign_{index}"
+        )),
+        Ok(Some(_)) => reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_key_cert_sign_missing_{index}"
+        )),
+        Ok(None) => reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_key_usage_missing_{index}"
+        )),
+        Err(err) => reasons.push(format!(
+            "ocsp_status_delegated_path_issuer_key_usage_invalid_{index}:{err}"
+        )),
+    }
+}
+
+fn validate_ocsp_path_certificate_extensions(
+    certificate: &X509Certificate<'_>,
+    label: &str,
+    _subordinate_ca_count: usize,
+    reasons: &mut Vec<String>,
+) {
+    let mut seen_oids = HashSet::new();
+    for extension in certificate.extensions() {
+        let oid = extension.oid.to_id_string();
+        if !seen_oids.insert(oid.clone()) {
+            reasons.push(format!("ocsp_status_{label}_duplicate_extension:{oid}"));
+        }
+        if matches!(
+            extension.parsed_extension(),
+            ParsedExtension::NameConstraints(_)
+        ) {
+            reasons.push(format!("ocsp_status_{label}_name_constraints_unsupported"));
+        }
+        if extension.critical
+            && (extension.parsed_extension().unsupported()
+                || extension.parsed_extension().error().is_some())
+        {
+            reasons.push(format!(
+                "ocsp_status_{label}_critical_extension_unsupported:{oid}"
+            ));
         }
     }
 }
@@ -299,25 +642,60 @@ pub(crate) fn extract_ocsp_response_nonce_hex(
     verified_evidence: &mut Vec<String>,
     reasons: &mut Vec<String>,
 ) -> Option<String> {
-    let extensions = basic_response
+    let Some(extensions) = basic_response
         .tbs_response_data
         .response_extensions
-        .as_ref()?;
+        .as_ref()
+    else {
+        return None;
+    };
+    let mut seen_oids = HashSet::new();
+    let mut nonce = None;
     for extension in extensions.iter() {
+        let oid = extension.extn_id.to_string();
+        if !seen_oids.insert(oid.clone()) {
+            reasons.push(format!("ocsp_status_response_extension_duplicate:{oid}"));
+            continue;
+        }
         if rasn_oid_matches(&extension.extn_id, &[1, 3, 6, 1, 5, 5, 7, 48, 1, 2]) {
-            return match rasn::der::decode::<rasn_ocsp::Nonce>(extension.extn_value.as_ref()) {
-                Ok(nonce) => {
+            nonce = match rasn::der::decode::<rasn_ocsp::Nonce>(extension.extn_value.as_ref()) {
+                Ok(value) => {
                     verified_evidence.push("ocsp_status_nonce_observed".to_string());
-                    Some(hex_bytes(nonce.as_ref()))
+                    Some(hex_bytes(value.as_ref()))
                 }
                 Err(err) => {
                     reasons.push(format!("ocsp_status_nonce_parse_failed:{err}"));
                     None
                 }
             };
+        } else if extension.critical {
+            reasons.push(format!(
+                "ocsp_status_response_critical_extension_unsupported:{oid}"
+            ));
         }
     }
-    None
+    nonce
+}
+
+pub(crate) fn validate_ocsp_single_response_extensions(
+    single_response: &SingleResponse,
+    reasons: &mut Vec<String>,
+) {
+    let Some(extensions) = single_response.single_extensions.as_ref() else {
+        return;
+    };
+    let mut seen_oids = HashSet::new();
+    for extension in extensions.iter() {
+        let oid = extension.extn_id.to_string();
+        if !seen_oids.insert(oid.clone()) {
+            reasons.push(format!("ocsp_status_single_extension_duplicate:{oid}"));
+        }
+        if extension.critical {
+            reasons.push(format!(
+                "ocsp_status_single_critical_extension_unsupported:{oid}"
+            ));
+        }
+    }
 }
 
 /// Verify the OCSP nonce against the expected value.
@@ -349,6 +727,7 @@ pub(crate) fn verify_ocsp_nonce(
 }
 
 /// Normalize an expected OCSP nonce hex string (strip separators, lowercase).
+#[allow(clippy::manual_is_multiple_of)] // `is_multiple_of` is unstable on the Rust 1.85 MSRV.
 pub(crate) fn normalize_expected_ocsp_nonce_hex(
     value: &str,
     reasons: &mut Vec<String>,
@@ -429,9 +808,11 @@ mod tests {
     use super::{
         apply_ocsp_cert_status, decode_basic_ocsp_response, decode_ocsp_response,
         extract_ocsp_response_nonce_hex, find_matching_ocsp_single_response,
-        normalize_expected_ocsp_nonce_hex, ocsp_responder_id_matches_issuer, rasn_oid_matches,
-        verify_basic_ocsp_signature_with_issuer, verify_ocsp_nonce,
-        verify_ocsp_single_response_freshness,
+        normalize_expected_ocsp_nonce_hex, ocsp_responder_id_matches_issuer,
+        ocsp_responder_public_key_sha1_hex, rasn_oid_matches,
+        validate_ocsp_single_response_extensions, verify_basic_ocsp_signature_with_certificate,
+        verify_basic_ocsp_signature_with_issuer, verify_delegated_ocsp_responder_authority,
+        verify_ocsp_nonce, verify_ocsp_single_response_freshness,
     };
     use asn1_rs::FromDer as _;
     use chrono::TimeZone as _;
@@ -445,7 +826,10 @@ mod tests {
     use rasn_pkix::{
         AlgorithmIdentifier as RasnAlgorithmIdentifier, CrlReason, Extension, Extensions,
     };
-    use rcgen::{CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose};
+    use rcgen::{
+        CertificateParams, CustomExtension, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
+        KeyUsagePurpose, SigningKey as _,
+    };
     use sha1::Digest as _;
     use x509_parser::certificate::X509Certificate;
 
@@ -547,6 +931,56 @@ mod tests {
         let leaked: &'static [u8] = Box::leak(der.into_boxed_slice());
         let (_, parsed) = X509Certificate::from_der(leaked).expect("parse CA DER");
         parsed
+    }
+
+    fn test_delegated_responder(
+        eku: ExtendedKeyUsagePurpose,
+        not_before: (i32, u8, u8),
+        not_after: (i32, u8, u8),
+    ) -> (X509Certificate<'static>, X509Certificate<'static>, KeyPair) {
+        let mut issuer_params =
+            CertificateParams::new(Vec::new()).expect("empty SAN issuer params");
+        issuer_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        issuer_params
+            .distinguished_name
+            .push(DnType::CommonName, "Forge Delegated OCSP Issuer");
+        issuer_params
+            .key_usages
+            .push(KeyUsagePurpose::DigitalSignature);
+        issuer_params.key_usages.push(KeyUsagePurpose::KeyCertSign);
+        issuer_params.not_before = rcgen::date_time_ymd(2026, 1, 1);
+        issuer_params.not_after = rcgen::date_time_ymd(2028, 1, 1);
+        let issuer_key = KeyPair::generate().expect("generate delegated issuer key");
+        let issuer_certificate = issuer_params
+            .self_signed(&issuer_key)
+            .expect("self-sign delegated issuer");
+
+        let mut responder_params =
+            CertificateParams::new(Vec::new()).expect("empty SAN responder params");
+        responder_params
+            .distinguished_name
+            .push(DnType::CommonName, "Forge Delegated OCSP Responder");
+        responder_params
+            .key_usages
+            .push(KeyUsagePurpose::DigitalSignature);
+        responder_params.extended_key_usages.push(eku);
+        responder_params.not_before =
+            rcgen::date_time_ymd(not_before.0, not_before.1, not_before.2);
+        responder_params.not_after = rcgen::date_time_ymd(not_after.0, not_after.1, not_after.2);
+        let responder_key = KeyPair::generate().expect("generate delegated responder key");
+        let issuer = Issuer::from_params(&issuer_params, &issuer_key);
+        let responder_certificate = responder_params
+            .signed_by(&responder_key, &issuer)
+            .expect("sign delegated responder");
+
+        let issuer_der: &'static [u8] =
+            Box::leak(issuer_certificate.der().to_vec().into_boxed_slice());
+        let responder_der: &'static [u8] =
+            Box::leak(responder_certificate.der().to_vec().into_boxed_slice());
+        let (_, issuer) = X509Certificate::from_der(issuer_der).expect("parse delegated issuer");
+        let (_, responder) =
+            X509Certificate::from_der(responder_der).expect("parse delegated responder");
+        (issuer, responder, responder_key)
     }
 
     fn sha1_of(content: &[u8]) -> Vec<u8> {
@@ -845,6 +1279,52 @@ mod tests {
     }
 
     #[test]
+    fn extract_nonce_rejects_unknown_critical_response_extension() {
+        let extension = Extension {
+            extn_id: RasnOid::new_unchecked(vec![1, 2, 3].into()),
+            critical: true,
+            extn_value: RasnOctetString::from(b"misc".as_slice()),
+        };
+        let basic = basic_ocsp_response(
+            vec![0xaa; 20],
+            Vec::new(),
+            Some(Extensions::from(vec![extension])),
+        );
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        assert!(extract_ocsp_response_nonce_hex(&basic, &mut evidence, &mut reasons).is_none());
+        assert!(reasons.iter().any(
+            |reason| reason.starts_with("ocsp_status_response_critical_extension_unsupported:")
+        ));
+    }
+
+    #[test]
+    fn single_response_rejects_unknown_critical_extension() {
+        let mut response = single_response(
+            synthetic_cert_id(&SHA256_OID, &[0; 32], &[0; 32], 1),
+            CertStatus::Good,
+            1000,
+            Some(2000),
+        );
+        response.single_extensions = Some(Extensions::from(vec![Extension {
+            extn_id: RasnOid::new_unchecked(vec![1, 2, 3].into()),
+            critical: true,
+            extn_value: RasnOctetString::from(b"misc".as_slice()),
+        }]));
+        let mut reasons = Vec::new();
+
+        validate_ocsp_single_response_extensions(&response, &mut reasons);
+
+        assert!(
+            reasons
+                .iter()
+                .any(|reason| reason
+                    .starts_with("ocsp_status_single_critical_extension_unsupported:"))
+        );
+    }
+
+    #[test]
     fn extract_nonce_returns_none_when_no_nonce_oid_present() {
         let extension = Extension {
             extn_id: RasnOid::new_unchecked(vec![1, 2, 3].into()),
@@ -1075,6 +1555,294 @@ mod tests {
 
         assert!(found.is_none());
         assert!(reasons.contains(&"ocsp_status_cert_id_hash_algorithm_unsupported".to_string()));
+    }
+
+    // ---- delegated responder authority -----------------------------------
+
+    #[test]
+    fn delegated_responder_authority_accepts_exact_issuer_eku_time_and_by_key() {
+        let (issuer, responder, _key) = test_delegated_responder(
+            ExtendedKeyUsagePurpose::OcspSigning,
+            (2026, 1, 1),
+            (2027, 1, 1),
+        );
+        let responder_hash = sha1_of(responder.public_key().subject_public_key.data.as_ref());
+        let basic = basic_ocsp_response(responder_hash, Vec::new(), None);
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        let mode = verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[],
+            &issuer,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert_eq!(mode, Some(crate::HostAdapterOcspResponderIdMode::ByKey));
+        assert!(reasons.is_empty());
+        assert!(!evidence.contains(&"ocsp_status_delegated_responder_authorized".to_string()));
+        assert_eq!(ocsp_responder_public_key_sha1_hex(&responder).len(), 40);
+    }
+
+    #[test]
+    fn delegated_responder_authority_accepts_responder_id_by_name() {
+        let (issuer, responder, _key) = test_delegated_responder(
+            ExtendedKeyUsagePurpose::OcspSigning,
+            (2026, 1, 1),
+            (2027, 1, 1),
+        );
+        let mut basic = basic_ocsp_response(vec![0; 20], Vec::new(), None);
+        basic.tbs_response_data.responder_id = ResponderId::ByName(
+            rasn::der::decode(responder.subject().as_raw()).expect("decode responder subject"),
+        );
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        let mode = verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[],
+            &issuer,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert_eq!(mode, Some(crate::HostAdapterOcspResponderIdMode::ByName));
+        assert!(reasons.is_empty());
+    }
+
+    #[test]
+    fn delegated_responder_authority_rejects_wrong_eku() {
+        let (issuer, responder, _key) = test_delegated_responder(
+            ExtendedKeyUsagePurpose::CodeSigning,
+            (2026, 1, 1),
+            (2027, 1, 1),
+        );
+        let basic = basic_ocsp_response(
+            sha1_of(responder.public_key().subject_public_key.data.as_ref()),
+            Vec::new(),
+            None,
+        );
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        assert!(verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[],
+            &issuer,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        )
+        .is_none());
+        assert!(reasons
+            .contains(&"ocsp_status_delegated_responder_ocsp_signing_eku_missing".to_string()));
+    }
+
+    #[test]
+    fn delegated_responder_authority_rejects_time_responder_id_and_path_mismatch() {
+        let (issuer, responder, _key) = test_delegated_responder(
+            ExtendedKeyUsagePurpose::OcspSigning,
+            (2028, 1, 1),
+            (2029, 1, 1),
+        );
+        let wrong_issuer = test_issuer_cert("Wrong Delegated OCSP Issuer");
+        let basic = basic_ocsp_response(vec![0xff; 20], Vec::new(), None);
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        assert!(verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[],
+            &wrong_issuer,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        )
+        .is_none());
+        assert!(reasons.contains(
+            &"ocsp_status_delegated_responder_not_valid_at_verification_time".to_string()
+        ));
+        assert!(reasons.contains(&"ocsp_status_responder_key_mismatch".to_string()));
+        assert!(reasons.iter().any(
+            |reason| reason.starts_with("ocsp_status_delegated_path_issuer_subject_mismatch_0")
+        ));
+        assert_ne!(issuer.subject(), wrong_issuer.subject());
+    }
+
+    #[test]
+    fn delegated_responder_authority_rejects_unsupported_critical_issuer_extension() {
+        let mut issuer_params = CertificateParams::new(Vec::new()).expect("issuer params");
+        issuer_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        issuer_params
+            .distinguished_name
+            .push(DnType::CommonName, "Critical Extension Issuer");
+        issuer_params.key_usages.push(KeyUsagePurpose::KeyCertSign);
+        let mut unsupported = CustomExtension::from_oid_content(&[1, 2, 3, 4], vec![5, 0]);
+        unsupported.set_criticality(true);
+        issuer_params.custom_extensions.push(unsupported);
+        let issuer_key = KeyPair::generate().expect("issuer key");
+        let issuer_certificate = issuer_params
+            .self_signed(&issuer_key)
+            .expect("issuer certificate");
+
+        let mut responder_params = CertificateParams::new(Vec::new()).expect("responder params");
+        responder_params
+            .distinguished_name
+            .push(DnType::CommonName, "Delegated Responder");
+        responder_params
+            .key_usages
+            .push(KeyUsagePurpose::DigitalSignature);
+        responder_params
+            .extended_key_usages
+            .push(ExtendedKeyUsagePurpose::OcspSigning);
+        let responder_key = KeyPair::generate().expect("responder key");
+        let issuer = Issuer::from_params(&issuer_params, &issuer_key);
+        let responder_certificate = responder_params
+            .signed_by(&responder_key, &issuer)
+            .expect("responder certificate");
+        let issuer_der: &'static [u8] =
+            Box::leak(issuer_certificate.der().to_vec().into_boxed_slice());
+        let responder_der: &'static [u8] =
+            Box::leak(responder_certificate.der().to_vec().into_boxed_slice());
+        let (_, issuer) = X509Certificate::from_der(issuer_der).expect("parse issuer");
+        let (_, responder) = X509Certificate::from_der(responder_der).expect("parse responder");
+        let basic = basic_ocsp_response(
+            sha1_of(responder.public_key().subject_public_key.data.as_ref()),
+            Vec::new(),
+            None,
+        );
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        assert!(verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[],
+            &issuer,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        )
+        .is_none());
+        assert!(reasons.iter().any(|reason| reason
+            .starts_with("ocsp_status_delegated_path_issuer_0_critical_extension_unsupported:")));
+    }
+
+    #[test]
+    fn delegated_responder_authority_rejects_path_len_zero_with_intermediate() {
+        let mut root_params = CertificateParams::new(Vec::new()).expect("root params");
+        root_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Constrained(0));
+        root_params
+            .distinguished_name
+            .push(DnType::CommonName, "Path Length Zero Root");
+        root_params.key_usages.push(KeyUsagePurpose::KeyCertSign);
+        let root_key = KeyPair::generate().expect("root key");
+        let root_certificate = root_params
+            .self_signed(&root_key)
+            .expect("root certificate");
+
+        let mut intermediate_params =
+            CertificateParams::new(Vec::new()).expect("intermediate params");
+        intermediate_params.is_ca = IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        intermediate_params
+            .distinguished_name
+            .push(DnType::CommonName, "Intermediate CA");
+        intermediate_params
+            .key_usages
+            .push(KeyUsagePurpose::KeyCertSign);
+        let intermediate_key = KeyPair::generate().expect("intermediate key");
+        let root_issuer = Issuer::from_params(&root_params, &root_key);
+        let intermediate_certificate = intermediate_params
+            .signed_by(&intermediate_key, &root_issuer)
+            .expect("intermediate certificate");
+
+        let mut responder_params = CertificateParams::new(Vec::new()).expect("responder params");
+        responder_params
+            .distinguished_name
+            .push(DnType::CommonName, "Delegated Responder");
+        responder_params
+            .key_usages
+            .push(KeyUsagePurpose::DigitalSignature);
+        responder_params
+            .extended_key_usages
+            .push(ExtendedKeyUsagePurpose::OcspSigning);
+        let responder_key = KeyPair::generate().expect("responder key");
+        let intermediate_issuer = Issuer::from_params(&intermediate_params, &intermediate_key);
+        let responder_certificate = responder_params
+            .signed_by(&responder_key, &intermediate_issuer)
+            .expect("responder certificate");
+
+        let root_der: &'static [u8] = Box::leak(root_certificate.der().to_vec().into_boxed_slice());
+        let intermediate_der: &'static [u8] =
+            Box::leak(intermediate_certificate.der().to_vec().into_boxed_slice());
+        let responder_der: &'static [u8] =
+            Box::leak(responder_certificate.der().to_vec().into_boxed_slice());
+        let (_, root) = X509Certificate::from_der(root_der).expect("parse root");
+        let (_, intermediate) =
+            X509Certificate::from_der(intermediate_der).expect("parse intermediate");
+        let (_, responder) = X509Certificate::from_der(responder_der).expect("parse responder");
+        let basic = basic_ocsp_response(
+            sha1_of(responder.public_key().subject_public_key.data.as_ref()),
+            Vec::new(),
+            None,
+        );
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+
+        assert!(verify_delegated_ocsp_responder_authority(
+            &basic,
+            &responder,
+            &[intermediate],
+            &root,
+            1_783_391_200,
+            &mut evidence,
+            &mut reasons,
+        )
+        .is_none());
+        assert!(reasons.contains(&"ocsp_status_delegated_path_length_exceeded_1".to_string()));
+    }
+
+    #[test]
+    fn delegated_responder_signature_verifies_only_with_delegated_key() {
+        let (issuer, responder, responder_key) = test_delegated_responder(
+            ExtendedKeyUsagePurpose::OcspSigning,
+            (2026, 1, 1),
+            (2027, 1, 1),
+        );
+        let responder_hash = sha1_of(responder.public_key().subject_public_key.data.as_ref());
+        let mut basic = basic_ocsp_response(responder_hash, Vec::new(), None);
+        let tbs_der = rasn::der::encode(&basic.tbs_response_data).expect("encode response data");
+        basic.signature = BitString::from_vec(
+            responder_key
+                .sign(&tbs_der)
+                .expect("sign response data with delegated key"),
+        );
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        assert!(verify_basic_ocsp_signature_with_certificate(
+            &basic,
+            &responder,
+            &mut evidence,
+            &mut reasons,
+        ));
+
+        let mut wrong_key_evidence = Vec::new();
+        let mut wrong_key_reasons = Vec::new();
+        assert!(!verify_basic_ocsp_signature_with_certificate(
+            &basic,
+            &issuer,
+            &mut wrong_key_evidence,
+            &mut wrong_key_reasons,
+        ));
+        assert!(wrong_key_reasons.contains(&"ocsp_status_response_signature_invalid".to_string()));
     }
 
     // ---- verify_basic_ocsp_signature_with_issuer (negative path) ---------

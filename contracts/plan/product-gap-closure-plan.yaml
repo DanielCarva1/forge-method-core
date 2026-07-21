@@ -23,8 +23,70 @@ priority_policy:
   - "Preserve the authority boundary before optimizing convenience."
   - "Close a single ordinary-user vertical slice before adding host breadth."
   - "Treat source implementation, shipped asset, hosted evidence, and field evidence as separate exits."
-  - "Do not begin P8 or P9 breadth while a P0 release blocker remains open."
+  - "Complete every C1-C7 source-bearing item before C3.2; defer only stabilization, publication, independent-review, and field evidence to C3.2-C3.4."
   - "Prefer additive public contracts and migrate durable state explicitly."
+
+sequencing_policy:
+  active_item_ids:
+    - "C1.1"
+    - "C1.2"
+    - "C1.3"
+    - "C1.4"
+    - "C2.1"
+    - "C2.2"
+    - "C2.3"
+    - "C2.4"
+    - "C3.1"
+    - "C3.2"
+    - "C3.3"
+    - "C3.4"
+    - "C4.1"
+    - "C4.2"
+    - "C5.1"
+    - "C5.2"
+    - "C5.3"
+    - "C6.1"
+    - "C6.2"
+    - "C7.1"
+    - "C7.2"
+  schedule_classes:
+    pre_stabilization_implementation:
+      - "C1.1"
+      - "C1.2"
+      - "C1.3"
+      - "C1.4"
+      - "C2.1"
+      - "C2.2"
+      - "C2.3"
+      - "C2.4"
+      - "C3.1"
+      - "C4.1"
+      - "C4.2"
+      - "C5.1"
+      - "C5.2"
+      - "C5.3"
+      - "C6.1"
+      - "C6.2"
+      - "C7.1"
+      - "C7.2"
+    stabilization_gate: ["C3.2"]
+    post_stabilization_evidence: ["C3.3", "C3.4"]
+  stabilization_source_leaves:
+    - "C1.4"
+    - "C2.4"
+    - "C3.1"
+    - "C4.2"
+    - "C5.3"
+    - "C7.2"
+  evidence_order:
+    - item: "C3.3"
+      depends_on: ["C3.2"]
+    - item: "C3.4"
+      depends_on: ["C1.4", "C3.3"]
+  rules:
+    - "All source-bearing items are active and dependency-ready work; none waits for stabilization, publication, hosted, independent-review, or field evidence."
+    - "C3.2 is stabilization only and opens after the complete source DAG and source-story inventory satisfy their typed checkpoints."
+    - "C3.3 is publication only after C3.2; C3.4 is field and independent-review evidence only after C3.3."
 
 verification_strategy:
   design_first:
@@ -32,12 +94,12 @@ verification_strategy:
     - "Use independent asynchronous review for security, persistence, and host-boundary decisions; the primary agent remains accountable for integration."
     - "Borrow proven storage-engine patterns such as explicit record versions, checksummed canonical bytes, write-ahead intent/commit ordering, directory durability, idempotent recovery, lock ownership, and failpoint testing without adding a database dependency by default."
   per_large_work_part:
-    - "Run formatter/static promise checks plus only the directly affected package, contract, and adversarial tests."
-    - "Compile immediate dependents when a public Rust type or wire contract changes."
-    - "Do not run the full workspace, platform matrix, release archive matrix, or cumulative real-host journey after each internal work item."
+    - "Use compiler errors as the implementation work queue: every coherent source batch must pass a compile-only check through /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py with --locked or --frozen and an explicit -p/--package scope before work moves on. The launcher replaces inherited executable, native-tool, config, proxy, shell, Python, Git, and Rust injection variables, verifies a root-owned non-symlink Cargo/rustc/rustdoc chain, and exposes only /usr/bin for native child discovery. Cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, but it must not execute project tests or binaries."
+    - "Run /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets periodically across accumulated source batches; the same launcher with metadata --locked --no-deps --format-version 1 may inspect the workspace without executing project tests or binaries. Non-hermetic direct Cargo and unknown wrappers fail closed."
+    - "Write package, contract, adversarial, fixture, and failure-injection test source with its owning story, but defer runtime tests, full suites, E2E, stress, fuzz, bench, project linked or release builds, MSRV/platform matrices, archives, hosted CI, publication, independent review, and field evidence."
   closure_gates:
-    - "Run one focused cumulative C1 gate after the broker contract, ledger provenance, adapter contract, and adversarial corpus land together."
-    - "Reserve full workspace, native-platform, release archive, hosted timing, and real-host matrices for C3 or an explicit release candidate."
+    - "Close each source phase only after static authority, dependency, checkpoint, and source-inventory review plus successful compile-only compiler-feedback checks for every coherent source batch; compiler feedback is implementation hygiene, not stabilization evidence."
+    - "Reserve runtime and cumulative test evidence, failure injection, project linked and release builds, native-platform and MSRV matrices, release archives, and hosted timing for C3.2; publication for C3.3; and real-host plus independent-review evidence for C3.4."
   failure_policy:
     - "A targeted regression blocks the part immediately; unrelated known slow suites are not rerun until their owning closure gate."
     - "No skipped expensive suite may be described as passing; it remains explicitly pending."
@@ -90,6 +152,13 @@ phases:
             - "contracts/spec/C1.1-opencode-host-capability-decision.yaml"
           opencode_1_14_33: "rejected on available local evidence: client-callable prompt/permission APIs and shell-capable in-process plugins do not prove native human origin, signer isolation, or separate administration"
           selected_host: "none; C1.1 remains in progress and C1.2/C1.3 must not claim a reference integration"
+          selected_reference_host:
+            kind: "none"
+            exact_version: null
+            decision_ref: null
+            decision_id: null
+            decision_status: null
+            selection_binding: null
       - id: "C1.2"
         title: "Implement the external broker component in Rust"
         work:
@@ -138,11 +207,13 @@ phases:
           - "Keep private external broker keys in their owner-specific backup procedure; never copy them into Forge state."
           - "Reject partial, stale, cross-project, rollback, and tampered restores."
       - id: "C2.3"
+        status: "in_progress"
         title: "Implement the owned product lifecycle"
         work:
           - "Provide an idempotent public setup/diagnostic surface and exact host configuration status."
           - "Install or update only verified immutable assets, preserve prior working binaries/configuration for rollback, and never silently migrate project authority."
           - "Uninstall product-owned binaries/adapters without deleting consumer projects, sidecars, operator anchors, or backups."
+          - "Wire the separately planned reinitialize-as-new protocol to retained Store authority only after it can preserve explicit abandonment, unrelated destination/identity, immutable plan/WAL/receipt bindings, and fail-closed public plan/apply semantics."
       - id: "C2.4"
         title: "Exercise interrupted and mixed-version states"
         work:
@@ -208,22 +279,25 @@ phases:
       - "Every advertised target has exact supported versions, installation assets, conformance evidence, and known limits."
 
   - id: "C5-ready-operate-evolve"
-    status: "planned"
+    status: "implemented_pending_evidence"
     priority: "P1"
     gap_refs: ["GAP-007"]
     outcome: "Governed continuity proceeds from BuildVerify through release, operation, feedback, rollback, and repeated evolution."
     sequence:
       - id: "C5.1"
+        status: "implemented_pending_evidence"
         title: "Specify post-BuildVerify durable episodes"
         work:
           - "Define release subject, rollback baseline, deployment observation, operational evidence, feedback, incident/bug intake, and evolution episode identity."
           - "Reuse existing readiness, ready-release, reality-evidence, context-recovery, and evolve-project policies."
       - id: "C5.2"
+        status: "implemented_pending_evidence"
         title: "Implement guarded phase advancement"
         work:
           - "Expose BuildVerify to ReadyOperate and ReadyOperate to Evolve only through admitted gate results and exact current snapshots."
           - "Make rollback and a post-release bug open the correct typed episode rather than editing phase state."
       - id: "C5.3"
+        status: "implemented_pending_evidence"
         title: "Prove replacement-agent operation"
         work:
           - "Resume release identity, rollback baseline, live observations, unresolved feedback, and next action across fresh processes."
@@ -233,7 +307,7 @@ phases:
       - "A replacement agent resumes the exact evolution episode without hidden chat context."
 
   - id: "C6-domain-pack-normal-lifecycle"
-    status: "planned"
+    status: "in_progress"
     priority: "P2"
     gap_refs: ["GAP-008"]
     outcome: "Clean and initialized projects manage packs through chat-level intent without human-authored lifecycle documents."
@@ -244,6 +318,7 @@ phases:
           - "Add high-level intent derivation for first acquisition and initialized-state changes over the existing lifecycle TCB rather than duplicate resolver, composition, trust, preflight, CAS, or recovery logic."
           - "Keep explicit candidate approval and degraded-empty gaps."
       - id: "C6.2"
+        status: "implemented_pending_evidence"
         title: "Add immutable remote acquisition"
         work:
           - "Define signed catalog metadata, digest-pinned download, revocation, mirror, cache, offline, and rollback semantics."
@@ -253,16 +328,18 @@ phases:
       - "Remote content is immutable, review-bound, revocable, and never silently activated."
 
   - id: "C7-domain-pack-sdk"
-    status: "planned"
+    status: "in_progress"
     priority: "P2"
     gap_refs: ["GAP-009"]
     outcome: "External authors can create and evolve packs without changing universal-core Rust."
     sequence:
       - id: "C7.1"
+        status: "implemented_pending_evidence"
         title: "Productize existing authoring, learning, and compatibility primitives"
         work:
           - "Generate a minimal typed pack skeleton and compose existing validation, learning, review/promotion, compatibility, and adversarial primitives into one author-facing test workflow."
       - id: "C7.2"
+        status: "implemented_pending_evidence"
         title: "Ship package, sign, review, publish, revoke, and evolve workflows"
         work:
           - "Bind every published revision to immutable content, reviewer evidence, compatibility, provenance, and revocation state."

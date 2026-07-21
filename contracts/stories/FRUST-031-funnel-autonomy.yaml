@@ -1,0 +1,94 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "FRUST-031"
+status: "implemented"
+slice: "accepted-funnel-autonomy"
+title: "Load one typed funnel-autonomy policy across guide and runtime boundaries"
+intent: >-
+  Replace scattered funnel heuristics with one accepted typed policy that raises
+  human guidance and research pressure for ambiguous early work, admits settled
+  mechanical loops only under claims, passing gates, authority evidence, and
+  effect contracts, and restores exact destructive, release, and authority gates.
+
+decision_sources:
+  - "contracts/backlog/rust-only-core-backlog.yaml#FRUST-031"
+  - "contracts/policies/funnel-autonomy.yaml"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "contracts/gates/gate-contract-v0.yaml"
+  - "contracts/stories/FRUST-020-operation-contract-planning.yaml"
+  - "contracts/stories/FRUST-030-guide-protocol.yaml"
+
+owned_files:
+  - "contracts/policies/funnel-autonomy.yaml"
+  - "contracts/stories/FRUST-031-funnel-autonomy.yaml"
+  - "contracts/backlog/rust-only-core-backlog.yaml"
+  - "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
+  - "contracts/plan/product-gap-closure-campaign-v1.yaml"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "contracts/gates/gate-contract-v0.yaml"
+  - "contracts/gates/destructive-review-pass-gate.yaml"
+  - "contracts/gates/authority-transition-pass-gate.yaml"
+  - "docs/product-status.md"
+  - "docs/product-gap-register.md"
+  - "docs/fixtures/operation-contract-v0/authority-transition-gate-required.yaml"
+  - "docs/fixtures/operation-contract-v0/destructive-effect-with-inverse.yaml"
+  - "docs/fixtures/operation-contract-v0/read-write-conflict-notify.yaml"
+  - "docs/fixtures/operation-contract-v0/repair-story-drift.yaml"
+  - "crates/forge-core-contracts/src/funnel_autonomy.rs"
+  - "crates/forge-core-contracts/src/gate.rs"
+  - "crates/forge-core-contracts/src/operation.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-decisions/src/funnel_autonomy.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-kernel/src/planning.rs"
+  - "crates/forge-core-kernel/src/builtin_gates.rs"
+  - "crates/forge-core-kernel/tests/operation_plan.rs"
+  - "crates/forge-core-cli/src/guide.rs"
+  - "crates/forge-core-cli/src/execute_operation.rs"
+
+constraints:
+  - "The only accepted source is contracts/policies/funnel-autonomy.yaml, loaded and validated centrally; callers cannot substitute an alternative runtime policy."
+  - "Guide, OperationContract planning, and the execution-boundary gate consume the same typed policy and closed phase profiles."
+  - "Mechanical plan, execute, and repair loops require an eligible phase, exact lane-claim declaration and reference, passing aggregate gate status, nonempty authority evidence, and nonempty effect-contract references."
+  - "Actual destructive effects omitted from risk_boundaries block at the execution boundary even when an inverse exists."
+  - "Publish behavior restores the release boundary, and explicit authority-transition candidates restore the authority boundary."
+  - "Destructive, release, and authority declarations are descriptive only and require matching typed gate scopes; no protected scope substitutes for another."
+  - "A passing matching protected gate represents the completed human checkpoint, while a missing or non-passing checkpoint fails closed."
+  - "The policy grants no mutation, phase, release, signing, private-key, trust, admission, install, activation, lifecycle, protected-anchor, or host-selection authority."
+  - "Only RuntimePlanStatus::ReadyToCallOperation may enter durable layout validation, retained producer admission, mutation gates, staging, command execution, evidence append, or effect application."
+  - "External broker private keys remain in their owner-specific backup procedure and never enter Forge state or Forge backups."
+  - "selected_host remains none."
+
+acceptance_criteria:
+  - "Every phase has one closed typed contact-density, lane, ambiguity-pressure, procedural-confirmation, claim, and automatic-gate profile."
+  - "Discovery and specification project high contact density with human-guidance-and-research pressure."
+  - "A settled mechanical fixture proceeds only with claim, passing gate, authority evidence, and effect references; removing the claim requires review."
+  - "Guide projects typed policy values and rejects unsupported project phases instead of inventing a fallback phase."
+  - "Planner output carries the funnel disposition, phase profile, reasons, and protected boundaries before host-call readiness."
+  - "The CLI unconditionally attaches the accepted funnel gate after loading exact effect documents and before audited WAL execution."
+  - "Source tests cover ambiguity escalation, mechanical admission, undeclared destructive blocking, release-gate restoration, authority-gate restoration, host-neutral policy limits, and non-passing mechanical gates."
+
+checks:
+  passed:
+    - "cargo fmt --package forge-core-contracts --package forge-core-decisions --package forge-core-kernel --package forge-core-cli"
+    - "cargo check --locked -p forge-core-contracts --all-targets"
+    - "cargo check --locked -p forge-core-decisions --all-targets"
+    - "cargo check --locked -p forge-core-kernel --all-targets"
+    - "cargo check --locked -p forge-core-cli --all-targets"
+    - "python3 scripts/check-static-structured-text.py"
+    - "python3 scripts/check-public-promises.py"
+    - "git diff --check"
+  deferred:
+    - "Rust test execution"
+    - "full workspace tests"
+    - "runtime integration and end-to-end execution"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, independent review, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "C5.2 is source-complete but retains deferred runtime, stabilization, hosted-CI, publication, and field-evidence obligations."
+  - "C5.3 complete repeated-episode persistence and authority-free replacement continuity are source-complete pending deferred runtime and hosted evidence."
+  - "C2.3 and later lifecycle consumers may consume the policy but cannot gain authority from it."
+  - "Reference-host selection, exact-host support, external broker private-key custody, release publication, and field evidence remain outside this story."

@@ -11,7 +11,7 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION: &str = "0.3";
+pub const DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION: &str = "0.4";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

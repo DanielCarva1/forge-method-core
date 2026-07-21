@@ -1,0 +1,2680 @@
+schema_version: '1.0'
+artifact_kind: product-gap-closure-story-inventory
+inventory_id: forge-product-gap-closure-story-inventory-v1
+status: active
+authority:
+  owns:
+  - the deduplicated current story inventory for the C1-C7 product-gap closure campaign
+  - story-to-campaign mapping, source schedule class, conservative source status, and forensic exclusions
+  does_not_own:
+  - campaign execution resume state
+  - C2.2 lane admission or continuity resume state
+  - compile, test, hosted, publication, independent-review, or field evidence
+  canonical_campaign_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+  c2_2_continuity_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_precedence_refs:
+  - contracts/plan/product-gap-closure-plan.yaml
+  - docs/product-status.md
+  - docs/product-gap-register.md
+  - contracts/backlog/rust-only-core-backlog.yaml
+  authority_rule: Repository paths and line or YAML anchors in this file are authority references. Workflow IDs
+    and result digests below are provenance only and never authorize resume, mutation, or evidence claims.
+provenance:
+  authoritative_for_resume: false
+  workflow_results:
+  - id: wvv9o8myb
+    role: canonical_story_reconciliation
+    result_digest: sha256:70b1c9e3a8609fd1a60fddac04ae323c371b8b1a10ad6b03465bdefd7f9e22db
+    authoritative_for_resume: false
+  - id: wbsgkus9i
+    role: current_obligation_adjudication
+    result_digest: sha256:508715950630435bdb4c23f34bec8c200cb48e637ef00e1fad082a9acf54db8a
+    authoritative_for_resume: false
+counts:
+  current: 81
+  source_control_test: 76
+  evidence_stage: 5
+  forensic_exclusions: 26
+  canonical_reconciled: 66
+  adjudicated_current_obligations: 15
+  source_complete_true: 66
+  by_status:
+    blocked: 13
+    in_progress: 0
+    planned: 7
+    source_complete: 61
+record_contract:
+  required_current_fields:
+  - id
+  - title
+  - campaign_item
+  - disposition
+  - kind
+  - schedule_class
+  - status
+  - source_complete
+  - remaining_source_work
+  - owner
+  - dependencies
+  - source_ref
+  - source_anchor
+  - checkpoint
+  - reference_consumers
+  - notes
+  campaign_item_nullable_only_for:
+  - FRUST-001
+  disposition_values:
+  - canonical_story
+  - assign
+  - supporting_predecessor
+  schedule_class_values:
+  - pre_stabilization_source
+  - stabilization_only
+  - publication_only
+  - field_or_independent_evidence_only
+  status_values:
+  - planned
+  - in_progress
+  - blocked
+  - source_complete
+  checkpoint_required_keys_when_present:
+  - kind
+  - state
+  - authority_ref
+  - authority_anchor
+  - participant
+  - generation
+  dependency_reference_types:
+  - current_record_id
+  - campaign_item_id
+scheduling_invariants:
+- Every pre_stabilization_source record must be source_complete with no remaining_source_work before C3.2 opens.
+- Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through
+  /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic
+  compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts
+  and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.
+- C3.2 is stabilization only; it may execute deferred runtime, full-suite, failure-injection, project-linked-build,
+  platform, archive, and hosted gates but may not own missing source implementation.
+- C3.3 is publication only and remains planned until C3.2 passes.
+- C3.4 is field and independent-review evidence only and remains planned until the exact C3.3 public assets exist.
+- No pre_stabilization_source record depends directly on C3.2, C3.3, or C3.4.
+- A source_complete value records source state and does not by itself claim compiler-feedback, runtime, full-suite,
+  hosted, publication, independent-review, or field evidence passed.
+- Planned records have owner and checkpoint set to null.
+- C2.2 source records are source_complete under the closed continuity checkpoint; runtime, interruption, mixed-version,
+  platform, hosted, release, independent-review, and field evidence remain deferred.
+- FRUST-001 remains a source-complete campaign-wide supporting predecessor with no campaign item or active owner.
+- Legacy v2 records remain forensic_reference_only exclusions and are not current source stories.
+current_records:
+- id: C1.1.work.1
+  title: Specify the complete native host-origin threat model
+  campaign_item: C1.1
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[1], lines 74-82
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[1], lines 74-82
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The accepted contract covers authenticated native events, replay binding, separation domains, custody, administration,
+    and receipts; source contract evidence is in contracts/spec/workflow-host-origin-adapter-v0.yaml:46-97.
+  - 'Reconciled implementation state: implemented_pending_host_selection.'
+- id: C1.1.work.2
+  title: Persist opaque host interaction provenance and preserve history
+  campaign_item: C1.1
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1.work.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[2], lines 78-80
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[2], lines 78-80
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Broker event 0.2, opaque provenance, descriptor recomputation, and historical compatibility are present in Rust
+    source; this is not selected-host or field evidence.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C1.1.work.3
+  title: Require native interaction rather than agent-supplied signing input
+  campaign_item: C1.1
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Select and bind an exact-version host that enforces the native-interaction boundary outside agent control.
+  owner: coordinator
+  dependencies:
+  - C1.1.work.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[3], lines 79-81
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: coordinator
+    generation: null
+  reference_consumers: []
+  notes:
+  - The contract forbids subject, answer, packet digest, or enrollment material supplied by the agent from becoming
+    signing authority; no selected host currently enforces the boundary.
+  - 'Reconciled implementation state: contract_implemented_host_enforcement_absent.'
+- id: C1.1.work.4
+  title: Select an exact-version conformant reference host
+  campaign_item: C1.1
+  disposition: canonical_story
+  kind: source_decision
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Select an exact-version conformant reference host, or retain the evidence-backed external block without claiming
+    support.
+  owner: coordinator
+  dependencies:
+  - C1.1.work.1
+  - C1.1.work.3
+  - FRUST-011
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].work[4] and screening_checkpoint,
+    lines 81-92
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: coordinator
+    generation: null
+  reference_consumers: []
+  notes:
+  - Codex 0.143.0, Pi 0.80.7, and OpenCode 1.14.33 are rejected by typed decisions; selected_host remains none,
+    so C1.2/C1.3 cannot claim a reference integration.
+  - 'Reconciled implementation state: blocked_external.'
+- id: FRUST-011
+  title: Borrowed-shell host conformance contract
+  campaign_item: C1.1
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E1].stories[FRUST-011], lines 145-165; next_ready_story lines 431-433
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+    authority_anchor: epics[FRUST-E1].stories[FRUST-011], lines 145-165; next_ready_story lines 431-433
+    participant: coordinator
+    generation: null
+  reference_consumers:
+  - C1.3
+  - C4.1
+  - C4.2
+  notes:
+  - Primary ownership is reconciled to C1.1 because it freezes the host/core responsibility and first-host acceptance
+    contract; C4 consumes that contract. The named planned outputs contracts/hosts/host-conformance.yaml, contracts/surfaces/cli-json.yaml,
+    and contracts/surfaces/mcp.yaml are absent.
+  - 'Reconciled implementation state: source_complete.'
+  - 'The common contract covers required candidates and install/invoke/update/diagnose/recover responsibilities while selected_host remains none; acceptance-host selection is external.'
+- id: C1.2.work.1
+  title: Compose the existing broker, packet, WAL, and provenance TCBs
+  campaign_item: C1.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.2].work[1], lines 93-97
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.2].work[1], lines 93-97
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The external broker reuses the existing registry, signed origin event, action packet, reserve/commit WAL, and ledger provenance paths without creating a second authority path.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'Actual external genesis and host handoff remain blocked on C1.1; selected_host remains none.'
+- id: C1.2.work.2
+  title: Keep broker private material outside agent-readable state
+  campaign_item: C1.2
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.2].work[2], lines 96-98
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Key exclusion covers project and sidecar state, model context, output, configuration, and inherited process
+    environment.
+  - 'Reconciled implementation state: planned_blocked_by_C1.1.'
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'Public registry metadata and content-free receipts only; external private broker keys remain outside Forge state and backups.'
+- id: C1.2.work.3
+  title: Expose no CLI, MCP, or IPC signing oracle
+  campaign_item: C1.2
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.2].work[3], lines 97-99
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The host-owned signer may act only from the authenticated native interaction established by C1.1.
+  - 'Reconciled implementation state: planned_blocked_by_C1.1.'
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'CLI registry/admin operations consume externally signed envelopes only and expose no signer, key generation, or arbitrary-signing path.'
+- id: C1.2.work.4
+  title: Implement broker administration and bounded replay recovery
+  campaign_item: C1.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.2].work[4], line 99
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Enrollment, status, rotation, revocation, and replay recovery require separate host/operator authority and durable
+    receipts.
+  - 'Reconciled implementation state: planned_blocked_by_C1.1.'
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'Registry and envelope source cannot self-anchor; actual external genesis remains blocked without an external selected-host anchor.'
+- id: C1.3.work.1
+  title: Package only thin host translation and broker handoff
+  campaign_item: C1.3
+  disposition: canonical_story
+  kind: source_adapter
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - 'Resolve the recorded prerequisite and complete the cited source obligation: Package only thin host translation
+    and broker handoff.'
+  owner: null
+  dependencies:
+  - C1.1
+  - C1.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[1], lines 100-104
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The package includes installation metadata and the existing start/next/action loop, not duplicated governance
+    or mutation authority.
+  - 'Reconciled implementation state: planned_blocked_by_host_selection.'
+- id: C1.3.work.2
+  title: Provide reference-host install, configure, diagnostics, and rollback
+  campaign_item: C1.3
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - 'Resolve the recorded prerequisite and complete the cited source obligation: Provide reference-host install,
+    configure, diagnostics, and rollback.'
+  owner: null
+  dependencies:
+  - C1.1
+  - C1.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[2], line 104
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - This is the minimum reference-host path; C2.3 owns the complete cross-version product lifecycle.
+  - 'Reconciled implementation state: planned_blocked_by_host_selection.'
+- id: C1.3.work.3
+  title: Keep mutation out of default MCP and policy out of the adapter
+  campaign_item: C1.3
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  - C1.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[3], line 105
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[3], line 105
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The adapter must preserve read-only MCP and kernel authority rather than become a second policy engine.
+  - 'Reconciled implementation state: planned.'
+  - 'Reconciled implementation state: source_complete.'
+  - 'Default MCP is typed read-only; signing and mutation remain forbidden, and projections cannot select, support, or release a host.'
+- id: C1.3.work.4
+  title: Return typed setup gaps instead of YAML-edit instructions
+  campaign_item: C1.3
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.1
+  - C1.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[4], line 106
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.3].work[4], line 106
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The chat-only human interface requires typed repair guidance without hand-authored Forge authority artifacts.
+  - 'Reconciled implementation state: planned.'
+  - 'Reconciled implementation state: source_complete.'
+  - 'SetupGapKind includes exact_host_execution_unavailable; the candidate-only contract never instructs authority-YAML editing.'
+- id: C1.4.dimension.native-origin
+  title: Native-origin conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited native-origin conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=native-origin], lines 41-46
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Covers exact native message/confirmation binding, agent-forgery rejection, and profile/kind mismatch.
+  - 'Reconciled implementation state: selected_host_cases_absent.'
+- id: C1.4.dimension.signer-non-oracle
+  title: Signer non-oracle conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited signer non-oracle conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=signer-non-oracle], lines 47-54
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Covers unavailable direct signing, forged invocation, one-interaction reuse, and secret leakage.
+  - 'Reconciled implementation state: selected_host_cases_absent.'
+- id: C1.4.dimension.confused-deputy
+  title: Confused-deputy conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited confused-deputy conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=confused-deputy], lines 55-60
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Binds confirmation to exact packet/project/authority coordinates and prevents agent-triggered auto-accept or
+    suppression.
+  - 'Reconciled implementation state: selected_host_cases_absent.'
+- id: C1.4.dimension.administration
+  title: Broker administration conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited broker administration conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=administration], lines 61-67
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Covers independent enroll/rotate/revoke authority, CAS, escalation rejection, and historical verification.
+  - 'Reconciled implementation state: selected_host_cases_absent.'
+- id: C1.4.dimension.wire-and-history
+  title: Wire and historical compatibility conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited wire and historical compatibility conformance corpus
+    source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=wire-and-history], lines 68-74
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Frozen v0.1 and v0.2/ledger-0.5 source cases exist; selected-host coverage is still absent.
+  - 'Reconciled implementation state: partial_rust_core_only.'
+- id: C1.4.dimension.replay-and-crash
+  title: Replay and crash conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited replay and crash conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=replay-and-crash], lines 75-81; still_required lines 35-39
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Targeted Rust recovery cases exist; real process failpoint and multiprocess adapter source remains required
+    before C3.2.
+  - 'Reconciled implementation state: partial_rust_core_only.'
+- id: C1.4.dimension.privacy
+  title: Privacy conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited privacy conformance corpus source corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=privacy], lines 82-87
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Requires opaque-only persistence, transcript exclusion, non-transcript descriptor hashing, and useful redacted
+    diagnostics.
+  - 'Reconciled implementation state: partial_rust_core_only.'
+- id: C1.4.dimension.install-and-rollback
+  title: Adapter install and rollback conformance corpus
+  campaign_item: C1.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add exact-version selected-host cases and close the cited adapter install and rollback conformance corpus source
+    corpus.
+  owner: null
+  dependencies:
+  - C1.2
+  - C1.3
+  source_ref: contracts/spec/host-origin-broker-conformance-v0.yaml
+  source_anchor: required_dimensions[id=install-and-rollback], lines 88-94
+  checkpoint:
+    kind: reference-host-selection-checkpoint
+    state: blocked_on_selected_host_none
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint, lines 83-92
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Covers clean/idempotent install, typed setup gaps, interrupted update, authority-safe rollback, and retained-state
+    uninstall.
+  - 'Reconciled implementation state: planned_blocked_by_adapter.'
+- id: C2.1.work.1
+  title: Distinguish never-initialized bootstrap from linked state loss
+  campaign_item: C2.1
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.1].work[1], lines 129-133
+  checkpoint:
+    kind: campaign-item-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.1].checkpoint, lines 205-224
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Source fails closed on linked loss; locked compiler feedback through the canonical hermetic launcher is required when
+    its coherent batch is touched, while runtime regression, failure-injection, linked-build, and cumulative evidence belongs to C3.2.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C2.1.work.2
+  title: Emit typed state-loss diagnosis and explicit recovery choices
+  campaign_item: C2.1
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.1].work[2], lines 132-133
+  checkpoint:
+    kind: campaign-item-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.1].checkpoint, lines 205-224
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The source exposes inspect, restore, and reinitialize-as-new choices without silently authorizing restore or
+    new authority.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C2.2.work.1
+  title: Bind complete authority state in a verifiable backup manifest
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.2].work[1], lines 134-138
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Complete-state source binds the Project Link, sidecar authority members, public external registries and anchors,
+    exact release identity, immutable archive, and durable project-bound receipts.
+  - Targeted package-scoped all-target compilation passed; runtime, interruption, platform, hosted, and field evidence
+    remains deferred.
+- id: C2.2.work.2
+  title: Exclude external broker private keys from Forge backups
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.2].work[2], line 138
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Forge backup membership validates public broker registry bytes and excludes private roots and external broker key
+    material; private keys remain solely in each broker owner's backup procedure.
+  - Targeted package-scoped all-target compilation passed; runtime and hostile fixture execution remains deferred.
+- id: C2.2.work.3
+  title: Reject partial, stale, cross-project, rollback, and tampered restores
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.2].work[3], line 139
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Restore source performs project-bound preflight, exact-member verification, rollback rejection, retained atomic
+    publication, protected completion selection, and fail-closed cleanup/recovery.
+  - Adversarial test source compiles; runtime, interruption, mixed-version, failure-injection, and platform execution
+    remains deferred.
+- id: C2.2.blocker.store-owned-effect-lock
+  title: Provide a Store-owned retained effect-lock API
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; retained Store effect-lock source closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - The Store-owned retained effect-lock API serves bounded callers without exposing a raw File constructor.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.effect-wal-recovery-metadata
+  title: Recover effect-WAL backup metadata against the sidecar root
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; sidecar-root effect-WAL recovery closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Recovery handles .forge-method-prefixed legacy paths and rebaselines metadata against the retained sidecar root.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.destination-quiescence
+  title: Retain destination quiescence through verification and receipt completion
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; retained destination-quiescence closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - The HostQuiescenceGuard remains held through first publication, exact verification, and durable receipt completion.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.broker-registry-validation
+  title: Validate public broker registry bytes before backup inclusion
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; public broker-registry validation closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Strict schema validation precedes admission of public broker registry bytes as a backup member.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.sealed-crash-io
+  title: Seal retained crash I/O behind Store-owned authority
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; sealed retained crash-I/O closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Retained crash I/O is sealed behind a Store-owned root-and-lock-bound capability.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.retained-restore-authority
+  title: Retain configured restore authority through cleanup
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; retained restore-authority closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - The configured authority root remains bound from preflight through lock, journal, receipt, and cleanup.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.staging-identity-publication
+  title: Bind Unix publication to the retained staging identity
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; retained staging-publication closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Post-rename identity mismatch must be quarantined or removed without operating on a substituted object.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.2.blocker.identity-checked-cleanup
+  title: Identity-check Unix rollback and cleanup names before unlink
+  campaign_item: C2.2
+  disposition: canonical_story
+  kind: source_blocker
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  source_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+  source_anchor: checkpoint.sequence=16; identity-checked cleanup closure
+  checkpoint:
+    kind: c2.2-continuity-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
+    authority_anchor: checkpoint.sequence=16 and checkpoint.current_phase
+    participant: null
+    generation: 1
+  reference_consumers: []
+  notes:
+  - Deletion requires quarantine and exact retained-object identity checks.
+  - 'Reconciled implementation state: source_complete; runtime and heavy evidence remain deferred.'
+- id: C2.3.work.1
+  title: Provide idempotent setup, diagnostics, and exact host-config status
+  campaign_item: C2.3
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  - C2.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.3].work[1], lines 140-143
+  checkpoint:
+    kind: campaign-item-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.3].checkpoint
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The public lifecycle setup/status/doctor surface uses one explicit owned install root and exact host-configuration digest observations without project-YAML editing or host selection.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: FRUST-061
+  title: Release packaging and user update proof
+  campaign_item: C2.3
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-050
+  - FRUST-060
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E6].stories[FRUST-061], lines 407-420
+  checkpoint:
+    kind: campaign-item-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.3].checkpoint
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.1
+  - C3.3
+  notes:
+  - 'Primary ownership is reconciled to C2.3: verified immutable install/update, typed release notes, compatibility and downgrade controls, and exact retry are now public source; C3.1 and C3.3 still own release controls and publication evidence.'
+  - FRUST-060 host-conformance execution remains deferred and no host is selected, supported, released, or field-verified by this source closure.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C2.3.work.3
+  title: Uninstall product-owned integration while retaining authority state
+  campaign_item: C2.3
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  - C2.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.3].work[3], line 145
+  checkpoint:
+    kind: campaign-item-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.3].checkpoint
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Product uninstall removes only exact unchanged inventory files, preserves modified and unknown files, and never traverses consumer projects, sidecars, operator anchors, backups, or external-key custody.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C2.4.work.1
+  title: Implement interrupted and mixed-version lifecycle test source
+  campaign_item: C2.4
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  - C2.2
+  - C2.3
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C2-state-loss-and-install-lifecycle].sequence[C2.4].work[1], lines 146-149
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/C2.4-product-lifecycle-recovery-corpus.yaml
+    authority_anchor: story_id/status and acceptance_criteria
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The closed source corpus covers partial setup, stale config, interrupted update, downgrade refusal, wrapper mismatch,
+    retained-state uninstall, backup interruption, and replacement-machine restore.
+  - The Rust integration source exists; runtime execution and stabilization evidence remain deferred.
+  - 'Reconciled implementation state: source_complete.'
+- id: C3.1.work.1
+  title: Use locked Cargo resolution for every release build
+  campaign_item: C3.1
+  disposition: canonical_story
+  kind: source_release_control
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[1], lines 164-168
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[1], lines 164-168
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The current release workflow uses locked build commands; older gap/status prose is stale on this control.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C3.1.work.2
+  title: Run a dedicated declared-MSRV lane
+  campaign_item: C3.1
+  disposition: canonical_story
+  kind: source_release_control
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[2], line 168
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[2], line 168
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The CI source pins Rust 1.85.1 and defines a locked workspace check; hosted execution remains C3.2 evidence.
+  - 'Reconciled implementation state: implemented_pending_hosted_evidence.'
+- id: C3.1.work.3
+  title: Add Linux ARM64 install smoke
+  campaign_item: C3.1
+  disposition: canonical_story
+  kind: source_release_control
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[3], line 169
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[3], line 169
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The release matrix cross-builds aarch64 but marks can_smoke false; no native or bounded-emulated install smoke
+    source was found.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'Native ubuntu-24.04-arm source is Linux/aarch64 constrained and smokes the packaged forge-core-aarch64-linux.tar.gz; no workflow run was performed.'
+- id: C3.1.work.4
+  title: Remove readlink -f dependence from the POSIX wrapper
+  campaign_item: C3.1
+  disposition: canonical_story
+  kind: source_release_control
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[4], line 170
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[4], line 170
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The wrapper uses bounded one-hop readlink resolution without -f; execution evidence remains deferred.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+- id: C3.1.work.5
+  title: Bind the SBOM to the exact archive set
+  campaign_item: C3.1
+  disposition: canonical_story
+  kind: source_release_control
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[5], line 171
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C3-release-assurance-and-publication].sequence[C3.1].work[5], line 171
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - A locked SBOM and signed/checksummed archives exist, but no exact signed/checksummed archive-set-to-SBOM digest
+    join was found.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'The deterministic release-set manifest binds ordered archive names and SHA-256 values, version/tag/source commit, exact-version SBOM filename/SHA-256, and a combined checksum; source test execution remains deferred.'
+- id: C3.2.work.1
+  title: Run cumulative workspace, failure, platform, archive, and hosted gates
+  campaign_item: C3.2
+  disposition: canonical_story
+  kind: stabilization_evidence
+  schedule_class: stabilization_only
+  status: planned
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C1.4
+  - C2.4
+  - C3.1
+  - C4.2
+  - C5.3
+  - C7.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C3-release-assurance-and-publication].sequence[C3.2].work[1], lines 172-176
+  checkpoint: null
+  reference_consumers: []
+  notes:
+  - This is the sole heavy runtime, linked-build, matrix, archive, and hosted gate; compiler feedback through the
+    canonical hermetic launcher remains required during implementation, and C3.2 must not absorb source implementation.
+  - 'Reconciled implementation state: pending_evidence_only.'
+- id: P7G.1
+  title: Meet explicit CI time budgets without deleting evidence
+  campaign_item: C3.2
+  disposition: canonical_story
+  kind: hosted_evidence
+  schedule_class: stabilization_only
+  status: planned
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C3.2.work.1
+  source_ref: contracts/stories/P7G.1-fast-evidence-test-topology.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 18-31
+  checkpoint: null
+  reference_consumers:
+  - C3.4
+  notes:
+  - This explicit story replaces the derived C3.2 artifact/timing substory. Timing, inventory parity, and tier-failure
+    proof remain evidence, not pre-stabilization source execution.
+  - 'Reconciled implementation state: source_controls_implemented_hosted_timing_pending.'
+- id: P7E.1
+  title: Publish one reproducible 0.12 release identity
+  campaign_item: C3.3
+  disposition: canonical_story
+  kind: publication_evidence
+  schedule_class: publication_only
+  status: planned
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C3.2
+  - P7G.1
+  source_ref: contracts/stories/P7E.1-release-correctness.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 17-23
+  checkpoint: null
+  reference_consumers:
+  - C3.4
+  notes:
+  - Its source-control portions are deduplicated into C3.1.work.1-C3.1.work.5. Under C3.3 only immutable tag/public
+    assets and independent downloaded-asset verification remain.
+  - 'Reconciled implementation state: source_controls_present_tag_and_publication_pending.'
+- id: P7F.1
+  title: Prove one chat-only real-host mediated product journey
+  campaign_item: C3.4
+  disposition: canonical_story
+  kind: field_evidence
+  schedule_class: field_or_independent_evidence_only
+  status: planned
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C3.3
+  - P7E.1
+  source_ref: contracts/stories/P7F.1-real-host-mediated-journey.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 23-35
+  checkpoint: null
+  reference_consumers: []
+  notes:
+  - Structural bundle tooling cannot prove host use, semantics, or actor independence. Adapter/test source must
+    already be complete before C3.2; the exact published real-host run belongs only to C3.4.
+  - 'Reconciled implementation state: evidence_tooling_present_selected_host_and_journey_pending.'
+- id: P7H.1
+  title: Align every public promise with executable evidence
+  campaign_item: C3.4
+  disposition: canonical_story
+  kind: documentation_and_evidence_reconciliation
+  schedule_class: field_or_independent_evidence_only
+  status: planned
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - P7F.1
+  - P7G.1
+  source_ref: contracts/stories/P7H.1-promise-docs-forks.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 18-30
+  checkpoint: null
+  reference_consumers: []
+  notes:
+  - Primary ownership is C3.4 because final promise closure is blocked on P7F/P7G/release evidence. Any remaining
+    source/doc edit must nevertheless finish before C3.2 so C3.4 stays evidence-only.
+  - 'Reconciled implementation state: source_checks_implemented_external_evidence_pending.'
+- id: C4.1.work.1
+  title: Implement thin packaging and event bridges for remaining hosts
+  campaign_item: C4.1
+  disposition: canonical_story
+  kind: source_adapter
+  schedule_class: pre_stabilization_source
+  status: planned
+  source_complete: false
+  remaining_source_work:
+  - 'Implement and checkpoint the cited source obligation: Implement thin packaging and event bridges for remaining
+    hosts.'
+  owner: null
+  dependencies:
+  - C1.4
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C4-host-breadth].sequence[C4.1].work[1], lines 198-202
+  checkpoint: null
+  reference_consumers: []
+  notes:
+  - The user-required ordering overrides deferred_after_p0; Claude, Cursor, and OpenCode source packaging/bridges
+    must land before C3.2.
+  - 'Reconciled implementation state: planned_source_absent_pre_C3.2_required.'
+- id: C4.1.work.2
+  title: Mark incapable hosts unsupported with the failed capability named
+  campaign_item: C4.1
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: planned
+  source_complete: false
+  remaining_source_work:
+  - 'Implement and checkpoint the cited source obligation: Mark incapable hosts unsupported with the failed capability
+    named.'
+  owner: null
+  dependencies:
+  - C1.4
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C4-host-breadth].sequence[C4.1].work[2], line 202
+  checkpoint: null
+  reference_consumers: []
+  notes:
+  - Host breadth cannot weaken native-origin assurance or turn enum recognition into a support claim.
+  - 'Reconciled implementation state: planned_pre_C3.2_required.'
+- id: FRUST-060
+  title: Cross-host conformance testkit
+  campaign_item: C4.1
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-011
+  - FRUST-030
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E6].stories[FRUST-060], lines 391-406
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+    authority_anchor: epics[FRUST-E6].stories[FRUST-060], lines 391-406
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.4
+  - C4.2
+  notes:
+  - Primary ownership is C4.1 because this is the reusable install/invoke/update/diagnose/recover testkit for multiple
+    hosts. The implementation lives in forge-core-validate rather than a separate crate; exact-host execution evidence
+    remains separate.
+  - 'Reconciled implementation state: source_complete.'
+  - 'forge-core-validate supplies an authority-free C1.4 case matrix, concrete typed HostCapabilityResult observation, candidate-only reports, replay/crash scenarios, registry-backup privacy checks, and selected_host: none.'
+- id: C4.2.work.1
+  title: Implement a versioned supported-host capability matrix
+  campaign_item: C4.2
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C4.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C4-host-breadth].sequence[C4.2].work[1], lines 203-206
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/hosts/host-support-matrix-v0.yaml
+    authority_anchor: host_support_matrix
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The candidate-only versioned matrix separates recognition, installability, read-only MCP, human-origin assurance,
+    governed mutation, exact versions, field evidence, limitations, release assets, and conformance evidence.
+  - Empty records truthfully represent that no exact host/version is selected or field-verified; exact-host execution remains blocked.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C5.1.work.1
+  title: Define durable post-BuildVerify episode identity and state
+  campaign_item: C5.1
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C5-ready-operate-evolve].sequence[C5.1].work[1], lines 216-220
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C5-ready-operate-evolve].sequence[C5.1].work[1], lines 216-220
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The candidate-only model binds exact release subject, rollback baseline, deployment and operational observations,
+    feedback, incident/bug intake, evolution identity, continuity references, and a monotonic self-digested generation.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C5.1.work.2
+  title: Compose existing readiness and continuity policies into post-release episodes
+  campaign_item: C5.1
+  disposition: canonical_story
+  kind: source_contract
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C5-ready-operate-evolve].sequence[C5.1].work[2], line 220
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C5-ready-operate-evolve].sequence[C5.1].work[2], line 220
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Pure decisions reference readiness, ready-release, reality-evidence, context-recovery, and evolve-project roles
+    without copying policy semantics, mutating phase, persisting state, or executing deployment/rollback.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C5.2.work.1
+  title: Implement admitted BuildVerify to ReadyOperate to Evolve advancement
+  campaign_item: C5.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C5-ready-operate-evolve].sequence[C5.2].work[1], lines 221-225
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C5-ready-operate-evolve].sequence[C5.2].work[1], lines 221-225
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The public kernel admission API binds candidate release/snapshot state to the exact current project snapshot, ledger
+    head, state version, durable phase, active admitted release, episode generation, and predecessor digest.
+  - BuildVerify to ReadyOperate requires the admitted readiness boundary and ReadyOperate to Evolve requires the admitted
+    release boundary; ordinary automatic phase planning still stops at BuildVerify.
+  - Historical summary-only typed events start wire epoch 0.7 and remain readable; complete C5.3 snapshots advance to
+    permanent epoch 0.8, while a target phase still appears only after the hard transition gate permits the adjacent route.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C5.2.work.2
+  title: Open typed rollback and post-release bug episodes
+  campaign_item: C5.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C5-ready-operate-evolve].sequence[C5.2].work[2], line 225
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C5-ready-operate-evolve].sequence[C5.2].work[2], line 225
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Readiness disproof and failed-deployment decisions open rollback-assessment events; unresolved feedback, incident,
+    or bug decisions open evolution-triage events.
+  - Follow-on events carry no target phase and no admitted gate, so they preserve the exact durable phase while extending
+    the episode generation/predecessor chain.
+  - Generic ledger append rejects the C5.2 event; only the dedicated retained-lock TCB path can commit its validated shape.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C5.3.work.1
+  title: Implement replacement-process post-release continuity proof source
+  campaign_item: C5.3
+  disposition: canonical_story
+  kind: source_test_fixture
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.2
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C5-ready-operate-evolve].sequence[C5.3].work[1], lines 226-229
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/C5.3-replacement-agent-continuity.yaml
+    authority_anchor: story_id/status and acceptance_criteria
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Ledger epoch 0.8 persists every complete repeated episode snapshot and coordination state through dedicated retained-lock
+    TCB routes while preserving historical 0.7 summaries as readable audit records.
+  - Fresh-process source reconstructs the exact active release, latest complete episode, rollback baseline, observations,
+    feedback/intake, evolution identity, next action, request/completion/recovery state, and live/expired/non-active claims.
+  - Request and Claim runtime joins require exact stable durable IDs; shared schema contract_ref paths do not identify live
+    instances, and returned projections carry no retained capability or mutation, claim, phase, release, signing, trust,
+    lifecycle, protected-anchor, install/activation, or host-selection authority.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: P7C.1
+  title: Derive explicit domain demand and explain matching packs
+  campaign_item: C6.1
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/stories/P7C.1-domain-demand-discovery.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 33-40
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/P7C.1-domain-demand-discovery.yaml
+    authority_anchor: story_id/status lines 3-6; acceptance_criteria lines 33-40
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - This explicit predecessor covers deterministic read-only demand/discovery and is credited to C6.1 rather than
+    reimplemented.
+  - 'Reconciled implementation state: source_implemented_story_records_completed.'
+- id: P7C.2
+  title: Acquire a reviewed package through public lifecycle commands
+  campaign_item: C6.1
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/stories/P7C.2-reviewed-pack-acquisition.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 28-34
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/P7C.2-reviewed-pack-acquisition.yaml
+    authority_anchor: story_id/status lines 3-6; acceptance_criteria lines 28-34
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Covers reviewed local acquisition and lifecycle derivation foundations. It does not close C6.2's immutable remote
+    catalog/download obligation.
+  - 'Reconciled implementation state: source_implemented_local_acquisition_release_evidence_pending.'
+- id: P7D.1
+  title: Rebase an active Domain Pack generation onto an adjacent core release
+  campaign_item: C6.1
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/stories/P7D.1-core-pack-rebase.yaml
+  source_anchor: story_id/status lines 3-6; acceptance_criteria lines 22-28
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/P7D.1-core-pack-rebase.yaml
+    authority_anchor: story_id/status lines 3-6; acceptance_criteria lines 22-28
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - The existing CAS-bound crash-recoverable rebase path is reusable C6.1 source; hosted execution remains separate.
+  - 'Reconciled implementation state: source_implemented_hosted_evidence_pending.'
+- id: C6.1.residual.initialized-intent-derivation
+  title: Derive ordinary initialized-project lifecycle intent
+  campaign_item: C6.1
+  disposition: canonical_story
+  kind: source_product_surface
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.1].work[1], lines 241-245; residual after P7C.1/P7C.2/P7D.1
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.1].work[1], lines 241-245; residual after
+      P7C.1/P7C.2/P7D.1
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Chat-level derivation for initialized install, upgrade, rollback, remove, and changed-Core rebase is implemented
+    over the existing TCBs without human-authored lifecycle documents.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C6.1.work.2
+  title: Preserve explicit candidate approval and degraded-empty gaps
+  campaign_item: C6.1
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.1].work[2], line 245
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.1].work[2], line 245
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Convenience cannot silently choose, trust, or activate a candidate, and degraded-empty states remain explicit.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C6.2.work.1
+  title: Implement immutable signed remote acquisition semantics
+  campaign_item: C6.2
+  disposition: canonical_story
+  kind: source_runtime
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C6.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.2].work[1], lines 246-250
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.2].work[1], lines 246-250
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Signed catalog mirrors/descriptors, publisher and registry signature subjects, cumulative revocation anchors,
+    candidate-only online/cache/offline planning, exact-byte verification, deterministic cache policy, and rollback
+    provenance are implemented.
+  - The local CLI imports exact operator-provisioned objects and intentionally performs no DNS, TLS, redirects,
+    subprocess download, general network transport, trust, lifecycle commit, installation, or activation.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C6.2.work.2
+  title: Separate discovery, download, trust, install, and activation authority
+  campaign_item: C6.2
+  disposition: canonical_story
+  kind: source_security_boundary
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C6.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.2].work[2], line 250
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C6-domain-pack-normal-lifecycle].sequence[C6.2].work[2], line 250
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Discovery, operator selection, catalog verification/anchoring, candidate-byte acquisition, trust, reviewed-registry
+    admission, preflight, private commit, and explicit activation remain separate typed authorities.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C7.1.work.1
+  title: Generate a typed pack skeleton and unified author test workflow
+  campaign_item: C7.1
+  disposition: canonical_story
+  kind: source_sdk
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C6.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C7-domain-pack-sdk].sequence[C7.1].work[1], lines 261-264
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C7-domain-pack-sdk].sequence[C7.1].work[1], lines 261-264
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Deterministic generic skeleton generation, exact sealed-Core validation, candidate validation/composition,
+    compatibility, learning/promotion, reviewed-registry readiness, adversarial diagnostics, and a non-authoritative
+    CLI materialization/report adapter are implemented without domain-specific core Rust.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: C7.2.work.1
+  title: Implement package, sign, review, publish, revoke, and evolve workflows
+  campaign_item: C7.2
+  disposition: canonical_story
+  kind: source_sdk
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C6.2
+  - C7.1
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: phases[C7-domain-pack-sdk].sequence[C7.2].work[1], lines 265-268
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-plan.yaml
+    authority_anchor: phases[C7-domain-pack-sdk].sequence[C7.2].work[1], lines 265-268
+    participant: null
+    generation: null
+  reference_consumers: []
+  notes:
+  - Candidate preparation binds immutable content, provenance, exact compatibility and author-test evidence; review
+    readiness, external-signing requests/evidence, unsigned catalog evolution, and cumulative revocation remain
+    candidate-only until existing authority owners independently verify and admit them.
+  - No private-key custody, generic signing, cryptographic verification, network publication, catalog admission, trust,
+    lifecycle commit, installation, or activation was added.
+  - 'Reconciled implementation state: source_complete_targeted_compile_green_evidence_deferred.'
+- id: GAP-002.reinitialize-as-new
+  title: Durable reinitialize-as-new plan and apply path
+  campaign_item: C2.3
+  disposition: assign
+  kind: accepted_gap_obligation
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C2.1
+  - C2.2
+  source_ref: docs/product-gap-register.md
+  source_anchor: confirmed gaps table, GAP-002, line 33
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/plan/product-gap-closure-campaign-v1.yaml
+    authority_anchor: items[C2.3].checkpoint
+    participant: null
+    generation: null
+  reference_consumers:
+  - C2.4
+  notes:
+  - C2.1 owns fail-closed linked-state-loss diagnosis and C2.2 owns restoration of prior authority. The separately
+    authority-abandoning mutator belongs to C2.3. Closed candidate-plan validation, retained predecessor lifetime
+    anchoring, unrelated-destination reservation, exact successor CAS, and immutable operation-scoped plan/WAL/receipt
+    bindings are implemented in the contracts and Store crates.
+  - The public command surface and CLI implement explicit plan/apply dispatch, exact argv-to-plan matching,
+    plan-derived confirmation, retry receipt verification, and live successor verification while candidate documents
+    remain non-authoritative and selected_host remains none.
+  - A targeted locked all-target compile-only check passed for forge-core-contracts, forge-core-store,
+    forge-core-command-surface, forge-core-cli, and forge-core-validate. Runtime, E2E, interruption/retry,
+    failure-injection, stress, fuzz, MSRV/platform, CI, release, and field evidence remain deferred.
+- id: GAP-010.codex-conformance
+  title: Exact-version Codex conformance result
+  campaign_item: C4.1
+  disposition: assign
+  kind: accepted_gap_obligation
+  schedule_class: pre_stabilization_source
+  status: blocked
+  source_complete: false
+  remaining_source_work:
+  - Add an exact-version Codex case to the common borrowed-shell host-conformance contract and cross-host testkit,
+    consuming the 0.143.0 spike rather than duplicating it.
+  - Emit a typed host_capability_result with unsupported state, failed capabilities, adapter/source identity, case
+    inventory digest, result bundle digest, and residual limitations.
+  - Represent install, invoke, update, diagnose, recover, unauthorized-mutation, and fresh-chat expectations as
+    deterministic cases or explicit unsupported outcomes.
+  - Project the C4.1 result into C4.2's capability matrix without conflating generic read-only MCP recognition with
+    human-origin assurance or governed mutation.
+  owner: null
+  dependencies:
+  - C1.1
+  - C1.4
+  - FRUST-011
+  - FRUST-060
+  source_ref: docs/product-gap-register.md
+  source_anchor: confirmed gaps table, GAP-010, line 41
+  checkpoint:
+    kind: host-capability-dependency-checkpoint
+    state: blocked_on_exact_host_execution
+    authority_ref: contracts/spec/C1.1-codex-host-capability-decision.yaml
+    authority_anchor: exact-version Codex 0.143.0 decision and failed capabilities, lines 92-123
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.1
+  - C4.2
+  notes:
+  - 'Codex is an intended GAP-010 target at docs/product-gap-register.md:41 and is not the C1 reference host: contracts/spec/C1.1-codex-host-capability-decision.yaml:92-123
+    rejects Codex CLI 0.143.0 for human-origin assurance, while contracts/plan/product-gap-closure-plan.yaml:84-92
+    still records selected_host=none. C4.1 therefore owns Codex deterministically as a named-host breadth result.
+    The host-neutral FRUST-011/FRUST-060 contracts and testkit now exist, but the negative spike is not yet an executed
+    exact host_capability_result bound to the current typed case/result digests and independently reviewed field evidence.'
+- id: FRUST-001
+  title: Rust-only backlog reconciliation
+  campaign_item: null
+  disposition: supporting_predecessor
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E0].stories[FRUST-001], lines 90-105
+  checkpoint:
+    kind: contract-completion-checkpoint
+    state: source_complete
+    authority_ref: contracts/policies/rust-only-backlog-reconciliation.yaml
+    authority_anchor: document root and legacy classification rules
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.1
+  - C1.2
+  - C1.3
+  - C1.4
+  - C2.1
+  - C2.2
+  - C2.3
+  - C2.4
+  - C3.1
+  - C3.2
+  - C3.3
+  - C3.4
+  - C4.1
+  - C4.2
+  - C5.1
+  - C5.2
+  - C5.3
+  - C6.1
+  - C6.2
+  - C7.1
+  - C7.2
+  notes:
+  - FRUST-001 is a current, completed campaign-wide governance predecessor rather than an out-of-campaign story.
+    contracts/backlog/rust-only-core-backlog.yaml:90-105 records done_by_contract, and contracts/policies/rust-only-backlog-reconciliation.yaml
+    establishes the typed Rust-only backlog, forensic-only legacy v2 status, and prohibition on Python implementation
+    authority. Every C item consumes this rule by reference; assigning it to one product boundary would create false
+    ownership.
+- id: FRUST-002
+  title: Markdown debt retirement map
+  campaign_item: C3.1
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-001
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E0].stories[FRUST-002], lines 106-126
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/migration/markdown-debt-inventory.yaml
+    authority_anchor: markdown_retirement_authority, schema_version 0.3
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.1
+  - C1.2
+  - C1.3
+  - C1.4
+  - C2.1
+  - C2.2
+  - C2.3
+  - C2.4
+  - C4.1
+  - C4.2
+  - C5.1
+  - C5.2
+  - C5.3
+  - C6.1
+  - C6.2
+  - C7.1
+  - C7.2
+  notes:
+  - C3.1 remains the least-distorting owner for repository-wide source and release-control hardening. The schema-version
+    0.3 migration contract now contains the exhaustive non-authoritative allowlist and all 12 historical debt dispositions;
+    typed Rust loading authority denies unknown paths and permissive defaults, and the canonical validator rejects full-tree
+    Markdown drift. Source awaits centralized locked compilation; validator and regression execution remain deferred to C3.2.
+  - 'Reconciled implementation state: source_complete.'
+  - 'Centralized targeted compilation remaining work is reconciled from recorded successful locked all-target compile evidence; validator and regression execution remain deferred to C3.2.'
+- id: FRUST-010
+  title: Rust core architecture contract
+  campaign_item: C1.1
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-002
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E1].stories[FRUST-010], lines 127-144
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: implemented_pending_evidence
+    authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+    authority_anchor: epics[FRUST-E1].stories[FRUST-010], lines 127-144
+    participant: coordinator
+    generation: null
+  reference_consumers:
+  - C1.2
+  - C1.3
+  - C4.1
+  - C4.2
+  notes:
+  - C1.1 must freeze the host/client versus Forge Core authority boundary before broker or adapter implementation,
+    so it owns the architecture contract. contracts/policies/rust-workspace-architecture.yaml is a substantial accepted
+    predecessor, but the story's planned contracts/architecture/rust-core.yaml and contracts/architecture/crate-boundaries.yaml
+    are absent, the existing policy does not provide the required per-boundary owns/does_not_own shape, and no dedicated
+    typed loader validates those outputs. C1.2 and later adapters consume the boundary.
+  - 'Reconciled implementation state: implemented_pending_evidence.'
+  - 'Both named YAML outputs enumerate every workspace crate with owns/does_not_own, core versus host-client boundaries, inert candidate semantics, and Rust validation/loading.'
+- id: FRUST-020
+  title: OperationContract typed execution planning
+  campaign_item: C5.2
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.1
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E2].stories[FRUST-020], lines 171-184
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/FRUST-020-operation-contract-planning.yaml
+    authority_anchor: document root and bounded planner/executor source checks
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.2
+  - C5.3
+  notes:
+  - C5.2 owns guarded runtime advancement and the OperationContract planner that admits or blocks phase-changing
+    work. The planner validates before classification, and the executor now returns read/status, review, gate, and
+    human-handoff outcomes before durable producer admission or mutation-gate evaluation. Focused source tests cover
+    allowed, denied, already-done, expired-claim handoff, missing/suggestible runtime handoff, correct-course, and
+    report-only behavior while proving non-ready outcomes create no durable state. The kernel all-target source and
+    test targets compile; Rust test execution and broader runtime evidence remain deferred.
+- id: FRUST-021
+  title: Command runner read-only evidence
+  campaign_item: C5.3
+  disposition: supporting_predecessor
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-020
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E2].stories[FRUST-021], lines 185-199
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/policies/runtime-command-evidence-recording-boundary.yaml
+    authority_anchor: document root and closed runtime command boundary
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.2
+  notes:
+  - This is a completed shared source predecessor for replacement-process evidence, not a second stabilization owner.
+    crates/forge-core-kernel/src/evidence.rs:104-317 validates staged-only direct argv execution, blocks non-read-only,
+    network-enabled, unsafe, and shell-executor commands before spawn, and derives RuntimeCommandEvidenceRecord.
+    crates/forge-core-kernel/tests/operation_plan.rs:535-669 and :855-930 contains source coverage for typed output,
+    unstaged and mutating denial, shell denial, and durable evidence append. C3.2 executes deferred gates; it does
+    not own this source.
+- id: FRUST-022
+  title: ToolEffect transaction and WAL hardening
+  campaign_item: C5.2
+  disposition: supporting_predecessor
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-020
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E2].stories[FRUST-022], lines 200-214
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/migration/operation-contract-plan-grill-audit.yaml
+    authority_anchor: closed transaction, application, and WAL recovery boundaries
+    participant: null
+    generation: null
+  reference_consumers:
+  - C2.2
+  - C2.4
+  - C5.3
+  notes:
+  - The ToolEffect transaction/WAL foundation is source-complete and supports C5.2's admitted mutation path; lifecycle
+    and backup/restore paths are reference consumers. Current source requires explicit payloads and hashes, checks
+    freshness, enforces destructive inverse/review policy, and provides recoverable Store-owned WAL application.
+    The accepted boundaries and implementation references are recorded in contracts/migration/operation-contract-plan-grill-audit.yaml,
+    with recovery source tests in crates/forge-core-store/tests/wal_recovery.rs and transaction/application coverage
+    under crates/forge-core-kernel/tests/operation_plan.rs and crates/forge-core-store/tests/reference_index.rs.
+- id: FRUST-030
+  title: Guide as default protocol orchestrator
+  campaign_item: C5.2
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.1
+  - FRUST-010
+  - FRUST-020
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E3].stories[FRUST-030], lines 220-235
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/FRUST-030-guide-protocol.yaml
+    authority_anchor: document root and exact next-operation protocol source checks
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.3
+  - C6.1
+  - C7.1
+  notes:
+  - C5.2 now owns an accepted operation-contract-first guide protocol that composes the existing GuideDecision and
+    OperationContractDocument without parallel authority. Kernel validation binds catalog/phase eligibility, exact
+    workflow, phase, allowed actions, observed state version, guide provenance, diagnostics, and one of six closed
+    route policies before the CLI returns the exact next operation. Decision-only input fails closed, host substitutions
+    are rejected, and targeted all-target compilation passed for contracts, command-surface, kernel, and CLI source
+    plus source-test targets; Rust test execution and broader runtime/hosted evidence remain deferred.
+- id: FRUST-031
+  title: Funnel autonomy policy
+  campaign_item: C5.2
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-030
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E3].stories[FRUST-031], lines 240-256
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/FRUST-031-funnel-autonomy.yaml
+    authority_anchor: document root and accepted policy consumer source checks
+    participant: null
+    generation: null
+  reference_consumers:
+  - C2.3
+  - C3.1
+  - C3.3
+  - C6.2
+  - C7.2
+  notes:
+  - C5.2 now owns one accepted typed funnel-autonomy policy loaded from a single embedded contract across Guide phase
+    projection, OperationContract planning, and the runtime execution gate. Early ambiguous phases restore human
+    guidance and research pressure; settled mechanical loops require an eligible phase, exact lane claim, passing
+    aggregate gate, authority evidence, and effect references. Actual undeclared destructive effects block, while
+    publish and explicit authority-transition candidates restore exact release and authority gate scopes. The policy,
+    risk declarations, and gate documents grant no mutation, phase, release, signing, private-key, trust, lifecycle,
+    or host-selection authority; selected_host remains none. Targeted all-target compilation passed for contracts,
+    decisions, kernel, and CLI source plus source-test targets; Rust test execution and broader runtime/hosted evidence
+    remain deferred.
+- id: FRUST-040
+  title: Claim, completion, request, and recovery contract integration
+  campaign_item: C5.3
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - C5.2
+  - FRUST-020
+  - FRUST-022
+  - FRUST-030
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E4].stories[FRUST-040], lines 254-270
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/stories/C5.3-replacement-agent-continuity.yaml
+    authority_anchor: constraints and acceptance_criteria
+    participant: null
+    generation: null
+  reference_consumers:
+  - C5.2
+  notes:
+  - The dedicated coordination ledger route now persists sender-owned Pending requests and driver-owned legal transitions,
+    required response evidence, strict expiration, exact typed dependencies, and evidence-only mutation handoffs.
+  - Completion application rejects stale state, invalidation, missing or non-active exact claim IDs, expired or mismatched
+    claimant/lease bindings, missing proof, and conflicting second completions; exact duplicate retries return the durable record.
+  - Recovery joins exact durable Request and live Claim IDs, rejects automatic stalled/crashed reassignment, and requires
+    the target driver plus reviewed request/claim references for handoff or reclaim.
+  - Fresh-process replacement projection joins the claim WAL without recreating claim or mutation authority. Targeted
+    all-target compilation passed; Rust test execution and runtime/hosted evidence remain deferred.
+- id: FRUST-041
+  title: Coordination eval suite
+  campaign_item: C5.3
+  disposition: supporting_predecessor
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-040
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E4].stories[FRUST-041], lines 271-283
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/evals/minimal-coordination-eval-suite.yaml
+    authority_anchor: dimensions and fixture inventory
+    participant: null
+    generation: null
+  reference_consumers:
+  - C1.4
+  - C3.2
+  notes:
+  - The coordination-eval source is a completed predecessor for C5.3. contracts/evals/minimal-coordination-eval-suite.yaml
+    enumerates all nine required dimensions, and crates/forge-core-decisions/src/coordination_eval.rs validates
+    missing/duplicate dimensions, fixture requirements, and fail-closed scoring; source tests include MissingDimension
+    and invalid-contract failures. crates/forge-core-cli/src/coordination.rs exposes the typed surface. Actual fixture
+    outcomes remain deferred evidence and do not create remaining source work for this story.
+- id: FRUST-050
+  title: Sigstore DSSE in-toto subject verifier
+  campaign_item: C2.3
+  disposition: supporting_predecessor
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies: []
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E5].stories[FRUST-050], lines 289-306
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/policies/sigstore-dsse-in-toto-subject-boundary.yaml
+    authority_anchor: document root and accepted verifier boundary
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.3
+  - C6.2
+  - C7.2
+  notes:
+  - FRUST-050 is a completed install/update trust predecessor, with C2.3 as the earliest product consumer; C3.3,
+    C6.2, and C7.2 reference the same verifier. contracts/policies/sigstore-dsse-in-toto-subject-boundary.yaml defines
+    the v0.3 DSSE, exact payload type, single-signature, PAE, in-toto subject, Fulcio, and Rekor boundary and names
+    implementation/test source. The canonical backlog marks it implemented at contracts/backlog/rust-only-core-backlog.yaml:289-306.
+    Publication and downloaded-asset proof remain later evidence, not missing verifier source.
+- id: FRUST-051
+  title: Timestamp, TSA, CT, revocation, and TUF freshness boundaries
+  campaign_item: C2.3
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-050
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E5].stories[FRUST-051], lines 307-357
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/policies/certificate-revocation-policy-boundary.yaml
+    authority_anchor: document root and explicit delegated OCSP composition boundary
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.3
+  - C6.2
+  - C7.2
+  notes:
+  - FRUST-051's umbrella authority model now composes the supplied direct-issuer and delegated-responder OCSP boundary
+    without duplicating FRUST-052's verifier or fixtures. The delegated model enforces exact issuer/path, responder
+    validity, id-kp-OCSPSigning EKU, responderID, and response-signature checks while preserving the separate TSA,
+    CT, Rekor, CRL, short-lived-certificate, TUF, network, and install/update boundaries. The affected crypto,
+    command-surface, and CLI all-target source compiled successfully under locked resolution; runtime/network evidence
+    remains deferred.
+- id: FRUST-052
+  title: Explicit OCSP revocation status boundary
+  campaign_item: C2.3
+  disposition: assign
+  kind: current_rust_story
+  schedule_class: pre_stabilization_source
+  status: source_complete
+  source_complete: true
+  remaining_source_work: []
+  owner: null
+  dependencies:
+  - FRUST-051
+  source_ref: contracts/backlog/rust-only-core-backlog.yaml
+  source_anchor: epics[FRUST-E5].stories[FRUST-052], lines 358-385
+  checkpoint:
+    kind: inventory-source-checkpoint
+    state: source_complete
+    authority_ref: contracts/policies/explicit-ocsp-revocation-status-boundary.yaml
+    authority_anchor: document root and direct/delegated offline responder authority
+    participant: null
+    generation: null
+  reference_consumers:
+  - C3.3
+  - C6.2
+  - C7.2
+  notes:
+  - FRUST-052 implements the concrete supplied/offline OCSP slice used before C2.3 install/update trust decisions.
+    Direct-issuer and supplied delegated-responder modes share exact CertID, freshness, nonce, status, and signature
+    requirements; strict CLI inputs and typed projections expose the verified authority without network, install/update,
+    signing, mutation, release, or host-selection authority. Positive and adversarial source cases cover ordered chains,
+    wrong path/EKU/validity/responderID/signature, stale response, nonce, serial/hash, and partial input failures. The
+    affected crypto, command-surface, and CLI all-target source compiled successfully under locked resolution; runtime
+    evidence remains deferred.
+forensic_exclusions:
+- id: v2-001
+  title: Version field + optimistic concurrency in write_state
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-001.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: expected_version increments version and raises VersionConflict on stale writes, with legacy
+    default behavior. Targets scripts/forge_method_runtime.py.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-002
+  title: 'Auto-migration: add version field to existing projects on first read'
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-002.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: treat missing version as 0 and persist it transparently on the next write. Python runtime
+    target is forbidden for the current core.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-003
+  title: --expected-version + --agent-id CLI flags on advance/handoff/checkpoint commands
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-003.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: thread optimistic version and agent identity through mutating CLI commands while preserving
+    no-flag behavior.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-004
+  title: Fleet-mode append-only handoff/checkpoint (no state mutation)
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-004.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: in fleet mode handoff/checkpoint appends a request and does not mutate integration state
+    unless explicitly overridden. PRD line 65 says handoff/checkoff; YAML says handoff/checkpoint.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-005
+  title: requests poll command — driver reads pending requests
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-005.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: read requests.ndjson, return pending requests as JSON, and remain non-mutating.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-006
+  title: requests apply command — driver applies a request with version check
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-006.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: locate a request, apply its payload with expected_version, mark it applied, and record a
+    ledger entry.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-007
+  title: agents/registry.yaml support + is_fleet_mode() detection
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-007.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: registry presence determines fleet mode.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-008
+  title: --agent-id flag + FORGE_AGENT_ID env threaded through all mutating commands
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-008.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: every mutator resolves agent identity from flag/environment/default and records it in state
+    and ledger writes.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-009
+  title: Agent attribution in every ledger entry
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-009.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: add agent_id to every ledger append while retaining backward parsing of unattributed entries.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-010
+  title: claims/<lane>.lock with TTL + claim/release/heartbeat commands
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-010.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: lane claims with owner, timestamp, expiry, denial while live, heartbeat renewal, release,
+    and ledger events. Internal inconsistency: title/PRD say .lock while description says .yaml.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-011
+  title: lanes command — show all lane claim statuses
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-011.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: show free/claimed/expired status, holder, and expiry from registry plus claim files.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-012
+  title: Claim enforcement in guidance safety
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-012.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: warn and log when an agent writes within an unclaimed lane, using path-to-lane mapping;
+    explicitly advisory rather than a hard block.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-013
+  title: Multi-agent anti-patterns encoded
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-013.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: detect write-without-driver-claim, write-without-version, acting outside lane, and worker-transcript-as-integration-memory.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-014
+  title: Autonomy anti-patterns
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-014.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: reject approval requests during locked-spec autopilot and require a human gate before spec/context
+    writes.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-015
+  title: Research-always-on affordance in facilitation prompts
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-015.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy behavior obligation: expose a research request affordance in every facilitation open floor. Its Markdown-pack
+    implementation target cannot be current runtime authority.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-016
+  title: Grill-as-default at every decision-close point
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-016.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: trigger grill before every handoff, phase transition, and specification lock across all
+    phases.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-017
+  title: Partner-grade presence directive in system prompt + pack tone
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-017.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy behavior obligation: collaborative partner-grade host tone. Markdown/system-prompt implementation is
+    not typed runtime authority.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-018
+  title: 'GAP-5: Integration gate'
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-018.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: integration-level typecheck and smoke checks block gate passage. Specific tsc/npm acceptance
+    is not valid Rust-only acceptance.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-019
+  title: 'GAP-1: forge commit wrapper'
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-019.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: stage and commit only paths inside the caller''s claimed lanes, avoiding cross-lane add
+    sweeps.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-020
+  title: 'GAP-2: Shared-types coordination'
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-020.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: detect conflicting global/module type augmentations before merge. PRD title adds a shared-types
+    contract lane; YAML title says shared-types coordination. Python-script alternative is forbidden for current
+    runtime authority.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-021
+  title: Typed agent-contract artifact + contract-check eval
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-021.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: typed lane/input/output/verification agent contracts plus an evaluation kind that verifies
+    adherence.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-022
+  title: Council standup mode
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-022.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: aggregate lane status, story progress, requests, dependencies, and blockers into a standup
+    artifact.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-023
+  title: Orchestration spawning
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-023.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: emit runtime-agnostic spawn directives with identity, lane, task, and parent; harness performs
+    spawning; registry and ledger record it.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-024
+  title: 'Evolve Loop wiring: fix evolve-reentry-routing-gap'
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-024.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: new intent during evolve routes back to discovery rather than directly to builder, with
+    a routing test.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-025
+  title: JSON schema for workflows/templates
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-025.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: schema workflow trigger/inputs/steps/outputs/done/blocked/handoff and validate every workflow.
+    The behavioral requirement may be mined, but its old Python command target is not authoritative.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.
+- id: v2-026
+  title: AGENTS.md emitter for Claude Code/OpenCode integration
+  disposition: forensic_reference_only
+  kind: legacy_v2_story
+  source_ref: forensic-reference/legacy-forge-state/stories/v2-026.yaml
+  source_anchor: historical story document root
+  exclusion_authority_ref: contracts/backlog/rust-only-core-backlog.yaml
+  exclusion_authority_anchor: authority.legacy_backlog_refs and authority.legacy_backlog_status, lines 8-20
+  notes:
+  - 'Legacy obligation: generate a human-approved draft host-instruction document from state and lane conventions.
+    Current non-negotiables prohibit Markdown as runtime/agent-facing authority, so only the thin-adapter intent
+    is reusable.'
+  - Legacy status and acceptance commands are not evidence of current Rust source implementation.

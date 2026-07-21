@@ -5,7 +5,17 @@
 //! through the write-ahead log. [`prepare_effect_transaction`] validates one
 //! effect against its payload set before the WAL apply.
 
+#![allow(clippy::unused_self)]
+
 use super::*;
+use forge_core_store::producer_quiescence::{
+    admit_effect_producer, EffectProducerGuard, ProducerBoundaryError,
+};
+use forge_core_store::{
+    append_effect_target_metadata_records_with_durability_under_boundary,
+    append_json_line_with_durability_under_boundary,
+    apply_file_effect_transaction_with_wal_lock_with_durability_under_boundary,
+};
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -73,6 +83,97 @@ pub struct Unverified;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Audited;
 
+/// Fixed, single-root durable layout for a runtime operation.
+///
+/// The constructor deliberately has no caller-selectable durable paths: evidence,
+/// WAL, locks, metadata, and gate traces always resolve below the same
+/// `<effect-store-root>/.forge-method` state root. Command working roots remain
+/// in [`CommandExecutionContext`] and are read-only.
+#[derive(Debug, Clone)]
+pub struct RuntimeOperationStorage<'a> {
+    effect_store_root: &'a Path,
+    state_root: std::path::PathBuf,
+}
+
+impl<'a> RuntimeOperationStorage<'a> {
+    fn canonical(effect_store_root: &'a Path) -> Self {
+        Self {
+            effect_store_root,
+            state_root: effect_store_root.join(".forge-method"),
+        }
+    }
+
+    fn validate(&self) -> Result<(), RuntimeOperationStorageError> {
+        let effect_root = self.effect_store_root.canonicalize().map_err(|source| {
+            RuntimeOperationStorageError::EffectStoreRootUnavailable {
+                path: self.effect_store_root.to_path_buf(),
+                source: source.to_string(),
+            }
+        })?;
+        if !effect_root.is_dir() {
+            return Err(RuntimeOperationStorageError::EffectStoreRootUnavailable {
+                path: effect_root,
+                source: "effect store root is not a directory".to_owned(),
+            });
+        }
+        let state_root = self.state_root.canonicalize().map_err(|source| {
+            RuntimeOperationStorageError::StateRootUnavailable {
+                path: self.state_root.clone(),
+                source: source.to_string(),
+            }
+        })?;
+        if !state_root.is_dir()
+            || state_root.file_name() != Some(std::ffi::OsStr::new(".forge-method"))
+            || state_root.parent() != Some(effect_root.as_path())
+        {
+            return Err(RuntimeOperationStorageError::InvalidStateRoot { path: state_root });
+        }
+        Ok(())
+    }
+
+    fn effect_store_root(&self) -> &'a Path {
+        self.effect_store_root
+    }
+
+    fn state_root(&self) -> &Path {
+        &self.state_root
+    }
+
+    fn evidence_relative_path(&self) -> &'static str {
+        ".forge-method/evidence/command-execution.ndjson"
+    }
+
+    fn wal_relative_path(&self) -> &'static str {
+        ".forge-method/wal/effects.ndjson"
+    }
+
+    fn lock_relative_path(&self) -> &'static str {
+        ".forge-method/locks/effects.lock"
+    }
+
+    fn metadata_relative_path(&self) -> &'static str {
+        ".forge-method/index/effect-targets.ndjson"
+    }
+}
+
+/// Typed preflight failure for a durable operation layout. This is returned
+/// before admission or gate evaluation, so malformed/mixed roots cannot create
+/// an audit trace or any other durable artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeOperationStorageError {
+    EffectStoreRootUnavailable {
+        path: std::path::PathBuf,
+        source: String,
+    },
+    StateRootUnavailable {
+        path: std::path::PathBuf,
+        source: String,
+    },
+    InvalidStateRoot {
+        path: std::path::PathBuf,
+    },
+}
+
 /// The execution context, parameterized over verification state.
 ///
 /// `Unverified` contexts cannot call [`execute_operation`]; only `Audited` can.
@@ -86,35 +187,20 @@ pub struct Audited;
 /// call sites keep compiling after adding the typestate transition.
 pub struct RuntimeOperationExecutionContext<'a, S = Unverified> {
     pub command_context: CommandExecutionContext<'a>,
-    pub effect_store_root: &'a Path,
-    pub evidence_log_relative_path: &'a str,
-    pub wal_relative_path: &'a str,
-    pub lock_relative_path: &'a str,
-    pub effect_metadata_index_relative_path: &'a str,
+    storage: RuntimeOperationStorage<'a>,
     pub recorded_at: &'a str,
     pub tx_id_prefix: &'a str,
-    /// WAL append durability for this operation (ADR-0009). Default
-    /// `SyncOnAppend` preserves the historical contract; CLI commands
-    /// may pass `NoSync` when the user opts in via `--no-sync`.
+    /// WAL append durability for this operation (ADR-0009).
     pub durability: WalDurability,
-    /// The gate chain consulted by [`execute_operation`] before any WAL append.
-    /// Empty by default (V2.C ships the seam; V3.A fills it with real gates).
     gates: Vec<Box<dyn OperationGate>>,
     _state: PhantomData<S>,
 }
 
 impl<'a, S> RuntimeOperationExecutionContext<'a, S> {
-    /// Shared field-wise constructor used by both the typestate constructors
-    /// below. Not public: callers go through [`single_root`](Self::single_root)
-    /// (Unverified) or the builder.
-    fn from_parts(root: &'a Path) -> Self {
+    fn from_parts(project_root: &'a Path, effect_store_root: &'a Path) -> Self {
         Self {
-            command_context: CommandExecutionContext::single_root(root),
-            effect_store_root: root,
-            evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
-            wal_relative_path: ".forge-method/wal/effects.ndjson",
-            lock_relative_path: ".forge-method/locks/effects.lock",
-            effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
+            command_context: CommandExecutionContext::single_root(project_root),
+            storage: RuntimeOperationStorage::canonical(effect_store_root),
             recorded_at: "unknown",
             tx_id_prefix: "runtime-operation",
             durability: WalDurability::default(),
@@ -125,40 +211,29 @@ impl<'a, S> RuntimeOperationExecutionContext<'a, S> {
 }
 
 impl<'a> RuntimeOperationExecutionContext<'a, Unverified> {
-    /// Historical constructor. Returns an `Unverified` context: callers must
-    /// transition it via [`audited`](Self::audited) (or
-    /// `dangerous_unchecked`) before calling
-    /// [`execute_operation`].
     #[must_use]
     pub fn single_root(root: &'a Path) -> Self {
-        Self::from_parts(root)
+        Self::from_parts(root, root)
     }
 
-    /// Attach a gate to the chain. Gates are consulted in attachment order
-    /// during [`execute_operation`]'s preamble; the first to reject wins
-    /// (fail-closed). Returns `Self` so gates chain fluently.
+    /// Construct an operation whose read-only command project root differs from
+    /// its trusted durable effect-store root.
+    #[must_use]
+    pub fn project_and_effect_roots(project_root: &'a Path, effect_store_root: &'a Path) -> Self {
+        Self::from_parts(project_root, effect_store_root)
+    }
+
     #[must_use]
     pub fn with_gate(mut self, gate: Box<dyn OperationGate>) -> Self {
         self.gates.push(gate);
         self
     }
 
-    /// Mark the context as having passed the gate chain. After this, no more
-    /// gates can be added, and [`execute_operation`] becomes callable.
-    ///
-    /// This transition is unconditional with respect to gate evaluation: the
-    /// gate chain is *consulted* (not run) at [`execute_operation`] time, once
-    /// the plan is available. `audited()` only encodes that the caller has
-    /// finished *configuring* the chain.
     #[must_use]
     pub fn audited(self) -> RuntimeOperationExecutionContext<'a, Audited> {
         RuntimeOperationExecutionContext {
             command_context: self.command_context,
-            effect_store_root: self.effect_store_root,
-            evidence_log_relative_path: self.evidence_log_relative_path,
-            wal_relative_path: self.wal_relative_path,
-            lock_relative_path: self.lock_relative_path,
-            effect_metadata_index_relative_path: self.effect_metadata_index_relative_path,
+            storage: self.storage,
             recorded_at: self.recorded_at,
             tx_id_prefix: self.tx_id_prefix,
             durability: self.durability,
@@ -167,28 +242,15 @@ impl<'a> RuntimeOperationExecutionContext<'a, Unverified> {
         }
     }
 
-    /// EXPLICIT bypass — the rustls `dangerous()` pattern. Only available under
-    /// the `dangerous-bypass` feature flag, so a bypass is visible in the diff
-    /// AND the feature config, never silent. For tests/legacy callers that
-    /// genuinely don't need gates. V2.C ships the seam; real callers should
-    /// prefer [`audited`](Self::audited).
     #[cfg(feature = "dangerous-bypass")]
     #[must_use]
     pub fn dangerous_unchecked(self) -> RuntimeOperationExecutionContext<'a, Audited> {
-        tracing::warn!(
-            tx_id_prefix = %self.tx_id_prefix,
-            "RuntimeOperationExecutionContext marked dangerous_unchecked: \
-             mutation gates bypassed (dangerous-bypass feature). \
-             This must never ship in a production binary."
-        );
+        tracing::warn!(tx_id_prefix = %self.tx_id_prefix, "RuntimeOperationExecutionContext marked dangerous_unchecked");
         self.audited()
     }
 }
 
 impl RuntimeOperationExecutionContext<'_, Audited> {
-    /// Read-only access to the configured gate chain, in attachment order.
-    /// Used by [`execute_operation`]'s preamble. Exposed so auditors/tests can
-    /// assert on the chain without re-running it.
     #[must_use]
     pub fn gates(&self) -> &[Box<dyn OperationGate>] {
         &self.gates
@@ -232,6 +294,10 @@ pub enum RuntimeOperationExecutionReason {
     MissingOptionalCommandContract,
     RequiredCommandUnsuccessful,
     CommandEvidenceAppendFailed,
+    /// Durable layout was invalid before admission or gate evaluation.
+    InvalidDurableLayout,
+    /// The operation could not enter the state root's durable producer boundary.
+    ProducerAdmissionFailed,
     /// Legacy execution cannot apply multiple effects as separate commits.
     /// Use the operation-wide commit path so the whole write set shares one WAL.
     OperationWideCommitRequired,
@@ -285,14 +351,36 @@ pub fn execute_operation(
     let operation_id = plan.contract_id.clone();
     tracing::Span::current().record("operation_id", operation_id.0.as_str());
 
-    // V2.C gate preamble — the hook V3.A fills with real gates. Each attached
-    // gate is consulted, in attachment order, against the plan of what WILL
-    // happen. The first rejection wins (fail-closed): the mutation is blocked
-    // and the typed reason is returned early, before any staging, command
-    // evidence, or WAL append. This runs BEFORE the kernel's own
-    // OperationContract authorization and does not replace it.
+    // Read/status, review, gate, and human-handoff outcomes are complete typed
+    // planner results. They must not require a durable producer boundary or run
+    // mutation gates merely because a host called the executor entrypoint.
+    if plan.status != RuntimePlanStatus::ReadyToCallOperation {
+        return Ok(non_ready_operation_execution(operation_id, plan));
+    }
+
+    // Durable layout is fixed before admission: no gate receives a caller-chosen
+    // trace root and no later write can resolve outside this operation state root.
+    if context.storage.validate().is_err() {
+        return Ok(runtime_operation_failure(
+            operation_id,
+            plan,
+            RuntimeOperationExecutionReason::InvalidDurableLayout,
+        ));
+    }
+    let authority = match admit_operation_producer(context) {
+        Ok(admission) => OperationProducerAuthority { admission },
+        Err(_) => {
+            return Ok(runtime_operation_failure(
+                operation_id,
+                plan,
+                RuntimeOperationExecutionReason::ProducerAdmissionFailed,
+            ));
+        }
+    };
+    let gate_context =
+        GateEvaluationContext::new(context.storage.state_root(), authority.boundary());
     for gate in context.gates() {
-        gate.evaluate(&plan)?;
+        gate.evaluate(&plan, &gate_context)?;
     }
 
     Ok(execute_operation_inner(
@@ -302,6 +390,7 @@ pub fn execute_operation(
         effects,
         payloads,
         context,
+        &authority,
         plan,
         operation_id,
     ))
@@ -312,12 +401,13 @@ pub fn execute_operation(
 /// plan/staging/command/WAL logic. Takes the already-computed `plan` and
 /// `operation_id` so nothing is recomputed. The `context` keeps the typestate
 /// `Audited` marker because this is only reachable from an audited context.
-// This helper is the central mutate path and genuinely takes 8 arguments: the
+// This helper is the central mutate path and genuinely takes 9 arguments: the
 // operation document, read snapshot, command inputs, effect inputs, effect
-// payloads, audited execution context, the precomputed plan, and the operation
-// id. Splitting or bundling them would hurt readability of the step-by-step
-// mutation walk; the signature mirrors `execute_operation`'s public shape plus
-// the two precomputed values. Follows the same rationale as the crate-level
+// payloads, audited execution context, retained operation authority, the
+// precomputed plan, and the operation id. Splitting or bundling them would hurt
+// readability of the step-by-step mutation walk; the signature mirrors
+// `execute_operation`'s public shape plus the retained and precomputed values.
+// Follows the same rationale as the crate-level
 // `#![allow(clippy::too_many_lines)]`.
 #[allow(clippy::too_many_arguments)]
 fn execute_operation_inner(
@@ -327,6 +417,7 @@ fn execute_operation_inner(
     effects: &[RuntimeOperationEffectInput],
     payloads: &[RuntimeOperationEffectPayload],
     context: &RuntimeOperationExecutionContext<'_, Audited>,
+    authority: &OperationProducerAuthority,
     plan: RuntimePlan,
     operation_id: StableId,
 ) -> RuntimeOperationExecution {
@@ -338,24 +429,7 @@ fn execute_operation_inner(
     let mut reasons = Vec::new();
 
     if plan.status != RuntimePlanStatus::ReadyToCallOperation {
-        let status = if plan.status == RuntimePlanStatus::AwaitingHuman {
-            reasons.push(RuntimeOperationExecutionReason::PlanAwaitingHuman);
-            RuntimeOperationExecutionStatus::AwaitingHuman
-        } else {
-            reasons.push(RuntimeOperationExecutionReason::PlanNotReady);
-            RuntimeOperationExecutionStatus::Blocked
-        };
-        return RuntimeOperationExecution {
-            status,
-            operation_id,
-            plan,
-            staging: None,
-            command_executions: Vec::new(),
-            command_evidence_appended: 0,
-            effect_transactions: Vec::new(),
-            effect_applications: Vec::new(),
-            reasons,
-        };
+        return non_ready_operation_execution(operation_id, plan);
     }
 
     let staging = stage_operation_effects(&plan);
@@ -439,9 +513,10 @@ fn execute_operation_inner(
         let execution =
             run_staged_read_only_command(&staging, &command.document, &context.command_context);
         let evidence = command_execution_evidence_record(&staging, &execution, context.recorded_at);
-        if append_json_line_with_durability(
-            context.effect_store_root,
-            context.evidence_log_relative_path,
+        if append_json_line_with_durability_under_boundary(
+            authority.boundary(),
+            context.storage.effect_store_root(),
+            context.storage.evidence_relative_path(),
             &evidence,
             context.durability,
         )
@@ -519,18 +594,20 @@ fn execute_operation_inner(
             };
         }
 
-        let mut application = apply_file_effect_transaction_with_wal_lock_with_durability(
-            context.effect_store_root,
-            &effect.document,
-            &store_payloads,
-            context.wal_relative_path,
-            context.lock_relative_path,
-            effect_tx_id(
-                context.tx_id_prefix,
-                &effect.document.tool_effect_contract.id,
-            ),
-            context.durability,
-        );
+        let mut application =
+            apply_file_effect_transaction_with_wal_lock_with_durability_under_boundary(
+                authority.boundary(),
+                context.storage.effect_store_root(),
+                &effect.document,
+                &store_payloads,
+                context.storage.wal_relative_path(),
+                context.storage.lock_relative_path(),
+                effect_tx_id(
+                    context.tx_id_prefix,
+                    &effect.document.tool_effect_contract.id,
+                ),
+                context.durability,
+            );
         let applied = application.status == EffectApplicationStatus::Applied;
         if !applied {
             effect_applications.push(application);
@@ -550,9 +627,10 @@ fn execute_operation_inner(
         for record in &mut application.metadata_records {
             record.recorded_at = Some(context.recorded_at.to_string());
         }
-        if append_effect_target_metadata_records_with_durability(
-            context.effect_store_root,
-            context.effect_metadata_index_relative_path,
+        if append_effect_target_metadata_records_with_durability_under_boundary(
+            authority.boundary(),
+            context.storage.effect_store_root(),
+            context.storage.metadata_relative_path(),
             &application.metadata_records,
             context.durability,
         )
@@ -588,6 +666,70 @@ fn execute_operation_inner(
         effect_applications,
         reasons,
     }
+}
+
+/// Opaque root-scoped effect-producer authority. It is minted only after the
+/// kernel validates the durable state root and remains owned through final write.
+struct OperationProducerAuthority {
+    admission: EffectProducerGuard,
+}
+
+impl OperationProducerAuthority {
+    fn boundary(&self) -> &EffectProducerGuard {
+        &self.admission
+    }
+}
+
+fn non_ready_operation_execution(
+    operation_id: StableId,
+    plan: RuntimePlan,
+) -> RuntimeOperationExecution {
+    let (status, reason) = if plan.status == RuntimePlanStatus::AwaitingHuman {
+        (
+            RuntimeOperationExecutionStatus::AwaitingHuman,
+            RuntimeOperationExecutionReason::PlanAwaitingHuman,
+        )
+    } else {
+        (
+            RuntimeOperationExecutionStatus::Blocked,
+            RuntimeOperationExecutionReason::PlanNotReady,
+        )
+    };
+    RuntimeOperationExecution {
+        status,
+        operation_id,
+        plan,
+        staging: None,
+        command_executions: Vec::new(),
+        command_evidence_appended: 0,
+        effect_transactions: Vec::new(),
+        effect_applications: Vec::new(),
+        reasons: vec![reason],
+    }
+}
+
+fn runtime_operation_failure(
+    operation_id: StableId,
+    plan: RuntimePlan,
+    reason: RuntimeOperationExecutionReason,
+) -> RuntimeOperationExecution {
+    RuntimeOperationExecution {
+        status: RuntimeOperationExecutionStatus::Failed,
+        operation_id,
+        plan,
+        staging: None,
+        command_executions: Vec::new(),
+        command_evidence_appended: 0,
+        effect_transactions: Vec::new(),
+        effect_applications: Vec::new(),
+        reasons: vec![reason],
+    }
+}
+
+fn admit_operation_producer(
+    context: &RuntimeOperationExecutionContext<'_, Audited>,
+) -> Result<EffectProducerGuard, ProducerBoundaryError> {
+    admit_effect_producer(context.storage.state_root(), false)
 }
 
 #[must_use]
@@ -692,4 +834,27 @@ fn effect_tx_id(prefix: &str, effect_id: &StableId) -> String {
         })
         .collect();
     format!("{prefix}-{sanitized}")
+}
+
+#[cfg(test)]
+mod boundary_layout_tests {
+    use super::*;
+
+    #[test]
+    fn mixed_durable_state_root_is_rejected_before_admission_or_gate_evaluation() {
+        let base =
+            std::env::temp_dir().join(format!("forge-kernel-mixed-root-{}", std::process::id()));
+        let effect_root = base.join("effect");
+        let foreign_root = base.join("foreign");
+        std::fs::create_dir_all(effect_root.join(".forge-method")).expect("effect state root");
+        std::fs::create_dir_all(foreign_root.join(".forge-method")).expect("foreign state root");
+        let mut storage = RuntimeOperationStorage::canonical(&effect_root);
+        storage.state_root = foreign_root.join(".forge-method");
+
+        assert!(matches!(
+            storage.validate(),
+            Err(RuntimeOperationStorageError::InvalidStateRoot { .. })
+        ));
+        let _ = std::fs::remove_dir_all(base);
+    }
 }

@@ -375,6 +375,20 @@
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
+        "material": "domain_pack_generation_catalog",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 41,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_catalog",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/catalog.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 42,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
         "material": "domain_pack_generation_lock",
         "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/lock.yaml",
         "entry_type": "regular_file",
@@ -695,6 +709,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:8810f2218e011121b9c7d2bef1c8ece3a4b8eac3b729dafd643eca5d2d4eafad"
+    "manifest_set_digest": "sha256:446d23aa82926b74f9d5e4bd973895c99ab755bb945f3346221bbcfd65a837d5"
   }
 }

@@ -13,17 +13,21 @@ trust and lifecycle boundary is satisfied.
 ## Authority ladder
 
 ```text
-manifest/content sidecars
-  -> candidate validation
-  -> deterministic composition/resolution (still untrusted)
-  -> publisher + registry supply-chain verification
-  -> independent semantic review + registry authorization
-  -> exact capability/sandbox/project compatibility preflight
-  -> immutable governed generation
-  -> workflow effective epoch
+discovery
+  -> operator selection
+  -> catalog verify/anchor
+  -> download/cache byte verify
+  -> trust policy
+  -> reviewed registry
+  -> preflight
+  -> private commit authority
+  -> explicit commit/activation
 ```
 
-Copying a fixture or changing `authority:` in YAML cannot skip this ladder.
+Manifest/content sidecars, candidate validation, and deterministic composition
+remain candidate inputs to that ladder. Copying a fixture, changing `authority:`
+in YAML, finding a cache entry, or receiving a byte-verification receipt cannot
+skip the next authority ceremony.
 
 ## Package and state locations
 
@@ -144,6 +148,34 @@ download, installation, or activation authority. `contracts/domain-pack-discover
 includes neutral, uncovered-gap, and game-domain inputs; game behavior is
 fixture data rather than a Rust branch. Only the explicit apply path can reach a
 new effective epoch, and only after all five ceremonies succeed.
+
+## Remote acquisition contract
+
+C6.2 is currently a planned contract freeze, not an implemented download or
+activation surface. The existing supply-chain registry is the only catalog: its
+future signed subject carries stable priority-ordered mirrors plus exact
+manifest/content/license/fixture descriptors. Artifact descriptors bind logical
+paths, raw and canonical SHA-256 pins, exact length, a closed media type/kind,
+and a relative `objects/sha256/<raw-hex>` object path. The mirror's HTTPS base or
+operator-provisioned local location stays separate from the object path.
+
+A remote request, plan, fetch observation/evidence, receipt, and cache projection
+are all `candidate_only`. A cache is availability evidence keyed by raw SHA-256;
+every use must recheck exact raw/canonical bytes, length, and media type. Its sole
+bounded policy rejects on full and never silently evicts, enlarges, or treats a
+cache hit as signature validity, freshness, trust, review, installation, or
+activation.
+
+`OfflineOnly` has no network fallback. It requires exact bytes and a still-valid,
+operator-anchored local catalog head that exactly matches the current catalog
+identity and expiry; it cannot extend freshness or bypass current revocation.
+Revocation blocks a new resolution, upgrade, activation, or rollback of a revoked
+package. Removing a currently active revoked package remains permissible and may
+produce explicit degraded gaps, but cannot be used to mutate or add packages.
+
+Rollback is a new forward lifecycle transaction based on retained exact receipt,
+lock, generation, and objects. It uses a fresh current anchored catalog only for
+current revocation/policy evaluation and never redownloads or depends on cache.
 
 ## Operator lifecycle
 

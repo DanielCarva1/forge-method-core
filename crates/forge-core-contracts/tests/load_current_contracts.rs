@@ -152,7 +152,7 @@ fn deserializes_all_operation_fixtures() {
         count += 1;
     }
 
-    assert_eq!(count, 23);
+    assert_eq!(count, 24);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn deserializes_claim_completion_and_gate_instances() {
         "completion-contract-v0.yaml",
         2,
     );
-    assert_yaml_instances::<GateContractDocument>("contracts/gates", "gate-contract-v0.yaml", 5);
+    assert_yaml_instances::<GateContractDocument>("contracts/gates", "gate-contract-v0.yaml", 7);
 }
 
 #[test]

@@ -110,6 +110,7 @@ fn recovery_from_records(records: Vec<ClaimWalRecord>) -> ClaimWalRecovery {
         original_len,
         repaired: false,
         stop_reason: ClaimWalStopReason::CleanEof,
+        retained_authority: None,
     }
 }
 

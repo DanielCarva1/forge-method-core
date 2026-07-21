@@ -264,6 +264,7 @@ fn state_one_no_link_bootstraps_project_with_space_in_path() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn state_two_link_without_sidecar_fails_closed_without_mutation() {
     let parent = FreshParent::new("no-sidecar");
     let app = parent.path.join("app");

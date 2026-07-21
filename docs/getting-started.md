@@ -130,10 +130,20 @@ newer binary never silently migrates project authority; the agent follows
 - Read the independently versioned `data.state_loss.schema_version`,
   `diagnosis_digest`, and typed `choices`. Only `inspect` is currently
   `available_read_only`; execute its argv directly when inspection is needed.
-- `restore_verified_backup` is deferred to a verified restore protocol.
-  `reinitialize_as_new` is separately deferred, explicitly abandons prior
-  authority, requires operator confirmation, and requires a different project
-  identity and authority location. Neither choice publishes executable argv.
+- C2.2 now exposes explicit complete-state backup and restore commands:
+  - backup creation: `forge-core backup create`;
+  - backup verification: `forge-core backup verify`;
+  - restore preflight: `forge-core restore preflight`;
+  - restore application: `forge-core restore apply`.
+  Always verify the exact archive and authority identity before applying a
+  restore; source compilation is complete, while runtime, interruption,
+  mixed-version, platform, and hosted evidence remains pending.
+- The `restore_verified_backup` choice in the state-loss diagnosis remains a
+  diagnosis choice rather than implicit authority or automatic execution; use
+  the explicit restore preflight/apply surface. `reinitialize_as_new` is
+  separately deferred, explicitly abandons prior authority, requires operator
+  confirmation, and requires a different project identity and authority
+  location. It does not publish executable argv.
 - `start` retries and `project init` are not recovery paths and cannot normalize
   linked missing or partial state. Automatic bootstrap requires both no Project
   Link and an unoccupied, symlink-free target state path; preexisting sidecar
