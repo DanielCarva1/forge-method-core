@@ -13,6 +13,7 @@ use fs4::{FileExt, TryLockError};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
@@ -1240,7 +1241,7 @@ fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
         });
     }
     let identity =
-        metadata_identity(&metadata).ok_or_else(|| ProducerBoundaryError::UnsafeStateRoot {
+        file_identity(&directory).ok_or_else(|| ProducerBoundaryError::UnsafeStateRoot {
             path: canonical.clone(),
             source: "filesystem does not expose a stable directory identity".to_owned(),
         })?;
@@ -1278,7 +1279,7 @@ fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
             source: "must be a real directory".to_owned(),
         });
     }
-    let locks_identity = metadata_identity(&locks_metadata).ok_or_else(|| {
+    let locks_identity = file_identity(&locks_directory).ok_or_else(|| {
         ProducerBoundaryError::CreateLockDirectory {
             path: locks.clone(),
             source: "filesystem does not expose a stable directory identity".to_owned(),
@@ -1342,15 +1343,10 @@ fn validate_pin(pin: &RootPin) -> Result<(), ProducerBoundaryError> {
             path: pin.requested.clone(),
         });
     }
-    let retained_root = pin
-        .directory
-        .metadata()
-        .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+    let retained_root = file_identity(&pin.directory);
     let current_root = open_directory_nofollow(&pin.requested)
-        .and_then(|file| file.metadata())
         .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+        .and_then(|file| file_identity(&file));
     if retained_root != Some(pin.identity) || current_root != Some(pin.identity) {
         return Err(ProducerBoundaryError::RootIdentityChanged {
             path: pin.requested.clone(),
@@ -1364,15 +1360,10 @@ fn validate_pin(pin: &RootPin) -> Result<(), ProducerBoundaryError> {
     {
         return Err(ProducerBoundaryError::RootIdentityChanged { path: locks });
     }
-    let retained_locks = pin
-        .locks_directory
-        .metadata()
-        .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+    let retained_locks = file_identity(&pin.locks_directory);
     let current_locks = open_directory_nofollow(&locks)
-        .and_then(|file| file.metadata())
         .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+        .and_then(|file| file_identity(&file));
     if retained_locks != Some(pin.locks_identity) || current_locks != Some(pin.locks_identity) {
         return Err(ProducerBoundaryError::RootIdentityChanged { path: locks });
     }
@@ -1443,14 +1434,10 @@ fn open_boundary_lock(
     file_name: &str,
 ) -> Result<(File, RootIdentity), ProducerBoundaryError> {
     let path = parent.join(file_name);
-    let retained_parent = directory
-        .metadata()
-        .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+    let retained_parent = file_identity(directory);
     let current_parent = open_directory_nofollow(parent)
-        .and_then(|file| file.metadata())
         .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+        .and_then(|file| file_identity(&file));
     if retained_parent != Some(parent_identity) || current_parent != Some(parent_identity) {
         return Err(ProducerBoundaryError::RootIdentityChanged {
             path: parent.to_path_buf(),
@@ -1468,17 +1455,15 @@ fn open_boundary_lock(
             path: path.clone(),
             source: source.to_string(),
         })?;
-    validate_lock_metadata(&path, &opened)?;
-    let identity =
-        metadata_identity(&opened).ok_or_else(|| ProducerBoundaryError::UnsafeLockFile {
-            path: path.clone(),
-            source: "filesystem does not expose a stable lock-file identity".to_owned(),
-        })?;
+    validate_lock_metadata(&path, &file, &opened)?;
+    let identity = file_identity(&file).ok_or_else(|| ProducerBoundaryError::UnsafeLockFile {
+        path: path.clone(),
+        source: "filesystem does not expose a stable lock-file identity".to_owned(),
+    })?;
     validate_pinned_lock(&file, &path, identity)?;
     let current_parent = open_directory_nofollow(parent)
-        .and_then(|current| current.metadata())
         .ok()
-        .and_then(|metadata| metadata_identity(&metadata));
+        .and_then(|current| file_identity(&current));
     if current_parent != Some(parent_identity) {
         return Err(ProducerBoundaryError::RootIdentityChanged {
             path: parent.to_path_buf(),
@@ -1498,15 +1483,23 @@ fn validate_pinned_lock(
             path: path.to_path_buf(),
             source: source.to_string(),
         })?;
-    validate_lock_metadata(path, &opened)?;
-    let lexical =
-        fs::symlink_metadata(path).map_err(|source| ProducerBoundaryError::UnsafeLockFile {
+    validate_lock_metadata(path, file, &opened)?;
+    let current = open_existing_lock_nofollow(path).map_err(|source| {
+        ProducerBoundaryError::UnsafeLockFile {
             path: path.to_path_buf(),
             source: source.to_string(),
-        })?;
-    validate_lock_metadata(path, &lexical)?;
-    if metadata_identity(&opened) != Some(expected_identity)
-        || metadata_identity(&lexical) != Some(expected_identity)
+        }
+    })?;
+    let current_metadata =
+        current
+            .metadata()
+            .map_err(|source| ProducerBoundaryError::UnsafeLockFile {
+                path: path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+    validate_lock_metadata(path, &current, &current_metadata)?;
+    if file_identity(file) != Some(expected_identity)
+        || file_identity(&current) != Some(expected_identity)
     {
         return Err(ProducerBoundaryError::UnsafeLockFile {
             path: path.to_path_buf(),
@@ -1518,6 +1511,7 @@ fn validate_pinned_lock(
 
 fn validate_lock_metadata(
     path: &Path,
+    file: &File,
     metadata: &fs::Metadata,
 ) -> Result<(), ProducerBoundaryError> {
     if metadata_is_link_or_reparse(metadata) || !metadata.is_file() {
@@ -1526,7 +1520,7 @@ fn validate_lock_metadata(
             source: "must be a regular non-symlink file".to_owned(),
         });
     }
-    if metadata_link_count(metadata).is_some_and(|count| count != 1) {
+    if file_link_count(file).is_some_and(|count| count != 1) {
         return Err(ProducerBoundaryError::UnsafeLockFile {
             path: path.to_path_buf(),
             source: "must have exactly one filesystem link".to_owned(),
@@ -1627,8 +1621,35 @@ fn open_lock_nofollow_at(
 }
 
 #[cfg(unix)]
-fn metadata_identity(metadata: &fs::Metadata) -> Option<RootIdentity> {
+fn open_existing_lock_nofollow(path: &Path) -> io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+}
+
+#[cfg(windows)]
+fn open_existing_lock_nofollow(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn open_existing_lock_nofollow(path: &Path) -> io::Result<File> {
+    OpenOptions::new().read(true).write(true).open(path)
+}
+
+#[cfg(unix)]
+fn file_identity(file: &File) -> Option<RootIdentity> {
     use std::os::unix::fs::MetadataExt as _;
+    let metadata = file.metadata().ok()?;
     Some(RootIdentity {
         first: metadata.dev(),
         second: metadata.ino(),
@@ -1636,33 +1657,36 @@ fn metadata_identity(metadata: &fs::Metadata) -> Option<RootIdentity> {
 }
 
 #[cfg(windows)]
-fn metadata_identity(metadata: &fs::Metadata) -> Option<RootIdentity> {
-    use std::os::windows::fs::MetadataExt as _;
+fn file_identity(file: &File) -> Option<RootIdentity> {
+    let information = crate::windows_file_info::file_information(file).ok()?;
     Some(RootIdentity {
-        first: u64::from(metadata.volume_serial_number()?),
-        second: metadata.file_index()?,
+        first: u64::from(information.volume_serial_number),
+        second: information.file_index,
     })
 }
 
 #[cfg(not(any(unix, windows)))]
-fn metadata_identity(_metadata: &fs::Metadata) -> Option<RootIdentity> {
+fn file_identity(_file: &File) -> Option<RootIdentity> {
     None
 }
 
 #[cfg(unix)]
-fn metadata_link_count(metadata: &fs::Metadata) -> Option<u64> {
+fn file_link_count(file: &File) -> Option<u64> {
     use std::os::unix::fs::MetadataExt as _;
-    Some(metadata.nlink())
+    Some(file.metadata().ok()?.nlink())
 }
 
 #[cfg(windows)]
-fn metadata_link_count(metadata: &fs::Metadata) -> Option<u64> {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata.number_of_links().map(u64::from)
+fn file_link_count(file: &File) -> Option<u64> {
+    Some(
+        crate::windows_file_info::file_information(file)
+            .ok()?
+            .number_of_links,
+    )
 }
 
 #[cfg(not(any(unix, windows)))]
-fn metadata_link_count(_metadata: &fs::Metadata) -> Option<u64> {
+fn file_link_count(_file: &File) -> Option<u64> {
     None
 }
 

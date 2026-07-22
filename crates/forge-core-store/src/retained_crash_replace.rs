@@ -618,13 +618,8 @@ fn retained_link_count(file: &File) -> io::Result<u64> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt as _;
-        metadata.number_of_links().map(u64::from).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::Unsupported,
-                "retained crash-replacement link count is unavailable",
-            )
-        })
+        let _ = metadata;
+        Ok(crate::windows_file_info::file_information(file)?.number_of_links)
     }
     #[cfg(not(any(unix, windows)))]
     {

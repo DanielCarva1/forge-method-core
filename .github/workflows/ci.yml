@@ -214,7 +214,7 @@ jobs:
         shell: bash
         run: python scripts/run-ci-tier.py --tier focused-regression-summary --budget-seconds 900 --report target/ci-timing/regression-summary.json -- bash -o pipefail -c 'cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null > target/validate-summary.json'
 
-      - name: Regression anchors (139 historical, 156 Batch A, 174 pre-P7, 178 aggregate)
+      - name: Regression anchors (149 historical, 166 Batch A, 184 pre-P7, 188 aggregate)
         timeout-minutes: 16
         shell: bash
         run: |
@@ -241,17 +241,17 @@ jobs:
               and check["name"] != "workflow_release_v2_admission"
           ]
           assert summary["status"] == "passed", summary["diagnostics"]
-          assert len(historical) == 139, len(historical)
-          assert len(batch_a) == 156, len(batch_a)
+          assert len(historical) == 149, len(historical)
+          assert len(batch_a) == 166, len(batch_a)
           pre_p7 = [check for check in checks if not is_universal_assurance(check)]
-          assert len(pre_p7) == 174, len(pre_p7)
+          assert len(pre_p7) == 184, len(pre_p7)
           pre_retirement = [
               check for check in checks
               if check["name"] != "workflow_retirement_checkpoint"
               and not check["name"].startswith("domain_pack_")
           ]
-          assert len(pre_retirement) == 173, len(pre_retirement)
-          assert len(checks) == 178, len(checks)
+          assert len(pre_retirement) == 183, len(pre_retirement)
+          assert len(checks) == 188, len(checks)
           assert all(check["diagnostics"] == 0 for check in checks), checks
           print(
               f"Historical anchor: {len(historical)}; "

@@ -193,10 +193,31 @@ struct RetainedAncestorDirectory {
     name_in_parent: Option<OsString>,
 }
 
+#[derive(Debug, Clone)]
+struct RetainedMetadata {
+    metadata: Metadata,
+    #[cfg(windows)]
+    file_information: crate::windows_file_info::WindowsFileInformation,
+}
+
+impl RetainedMetadata {
+    fn capture(file: &File, path: &Path) -> Result<Self, RetainedProjectTreeError> {
+        let metadata = file.metadata().map_err(|error| io_error(path, error))?;
+        #[cfg(windows)]
+        let file_information = crate::windows_file_info::file_information(file)
+            .map_err(|error| io_error(path, error))?;
+        Ok(Self {
+            metadata,
+            #[cfg(windows)]
+            file_information,
+        })
+    }
+}
+
 #[derive(Debug)]
 struct RetainedTreeDirectory {
     handle: File,
-    metadata: Metadata,
+    metadata: RetainedMetadata,
     capability_nonce: String,
     relative_path: String,
     parent: Option<usize>,
@@ -207,7 +228,7 @@ struct RetainedTreeDirectory {
 #[derive(Debug)]
 struct RetainedTreeFile {
     handle: File,
-    metadata: Metadata,
+    metadata: RetainedMetadata,
     capability_nonce: String,
     relative_path: String,
     parent: usize,
@@ -389,9 +410,7 @@ impl RetainedProjectTree {
             .handle
             .try_clone()
             .map_err(|error| io_error(&display_root, error))?;
-        let root_metadata = root_handle
-            .metadata()
-            .map_err(|error| io_error(&display_root, error))?;
+        let root_metadata = RetainedMetadata::capture(&root_handle, &display_root)?;
         validate_directory_metadata(&root_metadata, &display_root)?;
         let root_capability_nonce = project_capability_nonce(&display_root)?;
         let mut tree = Self {
@@ -733,10 +752,7 @@ impl RetainedProjectTree {
             let display_path = self
                 .display_root
                 .join(relative_path_to_path(&file.relative_path));
-            let metadata = file
-                .handle
-                .metadata()
-                .map_err(|error| io_error(&display_path, error))?;
+            let metadata = RetainedMetadata::capture(&file.handle, &display_path)?;
             validate_file_metadata(&metadata, &display_path, false)?;
         }
         self.revalidate()
@@ -788,9 +804,7 @@ impl RetainedProjectTree {
                 .join(relative_path_to_path(&relative_path));
             let handle = platform::open_child(&parent_handle, &entry.name)
                 .map_err(|error| io_error(&display_path, error))?;
-            let metadata = handle
-                .metadata()
-                .map_err(|error| io_error(&display_path, error))?;
+            let metadata = RetainedMetadata::capture(&handle, &display_path)?;
             if object_id(&metadata)? != entry.object_id {
                 return Err(identity_error(
                     &display_path,
@@ -836,7 +850,7 @@ impl RetainedProjectTree {
                     &display_path,
                     self.allow_store_owned_file_anchors,
                 )?;
-                let length = metadata.len();
+                let length = metadata.metadata.len();
                 *accepted_bytes = (*accepted_bytes).saturating_add(length);
                 if *accepted_bytes > maximum_bytes {
                     return Err(RetainedProjectTreeError::ResourceLimit {
@@ -853,9 +867,7 @@ impl RetainedProjectTree {
                 )?;
                 let rebound = platform::open_child(&parent_handle, &entry.name)
                     .map_err(|error| io_error(&display_path, error))?;
-                let rebound_metadata = rebound
-                    .metadata()
-                    .map_err(|error| io_error(&display_path, error))?;
+                let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
                 validate_file_metadata(
                     &rebound_metadata,
                     &display_path,
@@ -920,10 +932,7 @@ impl RetainedProjectTree {
 
     fn validate_ancestry(&self) -> Result<(), RetainedProjectTreeError> {
         for (index, directory) in self.ancestry.iter().enumerate() {
-            let current = directory
-                .handle
-                .metadata()
-                .map_err(|error| io_error(&self.display_root, error))?;
+            let current = RetainedMetadata::capture(&directory.handle, &self.display_root)?;
             validate_directory_metadata(&current, &self.display_root)?;
             if identity(&current)? != directory.identity {
                 return Err(identity_error(
@@ -935,9 +944,7 @@ impl RetainedProjectTree {
                 let parent = &self.ancestry[index - 1];
                 let rebound = platform::open_child(&parent.handle, name)
                     .map_err(|error| io_error(&self.display_root, error))?;
-                let rebound_metadata = rebound
-                    .metadata()
-                    .map_err(|error| io_error(&self.display_root, error))?;
+                let rebound_metadata = RetainedMetadata::capture(&rebound, &self.display_root)?;
                 validate_directory_metadata(&rebound_metadata, &self.display_root)?;
                 if identity(&rebound_metadata)? != directory.identity {
                     return Err(identity_error(
@@ -954,13 +961,9 @@ impl RetainedProjectTree {
                     path: self.display_root.clone(),
                     reason: "project ancestry is empty".to_owned(),
                 })?;
-        if identity(
-            &self.directories[0]
-                .handle
-                .metadata()
-                .map_err(|error| io_error(&self.display_root, error))?,
-        )? != retained_root.identity
-        {
+        let retained_tree_root =
+            RetainedMetadata::capture(&self.directories[0].handle, &self.display_root)?;
+        if identity(&retained_tree_root)? != retained_root.identity {
             return Err(identity_error(
                 &self.display_root,
                 "retained project-tree root differs from its ancestor binding",
@@ -978,9 +981,7 @@ impl RetainedProjectTree {
             {
                 let rebound = platform::open_child(&self.directories[parent_index].handle, name)
                     .map_err(|error| io_error(&display_path, error))?;
-                let metadata = rebound
-                    .metadata()
-                    .map_err(|error| io_error(&display_path, error))?;
+                let metadata = RetainedMetadata::capture(&rebound, &display_path)?;
                 validate_directory_metadata(&metadata, &display_path)?;
                 if !same_stable_metadata(&directory.metadata, &metadata) {
                     return Err(identity_error(
@@ -1011,9 +1012,7 @@ impl RetainedProjectTree {
                 let child_display = display_path.join(&entry.name);
                 let rebound = platform::open_child(&directory.handle, &entry.name)
                     .map_err(|error| io_error(&child_display, error))?;
-                let metadata = rebound
-                    .metadata()
-                    .map_err(|error| io_error(&child_display, error))?;
+                let metadata = RetainedMetadata::capture(&rebound, &child_display)?;
                 if object_id(&metadata)? != entry.object_id {
                     return Err(identity_error(
                         &child_display,
@@ -1071,9 +1070,7 @@ impl RetainedProjectTree {
             let parent = &self.directories[file.parent];
             let rebound = platform::open_child(&parent.handle, &file.name_in_parent)
                 .map_err(|error| io_error(&display_path, error))?;
-            let rebound_metadata = rebound
-                .metadata()
-                .map_err(|error| io_error(&display_path, error))?;
+            let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
             validate_file_metadata(
                 &rebound_metadata,
                 &display_path,
@@ -1108,9 +1105,7 @@ impl RetainedProjectTree {
             )?;
             let rebound_after = platform::open_child(&parent.handle, &file.name_in_parent)
                 .map_err(|error| io_error(&display_path, error))?;
-            let rebound_after_metadata = rebound_after
-                .metadata()
-                .map_err(|error| io_error(&display_path, error))?;
+            let rebound_after_metadata = RetainedMetadata::capture(&rebound_after, &display_path)?;
             if !same_stable_file_metadata(
                 &file.metadata,
                 &rebound_after_metadata,
@@ -1150,9 +1145,7 @@ fn open_ancestry(
         });
     }
     let anchor_handle = platform::open_root(&anchor).map_err(|error| io_error(&anchor, error))?;
-    let anchor_metadata = anchor_handle
-        .metadata()
-        .map_err(|error| io_error(&anchor, error))?;
+    let anchor_metadata = RetainedMetadata::capture(&anchor_handle, &anchor)?;
     validate_directory_metadata(&anchor_metadata, &anchor)?;
     let mut ancestry = vec![RetainedAncestorDirectory {
         handle: anchor_handle,
@@ -1168,9 +1161,7 @@ fn open_ancestry(
             .expect("filesystem anchor initializes project ancestry");
         let handle = platform::open_child(&parent.handle, &component)
             .map_err(|error| io_error(&display, error))?;
-        let metadata = handle
-            .metadata()
-            .map_err(|error| io_error(&display, error))?;
+        let metadata = RetainedMetadata::capture(&handle, &display)?;
         validate_directory_metadata(&metadata, &display)?;
         ancestry.push(RetainedAncestorDirectory {
             handle,
@@ -1422,12 +1413,10 @@ fn os_path_digest(path: &Path) -> String {
 
 fn validate_stable_directory(
     handle: &File,
-    expected: &Metadata,
+    expected: &RetainedMetadata,
     display_path: &Path,
 ) -> Result<(), RetainedProjectTreeError> {
-    let current = handle
-        .metadata()
-        .map_err(|error| io_error(display_path, error))?;
+    let current = RetainedMetadata::capture(handle, display_path)?;
     validate_directory_metadata(&current, display_path)?;
     if same_stable_metadata(expected, &current) {
         Ok(())
@@ -1441,13 +1430,11 @@ fn validate_stable_directory(
 
 fn validate_stable_file(
     handle: &File,
-    expected: &Metadata,
+    expected: &RetainedMetadata,
     display_path: &Path,
     allow_store_owned_file_anchors: bool,
 ) -> Result<(), RetainedProjectTreeError> {
-    let current = handle
-        .metadata()
-        .map_err(|error| io_error(display_path, error))?;
+    let current = RetainedMetadata::capture(handle, display_path)?;
     validate_file_metadata(&current, display_path, allow_store_owned_file_anchors)?;
     if same_stable_file_metadata(expected, &current, allow_store_owned_file_anchors) {
         Ok(())
@@ -1460,7 +1447,7 @@ fn validate_stable_file(
 }
 
 fn validate_directory_metadata(
-    metadata: &Metadata,
+    metadata: &RetainedMetadata,
     display_path: &Path,
 ) -> Result<(), RetainedProjectTreeError> {
     if is_directory(metadata) && !is_reparse(metadata) {
@@ -1474,7 +1461,7 @@ fn validate_directory_metadata(
 }
 
 fn validate_file_metadata(
-    metadata: &Metadata,
+    metadata: &RetainedMetadata,
     display_path: &Path,
     allow_store_owned_file_anchors: bool,
 ) -> Result<(), RetainedProjectTreeError> {
@@ -1497,77 +1484,78 @@ fn validate_file_metadata(
     }
 }
 
-fn is_directory(metadata: &Metadata) -> bool {
-    metadata.is_dir() && !metadata.file_type().is_symlink()
-}
-
-fn is_regular_file(metadata: &Metadata) -> bool {
-    metadata.is_file() && !metadata.file_type().is_symlink()
+#[cfg(not(windows))]
+fn is_directory(metadata: &RetainedMetadata) -> bool {
+    metadata.metadata.is_dir() && !metadata.metadata.file_type().is_symlink()
 }
 
 #[cfg(windows)]
-fn is_reparse(metadata: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+fn is_directory(metadata: &RetainedMetadata) -> bool {
+    const FILE_ATTRIBUTE_DIRECTORY: u64 = 0x0000_0010;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_DIRECTORY != 0
 }
 
 #[cfg(not(windows))]
-fn is_reparse(_metadata: &Metadata) -> bool {
+fn is_regular_file(metadata: &RetainedMetadata) -> bool {
+    metadata.metadata.is_file() && !metadata.metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn is_regular_file(metadata: &RetainedMetadata) -> bool {
+    const FILE_ATTRIBUTE_DIRECTORY: u64 = 0x0000_0010;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_DIRECTORY == 0
+}
+
+#[cfg(windows)]
+fn is_reparse(metadata: &RetainedMetadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u64 = 0x0000_0400;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse(_metadata: &RetainedMetadata) -> bool {
     false
 }
 
 #[cfg(unix)]
-fn hard_link_count(metadata: &Metadata) -> u64 {
+fn hard_link_count(metadata: &RetainedMetadata) -> u64 {
     use std::os::unix::fs::MetadataExt as _;
-    metadata.nlink()
+    metadata.metadata.nlink()
 }
 
 #[cfg(windows)]
-fn hard_link_count(metadata: &Metadata) -> u64 {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata.number_of_links().unwrap_or(0)
+fn hard_link_count(metadata: &RetainedMetadata) -> u64 {
+    metadata.file_information.number_of_links
 }
 
 #[cfg(not(any(unix, windows)))]
-fn hard_link_count(_metadata: &Metadata) -> u64 {
+fn hard_link_count(_metadata: &RetainedMetadata) -> u64 {
     0
 }
 
 #[cfg(unix)]
-fn identity(metadata: &Metadata) -> Result<FileIdentity, RetainedProjectTreeError> {
+fn identity(metadata: &RetainedMetadata) -> Result<FileIdentity, RetainedProjectTreeError> {
     use std::os::unix::fs::MetadataExt as _;
     Ok(FileIdentity {
         platform: PlatformIdentity {
-            device: metadata.dev(),
-            inode: metadata.ino(),
+            device: metadata.metadata.dev(),
+            inode: metadata.metadata.ino(),
         },
     })
 }
 
 #[cfg(windows)]
-fn identity(metadata: &Metadata) -> Result<FileIdentity, RetainedProjectTreeError> {
-    use std::os::windows::fs::MetadataExt as _;
-    let volume =
-        metadata
-            .volume_serial_number()
-            .ok_or_else(|| RetainedProjectTreeError::Identity {
-                path: PathBuf::from("<retained-project-tree>"),
-                reason: "opened project object has no volume identity".to_owned(),
-            })?;
-    let index = metadata
-        .file_index()
-        .ok_or_else(|| RetainedProjectTreeError::Identity {
-            path: PathBuf::from("<retained-project-tree>"),
-            reason: "opened project object has no file identity".to_owned(),
-        })?;
+fn identity(metadata: &RetainedMetadata) -> Result<FileIdentity, RetainedProjectTreeError> {
     Ok(FileIdentity {
-        platform: PlatformIdentity { volume, index },
+        platform: PlatformIdentity {
+            volume: metadata.file_information.volume_serial_number,
+            index: metadata.file_information.file_index,
+        },
     })
 }
 
 #[cfg(not(any(unix, windows)))]
-fn identity(_metadata: &Metadata) -> Result<FileIdentity, RetainedProjectTreeError> {
+fn identity(_metadata: &RetainedMetadata) -> Result<FileIdentity, RetainedProjectTreeError> {
     Err(RetainedProjectTreeError::InvalidRoot {
         path: PathBuf::from("<retained-project-tree>"),
         reason: "retained project identity is unsupported on this platform".to_owned(),
@@ -1575,24 +1563,18 @@ fn identity(_metadata: &Metadata) -> Result<FileIdentity, RetainedProjectTreeErr
 }
 
 #[cfg(unix)]
-fn object_id(metadata: &Metadata) -> Result<u64, RetainedProjectTreeError> {
+fn object_id(metadata: &RetainedMetadata) -> Result<u64, RetainedProjectTreeError> {
     use std::os::unix::fs::MetadataExt as _;
-    Ok(metadata.ino())
+    Ok(metadata.metadata.ino())
 }
 
 #[cfg(windows)]
-fn object_id(metadata: &Metadata) -> Result<u64, RetainedProjectTreeError> {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata
-        .file_index()
-        .ok_or_else(|| RetainedProjectTreeError::Identity {
-            path: PathBuf::from("<retained-project-tree>"),
-            reason: "opened project object has no file identity".to_owned(),
-        })
+fn object_id(metadata: &RetainedMetadata) -> Result<u64, RetainedProjectTreeError> {
+    Ok(metadata.file_information.file_index)
 }
 
 #[cfg(not(any(unix, windows)))]
-fn object_id(_metadata: &Metadata) -> Result<u64, RetainedProjectTreeError> {
+fn object_id(_metadata: &RetainedMetadata) -> Result<u64, RetainedProjectTreeError> {
     Err(RetainedProjectTreeError::InvalidRoot {
         path: PathBuf::from("<retained-project-tree>"),
         reason: "retained project identity is unsupported on this platform".to_owned(),
@@ -1600,8 +1582,10 @@ fn object_id(_metadata: &Metadata) -> Result<u64, RetainedProjectTreeError> {
 }
 
 #[cfg(unix)]
-fn same_stable_metadata(left: &Metadata, right: &Metadata) -> bool {
+fn same_stable_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bool {
     use std::os::unix::fs::MetadataExt as _;
+    let left = &left.metadata;
+    let right = &right.metadata;
     left.dev() == right.dev()
         && left.ino() == right.ino()
         && left.file_type() == right.file_type()
@@ -1617,34 +1601,32 @@ fn same_stable_metadata(left: &Metadata, right: &Metadata) -> bool {
 }
 
 #[cfg(windows)]
-fn same_stable_metadata(left: &Metadata, right: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    left.volume_serial_number().is_some()
-        && left.volume_serial_number() == right.volume_serial_number()
-        && left.file_index().is_some()
-        && left.file_index() == right.file_index()
-        && left.file_type() == right.file_type()
-        && left.file_attributes() == right.file_attributes()
-        && left.creation_time() == right.creation_time()
-        && left.number_of_links() == right.number_of_links()
-        && left.file_size() == right.file_size()
-        && left.last_write_time() == right.last_write_time()
+fn same_stable_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bool {
+    left.file_information.volume_serial_number == right.file_information.volume_serial_number
+        && left.file_information.file_index == right.file_information.file_index
+        && left.file_information.file_attributes == right.file_information.file_attributes
+        && left.file_information.creation_time == right.file_information.creation_time
+        && left.file_information.number_of_links == right.file_information.number_of_links
+        && left.file_information.file_size == right.file_information.file_size
+        && left.file_information.last_write_time == right.file_information.last_write_time
         && !is_reparse(left)
         && !is_reparse(right)
 }
 
 #[cfg(not(any(unix, windows)))]
-fn same_stable_metadata(_left: &Metadata, _right: &Metadata) -> bool {
+fn same_stable_metadata(_left: &RetainedMetadata, _right: &RetainedMetadata) -> bool {
     false
 }
 
 #[cfg(unix)]
 fn same_stable_file_metadata(
-    left: &Metadata,
-    right: &Metadata,
+    left: &RetainedMetadata,
+    right: &RetainedMetadata,
     allow_store_owned_file_anchors: bool,
 ) -> bool {
     use std::os::unix::fs::MetadataExt as _;
+    let left = &left.metadata;
+    let right = &right.metadata;
     left.dev() == right.dev()
         && left.ino() == right.ino()
         && left.file_type() == right.file_type()
@@ -1662,29 +1644,26 @@ fn same_stable_file_metadata(
 
 #[cfg(windows)]
 fn same_stable_file_metadata(
-    left: &Metadata,
-    right: &Metadata,
+    left: &RetainedMetadata,
+    right: &RetainedMetadata,
     allow_store_owned_file_anchors: bool,
 ) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    left.volume_serial_number().is_some()
-        && left.volume_serial_number() == right.volume_serial_number()
-        && left.file_index().is_some()
-        && left.file_index() == right.file_index()
-        && left.file_type() == right.file_type()
-        && left.file_attributes() == right.file_attributes()
-        && left.creation_time() == right.creation_time()
-        && left.file_size() == right.file_size()
-        && left.last_write_time() == right.last_write_time()
-        && (allow_store_owned_file_anchors || left.number_of_links() == right.number_of_links())
+    left.file_information.volume_serial_number == right.file_information.volume_serial_number
+        && left.file_information.file_index == right.file_information.file_index
+        && left.file_information.file_attributes == right.file_information.file_attributes
+        && left.file_information.creation_time == right.file_information.creation_time
+        && left.file_information.file_size == right.file_information.file_size
+        && left.file_information.last_write_time == right.file_information.last_write_time
+        && (allow_store_owned_file_anchors
+            || left.file_information.number_of_links == right.file_information.number_of_links)
         && !is_reparse(left)
         && !is_reparse(right)
 }
 
 #[cfg(not(any(unix, windows)))]
 fn same_stable_file_metadata(
-    _left: &Metadata,
-    _right: &Metadata,
+    _left: &RetainedMetadata,
+    _right: &RetainedMetadata,
     _allow_store_owned_file_anchors: bool,
 ) -> bool {
     false
@@ -1706,7 +1685,7 @@ fn identity_error(path: &Path, reason: &str) -> RetainedProjectTreeError {
 
 #[cfg(unix)]
 mod platform {
-    use super::{io, Digest, DirectoryEntry, File, OsStr, OsString, Path};
+    use super::{io, DirectoryEntry, File, OsStr, OsString, Path};
     use std::os::unix::ffi::OsStringExt as _;
 
     pub(super) fn open_root(path: &Path) -> io::Result<File> {

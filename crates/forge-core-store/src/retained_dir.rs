@@ -436,10 +436,10 @@ impl RetainedDirectory {
     }
 
     pub(crate) fn identity_of(file: &File) -> io::Result<RetainedFileIdentity> {
-        let metadata = file.metadata()?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt as _;
+            let metadata = file.metadata()?;
             Ok(RetainedFileIdentity {
                 platform: PlatformIdentity {
                     device: metadata.dev(),
@@ -449,26 +449,17 @@ impl RetainedDirectory {
         }
         #[cfg(windows)]
         {
-            use std::os::windows::fs::MetadataExt as _;
+            let information = crate::windows_file_info::file_information(file)?;
             Ok(RetainedFileIdentity {
                 platform: PlatformIdentity {
-                    volume: metadata.volume_serial_number().ok_or_else(|| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "opened file has no volume identity",
-                        )
-                    })?,
-                    index: metadata.file_index().ok_or_else(|| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "opened file has no file identity",
-                        )
-                    })?,
+                    volume: information.volume_serial_number,
+                    index: information.file_index,
                 },
             })
         }
         #[cfg(not(any(unix, windows)))]
         {
+            let metadata = file.metadata()?;
             Ok(RetainedFileIdentity {
                 platform: PlatformIdentity {
                     length: metadata.len(),
@@ -753,10 +744,8 @@ impl RetainedDirectory {
             metadata.file_attributes() & 0x400 != 0x400
         };
         #[cfg(windows)]
-        let authority_link_shape = {
-            use std::os::windows::fs::MetadataExt as _;
-            metadata.number_of_links().is_some_and(|count| count == 1)
-        };
+        let authority_link_shape =
+            crate::windows_file_info::file_information(file)?.number_of_links == 1;
         #[cfg(unix)]
         let authority_link_shape = {
             use std::os::unix::fs::MetadataExt as _;
@@ -2417,8 +2406,9 @@ mod platform {
 
     fn openat(parent: &File, value: &OsStr, flags: i32, mode: libc::mode_t) -> io::Result<File> {
         let value = name(value)?;
+        let promoted_mode: libc::c_uint = mode.into();
         // SAFETY: parent and CString remain valid for the call; successful fd ownership transfers.
-        let fd = unsafe { libc::openat(parent.as_raw_fd(), value.as_ptr(), flags, mode) };
+        let fd = unsafe { libc::openat(parent.as_raw_fd(), value.as_ptr(), flags, promoted_mode) };
         if fd < 0 {
             Err(io::Error::last_os_error())
         } else {

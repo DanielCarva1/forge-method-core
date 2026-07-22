@@ -49,6 +49,8 @@ pub mod retained_crash_replace;
 mod retained_dir;
 pub mod retained_lifecycle;
 pub mod retained_project_tree;
+#[cfg(windows)]
+mod windows_file_info;
 pub mod workflow_action_replay;
 pub mod workflow_broker_admin;
 

@@ -613,18 +613,39 @@ impl RetainedBackupSourceRoots {
     }
 }
 
+#[derive(Debug, Clone)]
+struct RetainedSourceMetadata {
+    metadata: fs::Metadata,
+    #[cfg(windows)]
+    file_information: crate::windows_file_info::WindowsFileInformation,
+}
+
+impl RetainedSourceMetadata {
+    fn capture(file: &File, path: &Path) -> Result<Self, BackupError> {
+        let metadata = file.metadata().map_err(|source| io_error(path, source))?;
+        #[cfg(windows)]
+        let file_information = crate::windows_file_info::file_information(file)
+            .map_err(|source| io_error(path, source))?;
+        Ok(Self {
+            metadata,
+            #[cfg(windows)]
+            file_information,
+        })
+    }
+}
+
 #[derive(Debug)]
 struct RetainedSourceDirectory {
     handle: File,
     display_path: PathBuf,
-    opened_metadata: fs::Metadata,
+    opened_metadata: RetainedSourceMetadata,
 }
 
 #[derive(Debug)]
 struct RetainedSourceFile {
     handle: File,
     display_path: PathBuf,
-    opened_metadata: fs::Metadata,
+    opened_metadata: RetainedSourceMetadata,
 }
 
 #[derive(Debug)]
@@ -659,7 +680,7 @@ struct CapturedSourceWalk {
 }
 
 impl RetainedSourceChild {
-    fn opened_metadata(&self) -> &fs::Metadata {
+    fn opened_metadata(&self) -> &RetainedSourceMetadata {
         match self {
             Self::Directory(directory) => &directory.opened_metadata,
             Self::File(file) => &file.opened_metadata,
@@ -719,9 +740,7 @@ impl RetainedSourceDirectory {
     }
 
     fn from_handle(handle: File, display_path: PathBuf) -> Result<Self, BackupError> {
-        let metadata = handle
-            .metadata()
-            .map_err(|source| io_error(&display_path, source))?;
+        let metadata = RetainedSourceMetadata::capture(&handle, &display_path)?;
         validate_source_directory_metadata(&metadata, &display_path)?;
         Ok(Self {
             handle,
@@ -735,23 +754,22 @@ impl RetainedSourceDirectory {
         let display_path = self.display_path.join(name);
         let handle = source_platform::open_child(&self.handle, name)
             .map_err(|source| io_error(&display_path, source))?;
-        let metadata = handle
-            .metadata()
-            .map_err(|source| io_error(&display_path, source))?;
-        if metadata_is_reparse(&metadata) || metadata.file_type().is_symlink() {
+        let metadata = RetainedSourceMetadata::capture(&handle, &display_path)?;
+        if source_metadata_is_reparse(&metadata) {
             return Err(BackupError::UnsafeFileType {
                 path: display_path,
                 reason: "source links and reparse points are forbidden".to_owned(),
             });
         }
-        if metadata.is_dir() {
+        if source_metadata_is_directory(&metadata) {
             return Ok(RetainedSourceChild::Directory(Self {
                 handle,
                 display_path,
                 opened_metadata: metadata,
             }));
         }
-        if metadata.is_file() && hard_link_count(&metadata) == 1 {
+        if source_metadata_is_regular_file(&metadata) && retained_source_link_count(&metadata) == 1
+        {
             return Ok(RetainedSourceChild::File(RetainedSourceFile {
                 handle,
                 display_path,
@@ -861,10 +879,7 @@ impl RetainedSourceDirectory {
     }
 
     fn validate_retained_object(&self) -> Result<(), BackupError> {
-        let current = self
-            .handle
-            .metadata()
-            .map_err(|source| io_error(&self.display_path, source))?;
+        let current = RetainedSourceMetadata::capture(&self.handle, &self.display_path)?;
         validate_source_directory_metadata(&current, &self.display_path)?;
         if !same_file_object(&self.opened_metadata, &current) {
             return Err(BackupError::Archive {
@@ -878,10 +893,7 @@ impl RetainedSourceDirectory {
     }
 
     fn validate_retained_stable(&self) -> Result<(), BackupError> {
-        let current = self
-            .handle
-            .metadata()
-            .map_err(|source| io_error(&self.display_path, source))?;
+        let current = RetainedSourceMetadata::capture(&self.handle, &self.display_path)?;
         validate_source_directory_metadata(&current, &self.display_path)?;
         if !same_file_identity(&self.opened_metadata, &current) {
             return Err(BackupError::Archive {
@@ -923,10 +935,7 @@ impl RetainedSourceDirectory {
     }
 
     fn rebaseline(&mut self) -> Result<(), BackupError> {
-        let current = self
-            .handle
-            .metadata()
-            .map_err(|source| io_error(&self.display_path, source))?;
+        let current = RetainedSourceMetadata::capture(&self.handle, &self.display_path)?;
         validate_source_directory_metadata(&current, &self.display_path)?;
         if !same_file_object(&self.opened_metadata, &current) {
             return Err(BackupError::Archive {
@@ -943,10 +952,7 @@ impl RetainedSourceDirectory {
 
 impl RetainedSourceFile {
     fn validate_retained_stable(&self) -> Result<(), BackupError> {
-        let current = self
-            .handle
-            .metadata()
-            .map_err(|source| io_error(&self.display_path, source))?;
+        let current = RetainedSourceMetadata::capture(&self.handle, &self.display_path)?;
         validate_source_file_metadata(&current, &self.display_path)?;
         if !same_file_identity(&self.opened_metadata, &current) {
             return Err(BackupError::Archive {
@@ -991,29 +997,51 @@ fn validate_source_component(name: &OsStr, parent: &Path) -> Result<(), BackupEr
 }
 
 #[cfg(unix)]
-fn directory_entry_matches(entry: &SourceDirectoryEntry, metadata: &fs::Metadata) -> bool {
+fn directory_entry_matches(
+    entry: &SourceDirectoryEntry,
+    metadata: &RetainedSourceMetadata,
+) -> bool {
     use std::os::unix::fs::MetadataExt as _;
-    entry.object_id == metadata.ino()
+    entry.object_id == metadata.metadata.ino()
 }
 
 #[cfg(windows)]
-fn directory_entry_matches(entry: &SourceDirectoryEntry, metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata
-        .file_index()
-        .is_some_and(|index| entry.object_id == index)
+fn directory_entry_matches(
+    entry: &SourceDirectoryEntry,
+    metadata: &RetainedSourceMetadata,
+) -> bool {
+    entry.object_id == metadata.file_information.file_index
 }
 
 #[cfg(not(any(unix, windows)))]
-fn directory_entry_matches(_entry: &SourceDirectoryEntry, _metadata: &fs::Metadata) -> bool {
+fn directory_entry_matches(
+    _entry: &SourceDirectoryEntry,
+    _metadata: &RetainedSourceMetadata,
+) -> bool {
     false
 }
 
+#[cfg(unix)]
+fn retained_source_link_count(metadata: &RetainedSourceMetadata) -> u64 {
+    use std::os::unix::fs::MetadataExt as _;
+    metadata.metadata.nlink()
+}
+
+#[cfg(windows)]
+fn retained_source_link_count(metadata: &RetainedSourceMetadata) -> u64 {
+    metadata.file_information.number_of_links
+}
+
+#[cfg(not(any(unix, windows)))]
+fn retained_source_link_count(_metadata: &RetainedSourceMetadata) -> u64 {
+    0
+}
+
 fn validate_source_directory_metadata(
-    metadata: &fs::Metadata,
+    metadata: &RetainedSourceMetadata,
     path: &Path,
 ) -> Result<(), BackupError> {
-    if !metadata.is_dir() || metadata.file_type().is_symlink() || metadata_is_reparse(metadata) {
+    if !source_metadata_is_directory(metadata) || source_metadata_is_reparse(metadata) {
         return Err(BackupError::UnsafeFileType {
             path: path.to_path_buf(),
             reason: "source ancestor must be a no-follow non-reparse directory".to_owned(),
@@ -1022,11 +1050,13 @@ fn validate_source_directory_metadata(
     Ok(())
 }
 
-fn validate_source_file_metadata(metadata: &fs::Metadata, path: &Path) -> Result<(), BackupError> {
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata_is_reparse(metadata)
-        || hard_link_count(metadata) != 1
+fn validate_source_file_metadata(
+    metadata: &RetainedSourceMetadata,
+    path: &Path,
+) -> Result<(), BackupError> {
+    if !source_metadata_is_regular_file(metadata)
+        || source_metadata_is_reparse(metadata)
+        || retained_source_link_count(metadata) != 1
     {
         return Err(BackupError::UnsafeFileType {
             path: path.to_path_buf(),
@@ -1036,15 +1066,36 @@ fn validate_source_file_metadata(metadata: &fs::Metadata, path: &Path) -> Result
     Ok(())
 }
 
+#[cfg(not(windows))]
+fn source_metadata_is_directory(metadata: &RetainedSourceMetadata) -> bool {
+    metadata.metadata.is_dir() && !metadata.metadata.file_type().is_symlink()
+}
+
 #[cfg(windows)]
-fn metadata_is_reparse(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
-    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+fn source_metadata_is_directory(metadata: &RetainedSourceMetadata) -> bool {
+    const FILE_ATTRIBUTE_DIRECTORY: u64 = 0x0000_0010;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_DIRECTORY != 0
 }
 
 #[cfg(not(windows))]
-fn metadata_is_reparse(_metadata: &fs::Metadata) -> bool {
+fn source_metadata_is_regular_file(metadata: &RetainedSourceMetadata) -> bool {
+    metadata.metadata.is_file() && !metadata.metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn source_metadata_is_regular_file(metadata: &RetainedSourceMetadata) -> bool {
+    const FILE_ATTRIBUTE_DIRECTORY: u64 = 0x0000_0010;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_DIRECTORY == 0
+}
+
+#[cfg(windows)]
+fn source_metadata_is_reparse(metadata: &RetainedSourceMetadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u64 = 0x0000_0400;
+    metadata.file_information.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn source_metadata_is_reparse(_metadata: &RetainedSourceMetadata) -> bool {
     false
 }
 
@@ -1215,7 +1266,7 @@ fn capture_retained_source(
         .map_err(|error| BackupError::Manifest {
             reason: format!("source exclusion failed: {error:?}"),
         })?;
-    let byte_length = source.opened_metadata.len();
+    let byte_length = source.opened_metadata.metadata.len();
     let bytes = if exclusion.is_some() {
         None
     } else {
@@ -1302,7 +1353,7 @@ fn capture_one_source(
 
 #[cfg(unix)]
 mod source_platform {
-    use super::{io, Digest, File, OsStr, OsString, Path, SourceDirectoryEntry};
+    use super::{io, File, OsStr, OsString, Path, SourceDirectoryEntry};
     use std::os::unix::ffi::OsStringExt as _;
 
     pub(super) fn open_root_directory(path: &Path) -> io::Result<File> {
@@ -1605,56 +1656,54 @@ mod source_platform {
 }
 
 #[cfg(unix)]
-fn same_file_object(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+fn same_file_object(left: &RetainedSourceMetadata, right: &RetainedSourceMetadata) -> bool {
     use std::os::unix::fs::MetadataExt as _;
-    left.dev() == right.dev() && left.ino() == right.ino() && left.file_type() == right.file_type()
+    left.metadata.dev() == right.metadata.dev()
+        && left.metadata.ino() == right.metadata.ino()
+        && left.metadata.file_type() == right.metadata.file_type()
 }
 
 #[cfg(windows)]
-fn same_file_object(left: &fs::Metadata, right: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    left.volume_serial_number().is_some()
-        && left.volume_serial_number() == right.volume_serial_number()
-        && left.file_index().is_some()
-        && left.file_index() == right.file_index()
-        && left.file_type() == right.file_type()
-        && !metadata_is_reparse(left)
-        && !metadata_is_reparse(right)
+fn same_file_object(left: &RetainedSourceMetadata, right: &RetainedSourceMetadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u64 = 0x0000_0400;
+    left.file_information.volume_serial_number == right.file_information.volume_serial_number
+        && left.file_information.file_index == right.file_information.file_index
+        && left.file_information.file_attributes == right.file_information.file_attributes
+        && left.file_information.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0
+        && right.file_information.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0
 }
 
 #[cfg(not(any(unix, windows)))]
-fn same_file_object(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+fn same_file_object(_left: &RetainedSourceMetadata, _right: &RetainedSourceMetadata) -> bool {
     false
 }
 
 #[cfg(unix)]
-fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+fn same_file_identity(left: &RetainedSourceMetadata, right: &RetainedSourceMetadata) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     same_file_object(left, right)
-        && left.mode() == right.mode()
-        && left.uid() == right.uid()
-        && left.gid() == right.gid()
-        && left.nlink() == right.nlink()
-        && left.len() == right.len()
-        && left.mtime() == right.mtime()
-        && left.mtime_nsec() == right.mtime_nsec()
-        && left.ctime() == right.ctime()
-        && left.ctime_nsec() == right.ctime_nsec()
+        && left.metadata.mode() == right.metadata.mode()
+        && left.metadata.uid() == right.metadata.uid()
+        && left.metadata.gid() == right.metadata.gid()
+        && left.metadata.nlink() == right.metadata.nlink()
+        && left.metadata.len() == right.metadata.len()
+        && left.metadata.mtime() == right.metadata.mtime()
+        && left.metadata.mtime_nsec() == right.metadata.mtime_nsec()
+        && left.metadata.ctime() == right.metadata.ctime()
+        && left.metadata.ctime_nsec() == right.metadata.ctime_nsec()
 }
 
 #[cfg(windows)]
-fn same_file_identity(left: &fs::Metadata, right: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
+fn same_file_identity(left: &RetainedSourceMetadata, right: &RetainedSourceMetadata) -> bool {
     same_file_object(left, right)
-        && left.file_attributes() == right.file_attributes()
-        && left.creation_time() == right.creation_time()
-        && left.number_of_links() == right.number_of_links()
-        && left.file_size() == right.file_size()
-        && left.last_write_time() == right.last_write_time()
+        && left.file_information.creation_time == right.file_information.creation_time
+        && left.file_information.number_of_links == right.file_information.number_of_links
+        && left.file_information.file_size == right.file_information.file_size
+        && left.file_information.last_write_time == right.file_information.last_write_time
 }
 
 #[cfg(not(any(unix, windows)))]
-fn same_file_identity(_left: &fs::Metadata, _right: &fs::Metadata) -> bool {
+fn same_file_identity(_left: &RetainedSourceMetadata, _right: &RetainedSourceMetadata) -> bool {
     false
 }
 
@@ -4040,7 +4089,7 @@ fn ensure_nofollow_regular_single_link(path: &Path) -> Result<(), BackupError> {
             reason: "must be a no-follow regular file".to_owned(),
         });
     }
-    if hard_link_count(&metadata) != 1 {
+    if path_hard_link_count(path, &metadata)? != 1 {
         return Err(BackupError::UnsafeFileType {
             path: path.to_path_buf(),
             reason: "hard-link count must be exactly one".to_owned(),
@@ -4050,20 +4099,52 @@ fn ensure_nofollow_regular_single_link(path: &Path) -> Result<(), BackupError> {
 }
 
 #[cfg(unix)]
-fn hard_link_count(metadata: &fs::Metadata) -> u64 {
+fn path_hard_link_count(_path: &Path, metadata: &fs::Metadata) -> Result<u64, BackupError> {
     use std::os::unix::fs::MetadataExt as _;
-    metadata.nlink()
+    Ok(metadata.nlink())
 }
 
 #[cfg(windows)]
-fn hard_link_count(metadata: &fs::Metadata) -> u64 {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata.number_of_links().unwrap_or(0)
+fn path_hard_link_count(path: &Path, _metadata: &fs::Metadata) -> Result<u64, BackupError> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|source| io_error(path, source))?;
+    crate::windows_file_info::file_information(&file)
+        .map(|information| information.number_of_links)
+        .map_err(|source| io_error(path, source))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn hard_link_count(_metadata: &fs::Metadata) -> u64 {
-    0
+fn path_hard_link_count(_path: &Path, _metadata: &fs::Metadata) -> Result<u64, BackupError> {
+    Ok(0)
+}
+
+fn opened_hard_link_count(file: &File, metadata: &fs::Metadata) -> Result<u64, BackupError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let _ = file;
+        Ok(metadata.nlink())
+    }
+    #[cfg(windows)]
+    {
+        let _ = metadata;
+        crate::windows_file_info::file_information(file)
+            .map(|information| information.number_of_links)
+            .map_err(|source| BackupError::Archive {
+                reason: format!("opened file information is unavailable: {source}"),
+            })
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (file, metadata);
+        Ok(0)
+    }
 }
 
 #[cfg(unix)]
@@ -4105,7 +4186,7 @@ fn open_nofollow_read(path: &Path) -> Result<File, BackupError> {
 
 fn validate_opened_regular_single_link(file: &File, path: &Path) -> Result<(), BackupError> {
     let metadata = file.metadata().map_err(|source| io_error(path, source))?;
-    if !metadata.file_type().is_file() || hard_link_count(&metadata) != 1 {
+    if !metadata.file_type().is_file() || opened_hard_link_count(file, &metadata)? != 1 {
         return Err(BackupError::UnsafeFileType {
             path: path.to_path_buf(),
             reason: "opened source must be one no-follow single-link regular file".to_owned(),
@@ -4136,14 +4217,14 @@ fn open_private_create_new(path: &Path) -> Result<File, BackupError> {
 
 pub(crate) fn read_file_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, BackupError> {
     let mut file = open_nofollow_read(path)?;
-    let metadata = file.metadata().map_err(|source| io_error(path, source))?;
-    if metadata.len() > maximum {
+    let metadata = RetainedSourceMetadata::capture(&file, path)?;
+    if metadata.metadata.len() > maximum {
         return Err(BackupError::ResourceLimit {
             resource: "file bytes",
             maximum,
         });
     }
-    let capacity = usize_from_u64(metadata.len(), "file bytes")?;
+    let capacity = usize_from_u64(metadata.metadata.len(), "file bytes")?;
     let mut bytes = Vec::with_capacity(capacity);
     (&mut file)
         .take(maximum.saturating_add(1))
@@ -4155,8 +4236,8 @@ pub(crate) fn read_file_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, Ba
             maximum,
         });
     }
-    let after = file.metadata().map_err(|source| io_error(path, source))?;
-    if !same_file_identity(&metadata, &after) || after.len() != bytes.len() as u64 {
+    let after = RetainedSourceMetadata::capture(&file, path)?;
+    if !same_file_identity(&metadata, &after) || after.metadata.len() != bytes.len() as u64 {
         return Err(BackupError::Archive {
             reason: format!("file changed while reading {}", path.display()),
         });

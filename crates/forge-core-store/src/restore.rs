@@ -2757,7 +2757,7 @@ fn validate_restore_file_handle(
     file: &File,
 ) -> io::Result<crate::retained_dir::RetainedFileIdentity> {
     let metadata = file.metadata()?;
-    let valid = metadata.is_file() && hard_link_count(&metadata) == 1;
+    let valid = metadata.is_file() && retained_hard_link_count(file, &metadata)? == 1;
     #[cfg(windows)]
     let valid = {
         use std::os::windows::fs::MetadataExt as _;
@@ -2776,14 +2776,13 @@ fn validate_restore_authority_file_handle(
     file: &File,
 ) -> io::Result<crate::retained_dir::RetainedFileIdentity> {
     let metadata = file.metadata()?;
+    let link_count = retained_hard_link_count(file, &metadata)?;
     #[cfg(unix)]
-    let valid = metadata.is_file() && hard_link_count(&metadata) >= 1;
+    let valid = metadata.is_file() && link_count >= 1;
     #[cfg(windows)]
     let valid = {
         use std::os::windows::fs::MetadataExt as _;
-        metadata.is_file()
-            && hard_link_count(&metadata) == 1
-            && metadata.file_attributes() & 0x400 != 0x400
+        metadata.is_file() && link_count == 1 && metadata.file_attributes() & 0x400 != 0x400
     };
     #[cfg(not(any(unix, windows)))]
     let valid = false;
@@ -4039,7 +4038,7 @@ fn walk_sidecar_files(
         }
         if metadata.is_dir() {
             walk_sidecar_files(root, &path, files)?;
-        } else if metadata.is_file() && hard_link_count(&metadata) == 1 {
+        } else if metadata.is_file() && path_hard_link_count(&path, &metadata) == 1 {
             files.push(
                 path.strip_prefix(root)
                     .map_err(|_| RestoreError::Tampered {
@@ -4540,7 +4539,7 @@ fn restore_isolate_unquiesced_publication(
                             "exact unquiesced publication disappeared; authoritative Store placeholder installed",
                         ));
                     }
-                    Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(source) if source.kind() == io::ErrorKind::AlreadyExists => continue,
                     Err(source) => return Err(source),
                 }
             }
@@ -7280,20 +7279,46 @@ fn sha256(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
-#[cfg(unix)]
-fn hard_link_count(metadata: &fs::Metadata) -> u64 {
+fn retained_hard_link_count(file: &File, metadata: &fs::Metadata) -> io::Result<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let _ = file;
+        Ok(metadata.nlink())
+    }
+    #[cfg(windows)]
+    {
+        let _ = metadata;
+        Ok(crate::windows_file_info::file_information(file)?.number_of_links)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (file, metadata);
+        Ok(0)
+    }
+}
+
+#[cfg(all(test, unix))]
+fn path_hard_link_count(_path: &Path, metadata: &fs::Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt as _;
     metadata.nlink()
 }
 
-#[cfg(windows)]
-fn hard_link_count(metadata: &fs::Metadata) -> u64 {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata.number_of_links().unwrap_or(0)
+#[cfg(all(test, windows))]
+fn path_hard_link_count(path: &Path, _metadata: &fs::Metadata) -> u64 {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .and_then(|file| crate::windows_file_info::file_information(&file))
+        .map_or(0, |information| information.number_of_links)
 }
 
-#[cfg(not(any(unix, windows)))]
-fn hard_link_count(_metadata: &fs::Metadata) -> u64 {
+#[cfg(all(test, not(any(unix, windows))))]
+fn path_hard_link_count(_path: &Path, _metadata: &fs::Metadata) -> u64 {
     0
 }
 

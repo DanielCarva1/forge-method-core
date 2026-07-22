@@ -983,6 +983,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "winapi-util",
 ]
 
 [[package]]
@@ -1099,6 +1100,7 @@ dependencies = [
  "serde_json_canonicalizer",
  "sha2",
  "tracing",
+ "winapi-util",
  "windows-sys 0.61.2",
  "yaml_serde",
 ]

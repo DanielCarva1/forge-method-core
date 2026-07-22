@@ -564,21 +564,10 @@ fn snapshot_file_identity(file: &File) -> std::io::Result<SnapshotFileIdentity> 
 
 #[cfg(windows)]
 fn snapshot_file_identity(file: &File) -> std::io::Result<SnapshotFileIdentity> {
-    use std::os::windows::fs::MetadataExt as _;
-    let metadata = file.metadata()?;
-    let volume = metadata.volume_serial_number().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "event-log member has no volume identity",
-        )
-    })?;
-    let index = metadata.file_index().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "event-log member has no file identity",
-        )
-    })?;
-    Ok((volume, index))
+    let information = winapi_util::file::information(file)?;
+    let volume = u32::try_from(information.volume_serial_number())
+        .expect("Windows volume serial number is represented by a u32");
+    Ok((volume, information.file_index()))
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -687,7 +676,9 @@ fn validate_leaf(file: &File) -> Result<(), String> {
         if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
             return Err("event-log leaf must not be a reparse point".to_owned());
         }
-        if metadata.number_of_links().map(u64::from) != Some(1) {
+        let information =
+            winapi_util::file::information(file).map_err(|source| source.to_string())?;
+        if information.number_of_links() != 1 {
             return Err("event-log leaf must have exactly one link".to_owned());
         }
     }
