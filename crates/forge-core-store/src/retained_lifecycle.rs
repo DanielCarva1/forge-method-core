@@ -16,8 +16,8 @@ use crate::retained_dir::{
     RetainedDirectory, RetainedFileAnchorBinding, RetainedFileIdentity, RetainedFileLifetimeAnchor,
 };
 use crate::retained_project_tree::{
-    RetainedProjectAnchorBinding, RetainedProjectLifetimeAnchors, RetainedProjectTree,
-    RetainedProjectTreeError,
+    RetainedProjectAnchorBinding, RetainedProjectLifetimeAnchors, RetainedProjectRootBinding,
+    RetainedProjectTree, RetainedProjectTreeError,
 };
 use crate::{sha256_content_hash, EffectStoreLock, EffectStoreLockError};
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,7 @@ pub struct RetainedDomainPackLifecycleStore {
     state_root_identity: RetainedFileIdentity,
     lifecycle_root: RetainedDirectory,
     lifecycle_root_identity: RetainedFileIdentity,
+    project_root_binding: Option<RetainedProjectRootBinding>,
 }
 
 /// Opaque exact active-pointer leaf retained beneath one lifecycle Store.
@@ -320,7 +321,8 @@ impl fmt::Display for RetainedLifecycleIoError {
 impl std::error::Error for RetainedLifecycleIoError {}
 
 impl EffectStoreLock {
-    /// Consume this exact lock and seal it into Domain Pack lifecycle I/O.
+    /// Consume this exact lock and seal it into Domain Pack lifecycle I/O for an
+    /// embedded state root whose direct parent is the governed project.
     ///
     /// # Errors
     ///
@@ -329,6 +331,30 @@ impl EffectStoreLock {
     /// retained without following a link or reparse point.
     pub fn into_domain_pack_lifecycle_store(
         self,
+    ) -> Result<RetainedDomainPackLifecycleStore, RetainedLifecycleIoError> {
+        self.into_domain_pack_lifecycle_store_inner(None)
+    }
+
+    /// Consume this exact lock and bind lifecycle I/O to one explicit retained
+    /// project root. This is required when state lives in a detached sidecar.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the project binding cannot be retained or this is not the fixed
+    /// lifecycle lock beneath the current Store root.
+    pub fn into_domain_pack_lifecycle_store_for_project(
+        self,
+        project_tree: &RetainedProjectTree,
+    ) -> Result<RetainedDomainPackLifecycleStore, RetainedLifecycleIoError> {
+        let binding = project_tree
+            .root_binding()
+            .map_err(|error| lifecycle_project_anchor_error(project_tree, error))?;
+        self.into_domain_pack_lifecycle_store_inner(Some(binding))
+    }
+
+    fn into_domain_pack_lifecycle_store_inner(
+        self,
+        project_root_binding: Option<RetainedProjectRootBinding>,
     ) -> Result<RetainedDomainPackLifecycleStore, RetainedLifecycleIoError> {
         if self.state_lock_relative_path != Path::new(DOMAIN_PACK_LIFECYCLE_LOCK) {
             return Err(RetainedLifecycleIoError::InvalidRelativePath {
@@ -363,6 +389,7 @@ impl EffectStoreLock {
             state_root_identity,
             lifecycle_root,
             lifecycle_root_identity,
+            project_root_binding,
         };
         store.validate_current()?;
         Ok(store)
@@ -435,24 +462,31 @@ impl RetainedDomainPackLifecycleStore {
         project_tree: &RetainedProjectTree,
     ) -> Result<(), RetainedLifecycleIoError> {
         self.validate_current()?;
-        let expected_project_root =
-            self.lock
-                .state_root
-                .display_path()
-                .parent()
-                .ok_or_else(|| {
-                    lifecycle_identity_error(
-                        &self.lock,
-                        Path::new(""),
-                        "retained state root has no project parent".to_owned(),
-                    )
-                })?;
-        if project_tree.display_root() != expected_project_root {
-            return Err(RetainedLifecycleIoError::Identity {
-                path: project_tree.display_root().to_path_buf(),
-                reason: "retained project tree is not the exact parent of the locked state root"
-                    .to_owned(),
-            });
+        if let Some(expected) = &self.project_root_binding {
+            project_tree
+                .validate_root_binding(expected)
+                .map_err(|error| lifecycle_project_anchor_error(project_tree, error))?;
+        } else {
+            let expected_project_root =
+                self.lock
+                    .state_root
+                    .display_path()
+                    .parent()
+                    .ok_or_else(|| {
+                        lifecycle_identity_error(
+                            &self.lock,
+                            Path::new(""),
+                            "retained state root has no project parent".to_owned(),
+                        )
+                    })?;
+            if project_tree.display_root() != expected_project_root {
+                return Err(RetainedLifecycleIoError::Identity {
+                    path: project_tree.display_root().to_path_buf(),
+                    reason:
+                        "retained project tree is not the exact parent of the locked state root"
+                            .to_owned(),
+                });
+            }
         }
         project_tree
             .revalidate()

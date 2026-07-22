@@ -95,8 +95,8 @@ use forge_core_decisions::{
     WorkflowGovernanceStatus,
 };
 use forge_core_domain_pack_tcb::{
-    lock_domain_pack_lifecycle, AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
-    LockedDomainPackLifecycle,
+    lock_domain_pack_lifecycle_for_project, AdmittedActiveDomainPackGeneration,
+    DomainPackLifecycleStoreError, LockedDomainPackLifecycle,
 };
 use forge_core_store::claim_wal::{
     project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
@@ -679,8 +679,11 @@ enum DomainPackTransitionRecovery {
 }
 
 impl LockedWorkflowDomainPackContext {
-    fn acquire(state_root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
-        let lifecycle = lock_domain_pack_lifecycle(state_root)?;
+    fn acquire(
+        project_root: &Path,
+        state_root: &Path,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let lifecycle = lock_domain_pack_lifecycle_for_project(project_root, state_root)?;
         if lifecycle.projection().active_pointer.is_some() {
             Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
         } else {
@@ -793,7 +796,10 @@ impl WorkflowGovernanceProjectAdapter {
         self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1030,7 +1036,10 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
         initialize_workflow_action_replay(&self.binding.state_root)?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let genesis = registry.genesis();
         let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -1118,7 +1127,10 @@ impl WorkflowGovernanceProjectAdapter {
         self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1149,7 +1161,10 @@ impl WorkflowGovernanceProjectAdapter {
         now: u64,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1202,7 +1217,10 @@ impl WorkflowGovernanceProjectAdapter {
             .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
 
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1274,7 +1292,10 @@ impl WorkflowGovernanceProjectAdapter {
         }
 
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1339,51 +1360,15 @@ impl WorkflowGovernanceProjectAdapter {
             &projection,
             current_now,
         )?;
-        let principal_registry_digest = self.current_trusted_registry_digest()?;
-        let derived = derive_receipts(
-            effective.document(),
-            &projection,
-            &self.binding.project_root,
-            &guidance.snapshot_digest,
-            current_now,
-            principal_registry_digest.as_deref(),
-            Some(&broker_registry_digest),
-        )?;
-        let base_assurance_projection = project_durable_assurance(&projection.records)?;
-        let assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
-            derive_governed_assurance_facts(
-                effective.document(),
-                effective.identity(),
-                &projection,
-                base,
-                &self.binding.project_root,
-                &guidance.snapshot_digest,
-                guidance.target,
-                current_now,
-                principal_registry_digest.as_deref(),
-                Some(&broker_registry_digest),
-            )?
-        } else {
-            GovernedAssuranceFacts {
-                target: guidance.target,
-                evidence: Vec::new(),
-                capabilities: Vec::new(),
-                decisions: Vec::new(),
-                waivers: Vec::new(),
-                action_packets: Vec::new(),
-            }
-        };
-        let packet = authorization_action_packets(
-            effective.document(),
-            &guidance,
-            &derived,
-            Some(&assurance_facts),
-            principal_registry_digest,
-            Some(broker_registry_digest.clone()),
-        )?
-        .into_iter()
-        .find(|packet| packet.packet_digest == audit.action_packet_digest)
-        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+        // Guidance already derived the canonical packets from this exact
+        // projection and snapshot. Later pre-commit checks still reject any
+        // project, registry, or ledger drift before the packet can be recorded.
+        let packet = guidance
+            .authorization
+            .action_packets
+            .into_iter()
+            .find(|packet| packet.packet_digest == audit.action_packet_digest)
+            .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
         validate_broker_packet_audit(&packet, &semantic_input, &audit, &broker_registry_digest)?;
         let (packet, action_event, phase_may_advance) = if matches!(
             &semantic_input,
@@ -1539,7 +1524,10 @@ impl WorkflowGovernanceProjectAdapter {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -1602,7 +1590,10 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<WorkflowGovernanceReleaseStatus, WorkflowGovernanceAdapterError> {
         self.recover_pending_release_rebase()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let active = self.resolve_active_release(&registry, &projection)?;
@@ -1701,7 +1692,10 @@ impl WorkflowGovernanceProjectAdapter {
         expected_rebase_plan_digest: &str,
     ) -> Result<DomainPackRebasePlanDocument, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         if !domain.has_active_generation() {
             return Err(WorkflowGovernanceAdapterError::DomainPackGenerationMissing);
         }
@@ -1761,7 +1755,10 @@ impl WorkflowGovernanceProjectAdapter {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseApplyUnavailable);
         }
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let material = domain
             .rebase_material()?
             .ok_or(WorkflowGovernanceAdapterError::DomainPackGenerationMissing)?;
@@ -1921,7 +1918,10 @@ impl WorkflowGovernanceProjectAdapter {
         if !verify_domain_pack_rebase_plan(&plan) {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
         }
-        let lifecycle = lock_domain_pack_lifecycle(&self.binding.state_root)?;
+        let lifecycle = lock_domain_pack_lifecycle_for_project(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let source = lifecycle.active_rebase_source()?;
         let expected_generation = plan
             .domain_pack_rebase_plan
@@ -2013,7 +2013,10 @@ impl WorkflowGovernanceProjectAdapter {
         expected_snapshot_digest: &str,
     ) -> Result<WorkflowGovernanceReleaseUpgradeReceipt, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         if domain.has_active_generation() {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseRequired);
         }
@@ -2188,7 +2191,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowApplicabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2274,7 +2280,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowCapabilityAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2361,7 +2370,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowEvidenceAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2502,7 +2514,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowDecisionAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2636,7 +2651,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowWaiverAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2742,7 +2760,10 @@ impl WorkflowGovernanceProjectAdapter {
         authorization: VerifiedWorkflowSignalAuthorization,
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2836,9 +2857,33 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn prepare_completion(
         &self,
     ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
+        self.prepare_completion_for_snapshot_inner(None)
+    }
+
+    /// Convert currently verified completion into a one-use token while also
+    /// binding the preparation to the caller's current project snapshot.
+    ///
+    /// # Errors
+    /// Returns a typed drift error when the expected snapshot is no longer
+    /// current, or the same completion errors as [`Self::prepare_completion`].
+    pub fn prepare_completion_for_snapshot(
+        &self,
+        expected_snapshot_digest: &str,
+    ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
+        self.prepare_completion_for_snapshot_inner(Some(expected_snapshot_digest))
+    }
+
+    fn prepare_completion_for_snapshot_inner(
+        &self,
+        expected_snapshot_digest: Option<&str>,
+    ) -> Result<PreparedWorkflowGovernanceCompletion, WorkflowGovernanceAdapterError> {
+        self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -2848,6 +2893,9 @@ impl WorkflowGovernanceProjectAdapter {
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let (guidance, verified) =
             self.verified_from_projection(&registry, admitted, &effective, &projection, now)?;
+        if expected_snapshot_digest.is_some_and(|expected| expected != guidance.snapshot_digest) {
+            return Err(WorkflowGovernanceAdapterError::CompletionDrift);
+        }
         if guidance.status == WorkflowGovernanceGuidanceStatus::PhaseComplete {
             return Err(WorkflowGovernanceAdapterError::PolicyAlreadyCompleted);
         }
@@ -2889,7 +2937,10 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
@@ -7425,7 +7476,9 @@ fn authorization_action_packets(
     trusted_broker_registry_digest: Option<String>,
 ) -> Result<Vec<WorkflowAuthorizationActionPacket>, WorkflowGovernanceAdapterError> {
     let selected = policy_by_id(bundle, &guidance.selected_policy_ref)?;
-    let binding_for = |policy: &WorkflowGovernancePolicy, subject_ref: StableId| {
+    let binding_for = |policy: &WorkflowGovernancePolicy,
+                       subject_ref: StableId,
+                       readiness_target: ReadinessTarget| {
         WorkflowAuthorizationPacketBinding {
             project_id: guidance.project_id.clone(),
             effective_bundle_id: guidance
@@ -7446,7 +7499,7 @@ fn authorization_action_packets(
             ledger_head_digest: guidance.ledger_head_digest.clone(),
             trusted_principal_registry_digest: trusted_principal_registry_digest.clone(),
             trusted_broker_registry_digest: trusted_broker_registry_digest.clone(),
-            readiness_target: policy.routing.readiness_target,
+            readiness_target,
         }
     };
     let mut packets = Vec::new();
@@ -7479,7 +7532,7 @@ fn authorization_action_packets(
     packets.push(make_authorization_action_packet(
         WorkflowAuthorizationKind::IntentRevision,
         StableId(format!("packet.workflow.intent-revision.{}", intent_id.0)),
-        binding_for(selected, intent_id.clone()),
+        binding_for(selected, intent_id.clone(), guidance.target),
         human_authority("workflow.intent.accept_revision"),
         WorkflowAuthorizationInputContract::IntentRevision {
             intent_id,
@@ -7500,11 +7553,22 @@ fn authorization_action_packets(
         return Ok(packets);
     }
 
+    let mut policy_contexts = vec![(selected, guidance.target, &guidance.simulation)];
+    for boundary in &guidance.boundary_rechecks {
+        let policy = policy_by_id(bundle, &boundary.policy_ref)?;
+        if policy_contexts
+            .iter()
+            .all(|(candidate, _, _)| candidate.id != policy.id)
+        {
+            policy_contexts.push((policy, boundary.requested_target, &boundary.simulation));
+        }
+    }
+
     if guidance.status == WorkflowGovernanceGuidanceStatus::ApplicabilityRequired {
         packets.push(make_authorization_action_packet(
             WorkflowAuthorizationKind::Applicability,
             StableId(format!("packet.workflow.applicability.{}", selected.id.0)),
-            binding_for(selected, selected.id.clone()),
+            binding_for(selected, selected.id.clone(), guidance.target),
             human_authority("workflow.applicability.assess"),
             WorkflowAuthorizationInputContract::Applicability {
                 basis_refs_min_items: 1,
@@ -7513,51 +7577,66 @@ fn authorization_action_packets(
         )?);
     }
 
-    for gap in &guidance.simulation.candidate_capability_gaps {
-        let requirement = selected
-            .capability_requirements
-            .iter()
-            .find(|candidate| candidate.id == gap.id)
-            .ok_or_else(|| WorkflowGovernanceAdapterError::UnknownCapability(gap.id.0.clone()))?;
-        packets.push(make_authorization_action_packet(
-            WorkflowAuthorizationKind::Capability,
-            StableId(format!("packet.workflow.capability.{}", requirement.id.0)),
-            binding_for(selected, requirement.id.clone()),
-            runtime_authority("workflow.capability.authorize"),
-            WorkflowAuthorizationInputContract::Capability {
-                capability_ref: requirement.id.clone(),
-                probe_kind: requirement.probe_kind,
-                subject_kinds: capability_subject_kinds(requirement.probe_kind),
-                probe_reference_required: true,
-            },
-        )?);
+    for (action_policy, readiness_target, simulation) in &policy_contexts {
+        for gap in &simulation.candidate_capability_gaps {
+            let requirement = action_policy
+                .capability_requirements
+                .iter()
+                .find(|candidate| candidate.id == gap.id)
+                .ok_or_else(|| {
+                    WorkflowGovernanceAdapterError::UnknownCapability(gap.id.0.clone())
+                })?;
+            packets.push(make_authorization_action_packet(
+                WorkflowAuthorizationKind::Capability,
+                StableId(format!("packet.workflow.capability.{}", requirement.id.0)),
+                binding_for(action_policy, requirement.id.clone(), *readiness_target),
+                runtime_authority("workflow.capability.authorize"),
+                WorkflowAuthorizationInputContract::Capability {
+                    capability_ref: requirement.id.clone(),
+                    probe_kind: requirement.probe_kind,
+                    subject_kinds: capability_subject_kinds(requirement.probe_kind),
+                    probe_reference_required: true,
+                },
+            )?);
+        }
+
+        for request in &simulation.candidate_decision_requests {
+            packets.push(make_authorization_action_packet(
+                WorkflowAuthorizationKind::Decision,
+                StableId(format!("packet.workflow.decision.{}", request.id.0)),
+                binding_for(action_policy, request.id.clone(), *readiness_target),
+                human_authority("workflow.decision.resolve"),
+                WorkflowAuthorizationInputContract::Decision {
+                    decision_ref: request.id.clone(),
+                    alternatives: request.alternatives.clone(),
+                    recommended_alternative_ref: request.recommended_alternative_ref.clone(),
+                },
+            )?);
+        }
     }
 
-    for request in &guidance.simulation.candidate_decision_requests {
-        packets.push(make_authorization_action_packet(
-            WorkflowAuthorizationKind::Decision,
-            StableId(format!("packet.workflow.decision.{}", request.id.0)),
-            binding_for(selected, request.id.clone()),
-            human_authority("workflow.decision.resolve"),
-            WorkflowAuthorizationInputContract::Decision {
-                decision_ref: request.id.clone(),
-                alternatives: request.alternatives.clone(),
-                recommended_alternative_ref: request.recommended_alternative_ref.clone(),
-            },
-        )?);
-    }
-
-    let mut actionable_policies = vec![selected];
+    let mut actionable_policies = policy_contexts
+        .iter()
+        .map(|(policy, target, simulation)| (*policy, *target, Some(*simulation)))
+        .collect::<Vec<_>>();
     if let Some(assurance_policy) = bundle
         .workflow_governance_bundle
         .policies
         .iter()
         .find(|policy| policy.id.0 == UNIVERSAL_ASSURANCE_POLICY_ID)
-        .filter(|policy| policy.id != selected.id)
+        .filter(|policy| {
+            actionable_policies
+                .iter()
+                .all(|(candidate, _, _)| candidate.id != policy.id)
+        })
     {
-        actionable_policies.push(assurance_policy);
+        actionable_policies.push((
+            assurance_policy,
+            assurance_policy.routing.readiness_target,
+            None,
+        ));
     }
-    for action_policy in actionable_policies {
+    for (action_policy, readiness_target, simulation) in actionable_policies {
         for claim in &action_policy.claims {
             let governed_role_complete = guidance
                 .durable_assurance
@@ -7579,11 +7658,13 @@ fn authorization_action_packets(
             let claim_complete = if claim.assurance_role.is_some() {
                 governed_role_complete
             } else {
-                let result = guidance
-                    .simulation
-                    .candidate_claim_results
-                    .iter()
-                    .find(|candidate| candidate.claim_id == claim.id.0)
+                let result = simulation
+                    .and_then(|simulation| {
+                        simulation
+                            .candidate_claim_results
+                            .iter()
+                            .find(|candidate| candidate.claim_id == claim.id.0)
+                    })
                     .ok_or_else(|| {
                         WorkflowGovernanceAdapterError::UnknownClaim(claim.id.0.clone())
                     })?;
@@ -7676,7 +7757,7 @@ fn authorization_action_packets(
             packets.push(make_authorization_action_packet(
                 WorkflowAuthorizationKind::Evidence,
                 StableId(format!("packet.workflow.evidence.{}", claim.id.0)),
-                binding_for(action_policy, claim.id.clone()),
+                binding_for(action_policy, claim.id.clone(), readiness_target),
                 required_authority,
                 WorkflowAuthorizationInputContract::Evidence {
                     claim_ref: claim.id.clone(),
@@ -7701,12 +7782,11 @@ fn authorization_action_packets(
                 ..
             } = &claim.waiver
             {
-                let maximum_readiness_target =
-                    if max_target.rank() < action_policy.routing.readiness_target.rank() {
-                        *max_target
-                    } else {
-                        action_policy.routing.readiness_target
-                    };
+                let maximum_readiness_target = if max_target.rank() < readiness_target.rank() {
+                    *max_target
+                } else {
+                    readiness_target
+                };
                 let mut consequence_statements = vec![format!(
                     "Claim {} will be treated as waived without verified evidence: {}",
                     claim.id.0, claim.statement
@@ -7730,7 +7810,7 @@ fn authorization_action_packets(
                 packets.push(make_authorization_action_packet(
                     WorkflowAuthorizationKind::Waiver,
                     StableId(format!("packet.workflow.waiver.{}", claim.id.0)),
-                    binding_for(action_policy, claim.id.clone()),
+                    binding_for(action_policy, claim.id.clone(), readiness_target),
                     human_authority("workflow.waiver.authorize"),
                     WorkflowAuthorizationInputContract::Waiver {
                         claim_ref: claim.id.clone(),
@@ -7768,7 +7848,7 @@ fn authorization_action_packets(
             packets.push(make_authorization_action_packet(
                 WorkflowAuthorizationKind::Signal,
                 StableId(format!("packet.workflow.{}", subject_ref.0)),
-                binding_for(policy, subject_ref),
+                binding_for(policy, subject_ref, policy.routing.readiness_target),
                 operator_authority("workflow.signal.authorize"),
                 WorkflowAuthorizationInputContract::Signal {
                     signal,
@@ -10742,6 +10822,148 @@ mod tests {
     }
 
     #[test]
+    fn boundary_rechecks_emit_cas_bound_packets_at_the_requested_target() {
+        let (root, state) = temp_project("boundary-action-packets");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.boundary-action-packets".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        accept_test_intent(&adapter);
+
+        let bundle: WorkflowGovernanceBundleDocument = yaml_serde::from_str(include_str!(
+            "../../../../contracts/workflow-governance/golden-path-v0.yaml"
+        ))
+        .expect("golden path bundle");
+        let mut guidance = adapter.next().expect("selected-policy guidance");
+        let mut derived = DerivedReceipts::default();
+        for policy_ref in [
+            "policy.workflow.domain-scan",
+            "policy.workflow.product-requirements",
+        ] {
+            let policy = policy_by_id(&bundle, &StableId(policy_ref.to_owned())).expect("policy");
+            derived.completed_policy_refs.insert(policy.id.clone());
+            derived
+                .decision_need_refs
+                .extend(policy.decision_rules.iter().map(|rule| rule.id.clone()));
+        }
+        guidance.boundary_rechecks = boundary_rechecks(
+            &bundle,
+            &derived,
+            guidance.state_version,
+            1_800_000_000,
+            ReadinessTarget::Release,
+        )
+        .expect("boundary rechecks");
+        assert_eq!(guidance.boundary_rechecks.len(), 2);
+        assert!(guidance
+            .boundary_rechecks
+            .iter()
+            .all(|boundary| boundary.requested_target == ReadinessTarget::Release));
+
+        let principal_registry_digest = Some(format!("sha256:{}", "a".repeat(64)));
+        let broker_registry_digest = Some(format!("sha256:{}", "b".repeat(64)));
+        let packets = authorization_action_packets(
+            &bundle,
+            &guidance,
+            &derived,
+            None,
+            principal_registry_digest.clone(),
+            broker_registry_digest.clone(),
+        )
+        .expect("boundary packets");
+        let boundary_packet = |kind, policy_ref: &str, subject_ref: &str| {
+            packets
+                .iter()
+                .find(|packet| {
+                    packet.authorization_kind == kind
+                        && packet.binding.policy_ref.0 == policy_ref
+                        && packet.binding.subject_ref.0 == subject_ref
+                })
+                .expect("boundary action packet")
+        };
+
+        let capability = boundary_packet(
+            WorkflowAuthorizationKind::Capability,
+            "policy.workflow.domain-scan",
+            "capability.workflow.domain-scan.qualified-review",
+        );
+        assert!(matches!(
+            &capability.input_contract,
+            WorkflowAuthorizationInputContract::Capability {
+                capability_ref,
+                probe_kind: WorkflowCapabilityProbeKind::ExternalVerification,
+                probe_reference_required: true,
+                ..
+            } if capability_ref.0 == "capability.workflow.domain-scan.qualified-review"
+        ));
+
+        let evidence = boundary_packet(
+            WorkflowAuthorizationKind::Evidence,
+            "policy.workflow.domain-scan",
+            "claim.workflow.domain-scan.domain-risks-bounded",
+        );
+        assert!(matches!(
+            &evidence.input_contract,
+            WorkflowAuthorizationInputContract::Evidence {
+                provider: WorkflowEvaluatorProvider::ExternalAuthority,
+                evidence_kind: WorkflowEvidenceKind::ExternalAuthority,
+                strength: WorkflowEvidenceStrength::AuthoritativeAcceptance,
+                ..
+            }
+        ));
+
+        let decision = boundary_packet(
+            WorkflowAuthorizationKind::Decision,
+            "policy.workflow.product-requirements",
+            "decision.workflow.product-requirements.product-direction",
+        );
+        assert!(matches!(
+            &decision.input_contract,
+            WorkflowAuthorizationInputContract::Decision {
+                decision_ref,
+                recommended_alternative_ref,
+                ..
+            } if decision_ref.0 == "decision.workflow.product-requirements.product-direction"
+                && recommended_alternative_ref.0 == "alternative.preserve-intent"
+        ));
+
+        for packet in [capability, evidence, decision] {
+            assert_eq!(packet.binding.readiness_target, ReadinessTarget::Release);
+            assert_eq!(packet.binding.project_id, guidance.project_id);
+            assert_eq!(packet.binding.state_version, guidance.state_version);
+            assert_eq!(packet.binding.current_phase.0, guidance.current_phase);
+            assert_eq!(packet.binding.snapshot_digest, guidance.snapshot_digest);
+            assert_eq!(
+                packet.binding.ledger_head_digest,
+                guidance.ledger_head_digest
+            );
+            assert_eq!(
+                packet.binding.trusted_principal_registry_digest,
+                principal_registry_digest
+            );
+            assert_eq!(
+                packet.binding.trusted_broker_registry_digest,
+                broker_registry_digest
+            );
+            assert_eq!(
+                packet.packet_digest,
+                authorization_action_packet_digest(
+                    &packet.schema_version,
+                    &packet.packet_id,
+                    packet.authorization_kind,
+                    &packet.binding,
+                    &packet.required_authority,
+                    &packet.input_contract,
+                )
+                .expect("canonical packet digest")
+            );
+        }
+    }
+
+    #[test]
     fn next_exposes_actionable_broker_setup_and_survives_last_issuer_revocation() {
         let (root, state) = temp_project("broker-setup-guidance");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -10961,7 +11183,7 @@ mod tests {
         let release_registry =
             load_admitted_workflow_governance_universal_assurance_release_registry()
                 .expect("release registry");
-        let domain = LockedWorkflowDomainPackContext::acquire(&state).expect("domain");
+        let domain = LockedWorkflowDomainPackContext::acquire(&root, &state).expect("domain");
         let ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger");
         let projection = ledger.recover().expect("projection");
         let admitted = adapter
@@ -11805,7 +12027,7 @@ mod tests {
         let release_registry =
             load_admitted_workflow_governance_universal_assurance_release_registry()
                 .expect("release registry");
-        let domain = LockedWorkflowDomainPackContext::acquire(&state).expect("domain");
+        let domain = LockedWorkflowDomainPackContext::acquire(&root, &state).expect("domain");
         let mut ledger = lock_workflow_governance_ledger_tcb(&state).expect("ledger");
         let projection = ledger.recover().expect("projection");
         let admitted = adapter

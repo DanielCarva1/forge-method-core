@@ -18,9 +18,9 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, lock_domain_pack_lifecycle,
-    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
-    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
-    DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
+    lock_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
+    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
+    DomainPackLifecycleStoreError, DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -3854,6 +3854,37 @@ fn lifecycle_load_transfers_the_original_reconciliation_session_authority() {
     assert!(transfer.contains("target: self.target"));
     assert!(!transfer.contains("open_leaf_"));
     assert!(!transfer.contains("read_file_"));
+}
+
+#[test]
+fn detached_lifecycle_binds_the_explicit_project_not_sidecar_neighbors() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_nanos();
+    let outer = std::env::temp_dir().join(format!(
+        "forge-domain-pack-tcb-detached-explicit-project-{}-{nonce}",
+        std::process::id()
+    ));
+    let project = outer.join("app");
+    let sidecar = outer.join("forge-app");
+    let state = sidecar.join(".forge-method");
+    let operator = sidecar.join("operator");
+    fs::create_dir_all(&project).expect("create detached project");
+    fs::create_dir_all(&state).expect("create detached state root");
+    fs::create_dir_all(&operator).expect("create operator root");
+    fs::write(project.join("project.txt"), b"detached project input\n")
+        .expect("write detached project input");
+    let quarantine = operator.join(".forge-crash-recovery-marker-test.quarantine");
+    fs::write(&quarantine, b"store-owned recovery marker\n").expect("write Store recovery marker");
+    fs::hard_link(&quarantine, operator.join("marker-retained-anchor"))
+        .expect("retain Store marker anchor");
+
+    let lifecycle = lock_domain_pack_lifecycle_for_project(&project, &state)
+        .expect("detached lifecycle must snapshot the explicit project root");
+    assert!(lifecycle.projection().active_pointer.is_none());
+    drop(lifecycle);
+    fs::remove_dir_all(outer).expect("cleanup");
 }
 
 #[test]

@@ -60,9 +60,9 @@ use forge_core_decisions::{
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, derive_domain_pack_capability_demands,
     domain_pack_project_snapshot_digest, lock_domain_pack_lifecycle,
-    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
-    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
-    DOMAIN_PACK_MAX_DOCUMENT_BYTES,
+    lock_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
+    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
+    DomainPackLifecycleStoreError, DOMAIN_PACK_MAX_DOCUMENT_BYTES,
 };
 use forge_core_store::{
     acquire_effect_store_lock, backup::BackupExpectedMember,
@@ -1052,6 +1052,35 @@ fn run_acquisition_download(args: &[String]) -> Result<(), ExitError> {
     )
 }
 
+fn selected_package_matches_supply_chain_record(
+    record: &forge_core_contracts::DomainPackRegistryPackageRecord,
+    selected: &forge_core_contracts::DomainPackResolvedPackage,
+) -> bool {
+    record.record_digest == selected.registry_record_digest
+        && record.identity == selected.identity
+        && record.package_digest == selected.package.package_digest
+        && record.manifest_digest == selected.package.manifest.raw_sha256
+        && record.content_digest == selected.package.content.raw_sha256
+        && record.license_digest == selected.package.license.raw_sha256
+        && record.fixture_digests.iter().eq(selected
+            .package
+            .fixtures
+            .iter()
+            .map(|fixture| &fixture.raw_sha256))
+        && record.artifacts.manifest.binding == selected.package.manifest
+        && record.artifacts.content.binding.artifact_ref == selected.package.content.content_ref
+        && record.artifacts.content.binding.raw_sha256 == selected.package.content.raw_sha256
+        && record.artifacts.content.binding.canonical_sha256
+            == selected.package.content.canonical_sha256
+        && record.artifacts.license.binding == selected.package.license
+        && record
+            .artifacts
+            .fixtures
+            .iter()
+            .map(|fixture| &fixture.binding)
+            .eq(&selected.package.fixtures)
+}
+
 #[allow(clippy::similar_names, clippy::too_many_lines)]
 fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
     let mut derivation_input_file: Option<PathBuf> = None;
@@ -1258,21 +1287,7 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
             .entries()
             .iter()
             .map(forge_core_authority::VerifiedDomainPackSupplyChainEntry::record)
-            .find(|record| {
-                record.record_digest == selected.registry_record_digest
-                    && record.identity == selected.identity
-                    && record.package_digest == selected.package.package_digest
-                    && record.manifest_digest == selected.package.manifest.canonical_sha256
-                    && record.content_digest == selected.package.content.canonical_sha256
-                    && record.license_digest == selected.package.license.canonical_sha256
-                    && record.fixture_digests
-                        == selected
-                            .package
-                            .fixtures
-                            .iter()
-                            .map(|fixture| fixture.canonical_sha256.clone())
-                            .collect::<Vec<_>>()
-            })
+            .find(|record| selected_package_matches_supply_chain_record(record, selected))
             .ok_or_else(|| {
                 ExitError::with_code(
                     2,
@@ -1453,7 +1468,9 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
             payload: lock_payload,
         },
     };
-    let mut lifecycle = lock_domain_pack_lifecycle(&state_root).map_err(map_lifecycle_error)?;
+    let mut lifecycle =
+        lock_domain_pack_lifecycle_for_project(&controlled_roots.project, &controlled_roots.state)
+            .map_err(map_lifecycle_error)?;
     if lifecycle.projection().active_pointer.is_some() {
         return Err(ExitError::conflict(
             "domain-pack: acquire apply is clean-install-only; use intent-specific lifecycle upgrade, rollback, or remove for initialized state",
@@ -1730,7 +1747,9 @@ pub(crate) fn apply_domain_pack_core_rebase(
             domain_pack_rebase_plan: plan.clone(),
         },
     )?;
-    let mut lifecycle = lock_domain_pack_lifecycle(state_root).map_err(map_lifecycle_error)?;
+    let mut lifecycle =
+        lock_domain_pack_lifecycle_for_project(&controlled_roots.project, &controlled_roots.state)
+            .map_err(map_lifecycle_error)?;
     let source = lifecycle
         .active_rebase_source()
         .map_err(map_lifecycle_error)?;
@@ -1770,7 +1789,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
         .clone_from(&source_lock.roots);
     resolution_request
         .domain_pack_resolution_request
-        .current_lock = None;
+        .current_lock = Some(source.exact_lock.clone());
     resolution_request
         .domain_pack_resolution_request
         .registry_snapshot_digest
@@ -1796,21 +1815,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
             .entries()
             .iter()
             .map(forge_core_authority::VerifiedDomainPackSupplyChainEntry::record)
-            .find(|record| {
-                record.record_digest == selected.registry_record_digest
-                    && record.identity == selected.identity
-                    && record.package_digest == selected.package.package_digest
-                    && record.manifest_digest == selected.package.manifest.canonical_sha256
-                    && record.content_digest == selected.package.content.canonical_sha256
-                    && record.license_digest == selected.package.license.canonical_sha256
-                    && record.fixture_digests
-                        == selected
-                            .package
-                            .fixtures
-                            .iter()
-                            .map(|fixture| fixture.canonical_sha256.clone())
-                            .collect::<Vec<_>>()
-            })
+            .find(|record| selected_package_matches_supply_chain_record(record, selected))
             .ok_or_else(|| {
                 ExitError::with_code(
                     2,
@@ -2439,7 +2444,9 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
     )?;
     let owned = load_composition_materials(&composition_request, &artifact_root)?;
     let materials = material_views(&composition_request, &owned);
-    let mut lifecycle = lock_domain_pack_lifecycle(&state_root).map_err(map_lifecycle_error)?;
+    let mut lifecycle =
+        lock_domain_pack_lifecycle_for_project(&controlled_roots.project, &controlled_roots.state)
+            .map_err(map_lifecycle_error)?;
     let prepared = lifecycle
         .prepare_candidate(preflight.clone())
         .map_err(map_lifecycle_error)?;
@@ -2947,6 +2954,7 @@ fn require_direct_operator_file(
 }
 
 pub(crate) fn lock_domain_pack_backup_authorities(
+    project_root: &Path,
     state_root: &Path,
     verified_at_unix: u64,
 ) -> Result<LockedDomainPackBackupAuthorities, ExitError> {
@@ -3004,11 +3012,12 @@ pub(crate) fn lock_domain_pack_backup_authorities(
     // acquisition a forbidden process-local upgrade. Any producer entering the
     // small handoff window is drained by that exclusive root acquisition before
     // source bytes are observed.
-    let lifecycle = lock_domain_pack_lifecycle(state_root).map_err(|error| {
-        ExitError::failed(format!(
-            "domain-pack: cannot validate lifecycle for backup: {error}"
-        ))
-    })?;
+    let lifecycle =
+        lock_domain_pack_lifecycle_for_project(project_root, state_root).map_err(|error| {
+            ExitError::failed(format!(
+                "domain-pack: cannot validate lifecycle for backup: {error}"
+            ))
+        })?;
     drop(lifecycle);
     let learning_capture =
         acquire_effect_store_lock(state_root, "domain-pack-learning/capture.lock").map_err(

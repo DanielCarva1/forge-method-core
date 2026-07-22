@@ -806,8 +806,12 @@ impl From<CrashReplaceError> for DomainPackLifecycleStoreError {
     }
 }
 
-/// Acquire the fixed lifecycle lock, reconcile interrupted pointer replacement,
-/// and verify the complete active generation and immutable ledger chain.
+/// Acquire the fixed lifecycle lock for an embedded `.forge-method` directory,
+/// reconcile interrupted pointer replacement, and verify the complete active
+/// generation and immutable ledger chain.
+///
+/// Call [`lock_domain_pack_lifecycle_for_project`] when the Forge state is a
+/// detached sidecar rather than a direct child of the governed project root.
 ///
 /// # Errors
 ///
@@ -820,6 +824,40 @@ pub fn lock_domain_pack_lifecycle(
     let project_root = state_root
         .parent()
         .ok_or_else(|| invalid("state_root", "canonical state root has no project parent"))?;
+    lock_domain_pack_lifecycle_for_canonical_project(project_root, &state_root)
+}
+
+/// Acquire the fixed lifecycle lock while binding project evidence to an
+/// explicit governed project root.
+///
+/// This is the authoritative entry point for detached sidecar layouts. Store,
+/// operator, and recovery files beside the `.forge-method` directory are not
+/// project evidence and therefore cannot contaminate the retained project tree.
+///
+/// # Errors
+///
+/// Returns a typed lock, recovery, confinement, integrity, or I/O error when
+/// either root or the retained state cannot be proven complete.
+pub fn lock_domain_pack_lifecycle_for_project(
+    project_root: impl AsRef<Path>,
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycle, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root.as_ref())?;
+    let project_root = fs::canonicalize(project_root.as_ref())
+        .map_err(|error| io_error(project_root.as_ref(), error))?;
+    if !project_root.is_dir() {
+        return Err(invalid(
+            "project_root",
+            "must be an existing canonical project directory",
+        ));
+    }
+    lock_domain_pack_lifecycle_for_canonical_project(&project_root, &state_root)
+}
+
+fn lock_domain_pack_lifecycle_for_canonical_project(
+    project_root: &Path,
+    state_root: &Path,
+) -> Result<LockedDomainPackLifecycle, DomainPackLifecycleStoreError> {
     let project_snapshot = Arc::new(
         RetainedProjectTree::capture_allowing_store_owned_file_anchors(
             project_root,
@@ -827,8 +865,8 @@ pub fn lock_domain_pack_lifecycle(
             DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_BYTES,
         )?,
     );
-    let lock = acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)?;
-    let store = lock.into_domain_pack_lifecycle_store()?;
+    let lock = acquire_effect_store_lock(state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)?;
+    let store = lock.into_domain_pack_lifecycle_store_for_project(&project_snapshot)?;
     let (loaded, recovery, active_pointer_authority) =
         load_current_state_under_lock(&store, &project_snapshot)?;
     Ok(LockedDomainPackLifecycle {

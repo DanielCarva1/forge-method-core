@@ -112,8 +112,11 @@ fn run_create(args: BackupArgs) -> Result<(), ExitError> {
         .next()
         .map_err(|error| ExitError::env_config(format!("derive workflow authority: {error}")))?;
 
-    let domain_pack =
-        crate::domain_pack_cmd::lock_domain_pack_backup_authorities(&state_root, now_unix()?)?;
+    let domain_pack = crate::domain_pack_cmd::lock_domain_pack_backup_authorities(
+        &project_root,
+        &state_root,
+        now_unix()?,
+    )?;
     let credential =
         crate::workflow_credential_cmd::lock_workflow_credential_registry(&project_root)?;
     let broker = crate::workflow_broker_cmd::lock_workflow_broker_registry(&project_root)?;
@@ -301,8 +304,11 @@ fn run_verify(args: BackupArgs) -> Result<(), ExitError> {
         &state_root,
     )
     .map_err(|error| ExitError::env_config(format!("bind workflow governance: {error}")))?;
-    let _domain_pack =
-        crate::domain_pack_cmd::lock_domain_pack_backup_authorities(&state_root, now_unix()?)?;
+    let _domain_pack = crate::domain_pack_cmd::lock_domain_pack_backup_authorities(
+        &project_root,
+        &state_root,
+        now_unix()?,
+    )?;
     let credential =
         crate::workflow_credential_cmd::lock_workflow_credential_registry(&project_root)?;
     let broker = crate::workflow_broker_cmd::lock_workflow_broker_registry(&project_root)?;

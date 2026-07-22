@@ -347,14 +347,10 @@ fn complete(
     args: &WorkflowCliArgs,
 ) -> Result<Value, forge_core_kernel::WorkflowGovernanceAdapterError> {
     let expected = required(args, "if-snapshot").map_err(invalid_observation)?;
-    let current = adapter.next()?;
-    if expected != current.snapshot_digest {
-        return Err(forge_core_kernel::WorkflowGovernanceAdapterError::CompletionDrift);
-    }
     let principal = PrincipalId(
         optional(args, "principal").unwrap_or_else(|| "principal.replacement-agent".to_owned()),
     );
-    let prepared = adapter.prepare_completion()?;
+    let prepared = adapter.prepare_completion_for_snapshot(&expected)?;
     adapter
         .consume_completion(prepared, principal)
         .map(|receipt| serde_json::to_value(receipt).expect("serializable completion receipt"))

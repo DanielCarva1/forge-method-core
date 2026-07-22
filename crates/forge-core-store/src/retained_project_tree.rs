@@ -37,6 +37,14 @@ pub struct RetainedProjectTree {
     allow_store_owned_file_anchors: bool,
 }
 
+/// Store-private binding between a lifecycle lock and the exact governed
+/// project root selected by its trusted caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RetainedProjectRootBinding {
+    display_root: PathBuf,
+    identity: FileIdentity,
+}
+
 /// Canonical persisted binding for the complete retained project tree.
 ///
 /// This type remains crate-private because its random nonces are valid only while
@@ -761,6 +769,37 @@ impl RetainedProjectTree {
     #[must_use]
     pub(crate) fn display_root(&self) -> &Path {
         &self.display_root
+    }
+
+    pub(crate) fn root_binding(
+        &self,
+    ) -> Result<RetainedProjectRootBinding, RetainedProjectTreeError> {
+        let root =
+            self.directories
+                .first()
+                .ok_or_else(|| RetainedProjectTreeError::InvalidRoot {
+                    path: self.display_root.clone(),
+                    reason: "retained project tree has no root directory witness".to_owned(),
+                })?;
+        Ok(RetainedProjectRootBinding {
+            display_root: self.display_root.clone(),
+            identity: identity(&root.metadata)?,
+        })
+    }
+
+    pub(crate) fn validate_root_binding(
+        &self,
+        expected: &RetainedProjectRootBinding,
+    ) -> Result<(), RetainedProjectTreeError> {
+        let actual = self.root_binding()?;
+        if &actual != expected {
+            return Err(RetainedProjectTreeError::Identity {
+                path: self.display_root.clone(),
+                reason: "retained project tree differs from the lifecycle-bound project root"
+                    .to_owned(),
+            });
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
