@@ -105,11 +105,15 @@ features = ["plotters", "cargo_bench_support"]
 [workspace.dependencies.assert_cmd]
 version = "2.0"
 
+# Low optimization keeps debug assertions and overflow checks active while
+# making CPU-heavy governance derivation practical in real-process tests.
+[profile.test]
+opt-level = 1
+
 # Release profile tuned for the forge-core-cli binary: thin LTO + single
 # codegen unit maximises cross-crate inlining for the crypto-heavy paths
 # (rekor verify, OCSP decode, ed25519/p256 signatures), panic = abort trims
 # the unwind tables, and opt-level = 3 keeps the hot loops vectorised.
-# Debug builds and `cargo test` keep the dev profile (untouched here).
 [profile.release]
 opt-level = 3
 lto = "thin"
