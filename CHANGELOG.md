@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Canonical Rust product gap register and closure plan.** Added an evidence-
+  backed, machine-checked distinction between absent implementation, partial
+  public surfaces, engineering hardening debt, and external evidence. The plan
+  starts with the first-use human-origin authority and one named-host vertical
+  slice, then closes state-loss/install lifecycle and release blockers before
+  Ready/Operate/Evolve or Domain Pack ecosystem breadth. Legacy Python remains
+  explicitly non-authoritative.
+- **C1 host-origin broker source primitives (not host evidence).** Added signed
+  opaque native-host provenance for broker event `0.2`, recovery-only frozen
+  `0.1`, permanent workflow-ledger wire epoch `0.5`, native-tuple replay
+  identity, and a lock-held nonmutating replay preflight across the authoritative
+  ledger commit. No reference host, isolated signer, or production human-origin
+  assurance is claimed.
 - **P7C reviewed Domain Pack discovery and acquisition.** Added accepted-intent-
   bound search/explain, exact candidate planning, catalog-backed preparation,
   explicit operator approval, and high-level lifecycle apply that derives and

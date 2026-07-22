@@ -1,0 +1,658 @@
+schema_version: '0.1'
+campaign_id: forge-product-gap-closure-p0-v1
+status: source_complete
+authority:
+  kind: c2.2-continuity-projection
+  canonical_manifest: contracts/plan/product-gap-closure-campaign-v1.yaml
+  item_id: C2.2
+  authority_rule: This projection is resume authority while the canonical C2.2 item checkpoint references
+    this path and its checkpoint generation and admission anchor match. Chat, transcripts, .pi, display
+    summaries, and unreferenced sidecar state never authorize work.
+  recovery_policy: Ambiguous Git identity, lane disposition, path ownership, claim, lock, checkpoint,
+    event, or hash state fails closed as blocked_recovery_required.
+existing_lanes:
+  disposition_vocabulary:
+  - unresolved
+  - adopt
+  - supersede
+  - quarantine
+  entries:
+  - id: L01
+    branch: lane/c2-backup-restore
+    head: 437cbef563fcb8fc3295a9712f7364c74bae625e
+    worktree: /home/user/forge-worktrees/forge-method-core/c2-backup-restore
+    disposition: adopt
+    evidence_refs:
+    - 137b3cf43b123d4b15c45b544a3e3060e714ffb9:/mnt/d/forge-method-core/contracts/plan/product-gap-closure-plan.yaml:134-154
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-store/src/backup.rs:309-339
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-store/src/backup.rs:714-797
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-store/src/backup.rs:951-1022
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-cli/src/backup_cmd.rs:63-72
+    rationale: 'Primary reusable C2.2 backup source: it provides protected receipt bindings, strict archive
+      and Project Link verification, configured-current-authority comparison, destination-name preflight,
+      immutable archive/receipt publication, retained producer snapshots, and public verification. It
+      is not complete because create fails closed, snapshot assembly is test-only, capture is not capability-gated,
+      and restore plus restore receipts are absent.'
+    integration_action: Layer L01 file-by-file after the canonical Store, EventLog, and kernel authority
+      foundations. Preserve its receipt, archive, verification, publication, and producer-snapshot code;
+      require a typed HostQuiescenceGuard for capture, add the production assembler, then implement atomic
+      restore and durable project-bound restore receipts before enabling create or exposing restore.
+  - id: L02
+    branch: lane/c2-s04-authority-seams
+    head: 9a4e0f64756a6252b2daf04d2d977fcbb1e6b3d9
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 9a4e0f64756a6252b2daf04d2d977fcbb1e6b3d9:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:194-202
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-cli/src/io_util.rs:248-267
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:360-404
+    rationale: Nine of eleven commits are patch-equivalent to L01. Its remaining retained-directory and
+      Domain Pack read hardening is not an independent backup/restore capability and is replaced by L01's
+      retained exact-byte snapshots, opened-handle identity checks, single-link validation, and later
+      namespace-mutation defenses.
+    integration_action: Do not replay L02. Consolidate any still-needed retained-directory behavior into
+      the canonical Store composition while preserving L01's snapshot and replacement defenses.
+  - id: L03
+    branch: lane/c2-s04-cli-lock-seams
+    head: e343ea00dbdb0badb76213b0ed994fed019e861b
+    worktree: /home/user/forge-worktrees/forge-method-core/c2-s04-cli-lock-seams
+    disposition: supersede
+    evidence_refs:
+    - e343ea00dbdb0badb76213b0ed994fed019e861b:/mnt/d/forge-method-core/crates/forge-core-cli/src/workflow_credential_cmd.rs:671-701
+    - 437cbef563fcb8fc3295a9712f7364c74bae625e:/mnt/d/forge-method-core/crates/forge-core-cli/src/io_util.rs:140-179
+    rationale: All three commits are patch-equivalent to source already present in L01, including workflow
+      registry snapshots, private-key exclusion, retained CLI directory identity, and descriptor-relative
+      replacement.
+    integration_action: Do not replay L03; consume the corresponding L01 source once and preserve exclusion
+      of private external workflow keys.
+  - id: L04
+    branch: lane/c2-s04-eventlog-admission
+    head: 6f3084a7b4329e332ad130de49f570a183ca647c
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 6f3084a7b4329e332ad130de49f570a183ca647c:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:402-413
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs:57-155
+    rationale: L04 is a strict ancestor of L05. L05 retains its producer quiescence, retained root authority,
+      effect locking, and EventLog transaction work and adds later TCB hardening and deterministic contention
+      evidence.
+    integration_action: Do not integrate L04 separately; admit its source only through L05's canonical
+      EventLog endpoint after deduplicating the shared Store prefix.
+  - id: L05
+    branch: lane/c2-s04-eventlog-contract-aliases
+    head: 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27
+    worktree: null
+    disposition: adopt
+    evidence_refs:
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs:57-109
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs:112-147
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/lib.rs:1-17
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:311-429
+    rationale: Canonical EventLog consistency source. Its closed TCB admits mutations under the retained
+      producer boundary and exposes a read-only quiesced snapshot seam. In the full reconciliation, the
+      shared ac3720c1..602f8bec Store foundation is already supplied by L16, so L05 contributes only its
+      EventLog-specific descendant chain.
+    integration_action: Integrate only the EventLog chain aba815a7 through 74526d05 after L16. Expose
+      a narrow typed backup capture facade from the private TCB, and keep the exclusive host guard held
+      through reconciliation, producer locks, copy, and stable re-enumeration.
+  - id: L06
+    branch: lane/c2-s04-eventlog-tcb-fix1
+    head: 9b05da132e885b94b5e00d48246d15e3b1fee8cf
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 9b05da132e885b94b5e00d48246d15e3b1fee8cf:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs:57-109
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs:493-607
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/admission.rs:220-230
+    rationale: L06 is the direct parent of L05 and its production source is inherited unchanged; L05 adds
+      the final deterministic EventLog contention and test hardening.
+    integration_action: Do not replay L06; use L05's canonical descendant only.
+  - id: L07
+    branch: lane/c2-s04-eventlog-tcb-fix2
+    head: 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:402-413
+    - 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27:/mnt/d/forge-method-core/crates/forge-core-eventlog/src/lib.rs:1-44
+    rationale: L07 is object-identical to L05 at commit and tree 74526d0538e30ca3d2b01cbb2b5caf78c45e8d27
+      and contributes no independent source.
+    integration_action: Drop the duplicate lane record; assign no separate replay or ownership.
+  - id: L08
+    branch: lane/c2-s04-kernel-admission
+    head: e82bec3849998bafa6e13e13cbc2f3aa967cbbae
+    worktree: null
+    disposition: adopt
+    evidence_refs:
+    - e82bec3849998bafa6e13e13cbc2f3aa967cbbae:/mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs:560-580
+    - e82bec3849998bafa6e13e13cbc2f3aa967cbbae:/mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs:1618-1680
+    - e82bec3849998bafa6e13e13cbc2f3aa967cbbae:/mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs:1701-1729
+    - e82bec3849998bafa6e13e13cbc2f3aa967cbbae:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:1341-1475
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:311-429
+    rationale: L08 directly closes runtime mutation escape paths by retaining effect namespace authority
+      and carrying one producer admission across operation writes, replay, recovery, and host-quiesced
+      reconciliation. Globally, L16 already contains the shared foundation and commit 75c35242, leaving
+      three independent kernel commits.
+    integration_action: Integrate only 5852a083, 8ae9ac96, and e82bec38 after L16; do not duplicate 75c35242.
+      Preserve the namespace-authority lock and host-quiesced reconciliation seam, and reconcile any shared
+      Store requests through C22-P0/C22-P1.
+  - id: L09
+    branch: lane/c2-s04-kernel-admission-fix1
+    head: 25b1e73dabd5cdd3b031b97538baedbf160fef39
+    worktree: null
+    disposition: quarantine
+    evidence_refs:
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/docs/runtime-operation-context-migration.md:50-61
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs:40-47
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs:1617-1626
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/crates/forge-core-kernel/src/wal_orchestration.rs:486-503
+    rationale: 'Its tip is statically incomplete: kernel source imports and invokes new canonical operation-lock
+      and under-effect-lock Store APIs that the Store tree does not implement, and the lane''s migration
+      document acknowledges the missing APIs. This authority migration is not bounded C2.2 integration.'
+    integration_action: Do not admit 25b1e73d. Retain L08's usable kernel predecessor; reassess the redesign
+      only after a separately reviewed Store companion implementation exists.
+  - id: L10
+    branch: lane/c2-s04-kernel-api-errors-fix2
+    head: 25b1e73dabd5cdd3b031b97538baedbf160fef39
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/docs/runtime-operation-context-migration.md:57-61
+    - 25b1e73dabd5cdd3b031b97538baedbf160fef39:/mnt/d/forge-method-core/crates/forge-core-kernel/src/wal_orchestration.rs:8-15
+    rationale: L10 is object-identical to quarantined L09 at commit and tree 25b1e73d and therefore has
+      no independent source or remediation value.
+    integration_action: Drop the duplicate record; use adopted L08 as the safe predecessor and route any
+      future redesign through L09's quarantine conditions.
+  - id: L11
+    branch: lane/c2-s04-producer-quiescence-store
+    head: 97d8a8b065caaed60280e79bb8db9b931a8c7142
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - 97d8a8b065caaed60280e79bb8db9b931a8c7142:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:3-10
+    - 97d8a8b065caaed60280e79bb8db9b931a8c7142:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:218-222
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:1059-1135
+    rationale: L11 is a strict ancestor of L16. L16 retains its persistent Windows authority handle and
+      adds the Unix directory-inode authority correction plus stronger contention attribution.
+    integration_action: Do not replay L11 separately; source platform-specific producer root authority
+      from L16.
+  - id: L12
+    branch: lane/c2-s04-reserved-ledgers-fix1
+    head: c7c7a76f69b269b212eb8f5fd92250e7df07ae23
+    worktree: null
+    disposition: quarantine
+    evidence_refs:
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-94
+    - 2bc7fcdb21902f9064afdfc01ca09e6d7fc9732a:/mnt/d/forge-method-core/crates/forge-core-contracts/src/reserved_state_paths.rs:17-65
+    - 2bc7fcdb21902f9064afdfc01ca09e6d7fc9732a:/mnt/d/forge-method-core/crates/forge-core-contracts/src/reserved_state_paths.rs:88-147
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:344-400
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-store/src/crash_replace.rs:243-270
+    rationale: The immutable head is syntactically invalid because RetainedDirectory::from_handle contains
+      a method declaration inside a Self literal. The isolated reserved-path classifier 2bc7fcdb and Store
+      guard delta c7c7a76f remain bounded salvage candidates because they do not require adopting the
+      malformed tree.
+    integration_action: Never integrate the L12 tree. After composing L16 and L14, port only the reviewed
+      deltas from 2bc7fcdb and c7c7a76f, preserving the no-exception reserved-path policy and final retained
+      mutation boundaries.
+  - id: L13
+    branch: lane/c2-s04-retained-leaves-fix2
+    head: d5c0c008cb377ca545ccf25ee14e6ca86b23f0e2
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - d5c0c008cb377ca545ccf25ee14e6ca86b23f0e2:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:293-329
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:369-442
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-contracts/src/backup_manifest.rs:2560-2606
+    rationale: L13 is a strict ancestor of L14. L14 adds bounded collision retries, retained temp/destination
+      identity checks, identity-safe cleanup, post-rename verification, and matching exact backup-exclusion
+      grammar.
+    integration_action: Do not integrate L13 independently; take the complete retained-authority replacement
+      endpoint through L14.
+  - id: L14
+    branch: lane/c2-s04-retained-temp-fix3
+    head: 665c47fd3beac974aaf67aef2882c99ddef3387d
+    worktree: null
+    disposition: adopt
+    evidence_refs:
+    - 137b3cf43b123d4b15c45b544a3e3060e714ffb9:/mnt/d/forge-method-core/contracts/spec/project-state-backup-manifest-v1.yaml:20-28
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:221-289
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:293-442
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:4808-4900
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-contracts/src/backup_manifest.rs:2530-2606
+    rationale: Authoritative retained-leaf and atomic authority-replacement complement. It supplies no-follow
+      regular/single-link authority validation, retained effect/claim/workflow mutation paths, orphan-safe
+      replacement, identity-checked cleanup, and precise temporary-file exclusion, but must not replace
+      L16's whole Store tree.
+    integration_action: Apply the final net source delta from common fork 25e34839 through 665c47fd onto
+      L16. Preserve L16's root authority and .producer-root-authority.lock exclusion while adding L14's
+      stricter pid-nanos-attempt temporary grammar and replacement checks.
+  - id: L15
+    branch: lane/c2-s04-root-authority-fix2
+    head: d0e9f3e807197a598deb5727c4e373c36e3720c8
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - d0e9f3e807197a598deb5727c4e373c36e3720c8:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:914-1135
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:40-73
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:1995-2103
+    rationale: L15 is a strict ancestor of L16. The descendant retains the production authority model
+      and replaces only test synchronization and contention attribution with stronger final evidence.
+    integration_action: Use L16 as the sole root-authority head; do not retain L15's superseded test formulation.
+  - id: L16
+    branch: lane/c2-s04-root-hooks-fix5
+    head: b4e79061addcc6b4d8c29ced73166b5d03ddafda
+    worktree: null
+    disposition: adopt
+    evidence_refs:
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:311-429
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:914-1135
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:1230-1393
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:1447-1470
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:218-223
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-contracts/src/backup_manifest.rs:2519-2525
+    rationale: Canonical Store producer-quiescence and root-authority foundation. It exposes an opaque
+      sealed exact-root boundary, retains exclusive host quiescence, binds effect authority to the held
+      boundary, uses Unix directory-inode authority and a Windows no-delete-share authority handle, validates
+      retained identities fail closed, and excludes the persistent authority leaf from backup.
+    integration_action: Use b4e79061 as the sole Store foundation. It already contains the common ac3720c1..602f8bec
+      series and L08's 75c35242; then layer L14's net retained-leaf delta and the bounded L12 salvage.
+      Do not admit the non-authoritative .gitignore hunk.
+  - id: L17
+    branch: lane/c2-s04-store-integration
+    head: b4e79061addcc6b4d8c29ced73166b5d03ddafda
+    worktree: /home/user/forge-worktrees/forge-method-core/c2-s04-store-integration
+    disposition: supersede
+    evidence_refs:
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs:311-429
+    - b4e79061addcc6b4d8c29ced73166b5d03ddafda:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:1458-1470
+    rationale: L17 is byte-identical to L16 at commit and tree b4e79061 and has no separate source ownership.
+    integration_action: Drop the coordination alias and perform the L16 plus L14 plus bounded L12 composition
+      once.
+  - id: L18
+    branch: lane/c2-s04-store-reserved-ledgers
+    head: c7c7a76f69b269b212eb8f5fd92250e7df07ae23
+    worktree: null
+    disposition: quarantine
+    evidence_refs:
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-94
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-contracts/src/reserved_state_paths.rs:130-165
+    - c7c7a76f69b269b212eb8f5fd92250e7df07ae23:/mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs:5794-5864
+    rationale: L18 is the exact c7c7a76f head/tree represented by L12 and inherits the same malformed
+      retained_dir.rs; it contributes no independent evidence or source.
+    integration_action: Quarantine the duplicate head and use L12's single bounded-salvage path only;
+      never apply both lane identities.
+  - id: L19
+    branch: lane/c2-s04-store-retained-leaves
+    head: 8dbea5e0dc84a22a5b4f626c170e1d3123190877
+    worktree: null
+    disposition: quarantine
+    evidence_refs:
+    - 8dbea5e0dc84a22a5b4f626c170e1d3123190877:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-94
+    - e9879f1b062da46871a9e4cd4eff9faf4767c09d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-100
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-100
+    rationale: Its immutable head contains the same syntactically invalid Self literal later corrected
+      by e9879f1b; unsafe source cannot be authoritative even though it lies on the retained-leaf lineage.
+    integration_action: Do not integrate L19. Consume the corrected and hardened lineage only through
+      L14's final net delta.
+  - id: L20
+    branch: lane/c2-s04-store-retained-leaves-fix1
+    head: e9879f1b062da46871a9e4cd4eff9faf4767c09d
+    worktree: null
+    disposition: supersede
+    evidence_refs:
+    - e9879f1b062da46871a9e4cd4eff9faf4767c09d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:85-100
+    - e9879f1b062da46871a9e4cd4eff9faf4767c09d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:292-320
+    - 665c47fd3beac974aaf67aef2882c99ddef3387d:/mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs:369-442
+    rationale: L20 repairs L19 and is relevant, but it is a strict ancestor of L14. Its deterministic
+      authority.tmp replacement lacks L14's collision handling, retained identity, identity-safe cleanup,
+      and post-rename checks.
+    integration_action: Do not integrate L20 separately; take all corrected retained-leaf authority through
+      L14.
+participants:
+- id: C22-P0
+  role: Shared-contract and integration authority
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/contracts/
+  - /mnt/d/forge-method-core/docs/generated/command-surface.md
+  - /mnt/d/forge-method-core/Cargo.toml
+  - /mnt/d/forge-method-core/crates/forge-core-command-surface/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-governance/
+  - /mnt/d/forge-method-core/crates/forge-core-memory/
+  - /mnt/d/forge-method-core/crates/forge-core-research/Cargo.toml
+  - /mnt/d/forge-method-core/crates/forge-core-research/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-domain-pack-learning-store/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-domain-pack-tcb/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-workflow-governance-tcb/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/Cargo.toml
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/governance/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/research/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/Cargo.toml
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/lib.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/command_registry.rs
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P0/generation-1
+  first_task: Record the canonical object/dedup map, compose shared contracts and exports requested by
+    P1-P4, and admit only Cargo manifest source edits required by the adopted dependency/refactor source.
+    Leave Cargo.lock and the non-authoritative .gitignore hunk outside this implementation scope.
+  shared_file_requests_to: none; C22-P0 is the sole shared-file authority
+- id: C22-P1
+  role: Store quiescence and retained-authority owner
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/producer_quiescence.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/retained_dir.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/claim_wal.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/replay_anchor.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/replay_wal.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/workflow_action_replay.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/crash_replace.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/retained_crash_replace.rs
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P1/generation-1
+  first_task: Compose L16 with L14's final net retained-leaf delta, preserving both platform root-authority
+    branches, .producer-root-authority.lock exclusion, and L14's exact temporary grammar; then prepare
+    the Store portion of the bounded L12 salvage.
+  shared_file_requests_to: C22-P0
+- id: C22-P2
+  role: Closed EventLog TCB owner
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/tcb.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/error.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/governance/arbitrate.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/governance/error.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/governance/escalate.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/governance/record.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/admission.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/error.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/promote.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/memory/retention.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/research/admission.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/research/error.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/lock.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/projection.rs
+  - /mnt/d/forge-method-core/crates/forge-core-eventlog/src/tests.rs
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P2/generation-1
+  first_task: Port only L05's EventLog-specific chain after 602f8bec, retain one closed stream authority
+    throughout transactions, and define the narrow typed quiesced snapshot facade that P0 will export.
+  shared_file_requests_to: C22-P0
+- id: C22-P3
+  role: Kernel operation-authority owner
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/execute_operation.rs
+  - /mnt/d/forge-method-core/crates/forge-core-kernel/src/builtin_gates.rs
+  - /mnt/d/forge-method-core/crates/forge-core-kernel/src/gate.rs
+  - /mnt/d/forge-method-core/crates/forge-core-kernel/src/prepared_execution.rs
+  - /mnt/d/forge-method-core/crates/forge-core-kernel/src/wal_orchestration.rs
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P3/generation-1
+  first_task: Integrate only L08 commits 5852a083, 8ae9ac96, and e82bec38 on top of L16, preserving one
+    operation admission across effect writes, replay, recovery, and quiesced reconciliation; exclude every
+    L09 API reference.
+  shared_file_requests_to: C22-P0
+- id: C22-P4
+  role: Backup, restore, and producer-adapter owner
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/backup.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/restore.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/backup_cmd.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/restore_cmd.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/claim.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/domain_pack_cmd.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/domain_pack_learning_cmd.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/io_util.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/isolation.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/workflow_broker_cmd.rs
+  - /mnt/d/forge-method-core/crates/forge-core-cli/src/workflow_credential_cmd.rs
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P4/generation-1
+  first_task: Port L01's reusable backup and producer-adapter source after P1-P3 settle, capability-gate
+    capture with the exact-root host guard, construct the complete manifest/member snapshot, and implement
+    preflighted atomic restore plus protected restore-receipt publication.
+  shared_file_requests_to: C22-P0
+- id: C22-P5
+  role: Adversarial C2.2 test-source owner
+  state: completed
+  branch: lane/c2-c22-continuity-repair
+  worktree: /mnt/d/forge-method-core
+  path_scope:
+  - /mnt/d/forge-method-core/crates/forge-core-cli/tests/
+  - /mnt/d/forge-method-core/crates/forge-core-store/tests/
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/backup_tests.rs
+  - /mnt/d/forge-method-core/crates/forge-core-store/src/restore_tests.rs
+  - /mnt/d/forge-method-core/crates/forge-core-kernel/tests/
+  - /mnt/d/forge-method-core/crates/forge-core-domain-pack-learning-store/tests/
+  - /mnt/d/forge-method-core/crates/forge-core-domain-pack-tcb/tests/
+  - /mnt/d/forge-method-core/crates/forge-core-workflow-governance-tcb/tests/
+  claim_ref: campaign://forge-product-gap-closure-p0-v1/C2.2/C22-P5/generation-1
+  first_task: Add bounded test source for complete-scope capture, mutation contention, interrupted publication,
+    destination collisions, stale/cross-project/rollback/tampered restore rejection, private-key exclusion,
+    and durable project-bound receipts; locked compilation through the canonical hermetic compile-feedback launcher is
+    required during implementation, while runtime execution remains deferred to final stabilization.
+  shared_file_requests_to: C22-P0
+dependencies:
+- item_id: C2.1
+  required_status:
+  - implemented_pending_evidence
+  - completed
+prohibited_during_implementation:
+- cargo test (including --no-run), run, build, install, bench, nextest, fuzz, clippy, doc, package, rustc, fix, clean,
+  update, fetch, vendor, tree, generate-lockfile, aliases, plugins, and unknown Cargo subcommands
+- direct rustc, rustup, rustfmt, rustdoc, clippy-driver, nextest, cross, cargo-* plugins, toolchain overrides, release or
+  custom profiles, target selection, Cargo config, unstable flags, and Rust environment or runner injection
+- wrappers or indirection through shell -c, eval, source, substitutions, exec, builtin, command, env, time, timeout,
+  nice, nohup, script, stdbuf, ionice, corepack, xargs, find -exec, make, just, task, mise, direnv, nix/devenv, shell or
+  language launchers, generic child launchers, aliases, functions, path shims, or unreviewed local scripts
+- Cargo-backed generators or checkers that execute project binaries; admitted cargo check may execute build scripts
+  and proc macros only as inherent compile-time behavior
+- GitHub Actions, gh workflow execution, act, CI triggers, pushes, tags, and releases
+- manual edits to sidecar locks, claims, WAL, ledgers, or projections
+- editing, moving, resetting, rebasing, deleting, or reusing existing C2 lanes or worktrees
+- treating transcripts, .pi records, or display task lists as resume authority
+deferred_stabilization_gates:
+- runtime regressions, full suites, E2E, stress, failure injection, doctests, benchmarks, and fuzz execution
+- rustfmt, clippy, documentation generation, project linked builds, release builds, install smoke, and Cargo-backed
+  project execution; compile-time build scripts and proc macros inherent in admitted cargo check remain allowed
+- MSRV, platform, target, and toolchain matrices
+- release archive, SBOM, hosted timing, and real-host journeys
+compiler_feedback_policy:
+  mode: compiler_errors_as_work_queue
+  applies_during_implementation: true
+  hermetic_launcher_only: true
+  canonical_launcher: /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py
+  trusted_cargo_path: /opt/forge-method/rust-1.85.1/bin/cargo
+  trusted_rustc_path: /opt/forge-method/rust-1.85.1/bin/rustc
+  trusted_rustdoc_path: /opt/forge-method/rust-1.85.1/bin/rustdoc
+  trusted_path: /usr/bin
+  trusted_executable_invariants: Cargo, rustc, rustdoc, every executable path component, and every PATH directory are
+    root-owned non-symlinks, are not group/world writable, and are not writable by the invoking uid.
+  fixed_environment:
+    HOME: /nonexistent
+    CARGO_HOME: /home/user/.cargo
+    PATH: /usr/bin
+    RUSTC: /opt/forge-method/rust-1.85.1/bin/rustc
+    RUSTDOC: /opt/forge-method/rust-1.85.1/bin/rustdoc
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
+  execution_boundary: The canonical launcher rejects any mutable or symlinked Cargo/rustc/rustdoc chain, replaces the
+    inherited environment, and exposes only root-owned /usr/bin for native child discovery. Compile-only cargo check still
+    executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, including building
+    proc-macro artifacts; it must not execute project tests or binaries.
+  historical_static_results_unchanged: true
+  targeted_package_checks:
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-store --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-eventlog --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-kernel --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-domain-pack-learning-store --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-domain-pack-tcb --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-workflow-governance-tcb --all-targets
+  - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked -p forge-core-cli --all-targets
+  metadata_check: /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py metadata --locked --no-deps --format-version 1
+  periodic_workspace_check: /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets
+  progression_rule: Every coherent source batch passes its trusted compile-only targeted check before work moves on;
+    the workspace form runs periodically across accumulated batches.
+  evidence_boundary: Compiler feedback is implementation hygiene; cargo check may run build scripts and proc macros
+    as compile-time behavior but must not execute project tests or binaries and does not claim runtime, full-suite,
+    hosted, publication, independent-review, or field evidence.
+static_checks:
+- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-static-structured-text.py
+- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-doc-links.py
+- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-public-promises.py
+- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-msrv.py
+- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-release-locking.py
+- /usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check 137b3cf43b123d4b15c45b544a3e3060e714ffb9
+checkpoint:
+  sequence: 17
+  generation: 1
+  repository: /mnt/d/forge-method-core
+  branch: lane/c2-c22-continuity-repair
+  base_commit: 137b3cf43b123d4b15c45b544a3e3060e714ffb9
+  current_phase: source_complete
+  next_action: Execute deferred Rust tests and stabilization for C2.2-C2.4, including reinitialize interruption/retry,
+    lifecycle mixed-version, failure-injection, MSRV, platform, hosted-CI, release, and field evidence. Retained
+    ProjectLinkCas and public plan/apply dispatch are source-complete, candidate documents remain non-authoritative,
+    and selected_host remains none.
+  manifest_digest: null
+  previous_digest: sha256:e56615891c9cfd0b9a80e315ffafd1838ce0aab36e70430ded4848eb92be0ead
+  event_head: workflow:wf_9e02a312-036
+  accepted_handoffs:
+  - workflow:wf_9634736b-1b9#sha256=66d23d20ade303fcac534f2d7977da22c4b8090759eff10fcf5cf2123e37a740
+  - workflow:wf_e61d6bb5-4fb#sha256=fe581653fce906ec3c005e695d2f08b5806322afa04e6e821007a86144e9cb9f
+  - workflow:wf_d2d45c95-30c#sha256=3d407eaa6a12e1a8f68d8abae5dbaf6671d6eb21d602f35998a3d93abdf82a2b
+  - workflow:wf_b907550e-3b4#sha256=aacf308ac63b2b329fb457be259666ed67822b9d6f963ac9a6582b577294711b
+  - workflow:wf_8825172b-09d#sha256=ef1c2155f6664f42e9a1ed81b004435ee35ff0532cf8c2c918b8be6557c2588e
+  - workflow:wf_519d840f-49b#sha256=05d3c036d98d6c617baf2190fd388430f18213bbe61ca994bd918
+  - workflow:wf_c998834d-0ee#sha256=b1a8ce3b8c591915bfe2f105c6163bd61eff70529b679f6e9ab335c81f37e21e
+  - workflow:wf_449b0037-ab3#sha256=e56615891c9cfd0b9a80e315ffafd1838ce0aab36e70430ded4848eb92be0ead
+  changed_paths:
+  - contracts/plan/product-gap-closure-plan.yaml
+  - contracts/plan/product-gap-closure-campaign-v1.yaml
+  - contracts/plan/product-gap-closure-story-inventory-v1.yaml
+  - contracts/plan/c2.2-campaign-continuity-v1.yaml
+  - contracts/backlog/rust-only-core-backlog.yaml
+  - contracts/stories/C2.3-owned-product-lifecycle.yaml
+  - docs/product-gap-register.md
+  - docs/product-status.md
+  - scripts/check-static-structured-text.py
+  - scripts/check-public-promises.py
+  - pi-green-loop.json
+  - scripts/block-deferred-build-command.py
+  - scripts/hermetic-compile-feedback.py
+  artifact_hashes:
+    scripts/check-static-structured-text.py: sha256:7825c508ce04e78ec8b12379b52d406e29db1bee0675fc81bbb07e07a02d47fe
+    pi-green-loop.json: sha256:d26c0b154859459bf12fb7fd9bb69656230a79bf2ac5fb0d5fd790f740852aaa
+    scripts/block-deferred-build-command.py: sha256:2b3b79f16fdc55f482e790c1e512b8a358619e74779d7f3fc045dff5a812c021
+    scripts/hermetic-compile-feedback.py: sha256:b1db9da2caa783ef904588c6b4608d2e7e9c8d0c75f1175c9059a59a35855e7b
+    contracts/plan/product-gap-closure-plan.yaml: sha256:edcd7ccc38547844725df31cf46497699967af696391181d71c991eded563174
+    contracts/plan/product-gap-closure-story-inventory-v1.yaml: sha256:210925eaa26c4826a841802821d2e04a133bad88c75fb7405bf88deafc2ea2fb
+    scripts/check-public-promises.py: sha256:df271304d5e1cd7b9e46ec8d09ad60330ec670504eb00dbcb088027af2397ccd
+  static_check_results:
+  - 'cargo check --locked -p forge-core-store --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-eventlog --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-workflow-governance-tcb --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-kernel --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-domain-pack-learning-store --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-domain-pack-tcb --all-targets: passed with the available toolchain'
+  - 'cargo check --locked -p forge-core-cli --all-targets: passed with the available toolchain'
+  - 'compile boundary: direct package-scoped implementation feedback only; no hermetic Rust 1.85/MSRV evidence claimed'
+  - 'check-static-structured-text.py: passed over 854 files'
+  - 'check-doc-links.py: passed'
+  - 'check-public-promises.py: passed'
+  - 'git diff --check: passed'
+  state_hash: null
+  updated_at: '2026-07-20'
+  lane_result_digest: sha256:e56615891c9cfd0b9a80e315ffafd1838ce0aab36e70430ded4848eb92be0ead
+  adopted_lanes:
+  - L01
+  - L05
+  - L08
+  - L14
+  - L16
+  bounded_salvage_lanes:
+  - L12
+  quarantined_lanes:
+  - L09
+  - L12
+  - L18
+  - L19
+  superseded_lanes:
+  - L02
+  - L03
+  - L04
+  - L06
+  - L07
+  - L10
+  - L11
+  - L13
+  - L15
+  - L17
+  - L20
+  deferred_gate_enforcement:
+    hook_config: .claude/settings.local.json
+    hook_script: scripts/block-deferred-build-command.py
+    new_subagents_load_policy: true
+    current_session_reload_required: true
+  active_workflow: null
+  intermediate_handoffs:
+  - participant: C22-P1
+    state: completed_handoff_pending_integration
+    changed_paths:
+    - crates/forge-core-store/src/producer_quiescence.rs
+    - crates/forge-core-store/src/replay_anchor.rs
+    - crates/forge-core-store/src/claim_wal.rs
+    - crates/forge-core-store/src/replay_wal.rs
+    - crates/forge-core-store/src/workflow_action_replay.rs
+    - crates/forge-core-store/src/retained_dir.rs
+    - crates/forge-core-store/src/crash_replace.rs
+    - crates/forge-core-store/src/retained_crash_replace.rs
+    summary: L16 Store authority foundation composed with L14 final net retained-leaf delta, bounded c7
+      crash_replace patch, and L01 retained crash replacement; no shared files edited.
+    remaining: Scoped static diff checks and C22-P0 shared Store/contracts/module integration.
+    static_checks:
+    - 'scoped tracked-file git diff --check: passed'
+    - 'untracked-file no-index git diff --check: passed'
+    - 'conflict-marker and placeholder scan: passed'
+    source_heads:
+    - L16:b4e79061addcc6b4d8c29ced73166b5d03ddafda
+    - L14:25e3483985312d1d2dfad79bca7cbb9d0128a51e..665c47fd3beac974aaf67aef2882c99ddef3387d
+    - L12-salvage:c7c7a76f69b269b212eb8f5fd92250e7df07ae23
+    - L01-retained-replace:437cbef563fcb8fc3295a9712f7364c74bae625e
+  - participant: C22-P3
+    state: completed_handoff_pending_integration
+    summary: Kernel retains opaque EffectProducerGuard across gates, writes, replay, and recovery while
+      preserving the safe e82 public surface and excluding all 25b-only APIs.
+    shared_requests:
+    - Expose EffectProducerGuard and admit_effect_producer(..., false) to kernel.
+    - Implement acquire_effect_store_lock_under_boundary.
+    - Implement four append/apply _under_boundary helpers.
+    - Implement reserve_replay_nonce_under_effect_lock.
+    - Implement recover_effect_wal_under_lock.
+    - Reconcile EventLog tcb shared admission followed by effect-lock acquisition.
+  residual_source_blockers: []
+admission:
+  allowed: true
+  admission_anchor: workflow-result:sha256:66d23d20ade303fcac534f2d7977da22c4b8090759eff10fcf5cf2123e37a740
+  approval:
+    actor: coordinator
+    at: '2026-07-18'
+  conditions:
+  - Every recorded lane head matches its immutable object ID.
+  - Every lane disposition is adopt, supersede, or quarantine.
+  - Exactly six participant scopes and claim refs are unique and non-overlapping.
+  - Shared manifests, registries, exports, and integration files remain coordinator-owned.
+  - No conflicting claim, semaphore holder, stale projection, path escape, symlink authority file, or
+    hash mismatch exists.
+  - All configured commands are static and every static check passes.
+  blocked_reason: null

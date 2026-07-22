@@ -274,7 +274,7 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
     name: "guide",
     usage_lines:     &[
                 "       forge-core guide describe [--catalog-dir <path>] [--json|--no-json]",
-                "       forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--json|--no-json]",
+                "       forge-core guide decide --protocol-file <path> [--catalog-dir <path>] [--gates-file <path>] [--json|--no-json]",
                 "       forge-core guide status --phase <phase> [--catalog-dir <path>] [--json|--no-json]",
                 "       forge-core guide migration-audit [--catalog-dir <path>] [--plan-file <yaml>] [--json|--no-json]",
                 "       forge-core guide rollout-audit --manifest-file <yaml> [--batch-file <yaml>]... [--catalog-dir <path>] [--plan-file <yaml>] [--json|--no-json]",
@@ -305,22 +305,19 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow release-rebase-apply [--root <path>] --target-release-id <id> --expected-rebase-plan-digest <sha256> [--json|--no-json]",
         "       forge-core workflow release-upgrade [--root <path>] --target-release-id <id> --expected-current-release-digest <sha256> --expected-head-digest <sha256> --expected-snapshot-digest <sha256> [--json|--no-json]",
         "       forge-core workflow shadow [--root <path>] [--json|--no-json]",
-        "       forge-core workflow applicability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
-        "       forge-core workflow capability-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
         "       forge-core workflow complete [--root <path>] --if-snapshot <sha256> [--principal <id>] [--json|--no-json]",
-        "       forge-core workflow decision-resolve [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
-        "       forge-core workflow evidence-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
-        "       forge-core workflow signal-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
-        "       forge-core workflow waiver-authorize [--root <path>] --request-file <json> --attestation-file <json> [--json|--no-json]",
         "       forge-core workflow credential provision --root <path> --credential-id <id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]",
         "       forge-core workflow credential rotate --root <path> --replaces <old-id> --credential-id <new-id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]",
         "       forge-core workflow credential revoke --root <path> --credential-id <id> [--json|--no-json]",
         "       forge-core workflow credential status --root <path> [--json|--no-json]",
-        "       forge-core workflow credential sign --root <path> --credential-id <id> --kind <applicability|capability|decision|evidence|signal|waiver> --request-file <json> [--output-file <json>] [--json|--no-json]",
-        "       forge-core workflow broker trust --root <path> --issuer-id <id> --profile <human|reviewer|runtime> --public-key-file <hex> --ceremony-ref <ref> --ceremony-file <artifact> [--json|--no-json]",
-        "       forge-core workflow broker rotate --root <path> --replaces <old-id> --issuer-id <new-id> --profile <human|reviewer|runtime> --public-key-file <hex> --ceremony-ref <ref> --ceremony-file <artifact> [--json|--no-json]",
-        "       forge-core workflow broker revoke --root <path> --issuer-id <id> [--json|--no-json]",
+        "       forge-core workflow broker initialize --root <path> --registry-file <strict-registry.yaml> --authorization-file <signed-native-admin.json> [--json|--no-json]",
+        "       forge-core workflow broker register --root <path> --registry-file <proposed-registry.yaml> --authorization-file <signed-native-admin.json> --expected-registry-digest <sha256:...> [--json|--no-json]",
+        "       forge-core workflow broker rotate --root <path> --registry-file <proposed-registry.yaml> --authorization-file <signed-native-admin.json> --expected-registry-digest <sha256:...> [--json|--no-json]",
+        "       forge-core workflow broker revoke --root <path> --registry-file <proposed-registry.yaml> --authorization-file <signed-native-admin.json> --expected-registry-digest <sha256:...> [--json|--no-json]",
+        "       forge-core workflow broker list --root <path> [--json|--no-json]",
+        "       forge-core workflow broker inspect --root <path> --credential-id <id> [--json|--no-json]",
         "       forge-core workflow broker status --root <path> [--json|--no-json]",
+        "       forge-core workflow broker conformance --root <path> [--json|--no-json]",
     ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -378,7 +375,11 @@ pub const COMMAND_DOMAIN_PACK: CommandSpec = CommandSpec {
         "       forge-core domain-pack explain --projection-file <path> --requirement-ref <id> [--json|--no-json]",
         "       forge-core domain-pack acquire plan --intent-file <path> --request-file <path> --projection-file <path> [--json|--no-json]",
         "       forge-core domain-pack acquire prepare --intent-file <path> --request-file <path> --projection-file <path> --catalog-file <path> [--json|--no-json]",
+        "       forge-core domain-pack acquire download --intent-file <path> --request-file <path> --projection-file <path> --catalog-file <path> --remote-request-file <path> --remote-plan-file <path> --cache-projection-file <path> --catalog-facts-file <path> --artifact-root <path> [--json|--no-json]",
+        "       forge-core domain-pack acquire derive-initialized --intent-file <path> [--candidate-input-file <path>] [--target-catalog-file <path>] [--operator-approve-candidate <candidate-id>] [--state-root <.forge-method>] [--json|--no-json]",
         "       forge-core domain-pack acquire apply --derivation-input-file <path> --operator-approve-candidate <candidate-id> --trust-policy-file <path> --registry-file <path> --reviewer-registry-file <path> --reviewed-registry-file <path> --capability-registry-file <path> --sandbox-policy-file <path> --principal-id <id> --project-root <path> [--artifact-root <path>] [--state-root <.forge-method>] [--json|--no-json]",
+        "       forge-core domain-pack author skeleton --request-file <path> --output-root <path> [--json|--no-json]",
+        "       forge-core domain-pack author test --request-file <path> [--json|--no-json]",
         "       forge-core domain-pack compose --request-file <path> [--artifact-root <path>] [--json|--no-json]",
         "       forge-core domain-pack resolve --request-file <path> --registry-file <path> [--json|--no-json]",
         "       forge-core domain-pack learning capture --candidate-file <yaml> --state-root <.forge-method> [--json|--no-json]",
@@ -458,11 +459,65 @@ pub const COMMAND_COORDINATION: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+pub const COMMAND_BACKUP: CommandSpec = CommandSpec {
+    name: "backup",
+    usage_lines: &[
+        "       forge-core backup create --root <project> --archive <path> --authority <configured-id> [--principal-registry <yaml>] [--broker-registry <yaml>] [--json|--no-json]",
+        "       forge-core backup verify --root <project> --archive <path> --authority <configured-id> [--principal-registry <yaml>] [--broker-registry <yaml>] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_RESTORE: CommandSpec = CommandSpec {
+    name: "restore",
+    usage_lines: &[
+        "       forge-core restore preflight --root <project> --archive <path> --authority <configured-id> [--platform <posix|windows>] [--principal-registry <yaml>] [--broker-registry <yaml>] [--json|--no-json]",
+        "       forge-core restore apply --root <project> --archive <path> --authority <configured-id> [--platform <posix|windows>] [--principal-registry <yaml>] [--broker-registry <yaml>] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+/// Host-neutral product lifecycle. Status and doctor are read-only; setup,
+/// install, update, rollback, and uninstall mutate only the explicitly owned
+/// installation root after its marker and immutable release bundle validate.
+pub const COMMAND_LIFECYCLE: CommandSpec = CommandSpec {
+    name: "lifecycle",
+    usage_lines: &[
+        "       forge-core lifecycle setup --install-root <path> [--json|--no-json]",
+        "       forge-core lifecycle status --install-root <path> [--json|--no-json]",
+        "       forge-core lifecycle doctor --install-root <path> [--json|--no-json]",
+        "       forge-core lifecycle install --install-root <path> --release-file <yaml> --trusted-verification-file <yaml> [--explicit-canary-opt-in] [--json|--no-json]",
+        "       forge-core lifecycle update --install-root <path> --release-file <yaml> --trusted-verification-file <yaml> [--explicit-canary-opt-in] [--json|--no-json]",
+        "       forge-core lifecycle rollback --install-root <path> [--json|--no-json]",
+        "       forge-core lifecycle uninstall --install-root <path> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+/// Read-only rendering and validation of a candidate-only host support matrix.
+pub const COMMAND_HOST_SUPPORT_MATRIX: CommandSpec = CommandSpec {
+    name: "host-support-matrix",
+    usage_lines: &[
+        "       forge-core host-support-matrix show --matrix-file <yaml> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
 pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
     name: "project",
     usage_lines:     &[
                 "       forge-core project init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]",
                 "       forge-core project resolve [--root <path>] [--json|--no-json]",
+                "       forge-core project reinitialize plan --root <absolute-path> --destination <absolute-path> --abandoned-authority-id <id> --new-project-id <id> --new-authority-id <id> --state-loss-diagnosis <absolute-file> --plan-file <absolute-file> [--json]",
+                "       forge-core project reinitialize apply --root <absolute-path> --destination <absolute-path> --abandoned-authority-id <id> --new-project-id <id> --new-authority-id <id> --state-loss-diagnosis <absolute-file> --plan-file <absolute-file> --plan-digest sha256:<digest> --confirm sha256:<plan-derived-token> [--json]",
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -755,7 +810,7 @@ pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS: CommandSpec = Comm
 
 pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS: CommandSpec = CommandSpec {
     name: "host-adapter-verify-certificate-ocsp-status",
-    usage_lines:     &["       forge-core host-adapter-verify-certificate-ocsp-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --ocsp-response-path <path> --verification-time-unix <seconds> [--expected-nonce-hex <hex>] [--json|--no-json]"],
+    usage_lines:     &["       forge-core host-adapter-verify-certificate-ocsp-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --ocsp-response-path <path> --verification-time-unix <seconds> [--expected-nonce-hex <hex>] [--ocsp-responder-certificate-path <path> [--ocsp-responder-issuer-certificate-path <ordered-path>]...] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -815,6 +870,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_MEMORY,
     COMMAND_GOVERNANCE,
     COMMAND_COORDINATION,
+    COMMAND_BACKUP,
+    COMMAND_RESTORE,
+    COMMAND_LIFECYCLE,
+    COMMAND_HOST_SUPPORT_MATRIX,
     COMMAND_PROJECT,
     COMMAND_GRAPH,
     COMMAND_EVAL,
@@ -952,7 +1011,7 @@ mod tests {
             COMMAND_PROJECT
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
-            vec!["init", "resolve"]
+            vec!["init", "resolve", "reinitialize"]
         );
         assert_eq!(
             COMMAND_GUIDE
@@ -1018,6 +1077,7 @@ mod tests {
                 "search",
                 "explain",
                 "acquire",
+                "author",
                 "compose",
                 "resolve",
                 "learning",
@@ -1059,17 +1119,41 @@ mod tests {
                 "release-rebase-apply",
                 "release-upgrade",
                 "shadow",
-                "applicability-authorize",
-                "capability-authorize",
                 "complete",
-                "decision-resolve",
-                "evidence-authorize",
-                "signal-authorize",
-                "waiver-authorize",
                 "credential",
                 "broker"
             ]
         );
+    }
+
+    #[test]
+    fn workflow_surface_exposes_no_signing_or_legacy_authorization_oracle() {
+        let usage = COMMAND_WORKFLOW.usage_lines.join("\n");
+        for forbidden in [
+            "workflow credential sign",
+            "applicability-authorize",
+            "capability-authorize",
+            "decision-resolve",
+            "evidence-authorize",
+            "signal-authorize",
+            "waiver-authorize",
+        ] {
+            assert!(
+                !usage.contains(forbidden),
+                "forbidden workflow surface: {forbidden}"
+            );
+        }
+        assert!(usage.contains("workflow action authorize"));
+        assert!(usage.contains("workflow action apply"));
+        assert!(usage.contains("workflow broker initialize"));
+        assert!(usage.contains("workflow broker register"));
+        assert!(usage.contains("--registry-file <strict-registry.yaml>"));
+        assert!(usage.contains("--authorization-file <signed-native-admin.json>"));
+        assert!(usage.contains("--expected-registry-digest <sha256:...>"));
+        assert!(!usage.contains("workflow broker import"));
+        assert!(!usage.contains("workflow broker trust"));
+        assert!(!usage.contains("--issuer-id"));
+        assert!(!usage.contains("--ceremony-file"));
     }
 
     #[test]
@@ -1090,6 +1174,51 @@ mod tests {
         assert_eq!(
             COMMAND_PREFLIGHT.usage_line_for_subcommand_path(&["init"]),
             Some("forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]")
+        );
+    }
+
+    #[test]
+    fn domain_pack_acquire_and_author_surface_expose_candidate_only_commands() {
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.usage_line_for_subcommand_path(&["acquire", "download"]),
+            Some(
+                "forge-core domain-pack acquire download --intent-file <path> --request-file <path> --projection-file <path> --catalog-file <path> --remote-request-file <path> --remote-plan-file <path> --cache-projection-file <path> --catalog-facts-file <path> --artifact-root <path> [--json|--no-json]"
+            )
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.concrete_child_hint_under_subcommand_path(&["acquire"]),
+            "plan | prepare | download | derive-initialized | apply"
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.usage_line_for_subcommand_path(&["author", "skeleton"]),
+            Some(
+                "forge-core domain-pack author skeleton --request-file <path> --output-root <path> [--json|--no-json]"
+            )
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.usage_line_for_subcommand_path(&["author", "test"]),
+            Some("forge-core domain-pack author test --request-file <path> [--json|--no-json]")
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.concrete_child_hint_under_subcommand_path(&["author"]),
+            "skeleton | test"
+        );
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.authority,
+            CommandAuthority::MixedBySubcommand
+        );
+        assert_eq!(COMMAND_DOMAIN_PACK.json_mode, JsonMode::EnvelopeOptional);
+        assert_eq!(
+            COMMAND_DOMAIN_PACK.mcp_visibility,
+            McpVisibility::AllowlistOnly
+        );
+        assert_eq!(
+            COMMANDS
+                .iter()
+                .filter(|command| command.name == "domain-pack")
+                .count(),
+            1,
+            "Domain Pack must retain exactly one top-level command row"
         );
     }
 

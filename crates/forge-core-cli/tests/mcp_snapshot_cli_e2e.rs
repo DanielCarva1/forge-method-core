@@ -1,10 +1,15 @@
 use assert_cmd::Command;
-use forge_core_contracts::{AssuranceCaseDocument, OperationContractDocument};
+use forge_core_contracts::claim::ActorRole;
+use forge_core_contracts::{
+    AssuranceCaseDocument, ClaimContractDocument, OperationContractDocument, PrincipalId, RepoPath,
+    StableId,
+};
 use forge_core_protocol_mcp::McpLocalExecutionSnapshotDocument;
 use forge_core_protocol_mcp::{
     AttestationInput, AttestationPolicy, AttestationVerifier, CanonicalIntent,
     PrincipalCredentialStatus, PrincipalRegistryDocument,
 };
+use forge_core_store::claim_wal::{append_claim_wal_record, ClaimWalOperation};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,6 +35,8 @@ fn prepare_project(parent: &Path) -> (PathBuf, PathBuf) {
     let state_root = parent.join("runtime/.forge-method");
     fs::create_dir_all(project.join("contracts/effects")).expect("effects dir");
     fs::create_dir_all(project.join("contracts/assurance")).expect("assurance dir");
+    fs::create_dir_all(project.join("contracts/claims")).expect("claims dir");
+    fs::create_dir_all(project.join("contracts/gates")).expect("gates dir");
     fs::write(project.join("README.md"), "# consumer\n").expect("readme");
     let source = repo_root();
     let assurance_text = fs::read_to_string(
@@ -67,6 +74,33 @@ fn prepare_project(parent: &Path) -> (PathBuf, PathBuf) {
         project.join("contracts/effects/file-delete-restore-inverse-effect.yaml"),
     )
     .expect("effect");
+    fs::copy(
+        source.join("contracts/gates/destructive-review-pass-gate.yaml"),
+        project.join("contracts/gates/destructive-review-pass-gate.yaml"),
+    )
+    .expect("gate");
+
+    let mut claim: ClaimContractDocument = yaml_serde::from_str(
+        &fs::read_to_string(source.join("contracts/claims/story-v2-010-active-claim.yaml"))
+            .expect("claim fixture"),
+    )
+    .expect("typed claim");
+    claim.claim_contract.claim.claimant_principal_id =
+        Some(PrincipalId("principal.agent".to_owned()));
+    claim.claim_contract.claim.claimant_agent_id = StableId("agent".to_owned());
+    claim.claim_contract.claim.claimant_role = ActorRole::Driver;
+    claim.claim_contract.scope.paths = vec![RepoPath("src/obsolete.rs".to_owned())];
+    "2026-07-21T00:00:00Z".clone_into(&mut claim.claim_contract.lease.acquired_at);
+    "2026-07-21T00:00:00Z".clone_into(&mut claim.claim_contract.lease.last_heartbeat_at);
+    "2030-01-01T00:00:00Z".clone_into(&mut claim.claim_contract.lease.expires_at);
+    claim.claim_contract.lease.expected_state_version = state_version;
+    "2026-07-21T00:00:00Z".clone_into(&mut claim.claim_contract.status.evaluated_at);
+    fs::write(
+        project.join("contracts/claims/story-v2-010-active-claim.yaml"),
+        yaml_serde::to_string(&claim).expect("claim yaml"),
+    )
+    .expect("claim");
+
     let init = bin()
         .args(["project", "init", "--root"])
         .arg(&project)
@@ -79,9 +113,17 @@ fn prepare_project(parent: &Path) -> (PathBuf, PathBuf) {
         .expect("project init");
     assert!(
         init.status.success(),
-        "project init failed: {}",
-        String::from_utf8_lossy(&init.stdout)
+        "project init failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&init.stdout),
+        String::from_utf8_lossy(&init.stderr)
     );
+    append_claim_wal_record(
+        &state_root,
+        ClaimWalOperation::Acquire,
+        &claim.claim_contract,
+        "2026-07-21T00:00:00Z",
+    )
+    .expect("claim WAL acquire");
     (project, state_root)
 }
 
@@ -139,8 +181,9 @@ fn agent_command_generates_and_atomically_refreshes_content_bound_snapshot() {
     let first = run();
     assert!(
         first.status.success(),
-        "snapshot failed: {}",
-        String::from_utf8_lossy(&first.stdout)
+        "snapshot failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&first.stdout),
+        String::from_utf8_lossy(&first.stderr)
     );
     let envelope: Value = serde_json::from_slice(&first.stdout).expect("JSON envelope");
     assert_eq!(envelope["ok"], true);
@@ -262,7 +305,12 @@ fn credential_lifecycle_keeps_private_key_out_of_output_and_project() {
         ])
         .output()
         .expect("snapshot with provisioned credential");
-    assert!(snapshot.status.success());
+    assert!(
+        snapshot.status.success(),
+        "snapshot failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&snapshot.stdout),
+        String::from_utf8_lossy(&snapshot.stderr)
+    );
     let arguments_path = parent.join("arguments.json");
     fs::write(
         &arguments_path,

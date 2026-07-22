@@ -38,7 +38,98 @@ use forge_core_store::claim_wal::{
     append_claim_wal_record_with_durability, claim_wal_path, ClaimWalOperation,
 };
 use forge_core_store::WalDurability;
+use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
+
+const CLAIM_CACHE_LOCKFILE: &str = ".forge-claim.lock";
+#[allow(dead_code)]
+const MAX_CLAIM_CACHE_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+
+#[allow(dead_code)]
+/// Opaque retained authority for claim-cache mutation.
+pub(crate) struct LockedClaimCache {
+    lock: crate::io_util::DirLock,
+}
+
+#[allow(dead_code)]
+/// One exact cache document and its typed handoff/evidence projection.
+pub(crate) struct ClaimCacheEntrySnapshot {
+    relative_path: String,
+    raw: Vec<u8>,
+    raw_sha256: String,
+    claim: ClaimContract,
+}
+
+#[allow(dead_code)]
+impl ClaimCacheEntrySnapshot {
+    pub(crate) fn relative_path(&self) -> &str {
+        &self.relative_path
+    }
+
+    pub(crate) fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+
+    pub(crate) fn raw_sha256(&self) -> &str {
+        &self.raw_sha256
+    }
+
+    pub(crate) const fn claim(&self) -> &ClaimContract {
+        &self.claim
+    }
+}
+
+#[allow(dead_code)]
+/// Stable sorted claim-cache projection captured under mutation authority.
+pub(crate) struct ClaimCacheSnapshot {
+    entries: Vec<ClaimCacheEntrySnapshot>,
+}
+
+#[allow(dead_code)]
+impl ClaimCacheSnapshot {
+    pub(crate) fn entries(&self) -> &[ClaimCacheEntrySnapshot] {
+        &self.entries
+    }
+}
+
+pub(crate) fn acquire_claim_cache_authority(
+    claims_dir: &Path,
+) -> std::io::Result<LockedClaimCache> {
+    let lock = crate::io_util::DirLock::acquire(claims_dir, CLAIM_CACHE_LOCKFILE)?;
+    Ok(LockedClaimCache { lock })
+}
+
+#[allow(dead_code)]
+pub(crate) fn snapshot_claim_cache_under_authority(
+    locked: &LockedClaimCache,
+) -> std::io::Result<ClaimCacheSnapshot> {
+    use std::io::{Error, ErrorKind};
+    let projected = locked
+        .lock
+        .directory_identity()
+        .read_sorted_direct_files_bounded("yaml", MAX_CLAIM_CACHE_DOCUMENT_BYTES)?;
+    let mut entries = Vec::with_capacity(projected.len());
+    for (relative_file, raw) in projected {
+        let document: ClaimContractDocument = yaml_serde::from_slice(&raw).map_err(|error| {
+            Error::new(
+                ErrorKind::InvalidData,
+                format!("{}: {error}", relative_file.display()),
+            )
+        })?;
+        let relative_path = relative_file
+            .to_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "non-UTF-8 claim cache path"))?
+            .to_owned();
+        entries.push(ClaimCacheEntrySnapshot {
+            relative_path,
+            raw_sha256: format!("sha256:{:x}", Sha256::digest(&raw)),
+            raw,
+            claim: document.claim_contract,
+        });
+    }
+    Ok(ClaimCacheSnapshot { entries })
+}
+
 use std::path::{Path, PathBuf};
 
 // ============================================================================
@@ -289,7 +380,7 @@ pub fn run_acquire(
     }
     // Serialize lifecycle transitions: the pure engine can't see a concurrent
     // writer, so hold the directory lock for the whole load->decide->write.
-    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+    let _lock = match acquire_claim_cache_authority(claims_dir) {
         Ok(l) => l,
         Err(e) => {
             return CliEnvelope::err(
@@ -334,7 +425,7 @@ pub fn run_heartbeat(
     now_unix: i64,
     durability: WalDurability,
 ) -> CliEnvelope<ClaimResult> {
-    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+    let _lock = match acquire_claim_cache_authority(claims_dir) {
         Ok(l) => l,
         Err(e) => {
             return CliEnvelope::err(
@@ -387,7 +478,7 @@ pub fn run_release(
     now_unix: i64,
     durability: WalDurability,
 ) -> CliEnvelope<ClaimResult> {
-    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+    let _lock = match acquire_claim_cache_authority(claims_dir) {
         Ok(l) => l,
         Err(e) => {
             return CliEnvelope::err(
@@ -443,7 +534,7 @@ pub fn run_handoff(
     now_unix: i64,
     durability: WalDurability,
 ) -> CliEnvelope<ClaimHandoffResult> {
-    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+    let _lock = match acquire_claim_cache_authority(claims_dir) {
         Ok(l) => l,
         Err(e) => {
             return CliEnvelope::err(
@@ -581,7 +672,7 @@ pub fn run_reconcile_once(
     now_unix: i64,
     durability: WalDurability,
 ) -> CliEnvelope<ClaimReconcileResult> {
-    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+    let _lock = match acquire_claim_cache_authority(claims_dir) {
         Ok(l) => l,
         Err(e) => {
             return CliEnvelope::err(
@@ -1250,6 +1341,57 @@ mod tests {
         assert_eq!(wal.records[0].operation, ClaimWalOperation::Acquire);
     }
 
+    #[test]
+    fn retained_claim_authority_projects_exact_cache_bytes_and_blocks_producer() {
+        let dir = tempfile_dir();
+        let env = run_acquire(&dir, &req("snapshot", "agentA"), T0, WalDurability::NoSync);
+        assert!(env.ok, "{:?}", env.error);
+
+        let locked = acquire_claim_cache_authority(&dir).expect("retained claim authority");
+        let snapshot = snapshot_claim_cache_under_authority(&locked).expect("claim projection");
+        assert_eq!(snapshot.entries().len(), 1);
+        let entry = &snapshot.entries()[0];
+        assert_eq!(entry.claim().id.0, env.data.unwrap().claim_id);
+        assert_eq!(
+            entry.raw(),
+            std::fs::read(dir.join(entry.relative_path())).unwrap()
+        );
+        assert_eq!(
+            entry.raw_sha256(),
+            format!("sha256:{:x}", Sha256::digest(entry.raw()))
+        );
+        let Err(error) = acquire_claim_cache_authority(&dir) else {
+            panic!("producer lock must contend");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+    }
+    #[test]
+    fn retained_claim_snapshot_stays_bound_to_original_after_parent_swap() {
+        let dir = tempfile_dir();
+        let moved = dir.with_extension("retained");
+        let locked = acquire_claim_cache_authority(&dir).expect("old retained authority");
+        std::fs::rename(&dir, &moved).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let producer = run_acquire(
+            &dir,
+            &req("replacement", "attacker"),
+            T0,
+            WalDurability::NoSync,
+        );
+        assert!(
+            producer.ok,
+            "replacement namespace has independent authority"
+        );
+        let snapshot = snapshot_claim_cache_under_authority(&locked).unwrap();
+        assert!(
+            snapshot.entries().is_empty(),
+            "replacement claim bytes must not enter the retained authority"
+        );
+        drop(locked);
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = std::fs::remove_dir_all(moved);
+    }
     #[test]
     fn acquire_rejects_second_agent_on_same_scope() {
         let dir = tempfile_dir();

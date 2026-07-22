@@ -1,0 +1,61 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C5.1"
+status: "implemented"
+slice: "ready-operate-evolve"
+title: "Implement durable post-BuildVerify episode contracts"
+intent: >-
+  Implement the bounded source-only C5.1 model required to preserve one exact
+  release subject, rollback baseline, observations, feedback, incident/bug
+  intake, and evolution identity across a future durable continuation boundary.
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/post-build-verify-episode-v0.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/release-readiness.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/ready-release.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/reality-evidence-gate.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/context-recovery.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/evolve-project.yaml"
+
+owned_files:
+  - "contracts/spec/post-build-verify-episode-v0.yaml"
+  - "contracts/stories/C5.1-post-build-verify-durable-episodes.yaml"
+  - "docs/post-build-verify-episodes.md"
+  - "crates/forge-core-contracts/src/post_build_verify_episode.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-contracts/tests/post_build_verify_episode.rs"
+  - "crates/forge-core-decisions/src/post_build_verify_episode.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-decisions/tests/post_build_verify_episode.rs"
+
+constraints:
+  - "Reuse WorkflowGovernanceReleaseIdentity for the exact release subject and WorkflowContentAddressedReference for BuildVerify, evidence, report, and recovery bindings."
+  - "Use one closed candidate_only authority and deny_unknown_fields on every serializable contract struct."
+  - "Keep release subject, rollback baseline, deployment observation, operational evidence, feedback, incident/bug intake, evolution identity, continuity binding, generation chain, and canonical self-digest explicit."
+  - "Reference readiness, ready-release, reality-evidence, context-recovery, and evolve-project policies by role/id/path rather than copying their prose or executing them."
+  - "Bind every post-release datum to the exact release digest and reject a rollback baseline that names the current release subject."
+  - "Bound all item collections and reject duplicate item identities or policy-role references."
+  - "A proposed evolution entry is a recommendation only and may name only Discovery, Specification, Plan, or BuildVerify."
+  - "Pure decisions may choose referenced policy roles but may not mutate phase, persist Store state, read a host, execute a release/deployment/rollback, run commands, or create authority."
+  - "Do not edit domain-pack files, phase-transition logic, authority/TCB/runtime/Store/CLI/command surfaces, Cargo manifests, or campaign status/plan records."
+
+acceptance_criteria:
+  - "The typed contract validates exact release subject and rollback baseline bindings, generation-chain shape, canonical self-digest, closed enums, policy-reference completeness, bounded collections, and all content-addressed references."
+  - "Deployment observations, operational evidence, feedback, incident/bug intake, and evolution identity cannot refer to a different release digest."
+  - "The decision is deterministic and returns only non-authoritative blocked, release-readiness, operational-monitoring, evolution-triage, or rollback-assessment outcomes."
+  - "A failed deployment or evidence that disproves readiness is prioritized ahead of feedback triage; untriaged feedback or unresolved intake selects evolution triage; absent deployment selects release readiness."
+  - "Focused contract and decision tests cover serde unknown fields, self-digest mutation, release binding mismatch, rollback-baseline mismatch, policy completeness, bounded input, decision precedence, replay verification, and absence of phase/runtime authority."
+
+checks:
+  permitted:
+    - "scoped textual searches"
+    - "scoped git diff --check over owned paths"
+    - "targeted locked Cargo checks for affected crates and all source-test targets"
+  deferred:
+    - "Rust test execution, rustfmt, CI, runtime execution, remote operations, staging, commit, and push"
+
+follow_on_boundaries:
+  - "C5.2 now implements guarded phase advancement from admitted gate results and exact current snapshots without changing C5.1 candidate authority."
+  - "C5.3 now persists complete C5.1 snapshots and exposes authority-free cross-process replacement recovery; runtime and hosted proof remain deferred."
+  - "Deployment, release admission, rollback execution, policy loading, and any host/runtime effect remain owned by their existing or future authority layers."

@@ -21,11 +21,13 @@ use forge_core_decisions::{
     ObligationEngineInputDocument, RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_kernel::{
-    prepare_execution_transaction, reconcile_prepared_execution_commits, ExecutionCommitError,
-    ExecutionCommitOutcome, ExecutionCommitStatus, ExecutionReplayReconciliationStatus,
-    LateAdmissionError, LateAdmissionOutcome, LateExecutionSnapshot, LateExecutionSnapshotSource,
-    LateSnapshotError, PrepareExecutionError, PreparedExecutionMaterial, RuntimeEffectPayloadKind,
-    RuntimeOperationEffectPayload, TrustedExecutionEnvironment, PREPARED_EFFECT_LOCK_RELATIVE_PATH,
+    prepare_execution_transaction, reconcile_prepared_execution_commits,
+    reconcile_prepared_execution_commits_under_host_quiescence, ExecutionCommitError,
+    ExecutionCommitOutcome, ExecutionCommitStatus, ExecutionReplayReconciliationError,
+    ExecutionReplayReconciliationStatus, LateAdmissionError, LateAdmissionOutcome,
+    LateExecutionSnapshot, LateExecutionSnapshotSource, LateSnapshotError, PrepareExecutionError,
+    PreparedExecutionMaterial, RuntimeEffectPayloadKind, RuntimeOperationEffectPayload,
+    TrustedExecutionEnvironment, PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     PREPARED_EFFECT_WAL_RELATIVE_PATH,
 };
 use forge_core_store::replay_wal::{
@@ -39,6 +41,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -707,6 +710,13 @@ fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() 
     let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
         .expect("environment");
     let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    assert!(matches!(
+        forge_core_store::producer_quiescence::quiesce_host_producers(
+            project_root.join(".forge-method"),
+            &AtomicBool::new(false),
+        ),
+        Err(forge_core_store::producer_quiescence::ProducerBoundaryError::ReentrantUpgrade { .. })
+    ));
     let LateAdmissionOutcome::Admitted(admitted) =
         prepared.evaluate_late(&source).expect("late evaluation")
     else {
@@ -1044,6 +1054,30 @@ fn recovery_reconciles_operation_wide_commit_without_reapplying_constituents() {
             .status,
         ExecutionReplayReconciliationStatus::Noop
     );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn host_quiescence_requires_typed_reconciliation_path() {
+    let project_root = temp_project("host-quiescence-reconciliation");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let quiescence = forge_core_store::producer_quiescence::quiesce_host_producers(
+        environment.state_root(),
+        &AtomicBool::new(false),
+    )
+    .expect("host quiescence");
+
+    assert!(matches!(
+        reconcile_prepared_execution_commits(&environment),
+        Err(ExecutionReplayReconciliationError::ProducerAdmission(_))
+    ));
+    let reconciled =
+        reconcile_prepared_execution_commits_under_host_quiescence(&environment, &quiescence)
+            .expect("typed reconciliation under backup quiescence");
+    assert_eq!(reconciled.status, ExecutionReplayReconciliationStatus::Noop);
+
+    drop(quiescence);
     fs::remove_dir_all(project_root).expect("cleanup");
 }
 

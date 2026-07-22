@@ -100,6 +100,35 @@ struct AuthorityPaths {
     secrets: PathBuf,
 }
 
+#[allow(dead_code)]
+const MAX_PUBLIC_REGISTRY_BYTES: u64 = 8 * 1024 * 1024;
+
+#[allow(dead_code)]
+/// Opaque retained producer authority for the public principal registry.
+pub(crate) struct LockedWorkflowCredentialRegistry {
+    registry_file: PathBuf,
+    expected_audience: String,
+    lock: crate::io_util::DirLock,
+}
+
+#[allow(dead_code)]
+/// Exact public principal-registry bytes; private workflow keys are excluded.
+pub(crate) struct WorkflowCredentialRegistrySnapshot {
+    raw_registry: Option<Vec<u8>>,
+    raw_sha256: Option<String>,
+}
+
+#[allow(dead_code)]
+impl WorkflowCredentialRegistrySnapshot {
+    pub(crate) fn raw_registry(&self) -> Option<&[u8]> {
+        self.raw_registry.as_deref()
+    }
+
+    pub(crate) fn raw_sha256(&self) -> Option<&str> {
+        self.raw_sha256.as_deref()
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
 struct CredentialResult {
@@ -110,8 +139,6 @@ struct CredentialResult {
     public_key_fingerprint: Option<String>,
     secret_deleted: Option<bool>,
     principals: Option<Vec<CredentialStatusRow>>,
-    attestation: Option<AttestationInput>,
-    output_file: Option<String>,
     storage_boundary: String,
 }
 
@@ -215,7 +242,6 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
         ),
         "revoke" => revoke(&flags, want_json),
         "status" => status(&flags, want_json),
-        "sign" => sign(&flags, want_json),
         _ => Err(ExitError::usage(usage())),
     }
 }
@@ -234,6 +260,9 @@ fn provision(
     require_nonblank("--principal-id", &principal_id.0)?;
     require_nonblank("--agent-id", &agent_id.0)?;
 
+    if let Some(old) = replaces.as_deref() {
+        require_nonblank("--replaces", old)?;
+    }
     let audience = format!("forge-core:workflow:{}", paths.project_id);
     let _lock = acquire_authority_lock(&paths)?;
     let mut document = load_or_new_registry(&paths.registry, &audience)?;
@@ -276,7 +305,10 @@ fn provision(
             authority_grants: profile.grants(),
             status: PrincipalCredentialStatus::Active,
         });
-    validate_registry(&document)?;
+    validate_registry_for_audience(
+        &document,
+        &format!("forge-core:workflow:{}", paths.project_id),
+    )?;
     create_private_dir(&paths.secrets)?;
     let new_secret = secret_path(&paths.secrets, &credential_id);
     write_secret_new(&new_secret, key.as_bytes())?;
@@ -297,8 +329,6 @@ fn provision(
             public_key_fingerprint: Some(fingerprint(&public_key_hex)),
             secret_deleted: deleted,
             principals: None,
-            attestation: None,
-            output_file: None,
             storage_boundary: "private key stored only in the derived operator directory outside project and Forge state; key bytes are never emitted".to_owned(),
         },
         want_json,
@@ -308,8 +338,12 @@ fn provision(
 fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), ExitError> {
     let paths = authority_paths(required_path(flags, "--root")?)?;
     let credential_id = required(flags, "--credential-id")?;
+    require_nonblank("--credential-id", credential_id)?;
     let _lock = acquire_authority_lock(&paths)?;
-    let mut document = load_registry(&paths.registry)?;
+    let mut document = load_registry(
+        &paths.registry,
+        &format!("forge-core:workflow:{}", paths.project_id),
+    )?;
     let entry = document
         .principal_registry
         .principals
@@ -318,7 +352,10 @@ fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
         .ok_or_else(|| ExitError::env_config(format!("unknown credential '{credential_id}'")))?;
     entry.status = PrincipalCredentialStatus::Revoked;
     let public_key = entry.public_key_hex.clone();
-    validate_registry(&document)?;
+    validate_registry_for_audience(
+        &document,
+        &format!("forge-core:workflow:{}", paths.project_id),
+    )?;
     write_registry(&paths.registry, &document)?;
     let secret = secret_path(&paths.secrets, credential_id);
     let deleted = if secret.exists() {
@@ -341,8 +378,6 @@ fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
             public_key_fingerprint: Some(fingerprint(&public_key)),
             secret_deleted: Some(deleted),
             principals: None,
-            attestation: None,
-            output_file: None,
             storage_boundary: "registry revocation is committed before private-key deletion"
                 .to_owned(),
         },
@@ -352,7 +387,10 @@ fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
 
 fn status(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), ExitError> {
     let paths = authority_paths(required_path(flags, "--root")?)?;
-    let document = load_registry(&paths.registry)?;
+    let document = load_registry(
+        &paths.registry,
+        &format!("forge-core:workflow:{}", paths.project_id),
+    )?;
     let principals = document
         .principal_registry
         .principals
@@ -380,47 +418,8 @@ fn status(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
             public_key_fingerprint: None,
             secret_deleted: None,
             principals: Some(principals),
-            attestation: None,
-            output_file: None,
             storage_boundary:
                 "status exposes registry audit metadata and fingerprints, never private key bytes"
-                    .to_owned(),
-        },
-        want_json,
-    )
-}
-
-fn sign(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), ExitError> {
-    let paths = authority_paths(required_path(flags, "--root")?)?;
-    let credential_id = required(flags, "--credential-id")?;
-    let kind = parse_kind(required(flags, "--kind")?)?;
-    let request_path = required_path(flags, "--request-file")?;
-    let request = normalized_request(kind, &request_path)?;
-    let (_document, attestation) = sign_normalized_request(&paths, credential_id, kind, &request)?;
-    let public_key_fingerprint = fingerprint(&attestation.public_key_hex);
-    let output_file = optional(flags, "--output-file")
-        .map(PathBuf::from)
-        .map(|path| safe_output_path(&paths, path))
-        .transpose()?;
-    if let Some(path) = output_file.as_ref() {
-        let serialized = serde_json::to_string_pretty(&attestation)
-            .map_err(|error| ExitError::env_config(format!("serialize attestation: {error}")))?;
-        crate::io_util::atomic_write(path, &serialized)
-            .map_err(|error| ExitError::env_config(format!("write {}: {error}", path.display())))?;
-    }
-    emit_result(
-        CredentialResult {
-            action: format!("signed_{}", kind.canonical_action()),
-            credential_id: Some(credential_id.to_owned()),
-            profile: None,
-            registry_path: display(&paths.registry),
-            public_key_fingerprint: Some(public_key_fingerprint),
-            secret_deleted: None,
-            principals: None,
-            attestation: Some(attestation),
-            output_file: output_file.as_deref().map(display),
-            storage_boundary:
-                "exact typed request signed in process; private key bytes were not emitted"
                     .to_owned(),
         },
         want_json,
@@ -437,6 +436,7 @@ pub(crate) fn sign_typed_request(
     request_value: Value,
 ) -> Result<SignedWorkflowRequest, ExitError> {
     let paths = authority_paths(root.to_path_buf())?;
+    require_nonblank("credential_id", credential_id)?;
     let request = normalized_request_value(kind, request_value)?;
     let (document, attestation) = sign_normalized_request(&paths, credential_id, kind, &request)?;
     let registry = AuthorizedPrincipalRegistry::from_document(document)
@@ -453,7 +453,10 @@ fn sign_normalized_request(
     kind: WorkflowAuthorizationKind,
     request: &NormalizedWorkflowRequest,
 ) -> Result<(PrincipalRegistryDocument, AttestationInput), ExitError> {
-    let document = load_registry(&paths.registry)?;
+    let document = load_registry(
+        &paths.registry,
+        &format!("forge-core:workflow:{}", paths.project_id),
+    )?;
     let entry = document
         .principal_registry
         .principals
@@ -504,17 +507,6 @@ fn sign_normalized_request(
     Ok((document, attestation))
 }
 
-fn normalized_request(
-    kind: WorkflowAuthorizationKind,
-    path: &Path,
-) -> Result<NormalizedWorkflowRequest, ExitError> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|error| ExitError::env_config(format!("read {}: {error}", path.display())))?;
-    let raw_value: Value = serde_json::from_str(&raw)
-        .map_err(|error| ExitError::env_config(format!("parse {}: {error}", path.display())))?;
-    normalized_request_value(kind, raw_value)
-}
-
 fn normalized_request_value(
     kind: WorkflowAuthorizationKind,
     raw_value: Value,
@@ -546,25 +538,6 @@ fn normalized_request_value(
         }
     }
     .map_err(|error| ExitError::env_config(format!("invalid typed request: {error}")))
-}
-
-fn parse_kind(value: &str) -> Result<WorkflowAuthorizationKind, ExitError> {
-    match value {
-        "applicability" => Ok(WorkflowAuthorizationKind::Applicability),
-        "capability" => Ok(WorkflowAuthorizationKind::Capability),
-        "decision" => Ok(WorkflowAuthorizationKind::Decision),
-        "evidence" => Ok(WorkflowAuthorizationKind::Evidence),
-        "intent_revision" | "intent-revision" => Err(ExitError::usage(
-            "human intent revisions require `forge-core workflow intent record` with an external human-broker envelope; local workflow credentials cannot sign them"
-                .to_owned(),
-        )),
-        "signal" => Ok(WorkflowAuthorizationKind::Signal),
-        "waiver" => Ok(WorkflowAuthorizationKind::Waiver),
-        _ => Err(ExitError::usage(
-            "--kind must be applicability, capability, decision, evidence, signal, or waiver"
-                .to_owned(),
-        )),
-    }
 }
 
 fn authority_paths(root: PathBuf) -> Result<AuthorityPaths, ExitError> {
@@ -618,14 +591,68 @@ fn authority_paths(root: PathBuf) -> Result<AuthorityPaths, ExitError> {
     })
 }
 
-fn acquire_authority_lock(paths: &AuthorityPaths) -> Result<crate::io_util::DirLock, ExitError> {
+fn acquire_authority_lock(
+    paths: &AuthorityPaths,
+) -> Result<LockedWorkflowCredentialRegistry, ExitError> {
     std::fs::create_dir_all(&paths.operator_dir)
         .map_err(|error| ExitError::env_config(format!("create operator directory: {error}")))?;
     reject_existing_links(&paths.operator_dir)?;
     validate_physical_boundary(&paths.operator_dir, &paths.project_root, &paths.state_root)?;
-    crate::io_util::DirLock::acquire(&paths.operator_dir, ".workflow-credential.lock").map_err(
-        |error| ExitError::conflict(format!("cannot acquire workflow credential lock: {error}")),
-    )
+    let lock = crate::io_util::DirLock::acquire(&paths.operator_dir, ".workflow-credential.lock")
+        .map_err(|error| {
+        ExitError::conflict(format!("cannot acquire workflow credential lock: {error}"))
+    })?;
+    let registry_file = paths
+        .registry
+        .strip_prefix(&paths.operator_dir)
+        .map_err(|error| ExitError::env_config(format!("resolve public registry: {error}")))?
+        .to_path_buf();
+    Ok(LockedWorkflowCredentialRegistry {
+        registry_file,
+        expected_audience: format!("forge-core:workflow:{}", paths.project_id),
+        lock,
+    })
+}
+
+#[allow(dead_code)]
+/// Resolve and retain the same credential-registry authority used by producers.
+pub(crate) fn lock_workflow_credential_registry(
+    project_root: &Path,
+) -> Result<LockedWorkflowCredentialRegistry, ExitError> {
+    let paths = authority_paths(project_root.to_path_buf())?;
+    acquire_authority_lock(&paths)
+}
+
+#[allow(dead_code)]
+/// Read exact public registry bytes under the retained producer authority.
+pub(crate) fn snapshot_workflow_credential_registry(
+    locked: &LockedWorkflowCredentialRegistry,
+) -> Result<WorkflowCredentialRegistrySnapshot, ExitError> {
+    let raw_registry = locked
+        .lock
+        .directory_identity()
+        .read_optional_direct_file_bounded(&locked.registry_file, MAX_PUBLIC_REGISTRY_BYTES)
+        .map_err(|error| {
+            ExitError::env_config(format!(
+                "read public workflow credential registry {}: {error}",
+                locked.registry_file.display()
+            ))
+        })?;
+    if let Some(raw) = raw_registry.as_deref() {
+        let document: PrincipalRegistryDocument = yaml_serde::from_slice(raw).map_err(|error| {
+            ExitError::env_config(format!(
+                "strict public workflow credential registry parse failed: {error}"
+            ))
+        })?;
+        validate_registry_for_audience(&document, &locked.expected_audience)?;
+    }
+    let raw_sha256 = raw_registry
+        .as_ref()
+        .map(|raw| format!("sha256:{:x}", Sha256::digest(raw)));
+    Ok(WorkflowCredentialRegistrySnapshot {
+        raw_registry,
+        raw_sha256,
+    })
 }
 
 fn reject_existing_links(path: &Path) -> Result<(), ExitError> {
@@ -686,45 +713,12 @@ fn physical_candidate(path: &Path) -> Result<PathBuf, ExitError> {
     Ok(canonical.join(suffix))
 }
 
-fn safe_output_path(paths: &AuthorityPaths, requested: PathBuf) -> Result<PathBuf, ExitError> {
-    let absolute = if requested.is_absolute() {
-        requested
-    } else {
-        std::env::current_dir()
-            .map_err(|error| ExitError::env_config(format!("resolve current directory: {error}")))?
-            .join(requested)
-    };
-    let parent = absolute
-        .parent()
-        .ok_or_else(|| ExitError::usage("--output-file must have a parent directory".to_owned()))?;
-    let parent = std::fs::canonicalize(parent).map_err(|error| {
-        ExitError::env_config(format!(
-            "canonicalize output parent {}: {error}",
-            parent.display()
-        ))
-    })?;
-    let file_name = absolute
-        .file_name()
-        .ok_or_else(|| ExitError::usage("--output-file must name a file".to_owned()))?;
-    let output = parent.join(file_name);
-    let physical_output = physical_candidate(&output)?;
-    let physical_registry = physical_candidate(&paths.registry)?;
-    let physical_secrets = physical_candidate(&paths.secrets)?;
-    if physical_output == physical_registry || physical_output.starts_with(&physical_secrets) {
-        return Err(ExitError::env_config(
-            "attestation output must not overwrite the workflow registry or secret directory"
-                .to_owned(),
-        ));
-    }
-    Ok(output)
-}
-
 fn load_or_new_registry(
     path: &Path,
     audience: &str,
 ) -> Result<PrincipalRegistryDocument, ExitError> {
     if path.exists() {
-        let document = load_registry(path)?;
+        let document = load_registry(path, audience)?;
         if document.principal_registry.audience != audience {
             return Err(ExitError::env_config(
                 "workflow registry audience mismatch".to_owned(),
@@ -742,16 +736,27 @@ fn load_or_new_registry(
     }
 }
 
-fn load_registry(path: &Path) -> Result<PrincipalRegistryDocument, ExitError> {
+fn load_registry(
+    path: &Path,
+    expected_audience: &str,
+) -> Result<PrincipalRegistryDocument, ExitError> {
     let raw = std::fs::read_to_string(path)
         .map_err(|error| ExitError::env_config(format!("read {}: {error}", path.display())))?;
     let document = yaml_serde::from_str(&raw)
         .map_err(|error| ExitError::env_config(format!("invalid registry YAML: {error}")))?;
-    validate_registry(&document)?;
+    validate_registry_for_audience(&document, expected_audience)?;
     Ok(document)
 }
 
-fn validate_registry(document: &PrincipalRegistryDocument) -> Result<(), ExitError> {
+fn validate_registry_for_audience(
+    document: &PrincipalRegistryDocument,
+    expected_audience: &str,
+) -> Result<(), ExitError> {
+    if document.principal_registry.audience != expected_audience {
+        return Err(ExitError::env_config(
+            "workflow registry audience mismatch".to_owned(),
+        ));
+    }
     AuthorizedPrincipalRegistry::from_document(document.clone())
         .map(|_| ())
         .map_err(|error| ExitError::env_config(format!("invalid workflow registry: {error}")))
@@ -831,13 +836,6 @@ fn parse_flags(action: &str, args: &[String]) -> Result<BTreeMap<String, Vec<Str
         ],
         "revoke" => &["--root", "--credential-id"],
         "status" => &["--root"],
-        "sign" => &[
-            "--root",
-            "--credential-id",
-            "--kind",
-            "--request-file",
-            "--output-file",
-        ],
         _ => return Err(ExitError::usage(usage())),
     };
     let mut flags = BTreeMap::<String, Vec<String>>::new();
@@ -892,8 +890,15 @@ fn required_path(flags: &BTreeMap<String, Vec<String>>, flag: &str) -> Result<Pa
 }
 
 fn require_nonblank(flag: &str, value: &str) -> Result<(), ExitError> {
-    if value.trim().is_empty() {
-        Err(ExitError::usage(format!("{flag} must not be blank")))
+    if value.is_empty()
+        || value.len() > 128
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
+    {
+        Err(ExitError::usage(format!(
+            "{flag} must be 1..=128 bytes using only ASCII letters, digits, '.', '_', ':', or '-'"
+        )))
     } else {
         Ok(())
     }
@@ -908,7 +913,33 @@ fn now_unix() -> Result<i64, ExitError> {
 }
 
 fn fingerprint(public_key_hex: &str) -> String {
-    format!("sha256:{}", hex(&Sha256::digest(public_key_hex)))
+    let public_key = decode_public_key(public_key_hex).unwrap_or([0_u8; 32]);
+    format!("sha256:{}", hex(&Sha256::digest(public_key)))
+}
+
+fn decode_public_key(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return None;
+    }
+    let mut output = [0_u8; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = decode_nibble(pair[0])?;
+        let low = decode_nibble(pair[1])?;
+        output[index] = (high << 4) | low;
+    }
+    Some(output)
+}
+
+const fn decode_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        _ => None,
+    }
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -929,5 +960,130 @@ fn emit_result(result: CredentialResult, want_json: bool) -> Result<(), ExitErro
 }
 
 fn usage() -> String {
-    "usage:\n  forge-core workflow credential provision --root <project> --credential-id <id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]\n  forge-core workflow credential rotate --root <project> --replaces <old-id> --credential-id <new-id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]\n  forge-core workflow credential revoke --root <project> --credential-id <id> [--json|--no-json]\n  forge-core workflow credential status --root <project> [--json|--no-json]\n  forge-core workflow credential sign --root <project> --credential-id <id> --kind <applicability|capability|decision|evidence|signal|waiver> --request-file <json> [--output-file <json>] [--json|--no-json]".to_owned()
+    "usage:\n  forge-core workflow credential provision --root <project> --credential-id <id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]\n  forge-core workflow credential rotate --root <project> --replaces <old-id> --credential-id <new-id> --principal-id <id> --agent-id <id> --profile <human|agent|runtime> [--json|--no-json]\n  forge-core workflow credential revoke --root <project> --credential-id <id> [--json|--no-json]\n  forge-core workflow credential status --root <project> [--json|--no-json]\n\nReusable attestation signing is intentionally unavailable. Local credentials are consumed only inside `workflow action authorize` after the kernel verifies an operator_credential_broker packet.".to_owned()
+}
+
+#[cfg(test)]
+mod backup_seam_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn reusable_signing_is_absent_from_the_public_credential_surface() {
+        assert!(!usage().contains("credential sign"));
+        assert!(parse_flags("sign", &[]).is_err());
+    }
+
+    #[test]
+    fn retained_credential_authority_snapshots_only_exact_public_registry() {
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+        let base = std::env::temp_dir().join(format!(
+            "forge-credential-lock-seam-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::SeqCst)
+        ));
+        let project_root = base.join("project");
+        let state_root = base.join("state");
+        let operator_dir = base.join("operator");
+        let registry = operator_dir.join("principals.yaml");
+        let secrets = operator_dir.join("workflow-secrets");
+        std::fs::create_dir_all(&project_root).unwrap();
+        std::fs::create_dir_all(&state_root).unwrap();
+        std::fs::create_dir_all(&secrets).unwrap();
+        let raw = br#"schema_version: "0.1"
+principal_registry:
+  audience: forge-core:workflow:project.test
+  principals:
+    - credential_id: credential.test
+      principal_id: principal.test
+      agent_id: agent.test
+      role: human
+      public_key_hex: d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+      allowed_tools:
+        - workflow
+      authority_grants:
+        - workflow.applicability.assess
+      status: active
+# retained exactly
+"#;
+        std::fs::write(&registry, raw).unwrap();
+        std::fs::write(secrets.join("private.ed25519"), b"must-not-escape").unwrap();
+        let paths = AuthorityPaths {
+            project_id: "project.test".to_owned(),
+            project_root,
+            state_root,
+            operator_dir,
+            registry,
+            secrets,
+        };
+
+        let locked = acquire_authority_lock(&paths).unwrap();
+        let snapshot = snapshot_workflow_credential_registry(&locked).unwrap();
+        assert_eq!(snapshot.raw_registry(), Some(raw.as_slice()));
+        assert_eq!(
+            snapshot.raw_sha256(),
+            Some(format!("sha256:{:x}", Sha256::digest(raw)).as_str())
+        );
+        assert!(!snapshot
+            .raw_registry()
+            .unwrap()
+            .windows(b"must-not-escape".len())
+            .any(|window| window == b"must-not-escape"));
+        drop(locked);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn retained_credential_snapshot_stays_bound_after_operator_parent_swap() {
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+        let base = std::env::temp_dir().join(format!(
+            "forge-credential-parent-swap-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::SeqCst)
+        ));
+        let project_root = base.join("project");
+        let state_root = base.join("state");
+        let operator_dir = base.join("operator");
+        let registry = operator_dir.join("principals.yaml");
+        let secrets = operator_dir.join("workflow-secrets");
+        std::fs::create_dir_all(&project_root).unwrap();
+        std::fs::create_dir_all(&state_root).unwrap();
+        std::fs::create_dir_all(&secrets).unwrap();
+        let trusted = br#"schema_version: "0.1"
+principal_registry:
+  audience: forge-core:workflow:project.test
+  principals:
+    - credential_id: credential.test
+      principal_id: principal.test
+      agent_id: agent.test
+      role: human
+      public_key_hex: d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+      allowed_tools:
+        - workflow
+      authority_grants:
+        - workflow.applicability.assess
+      status: active
+"#;
+        std::fs::write(&registry, trusted).unwrap();
+        let paths = AuthorityPaths {
+            project_id: "project.test".to_owned(),
+            project_root,
+            state_root,
+            operator_dir: operator_dir.clone(),
+            registry: registry.clone(),
+            secrets,
+        };
+        let locked = acquire_authority_lock(&paths).unwrap();
+        let moved = base.join("operator-retained");
+        std::fs::rename(&operator_dir, &moved).unwrap();
+        std::fs::create_dir_all(operator_dir.join("workflow-secrets")).unwrap();
+        std::fs::write(&registry, b"attacker: true\n").unwrap();
+        let replacement = acquire_authority_lock(&paths).unwrap();
+
+        let snapshot = snapshot_workflow_credential_registry(&locked).unwrap();
+        assert_eq!(snapshot.raw_registry(), Some(trusted.as_slice()));
+        drop(replacement);
+        drop(locked);
+        let _ = std::fs::remove_dir_all(base);
+    }
 }

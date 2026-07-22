@@ -1,0 +1,50 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C2.4"
+status: "source-corpus-complete"
+slice: "state-loss-and-install-lifecycle"
+title: "Specify the host-neutral product lifecycle recovery corpus"
+intent: >-
+  Supply closed source cases for lifecycle recovery boundaries without adding a
+  host, selecting a host, executing recovery, admitting a release, or changing
+  lifecycle state.
+
+decision_sources:
+  - "contracts/spec/product-lifecycle-v0.yaml"
+  - "contracts/spec/C2.4-product-lifecycle-recovery-v0.yaml"
+  - "contracts/stories/C2.3-owned-product-lifecycle.yaml"
+
+owned_files:
+  - "contracts/spec/C2.4-product-lifecycle-recovery-v0.yaml"
+  - "contracts/stories/C2.4-product-lifecycle-recovery-corpus.yaml"
+  - "docs/C2.4-product-lifecycle-recovery.md"
+  - "docs/fixtures/product-lifecycle-recovery-v0/C2.4-product-lifecycle-recovery-corpus.yaml"
+  - "crates/forge-core-cli/tests/product_lifecycle_recovery_corpus_e2e.rs"
+
+constraints:
+  - "Cases use explicit fictional install roots and host-neutral labels; they neither require nor select a host."
+  - "selected_host remains null in every fixture, expected observation, and diagnostic projection."
+  - "The corpus describes candidate inputs and source assertions only; it has no signing, trust, admission, install, activation, lifecycle, protected-anchor, private-key, mutation, release, phase-transition, or host-selection authority."
+  - "No fixture contains an external broker private key, and no case permits one in Forge state or backups."
+  - "Stale configuration is observable retained data, never a host-selection or host-support assertion."
+  - "Recovery must preserve active generation identity unless complete verified publication and the requested operation's existing rules authorize a state change."
+
+acceptance_criteria:
+  - "The closed corpus has one source case for partial setup, stale host configuration, interrupted update, downgrade, wrapper mismatch, retained-state uninstall, backup interruption, and replacement-machine restore."
+  - "Each case declares preconditions, an input or interruption boundary, an expected fail-closed or preservation result, and required observations."
+  - "The corpus explicitly distinguishes authored source cases from unexecuted stabilization evidence."
+  - "The corpus requires observation-only status and doctor outputs with selected_host null."
+  - "Source-test consumers can assert no implicit root adoption, no stale-data activation, no downgrade, no wrapper replacement on mismatch, and no private-key migration."
+
+checks:
+  passed:
+    - "Closed source contract, story, documentation, and corpus fixtures authored"
+  deferred:
+    - "Rust source-test execution"
+    - "failure injection, interrupted-update, backup-interruption, and replacement-machine runtime execution"
+    - "mixed-version, stress, fuzzing, benchmark, MSRV, platform, and target matrices"
+    - "hosted CI, publication, release, downloaded-asset verification, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "This story supplies source corpus artifacts only; it does not implement a recovery command, backup system, restore executor, or host adapter."
+  - "C3.2-C3.4 own cumulative runtime stabilization and hosted evidence after source stories compile."

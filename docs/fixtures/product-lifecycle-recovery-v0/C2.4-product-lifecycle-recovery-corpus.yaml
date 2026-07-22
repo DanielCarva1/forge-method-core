@@ -1,0 +1,198 @@
+schema_version: "0.1"
+artifact_kind: "product-lifecycle-recovery-source-corpus"
+corpus_id: "C2.4-product-lifecycle-recovery-v0"
+closed_schema: true
+selected_host: null
+shared:
+  product_lifecycle_spec: "contracts/spec/product-lifecycle-v0.yaml"
+  explicit_install_root_rule: "Every case supplies its exact install_root; inference is forbidden."
+  candidate_data_only: true
+  authority_grants:
+    claim: false
+    mutation: false
+    phase_transition: false
+    release: false
+    signing: false
+    trust: false
+    admission: false
+    install: false
+    activation: false
+    lifecycle: false
+    protected_anchor: false
+    private_key: false
+    host_selection: false
+  selected_host: null
+  private_external_broker_keys: "excluded from state, backups, fixtures, and recovery material"
+
+cases:
+  - case_id: "C2.4.partial-setup"
+    category: "partial_setup"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/partial-setup"
+      ownership_marker: "present"
+      lifecycle_state: "missing"
+      retained_unknown_file: "operator-note.txt"
+    interruption_or_input: "Process ends after marker creation and before valid initial state publication."
+    requested_operation: "status_then_doctor_then_setup"
+    expected_result: "fail_closed_incomplete_setup; do not adopt, overwrite, or activate retained data"
+    required_observations:
+      marker: "present"
+      lifecycle_state: "missing"
+      diagnostic: "incomplete_or_degraded"
+      selected_host: null
+    preservation_requirements:
+      - "operator-note.txt remains unchanged"
+      - "no generation becomes active"
+
+  - case_id: "C2.4.stale-host-configuration"
+    category: "stale_host_configuration"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/stale-config"
+      active_generation: "generation-a"
+      retained_configuration: "hosts/runtime-neutral/config.json"
+      recorded_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      observed_state: "missing_or_digest_mismatched_or_unsafe"
+    interruption_or_input: "Configuration is stale after external modification or removal."
+    requested_operation: "status_then_doctor"
+    expected_result: "report_exact_degraded_observation_only"
+    required_observations:
+      host_configuration: "missing_or_digest_mismatched_or_unsafe"
+      selected_host: null
+      active_generation: "generation-a"
+    preservation_requirements:
+      - "no host is selected, supported, or field-verified"
+      - "no configuration repair or activation occurs"
+
+  - case_id: "C2.4.interrupted-update"
+    category: "interrupted_update"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/interrupted-update"
+      active_generation: "generation-a"
+      active_version: "2.4.0"
+      previous_generation: "generation-previous"
+      candidate_generation: "generation-b"
+      candidate_version: "2.5.0"
+    interruption_or_input: "Process ends after fresh staging creation and before complete generation, receipt, and active-state publication."
+    requested_operation: "doctor_then_retry_update"
+    expected_result: "retain_generation-a_as_active; staged_candidate_is_not_active; retry_reverifies_input"
+    required_observations:
+      active_generation: "generation-a"
+      previous_generation: "generation-previous"
+      incomplete_candidate: "degraded_or_ignored_not_active"
+      selected_host: null
+    preservation_requirements:
+      - "no partial candidate receives activation"
+      - "prior verified inventory remains available"
+
+  - case_id: "C2.4.downgrade"
+    category: "downgrade"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/downgrade"
+      active_generation: "generation-2.5.0"
+      active_version: "2.5.0"
+      previous_generation: "generation-2.4.0"
+      candidate_version: "2.4.9"
+    interruption_or_input: "A verified candidate release has a semantic version below active_version."
+    requested_operation: "update"
+    expected_result: "reject_downgrade_before_active_state_mutation"
+    required_observations:
+      active_generation: "generation-2.5.0"
+      previous_generation: "generation-2.4.0"
+      selected_host: null
+    preservation_requirements:
+      - "candidate is not activated"
+      - "generation identities remain unchanged"
+
+  - case_id: "C2.4.wrapper-mismatch"
+    category: "wrapper_mismatch"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/wrapper-mismatch"
+      active_generation: "generation-a"
+      wrapper_inventory_path: "bin/forge-wrapper"
+      recorded_digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      observed_digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    interruption_or_input: "An installed wrapper's observed bytes do not match retained inventory."
+    requested_operation: "doctor_then_uninstall"
+    expected_result: "report_digest_mismatch; preserve_wrapper_on_uninstall"
+    required_observations:
+      wrapper: "digest_mismatched"
+      selected_host: null
+      active_generation: "generation-a"
+    preservation_requirements:
+      - "wrapper is neither replaced nor activated"
+      - "uninstall preserves the mismatched wrapper"
+
+  - case_id: "C2.4.retained-state-uninstall"
+    category: "retained_state_uninstall"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/retained-uninstall"
+      matching_product_asset: "bin/forge-core"
+      modified_product_asset: "bin/forge-wrapper"
+      unknown_file: "operator-note.txt"
+      excluded_paths:
+        - "consumer-project/"
+        - "forge-sidecar/"
+        - "operator-anchor/"
+        - "backup/"
+        - "restore-receipt/"
+        - "external-broker-registry/"
+        - "external-broker-private-key/"
+    interruption_or_input: "Root contains retained product-adjacent and external-owner state."
+    requested_operation: "uninstall"
+    expected_result: "delete_only_matching_regular_product_inventory"
+    required_observations:
+      selected_host: null
+      matching_product_asset: "removed"
+      modified_product_asset: "preserved"
+    preservation_requirements:
+      - "unknown and excluded paths remain unchanged"
+      - "external-broker-private-key is never read, copied, or backed up"
+
+  - case_id: "C2.4.backup-interruption"
+    category: "backup_interruption"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/backup-interruption"
+      active_generation: "generation-a"
+      backup_artifact: "backup/incomplete-copy"
+      backup_completion_receipt: "missing"
+      external_broker_private_key: "owner_external_and_absent"
+    interruption_or_input: "Backup process stops before its owner-specific completion record exists."
+    requested_operation: "status_then_doctor"
+    expected_result: "backup_artifact_is_not_lifecycle_state_or_restore_authority"
+    required_observations:
+      active_generation: "generation-a"
+      backup: "outside_lifecycle_custody"
+      selected_host: null
+    preservation_requirements:
+      - "no restore or lifecycle mutation follows"
+      - "private external broker key remains absent from Forge state and backups"
+
+  - case_id: "C2.4.replacement-machine-restore"
+    category: "replacement_machine_restore"
+    preconditions:
+      install_root: "/fixture/product-lifecycle-recovery/replacement-machine"
+      local_ownership_marker: "missing"
+      candidate_recovery_material: "copied_generation_metadata_and_assets"
+      candidate_active_generation: "generation-a"
+      external_broker_private_key: "absent"
+    interruption_or_input: "A replacement machine receives candidate recovery material without local lifecycle setup."
+    requested_operation: "status_then_doctor"
+    expected_result: "observe_candidate_only; no_implicit_setup_restore_or_activation"
+    required_observations:
+      ownership_marker: "missing"
+      candidate_material: "not_active"
+      selected_host: null
+    preservation_requirements:
+      - "no install root is claimed automatically"
+      - "no generation is activated"
+      - "no external private key, signer, trust, anchor, or host-selection authority is recreated"
+
+evidence_status:
+  source_cases: "authored_not_executed"
+  stabilization_evidence: "unexecuted"
+  deferred:
+    - "Rust source-test execution"
+    - "failure injection and runtime interruption execution"
+    - "mixed-version, backup, and replacement-machine execution"
+    - "stress, fuzzing, benchmarks, MSRV, platform, target, and hosted CI matrices"
+    - "publication, release, real-host, and field evidence"

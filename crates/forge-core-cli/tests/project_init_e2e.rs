@@ -123,6 +123,48 @@ fn root_entry_names(root: &Path) -> BTreeSet<String> {
         .collect()
 }
 
+fn tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
+    fn visit(base: &Path, path: &Path, entries: &mut Vec<(String, String, Vec<u8>)>) {
+        let mut children = fs::read_dir(path)
+            .expect("read snapshot directory")
+            .map(|entry| entry.expect("read snapshot entry").path())
+            .collect::<Vec<_>>();
+        children.sort();
+        for child in children {
+            let relative = child
+                .strip_prefix(base)
+                .expect("snapshot path below base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let metadata = fs::symlink_metadata(&child).expect("snapshot metadata");
+            if metadata.file_type().is_symlink() {
+                entries.push((
+                    relative,
+                    "symlink".to_string(),
+                    fs::read_link(&child)
+                        .expect("snapshot symlink target")
+                        .to_string_lossy()
+                        .into_owned()
+                        .into_bytes(),
+                ));
+            } else if metadata.is_dir() {
+                entries.push((relative, "dir".to_string(), Vec::new()));
+                visit(base, &child, entries);
+            } else {
+                entries.push((
+                    relative,
+                    "file".to_string(),
+                    fs::read(&child).expect("snapshot file bytes"),
+                ));
+            }
+        }
+    }
+
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries);
+    entries
+}
+
 fn expected_existing_app_entries() -> BTreeSet<String> {
     BTreeSet::from([
         ".forge-method.yaml".to_string(),
@@ -297,6 +339,83 @@ fn project_init_is_idempotent_for_same_root() {
     assert_no_consumer_local_state(&app);
 }
 
+#[test]
+fn project_init_rejects_linked_missing_or_partial_state_without_normalization() {
+    for state_shape in ["missing", "partial"] {
+        let parent = FreshParent::new(state_shape);
+        let app = create_existing_app(&parent.path, "darkest-roguelite");
+        let sidecar = parent.path.join("forge-darkest-roguelite");
+        let state = sidecar.join(".forge-method");
+        fs::write(
+            app.join(".forge-method.yaml"),
+            "schema_version: forge_project_link_v1\nproject_id: darkest-roguelite\nsidecar_root: ../forge-darkest-roguelite\nstate_root: ../forge-darkest-roguelite/.forge-method\n",
+        )
+        .expect("write matching Project Link");
+        if state_shape == "partial" {
+            fs::create_dir_all(state.join("wal")).expect("create partial linked state");
+            fs::write(state.join("retained-evidence.bin"), b"do-not-normalize\n")
+                .expect("write retained evidence");
+        }
+        let before = tree_snapshot(&parent.path);
+
+        let output = project_init(&app);
+
+        let json = assert_failure(&output, "project init over linked state loss");
+        assert_eq!(json["exit_reason"], "env_config");
+        assert_message_mentions_all(
+            &json,
+            &["prior initialization", "automatic recreation is forbidden"],
+        );
+        assert_eq!(
+            tree_snapshot(&parent.path),
+            before,
+            "project init must preserve the complete parent tree for {state_shape} linked state"
+        );
+    }
+}
+
+#[test]
+fn project_init_rejects_preexisting_sidecar_state_without_a_project_link() {
+    let parent = FreshParent::new("orphan-state");
+    let app = create_existing_app(&parent.path, "darkest-roguelite");
+    let state = parent
+        .path
+        .join("forge-darkest-roguelite")
+        .join(".forge-method");
+    fs::create_dir_all(&state).expect("create preexisting sidecar state");
+    fs::write(state.join("retained-authority.bin"), b"retain\n").expect("write retained authority");
+    let before = tree_snapshot(&parent.path);
+
+    let output = project_init(&app);
+
+    let json = assert_failure(&output, "project init with preexisting sidecar state");
+    assert_eq!(json["exit_reason"], "env_config");
+    assert_message_mentions_all(&json, &["without a Project Link", "refusing to normalize"]);
+    assert_eq!(tree_snapshot(&parent.path), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn project_init_rejects_fresh_sidecar_symlink_without_mutating_target() {
+    use std::os::unix::fs::symlink;
+
+    let parent = FreshParent::new("fresh-sidecar-symlink");
+    let app = create_existing_app(&parent.path, "darkest-roguelite");
+    let foreign = parent.path.join("foreign-authority");
+    fs::create_dir_all(&foreign).expect("create foreign target");
+    fs::write(foreign.join("retained.bin"), b"foreign\n").expect("write foreign marker");
+    symlink(&foreign, parent.path.join("forge-darkest-roguelite"))
+        .expect("substitute default sidecar with symlink");
+    let before = tree_snapshot(&parent.path);
+
+    let output = project_init(&app);
+
+    let json = assert_failure(&output, "project init with symlinked fresh sidecar");
+    assert_eq!(json["exit_reason"], "invalid_decision_shape");
+    assert_message_mentions_all(&json, &["unsafe", "symbolic link"]);
+    assert_eq!(tree_snapshot(&parent.path), before);
+    assert!(!app.join(".forge-method.yaml").exists());
+}
 #[test]
 fn project_init_rejects_preexisting_consumer_local_state_without_creating_link() {
     let parent = FreshParent::new("preexisting-local-state");

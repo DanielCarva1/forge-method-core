@@ -105,16 +105,20 @@ epics:
           - "No Python implementation target is introduced."
       - id: "FRUST-002"
         title: "Markdown debt retirement map"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         problem: "Architecture Markdown staging files still exist and can mislead agents."
         evidence_refs:
           - "tool_schema_compression_2605_26165"
-          - "file_native_context_2602_05447"
+          - "structured_context_engineering_file_native_2026"
         depends_on:
           - "FRUST-001"
+        implementation_note: "Source replaces the superseded pointer with an exhaustive typed Markdown allowlist and historical retirement map, adds a deny-by-default runtime/agent load authorization API, and wires repository Markdown discovery into the canonical Rust validation pipeline. Rust unit/regression source covers unknown-path, audience, permissive-default, and newly introduced Markdown rejection. Compile and runtime evidence are not claimed by this source update."
         existing_artifacts:
           - "contracts/migration/markdown-debt-inventory.yaml"
+          - "crates/forge-core-contracts/src/markdown_authority.rs"
+          - "crates/forge-core-validate/src/markdown_authority.rs"
+          - "crates/forge-core-cli/src/validate.rs"
         acceptance:
           - "Every Markdown debt entry has a typed target contract or deletion reason."
           - "Runtime/agent flows are forbidden from loading non-allowlisted Markdown."
@@ -126,7 +130,7 @@ epics:
     stories:
       - id: "FRUST-010"
         title: "Rust core architecture contract"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         problem: "The target crate design exists as Markdown staging, not typed authority."
         evidence_refs:
@@ -144,7 +148,7 @@ epics:
           - "Cargo validation loads the architecture contract."
       - id: "FRUST-011"
         title: "Borrowed-shell host conformance contract"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         problem: "Host compatibility requirements are still open and partly prose-shaped."
         evidence_refs:
@@ -170,7 +174,7 @@ epics:
     stories:
       - id: "FRUST-020"
         title: "OperationContract typed execution planning"
-        status: "implemented_partial"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "runtime_enforcement_2503_18666"
@@ -215,11 +219,11 @@ epics:
   - id: "FRUST-E3"
     title: "Guidance and Funnel Autonomy"
     goal: "Encode human-guided early phases and mechanical later phases as typed operation policy."
-    status: "planned"
+    status: "active"
     stories:
       - id: "FRUST-030"
         title: "Guide as default protocol orchestrator"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "swe_agent_2405_15793"
@@ -235,13 +239,18 @@ epics:
           - "Host agents cannot invent next state without a Forge operation contract."
       - id: "FRUST-031"
         title: "Funnel autonomy policy"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "funnel_autonomy_validated"
           - "runtime_enforcement_2503_18666"
         planned_outputs:
           - "contracts/policies/funnel-autonomy.yaml"
+        existing_artifacts:
+          - "contracts/stories/FRUST-031-funnel-autonomy.yaml"
+          - "crates/forge-core-contracts/src/funnel_autonomy.rs"
+          - "crates/forge-core-decisions/src/funnel_autonomy.rs"
+          - "crates/forge-core-kernel/src/builtin_gates.rs"
         acceptance:
           - "Early ambiguous work raises human guidance and research pressure."
           - "Settled build/story/test loops can proceed mechanically under claims, gates, and evidence."
@@ -249,11 +258,11 @@ epics:
   - id: "FRUST-E4"
     title: "Multi-Agent Coordination"
     goal: "Support multiple agents and humans without state clobbering, stale claims, or duplicate work."
-    status: "planned"
+    status: "implemented"
     stories:
       - id: "FRUST-040"
         title: "Claim, completion, request, and recovery contract integration"
-        status: "implemented_partial"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "communication_centric_llm_mas_2502_14321"
@@ -264,13 +273,19 @@ epics:
           - "contracts/completion/completion-contract-v0.yaml"
           - "contracts/requests/request-contract-v0.yaml"
           - "contracts/recovery/health-recovery-contract-v0.yaml"
+          - "contracts/stories/C5.3-replacement-agent-continuity.yaml"
+          - "crates/forge-core-contracts/src/workflow_governance.rs"
+          - "crates/forge-core-workflow-governance-tcb/src/lib.rs"
+          - "crates/forge-core-kernel/src/workflow_governance/adapter.rs"
         acceptance:
           - "Claims include TTL, heartbeat, owner, scope, and handoff-on-expiry."
           - "Requests are durable protocol units with sender, receiver, payload, status, dependencies, and evidence."
           - "Completion cannot be done without proof."
+          - "Runtime request and claim joins use exact stable durable IDs rather than shared schema contract_ref paths."
+          - "Fresh-process recovery joins request, completion, recovery, and claim-WAL audit state without recreating authority."
       - id: "FRUST-041"
         title: "Coordination eval suite"
-        status: "planned"
+        status: "implemented"
         priority: "high"
         evidence_refs:
           - "multi_agent_failure_modes_2503_13657"
@@ -306,8 +321,9 @@ epics:
           - "Verifier composes Fulcio identity and Rekor evidence."
       - id: "FRUST-051"
         title: "Timestamp, TSA, CT, revocation, and TUF freshness boundaries"
-        status: "implemented_partial"
+        status: "implemented"
         priority: "high"
+        implementation_note: "The umbrella boundary composes the supplied direct-issuer and delegated-responder OCSP verifier without conflating TSA, CT, Rekor, CRL, short-lived-certificate, TUF, network, or install/update authority. The delegated model validates exact issuer/path signatures and validity, id-kp-OCSPSigning EKU, responderID, and BasicOCSPResponse signature. A locked all-target compile completed for forge-core-crypto, forge-core-command-surface, and forge-core-cli; runtime/network evidence remains deferred."
         evidence_refs:
           - "sigstore_client_spec"
           - "fulcio_spec_oidc_certificate_binding"
@@ -333,7 +349,7 @@ epics:
           - "certificate_transparency_sct_boundary"
           - "certificate_revocation_policy_boundary"
           - "explicit_crl_revocation_status_boundary"
-          - "explicit_ocsp_revocation_status_boundary_direct_issuer"
+          - "explicit_ocsp_revocation_status_boundary_direct_and_delegated_offline_authority"
           - "tuf_trusted_root_freshness_boundary"
         existing_artifacts:
           - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
@@ -350,47 +366,48 @@ epics:
           - "contracts/migration/tuf-trusted-root-freshness-boundary-grill-audit.yaml"
           - "crates/forge-core-cli"
         remaining_boundaries:
-          - "delegated_ocsp_responder_certificate_authority"
+          - "ocsp_network_retrieval_and_cache_policy"
         acceptance:
           - "Timestamp and certificate validity semantics are explicit."
           - "TUF freshness, explicit local CRL status, and explicit OCSP status are not silently implied by other checks."
           - "Explicit local CRL status remains local/supplied-CRL only; CRL distribution fetch, delta CRL, indirect CRL, and OCSP remain separate boundaries."
       - id: "FRUST-052"
         title: "Explicit OCSP revocation status boundary"
-        status: "implemented_partial"
+        status: "implemented"
         priority: "high"
         evidence_refs:
           - "rfc6960_ocsp_certificate_status"
           - "rfc5280_x509_crl_profile"
         depends_on:
           - "FRUST-051"
-        implementation_note: "Runtime integrated as of 2026-06-29 for supplied/offline OCSP responses signed directly by the supplied issuer certificate. The verifier is read-only, performs no network OCSP fetch, fails closed for verification/freshness/binding failures, and exposes host-adapter CLI/projection. Delegated OCSP responder certificate authority remains a pending extension and is intentionally fail-closed instead of implied."
+        implementation_note: "Source supports supplied/offline OCSP responses through the product CLI under exactly one direct-issuer or supplied delegated-responder authority. Delegated CLI input requires one strict responder certificate path and zero or more repeated ordered issuer-chain paths; chain-only, duplicate-certificate, empty, and flag-shaped values fail closed. The manifest owns typed per-command setup gaps, generated CLI-JSON/MCP projections preserve them exactly, delegated schemas require the responder certificate whenever an issuer chain is supplied, and the typed prohibition set denies retrieval, install/update, CRL, CT, Rekor, TUF, signing, mutation, host-selection/support/release, and projection-promotion authority. A locked all-target compile completed for forge-core-crypto, forge-core-command-surface, and forge-core-cli; runtime/network evidence remains deferred."
         existing_artifacts:
           - "contracts/policies/explicit-ocsp-revocation-status-boundary.yaml"
-          - "contracts/migration/explicit-ocsp-revocation-status-boundary-grill-audit.yaml"
-          - "crates/forge-core-cli/src/lib.rs"
-          - "crates/forge-core-cli/src/main.rs"
-          - "crates/forge-core-cli/tests/validate.rs"
+          - "crates/forge-core-crypto/src/host_adapter_types.rs"
+          - "crates/forge-core-crypto/src/ocsp.rs"
+          - "crates/forge-core-crypto/src/host_adapter_verification.rs"
+          - "crates/forge-core-cli/src/host_adapter_verify_cmd.rs"
+          - "crates/forge-core-cli/src/host_adapter_projection.rs"
         pending_extensions:
-          - "delegated_ocsp_responder_certificate_authority"
+          - "ocsp_network_retrieval_and_cache_policy"
         non_goals:
           - "Do not infer OCSP status from short-lived certificate policy, CRL status, CT, TSA, Rekor, or TUF freshness."
           - "Do not perform network OCSP fetch unless a later host-adapter boundary explicitly permits it."
           - "Do not claim install/update authority from OCSP verification alone."
         acceptance:
-          - "Read-only verifier accepts supplied OCSP response evidence signed by the supplied issuer and reports good, revoked, or unknown status explicitly."
-          - "Verifier fails closed for stale/expired/future OCSP responses, absent nextUpdate, issuer/responder mismatch, bad target certificate signatures, bad response signatures, unsupported CertID hash algorithms, CertID serial mismatch, and unsupported responder authority."
-          - "Nonce freshness is verified when nonce evidence is present and explicitly reported when no nonce is supplied, absent, mismatched, or unsupported."
-          - "Host-adapter projection exposes the OCSP command schema instead of falling through to an empty schema."
-          - "Fixtures cover good, revoked, unknown, stale/expired, future thisUpdate, future producedAt, absent nextUpdate, responder mismatch, bad response signature, bad target certificate signature, CertID serial mismatch, unsupported CertID hash, nonce absent, nonce match, and nonce mismatch cases before the boundary is recommended."
+          - "Read-only verifier source selects exactly one supplied direct issuer or supplied delegated responder and reports good, revoked, or unknown status explicitly."
+          - "Delegated authority fails closed for wrong issuer/path, invalid responder/path time, missing id-kp-OCSPSigning EKU, responderID mismatch, ambiguous authority, or bad response signature."
+          - "Direct and delegated modes apply identical CertID serial/hash, producedAt, thisUpdate, nextUpdate, status, and nonce requirements."
+          - "Host-adapter projection exposes supplied delegated responder certificate/chain inputs and typed selected-authority identity without network, install, update, CRL, CT, Rekor, TUF, or release authority."
+          - "Production-entrypoint source tests cover a non-empty ordered delegated issuer chain plus reversed, omitted, duplicated, terminal-included, invalid-validity, and partial chain-only failures alongside EKU, responderID, signature, stale response, nonce, and serial/hash failures; locked all-target compilation is complete and runtime evidence remains pending."
   - id: "FRUST-E6"
     title: "Release Readiness and Cross-Host Conformance"
     goal: "Prove the core works as a product across borrowed shells."
-    status: "planned"
+    status: "in_progress"
     stories:
       - id: "FRUST-060"
         title: "Cross-host conformance testkit"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "agent_harness_engineering_survey_2026"
@@ -399,14 +416,15 @@ epics:
           - "FRUST-011"
           - "FRUST-030"
         planned_outputs:
-          - "crates/forge-testkit"
+          - "crates/forge-core-validate/src/testkit.rs"
           - "contracts/hosts/host-conformance.yaml"
+          - "contracts/hosts/host-support-matrix-v0.yaml"
         acceptance:
           - "A host can install, invoke guide, report what Forge says, block unauthorized mutation, update, diagnose stale installation, and recover in a fresh chat."
           - "Conformance results are typed evidence."
       - id: "FRUST-061"
         title: "Release packaging and user update proof"
-        status: "planned"
+        status: "implemented"
         priority: "critical"
         evidence_refs:
           - "sigstore_bundle_format_docs"
@@ -414,6 +432,13 @@ epics:
         depends_on:
           - "FRUST-050"
           - "FRUST-060"
+        implementation_note: "C2.3 source exposes one explicit lifecycle setup/status/doctor/install/update/rollback/uninstall family backed by the retained Store product-lifecycle namespace. It consumes a closed immutable release bundle with typed change records, semantic-version compatibility, existing distribution admission, existing local artifact verification, exact no-follow SHA-256 byte rechecks, immutable generations, generation-local audit receipts, exact retry, downgrade and same-version drift rejection, verified rollback, and product-owned-only uninstall. GAP-002 retained ProjectLinkCas and public plan/apply dispatch are also source-complete with exact confirmation, predecessor lifetime anchoring, destination reservation, successor CAS, operation-scoped plan/WAL/receipt records, and retry verification. Compile-only all-target checks passed for contracts, Store, command surface, CLI, and forge-core-validate. Rust test execution, FRUST-060 exact-host conformance execution, C2.4 interruption/mixed-version execution, hosted CI, publication, release assets, downloaded-asset verification, and field evidence remain deferred; selected_host remains none."
+        existing_artifacts:
+          - "contracts/spec/product-lifecycle-v0.yaml"
+          - "contracts/stories/C2.3-owned-product-lifecycle.yaml"
+          - "crates/forge-core-contracts/src/product_lifecycle.rs"
+          - "crates/forge-core-cli/src/product_lifecycle_cmd.rs"
+          - "docs/product-lifecycle.md"
         acceptance:
           - "Release artifact verification is part of install/update acceptance."
           - "Users can update without knowing implementation internals."
@@ -430,4 +455,4 @@ open_questions:
     recommended_answer: "One copy-paste install command, one copy-paste update command, local version diagnosis, and human-readable patch summary generated from typed release metadata."
 next_ready_story:
   id: "FRUST-011"
-  reason: "FRUST-052 now has a direct-issuer supplied/offline OCSP runtime slice; cross-host conformance still depends on the borrowed-shell host conformance contract before FRUST-060 can prove multi-host product behavior."
+  reason: "FRUST-052 and FRUST-060 source are implemented. The host-neutral conformance vectors, typed capability-result integration, candidate-only support matrix, and CLI validation/reporting exist without selecting, supporting, releasing, or field-verifying a host. The next true blocker is exact-version host execution and field evidence after a release acceptance host is selected."

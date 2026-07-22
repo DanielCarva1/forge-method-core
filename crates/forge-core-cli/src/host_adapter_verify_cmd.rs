@@ -11,7 +11,7 @@ use crate::cli_error::ExitError;
 use crate::cli_util::command_surface_usage;
 use crate::{
     run_host_adapter_artifact_verification, run_host_adapter_certificate_crl_status_verification,
-    run_host_adapter_certificate_ocsp_status_verification,
+    run_host_adapter_certificate_ocsp_status_verification_with_responder_material,
     run_host_adapter_certificate_revocation_policy_verification,
     run_host_adapter_certificate_transparency_sct_verification,
     run_host_adapter_fulcio_certificate_identity_verification,
@@ -30,7 +30,8 @@ use crate::{
     HostAdapterCertificateTransparencySctVerificationInput,
     HostAdapterCertificateTransparencySctVerificationStatus,
     HostAdapterFulcioCertificateIdentityVerificationInput,
-    HostAdapterFulcioCertificateIdentityVerificationStatus, HostAdapterProvenanceVerificationInput,
+    HostAdapterFulcioCertificateIdentityVerificationStatus,
+    HostAdapterOcspDelegatedResponderMaterial, HostAdapterProvenanceVerificationInput,
     HostAdapterProvenanceVerificationStatus, HostAdapterRekorVerificationInput,
     HostAdapterRekorVerificationStatus, HostAdapterSigstoreBundleSubjectVerificationInput,
     HostAdapterSigstoreBundleSubjectVerificationStatus,
@@ -83,6 +84,13 @@ fn parse_u64_or_verify_usage(value: &str, command: &CommandSpec) -> Result<u64, 
     value
         .parse::<u64>()
         .map_err(|_| ExitError::usage(host_adapter_verify_usage(command)))
+}
+
+fn parse_strict_offline_path(value: &str, command: &CommandSpec) -> Result<PathBuf, ExitError> {
+    if value.trim().is_empty() || value.starts_with('-') {
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
+    }
+    Ok(PathBuf::from(value))
 }
 
 /// Runs the `host-adapter-verify-artifact` command.
@@ -1463,6 +1471,8 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
     let mut ocsp_response_path: Option<PathBuf> = None;
     let mut verification_time_unix: Option<i64> = None;
     let mut expected_nonce_hex: Option<OcspNonceHex> = None;
+    let mut delegated_responder_certificate_path: Option<PathBuf> = None;
+    let mut delegated_responder_issuer_certificate_paths = Vec::new();
     let mut json = false;
     let mut index = 1usize;
     while index < args.len() {
@@ -1504,6 +1514,23 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
                     args, index, command,
                 )?));
             }
+            "--ocsp-responder-certificate-path" => {
+                if delegated_responder_certificate_path.is_some() {
+                    return Err(ExitError::usage(host_adapter_verify_usage(command)));
+                }
+                index += 1;
+                delegated_responder_certificate_path = Some(parse_strict_offline_path(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
+            }
+            "--ocsp-responder-issuer-certificate-path" => {
+                index += 1;
+                delegated_responder_issuer_certificate_paths.push(parse_strict_offline_path(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
+            }
             "--json" => json = true,
             "--no-json" => json = false,
             "--help" | "-h" => {
@@ -1534,16 +1561,30 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
         return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
-    let verification = run_host_adapter_certificate_ocsp_status_verification(
-        HostAdapterCertificateOcspStatusVerificationInput {
-            trust_policy_path,
-            certificate_path,
-            issuer_certificate_path,
-            ocsp_response_path,
-            verification_time_unix,
-            expected_nonce_hex,
-        },
-    );
+    if delegated_responder_certificate_path.is_none()
+        && !delegated_responder_issuer_certificate_paths.is_empty()
+    {
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
+    }
+    let delegated_responder_material =
+        delegated_responder_certificate_path.map(|certificate_path| {
+            HostAdapterOcspDelegatedResponderMaterial {
+                certificate_path,
+                issuer_chain_certificate_paths: delegated_responder_issuer_certificate_paths,
+            }
+        });
+    let verification =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            HostAdapterCertificateOcspStatusVerificationInput {
+                trust_policy_path,
+                certificate_path,
+                issuer_certificate_path,
+                ocsp_response_path,
+                verification_time_unix,
+                expected_nonce_hex,
+            },
+            delegated_responder_material,
+        );
     if json {
         println!(
             "{}",
@@ -1552,10 +1593,13 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
         );
     } else {
         println!(
-            "forge_core_host_adapter_certificate_ocsp_status_verification certificate={} status={:?} revocation_status={:?} reasons={:?}",
+            "forge_core_host_adapter_certificate_ocsp_status_verification certificate={} status={:?} revocation_status={:?} responder_authority={:?} responder_authority_identity={:?} verified_evidence={:?} reasons={:?}",
             verification.certificate_path,
             verification.status,
             verification.revocation_status,
+            verification.responder_authority,
+            verification.responder_authority_identity,
+            verification.verified_evidence,
             verification.reasons
         );
     }
@@ -1698,6 +1742,45 @@ mod tests {
             error.message(),
             host_adapter_verify_usage(&COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT)
         );
+    }
+
+    #[test]
+    fn delegated_ocsp_cli_rejects_partial_duplicate_and_malformed_material() {
+        for invalid_tail in [
+            vec![
+                "--ocsp-responder-issuer-certificate-path",
+                "responder-intermediate.pem",
+            ],
+            vec![
+                "--ocsp-responder-certificate-path",
+                "responder.pem",
+                "--ocsp-responder-certificate-path",
+                "other-responder.pem",
+            ],
+            vec!["--ocsp-responder-certificate-path", "--json"],
+        ] {
+            let mut argv = vec![
+                "host-adapter-verify-certificate-ocsp-status",
+                "--trust-policy-path",
+                "policy.yaml",
+                "--certificate-path",
+                "certificate.pem",
+                "--issuer-certificate-path",
+                "issuer.pem",
+                "--ocsp-response-path",
+                "response.der",
+                "--verification-time-unix",
+                "1783391200",
+            ];
+            argv.extend(invalid_tail);
+            argv.push("--no-json");
+            let error = run_host_adapter_verify_certificate_ocsp_status_command(&args(&argv))
+                .expect_err("partial or malformed delegated responder material must be usage");
+            assert_eq!(
+                error.message(),
+                host_adapter_verify_usage(&COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS)
+            );
+        }
     }
 
     #[test]

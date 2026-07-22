@@ -140,6 +140,10 @@ p6a_scope:
     - "installation, upgrade, rollback, removal transaction, and recovery"
     - "publisher trust, signature verification, registry policy, and lifecycle admission"
     - "activation, project pinning, or mutation of the admitted runtime snapshot"
+  deferred_to_c6_2:
+    - "candidate-only remote byte acquisition through the existing signed supply-chain registry"
+    - "signed mirror metadata, immutable artifact descriptors, exact-byte cache/offline evidence, and rollback retention semantics"
+    - "remote acquisition does not change P6a composition: P6a still performs no network access or lifecycle authority transition"
   deferred_to_p6d:
     - "a real game-development Domain Pack and its domain evidence"
 
@@ -156,3 +160,4 @@ references:
   - "contracts/plan/agent-native-guidance-plan.yaml"
   - "contracts/spec/workflow-governance-release-v0.yaml"
   - "contracts/workflow-governance/workflow-governance-contract-v0.yaml"
+  - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"

@@ -21,7 +21,7 @@
 //! `command_input_schema`) are used only by the five public builders above.
 
 use forge_core_command_surface as command_surface;
-use forge_core_contracts::RuntimeKind;
+use forge_core_contracts::{ProjectionProhibition, RuntimeKind};
 use serde_json::{json, Value};
 
 use crate::host_adapter_manifest::run_host_adapter_manifest;
@@ -31,12 +31,12 @@ use crate::host_adapter_types::{
     HostAdapterCwdPolicy, HostAdapterDistributionAdmission, HostAdapterDistributionAdmissionStatus,
     HostAdapterDistributionChannelPolicy, HostAdapterDistributionEvidence,
     HostAdapterDistributionPolicy, HostAdapterDistributionRequiredEvidence, HostAdapterEnvPolicy,
-    HostAdapterInvocationAdmission, HostAdapterInvocationAdmissionStatus,
-    HostAdapterInvocationRequest, HostAdapterMcpToolAnnotations, HostAdapterMcpToolProjection,
-    HostAdapterMutationClass, HostAdapterProcessSecurityPolicy, HostAdapterProcessTarget,
-    HostAdapterProjectedCommand, HostAdapterProjection, HostAdapterProjectionAuthorityBoundary,
-    HostAdapterProjectionTarget, HostAdapterStdioPolicy, HostAdapterUpdateChannel,
-    HostAdapterUpdaterPolicy,
+    HostAdapterEvidenceProjection, HostAdapterInvocationAdmission,
+    HostAdapterInvocationAdmissionStatus, HostAdapterInvocationRequest,
+    HostAdapterMcpToolAnnotations, HostAdapterMcpToolProjection, HostAdapterMutationClass,
+    HostAdapterProcessSecurityPolicy, HostAdapterProcessTarget, HostAdapterProjectedCommand,
+    HostAdapterProjection, HostAdapterProjectionAuthorityBoundary, HostAdapterProjectionTarget,
+    HostAdapterStdioPolicy, HostAdapterUpdateChannel, HostAdapterUpdaterPolicy,
 };
 use crate::host_command::{
     argv_has_shell_control, env_key_is_forbidden, source_ref_is_immutable, version_like,
@@ -70,17 +70,22 @@ pub fn run_host_adapter_projection(target: HostAdapterProjectionTarget) -> HostA
                 "authority_class".to_string(),
                 "safe_auto_invocation_triggers".to_string(),
                 "output_treatment".to_string(),
+                "required_contracts".to_string(),
+                "setup_gaps".to_string(),
             ],
-            projections_must_not: vec![
-                "convert advisory context into workflow authority".to_string(),
-                "auto-invoke mutating operations".to_string(),
-                "represent host UI labels as contract validation".to_string(),
-                "expose raw payload bytes in capability metadata".to_string(),
-            ],
+            projections_must_not: ProjectionProhibition::ALL
+                .into_iter()
+                .map(projection_prohibition_text)
+                .map(str::to_string)
+                .collect(),
         },
         commands: manifest
             .commands
             .iter()
+            .filter(|command| {
+                target != HostAdapterProjectionTarget::McpTools
+                    || command.mutation_class == HostAdapterMutationClass::ReadOnly
+            })
             .map(|command| project_host_command(command, target))
             .collect(),
     }
@@ -417,8 +422,19 @@ fn project_host_command(
         canonical_usage: surface.canonical_usage().trim_start().to_string(),
         title: title.clone(),
         description: description.clone(),
+        command_kind: command.command_kind,
         mutation_class: command.mutation_class,
         authority_class: command.authority_class,
+        required_contracts: command.required_contracts.clone(),
+        setup_gaps: command.setup_gaps.clone(),
+        evidence_projection: if command.name == "host-adapter-verify-certificate-ocsp-status" {
+            vec![
+                HostAdapterEvidenceProjection::OcspResponderAuthorityIdentity,
+                HostAdapterEvidenceProjection::OcspVerifiedAuthorityEvidence,
+            ]
+        } else {
+            Vec::new()
+        },
         safe_auto_invocation_triggers: command.safe_auto_invocation_triggers.clone(),
         output_treatment: command.output_treatment.clone(),
         mcp_tool: (target == HostAdapterProjectionTarget::McpTools).then(|| {
@@ -455,6 +471,28 @@ fn project_host_command(
                 display_authority_badge: format!("{:?}", command.authority_class),
             }
         }),
+    }
+}
+
+fn projection_prohibition_text(prohibition: ProjectionProhibition) -> &'static str {
+    match prohibition {
+        ProjectionProhibition::NetworkRetrievalAuthority => "perform network retrieval",
+        ProjectionProhibition::InstallAuthority => "grant install authority",
+        ProjectionProhibition::UpdateAuthority => "grant update authority",
+        ProjectionProhibition::CrlAuthority => "grant CRL authority",
+        ProjectionProhibition::CertificateTransparencyAuthority => {
+            "grant Certificate Transparency authority"
+        }
+        ProjectionProhibition::RekorAuthority => "grant Rekor authority",
+        ProjectionProhibition::TufAuthority => "grant TUF authority",
+        ProjectionProhibition::SigningAuthority => "grant signing authority",
+        ProjectionProhibition::MutationAuthority => "grant mutation authority",
+        ProjectionProhibition::HostSelection => "select a host",
+        ProjectionProhibition::HostSupportClaim => "claim host support",
+        ProjectionProhibition::HostReleaseClaim => "claim a host release",
+        ProjectionProhibition::ProjectionAuthorityPromotion => {
+            "promote projection metadata into authority"
+        }
     }
 }
 
@@ -545,7 +583,7 @@ fn command_description(command: &HostAdapterCommand) -> String {
             "Read-only explicit CRL revocation status verification for a supplied certificate, issuer certificate, and local CRL without claiming OCSP or update authority."
         }
         "host-adapter-verify-certificate-ocsp-status" => {
-            "Read-only offline verification of a supplied OCSP response for a supplied certificate and issuer certificate without network fetch or update authority."
+            "Read-only offline verification of a supplied OCSP response for a supplied certificate and issuer certificate, optionally using a strictly supplied delegated responder certificate and ordered issuer chain; projects typed selected-authority identity and evidence without network, signing, mutation, install, or update authority."
         }
         _ => "Forge Core command projection.",
     }
@@ -773,13 +811,18 @@ fn command_input_schema(name: &str) -> Value {
             "type": "object",
             "additionalProperties": false,
             "required": ["trust_policy_path", "certificate_path", "issuer_certificate_path", "ocsp_response_path", "verification_time_unix"],
+            "dependentRequired": {
+                "ocsp_responder_issuer_certificate_path": ["ocsp_responder_certificate_path"]
+            },
             "properties": {
                 "trust_policy_path": { "type": "string" },
                 "certificate_path": { "type": "string" },
                 "issuer_certificate_path": { "type": "string" },
                 "ocsp_response_path": { "type": "string" },
                 "verification_time_unix": { "type": "integer" },
-                "expected_nonce_hex": { "type": "string" }
+                "expected_nonce_hex": { "type": "string" },
+                "ocsp_responder_certificate_path": { "type": "string", "minLength": 1 },
+                "ocsp_responder_issuer_certificate_path": { "type": "array", "items": { "type": "string", "minLength": 1 } }
             }
         }),
         _ => json!({

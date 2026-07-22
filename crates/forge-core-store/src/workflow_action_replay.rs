@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read as _, Write as _};
+use std::fs::{self, File};
+use std::io::{self, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 
 pub const WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH: &str = "wal/workflow-action-replay.jsonl";
@@ -108,6 +108,29 @@ pub struct WorkflowActionReplayMutation {
     pub sequence: u64,
     pub bytes_appended: u64,
     pub entry: WorkflowActionReplayEntry,
+}
+
+/// Lock-held replay reservation prepared without changing durable bytes.
+///
+/// Callers must acquire this guard while holding the authoritative workflow
+/// ledger lock, commit the ledger, and only then call
+/// [`Self::commit_after_authoritative_ledger`]. Dropping the guard before the
+/// ledger commit leaves the replay WAL byte-identical, so a failed or crashed
+/// pre-commit attempt cannot strand an orphan durable reservation.
+#[must_use = "dropping the reservation releases the replay lock without changing replay state"]
+pub struct WorkflowActionReplayReservation {
+    wal_path: PathBuf,
+    lock: WorkflowActionReplayRetainedLock,
+    prepared: PreparedReplayCommit,
+}
+
+enum PreparedReplayCommit {
+    Existing(WorkflowActionReplayEntry),
+    Append {
+        reserve_line: Option<Vec<u8>>,
+        commit_line: Vec<u8>,
+        entry: WorkflowActionReplayEntry,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -286,8 +309,8 @@ pub fn initialize_workflow_action_replay(
     state_root: impl AsRef<Path>,
 ) -> Result<WorkflowActionReplayInitialization, WorkflowActionReplayError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_lock(&state_root)?;
-    let initialized = ensure_initialized_under_lock(&state_root, true)?;
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let initialized = ensure_initialized_under_lock(&lock, true)?;
     Ok(WorkflowActionReplayInitialization {
         wal_path: wal_path(&state_root),
         manifest_path: manifest_path(&state_root),
@@ -306,9 +329,137 @@ pub fn recover_workflow_action_replay(
     state_root: impl AsRef<Path>,
 ) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    recover_under_lock(&wal_path(&state_root))
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    recover_workflow_action_replay_under_retained_lock(&state_root, &lock)
+}
+
+/// Return the domain-separated fingerprint used to compare an opaque replay
+/// origin against already durable governance companions.
+///
+/// # Errors
+///
+/// Rejects blank, control-character, or overlong origin identifiers.
+pub fn workflow_action_replay_origin_fingerprint(
+    origin_event_id: &str,
+) -> Result<String, WorkflowActionReplayError> {
+    validate_origin(origin_event_id)?;
+    Ok(origin_hash(origin_event_id))
+}
+/// Acquire an exclusive replay reservation for an exact packet/origin/ledger
+/// tuple without appending to the replay WAL.
+///
+/// Conflict and capacity checks complete while the replay lock is held. The
+/// returned guard retains that lock across the caller's authoritative ledger
+/// commit. If the ledger commit fails, dropping the guard leaves no orphan
+/// reservation. After a successful ledger commit, call
+/// [`WorkflowActionReplayReservation::commit_after_authoritative_ledger`].
+///
+/// # Errors
+///
+/// Returns [`WorkflowActionReplayError`] for invalid input, corrupt state,
+/// binding conflicts, capacity exhaustion, locking, or initialization errors.
+pub fn begin_workflow_action_replay_reservation(
+    state_root: impl AsRef<Path>,
+    action_packet_digest: &str,
+    origin_event_id: &str,
+    planned_ledger_record_digest: &str,
+) -> Result<WorkflowActionReplayReservation, WorkflowActionReplayError> {
+    validate_digest("action_packet_digest", action_packet_digest)?;
+    validate_origin(origin_event_id)?;
+    validate_digest("planned_ledger_record_digest", planned_ledger_record_digest)?;
+    let origin_event_id_hash = origin_hash(origin_event_id);
+    let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
+    let state_root = trusted_state_root(state_root.as_ref())?;
+    let wal_path = wal_path(&state_root);
+    let replay_lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &replay_lock)?;
+
+    let prepared = if let Some(existing) = recovery.entries.get(&key_hash) {
+        validate_binding(
+            existing,
+            action_packet_digest,
+            &origin_event_id_hash,
+            planned_ledger_record_digest,
+        )?;
+        if existing.state == WorkflowActionReplayState::Committed {
+            PreparedReplayCommit::Existing(existing.clone())
+        } else {
+            let sequence = next_sequence(recovery.last_sequence)?;
+            let unsigned = UnsignedRecord {
+                schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+                sequence,
+                operation: WorkflowActionReplayOperation::Commit,
+                key_hash: key_hash.clone(),
+                action_packet_digest: action_packet_digest.to_owned(),
+                origin_event_id_hash: origin_event_id_hash.clone(),
+                planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+                prior_record_digest: recovery.last_record_digest.clone(),
+            };
+            let commit_line = encode_line(unsigned)?;
+            ensure_capacity(&recovery, commit_line.len())?;
+            let mut entry = existing.clone();
+            entry.state = WorkflowActionReplayState::Committed;
+            entry.committed_sequence = Some(sequence);
+            PreparedReplayCommit::Append {
+                reserve_line: None,
+                commit_line,
+                entry,
+            }
+        }
+    } else {
+        reject_cross_key_replay(&recovery, action_packet_digest, &origin_event_id_hash)?;
+        let reserved_sequence = next_sequence(recovery.last_sequence)?;
+        let reserve_unsigned = UnsignedRecord {
+            schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+            sequence: reserved_sequence,
+            operation: WorkflowActionReplayOperation::Reserve,
+            key_hash: key_hash.clone(),
+            action_packet_digest: action_packet_digest.to_owned(),
+            origin_event_id_hash: origin_event_id_hash.clone(),
+            planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+            prior_record_digest: recovery.last_record_digest.clone(),
+        };
+        let reserve_record_digest = digest_canonical(&reserve_unsigned)?;
+        let reserve_line = encode_line(reserve_unsigned)?;
+        ensure_capacity(&recovery, reserve_line.len())?;
+        let committed_sequence = next_sequence(reserved_sequence)?;
+        let commit_unsigned = UnsignedRecord {
+            schema_version: WORKFLOW_ACTION_REPLAY_SCHEMA_VERSION.to_owned(),
+            sequence: committed_sequence,
+            operation: WorkflowActionReplayOperation::Commit,
+            key_hash: key_hash.clone(),
+            action_packet_digest: action_packet_digest.to_owned(),
+            origin_event_id_hash: origin_event_id_hash.clone(),
+            planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+            prior_record_digest: reserve_record_digest,
+        };
+        let commit_line = encode_line(commit_unsigned)?;
+        let mut after_reserve = recovery.clone();
+        after_reserve.valid_record_count = after_reserve.valid_record_count.saturating_add(1);
+        after_reserve.wal_bytes = after_reserve
+            .wal_bytes
+            .saturating_add(u64::try_from(reserve_line.len()).unwrap_or(u64::MAX));
+        ensure_capacity(&after_reserve, commit_line.len())?;
+        PreparedReplayCommit::Append {
+            reserve_line: Some(reserve_line),
+            commit_line,
+            entry: WorkflowActionReplayEntry {
+                key_hash,
+                action_packet_digest: action_packet_digest.to_owned(),
+                origin_event_id_hash,
+                planned_ledger_record_digest: planned_ledger_record_digest.to_owned(),
+                state: WorkflowActionReplayState::Committed,
+                reserved_sequence,
+                committed_sequence: Some(committed_sequence),
+            },
+        }
+    };
+
+    Ok(WorkflowActionReplayReservation {
+        wal_path,
+        lock: replay_lock,
+        prepared,
+    })
 }
 
 /// Durably reserve one action packet/origin pair for an exact planned ledger
@@ -333,9 +484,8 @@ pub fn reserve_workflow_action(
     let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = wal_path(&state_root);
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_under_lock(&wal_path)?;
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &lock)?;
 
     if let Some(existing) = recovery.entries.get(&key_hash) {
         validate_binding(
@@ -361,7 +511,7 @@ pub fn reserve_workflow_action(
     };
     let bytes = encode_line(unsigned)?;
     ensure_capacity(&recovery, bytes.len())?;
-    append_and_sync(&wal_path, &bytes)?;
+    lock.append_wal(&bytes)?;
     Ok(WorkflowActionReplayMutation {
         wal_path,
         appended: true,
@@ -399,9 +549,8 @@ pub fn commit_workflow_action(
     let key_hash = replay_key_hash(action_packet_digest, &origin_event_id_hash);
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = wal_path(&state_root);
-    let _lock = acquire_lock(&state_root)?;
-    ensure_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_under_lock(&wal_path)?;
+    let lock = acquire_workflow_action_replay_retained_lock(&state_root)?;
+    let recovery = recover_workflow_action_replay_under_retained_lock(&state_root, &lock)?;
     let existing = recovery.entries.get(&key_hash).ok_or_else(|| {
         WorkflowActionReplayError::ReservationMissing {
             key_hash: key_hash.clone(),
@@ -430,7 +579,7 @@ pub fn commit_workflow_action(
     };
     let bytes = encode_line(unsigned)?;
     ensure_capacity(&recovery, bytes.len())?;
-    append_and_sync(&wal_path, &bytes)?;
+    lock.append_wal(&bytes)?;
     let mut entry = existing.clone();
     entry.state = WorkflowActionReplayState::Committed;
     entry.committed_sequence = Some(sequence);
@@ -441,6 +590,48 @@ pub fn commit_workflow_action(
         bytes_appended: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
         entry,
     })
+}
+
+impl WorkflowActionReplayReservation {
+    /// Persist the prepared replay state after the authoritative workflow
+    /// ledger batch has committed.
+    ///
+    /// A new tuple appends a reserve record and then a commit record while the
+    /// original replay lock remains held. A previously reserved exact tuple
+    /// appends only its commit; an exact committed retry appends nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WorkflowActionReplayError`] if either durable append fails.
+    pub fn commit_after_authoritative_ledger(
+        self,
+    ) -> Result<WorkflowActionReplayMutation, WorkflowActionReplayError> {
+        match self.prepared {
+            PreparedReplayCommit::Existing(entry) => Ok(existing_mutation(self.wal_path, &entry)),
+            PreparedReplayCommit::Append {
+                reserve_line,
+                commit_line,
+                entry,
+            } => {
+                let reserve_bytes = if let Some(bytes) = reserve_line {
+                    let len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+                    self.lock.append_wal(&bytes)?;
+                    len
+                } else {
+                    0
+                };
+                let commit_bytes = u64::try_from(commit_line.len()).unwrap_or(u64::MAX);
+                self.lock.append_wal(&commit_line)?;
+                Ok(WorkflowActionReplayMutation {
+                    wal_path: self.wal_path.clone(),
+                    appended: true,
+                    sequence: entry.committed_sequence.unwrap_or(entry.reserved_sequence),
+                    bytes_appended: reserve_bytes.saturating_add(commit_bytes),
+                    entry,
+                })
+            }
+        }
+    }
 }
 
 fn existing_mutation(
@@ -509,28 +700,36 @@ fn reject_cross_key_replay(
     Ok(())
 }
 
-fn recover_under_lock(
-    wal_path: &Path,
+fn recover_workflow_action_replay_file_under_lock(
+    guard: &WorkflowActionReplayRetainedLock,
 ) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
-    ensure_regular_authority_file(wal_path)?;
-    let bytes = read_bounded(wal_path, WORKFLOW_ACTION_REPLAY_MAX_BYTES).map_err(|source| {
-        if source.kind() == io::ErrorKind::FileTooLarge {
-            let observed = fs::metadata(wal_path).map_or(
-                WORKFLOW_ACTION_REPLAY_MAX_BYTES.saturating_add(1),
-                |metadata| metadata.len(),
-            );
-            WorkflowActionReplayError::CapacityExceeded {
-                kind: WorkflowActionReplayCapacityKind::Bytes,
-                limit: WORKFLOW_ACTION_REPLAY_MAX_BYTES,
-                observed,
+    let wal_path = &guard.wal_path;
+    let bytes = guard
+        .read_bounded(
+            Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH),
+            WORKFLOW_ACTION_REPLAY_MAX_BYTES,
+        )
+        .map_err(|source| {
+            if source.kind() == io::ErrorKind::FileTooLarge {
+                let observed = guard
+                    .root
+                    .metadata(Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH))
+                    .map_or(
+                        WORKFLOW_ACTION_REPLAY_MAX_BYTES.saturating_add(1),
+                        |metadata| metadata.len(),
+                    );
+                WorkflowActionReplayError::CapacityExceeded {
+                    kind: WorkflowActionReplayCapacityKind::Bytes,
+                    limit: WORKFLOW_ACTION_REPLAY_MAX_BYTES,
+                    observed,
+                }
+            } else {
+                WorkflowActionReplayError::ReadWal {
+                    path: wal_path.clone(),
+                    source: source.to_string(),
+                }
             }
-        } else {
-            WorkflowActionReplayError::ReadWal {
-                path: wal_path.to_path_buf(),
-                source: source.to_string(),
-            }
-        }
-    })?;
+        })?;
     if !bytes.is_empty() && !bytes.ends_with(b"\n") {
         return Err(corrupt(
             wal_path,
@@ -583,7 +782,7 @@ fn recover_under_lock(
         valid_record_count += 1;
     }
     Ok(WorkflowActionReplayRecovery {
-        wal_path: wal_path.to_path_buf(),
+        wal_path: wal_path.clone(),
         entries,
         valid_record_count,
         last_sequence,
@@ -758,85 +957,57 @@ fn ensure_capacity(
     Ok(())
 }
 
-fn append_and_sync(path: &Path, bytes: &[u8]) -> Result<(), WorkflowActionReplayError> {
-    let mut file = OpenOptions::new()
-        .append(true)
-        .open(path)
-        .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        })?;
-    file.write_all(bytes)
-        .and_then(|()| file.flush())
-        .and_then(|()| file.sync_all())
-        .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        })
-}
-
 fn ensure_initialized_under_lock(
-    state_root: &Path,
+    guard: &WorkflowActionReplayRetainedLock,
     create_if_absent: bool,
 ) -> Result<bool, WorkflowActionReplayError> {
-    let wal_path = wal_path(state_root);
-    let manifest_path = manifest_path(state_root);
-    let wal_exists = try_exists(&wal_path)?;
-    let manifest_exists = try_exists(&manifest_path)?;
+    let wal_relative = Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
+    let manifest_relative = Path::new(WORKFLOW_ACTION_REPLAY_MANIFEST_RELATIVE_PATH);
+    let wal_exists = guard.exists(wal_relative)?;
+    let manifest_exists = guard.exists(manifest_relative)?;
     match (manifest_exists, wal_exists) {
         (false, false) if create_if_absent => {
-            initialize_files(state_root, &wal_path, &manifest_path)?;
+            initialize_files(guard)?;
             Ok(true)
         }
         (false, false) => Err(WorkflowActionReplayError::NotInitialized {
-            state_root: state_root.to_path_buf(),
+            state_root: guard.state_root.clone(),
         }),
         (true, true) => {
-            validate_manifest(&manifest_path)?;
-            ensure_regular_authority_file(&wal_path)?;
+            validate_manifest(guard)?;
+            guard.ensure_regular(wal_relative)?;
             Ok(false)
         }
         _ => Err(WorkflowActionReplayError::InitializationMismatch {
-            manifest_path,
+            manifest_path: manifest_path(&guard.state_root),
             manifest_exists,
-            wal_path,
+            wal_path: guard.wal_path.clone(),
             wal_exists,
         }),
     }
 }
 
 fn initialize_files(
-    state_root: &Path,
-    wal_path: &Path,
-    manifest_path: &Path,
+    guard: &WorkflowActionReplayRetainedLock,
 ) -> Result<(), WorkflowActionReplayError> {
-    let wal_parent =
-        wal_path
-            .parent()
-            .ok_or_else(|| WorkflowActionReplayError::CreateDirectory {
-                path: wal_path.to_path_buf(),
-                source: "WAL path has no parent".to_owned(),
-            })?;
-    fs::create_dir_all(wal_parent).map_err(|source| {
+    let wal_relative = Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
+    let wal_parent = wal_relative.parent().expect("WAL has parent");
+    guard.root.create_dir_all(wal_parent).map_err(|source| {
         WorkflowActionReplayError::CreateDirectory {
-            path: wal_parent.to_path_buf(),
+            path: guard.state_root.join(wal_parent),
             source: source.to_string(),
         }
     })?;
-    ensure_directory_within_root(state_root, wal_parent)?;
-    let wal = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(wal_path)
-        .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: wal_path.to_path_buf(),
+    let wal = guard.root.open_write_new(wal_relative).map_err(|source| {
+        WorkflowActionReplayError::WriteWal {
+            path: guard.wal_path.clone(),
             source: source.to_string(),
-        })?;
+        }
+    })?;
     wal.sync_all()
-        .and_then(|()| sync_directory(wal_parent))
+        .and_then(|()| guard.root.sync_directory(wal_parent))
         .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: wal_path.to_path_buf(),
+            path: guard.wal_path.clone(),
             source: source.to_string(),
         })?;
 
@@ -845,21 +1016,22 @@ fn initialize_files(
             source: source.to_string(),
         }
     })?;
-    let mut manifest = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(manifest_path)
+    let manifest_relative = Path::new(WORKFLOW_ACTION_REPLAY_MANIFEST_RELATIVE_PATH);
+    let manifest_path = manifest_path(&guard.state_root);
+    let mut manifest = guard
+        .root
+        .open_write_new(manifest_relative)
         .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: manifest_path.to_path_buf(),
+            path: manifest_path.clone(),
             source: source.to_string(),
         })?;
     manifest
         .write_all(&bytes)
         .and_then(|()| manifest.flush())
         .and_then(|()| manifest.sync_all())
-        .and_then(|()| sync_directory(state_root))
+        .and_then(|()| guard.root.sync_root())
         .map_err(|source| WorkflowActionReplayError::WriteWal {
-            path: manifest_path.to_path_buf(),
+            path: manifest_path,
             source: source.to_string(),
         })
 }
@@ -872,24 +1044,28 @@ fn expected_manifest() -> WorkflowActionReplayManifest {
     }
 }
 
-fn validate_manifest(path: &Path) -> Result<(), WorkflowActionReplayError> {
-    ensure_regular_authority_file(path)?;
-    let bytes = read_bounded(path, MANIFEST_MAX_BYTES).map_err(|source| {
-        WorkflowActionReplayError::InvalidManifest {
-            path: path.to_path_buf(),
+fn validate_manifest(
+    guard: &WorkflowActionReplayRetainedLock,
+) -> Result<(), WorkflowActionReplayError> {
+    let relative = Path::new(WORKFLOW_ACTION_REPLAY_MANIFEST_RELATIVE_PATH);
+    guard.ensure_regular(relative)?;
+    let path = manifest_path(&guard.state_root);
+    let bytes = guard
+        .read_bounded(relative, MANIFEST_MAX_BYTES)
+        .map_err(|source| WorkflowActionReplayError::InvalidManifest {
+            path: path.clone(),
             source: source.to_string(),
-        }
-    })?;
+        })?;
     let actual =
         serde_json::from_slice::<WorkflowActionReplayManifest>(&bytes).map_err(|source| {
             WorkflowActionReplayError::InvalidManifest {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 source: source.to_string(),
             }
         })?;
     if actual != expected_manifest() {
         return Err(WorkflowActionReplayError::InvalidManifest {
-            path: path.to_path_buf(),
+            path,
             source: "unsupported manifest contents".to_owned(),
         });
     }
@@ -914,82 +1090,178 @@ fn trusted_state_root(path: &Path) -> Result<PathBuf, WorkflowActionReplayError>
     })
 }
 
-fn ensure_directory_within_root(
-    state_root: &Path,
-    path: &Path,
-) -> Result<(), WorkflowActionReplayError> {
-    let canonical = fs::canonicalize(path).map_err(|source| {
-        WorkflowActionReplayError::StateRootUnavailable {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        }
-    })?;
-    if !canonical.starts_with(state_root) {
-        return Err(WorkflowActionReplayError::StateRootUnavailable {
-            path: path.to_path_buf(),
-            source: "path resolves outside trusted state root".to_owned(),
-        });
-    }
-    Ok(())
+/// Crate-private retained workflow-action replay authority.
+///
+/// The private canonical root, WAL, and lock paths bind this unforgeable guard
+/// to one authority. Holding it permits sibling backup code to recover and read
+/// a stable snapshot without changing this store's no-repair durability policy.
+pub(crate) struct WorkflowActionReplayRetainedLock {
+    file: File,
+    boundary: crate::producer_quiescence::BoundaryLease,
+    root: crate::retained_dir::RetainedDirectory,
+    lock_identity: crate::retained_dir::RetainedFileIdentity,
+    state_root: PathBuf,
+    wal_path: PathBuf,
 }
 
-fn ensure_regular_authority_file(path: &Path) -> Result<(), WorkflowActionReplayError> {
-    let metadata = fs::symlink_metadata(path).map_err(|source| {
-        WorkflowActionReplayError::InvalidAuthorityFile {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        }
-    })?;
-    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
-        return Err(WorkflowActionReplayError::InvalidAuthorityFile {
-            path: path.to_path_buf(),
-            source: "must be a regular non-symlink file".to_owned(),
-        });
-    }
-    Ok(())
-}
-
-fn acquire_lock(state_root: &Path) -> Result<WorkflowActionReplayLock, WorkflowActionReplayError> {
-    let path = lock_path(state_root);
-    let parent = path
-        .parent()
-        .ok_or_else(|| WorkflowActionReplayError::CreateDirectory {
-            path: path.clone(),
-            source: "lock path has no parent".to_owned(),
+impl WorkflowActionReplayRetainedLock {
+    fn validate(&self, state_root: &Path) -> Result<(), WorkflowActionReplayError> {
+        self.boundary.validate_root(state_root).map_err(|source| {
+            WorkflowActionReplayError::ReadWal {
+                path: wal_path(state_root),
+                source: source.to_string(),
+            }
         })?;
-    fs::create_dir_all(parent).map_err(|source| WorkflowActionReplayError::CreateDirectory {
-        path: parent.to_path_buf(),
+        let current = self
+            .root
+            .open_leaf_read(
+                Path::new(WORKFLOW_ACTION_REPLAY_LOCK_RELATIVE_PATH),
+                crate::retained_dir::RetainedLeafPolicy::Authority,
+            )
+            .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
+        if !current.is_ok_and(|identity| identity == self.lock_identity) {
+            return Err(WorkflowActionReplayError::ReadWal {
+                path: lock_path(state_root),
+                source: "workflow-action replay lock identity changed".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    fn exists(&self, relative: &Path) -> Result<bool, WorkflowActionReplayError> {
+        self.root.exists(relative).map_err(|source| {
+            WorkflowActionReplayError::StateRootUnavailable {
+                path: self.state_root.join(relative),
+                source: source.to_string(),
+            }
+        })
+    }
+
+    fn ensure_regular(&self, relative: &Path) -> Result<(), WorkflowActionReplayError> {
+        self.root
+            .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority)
+            .map(|_| ())
+            .map_err(|source| WorkflowActionReplayError::InvalidAuthorityFile {
+                path: self.state_root.join(relative),
+                source: source.to_string(),
+            })
+    }
+
+    fn read_bounded(&self, relative: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
+        self.root.read_authority_bounded(relative, max_bytes)
+    }
+
+    fn append_wal(&self, bytes: &[u8]) -> Result<(), WorkflowActionReplayError> {
+        self.validate(&self.state_root)?;
+        let mut file = self
+            .root
+            .open_leaf_read_write_existing(Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH))
+            .map_err(|source| WorkflowActionReplayError::WriteWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            })?;
+        file.seek(SeekFrom::End(0))
+            .and_then(|_| file.write_all(bytes))
+            .and_then(|()| file.flush())
+            .and_then(|()| file.sync_all())
+            .map_err(|source| WorkflowActionReplayError::WriteWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            })
+    }
+}
+
+impl Drop for WorkflowActionReplayRetainedLock {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+pub(crate) fn acquire_workflow_action_replay_retained_lock(
+    state_root: &Path,
+) -> Result<WorkflowActionReplayRetainedLock, WorkflowActionReplayError> {
+    let boundary = crate::producer_quiescence::admit_producer(state_root).map_err(|source| {
+        WorkflowActionReplayError::Lock {
+            path: lock_path(state_root),
+            source: source.to_string(),
+        }
+    })?;
+    acquire_workflow_action_replay_retained_lock_under_boundary(&boundary, state_root)
+}
+
+pub(crate) fn acquire_workflow_action_replay_retained_lock_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+) -> Result<WorkflowActionReplayRetainedLock, WorkflowActionReplayError> {
+    let boundary = crate::producer_quiescence::BoundaryLease::from_boundary(boundary, state_root)
+        .map_err(|source| WorkflowActionReplayError::Lock {
+        path: lock_path(state_root),
         source: source.to_string(),
     })?;
-    ensure_directory_within_root(state_root, parent)?;
-    if path.exists() {
-        ensure_regular_authority_file(&path)?;
+    let state_root = trusted_state_root(state_root)?;
+    let root = boundary
+        .retained_root()
+        .map_err(|source| WorkflowActionReplayError::Lock {
+            path: lock_path(&state_root),
+            source: source.to_string(),
+        })?;
+    let relative = Path::new(WORKFLOW_ACTION_REPLAY_LOCK_RELATIVE_PATH);
+    root.create_dir_all(relative.parent().expect("lock has parent"))
+        .map_err(|source| WorkflowActionReplayError::CreateDirectory {
+            path: lock_path(&state_root)
+                .parent()
+                .expect("lock has parent")
+                .to_path_buf(),
+            source: source.to_string(),
+        })?;
+    let path = lock_path(&state_root);
+    let file = root.open_read_write_create(relative).map_err(|source| {
+        WorkflowActionReplayError::Lock {
+            path: path.clone(),
+            source: source.to_string(),
+        }
+    })?;
+    if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
+        return Err(WorkflowActionReplayError::Lock {
+            path,
+            source: "lock is not a regular file".to_owned(),
+        });
     }
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
+    FileExt::lock(&file).map_err(|source| WorkflowActionReplayError::Lock {
+        path: path.clone(),
+        source: source.to_string(),
+    })?;
+    let lock_identity =
+        crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+            WorkflowActionReplayError::Lock {
+                path: path.clone(),
+                source: source.to_string(),
+            }
+        })?;
+    boundary
+        .validate_root(&state_root)
         .map_err(|source| WorkflowActionReplayError::Lock {
             path: path.clone(),
             source: source.to_string(),
         })?;
-    FileExt::lock(&file).map_err(|source| WorkflowActionReplayError::Lock {
-        path,
-        source: source.to_string(),
-    })?;
-    Ok(WorkflowActionReplayLock { file })
+    Ok(WorkflowActionReplayRetainedLock {
+        boundary,
+        root,
+        file,
+        lock_identity,
+        wal_path: wal_path(&state_root),
+        state_root,
+    })
 }
 
-struct WorkflowActionReplayLock {
-    file: File,
-}
-
-impl Drop for WorkflowActionReplayLock {
-    fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.file);
-    }
+/// Verify the exact workflow-action replay WAL under its already-retained lock.
+pub(crate) fn recover_workflow_action_replay_under_retained_lock(
+    state_root: &Path,
+    guard: &WorkflowActionReplayRetainedLock,
+) -> Result<WorkflowActionReplayRecovery, WorkflowActionReplayError> {
+    guard.validate(state_root)?;
+    ensure_initialized_under_lock(guard, false)?;
+    recover_workflow_action_replay_file_under_lock(guard)
 }
 
 fn validate_digest(field: &'static str, value: &str) -> Result<(), WorkflowActionReplayError> {
@@ -1068,35 +1340,6 @@ fn next_sequence(last_sequence: u64) -> Result<u64, WorkflowActionReplayError> {
         .ok_or(WorkflowActionReplayError::SequenceOverflow { last_sequence })
 }
 
-fn read_bounded(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
-    let file = File::open(path)?;
-    let metadata_len = file.metadata()?.len();
-    if metadata_len > max_bytes {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            "file too large",
-        ));
-    }
-    let mut bytes = Vec::with_capacity(usize::try_from(metadata_len).unwrap_or(usize::MAX));
-    file.take(max_bytes.saturating_add(1))
-        .read_to_end(&mut bytes)?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            "file too large",
-        ));
-    }
-    Ok(bytes)
-}
-
-fn try_exists(path: &Path) -> Result<bool, WorkflowActionReplayError> {
-    path.try_exists()
-        .map_err(|source| WorkflowActionReplayError::StateRootUnavailable {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        })
-}
-
 fn corrupt(path: &Path, line: usize, reason: &str) -> WorkflowActionReplayError {
     WorkflowActionReplayError::CorruptWal {
         path: path.to_path_buf(),
@@ -1117,27 +1360,10 @@ fn manifest_path(state_root: &Path) -> PathBuf {
     state_root.join(WORKFLOW_ACTION_REPLAY_MANIFEST_RELATIVE_PATH)
 }
 
-#[cfg(not(windows))]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    File::open(path)?.sync_all()
-}
-
-#[cfg(windows)]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::fs::OpenOptionsExt as _;
-
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?
-        .sync_all()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::OpenOptions;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -1163,6 +1389,38 @@ mod tests {
 
     fn digest(character: char) -> String {
         format!("sha256:{}", character.to_string().repeat(64))
+    }
+
+    #[test]
+    fn retained_lock_binds_root_recovers_without_relocking_and_releases_on_drop() {
+        let root = TestRoot::new();
+        let other = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize replay WAL");
+        initialize_workflow_action_replay(&other.0).expect("initialize other replay WAL");
+        let guard =
+            acquire_workflow_action_replay_retained_lock(&root.0).expect("acquire retained lock");
+
+        let second = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(lock_path(&root.0))
+            .expect("open second lock handle");
+        let error = FileExt::try_lock(&second).expect_err("retained guard must block");
+        assert!(matches!(error, fs4::TryLockError::WouldBlock));
+
+        let recovery = recover_workflow_action_replay_under_retained_lock(&root.0, &guard)
+            .expect("recover under retained lock");
+        assert_eq!(recovery.valid_record_count, 0);
+        let mismatch = recover_workflow_action_replay_under_retained_lock(&other.0, &guard)
+            .expect_err("mismatched root must fail");
+        assert!(matches!(
+            mismatch,
+            WorkflowActionReplayError::ReadWal { .. }
+        ));
+
+        drop(guard);
+        FileExt::try_lock(&second).expect("drop must release lock");
+        FileExt::unlock(&second).expect("unlock second handle");
     }
 
     #[test]
@@ -1199,6 +1457,141 @@ mod tests {
         assert_eq!(recovery.valid_record_count, 2);
     }
 
+    #[test]
+    fn lock_held_reservation_is_nonmutating_until_authoritative_commit() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize");
+        let packet = digest('a');
+        let ledger = digest('b');
+        let path = wal_path(&root.0);
+        let before = fs::read(&path).expect("read empty WAL");
+
+        let reservation =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin reservation");
+        assert_eq!(
+            fs::read(&path).expect("read guarded WAL"),
+            before,
+            "pre-ledger reservation must not create orphan durable state"
+        );
+        drop(reservation);
+        assert_eq!(fs::read(&path).expect("read dropped WAL"), before);
+        assert!(recover_workflow_action_replay(&root.0)
+            .expect("recover after drop")
+            .entries
+            .is_empty());
+
+        let committed =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin committed reservation")
+                .commit_after_authoritative_ledger()
+                .expect("commit replay after authoritative ledger");
+        assert!(committed.appended);
+        assert_eq!(committed.entry.state, WorkflowActionReplayState::Committed);
+        let recovery = recover_workflow_action_replay(&root.0).expect("recover committed replay");
+        assert_eq!(recovery.valid_record_count, 2);
+
+        let committed_bytes = fs::read(&path).expect("read committed WAL");
+        let retry =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin exact committed retry")
+                .commit_after_authoritative_ledger()
+                .expect("finish exact committed retry");
+        assert!(!retry.appended);
+        assert_eq!(fs::read(&path).expect("read retry WAL"), committed_bytes);
+    }
+
+    #[test]
+    fn lock_held_reservation_commits_legacy_reserved_tuple_and_rejects_conflict() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize");
+        let packet = digest('a');
+        let ledger = digest('b');
+        reserve_workflow_action(&root.0, &packet, "host:event:1", &ledger)
+            .expect("legacy durable reserve");
+        let path = wal_path(&root.0);
+        let reserved_bytes = fs::read(&path).expect("read reserved WAL");
+
+        assert!(matches!(
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:2", &ledger,),
+            Err(WorkflowActionReplayError::PacketReplayConflict { .. })
+        ));
+        assert_eq!(
+            fs::read(&path).expect("read conflict WAL"),
+            reserved_bytes,
+            "conflict detection must not mutate replay authority"
+        );
+
+        let committed =
+            begin_workflow_action_replay_reservation(&root.0, &packet, "host:event:1", &ledger)
+                .expect("begin exact reserved retry")
+                .commit_after_authoritative_ledger()
+                .expect("commit exact reserved retry");
+        assert!(committed.appended);
+        let recovery = recover_workflow_action_replay(&root.0).expect("recover committed tuple");
+        assert_eq!(recovery.valid_record_count, 2);
+        assert_eq!(
+            recovery
+                .entries
+                .values()
+                .next()
+                .expect("replay entry")
+                .state,
+            WorkflowActionReplayState::Committed
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reservation_started_on_a_never_commits_to_replacement_b() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize A");
+        let reservation = begin_workflow_action_replay_reservation(
+            &root.0,
+            &digest('a'),
+            "host:event:root-swap",
+            &digest('b'),
+        )
+        .expect("begin on A");
+        let displaced = root.0.with_extension("inode-a");
+        fs::rename(&root.0, &displaced).expect("displace A");
+        fs::create_dir_all(root.0.join("wal")).expect("create B WAL directory");
+        fs::create_dir_all(root.0.join("locks")).expect("create B lock directory");
+        fs::copy(manifest_path(&displaced), manifest_path(&root.0)).expect("shape B manifest");
+        fs::write(wal_path(&root.0), b"").expect("shape B WAL");
+        let a_before = fs::read(wal_path(&displaced)).expect("read A before commit");
+        let b_before = fs::read(wal_path(&root.0)).expect("read B before commit");
+
+        assert!(reservation.commit_after_authoritative_ledger().is_err());
+        assert_eq!(fs::read(wal_path(&displaced)).expect("read A"), a_before);
+        assert_eq!(fs::read(wal_path(&root.0)).expect("read B"), b_before);
+
+        fs::remove_dir_all(&root.0).expect("remove B");
+        fs::rename(displaced, &root.0).expect("restore A");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reservation_rejects_recreated_lock_inode_before_publication() {
+        let root = TestRoot::new();
+        initialize_workflow_action_replay(&root.0).expect("initialize");
+        let reservation = begin_workflow_action_replay_reservation(
+            &root.0,
+            &digest('a'),
+            "host:event:lock-swap",
+            &digest('b'),
+        )
+        .expect("begin reservation");
+        let wal_before = fs::read(wal_path(&root.0)).expect("read WAL");
+        fs::remove_file(lock_path(&root.0)).expect("unlink retained lock");
+        fs::write(lock_path(&root.0), b"replacement").expect("recreate lock");
+
+        assert!(reservation.commit_after_authoritative_ledger().is_err());
+        assert_eq!(
+            fs::read(wal_path(&root.0)).expect("read unchanged WAL"),
+            wal_before
+        );
+    }
     #[test]
     fn mismatched_binding_and_cross_key_replays_are_rejected() {
         let root = TestRoot::new();

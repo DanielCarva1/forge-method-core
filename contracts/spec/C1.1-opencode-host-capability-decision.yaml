@@ -1,0 +1,119 @@
+schema_version: "0.1"
+artifact_kind: "host-capability-decision"
+decision_id: "C1.1.opencode-host-capability"
+status: "concluded_available_surface_negative"
+decided_at: "2026-07-15"
+
+question: >-
+  Can the locally installed OpenCode integration authenticate a native human
+  interaction and use a Forge broker signer/admin boundary that remains
+  unavailable to the agent, its shell/tools, plugins, and same-OS clients?
+
+requirements_ref: "contracts/spec/workflow-host-origin-adapter-v0.yaml"
+exact_local_subject:
+  product: "OpenCode CLI"
+  binary_version: "1.14.33"
+  package: "opencode-ai"
+  execution_environment: "Windows binary launched from WSL through cmd.exe"
+  adjacent_plugin_sdk_version: "1.14.25"
+  evidence_scope: >-
+    Exact 1.14.33 binary help plus the locally installed plugin/SDK declarations
+    loaded from the OpenCode configuration tree. The SDK is eight patch releases
+    behind the binary, so this decision is an absence-of-required-evidence result,
+    not a claim that every 1.14.33 internal type is identical to 1.14.25.
+
+observed_surfaces:
+  - surface: "headless server and attach client"
+    evidence: "opencode 1.14.33 serve/attach help"
+    observation: >-
+      The binary exposes a localhost headless server, attach mode, direct run
+      prompts, optional non-loopback mDNS, and CORS configuration.
+    authority_verdict: "insufficient"
+    reason: >-
+      A same-OS agent or plugin can be a protocol client; transport reachability
+      and session correlation do not authenticate physical user presence.
+  - surface: "chat.message plugin hook"
+    evidence: "@opencode-ai/plugin 1.14.25 dist/index.d.ts"
+    observation: >-
+      The pre-model hook receives session/message identifiers and mutable
+      UserMessage/Part output, while plugins receive the SDK client and Bun shell.
+    authority_verdict: "not_a_native_origin_boundary"
+    reason: >-
+      The in-process hook can transform content but carries no signed native-input
+      principal or unforgeable user-presence capability and shares agent-accessible
+      process/OS authority.
+  - surface: "session prompt API"
+    evidence: "@opencode-ai/sdk 1.14.25 dist/v2/gen/types.gen.d.ts SessionPromptData"
+    observation: >-
+      A client can post message parts to /session/{sessionID}/message and may
+      provide messageID, model, agent, tools, system text, and variant.
+    authority_verdict: "agent_forgeable"
+    reason: >-
+      User-shaped protocol messages and optional caller-provided IDs are not
+      proof that the native TUI observed a human submit event.
+  - surface: "permission and question replies"
+    evidence: "@opencode-ai/sdk 1.14.25 PermissionRespondData, PermissionReplyData, and QuestionRequest"
+    observation: >-
+      Permission replies are protocol requests carrying once/always/reject, and
+      question replies use session/request IDs and caller-supplied answers.
+    authority_verdict: "not_reusable_as_forge_authority"
+    reason: >-
+      Any admitted protocol client with a request ID can produce an approval-shaped
+      response; no Forge packet/semantic binding or human-presence proof is present.
+  - surface: "TUI plugin API"
+    evidence: "@opencode-ai/plugin 1.14.25 dist/tui.d.ts"
+    observation: >-
+      Plugins can render confirmation/prompt/select dialogs, submit the TUI prompt
+      programmatically, inspect session messages/permissions/questions, access the
+      SDK client, and install/activate/deactivate plugins.
+    authority_verdict: "presentation_only"
+    reason: >-
+      Exact text can be displayed, but the confirmation callback and prompt submit
+      are in-process plugin capabilities rather than a trusted display/signer path.
+  - surface: "provider authentication hooks"
+    evidence: "@opencode-ai/plugin 1.14.25 AuthHook and PluginInput"
+    observation: >-
+      Plugins can load provider auth and implement OAuth/API authorization while
+      retaining shell and client access.
+    authority_verdict: "not_a_broker_admin_boundary"
+    reason: >-
+      Provider credential plumbing does not supply separately authenticated Forge
+      enrollment, rotation, revocation, or non-exportable user-presence signing.
+  - surface: "version lifecycle"
+    evidence: "opencode 1.14.33 upgrade/plugin help"
+    observation: >-
+      upgrade accepts a target version and installation method; plugin install can
+      update configuration and supports global/force modes.
+    authority_verdict: "partial_packaging_only"
+    reason: >-
+      Target selection is useful, but no inspected surface proves signed immutable
+      adapter assets, compatibility negotiation, trusted rollback metadata, or
+      authority-state-safe rollback.
+
+capability_matrix:
+  native_input_before_model_hook: "yes_but_unauthenticated_and_mutable"
+  native_user_event_authentication_proven: "no"
+  exact_confirmation_presentation_possible: "yes"
+  exact_confirmation_as_human_authority_proven: "no"
+  opaque_ids_outside_agent_control_proven: "no"
+  non_exportable_signer_custody_proven: "no"
+  no_agent_callable_signing_oracle_proven: "no"
+  separate_broker_admin_boundary_proven: "no"
+  deterministic_adapter_install_and_rollback_proven: "no"
+
+resolution:
+  opencode_plugin_claim: "unsupported_for_human_origin_assurance"
+  opencode_server_client_claim: "unsupported_for_human_origin_assurance"
+  selected_C1_reference_host: "not_selected"
+  reconsideration_condition: >-
+    Reconsider only with exact-version evidence for authenticated native input,
+    trusted exact confirmation, OS-isolated non-exportable user-presence signing,
+    non-agent administration, protocol negotiation, and authority-safe rollback.
+
+claim_boundary: >-
+  OpenCode provides useful pre-model hooks, TUI dialogs, permission workflows,
+  sessions, and server APIs. On the inspected local surface those capabilities are
+  in-process or client-callable and do not establish an unforgeable human-origin
+  signer boundary. OpenCode is therefore not selected for C1; Forge must not infer
+  human presence from a chat.message hook, TUI callback, permission reply, question
+  answer, session/message ID, or plugin label.

@@ -1,0 +1,77 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C5.2"
+status: "implemented"
+slice: "ready-operate-evolve"
+title: "Implement guarded post-BuildVerify phase advancement"
+intent: >-
+  Admit one exact candidate-only C5.1 episode against current kernel-owned
+  project, release, phase, policy, assurance, and ledger state before recording
+  an adjacent ReadyOperate/Evolve transition or a phase-preserving follow-on
+  episode.
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/post-build-verify-episode-v0.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/release-readiness.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/ready-release.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/reality-evidence-gate.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/context-recovery.yaml"
+  - "contracts/evidence/workflow-retirement/legacy-catalog/evolve-project.yaml"
+
+owned_files:
+  - "contracts/spec/post-build-verify-episode-v0.yaml"
+  - "contracts/stories/C5.2-guarded-phase-advancement.yaml"
+  - "docs/post-build-verify-episodes.md"
+  - "crates/forge-core-contracts/src/workflow_governance.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-decisions/src/post_build_verify_episode.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-decisions/tests/post_build_verify_episode.rs"
+  - "crates/forge-core-workflow-governance-tcb/src/lib.rs"
+  - "crates/forge-core-workflow-governance-tcb/tests/workflow_governance_ledger.rs"
+  - "crates/forge-core-kernel/src/workflow_governance/adapter.rs"
+  - "crates/forge-core-cli/src/guide.rs"
+
+constraints:
+  - "A C5.1 document and its pure decision remain candidate-only and non-authoritative."
+  - "Bind each apply request to the exact current project snapshot, workflow-ledger head, state version, durable phase, active admitted release, candidate generation, and predecessor digest."
+  - "BuildVerify to ReadyOperate requires the existing readiness gate; ReadyOperate to Evolve requires the existing release gate."
+  - "Reuse the admitted phase policy and governed-assurance boundary plus the existing hard transition engine; do not synthesize a bypass from candidate fields."
+  - "Ordinary automatic phase planning must continue to stop at BuildVerify."
+  - "Use one atomic typed event for a forward admission and its adjacent phase target."
+  - "Rollback-assessment and evolution-triage events carry no target phase or admitted gate."
+  - "Generic ledger append must reject the C5.2 event; only the dedicated retained-lock TCB path may commit it."
+  - "Historical summary-only C5.2 events start wire epoch 0.7 and remain readable; complete C5.3 snapshots and coordination state advance the ledger to epoch 0.8, which every successor retains."
+  - "Serialized events and receipts are audit projections and cannot recreate kernel admission authority."
+
+acceptance_criteria:
+  - "A valid exact BuildVerify candidate can be admitted to ReadyOperate only after the readiness boundary and hard transition gate pass."
+  - "A valid exact ReadyOperate monitoring candidate can be admitted to Evolve only after the release boundary and hard transition gate pass."
+  - "Stale or mismatched snapshot, ledger head, state version, release, phase, generation, predecessor, route, or gate bindings reject before durable mutation."
+  - "Readiness disproof or failed deployment opens rollback assessment without changing phase."
+  - "Unresolved feedback, incident, or bug intake opens evolution triage without changing phase."
+  - "Recovery reconstructs phase from target-bearing C5.2 events and preserves phase across target-free follow-on events."
+  - "Focused source tests cover route classification, generic-append rejection, exact predecessor continuity, malformed event rejection, historical 0.7 compatibility, permanent 0.8 replacement-continuity epochs, phase-preserving follow-ons, and the automatic BuildVerify stop."
+
+checks:
+  passed:
+    - "cargo check --locked -p forge-core-contracts --all-targets"
+    - "cargo check --locked -p forge-core-decisions --all-targets"
+    - "cargo check --locked -p forge-core-workflow-governance-tcb --all-targets"
+    - "cargo check --locked -p forge-core-kernel --all-targets"
+    - "cargo check --locked -p forge-core-cli --all-targets"
+    - "python3 scripts/check-static-structured-text.py"
+    - "python3 scripts/check-public-promises.py"
+  deferred:
+    - "Rust test execution"
+    - "runtime integration and end-to-end execution"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, independent review, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "The separately inventoried planner, guide-protocol, and funnel-autonomy source stories are source-complete pending deferred evidence."
+  - "C5.3 now owns complete C5.1 persistence and authority-free cross-process replacement recovery; runtime and hosted proof remain deferred."
+  - "Deployment and rollback execution, external broker private keys, release publication, host selection, and field support remain outside this source story."

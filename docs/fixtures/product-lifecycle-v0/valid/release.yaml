@@ -1,0 +1,28 @@
+schema_version: "0.1"
+product_lifecycle_release:
+  release_id: "forge-core-0.12.0-fixture"
+  version: "0.12.0"
+  compatible_core_version: "0.12.0"
+  channel: "stable"
+  source_ref: "git+https://github.com/example/forge-method-core@0123456789abcdef0123456789abcdef01234567"
+  provenance_ref: "fixture://product-lifecycle/provenance-v0"
+  signature_ref: "fixture://product-lifecycle/signature-v0"
+  rollback_ref: "fixture://product-lifecycle/previous-working-generation"
+  changes:
+    - change_id: "change.lifecycle-fixture"
+      kind: "changed"
+      summary: "Exercise the closed typed product lifecycle release fixture."
+  assets:
+    - asset_id: "asset.forge-core-fixture"
+      kind: "core_binary"
+      source_path: "assets/forge-core"
+      install_path: "bin/forge-core"
+      sha256: "sha256:214743f261cf701e71f8a734891ccaf0e4b4f2b98bb715234957d833035c53f3"
+      executable: true
+    - asset_id: "asset.codex-config-fixture"
+      kind: "host_configuration"
+      source_path: "assets/codex-config.json"
+      install_path: "hosts/codex/config.json"
+      sha256: "sha256:32f97765859e9446d5ca34c070281e864913568b8c858b6e8cd919a0bf0935b5"
+      executable: false
+      host: "codex"

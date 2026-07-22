@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+forge-core-authority = { path = "../forge-core-authority" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
@@ -14,8 +15,14 @@ yaml_serde.workspace = true
 sha2.workspace = true
 crc32c.workspace = true
 fs4.workspace = true
+rustix.workspace = true
 getrandom.workspace = true
+libc.workspace = true
 tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi-util = "0.1.11"
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 proptest.workspace = true

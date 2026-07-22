@@ -11,9 +11,10 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ed25519_dalek::{Signer as _, SigningKey};
 use forge_core_cli::{
-    run_execute_operation, run_host_adapter_artifact_verification,
+    load_authorized_markdown, run_execute_operation, run_host_adapter_artifact_verification,
     run_host_adapter_certificate_crl_status_verification,
     run_host_adapter_certificate_ocsp_status_verification,
+    run_host_adapter_certificate_ocsp_status_verification_with_responder_material,
     run_host_adapter_certificate_revocation_policy_verification,
     run_host_adapter_certificate_transparency_sct_verification,
     run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
@@ -37,12 +38,14 @@ use forge_core_cli::{
     HostAdapterCertificateTransparencySctVerificationInput,
     HostAdapterCertificateTransparencySctVerificationStatus, HostAdapterCommandKind,
     HostAdapterDistributionAdmissionStatus, HostAdapterDistributionEvidence,
-    HostAdapterFulcioCertificateIdentityVerificationInput,
+    HostAdapterEvidenceProjection, HostAdapterFulcioCertificateIdentityVerificationInput,
     HostAdapterFulcioCertificateIdentityVerificationStatus, HostAdapterInvocationAdmissionStatus,
-    HostAdapterInvocationRequest, HostAdapterMutationClass, HostAdapterProcessTarget,
-    HostAdapterProjectionTarget, HostAdapterProvenanceVerificationInput,
+    HostAdapterInvocationRequest, HostAdapterMutationClass,
+    HostAdapterOcspDelegatedResponderMaterial, HostAdapterOcspResponderAuthorityMode,
+    HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterProvenanceVerificationInput,
     HostAdapterProvenanceVerificationStatus, HostAdapterRekorVerificationInput,
-    HostAdapterRekorVerificationStatus, HostAdapterSigstoreBundleSubjectVerificationInput,
+    HostAdapterRekorVerificationStatus, HostAdapterSetupGap,
+    HostAdapterSigstoreBundleSubjectVerificationInput,
     HostAdapterSigstoreBundleSubjectVerificationStatus,
     HostAdapterSigstoreDsseInTotoSubjectVerificationInput,
     HostAdapterSigstoreDsseInTotoSubjectVerificationStatus,
@@ -51,15 +54,18 @@ use forge_core_cli::{
     HostAdapterSigstoreTrustPolicyVerificationInput,
     HostAdapterSigstoreTrustPolicyVerificationStatus,
     HostAdapterTufTrustedRootFreshnessVerificationInput,
-    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel, OcspNonceHex,
-    PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
-    ValidationStatus,
+    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel,
+    MarkdownFileLoadError, OcspNonceHex, PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput,
+    RebuildEffectIndexInput, ValidationStatus,
 };
 use forge_core_command_surface as command_surface;
 use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind};
-use forge_core_contracts::{StableId, WorkflowMigrationBatchDocument};
+use forge_core_contracts::{
+    MarkdownLoadAudience, MarkdownLoadError, MarkdownRetirementDocument, StableId,
+    WorkflowMigrationBatchDocument,
+};
 use forge_core_store::{
     append_json_line, sha256_content_hash, EffectMetadataConsumerUse,
     EffectTargetMetadataIndexQueryStatus, EffectTargetMetadataIndexRebuildStatus,
@@ -142,6 +148,20 @@ fn copy_dir_recursive(source: &Path, target: &Path) {
     }
 }
 
+fn copy_allowlisted_markdown(source_root: &Path, target_root: &Path) {
+    let authority_path = source_root.join("contracts/migration/markdown-debt-inventory.yaml");
+    let authority_text = fs::read_to_string(&authority_path).expect("read Markdown authority");
+    let authority: MarkdownRetirementDocument =
+        yaml_serde::from_str(&authority_text).expect("parse Markdown authority");
+    for entry in authority.allowlist {
+        let source = source_root.join(&entry.path);
+        let target = target_root.join(&entry.path);
+        fs::create_dir_all(target.parent().expect("allowlisted Markdown parent"))
+            .expect("create allowlisted Markdown directory");
+        fs::copy(source, target).expect("copy allowlisted Markdown");
+    }
+}
+
 /// Build a temp validation root that mirrors the Forge core repo's contract
 /// tree plus the append-only ledger.
 ///
@@ -156,6 +176,7 @@ fn merged_validation_root(label: &str) -> PathBuf {
     let root = repo_root();
     let temp = temp_repo_root(label);
     copy_dir_recursive(&root.join("contracts"), &temp.join("contracts"));
+    copy_allowlisted_markdown(&root, &temp);
     let evaluator_source = root.join("crates/forge-core-decisions/src/workflow_behavior.rs");
     let evaluator_target = temp.join("crates/forge-core-decisions/src/workflow_behavior.rs");
     fs::create_dir_all(evaluator_target.parent().expect("evaluator parent"))
@@ -223,6 +244,16 @@ fn merged_validation_root(label: &str) -> PathBuf {
             .join("docs")
             .join("fixtures")
             .join("domain-pack-reference-v0"),
+    );
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("product-lifecycle-recovery-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("product-lifecycle-recovery-v0"),
     );
     // The ledger lives in the core repo's sibling sidecar via the Project Link;
     // fall back to a repo-local copy for repos that still ship it themselves.
@@ -653,6 +684,7 @@ struct OcspCertificateFixture {
     issuer_certificate_path: PathBuf,
     verification_time_unix: i64,
     issuer_certificate_der: Vec<u8>,
+    issuer_params: CertificateParams,
     issuer_key_pair: KeyPair,
     responder_mismatch_name_der: Vec<u8>,
 }
@@ -705,6 +737,7 @@ fn ocsp_certificate_fixture(label: &str) -> OcspCertificateFixture {
     let leaf_key_pair = KeyPair::generate().expect("generate OCSP leaf key");
     let issuer = Issuer::from_params(&ca_params, &ca_key_pair);
     let leaf_certificate = test_ocsp_leaf(&issuer, &leaf_key_pair);
+    drop(issuer);
     fs::write(&issuer_certificate_path, ca_certificate.pem()).expect("write OCSP root");
     fs::write(&certificate_path, leaf_certificate.pem()).expect("write OCSP leaf");
 
@@ -721,6 +754,7 @@ fn ocsp_certificate_fixture(label: &str) -> OcspCertificateFixture {
         issuer_certificate_path,
         verification_time_unix,
         issuer_certificate_der: ca_certificate.der().to_vec(),
+        issuer_params: ca_params,
         issuer_key_pair: ca_key_pair,
         responder_mismatch_name_der: x509_subject_der(&mismatch_certificate_der),
     }
@@ -765,6 +799,200 @@ fn test_ocsp_leaf(issuer: &Issuer<'_, &KeyPair>, key_pair: &KeyPair) -> Certific
         .expect("sign OCSP leaf certificate")
 }
 
+struct DelegatedOcspResponderFixture {
+    certificate_path: PathBuf,
+    certificate_der: Vec<u8>,
+    key_pair: KeyPair,
+}
+
+fn delegated_ocsp_responder_fixture(
+    fixture: &OcspCertificateFixture,
+    label: &str,
+    eku: ExtendedKeyUsagePurpose,
+    not_before: (i32, u8, u8),
+    not_after: (i32, u8, u8),
+) -> DelegatedOcspResponderFixture {
+    let mut params =
+        CertificateParams::new(Vec::default()).expect("empty SAN delegated responder params");
+    params.distinguished_name.push(
+        DnType::CommonName,
+        format!("Forge Delegated OCSP Responder {label}"),
+    );
+    params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+    params.extended_key_usages.push(eku);
+    params.not_before = date_time_ymd(not_before.0, not_before.1, not_before.2);
+    params.not_after = date_time_ymd(not_after.0, not_after.1, not_after.2);
+    let key_pair = KeyPair::generate().expect("generate delegated OCSP responder key");
+    let issuer = Issuer::from_params(&fixture.issuer_params, &fixture.issuer_key_pair);
+    let certificate = params
+        .signed_by(&key_pair, &issuer)
+        .expect("sign delegated OCSP responder certificate");
+    let certificate_path = fixture
+        .policy_path
+        .parent()
+        .expect("policy parent")
+        .join(format!("{label}-ocsp-responder.pem"));
+    fs::write(&certificate_path, certificate.pem()).expect("write delegated responder certificate");
+    DelegatedOcspResponderFixture {
+        certificate_path,
+        certificate_der: certificate.der().to_vec(),
+        key_pair,
+    }
+}
+
+struct DelegatedOcspChainFixture {
+    responder: DelegatedOcspResponderFixture,
+    issuer_chain_certificate_paths: Vec<PathBuf>,
+}
+
+fn delegated_ocsp_responder_chain_fixture(
+    fixture: &OcspCertificateFixture,
+    label: &str,
+    intermediate_not_before: (i32, u8, u8),
+    intermediate_not_after: (i32, u8, u8),
+) -> DelegatedOcspChainFixture {
+    let root = fixture.policy_path.parent().expect("policy parent");
+    let target_issuer = Issuer::from_params(&fixture.issuer_params, &fixture.issuer_key_pair);
+    let (upper_certificate, upper_params, upper_key_pair) = test_ocsp_intermediate_ca(
+        "Forge OCSP Upper Intermediate",
+        1,
+        intermediate_not_before,
+        intermediate_not_after,
+        &target_issuer,
+    );
+    let upper_path = root.join(format!("{label}-upper-intermediate.pem"));
+    fs::write(&upper_path, upper_certificate.pem()).expect("write upper OCSP intermediate");
+
+    let upper_issuer = Issuer::from_params(&upper_params, &upper_key_pair);
+    let (lower_certificate, lower_params, lower_key_pair) = test_ocsp_intermediate_ca(
+        "Forge OCSP Lower Intermediate",
+        0,
+        intermediate_not_before,
+        intermediate_not_after,
+        &upper_issuer,
+    );
+    let lower_path = root.join(format!("{label}-lower-intermediate.pem"));
+    fs::write(&lower_path, lower_certificate.pem()).expect("write lower OCSP intermediate");
+
+    let lower_issuer = Issuer::from_params(&lower_params, &lower_key_pair);
+    let mut responder_params =
+        CertificateParams::new(Vec::default()).expect("empty SAN delegated responder params");
+    responder_params.distinguished_name.push(
+        DnType::CommonName,
+        format!("Forge Chained OCSP Responder {label}"),
+    );
+    responder_params
+        .key_usages
+        .push(KeyUsagePurpose::DigitalSignature);
+    responder_params
+        .extended_key_usages
+        .push(ExtendedKeyUsagePurpose::OcspSigning);
+    responder_params.not_before = date_time_ymd(2026, 1, 1);
+    responder_params.not_after = date_time_ymd(2027, 1, 1);
+    let responder_key_pair = KeyPair::generate().expect("generate chained OCSP responder key");
+    let responder_certificate = responder_params
+        .signed_by(&responder_key_pair, &lower_issuer)
+        .expect("sign chained OCSP responder certificate");
+    let responder_path = root.join(format!("{label}-chained-ocsp-responder.pem"));
+    fs::write(&responder_path, responder_certificate.pem())
+        .expect("write chained OCSP responder certificate");
+
+    DelegatedOcspChainFixture {
+        responder: DelegatedOcspResponderFixture {
+            certificate_path: responder_path,
+            certificate_der: responder_certificate.der().to_vec(),
+            key_pair: responder_key_pair,
+        },
+        issuer_chain_certificate_paths: vec![lower_path, upper_path],
+    }
+}
+
+fn test_ocsp_intermediate_ca(
+    common_name: &str,
+    path_len_constraint: u8,
+    not_before: (i32, u8, u8),
+    not_after: (i32, u8, u8),
+    issuer: &Issuer<'_, &KeyPair>,
+) -> (Certificate, CertificateParams, KeyPair) {
+    let mut params =
+        CertificateParams::new(Vec::default()).expect("empty SAN can create intermediate params");
+    params.is_ca = IsCa::Ca(BasicConstraints::Constrained(path_len_constraint));
+    params
+        .distinguished_name
+        .push(DnType::CommonName, common_name);
+    params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+    params.key_usages.push(KeyUsagePurpose::KeyCertSign);
+    params.not_before = date_time_ymd(not_before.0, not_before.1, not_before.2);
+    params.not_after = date_time_ymd(not_after.0, not_after.1, not_after.2);
+    let key_pair = KeyPair::generate().expect("generate OCSP intermediate key");
+    let certificate = params
+        .signed_by(&key_pair, issuer)
+        .expect("sign OCSP intermediate certificate");
+    (certificate, params, key_pair)
+}
+
+fn run_delegated_ocsp_binary(
+    fixture: &OcspCertificateFixture,
+    response_path: &Path,
+    responder_path: &Path,
+    issuer_chain_paths: &[PathBuf],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_forge-core"));
+    command.args([
+        "host-adapter-verify-certificate-ocsp-status",
+        "--trust-policy-path",
+        fixture.policy_path.to_str().expect("utf8 policy path"),
+        "--certificate-path",
+        fixture
+            .certificate_path
+            .to_str()
+            .expect("utf8 certificate path"),
+        "--issuer-certificate-path",
+        fixture
+            .issuer_certificate_path
+            .to_str()
+            .expect("utf8 issuer certificate path"),
+        "--ocsp-response-path",
+        response_path.to_str().expect("utf8 response path"),
+        "--verification-time-unix",
+        "1783391200",
+        "--ocsp-responder-certificate-path",
+        responder_path
+            .to_str()
+            .expect("utf8 responder certificate path"),
+    ]);
+    for issuer_path in issuer_chain_paths {
+        command.args([
+            "--ocsp-responder-issuer-certificate-path",
+            issuer_path.to_str().expect("utf8 responder issuer path"),
+        ]);
+    }
+    command
+        .arg("--json")
+        .output()
+        .expect("run delegated OCSP product CLI")
+}
+
+fn write_delegated_ocsp_response_fixture(
+    fixture: &OcspCertificateFixture,
+    responder: &DelegatedOcspResponderFixture,
+    label: &str,
+    mut options: OcspResponseFixtureOptions,
+) -> PathBuf {
+    options.responder_name_der = Some(x509_subject_der(&responder.certificate_der));
+    let path = fixture
+        .policy_path
+        .parent()
+        .expect("policy parent")
+        .join(format!("{label}.delegated.ocsp.der"));
+    fs::write(
+        &path,
+        ocsp_response_der_signed_by(fixture, options, &responder.key_pair),
+    )
+    .expect("write delegated OCSP response fixture");
+    path
+}
+
 fn write_ocsp_response_fixture(
     fixture: &OcspCertificateFixture,
     label: &str,
@@ -780,6 +1008,14 @@ fn write_ocsp_response_fixture(
 fn ocsp_response_der(
     fixture: &OcspCertificateFixture,
     options: OcspResponseFixtureOptions,
+) -> Vec<u8> {
+    ocsp_response_der_signed_by(fixture, options, &fixture.issuer_key_pair)
+}
+
+fn ocsp_response_der_signed_by(
+    fixture: &OcspCertificateFixture,
+    options: OcspResponseFixtureOptions,
+    responder_signing_key: &KeyPair,
 ) -> Vec<u8> {
     let issuer_subject_der = x509_subject_der(&fixture.issuer_certificate_der);
     let responder_name_der = options
@@ -804,8 +1040,7 @@ fn ocsp_response_der(
         ));
     }
     let response_data = der_sequence(&response_data_parts);
-    let mut signature = fixture
-        .issuer_key_pair
+    let mut signature = responder_signing_key
         .sign(&response_data)
         .expect("sign OCSP response data");
     if options.tamper_signature {
@@ -1542,6 +1777,18 @@ fn rekor_entry_fixture_for_dsse(
 }
 
 #[test]
+fn product_markdown_loader_denies_unknown_path() {
+    let root = merged_validation_root("markdown-loader-unknown");
+    assert_eq!(
+        load_authorized_markdown(&root, "docs/new-authority.md", MarkdownLoadAudience::Agent,),
+        Err(MarkdownFileLoadError::Authorization(
+            MarkdownLoadError::NotAllowlisted,
+        ))
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn validate_library_passes_current_repo() {
     let root = merged_validation_root("validate-library-current-repo");
     let summary = run_validate(&root);
@@ -1557,6 +1804,20 @@ fn validate_library_passes_current_repo() {
         summary.diagnostics
     );
     assert!(!summary.checks.is_empty());
+    let markdown_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "markdown_retirement_authority")
+        .expect("Markdown retirement authority check");
+    assert_eq!(markdown_check.status, ValidationStatus::Passed);
+    assert_eq!(markdown_check.diagnostics, 0);
+    let host_surface_check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "common_borrowed_shell_contract_authority")
+        .expect("generated host projection authority check");
+    assert_eq!(host_surface_check.status, ValidationStatus::Passed);
+    assert_eq!(host_surface_check.diagnostics, 0);
     let release_checks = summary
         .checks
         .iter()
@@ -1649,6 +1910,55 @@ fn validate_library_passes_current_repo() {
         .expect("P6d aggregate reference Domain Pack check");
     assert_eq!(reference_check.status, ValidationStatus::Passed);
     assert_eq!(reference_check.diagnostics, 0);
+}
+
+#[test]
+fn common_borrowed_shell_authority_rejects_projection_contract_drift() {
+    let root = merged_validation_root("host-projection-contract-drift");
+    let cli_surface = root.join("contracts/surfaces/cli-json.yaml");
+    let source = fs::read_to_string(&cli_surface).expect("read CLI-JSON surface");
+    fs::write(
+        &cli_surface,
+        source.replace("    - required_contracts\n", ""),
+    )
+    .expect("remove required-contract projection claim");
+
+    let summary = run_validate(&root);
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "common_borrowed_shell_contract_authority")
+        .expect("common borrowed-shell authority check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(check.errors > 0);
+    assert!(summary
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.path.contains("preserved_fields")));
+}
+
+#[test]
+fn common_borrowed_shell_authority_rejects_weakened_projection_prohibitions() {
+    let root = merged_validation_root("host-projection-prohibition-drift");
+    let mcp_surface = root.join("contracts/surfaces/mcp.yaml");
+    let source = fs::read_to_string(&mcp_surface).expect("read MCP surface");
+    fs::write(
+        &mcp_surface,
+        source.replace("    - network_retrieval_authority\n", ""),
+    )
+    .expect("remove network-retrieval prohibition");
+
+    let summary = run_validate(&root);
+    let check = summary
+        .checks
+        .iter()
+        .find(|check| check.name == "common_borrowed_shell_contract_authority")
+        .expect("common borrowed-shell authority check");
+    assert_eq!(check.status, ValidationStatus::Failed);
+    assert!(summary
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.path.contains("projections_must_not")));
 }
 
 fn assert_domain_pack_lifecycle_check_failed(
@@ -2521,17 +2831,53 @@ fn host_adapter_projection_library_preserves_non_authority_boundary() {
     let projection = run_host_adapter_projection(HostAdapterProjectionTarget::McpTools);
     assert_eq!(projection.target, HostAdapterProjectionTarget::McpTools);
     assert!(!projection.projection_authoritative);
+    assert_eq!(
+        projection.authority_boundary.projections_must_not,
+        vec![
+            "perform network retrieval".to_string(),
+            "grant install authority".to_string(),
+            "grant update authority".to_string(),
+            "grant CRL authority".to_string(),
+            "grant Certificate Transparency authority".to_string(),
+            "grant Rekor authority".to_string(),
+            "grant TUF authority".to_string(),
+            "grant signing authority".to_string(),
+            "grant mutation authority".to_string(),
+            "select a host".to_string(),
+            "claim host support".to_string(),
+            "claim a host release".to_string(),
+            "promote projection metadata into authority".to_string(),
+        ]
+    );
     assert!(projection
         .authority_boundary
-        .projections_must_not
+        .projected_metadata_must_preserve
         .iter()
-        .any(|item| item.contains("auto-invoke mutating operations")));
+        .any(|item| item == "required_contracts"));
+    assert!(projection
+        .authority_boundary
+        .projected_metadata_must_preserve
+        .iter()
+        .any(|item| item == "setup_gaps"));
+    assert!(projection
+        .commands
+        .iter()
+        .all(|command| command.mutation_class == HostAdapterMutationClass::ReadOnly));
+    assert!(projection
+        .commands
+        .iter()
+        .all(|command| command.name != "execute-operation"));
 
-    let execute = projection
+    let borrowed = run_host_adapter_projection(HostAdapterProjectionTarget::BorrowedShell);
+    let execute = borrowed
         .commands
         .iter()
         .find(|command| command.name == "execute-operation")
-        .expect("execute operation projection");
+        .expect("execute operation borrowed-shell projection");
+    assert_eq!(
+        execute.command_kind,
+        HostAdapterCommandKind::OperationExecution
+    );
     assert_eq!(
         execute.mutation_class,
         HostAdapterMutationClass::MutatingOperation
@@ -2540,16 +2886,50 @@ fn host_adapter_projection_library_preserves_non_authority_boundary() {
         execute.authority_class,
         HostAdapterAuthorityClass::RequiresOperationAuthority
     );
-    let execute_mcp = execute.mcp_tool.as_ref().expect("execute mcp projection");
+    assert!(execute
+        .required_contracts
+        .iter()
+        .any(|contract| contract == "OperationContract"));
+    assert_eq!(
+        execute.setup_gaps,
+        vec![HostAdapterSetupGap::InvalidConfiguration]
+    );
+    let manifest = run_host_adapter_manifest();
+    let manifest_setup_gaps = manifest
+        .commands
+        .iter()
+        .flat_map(|command| command.setup_gaps.iter().copied())
+        .collect::<Vec<_>>();
+    for expected in [
+        HostAdapterSetupGap::MissingExecutable,
+        HostAdapterSetupGap::MissingAdapter,
+        HostAdapterSetupGap::UnsupportedHostVersion,
+        HostAdapterSetupGap::InvalidConfiguration,
+        HostAdapterSetupGap::MissingRequiredContract,
+        HostAdapterSetupGap::ExactHostExecutionUnavailable,
+    ] {
+        assert!(manifest_setup_gaps.contains(&expected));
+    }
+    for command in &borrowed.commands {
+        let source = manifest
+            .commands
+            .iter()
+            .find(|source| source.name == command.source_command)
+            .expect("projected command source");
+        assert_eq!(command.setup_gaps, source.setup_gaps);
+    }
     assert_eq!(
         execute.canonical_usage,
         command_surface::COMMAND_EXECUTE_OPERATION
             .canonical_usage()
             .trim_start()
     );
-    assert!(!execute_mcp.annotations.read_only_hint);
-    assert!(execute_mcp.annotations.destructive_hint);
-    assert!(!execute_mcp.annotations.idempotent_hint);
+    let shell = execute
+        .borrowed_shell
+        .as_ref()
+        .expect("borrowed-shell projection");
+    assert!(shell.explicit_invocation_required);
+    assert!(!shell.may_auto_invoke);
 
     let query = projection
         .commands
@@ -2566,6 +2946,37 @@ fn host_adapter_projection_library_preserves_non_authority_boundary() {
     assert!(query_mcp.annotations.read_only_hint);
     assert!(!query_mcp.annotations.destructive_hint);
     assert_eq!(query_mcp.input_schema["additionalProperties"], false);
+
+    let ocsp = projection
+        .commands
+        .iter()
+        .find(|command| command.name == "host-adapter-verify-certificate-ocsp-status")
+        .expect("OCSP verifier projection");
+    assert_eq!(
+        ocsp.evidence_projection,
+        vec![
+            HostAdapterEvidenceProjection::OcspResponderAuthorityIdentity,
+            HostAdapterEvidenceProjection::OcspVerifiedAuthorityEvidence,
+        ]
+    );
+    let input_schema = &ocsp
+        .mcp_tool
+        .as_ref()
+        .expect("OCSP MCP projection")
+        .input_schema;
+    assert!(input_schema["properties"]["ocsp_responder_certificate_path"].is_object());
+    assert!(input_schema["properties"]["ocsp_responder_issuer_certificate_path"].is_object());
+    assert_eq!(
+        input_schema["dependentRequired"]["ocsp_responder_issuer_certificate_path"],
+        json!(["ocsp_responder_certificate_path"])
+    );
+    assert!(input_schema["dependentRequired"]["ocsp_responder_certificate_path"].is_null());
+    assert!(!input_schema["required"]
+        .as_array()
+        .expect("OCSP required fields")
+        .contains(&Value::String(
+            "ocsp_responder_issuer_certificate_path".to_string()
+        )));
 }
 
 #[test]
@@ -2585,18 +2996,24 @@ fn host_adapter_projection_binary_outputs_mcp_json() {
     assert_eq!(json["target"], "mcp_tools");
     assert_eq!(json["projection_authoritative"], false);
     let commands = json["commands"].as_array().expect("commands array");
-    let execute = commands
+    assert!(commands
         .iter()
-        .find(|item| item["name"] == "execute-operation")
-        .expect("execute projection");
+        .all(|item| item["name"] != "execute-operation"));
+    let query = commands
+        .iter()
+        .find(|item| item["name"] == "query-effect-index")
+        .expect("read-only query projection");
     assert_eq!(
-        execute["canonical_usage"],
-        command_surface::COMMAND_EXECUTE_OPERATION
+        query["canonical_usage"],
+        command_surface::COMMAND_QUERY_EFFECT_INDEX
             .canonical_usage()
             .trim_start()
     );
-    assert_eq!(execute["mcp_tool"]["annotations"]["destructiveHint"], true);
-    assert_eq!(execute["mcp_tool"]["annotations"]["readOnlyHint"], false);
+    assert_eq!(query["command_kind"], "advisory_lookup");
+    assert!(query["required_contracts"].is_array());
+    assert_eq!(query["setup_gaps"][0], "missing_required_contract");
+    assert_eq!(query["mcp_tool"]["annotations"]["destructiveHint"], false);
+    assert_eq!(query["mcp_tool"]["annotations"]["readOnlyHint"], true);
 }
 
 #[test]
@@ -4732,6 +5149,254 @@ fn ocsp_verification_input(
     }
 }
 
+fn delegated_ocsp_material(
+    responder: &DelegatedOcspResponderFixture,
+) -> HostAdapterOcspDelegatedResponderMaterial {
+    HostAdapterOcspDelegatedResponderMaterial {
+        certificate_path: responder.certificate_path.clone(),
+        issuer_chain_certificate_paths: Vec::new(),
+    }
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_production_entrypoint_accepts_delegated_responder() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-delegated-good");
+    let responder = delegated_ocsp_responder_fixture(
+        &fixture,
+        "good",
+        ExtendedKeyUsagePurpose::OcspSigning,
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let expected_nonce = b"delegated-ocsp-nonce";
+    let response_path = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &responder,
+        "good",
+        OcspResponseFixtureOptions {
+            nonce: Some(expected_nonce),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, response_path, Some(expected_nonce)),
+            Some(delegated_ocsp_material(&responder)),
+        );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Passed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("good_by_supplied_ocsp")
+    );
+    let authority = verification
+        .responder_authority_identity
+        .expect("typed delegated responder identity");
+    assert_eq!(
+        authority.mode,
+        HostAdapterOcspResponderAuthorityMode::DelegatedResponder
+    );
+    assert_eq!(
+        authority.certificate_path,
+        responder.certificate_path.to_string_lossy().to_string()
+    );
+    assert!(authority.issuer_chain_certificate_paths.is_empty());
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_cert_id_serial_and_issuer_hash_match".to_string()));
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_nonce_verified".to_string()));
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_delegated_responder_authorized".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_production_entrypoint_rejects_delegated_authority_failures()
+{
+    let fixture = ocsp_certificate_fixture("verify-ocsp-delegated-failures");
+
+    let wrong_eku = delegated_ocsp_responder_fixture(
+        &fixture,
+        "wrong-eku",
+        ExtendedKeyUsagePurpose::CodeSigning,
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let wrong_eku_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &wrong_eku,
+        "wrong-eku",
+        OcspResponseFixtureOptions::good(),
+    );
+    let wrong_eku_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, wrong_eku_response, None),
+            Some(delegated_ocsp_material(&wrong_eku)),
+        );
+    assert!(wrong_eku_result
+        .reasons
+        .contains(&"ocsp_status_delegated_responder_ocsp_signing_eku_missing".to_string()));
+
+    let future = delegated_ocsp_responder_fixture(
+        &fixture,
+        "future",
+        ExtendedKeyUsagePurpose::OcspSigning,
+        (2028, 1, 1),
+        (2029, 1, 1),
+    );
+    let future_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &future,
+        "future",
+        OcspResponseFixtureOptions::good(),
+    );
+    let future_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, future_response, None),
+            Some(delegated_ocsp_material(&future)),
+        );
+    assert!(future_result
+        .reasons
+        .contains(&"ocsp_status_delegated_responder_not_valid_at_verification_time".to_string()));
+
+    let valid = delegated_ocsp_responder_fixture(
+        &fixture,
+        "valid-negative",
+        ExtendedKeyUsagePurpose::OcspSigning,
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let responder_id_mismatch_path = fixture
+        .policy_path
+        .parent()
+        .expect("policy parent")
+        .join("responder-id-mismatch.delegated.ocsp.der");
+    fs::write(
+        &responder_id_mismatch_path,
+        ocsp_response_der_signed_by(
+            &fixture,
+            OcspResponseFixtureOptions {
+                responder_name_der: Some(fixture.responder_mismatch_name_der.clone()),
+                ..OcspResponseFixtureOptions::good()
+            },
+            &valid.key_pair,
+        ),
+    )
+    .expect("write responderID mismatch response");
+    let responder_id_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, responder_id_mismatch_path, None),
+            Some(delegated_ocsp_material(&valid)),
+        );
+    assert!(responder_id_result
+        .reasons
+        .contains(&"ocsp_status_responder_name_mismatch".to_string()));
+
+    let bad_signature_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &valid,
+        "bad-signature",
+        OcspResponseFixtureOptions {
+            tamper_signature: true,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+    let bad_signature_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, bad_signature_response, None),
+            Some(delegated_ocsp_material(&valid)),
+        );
+    assert!(bad_signature_result
+        .reasons
+        .contains(&"ocsp_status_response_signature_invalid".to_string()));
+
+    let wrong_issuer_fixture = ocsp_certificate_fixture("verify-ocsp-delegated-wrong-path");
+    let wrong_path = delegated_ocsp_responder_fixture(
+        &wrong_issuer_fixture,
+        "wrong-path",
+        ExtendedKeyUsagePurpose::OcspSigning,
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let wrong_path_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &wrong_path,
+        "wrong-path",
+        OcspResponseFixtureOptions::good(),
+    );
+    let wrong_path_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, wrong_path_response, None),
+            Some(delegated_ocsp_material(&wrong_path)),
+        );
+    assert!(wrong_path_result
+        .reasons
+        .iter()
+        .any(|reason| reason.starts_with("ocsp_status_delegated_path_signature_failed_0:")));
+
+    for (label, options, expected_reason) in [
+        (
+            "stale",
+            OcspResponseFixtureOptions {
+                next_update: Some("20260701000000Z"),
+                ..OcspResponseFixtureOptions::good()
+            },
+            "ocsp_status_response_expired",
+        ),
+        (
+            "serial",
+            OcspResponseFixtureOptions {
+                cert_serial: &[0x12, 0x35],
+                ..OcspResponseFixtureOptions::good()
+            },
+            "ocsp_status_certificate_serial_not_found",
+        ),
+        (
+            "hash",
+            OcspResponseFixtureOptions {
+                hash_algorithm_oid: &[1, 2, 3, 4],
+                ..OcspResponseFixtureOptions::good()
+            },
+            "ocsp_status_cert_id_hash_algorithm_unsupported",
+        ),
+    ] {
+        let response = write_delegated_ocsp_response_fixture(&fixture, &valid, label, options);
+        let result = run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, response, None),
+            Some(delegated_ocsp_material(&valid)),
+        );
+        assert!(result.reasons.contains(&expected_reason.to_string()));
+        assert_eq!(
+            result.revocation_status.as_deref(),
+            Some("unknown_due_to_failed_ocsp_verification")
+        );
+    }
+
+    let nonce_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &valid,
+        "nonce-mismatch",
+        OcspResponseFixtureOptions {
+            nonce: Some(b"actual-delegated-nonce"),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+    let nonce_result =
+        run_host_adapter_certificate_ocsp_status_verification_with_responder_material(
+            ocsp_verification_input(&fixture, nonce_response, Some(b"expected-delegated-nonce")),
+            Some(delegated_ocsp_material(&valid)),
+        );
+    assert!(nonce_result
+        .reasons
+        .contains(&"ocsp_status_nonce_mismatch".to_string()));
+}
+
 #[test]
 fn host_adapter_certificate_ocsp_status_verification_passes_good_by_supplied_ocsp() {
     let fixture = ocsp_certificate_fixture("verify-ocsp-good");
@@ -5300,6 +5965,152 @@ fn host_adapter_verify_certificate_ocsp_status_binary_outputs_json() {
 }
 
 #[test]
+fn host_adapter_verify_certificate_ocsp_status_binary_projects_delegated_identity() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-delegated-binary");
+    let chain =
+        delegated_ocsp_responder_chain_fixture(&fixture, "binary", (2026, 1, 1), (2027, 1, 1));
+    let response_path = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &chain.responder,
+        "binary",
+        OcspResponseFixtureOptions::good(),
+    );
+
+    let output = run_delegated_ocsp_binary(
+        &fixture,
+        &response_path,
+        &chain.responder.certificate_path,
+        &chain.issuer_chain_certificate_paths,
+    );
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: Value = serde_json::from_slice(&output.stdout).expect("delegated OCSP JSON");
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["revocation_status"], "good_by_supplied_ocsp");
+    assert_eq!(
+        json["responder_authority"],
+        "delegated_responder_certificate"
+    );
+    assert_eq!(
+        json["responder_authority_identity"]["mode"],
+        "delegated_responder"
+    );
+    assert_eq!(
+        json["responder_authority_identity"]["certificate_path"].as_str(),
+        Some(chain.responder.certificate_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        json["responder_authority_identity"]["issuer_chain_certificate_paths"],
+        json!(chain
+            .issuer_chain_certificate_paths
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>())
+    );
+    assert!(json["responder_authority_identity"]["verified_checks"]
+        .as_array()
+        .expect("verified responder checks")
+        .contains(&Value::String(
+            "ocsp_signing_extended_key_usage".to_string()
+        )));
+    for forbidden in ["network", "install", "update", "crl", "rekor", "tuf"] {
+        assert!(!json["responder_authority_identity"]
+            .to_string()
+            .to_lowercase()
+            .contains(forbidden));
+    }
+}
+
+#[test]
+fn host_adapter_verify_certificate_ocsp_status_binary_rejects_invalid_ordered_chains() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-delegated-chain-negative");
+    let chain =
+        delegated_ocsp_responder_chain_fixture(&fixture, "negative", (2026, 1, 1), (2027, 1, 1));
+    let response_path = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &chain.responder,
+        "negative",
+        OcspResponseFixtureOptions::good(),
+    );
+
+    let mut reversed = chain.issuer_chain_certificate_paths.clone();
+    reversed.reverse();
+    let mut duplicated = chain.issuer_chain_certificate_paths.clone();
+    duplicated.insert(1, duplicated[0].clone());
+    let mut includes_terminal = chain.issuer_chain_certificate_paths.clone();
+    includes_terminal.push(fixture.issuer_certificate_path.clone());
+    let omitted = vec![chain.issuer_chain_certificate_paths[1].clone()];
+
+    for (label, paths) in [
+        ("reversed", reversed),
+        ("omitted", omitted),
+        ("duplicated", duplicated),
+        ("terminal", includes_terminal),
+    ] {
+        let output = run_delegated_ocsp_binary(
+            &fixture,
+            &response_path,
+            &chain.responder.certificate_path,
+            &paths,
+        );
+        assert!(
+            !output.status.success(),
+            "{label} delegated chain unexpectedly passed: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+
+    let invalid_validity_chain = delegated_ocsp_responder_chain_fixture(
+        &fixture,
+        "invalid-validity",
+        (2024, 1, 1),
+        (2025, 1, 1),
+    );
+    let invalid_validity_response = write_delegated_ocsp_response_fixture(
+        &fixture,
+        &invalid_validity_chain.responder,
+        "invalid-validity",
+        OcspResponseFixtureOptions::good(),
+    );
+    let invalid_validity_output = run_delegated_ocsp_binary(
+        &fixture,
+        &invalid_validity_response,
+        &invalid_validity_chain.responder.certificate_path,
+        &invalid_validity_chain.issuer_chain_certificate_paths,
+    );
+    assert!(!invalid_validity_output.status.success());
+}
+
+#[test]
+fn host_adapter_verify_certificate_ocsp_status_binary_rejects_partial_delegated_input() {
+    let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
+        .args([
+            "host-adapter-verify-certificate-ocsp-status",
+            "--trust-policy-path",
+            "policy.yaml",
+            "--certificate-path",
+            "certificate.pem",
+            "--issuer-certificate-path",
+            "issuer.pem",
+            "--ocsp-response-path",
+            "response.der",
+            "--verification-time-unix",
+            "1783391200",
+            "--ocsp-responder-issuer-certificate-path",
+            "intermediate.pem",
+            "--json",
+        ])
+        .output()
+        .expect("run partial delegated OCSP product CLI");
+    assert!(!output.status.success());
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
 fn host_adapter_tuf_trusted_root_freshness_verification_passes_fresh_metadata() {
     let policy = sigstore_trust_policy_fixture("verify-tuf-freshness-pass", &["fulcio-root.pem"]);
     let root = policy.policy_path.parent().expect("policy parent");
@@ -5603,6 +6414,7 @@ fn execute_operation_rejects_payload_larger_than_policy() {
 #[test]
 fn rebuild_effect_index_library_rebuilds_from_committed_wal() {
     let root = temp_repo_root("rebuild-library");
+    fs::create_dir(root.join(".forge-method")).expect("create state root");
     write_committed_metadata_wal(&root, "payload-secret");
 
     let result = run_rebuild_effect_index(RebuildEffectIndexInput {
@@ -5756,6 +6568,7 @@ fn rebuild_effect_index_binary_default_does_not_warn() {
 #[test]
 fn query_effect_index_library_filters_metadata_records() {
     let root = temp_repo_root("query-library");
+    fs::create_dir(root.join(".forge-method")).expect("create state root");
     write_effect_index_record(
         &root,
         "story.result",

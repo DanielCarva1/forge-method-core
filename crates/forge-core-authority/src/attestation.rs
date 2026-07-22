@@ -410,8 +410,9 @@ impl std::error::Error for HexDecodeError {
 ///
 /// Returns [`HexDecodeError::OddLength`] for an odd-length input, or
 /// [`HexDecodeError::InvalidNibble`] for a non-hex character.
+#[allow(clippy::manual_is_multiple_of)] // `is_multiple_of` is unstable on the Rust 1.85 MSRV.
 fn hex_decode(s: &str) -> Result<Vec<u8>, HexDecodeError> {
-    if !s.len().is_multiple_of(2) {
+    if s.len() % 2 != 0 {
         return Err(HexDecodeError::OddLength { len: s.len() });
     }
     let bytes = (0..s.len())

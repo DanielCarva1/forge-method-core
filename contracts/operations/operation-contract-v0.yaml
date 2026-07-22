@@ -9,6 +9,8 @@ design_rules:
     rule: "Claims, completion, gates, effects, requests, decisions, runtime handoff, evals, and recovery are referenced through approved fields."
   - id: "autonomy_is_policy"
     rule: "Execution policy and stop policy define autonomy boundaries instead of prompt-only instructions."
+  - id: "protected_boundaries_are_descriptive"
+    rule: "risk_boundaries declares destructive, release, or authority risk so the accepted funnel-autonomy policy can restore stricter gates; declarations never grant mutation, phase, release, signing, private-key, or host-selection authority."
 rust_compatibility:
   serialization: "serde"
   id_policy: "stable_ascii_ids"
@@ -71,6 +73,17 @@ enums:
     - "blocked"
     - "missing"
     - "not_applicable"
+  gate_scope:
+    - "lane"
+    - "product_area"
+    - "integration"
+    - "destructive"
+    - "release"
+    - "authority"
+  risk_boundary:
+    - "destructive"
+    - "release"
+    - "authority"
 required_fields:
   - "contract_id"
   - "project_ref.state_version"
@@ -107,6 +120,8 @@ field_contract:
     side_effect_policy: "Closed side_effect_policy enum."
     authority_evidence: "Typed evidence refs."
   coordination_scope: "Typed target, concurrency, write authority, and completion scope."
+  risk_boundaries: "Optional closed destructive|release|authority declarations consumed by the accepted funnel-autonomy policy; omitted values cannot suppress boundaries inferred from actual effects or publish behavior."
+  gates: "Typed required gate scopes include lane, product_area, integration, destructive, release, and authority."
   execution_policy: "Deterministic execution, retry, and branch behavior."
   stop_policy: "Deterministic stop conditions and handoff target."
   contract_refs: "Resolved by OperationReferencePolicy v0, not duplicated here."
@@ -126,3 +141,5 @@ failure_modes_prevented:
   - "autonomy level changes without execution policy"
   - "side effects happen without authority evidence"
   - "human checkpoint is omitted because prompt text seemed confident"
+  - "destructive, release, or authority work reaches execution without its matching typed gate"
+  - "a candidate risk declaration is mistaken for mutation, phase, release, signing, private-key, or host-selection authority"

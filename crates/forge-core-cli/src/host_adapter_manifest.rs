@@ -17,7 +17,7 @@ use forge_core_contracts::RuntimeKind;
 use crate::host_adapter_types::{
     HostAdapterAuthorityBoundary, HostAdapterAuthorityClass, HostAdapterAutoTrigger,
     HostAdapterCommandKind, HostAdapterManifest, HostAdapterMutationClass,
-    HostAdapterOutputTreatment,
+    HostAdapterOutputTreatment, HostAdapterSetupGap,
 };
 use crate::host_command::{host_command, HostCommandMetadata};
 
@@ -66,6 +66,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec![],
+                setup_gaps: vec![HostAdapterSetupGap::MissingRequiredContract],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::Diagnostics,
                     HostAdapterAutoTrigger::HandoffPreparation,
@@ -90,6 +91,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "ToolEffectContract when effect_contract_refs are present",
                     "PayloadLoadPolicy for runtime payload bytes",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::InvalidConfiguration],
                 safe_auto_invocation_triggers: vec![],
                 output_treatment: vec![HostAdapterOutputTreatment::RuntimeAuthorityResponse],
                 policy_refs: vec![
@@ -109,6 +111,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::AppendOnlyOperational,
                 authority_class: HostAdapterAuthorityClass::OperationalMaintenanceOnly,
                 required_contracts: vec!["Effect WAL records"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![
                     HostAdapterOutputTreatment::OperationalMaintenanceEvidence,
@@ -128,6 +131,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["Effect metadata index"],
+                setup_gaps: vec![HostAdapterSetupGap::MissingRequiredContract],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::EvidenceDiscovery,
                     HostAdapterAutoTrigger::Diagnostics,
@@ -151,6 +155,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec![],
+                setup_gaps: vec![HostAdapterSetupGap::MissingAdapter],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::EvidenceDiscovery,
                     HostAdapterAutoTrigger::Diagnostics,
@@ -169,6 +174,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterManifest"],
+                setup_gaps: vec![HostAdapterSetupGap::MissingAdapter],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::EvidenceDiscovery,
                     HostAdapterAutoTrigger::Diagnostics,
@@ -189,6 +195,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterManifest"],
+                setup_gaps: vec![HostAdapterSetupGap::MissingExecutable],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::EvidenceDiscovery,
                     HostAdapterAutoTrigger::Diagnostics,
@@ -207,6 +214,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterManifest"],
+                setup_gaps: vec![HostAdapterSetupGap::UnsupportedHostVersion],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::HostCapabilityMetadata],
                 policy_refs: vec!["contracts/policies/mcp-local-process-security-boundary.yaml"],
@@ -221,6 +229,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterManifest"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![
                     HostAdapterAutoTrigger::EvidenceDiscovery,
                     HostAdapterAutoTrigger::Diagnostics,
@@ -241,6 +250,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterManifest"],
+                setup_gaps: vec![HostAdapterSetupGap::InvalidConfiguration],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::HostCapabilityMetadata],
                 policy_refs: vec![
@@ -257,6 +267,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterDistributionEvidence"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -273,6 +284,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterDistributionEvidence", "SlsaInTotoProvenance"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -290,6 +302,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["HostAdapterDistributionEvidence", "SigstoreRekorEntry"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec!["contracts/policies/sigstore-rekor-backend-boundary.yaml"],
@@ -305,6 +318,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                 mutation_class: HostAdapterMutationClass::ReadOnly,
                 authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
                 required_contracts: vec!["SigstoreTrustedRootPolicy"],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -326,6 +340,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "FulcioCertificateChain",
                     "SigstoreIdentityPolicy",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -349,6 +364,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "SigstoreRekorEntry",
                     "HostAdapterDistributionEvidence",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -373,6 +389,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "SigstoreRekorEntry",
                     "HostAdapterDistributionEvidence",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -394,6 +411,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "FulcioCertificate",
                     "SigstoreTrustedTimeSource",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -417,6 +435,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "FulcioCertificate",
                     "CertificateTransparencySct",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -440,6 +459,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "CertificateRevocationPolicy",
                     "SigstoreTrustedTimeSource",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -462,6 +482,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "TufTrustedRootMetadata",
                     "TrustedUpdateStartTime",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -485,6 +506,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "IssuerCertificate",
                     "CertificateRevocationList",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![
@@ -508,6 +530,7 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "IssuerCertificate",
                     "OcspResponse",
                 ],
+                setup_gaps: vec![HostAdapterSetupGap::ExactHostExecutionUnavailable],
                 safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
                 output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
                 policy_refs: vec![

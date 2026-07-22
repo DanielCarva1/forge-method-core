@@ -6,8 +6,8 @@ description: Start or resume Forge Method for the current project. Use when the 
 # Start Forge
 
 This is the single entry point for Forge Method in a project. Run it once per
-chat/session — it bootstraps a fresh repo, repairs a broken one, or routes an
-in-progress project into agent-native workflow governance.
+chat/session — it bootstraps a fresh repo, fails closed on linked state loss,
+or routes a healthy project into agent-native workflow governance.
 
 ## Core rules
 
@@ -22,6 +22,11 @@ in-progress project into agent-native workflow governance.
 - Execute structured command arrays as argv. `data.next_step.command` is a
   human-readable display string, not a shell-safe command source. Never split,
   concatenate, or shell-evaluate it.
+- A Project Link proves prior initialization. If `start` reports
+  `data.state_loss`, do not recreate, normalize, or initialize the sidecar, and
+  never run `project init` as repair. Preserve all roots. Only the typed
+  `choices.inspect` action is currently available and read-only; restore and
+  reinitialize-as-new are deferred and intentionally expose no apply argv.
 
 ## Workflow
 
@@ -37,19 +42,24 @@ in-progress project into agent-native workflow governance.
      || echo "NOT_FOUND"
    ```
 
-   If missing, report that Forge is not installed and do not invent a fallback.
-
 3. **Run `forge-core start`.** This is the zero-config bootstrap entry point.
-   On a fresh repo it creates the Project Link + sidecar; on a broken repo it
-   repairs; on a healthy repo it reports the current bootstrap state.
+   On a fresh repo with no Project Link and an unoccupied, symlink-free target it
+   creates the Project Link + sidecar. If linked authority is missing, incomplete,
+   inaccessible, or substituted—or unlinked target state already exists—it exits
+   nonzero and performs no authority normalization. On a healthy repo it reports
+   the current bootstrap state.
 
    ```bash
    forge-core start --root "<project-root>" --json
    ```
 
-   Read `data.state`, `data.actions_performed`, `data.project`, and
-   `data.next_step` from the response. Use `data.next_step.command` only when
-   explaining the action to a human; agents execute the structured argv.
+   Read `data.state`, `data.state_loss`, `data.actions_performed`,
+   `data.project`, and `data.next_step` from the response. For state loss, verify
+   `data.state_loss.schema_version`, treat `diagnosis_digest` as correlation only,
+   and act only on a choice whose typed availability is `available_read_only`.
+   Never convert a deferred restore or reinitialize-as-new choice into invented
+   flags or commands. Use `data.next_step.command` only when explaining the action
+   to a human; agents execute the structured argv.
 
 4. **Enter agent-native workflow governance** when the Project Link and sidecar
    are healthy.

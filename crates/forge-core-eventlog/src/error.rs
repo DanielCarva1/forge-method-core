@@ -49,6 +49,9 @@ pub enum EventLogError<D: Clone = String> {
         /// Lossy stringified source from `AppendJsonLineError`.
         source: String,
     },
+    /// The stream has consumed `u64::MAX`; no further event can be assigned
+    /// a unique sequence number, so mutation fails closed before append.
+    SequenceExhausted,
     /// Serializing the event to JSON failed.
     Serialize {
         /// Lossy stringified `serde_json::Error`.
@@ -96,6 +99,9 @@ impl<D: Clone + std::fmt::Debug> std::fmt::Display for EventLogError<D> {
                     "append event to {} failed: {source}",
                     path.display()
                 )
+            }
+            Self::SequenceExhausted => {
+                write!(formatter, "event-log sequence space exhausted")
             }
             Self::Serialize { source } => {
                 write!(formatter, "serialize event failed: {source}")

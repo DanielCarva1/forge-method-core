@@ -251,15 +251,17 @@ fn invalid_project_link_never_falls_back_to_consumer_local_state() {
 }
 
 #[test]
-fn missing_linked_sidecar_requires_complete_start_repair() {
+fn missing_linked_sidecar_requires_preservation_and_explicit_recovery() {
     let parent = tmp_project_dir("missing-sidecar");
     let app = parent.join("app");
     std::fs::create_dir_all(&app).unwrap();
+    let link_path = app.join(".forge-method.yaml");
     std::fs::write(
-        app.join(".forge-method.yaml"),
+        &link_path,
         "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
     )
     .unwrap();
+    let link_before = std::fs::read(&link_path).unwrap();
     let args = vec![
         "preflight".to_string(),
         "init".to_string(),
@@ -267,8 +269,12 @@ fn missing_linked_sidecar_requires_complete_start_repair() {
         app.to_string_lossy().into_owned(),
     ];
     let error = forge_core_cli::preflight_cmd::run_preflight_command(&args)
-        .expect_err("missing linked state must require start repair");
-    assert!(error.to_string().contains("forge-core start"));
+        .expect_err("missing linked state must fail closed");
+    let message = error.to_string();
+    assert!(message.contains("forge-core start --json"));
+    assert!(message.contains("explicit verified recovery"));
+    assert!(!message.contains("to repair"));
+    assert_eq!(std::fs::read(&link_path).unwrap(), link_before);
     assert!(!parent.join("forge-app").exists());
     assert!(!app.join(".forge-method").exists());
 }

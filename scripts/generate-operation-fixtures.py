@@ -131,7 +131,7 @@ def write(name, operation):
 #   expect: AwaitingHuman, [HumanInputRequired], prompt.is_some(), validation_error_count=0
 # =============================================================================
 def fixture_facilitate():
-    o = base("op_fixture_facilitate_first_product_idea", "facilitate", "1-discovery", "discover-intent", "ask_first_question")
+    o = base("op_fixture_facilitate_first_product_idea", "facilitate", "1-discovery", "guidance-engine", "ask_first_question")
     o["authority"]["mutation_policy"] = "forbidden"  # forbidden -> no authority_evidence needed
     o["authority"]["missing_authority"] = ["human_explicit_direction"]
     o["human"]["input_requirement"] = "required"  # -> AwaitingHuman (HumanInputRequired)
@@ -151,7 +151,7 @@ def fixture_facilitate():
 #   contract_id MUST be op_fixture_mechanical_story_execute (evidence record test)
 # =============================================================================
 def fixture_mechanical():
-    o = base("op_fixture_mechanical_story_execute", "execute", "4-build-verify", "build-story", "run_story_step")
+    o = base("op_fixture_mechanical_story_execute", "execute", "4-build-verify", "quick-dev", "run_story_step")
     o["authority"]["mutation_policy"] = "allowed"
     o["authority"]["side_effect_policy"] = "write_project_files"
     o["authority"]["authority_sources"] = ["operation_contract", "lane_claim"]
@@ -397,7 +397,7 @@ def fixture_checkpoint():
 
 def fixture_correct_course():
     # named in design doc: correct-course-frustrated-user
-    o = base("op_fixture_correct_course_frustrated_user", "facilitate", "6-evolve", "correct-course", "address_user_frustration")
+    o = base("op_fixture_correct_course_frustrated_user", "facilitate", "6-evolve", "guidance-engine", "address_user_frustration")
     o["authority"]["mutation_policy"] = "forbidden"
     o["authority"]["missing_authority"] = ["human_explicit_direction"]
     o["human"]["input_requirement"] = "required"
@@ -442,7 +442,7 @@ def fixture_multi_agent_lane():
 # =============================================================================
 def fixture_already_done():
     # story already completed; re-execution is not needed -> read-only observe
-    o = base("op_fixture_already_done_story", "observe", "4-build-verify", "build-story", "story_already_done")
+    o = base("op_fixture_already_done_story", "observe", "4-build-verify", "quick-dev", "story_already_done")
     o["authority"]["mutation_policy"] = "forbidden"
     o["authority"]["missing_authority"] = ["completion_contract"]
     o["coordination_scope"]["completion"]["must_check_completion"] = True

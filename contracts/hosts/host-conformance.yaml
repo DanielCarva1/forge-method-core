@@ -1,0 +1,133 @@
+schema_version: "0.1"
+host_conformance:
+  contract_id: "host.common-borrowed-shell.v0"
+  authority: candidate_only
+  selected_host: null
+  released: false
+  field_verified: false
+  exact_host_execution: unknown
+  read_only_inputs:
+    host_origin_broker_conformance_ref: "contracts/spec/host-origin-broker-conformance-v0.yaml"
+    adapter_projection_policy_ref: "contracts/policies/host-adapter-manifest-projection-boundary.yaml"
+    treatment: read_only_non_authoritative
+  claim_separation:
+    - claim: runtime_recognition
+      independent_from: [read_only_mcp, installability, human_origin_assurance, governed_mutation, support]
+    - claim: read_only_mcp
+      independent_from: [runtime_recognition, installability, human_origin_assurance, governed_mutation, support]
+    - claim: installability
+      independent_from: [runtime_recognition, read_only_mcp, human_origin_assurance, governed_mutation, support]
+    - claim: human_origin_assurance
+      independent_from: [runtime_recognition, read_only_mcp, installability, governed_mutation, support]
+    - claim: governed_mutation
+      independent_from: [runtime_recognition, read_only_mcp, installability, human_origin_assurance, support]
+    - claim: support
+      independent_from: [runtime_recognition, read_only_mcp, installability, human_origin_assurance, governed_mutation]
+  candidates:
+    - host: codex
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+    - host: cursor
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+    - host: opencode
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+    - host: claude
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+    - host: pidev
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+    - host: forge_app
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
+  journeys:
+    - journey: install
+      outcome: candidate
+      host_client_responsibilities: [discover_candidate, install_owned_files, render_typed_diagnostics]
+      forge_core_responsibilities: [validate_contracts, return_typed_setup_gap, preserve_project_authority]
+    - journey: invoke
+      outcome: candidate
+      host_client_responsibilities: [translate_manifest, invoke_argv_without_shell_string]
+      forge_core_responsibilities: [classify_mutation, classify_authority, validate_contracts]
+    - journey: update
+      outcome: candidate
+      host_client_responsibilities: [preserve_prior_version_during_update, install_owned_files]
+      forge_core_responsibilities: [validate_contracts, preserve_project_authority, return_typed_setup_gap]
+    - journey: diagnose
+      outcome: candidate
+      host_client_responsibilities: [render_typed_diagnostics]
+      forge_core_responsibilities: [return_typed_setup_gap, reject_unknown_or_unauthorized_input]
+    - journey: recover
+      outcome: candidate
+      host_client_responsibilities: [remove_owned_integration_only, preserve_prior_version_during_update]
+      forge_core_responsibilities: [preserve_project_authority, validate_contracts]
+    - journey: unauthorized_mutation
+      outcome: unsupported
+      host_client_responsibilities: [reject_unauthorized_mutation_request]
+      forge_core_responsibilities: [admit_governed_mutation, reject_unknown_or_unauthorized_input]
+    - journey: fresh_chat
+      outcome: candidate
+      host_client_responsibilities: [start_without_hidden_chat_state]
+      forge_core_responsibilities: [require_explicit_context_each_chat, validate_contracts]

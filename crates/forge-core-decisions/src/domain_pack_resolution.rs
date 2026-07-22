@@ -392,6 +392,14 @@ fn validate_request_and_registry(
             "registry validity interval is inverted",
         );
     }
+    if registry.validate_remote_acquisition_metadata().is_err() {
+        issue(
+            issues,
+            DomainPackResolutionIssueCode::RegistryRecordMismatch,
+            "registry.remote_acquisition_metadata",
+            "registry remote artifact metadata is structurally invalid",
+        );
+    }
     if input.roots.len() > MAX_DOMAIN_PACK_RESOLUTION_ROOTS {
         resource_issue(issues, "roots", "root count exceeds 64");
     }
@@ -445,24 +453,23 @@ fn validate_current_lock(
             "current lock has an unsupported schema",
         );
     }
-    if lock.domain_pack_exact_lock.payload.project_id != input.project_id
-        || lock.domain_pack_exact_lock.payload.core.bundle_digest != input.core.bundle_digest
-        || lock.domain_pack_exact_lock.payload.core.policy_set_digest
-            != input.core.policy_set_digest
-    {
+    if lock.domain_pack_exact_lock.payload.project_id != input.project_id {
         issue(
             issues,
             DomainPackResolutionIssueCode::CurrentLockMismatch,
-            "current_lock.payload",
-            "current lock is not compatible with project and sealed core",
+            "current_lock.payload.project_id",
+            "current lock belongs to a different project",
         );
     }
-    if !valid_digest(&lock.domain_pack_exact_lock.lock_digest) {
+    if !valid_digest(&lock.domain_pack_exact_lock.lock_digest)
+        || canonical_digest(&lock.domain_pack_exact_lock.payload).as_deref()
+            != Some(lock.domain_pack_exact_lock.lock_digest.as_str())
+    {
         issue(
             issues,
             DomainPackResolutionIssueCode::InvalidDigest,
             "current_lock.lock_digest",
-            "invalid current lock digest",
+            "current lock digest does not match its canonical payload",
         );
     }
 }
@@ -552,18 +559,32 @@ fn record_matches_candidate(
     record: &DomainPackRegistryPackageRecord,
     candidate: &DomainPackResolutionCandidate,
 ) -> bool {
-    let fixture_digests = candidate
-        .package
+    let package = &candidate.package;
+    let artifacts = &record.artifacts;
+    let fixture_digests = package
         .fixtures
         .iter()
-        .map(|binding| binding.canonical_sha256.clone())
+        .map(|binding| binding.raw_sha256.clone())
         .collect::<Vec<_>>();
     record.identity == *candidate_identity(candidate)
-        && record.package_digest == candidate.package.package_digest
-        && record.manifest_digest == candidate.package.manifest.canonical_sha256
-        && record.content_digest == candidate.package.content.canonical_sha256
-        && record.license_digest == candidate.package.license.canonical_sha256
+        && record.package_digest == package.package_digest
+        // C6.2 registry record digest fields are immutable raw-byte pins. The
+        // semantic pins remain in the copied descriptor bindings below.
+        && record.manifest_digest == package.manifest.raw_sha256
+        && record.content_digest == package.content.raw_sha256
+        && record.license_digest == package.license.raw_sha256
         && sorted(record.fixture_digests.clone()) == sorted(fixture_digests)
+        && artifacts.manifest.binding == package.manifest
+        && artifacts.content.binding.artifact_ref == package.content.content_ref
+        && artifacts.content.binding.raw_sha256 == package.content.raw_sha256
+        && artifacts.content.binding.canonical_sha256 == package.content.canonical_sha256
+        && artifacts.license.binding == package.license
+        && artifacts.fixtures.len() == package.fixtures.len()
+        && artifacts
+            .fixtures
+            .iter()
+            .zip(&package.fixtures)
+            .all(|(descriptor, binding)| &descriptor.binding == binding)
         && valid_digest(&record.record_digest)
         && valid_digest(&record.package_digest)
         && valid_digest(&record.manifest_digest)
@@ -1232,9 +1253,9 @@ fn candidate_equivocation_key(candidate: &DomainPackResolutionCandidate) -> Stri
     format!(
         "{}|{}|{}|{}|{}",
         candidate.package.package_digest,
-        candidate.package.manifest.canonical_sha256,
-        candidate.package.content.canonical_sha256,
-        candidate.package.license.canonical_sha256,
+        candidate.package.manifest.raw_sha256,
+        candidate.package.content.raw_sha256,
+        candidate.package.license.raw_sha256,
         candidate.registry_record_digest.as_deref().unwrap_or("")
     )
 }

@@ -1,0 +1,761 @@
+schema_version: "0.1"
+artifact_kind: "canonical-campaign-manifest"
+campaign_id: "forge-product-gap-closure-p0-v1"
+status: "active"
+created_at: "2026-07-18"
+project: "forge-method-core"
+base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+source_checkpoint: "0.12.0"
+objective: >-
+  Implement every remaining product-gap source item without overstating evidence,
+  then run one explicit stabilization, publication, and field-evidence sequence.
+
+authority:
+  canonical_execution_authority: "contracts/plan/product-gap-closure-campaign-v1.yaml"
+  precedence:
+    - rank: 1
+      source: "contracts/plan/product-gap-closure-plan.yaml"
+      owns: "item identities, product outcomes, sequencing policy, and exit intent"
+    - rank: 2
+      source: "docs/product-status.md"
+      owns: "current source and evidence facts"
+    - rank: 3
+      source: "docs/product-gap-register.md"
+      owns: "accepted gaps, priority, classification, and closure semantics"
+    - rank: 4
+      source: "contracts/plan/agent-native-guidance-plan.yaml"
+      owns: "inherited authority boundaries and historical implementation lineage"
+    - rank: 5
+      source: "contracts/backlog/rust-only-core-backlog.yaml"
+      owns: "Rust-only, typed-authority, and legacy-forensic constraints"
+  conflict_rule: >-
+    Apply each source only inside its owned domain. The higher-ranked source wins
+    on overlap, but no source, checkpoint, or transcript may convert source
+    implementation into release, hosted, independent-review, or field evidence.
+
+story_inventory:
+  authority: "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
+  schema_version: "1.0"
+  current_record_count: 81
+  source_story_count: 76
+  evidence_story_count: 5
+  forensic_exclusion_count: 26
+  records_embedded: false
+
+constraints:
+  - "The product runtime and authority path remain Rust-only."
+  - "Python may be used only for repository tooling; no Python runtime authority is introduced."
+  - "Compiled and typed contracts outrank prose, fixtures, and conversational summaries."
+  - "Scheduling, checkpoints, and handoffs remain provider-neutral."
+  - "Unexecuted validation is always recorded as pending rather than passing."
+  - "Pre-existing user changes, .pi state, branches, and worktrees are preserved."
+
+campaign_scope:
+  active_item_ids:
+    - "C1.1"
+    - "C1.2"
+    - "C1.3"
+    - "C1.4"
+    - "C2.1"
+    - "C2.2"
+    - "C2.3"
+    - "C2.4"
+    - "C3.1"
+    - "C3.2"
+    - "C3.3"
+    - "C3.4"
+    - "C4.1"
+    - "C4.2"
+    - "C5.1"
+    - "C5.2"
+    - "C5.3"
+    - "C6.1"
+    - "C6.2"
+    - "C7.1"
+    - "C7.2"
+  deferred_item_ids: []
+  unlock_rule: >-
+    Source items are assignable whenever their source dependencies are ready.
+    C3.2 opens only after all source items and source stories close; C3.3 opens
+    after C3.2, and C3.4 opens after C3.3.
+
+status_vocabulary:
+  values:
+    - "planned"
+    - "in_progress"
+    - "blocked_external"
+    - "implemented_pending_evidence"
+    - "completed"
+  transitions:
+    planned: ["in_progress", "blocked_external"]
+    in_progress: ["implemented_pending_evidence", "blocked_external"]
+    blocked_external: ["in_progress", "implemented_pending_evidence"]
+    implemented_pending_evidence: ["completed", "in_progress", "blocked_external"]
+    completed: []
+
+category_vocabulary:
+  values:
+    - "partial_public_surface"
+    - "implementation_absent"
+    - "engineering_hardening_debt"
+    - "external_evidence_pending"
+  definitions:
+    partial_public_surface: "Some reusable source exists, but the promised public behavior is incomplete."
+    implementation_absent: "The promised source boundary is not yet implemented."
+    engineering_hardening_debt: "Source controls required for a trustworthy release remain incomplete."
+    external_evidence_pending: "The item primarily owns stabilization, publication, hosted, or field evidence."
+
+scheduling_vocabulary:
+  values:
+    - "pre_stabilization_implementation"
+    - "stabilization_gate"
+    - "post_stabilization_evidence"
+  definitions:
+    pre_stabilization_implementation: "All source, fixture, checker, and product-surface implementation uses continuous compile-only compiler feedback while runtime and heavy gates remain deferred; cargo check may execute build scripts and proc macros as compile-time behavior but must not execute project tests or binaries."
+    stabilization_gate: "The sole campaign item allowed to execute deferred runtime, project-linked-build, matrix, archive, and hosted gates after every source item and source story closes."
+    post_stabilization_evidence: "Publication, exact-public-asset, independent-review, and field evidence after stabilization passes."
+
+execution_policy:
+  max_concurrent_agents: 13
+  one_owner_per_item: true
+  dependency_ready_only: true
+  checkpoint_required: true
+  unknown_or_corrupt_state_admits_agents: false
+  implementation_claim: "implemented_pending_evidence"
+  compiler_feedback:
+    mode: "compiler_errors_as_work_queue"
+    active_before_item: "C3.2"
+    hermetic_launcher_only: true
+    canonical_launcher: "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py"
+    trusted_cargo_path: "/opt/forge-method/rust-1.85.1/bin/cargo"
+    trusted_rustc_path: "/opt/forge-method/rust-1.85.1/bin/rustc"
+    trusted_rustdoc_path: "/opt/forge-method/rust-1.85.1/bin/rustdoc"
+    trusted_path: "/usr/bin"
+    trusted_executable_invariants: "Cargo, rustc, rustdoc, every executable path component, and every PATH directory are root-owned non-symlinks, are not group/world writable, and are not writable by the invoking uid."
+    fixed_environment:
+      HOME: "/nonexistent"
+      CARGO_HOME: "/home/user/.cargo"
+      PATH: "/usr/bin"
+      RUSTC: "/opt/forge-method/rust-1.85.1/bin/rustc"
+      RUSTDOC: "/opt/forge-method/rust-1.85.1/bin/rustdoc"
+      LANG: "C.UTF-8"
+      LC_ALL: "C.UTF-8"
+    execution_boundary: "The canonical launcher rejects any mutable or symlinked Cargo/rustc/rustdoc chain, replaces the inherited environment, and exposes only root-owned /usr/bin for native child discovery. Compile-only cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, including building proc-macro artifacts; it must not execute project tests or binaries."
+    requires_structurally_valid_policy: true
+    coherent_batch_requirement: "Every coherent source batch passes a compile-only locked or frozen package-scoped check through the canonical hermetic launcher before work moves on."
+    periodic_workspace_requirement: "Accumulated source batches periodically pass /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets."
+    allowed_command_shapes:
+      - "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) (-p|--package) <workspace-package> [reviewed compile-only selectors]"
+      - "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) --workspace [reviewed compile-only selectors]"
+      - "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py metadata (--locked|--frozen) --no-deps --format-version 1"
+    allowed_check_flags:
+      - "--all-targets"
+      - "--all-features"
+      - "--features <feature-list>"
+      - "--no-default-features"
+      - "--lib"
+      - "--bins"
+      - "--examples"
+      - "--tests"
+      - "--benches"
+      - "--bin <name>"
+      - "--example <name>"
+      - "--test <name>"
+      - "--bench <name>"
+    forbidden_modifiers:
+      - "+toolchain"
+      - "--release or --profile"
+      - "--target or --target-dir"
+      - "--config or -Z"
+      - "inherited executable, native tool-discovery, config, proxy, shell, Python, Git, or Rust wrapper injection"
+      - "non-hermetic direct Cargo, unknown launchers, shell control operators, pipes, redirects, or substitutions"
+  deferred_heavy_stabilization:
+    active: true
+    authority_item: "C3.2"
+    opens_after_typed_source_closure: true
+    scope: "Runtime tests, project linked or release builds, matrices, archives, Cargo-backed project execution, and hosted stabilization commands open only after every typed C3.2 precondition; compile-time build-script and proc-macro execution inherent in admitted cargo check remains allowed before C3.2."
+    heavy_commands_forbidden_before_c3_2:
+      - "cargo test, including --no-run and every filter or target variant"
+      - "cargo run, build, install, bench, nextest, fuzz, clippy, doc, package, rustc, fix, clean, update, fetch, vendor, tree, generate-lockfile, aliases, plugins, and unknown subcommands"
+      - "direct rustc, rustup, rustfmt, rustdoc, clippy-driver, nextest, cross, and cargo-* tools"
+      - "toolchain overrides, release or custom profiles, target or target-dir selection, Cargo config, unstable flags, and environment or runner injection"
+      - "runtime tests, full suites, E2E, stress, failure injection, benchmarks, fuzzing, and doctests"
+      - "project linked builds, release builds, native-platform or MSRV matrices, archives, SBOMs, and install smoke"
+      - "exec, builtin, command, env, time, timeout, nice, nohup, script, stdbuf, ionice, corepack, xargs, find -exec, make, just, task, mise, direnv, nix/devenv, shell or language launchers, generic child launchers, aliases, functions, path shims, and unreviewed local scripts"
+      - "Cargo-backed generators or checkers that execute project binaries; admitted cargo check may execute build scripts and proc macros only as inherent compile-time behavior"
+      - "GitHub Actions, gh workflow or run execution, act, and CI triggers"
+    publication_commands_forbidden_before_c3_3:
+      - "cargo publish, login, owner, and yank"
+      - "git tag"
+      - "git push"
+      - "gh release"
+      - "release publication or public-asset mutation"
+    field_commands_forbidden_before_c3_4:
+      - "real-host or production-host journeys"
+      - "field evidence collection"
+      - "independent semantic or actor-separation review"
+    c3_2_does_not_lift:
+      - "publication commands"
+      - "field commands"
+      - "independent-review commands"
+
+stabilization:
+  item_id: "C3.2"
+  status: "planned"
+  opens_when:
+    logic: "all"
+    requirements:
+      - id: "all-source-items-complete"
+        authority: "contracts/plan/product-gap-closure-campaign-v1.yaml#items"
+        item_ids:
+          - "C1.1"
+          - "C1.2"
+          - "C1.3"
+          - "C1.4"
+          - "C2.1"
+          - "C2.2"
+          - "C2.3"
+          - "C2.4"
+          - "C3.1"
+          - "C4.1"
+          - "C4.2"
+          - "C5.1"
+          - "C5.2"
+          - "C5.3"
+          - "C6.1"
+          - "C6.2"
+          - "C7.1"
+          - "C7.2"
+        required_schedule_class: "pre_stabilization_implementation"
+        allowed_statuses: ["implemented_pending_evidence", "completed"]
+        required_owner: null
+      - id: "all-source-stories-complete"
+        authority: "contracts/plan/product-gap-closure-story-inventory-v1.yaml#current_records"
+        expected_current_record_count: 81
+        expected_source_story_count: 76
+        source_story_selector:
+          schedule_class: "pre_stabilization_source"
+        require_for_each_source_story:
+          status: "source_complete"
+          source_complete: true
+          owner: null
+          remaining_source_work: []
+      - id: "no-active-implementation-owners"
+        campaign_item_selector:
+          schedule_class: "pre_stabilization_implementation"
+        source_story_selector:
+          schedule_class: "pre_stabilization_source"
+        authorities:
+          - "contracts/plan/product-gap-closure-campaign-v1.yaml#items[schedule_class=pre_stabilization_implementation].owner"
+          - "contracts/plan/product-gap-closure-story-inventory-v1.yaml#current_records[schedule_class=pre_stabilization_source].owner"
+        required_active_owner_count: 0
+        stage_item_owner_excluded: "C3.2"
+      - id: "selected-exact-reference-host"
+        authority: "contracts/plan/product-gap-closure-plan.yaml#phases[C1-first-use-authority-vertical-slice].sequence[C1.1].screening_checkpoint.selected_reference_host"
+        required_kind_not: "none"
+        exact_version_required: true
+        decision_ref_required: true
+        affirmative_decision_status_required: "concluded_exact_version_affirmative"
+        canonical_decision_binding_required: true
+      - id: "valid-source-checkpoints"
+        campaign_item_checkpoints:
+          authority: "contracts/plan/product-gap-closure-campaign-v1.yaml#items[*].checkpoint"
+          required_for_item_ids:
+            - "C1.1"
+            - "C1.2"
+            - "C1.3"
+            - "C1.4"
+            - "C2.1"
+            - "C2.2"
+            - "C2.3"
+            - "C2.4"
+            - "C3.1"
+            - "C4.1"
+            - "C4.2"
+            - "C5.1"
+            - "C5.2"
+            - "C5.3"
+            - "C6.1"
+            - "C6.2"
+            - "C7.1"
+            - "C7.2"
+          accepted_kinds_ref: "contracts/plan/product-gap-closure-campaign-v1.yaml#resume_authority.accepted_checkpoint_kinds"
+          required_fields: ["kind", "state_ref", "base_commit", "updated_at"]
+          state_ref_must_resolve: true
+          base_commit_format: "40-lowercase-hex"
+          updated_at_format: "YYYY-MM-DD"
+        source_story_checkpoints:
+          authority: "contracts/plan/product-gap-closure-story-inventory-v1.yaml#current_records[*].checkpoint"
+          source_story_selector:
+            schedule_class: "pre_stabilization_source"
+          required_for_each_source_story: true
+          required_fields: ["kind", "state", "authority_ref", "authority_anchor", "participant", "generation"]
+          accepted_states: ["source_complete", "implemented_pending_evidence"]
+          supporting_predecessor_required_state: "source_complete"
+          authority_ref_must_resolve: true
+          authority_anchor_required: true
+      - id: "static-source-authority-validation"
+        manifest_dag_acyclic: true
+        c3_2_transitive_source_item_count: 18
+        story_inventory_counts_match: true
+        source_checkpoint_projections_valid: true
+  lifts_stabilization_commands_only: true
+  does_not_lift_publication_or_field_commands: true
+  completion_evidence:
+    - "Focused and cumulative workspace evidence"
+    - "Declared-MSRV evidence"
+    - "Native platform and release archive evidence"
+    - "Hosted timing and failure artifacts"
+
+items:
+  - id: "C1.1"
+    title: "Freeze the host-origin threat model and adapter contract"
+    phase: "C1"
+    priority: "P0"
+    gap_refs: ["GAP-001", "GAP-003"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "in_progress"
+    depends_on: []
+    owner: "coordinator"
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C1.1"
+      evidence_refs:
+        - "contracts/spec/C1.1-codex-host-capability-decision.yaml"
+        - "contracts/spec/C1.1-pi-host-capability-decision.yaml"
+        - "contracts/spec/C1.1-opencode-host-capability-decision.yaml"
+      remaining_work:
+        - "Select an exact-version host that satisfies the frozen origin boundary, or retain an evidence-backed external block."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-18"
+  - id: "C1.2"
+    title: "Implement the external broker component in Rust"
+    phase: "C1"
+    priority: "P0"
+    gap_refs: ["GAP-001", "GAP-003"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C1.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "crates/forge-core-authority/src/workflow_broker_control.rs"
+      evidence_refs:
+        - "crates/forge-core-authority/src/workflow_origin_broker.rs"
+        - "crates/forge-core-cli/src/workflow_broker_cmd.rs"
+        - "crates/forge-core-store/src/workflow_broker_admin.rs"
+        - "Recorded targeted locked all-target compilation: forge-core-authority and affected C1.2 packages."
+      remaining_work:
+        - "Select an exact-version host and external anchor before actual genesis, custody handoff, installation, activation, or field conformance; selected_host remains none."
+        - "Run deferred runtime, hostile, platform, hosted, release, and field evidence only at C3.2-C3.4."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C1.3"
+    title: "Ship one thin selected-host adapter"
+    phase: "C1"
+    priority: "P0"
+    gap_refs: ["GAP-001", "GAP-003"]
+    category: "implementation_absent"
+    schedule_class: "pre_stabilization_implementation"
+    status: "planned"
+    depends_on: ["C1.1", "C1.2"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C1.4"
+    title: "Prove the clean first-use path"
+    phase: "C1"
+    priority: "P0"
+    gap_refs: ["GAP-001", "GAP-003"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "planned"
+    depends_on: ["C1.2", "C1.3"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C2.1"
+    title: "Fail closed on linked-sidecar loss"
+    phase: "C2"
+    priority: "P0"
+    gap_refs: ["GAP-002", "GAP-004"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: []
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "crates/forge-core-cli/src/start_cmd.rs#linked-state-loss"
+      evidence_refs:
+        - "contracts/plan/product-gap-closure-plan.yaml#C2.1"
+      remaining_work:
+        - "Run deferred C3.2 runtime regression, failure-injection, linked-build, and cumulative stabilization evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-18"
+  - id: "C2.2"
+    title: "Add complete-state backup and restore contracts"
+    phase: "C2"
+    priority: "P0"
+    gap_refs: ["GAP-002", "GAP-004"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C2.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/c2.2-campaign-continuity-v1.yaml"
+      evidence_refs:
+        - "contracts/plan/c2.2-campaign-continuity-v1.yaml#checkpoint"
+        - "cargo-check:forge-core-store--all-targets:2026-07-20"
+        - "cargo-check:forge-core-eventlog--all-targets:2026-07-20"
+        - "cargo-check:forge-core-workflow-governance-tcb--all-targets:2026-07-20"
+        - "cargo-check:forge-core-kernel--all-targets:2026-07-18"
+        - "cargo-check:forge-core-domain-pack-learning-store--all-targets:2026-07-18"
+        - "cargo-check:forge-core-domain-pack-tcb--all-targets:2026-07-18"
+        - "cargo-check:forge-core-cli--all-targets:2026-07-18"
+      remaining_work:
+        - "Run deferred runtime, interruption, mixed-version, failure-injection, MSRV, platform, hosted-CI, release, and field-evidence gates."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C2.3"
+    title: "Implement the owned product lifecycle"
+    phase: "C2"
+    priority: "P0"
+    gap_refs: ["GAP-002", "GAP-004"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C2.1", "C2.2"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C2.3"
+      evidence_refs:
+        - "contracts/stories/C2.3-owned-product-lifecycle.yaml"
+        - "contracts/spec/product-lifecycle-v0.yaml"
+        - "crates/forge-core-contracts/src/product_lifecycle.rs"
+        - "crates/forge-core-contracts/src/project_reinitialize.rs"
+        - "crates/forge-core-store/src/project_reinitialize.rs"
+        - "crates/forge-core-command-surface/src/lib.rs"
+        - "crates/forge-core-cli/src/product_lifecycle_cmd.rs"
+        - "crates/forge-core-cli/src/project_reinitialize_cmd.rs"
+        - "docs/product-lifecycle.md"
+        - "Targeted locked all-target compile-only check passed: forge-core-contracts; forge-core-store; forge-core-command-surface; forge-core-cli; forge-core-validate."
+      remaining_work:
+        - "Run deferred Rust tests and execute the C2.4 partial/interrupted/mixed-version plus reinitialize interruption/retry corpus."
+        - "Run failure-injection, stress, fuzz, benchmark, MSRV/platform, hosted-CI, publication, release, downloaded-asset, real-host, and field evidence in the final stabilization campaign."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C2.4"
+    title: "Exercise interrupted and mixed-version states"
+    phase: "C2"
+    priority: "P0"
+    gap_refs: ["GAP-002", "GAP-004"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C2.1", "C2.2", "C2.3"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/stories/C2.4-product-lifecycle-recovery-corpus.yaml"
+      evidence_refs:
+        - "contracts/spec/C2.4-product-lifecycle-recovery-v0.yaml"
+        - "docs/fixtures/product-lifecycle-recovery-v0/C2.4-product-lifecycle-recovery-corpus.yaml"
+        - "crates/forge-core-cli/tests/product_lifecycle_recovery_corpus_e2e.rs"
+      remaining_work:
+        - "Execute the Rust recovery corpus and mixed-version/failure-injection campaigns."
+        - "Run MSRV/platform, hosted-CI, release, downloaded-asset, real-host, and field evidence gates."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C3.1"
+    title: "Close release-control debts"
+    phase: "C3"
+    priority: "P0"
+    gap_refs: ["GAP-005", "GAP-006"]
+    category: "engineering_hardening_debt"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: []
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "scripts/build-release-set-manifest.py"
+      evidence_refs:
+        - ".github/workflows/release.yml"
+        - "scripts/smoke-release-install.py"
+        - "scripts/build-release-set-manifest.py"
+        - "scripts/test-release-set-manifest.py"
+      remaining_work:
+        - "Run the native ARM64 workflow, release-set source test, archive, hosted, publication, and downloaded-asset evidence only in their authorized later stages."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C3.2"
+    title: "Run cumulative source and hosted gates"
+    phase: "C3"
+    priority: "P0"
+    gap_refs: ["GAP-005", "GAP-006"]
+    category: "external_evidence_pending"
+    schedule_class: "stabilization_gate"
+    status: "planned"
+    depends_on: ["C1.4", "C2.4", "C3.1", "C4.2", "C5.3", "C7.2"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C3.3"
+    title: "Publish and independently verify the matching release"
+    phase: "C3"
+    priority: "P0"
+    gap_refs: ["GAP-005", "GAP-006"]
+    category: "external_evidence_pending"
+    schedule_class: "post_stabilization_evidence"
+    status: "planned"
+    depends_on: ["C3.2"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C3.4"
+    title: "Collect real-host and independent-review evidence"
+    phase: "C3"
+    priority: "P0"
+    gap_refs: ["GAP-005", "GAP-006"]
+    category: "external_evidence_pending"
+    schedule_class: "post_stabilization_evidence"
+    status: "planned"
+    depends_on: ["C1.4", "C3.3"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C4.1"
+    title: "Apply the frozen conformance contract to remaining named hosts"
+    phase: "C4"
+    priority: "P1"
+    gap_refs: ["GAP-010"]
+    category: "implementation_absent"
+    schedule_class: "pre_stabilization_implementation"
+    status: "planned"
+    depends_on: ["C1.4"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C4.2"
+    title: "Publish a supported-host capability matrix"
+    phase: "C4"
+    priority: "P1"
+    gap_refs: ["GAP-010"]
+    category: "implementation_absent"
+    schedule_class: "pre_stabilization_implementation"
+    status: "planned"
+    depends_on: ["C4.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint: null
+  - id: "C5.1"
+    title: "Specify post-BuildVerify durable episodes"
+    phase: "C5"
+    priority: "P1"
+    gap_refs: ["GAP-007"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: []
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C5.1"
+      evidence_refs:
+        - "contracts/spec/post-build-verify-episode-v0.yaml"
+        - "crates/forge-core-contracts/src/post_build_verify_episode.rs"
+        - "crates/forge-core-decisions/src/post_build_verify_episode.rs"
+        - "Targeted compile-only --all-targets checks green: forge-core-contracts; forge-core-decisions."
+      remaining_work:
+        - "C5.2 guarded advancement and C5.3 complete replacement-continuity source are implemented pending deferred evidence."
+        - "Run deferred C3.2 runtime and heavy/stabilization tests and hosted CI, then C3.3-C3.4 publication and field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C5.2"
+    title: "Implement guarded phase advancement"
+    phase: "C5"
+    priority: "P1"
+    gap_refs: ["GAP-007"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C5.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C5.2"
+      evidence_refs:
+        - "contracts/spec/post-build-verify-episode-v0.yaml"
+        - "contracts/stories/C5.2-guarded-phase-advancement.yaml"
+        - "contracts/stories/FRUST-020-operation-contract-planning.yaml"
+        - "contracts/stories/FRUST-030-guide-protocol.yaml"
+        - "contracts/guidance/guide-protocol.yaml"
+        - "contracts/stories/FRUST-031-funnel-autonomy.yaml"
+        - "contracts/policies/funnel-autonomy.yaml"
+        - "Targeted compile-only --all-targets checks green for the affected C5.2 source batches."
+      remaining_work:
+        - "C5.3 complete repeated-episode persistence and authority-free replacement recovery source are implemented pending deferred evidence."
+        - "Run deferred C3.2 runtime and heavy/stabilization tests and hosted CI, then C3.3-C3.4 publication and field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C5.3"
+    title: "Prove replacement-agent operation"
+    phase: "C5"
+    priority: "P1"
+    gap_refs: ["GAP-007"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C5.2"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C5.3"
+      evidence_refs:
+        - "contracts/stories/C5.3-replacement-agent-continuity.yaml"
+        - "crates/forge-core-contracts/src/workflow_governance.rs"
+        - "crates/forge-core-workflow-governance-tcb/src/lib.rs"
+        - "crates/forge-core-workflow-governance-tcb/tests/workflow_governance_ledger.rs"
+        - "crates/forge-core-kernel/src/workflow_governance/adapter.rs"
+        - "contracts/evals/minimal-coordination-eval-suite.yaml"
+        - "Targeted compile-only --all-targets checks green: forge-core-workflow-governance-tcb; forge-core-kernel."
+      remaining_work:
+        - "Run deferred Rust tests and fresh-process/runtime integration, failure-injection, stress, fuzz, MSRV/platform, and hosted-CI evidence after every source story compiles."
+        - "Run publication, release, independent verification, real-host, and field evidence only after stabilization passes."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C6.1"
+    title: "Derive install, upgrade, rollback, remove, and rebase operations"
+    phase: "C6"
+    priority: "P2"
+    gap_refs: ["GAP-008"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: []
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C6.1"
+      evidence_refs:
+        - "crates/forge-core-contracts/src/domain_pack_lifecycle.rs"
+        - "crates/forge-core-decisions/src/domain_pack_acquisition.rs"
+        - "crates/forge-core-domain-pack-tcb/src/lib.rs"
+        - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+        - "Targeted compile-only checks green: forge-core-contracts; forge-core-decisions --all-targets; forge-core-domain-pack-tcb --all-targets; forge-core-cli --all-targets."
+      remaining_work:
+        - "Run deferred C3.2 runtime tests, heavy/stabilization tests, failure injection, project-linked and release builds, platform and MSRV matrices, archive checks, and hosted CI."
+        - "Run deferred C3.3 release/publication evidence."
+        - "Run deferred C3.4 independent semantic review, real-host, and field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C6.2"
+    title: "Add immutable remote acquisition"
+    phase: "C6"
+    priority: "P2"
+    gap_refs: ["GAP-008"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C6.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C6.2"
+      evidence_refs:
+        - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
+        - "crates/forge-core-contracts/src/domain_pack_remote_acquisition.rs"
+        - "crates/forge-core-authority/src/domain_pack_supply_chain.rs"
+        - "crates/forge-core-decisions/src/domain_pack_remote_acquisition.rs"
+        - "crates/forge-core-domain-pack-tcb/src/lib.rs"
+        - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+        - "Targeted compile-only --all-targets checks green: forge-core-contracts; forge-core-decisions; forge-core-command-surface; forge-core-cli."
+      remaining_work:
+        - "Keep the current CLI local-only; any selected transport owner must execute the signed derived attempts without acquiring trust, install, commit, or activation authority."
+        - "Run deferred C3.2 runtime tests, heavy/stabilization tests, failure injection, project-linked and release builds, platform and MSRV matrices, archive checks, and hosted CI."
+        - "Run deferred C3.3 release/publication evidence."
+        - "Run deferred C3.4 independent semantic review, real-host, and field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C7.1"
+    title: "Productize existing authoring, learning, and compatibility primitives"
+    phase: "C7"
+    priority: "P2"
+    gap_refs: ["GAP-009"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C6.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C7.1"
+      evidence_refs:
+        - "contracts/spec/domain-pack-authoring-v0.yaml"
+        - "crates/forge-core-contracts/src/domain_pack_authoring.rs"
+        - "crates/forge-core-decisions/src/domain_pack_authoring.rs"
+        - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+        - "crates/forge-core-command-surface/src/lib.rs"
+        - "Targeted compile-only --all-targets checks green: forge-core-contracts; forge-core-decisions; forge-core-command-surface; forge-core-cli."
+      remaining_work:
+        - "C7.2 owns packaging, external-signing evidence, independent-review readiness, publication-candidate/catalog evolution, revocation, and evolution source."
+        - "Run deferred C3.2 runtime and heavy/stabilization tests and hosted CI."
+        - "Run deferred C3.3 publication evidence and C3.4 independent-review, real-host, and field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+  - id: "C7.2"
+    title: "Ship package, sign, review, publish, revoke, and evolve workflows"
+    phase: "C7"
+    priority: "P2"
+    gap_refs: ["GAP-009"]
+    category: "partial_public_surface"
+    schedule_class: "pre_stabilization_implementation"
+    status: "implemented_pending_evidence"
+    depends_on: ["C6.2", "C7.1"]
+    owner: null
+    blocked_reason: null
+    checkpoint:
+      kind: "campaign-item-checkpoint"
+      state_ref: "contracts/plan/product-gap-closure-plan.yaml#C7.2"
+      evidence_refs:
+        - "contracts/spec/domain-pack-publication-v0.yaml"
+        - "crates/forge-core-contracts/src/domain_pack_publication.rs"
+        - "crates/forge-core-decisions/src/domain_pack_publication.rs"
+        - "Targeted compile-only --all-targets checks green: forge-core-contracts; forge-core-decisions."
+      remaining_work:
+        - "Existing authority owners must independently construct canonical signing bytes, verify external signatures, apply policy, and admit/anchor any catalog."
+        - "No C7.2 CLI, network transport, remote publication, trust, lifecycle commit, installation, or activation source was added."
+        - "Run deferred C3.2 runtime/heavy stabilization and hosted CI, C3.3 publication, and C3.4 independent-review/field evidence."
+      base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
+      updated_at: "2026-07-20"
+
+resume_authority:
+  canonical_manifest: "contracts/plan/product-gap-closure-campaign-v1.yaml"
+  accepted_checkpoint_kinds:
+    - "campaign-item-checkpoint"
+    - "c2.2-continuity-projection"
+  forbidden_resume_sources:
+    - "chat summaries"
+    - "provider transcripts"
+    - ".pi/subagentura-state.json"
+    - "display-only task lists"
+    - "unreferenced sidecar files"

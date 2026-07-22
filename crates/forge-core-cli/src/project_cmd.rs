@@ -7,13 +7,14 @@
 
 use forge_core_command_surface::COMMAND_PROJECT;
 use forge_core_contracts::{
-    CliEnvelope, ExitReason, ProjectLinkDocument, RepoPath, StableId, PROJECT_LINK_FILE_NAME,
-    PROJECT_LINK_SCHEMA_VERSION,
+    CliEnvelope, ExitReason, ProjectLinkDocument, RepoPath, StableId, StateLossCause,
+    PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
 };
 use serde::Serialize;
+use sha2::{Digest as _, Sha256};
 use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 
 use crate::cli_error::ExitError;
@@ -39,6 +40,12 @@ pub struct ProjectResolvePayload {
     /// fall back to `1-discovery` as the funnel entry point.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_phase: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectResolveObservation {
+    pub payload: ProjectResolvePayload,
+    pub project_link_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -164,6 +171,13 @@ pub enum ProjectInitError {
     ConsumerLocalStateExists {
         path: String,
     },
+    UnsafeFreshInitTarget {
+        path: String,
+        detail: String,
+    },
+    ExistingInitTargetWithoutProjectLink {
+        path: String,
+    },
     /// The consumer root is nested inside another git repository (it is not a
     /// git root of its own). Initializing Forge here would create sidecar
     /// state inside the parent repo. The user should run `git init` on the
@@ -191,11 +205,19 @@ pub enum ProjectInitError {
         source: String,
         exit_reason: ExitReason,
     },
+    ExistingProjectStateUnavailable {
+        cause: StateLossCause,
+        detail: String,
+    },
     ExistingProjectLinkMismatch(Box<ProjectLinkMismatch>),
     ProjectLinkSerialize {
         source: String,
     },
     CreateStateDir {
+        path: String,
+        source: String,
+    },
+    DirectorySync {
         path: String,
         source: String,
     },
@@ -263,6 +285,7 @@ impl ProjectInitError {
             | Self::StateRootOutsideSidecar { .. }
             | Self::ConsumerLocalStateRoot { .. }
             | Self::ConsumerLocalStateExists { .. }
+            | Self::UnsafeFreshInitTarget { .. }
             | Self::StateRootNotDotForgeMethod { .. }
             | Self::ExistingProjectLinkMismatch { .. }
             | Self::ProjectLinkSerialize { .. }
@@ -270,10 +293,13 @@ impl ProjectInitError {
             | Self::SidecarInsideAnotherRepo { .. } => ExitReason::InvalidDecisionShape,
             Self::ExistingProjectLinkInvalid { exit_reason, .. } => *exit_reason,
             Self::LinkExistsRace { .. } => ExitReason::Conflict,
-            Self::RootNotFound { .. }
+            Self::ExistingProjectStateUnavailable { .. }
+            | Self::ExistingInitTargetWithoutProjectLink { .. }
+            | Self::RootNotFound { .. }
             | Self::RootNotDirectory { .. }
             | Self::RootCanonicalize { .. }
             | Self::MissingRootDirectoryName { .. }
+            | Self::DirectorySync { .. }
             | Self::CreateStateDir { .. }
             | Self::LedgerCreate { .. }
             | Self::LedgerSync { .. }
@@ -376,6 +402,14 @@ impl fmt::Display for ProjectInitError {
                 f,
                 "consumer project already has local Forge state at '{path}'; move or quarantine it into a Forge Runtime Sidecar before running project init"
             ),
+            Self::UnsafeFreshInitTarget { path, detail } => write!(
+                f,
+                "fresh project initialization target '{path}' is unsafe: {detail}; refusing to follow or replace it"
+            ),
+            Self::ExistingInitTargetWithoutProjectLink { path } => write!(
+                f,
+                "Forge sidecar/state target already exists at '{path}' without a Project Link; refusing to normalize or claim possible prior authority"
+            ),
             Self::RootNestedInAnotherRepo { root, parent_repo } => write!(
                 f,
                 "consumer root '{root}' is nested inside another git repository ('{parent_repo}'); \
@@ -412,11 +446,19 @@ impl fmt::Display for ProjectInitError {
                 mismatch.found_sidecar_root,
                 mismatch.found_state_root,
             ),
+            Self::ExistingProjectStateUnavailable { cause, detail } => write!(
+                f,
+                "existing Project Link proves prior initialization, but linked state is unavailable ({}): {detail}; automatic recreation is forbidden",
+                cause.as_str()
+            ),
             Self::ProjectLinkSerialize { source } => {
                 write!(f, "could not serialize Forge Project Link: {source}")
             }
             Self::CreateStateDir { path, source } => {
                 write!(f, "could not create Forge state directory '{path}': {source}")
+            }
+            Self::DirectorySync { path, source } => {
+                write!(f, "could not durably sync Forge directory '{path}': {source}")
             }
             Self::LedgerCreate { path, source } => {
                 write!(f, "could not create Forge ledger '{path}': {source}")
@@ -486,6 +528,169 @@ fn display_path(path: &Path) -> String {
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
 
+/// Inspect the base authority shape owned by an existing Project Link.
+///
+/// This is shared by `start` and `project init` so no alternate bootstrap path
+/// can normalize missing, partial, inaccessible, or substituted linked state.
+pub(crate) fn linked_state_loss_detail(
+    resolved: &ProjectResolvePayload,
+) -> Option<(StateLossCause, String)> {
+    if let Some(link_path) = resolved.link_path.as_deref() {
+        if let Some(issue) = linked_entry_issue(
+            Path::new(link_path),
+            "Project Link",
+            false,
+            StateLossCause::Uninspectable,
+        ) {
+            return Some(issue);
+        }
+    }
+
+    let sidecar_root = Path::new(&resolved.sidecar_root);
+    if let Some(issue) = linked_entry_issue(
+        sidecar_root,
+        "linked sidecar root",
+        true,
+        StateLossCause::MissingSidecar,
+    ) {
+        return Some(issue);
+    }
+
+    let state_root = Path::new(&resolved.state_root);
+    if let Some(issue) = linked_entry_issue(
+        state_root,
+        "linked state root",
+        true,
+        StateLossCause::MissingStateRoot,
+    ) {
+        return Some(issue);
+    }
+
+    // These are the base markers created by `project init`. Workflow-specific
+    // ledgers are intentionally not required: before the first `workflow init`,
+    // their absence is legitimate. Complete-authority detection belongs to the
+    // versioned backup manifest and restore protocol.
+    for relative in [
+        "artifacts",
+        "claims-active",
+        "evidence",
+        "handoffs/expired-claims",
+        "index",
+        "locks",
+        "traces",
+        "wal",
+    ] {
+        let label = format!("required {relative} state directory");
+        if let Some(issue) = linked_entry_issue(
+            &state_root.join(relative),
+            &label,
+            true,
+            StateLossCause::IncompleteState,
+        ) {
+            return Some(issue);
+        }
+    }
+
+    for relative in [
+        "ledger.ndjson",
+        "wal/replay.fmr1",
+        "replay-wal.manifest.json",
+    ] {
+        let label = format!("required {relative} authority marker");
+        if let Some(issue) = linked_entry_issue(
+            &state_root.join(relative),
+            &label,
+            false,
+            StateLossCause::IncompleteState,
+        ) {
+            return Some(issue);
+        }
+    }
+    None
+}
+
+fn linked_entry_issue(
+    path: &Path,
+    label: &str,
+    expect_directory: bool,
+    missing_cause: StateLossCause,
+) -> Option<(StateLossCause, String)> {
+    if let Some(issue) = linked_path_component_issue(path, label) {
+        return Some(issue);
+    }
+
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == ErrorKind::NotFound => {
+            return Some((missing_cause, format!("the {label} does not exist")));
+        }
+        Err(source) => return Some(linked_inspection_error(label, &source)),
+    };
+    if metadata.file_type().is_symlink() {
+        return Some((
+            StateLossCause::SymlinkSubstitution,
+            format!("the {label} is a symbolic link"),
+        ));
+    }
+    if expect_directory && !metadata.is_dir() {
+        return Some((
+            StateLossCause::IncompleteState,
+            format!("the {label} is not a directory"),
+        ));
+    }
+    if !expect_directory && !metadata.is_file() {
+        return Some((
+            StateLossCause::IncompleteState,
+            format!("the {label} is not a regular file"),
+        ));
+    }
+
+    let access_result = if expect_directory {
+        fs::read_dir(path).map(|_| ())
+    } else {
+        fs::File::open(path).map(|_| ())
+    };
+    access_result
+        .err()
+        .map(|source| linked_inspection_error(label, &source))
+}
+
+fn linked_path_component_issue(path: &Path, label: &str) -> Option<(StateLossCause, String)> {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if matches!(component, Component::Prefix(_) | Component::RootDir) {
+            continue;
+        }
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Some((
+                    StateLossCause::SymlinkSubstitution,
+                    format!("the {label} path contains a symbolic link"),
+                ));
+            }
+            Ok(_) => {}
+            Err(source) if source.kind() == ErrorKind::NotFound => return None,
+            Err(source) => return Some(linked_inspection_error(label, &source)),
+        }
+    }
+    None
+}
+
+fn linked_inspection_error(label: &str, source: &std::io::Error) -> (StateLossCause, String) {
+    if source.kind() == ErrorKind::PermissionDenied {
+        (
+            StateLossCause::PermissionDenied,
+            format!("the {label} cannot be inspected (permission denied)"),
+        )
+    } else {
+        (
+            StateLossCause::Uninspectable,
+            format!("the {label} cannot be inspected ({:?})", source.kind()),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProjectInitPlan {
     project_id: String,
@@ -495,6 +700,111 @@ struct ProjectInitPlan {
     state_link: String,
     sidecar_root: PathBuf,
     state_root: PathBuf,
+}
+
+fn validate_fresh_init_target(plan: &ProjectInitPlan) -> Result<(), ProjectInitError> {
+    for (path, label) in [
+        (&plan.sidecar_root, "sidecar root"),
+        (&plan.state_root, "state root"),
+    ] {
+        if let Some((_cause, detail)) = linked_path_component_issue(path, label) {
+            return Err(ProjectInitError::UnsafeFreshInitTarget {
+                path: display_path(path),
+                detail,
+            });
+        }
+    }
+    match fs::symlink_metadata(&plan.sidecar_root) {
+        Ok(_) => Err(ProjectInitError::ExistingInitTargetWithoutProjectLink {
+            path: display_path(&plan.sidecar_root),
+        }),
+        Err(source) if source.kind() == ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(ProjectInitError::UnsafeFreshInitTarget {
+            path: display_path(&plan.sidecar_root),
+            detail: source.to_string(),
+        }),
+    }
+}
+
+#[cfg(not(windows))]
+fn sync_directory(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
+}
+
+#[cfg(windows)]
+fn sync_directory(path: &Path) -> io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?
+        .sync_all()
+}
+
+fn sync_init_directory(path: &Path) -> Result<(), ProjectInitError> {
+    sync_directory(path).map_err(|source| ProjectInitError::DirectorySync {
+        path: display_path(path),
+        source: source.to_string(),
+    })
+}
+
+fn cleanup_reserved_state_roots(created: &[PathBuf]) {
+    for path in created.iter().rev() {
+        // Remove only empty directories reserved by this attempt. Any concurrent
+        // content makes removal fail closed and is preserved for inspection.
+        if fs::remove_dir(path).is_ok() {
+            if let Some(parent) = path.parent() {
+                let _ = sync_directory(parent);
+            }
+        }
+    }
+}
+
+fn reserve_fresh_state_roots(plan: &ProjectInitPlan) -> Result<Vec<PathBuf>, ProjectInitError> {
+    let mut created = Vec::new();
+    let mut current = plan.sidecar_root.clone();
+    if let Err(source) = fs::create_dir(&current) {
+        return Err(ProjectInitError::CreateStateDir {
+            path: display_path(&current),
+            source: source.to_string(),
+        });
+    }
+    created.push(current.clone());
+    if let Some(parent) = current.parent() {
+        if let Err(error) = sync_init_directory(parent) {
+            cleanup_reserved_state_roots(&created);
+            return Err(error);
+        }
+    }
+
+    let relative_state = plan
+        .state_root
+        .strip_prefix(&plan.sidecar_root)
+        .expect("validated state root is inside sidecar root");
+    for component in relative_state.components() {
+        if matches!(component, Component::CurDir) {
+            continue;
+        }
+        current.push(component.as_os_str());
+        if let Err(source) = fs::create_dir(&current) {
+            cleanup_reserved_state_roots(&created);
+            return Err(ProjectInitError::CreateStateDir {
+                path: display_path(&current),
+                source: source.to_string(),
+            });
+        }
+        created.push(current.clone());
+        if let Some(parent) = current.parent() {
+            if let Err(error) = sync_init_directory(parent) {
+                cleanup_reserved_state_roots(&created);
+                return Err(error);
+            }
+        }
+    }
+    Ok(created)
 }
 
 /// Initializes a Forge project at `root`, creating the sidecar state tree
@@ -516,11 +826,27 @@ pub fn init_project(
     let plan = build_init_plan(&root, project_id, sidecar_root, state_root)?;
     reject_existing_consumer_local_state(&plan.project_root)?;
     validate_repo_identity(&plan.project_root, &plan.sidecar_root)?;
-    if plan.link_path.exists() {
-        return init_existing_project_link(&plan);
+    match fs::symlink_metadata(&plan.link_path) {
+        Ok(_) => return init_existing_project_link(&plan),
+        Err(source) if source.kind() == ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(ProjectInitError::ExistingProjectLinkInvalid {
+                path: display_path(&plan.link_path),
+                source: source.to_string(),
+                exit_reason: ExitReason::EnvConfig,
+            });
+        }
     }
-    create_state_tree(&plan.state_root)?;
-    write_project_link_atomically(&plan)?;
+    validate_fresh_init_target(&plan)?;
+    // Reserve dedicated sidecar/state directories with create-new semantics.
+    // No authority marker is written before the create-if-absent Project Link
+    // wins; a losing initializer removes only its still-empty reservations.
+    let reserved = reserve_fresh_state_roots(&plan)?;
+    if let Err(error) = write_project_link_atomically(&plan) {
+        cleanup_reserved_state_roots(&reserved);
+        return Err(error);
+    }
+    populate_fresh_state_tree(&plan.state_root)?;
     Ok(project_init_payload(&plan, ProjectInitStatus::Initialized))
 }
 
@@ -853,7 +1179,9 @@ fn init_existing_project_link(
         )));
     }
 
-    create_state_tree(&plan.state_root)?;
+    if let Some((cause, detail)) = linked_state_loss_detail(&existing) {
+        return Err(ProjectInitError::ExistingProjectStateUnavailable { cause, detail });
+    }
     Ok(project_init_payload(
         plan,
         ProjectInitStatus::AlreadyInitialized,
@@ -872,20 +1200,20 @@ fn project_init_payload(plan: &ProjectInitPlan, status: ProjectInitStatus) -> Pr
     }
 }
 
-fn create_state_tree(state_root: &Path) -> Result<(), ProjectInitError> {
-    let dirs = [
-        state_root.to_path_buf(),
-        state_root.join("artifacts"),
-        state_root.join("claims-active"),
-        state_root.join("evidence"),
-        state_root.join("handoffs").join("expired-claims"),
-        state_root.join("index"),
-        state_root.join("locks"),
-        state_root.join("traces"),
-        state_root.join("wal"),
-    ];
-    for dir in dirs {
-        fs::create_dir_all(&dir).map_err(|source| ProjectInitError::CreateStateDir {
+fn populate_fresh_state_tree(state_root: &Path) -> Result<(), ProjectInitError> {
+    for relative in [
+        "artifacts",
+        "claims-active",
+        "evidence",
+        "handoffs",
+        "handoffs/expired-claims",
+        "index",
+        "locks",
+        "traces",
+        "wal",
+    ] {
+        let dir = state_root.join(relative);
+        fs::create_dir(&dir).map_err(|source| ProjectInitError::CreateStateDir {
             path: display_path(&dir),
             source: source.to_string(),
         })?;
@@ -899,40 +1227,21 @@ fn create_state_tree(state_root: &Path) -> Result<(), ProjectInitError> {
     })?;
 
     let ledger = state_root.join("ledger.ndjson");
-    if ledger.exists() {
-        if !ledger.is_file() {
-            return Err(ProjectInitError::LedgerNotFile {
-                path: display_path(&ledger),
-            });
-        }
-        return Ok(());
-    }
-
-    match OpenOptions::new()
+    let file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&ledger)
-    {
-        Ok(file) => file
-            .sync_all()
-            .map_err(|source| ProjectInitError::LedgerSync {
-                path: display_path(&ledger),
-                source: source.to_string(),
-            }),
-        Err(source) if source.kind() == ErrorKind::AlreadyExists => {
-            if ledger.is_file() {
-                Ok(())
-            } else {
-                Err(ProjectInitError::LedgerNotFile {
-                    path: display_path(&ledger),
-                })
-            }
-        }
-        Err(source) => Err(ProjectInitError::LedgerCreate {
+        .map_err(|source| ProjectInitError::LedgerCreate {
             path: display_path(&ledger),
             source: source.to_string(),
-        }),
-    }
+        })?;
+    file.sync_all()
+        .map_err(|source| ProjectInitError::LedgerSync {
+            path: display_path(&ledger),
+            source: source.to_string(),
+        })?;
+    sync_init_directory(&state_root.join("handoffs"))?;
+    sync_init_directory(state_root)
 }
 
 /// Write the initial `state.yaml` at `<state_root>/state.yaml` carrying the
@@ -1007,9 +1316,18 @@ fn write_project_link_atomically(plan: &ProjectInitPlan) -> Result<(), ProjectIn
         })?;
     drop(temp);
 
-    match fs::rename(&temp_path, &plan.link_path) {
-        Ok(()) => Ok(()),
-        Err(_source) if plan.link_path.exists() => {
+    // A hard link in the same directory is an atomic create-if-absent publish:
+    // unlike rename, it never replaces a destination that appeared concurrently.
+    match fs::hard_link(&temp_path, &plan.link_path) {
+        Ok(()) => {
+            let _ = fs::remove_file(&temp_path);
+            let parent = plan
+                .link_path
+                .parent()
+                .expect("validated Project Link has a parent directory");
+            sync_init_directory(parent)
+        }
+        Err(_source) if fs::symlink_metadata(&plan.link_path).is_ok() => {
             let _ = fs::remove_file(&temp_path);
             Err(ProjectInitError::LinkExistsRace {
                 path: display_path(&plan.link_path),
@@ -1049,6 +1367,12 @@ fn temp_project_link_path(link_path: &Path) -> PathBuf {
 /// and link/state-related variants when the project link points at a
 /// non-existent or malformed state root.
 pub fn resolve_project(root: &Path) -> Result<ProjectResolvePayload, ProjectResolveError> {
+    resolve_project_observed(root).map(|observation| observation.payload)
+}
+
+pub(crate) fn resolve_project_observed(
+    root: &Path,
+) -> Result<ProjectResolveObservation, ProjectResolveError> {
     if !root.exists() {
         return Err(ProjectResolveError::RootNotFound {
             root: display_path(root),
@@ -1061,12 +1385,18 @@ pub fn resolve_project(root: &Path) -> Result<ProjectResolvePayload, ProjectReso
             source: source.to_string(),
         })?;
     let link_path = root.join(PROJECT_LINK_FILE_NAME);
-    if link_path.exists() {
-        return resolve_from_link(&root, &link_path);
+    match fs::symlink_metadata(&link_path) {
+        Ok(_) => resolve_from_link_observed(&root, &link_path),
+        Err(source) if source.kind() == ErrorKind::NotFound => {
+            Err(ProjectResolveError::MissingProjectLink {
+                root: display_path(&root),
+            })
+        }
+        Err(source) => Err(ProjectResolveError::LinkRead {
+            path: display_path(&link_path),
+            source: source.to_string(),
+        }),
     }
-    Err(ProjectResolveError::MissingProjectLink {
-        root: display_path(&root),
-    })
 }
 
 /// Read the current phase from `<state_root>/state.yaml`, returning the raw
@@ -1096,6 +1426,13 @@ fn resolve_from_link(
     project_root: &Path,
     link_path: &Path,
 ) -> Result<ProjectResolvePayload, ProjectResolveError> {
+    resolve_from_link_observed(project_root, link_path).map(|observation| observation.payload)
+}
+
+fn resolve_from_link_observed(
+    project_root: &Path,
+    link_path: &Path,
+) -> Result<ProjectResolveObservation, ProjectResolveError> {
     let raw = fs::read_to_string(link_path).map_err(|source| ProjectResolveError::LinkRead {
         path: display_path(link_path),
         source: source.to_string(),
@@ -1117,15 +1454,19 @@ fn resolve_from_link(
     } else {
         None
     };
-    Ok(ProjectResolvePayload {
-        project_id: link.project_id.0,
-        project_root: display_path(project_root),
-        link_path: Some(display_path(link_path)),
-        sidecar_root: display_path(&sidecar_root),
-        state_exists,
-        state_root: display_path(&state_root),
-        layout: ProjectLayoutKind::Sidecar,
-        current_phase,
+    let project_link_sha256 = format!("{:x}", Sha256::digest(raw.as_bytes()));
+    Ok(ProjectResolveObservation {
+        payload: ProjectResolvePayload {
+            project_id: link.project_id.0,
+            project_root: display_path(project_root),
+            link_path: Some(display_path(link_path)),
+            sidecar_root: display_path(&sidecar_root),
+            state_exists,
+            state_root: display_path(&state_root),
+            layout: ProjectLayoutKind::Sidecar,
+            current_phase,
+        },
+        project_link_sha256,
     })
 }
 
@@ -1587,6 +1928,12 @@ fn project_subcommand_hint() -> String {
 /// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
 /// code so the entrypoint can translate it into `process::exit(code)`.
 pub fn run_project_command(args: &[String]) -> Result<(), ExitError> {
+    if args
+        .get(1)
+        .is_some_and(|subcommand| subcommand == "reinitialize")
+    {
+        return crate::project_reinitialize_cmd::run_project_reinitialize_command(&args[1..]);
+    }
     let (output, exit) = dispatch(args);
     if !output.is_empty() {
         println!("{output}");
@@ -1600,6 +1947,8 @@ pub fn run_project_command(args: &[String]) -> Result<(), ExitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(label: &str) -> PathBuf {
@@ -2033,9 +2382,10 @@ state_root: ../forge-app/state
         fs::create_dir_all(&app).expect("create nested consumer root");
         seed_git_repo(&app);
 
-        // Sidecar must NOT resolve into the parent repo; put it in a separate
-        // clean temp location with no `.git` above it.
-        let sidecar = temp_root("nested-own-repo-sidecar");
+        // Sidecar must NOT resolve into the parent repo; put its not-yet-created
+        // target below a separate clean temp location with no `.git` above it.
+        let sidecar_parent = temp_root("nested-own-repo-sidecar-parent");
+        let sidecar = sidecar_parent.join("forge-app");
         let payload = init_project(
             &app,
             None,
@@ -2091,6 +2441,93 @@ state_root: ../forge-app/state
         assert!(
             !sidecar_in_foreign.join(".forge-method").exists(),
             "rejected sidecar init must not pollute the foreign repo"
+        );
+    }
+    #[test]
+    fn concurrent_full_initializers_leave_one_complete_authority_tree() {
+        const WORKERS: usize = 8;
+        let app = Arc::new(temp_root("full-init-race"));
+        let barrier = Arc::new(Barrier::new(WORKERS));
+        let mut workers = Vec::new();
+
+        for _ in 0..WORKERS {
+            let app = Arc::clone(&app);
+            let barrier = Arc::clone(&barrier);
+            workers.push(thread::spawn(move || {
+                barrier.wait();
+                init_project(app.as_ref(), None, None, None)
+            }));
+        }
+
+        let results = workers
+            .into_iter()
+            .map(|worker| worker.join().expect("initializer worker did not panic"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| matches!(
+                    result,
+                    Ok(payload) if payload.status == ProjectInitStatus::Initialized
+                ))
+                .count(),
+            1,
+            "exactly one concurrent initializer must publish new authority"
+        );
+        assert!(results.iter().all(|result| match result {
+            Ok(payload) => matches!(
+                payload.status,
+                ProjectInitStatus::Initialized | ProjectInitStatus::AlreadyInitialized
+            ),
+            Err(
+                ProjectInitError::CreateStateDir { .. }
+                | ProjectInitError::ExistingInitTargetWithoutProjectLink { .. }
+                | ProjectInitError::ExistingProjectStateUnavailable { .. },
+            ) => true,
+            Err(other) => panic!("unexpected concurrent initialization error: {other}"),
+        }));
+
+        let settled = init_project(app.as_ref(), None, None, None)
+            .expect("settled authority must resolve as complete");
+        assert_eq!(settled.status, ProjectInitStatus::AlreadyInitialized);
+        assert!(Path::new(&settled.link_path).is_file());
+        assert!(Path::new(&settled.state_root)
+            .join("ledger.ndjson")
+            .is_file());
+        assert_eq!(
+            fs::read_dir(app.as_ref())
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+                .count(),
+            0,
+            "concurrent initialization must not leave temporary Project Links"
+        );
+    }
+
+    #[test]
+    fn atomic_project_link_publish_never_replaces_a_concurrent_destination() {
+        let app = temp_root("link-create-race");
+        let plan = build_init_plan(&app, None, None, None).expect("build init plan");
+        let concurrent = b"concurrent-authority\n";
+        fs::write(&plan.link_path, concurrent).expect("publish concurrent link bytes");
+
+        let error = write_project_link_atomically(&plan).unwrap_err();
+
+        assert!(matches!(error, ProjectInitError::LinkExistsRace { .. }));
+        assert_eq!(fs::read(&plan.link_path).unwrap(), concurrent);
+        assert_eq!(
+            fs::read_dir(&app)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+                .count(),
+            0,
+            "failed atomic publication must clean its private temporary file"
+        );
+        assert!(
+            !plan.state_root.exists(),
+            "link publication conflict must happen before sidecar mutation"
         );
     }
 }

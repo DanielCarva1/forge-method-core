@@ -1,0 +1,131 @@
+schema_version: "0.1"
+artifact_kind: "funnel_autonomy_policy"
+status: "accepted"
+funnel_autonomy_policy:
+  id: "policy.funnel-autonomy.accepted-v0"
+  routing_policy:
+    id: "autonomy.funnel.accepted-v0"
+    applies_to:
+      kind: "repo"
+      ids:
+        - "forge-method-core"
+    default_mode: "sandbox_auto"
+    tool_classes:
+      - class: "file_edit"
+        mode: "sandbox_auto"
+        risk_score: 30
+        requires_approval_above: 80
+      - class: "terminal_command"
+        mode: "confidence_threshold"
+        risk_score: 45
+        requires_approval_above: 80
+      - class: "code_exec"
+        mode: "confidence_threshold"
+        risk_score: 55
+        requires_approval_above: 75
+      - class: "mcp_tool_call"
+        mode: "allowlist"
+        risk_score: 60
+        requires_approval_above: 70
+      - class: "network_egress"
+        mode: "manual"
+        risk_score: 90
+        requires_approval_above: 1
+      - class: "package_install"
+        mode: "manual"
+        risk_score: 90
+        requires_approval_above: 1
+      - class: "git_mutation"
+        mode: "manual"
+        risk_score: 95
+        requires_approval_above: 1
+      - class: "secret_access"
+        mode: "manual"
+        risk_score: 100
+        requires_approval_above: 1
+    escalation:
+      on_repeated_failure: 2
+      on_high_risk_path: true
+      on_semantic_uncertainty: true
+      max_retries_before_human: 3
+      cooldown_seconds: 300
+    evidence_basis: null
+  phase_profiles:
+    - phase: "0-route"
+      contact_density: "medium"
+      lane: "fast"
+      ambiguity_pressure: "human_guidance_and_research"
+      procedural_confirmation: "conditional"
+      claim_required_for_mutation: false
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "1-discovery"
+      contact_density: "high"
+      lane: "fast"
+      ambiguity_pressure: "human_guidance_and_research"
+      procedural_confirmation: "expected"
+      claim_required_for_mutation: false
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "2-specification"
+      contact_density: "high"
+      lane: "fast"
+      ambiguity_pressure: "human_guidance_and_research"
+      procedural_confirmation: "expected"
+      claim_required_for_mutation: false
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "3-plan"
+      contact_density: "medium"
+      lane: "fast"
+      ambiguity_pressure: "human_checkpoint"
+      procedural_confirmation: "conditional"
+      claim_required_for_mutation: true
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "4-build-verify"
+      contact_density: "low"
+      lane: "rigorous"
+      ambiguity_pressure: "gate_review"
+      procedural_confirmation: "forbidden"
+      claim_required_for_mutation: true
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "5-ready-operate"
+      contact_density: "low"
+      lane: "rigorous"
+      ambiguity_pressure: "gate_review"
+      procedural_confirmation: "forbidden"
+      claim_required_for_mutation: true
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+    - phase: "6-evolve"
+      contact_density: "medium"
+      lane: "rigorous"
+      ambiguity_pressure: "human_checkpoint"
+      procedural_confirmation: "conditional"
+      claim_required_for_mutation: true
+      automatic_gates: ["claim_coverage", "phase", "protected_boundary"]
+  mechanical_loop:
+    eligible_phases: ["3-plan", "4-build-verify", "6-evolve"]
+    autonomy_modes: ["plan", "execute", "repair"]
+    require_lane_claim: true
+    require_gate_pass: true
+    require_authority_evidence: true
+    require_effect_contracts: true
+  protected_boundaries:
+    - boundary: "destructive"
+      required_gate_scope: "destructive"
+      lane: "rigorous"
+      contact_density: "medium"
+      human_checkpoint_required: true
+    - boundary: "release"
+      required_gate_scope: "release"
+      lane: "rigorous"
+      contact_density: "medium"
+      human_checkpoint_required: true
+    - boundary: "authority"
+      required_gate_scope: "authority"
+      lane: "rigorous"
+      contact_density: "medium"
+      human_checkpoint_required: true
+  authority_limits:
+    grants_mutation_authority: false
+    grants_phase_authority: false
+    grants_release_authority: false
+    grants_signing_or_private_key_authority: false
+    selected_host: null

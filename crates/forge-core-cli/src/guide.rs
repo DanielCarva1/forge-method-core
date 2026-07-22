@@ -13,18 +13,22 @@ use forge_core_contracts::{
     WorkflowMigrationPlanDocument, WorkflowRetirementTombstone,
     WorkflowRetirementTombstoneCatalogDocument,
 };
-use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
+use forge_core_contracts::{
+    FunnelAmbiguityPressure, FunnelAutomaticGate, FunnelContactDensity, FunnelLane,
+    FunnelProceduralConfirmation, GuideProtocolDocument, OperationContractDocument,
+};
 use forge_core_decisions::{
-    evaluate_workflow_migration, evaluate_workflow_release, load_catalog, load_embedded_catalog,
+    evaluate_funnel_phase, evaluate_workflow_migration, evaluate_workflow_release,
+    load_accepted_funnel_autonomy_policy, load_catalog, load_embedded_catalog,
     load_workflow_documents, project_legacy_workflow_compatibility, simulate_workflow_governance,
     CatalogLoadReport, LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport,
     WorkflowGovernanceSimulation, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
     WorkflowReleaseEvaluation, WorkflowReleaseEvaluationStatus,
 };
-use forge_core_decisions::{
-    validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
+use forge_core_decisions::{GateKind, ProvidedGateResult};
+use forge_core_kernel::{
+    load_admitted_workflow_retirement_checkpoint, validate_guide_protocol, GuideRoute,
 };
-use forge_core_kernel::load_admitted_workflow_retirement_checkpoint;
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -614,6 +618,11 @@ pub struct DecideAccepted {
     pub current_phase: String,
     pub proposed_next_phase: Option<String>,
     pub reason: String,
+    /// Closed route derived from the exact validated `OperationContract`.
+    pub route: GuideRoute,
+    /// The exact authority response the host must render or execute next. The
+    /// host may not replace its phase, workflow, action, or control flow.
+    pub next_operation: OperationContractDocument,
     /// V5 — binding enforcement policy the agent must satisfy to advance this
     /// workflow. Populated when `--root` resolves a project; `None` when no
     /// project context is available (the legacy behavior).
@@ -621,44 +630,24 @@ pub struct DecideAccepted {
     pub enforcement_policy: Option<EnforcementPolicy>,
 }
 
-/// The binding policy a `guide decide` acceptance carries: what the agent
-/// must do (acquire a claim, satisfy gates) before the runtime will execute
-/// the recommended workflow. This is the "orchestrator" output — the agent
-/// reads it and complies, rather than guessing.
+/// The typed phase profile a `guide decide` acceptance projects from the one
+/// accepted funnel-autonomy policy. Guide does not author or override these
+/// values, and the projection grants no execution or phase authority.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EnforcementPolicy {
-    /// `true` when the recommended workflow mutates durable state and the
-    /// runtime's `ClaimCoverageGate` will refuse execution without a covering
-    /// claim. The agent should `claim acquire` before calling execute-operation.
+    /// Whether mutation in this phase requires a covering lane claim.
     pub claim_required: bool,
-    /// Autonomy lane derived from the project's phase (Fast for discovery/spec,
-    /// Rigorous for build-verify and beyond). Advisory — the runtime enforces
-    /// via `ClaimCoverageGate` + `PhaseGate`, not via this string.
-    pub lane: String,
-    /// Gates the runtime will attach automatically (the agent does not pass
-    /// these as flags). Informative so the agent knows what will be checked.
-    pub automatic_gates: Vec<String>,
-    /// Funnel-of-autonomy contact density for the current phase (principle #6).
-    /// Binding signal to the host agent about expected human-interaction mode.
-    ///
-    /// Values mirror the documented `density_by_phase` table:
-    /// - `"high"` — discovery, specification: agent provokes, extracts,
-    ///   confirms. Asking is expected and correct.
-    /// - `"medium"` — plan, evolve: human approves slicing / gives
-    ///   correct-course feedback, then the agent proceeds. Once the
-    ///   human-approved gate has passed, the agent executes remaining
-    ///   mechanical work without asking for procedural confirmation.
-    /// - `"low"` — build-verify, ready-operate: near-silent contractual
-    ///   execution. The agent must NOT request permission for work that is
-    ///   already aligned (spec'd, grilled, gated); it escalates only on gate
-    ///   failure or new ambiguity. Asking for procedural ok/continue here is a
-    ///   funnel violation, not a courtesy.
-    ///
-    /// Added 2026-07-07 (Wave 2 / D4 / FRUST-031). The engine derives this from
-    /// `Phase::rank()` so it stays consistent with the funnel as the project
-    /// advances. Previously the policy treated discovery/spec/plan as a single
-    /// "human-heavy" block, which caused agents to over-ask in plan and build.
-    pub contact_density: String,
+    /// Fast or rigorous lane from the accepted phase profile.
+    pub lane: FunnelLane,
+    /// Gates attached or enforced automatically by the runtime path.
+    pub automatic_gates: Vec<FunnelAutomaticGate>,
+    /// Expected human-contact density for this phase.
+    pub contact_density: FunnelContactDensity,
+    /// How semantic uncertainty restores human guidance, research, or review.
+    pub ambiguity_pressure: FunnelAmbiguityPressure,
+    /// Whether procedural confirmation is expected, conditional, or forbidden.
+    pub procedural_confirmation: FunnelProceduralConfirmation,
 }
 
 /// The failure payload for `guide decide` when the decision is Rejected.
@@ -685,28 +674,29 @@ pub fn run_decide(
     gates: &[ProvidedGateResult],
     project: Option<&crate::project_cmd::ProjectResolvePayload>,
 ) -> CliEnvelope<DecideAccepted> {
-    // 1. Load the decision (typed). Shape error -> exit 3.
-    let decision_text = match std::fs::read_to_string(decision_file) {
-        Ok(t) => t,
-        Err(e) => {
+    // 1. Load the closed guide protocol. A decision without the exact next
+    // OperationContract is incomplete and cannot authorize host control flow.
+    let protocol_text = match std::fs::read_to_string(decision_file) {
+        Ok(text) => text,
+        Err(error) => {
             return CliEnvelope::err(
                 "guide.decide",
                 ExitReason::InvalidDecisionShape,
-                format!("cannot read decision file: {e}"),
+                format!("cannot read guide protocol file: {error}"),
             );
         }
     };
-    let decision: GuideDecision =
-        match yaml_serde::from_str::<GuideDecisionDocument>(&decision_text) {
-            Ok(doc) => doc.guide_decision,
-            Err(e) => {
-                return CliEnvelope::err(
-                    "guide.decide",
-                    ExitReason::InvalidDecisionShape,
-                    format!("decision file is not a valid GuideDecisionDocument: {e}"),
-                );
-            }
-        };
+    let protocol = match yaml_serde::from_str::<GuideProtocolDocument>(&protocol_text) {
+        Ok(document) => document,
+        Err(error) => {
+            return CliEnvelope::err(
+                "guide.decide",
+                ExitReason::InvalidDecisionShape,
+                format!("file is not a valid GuideProtocolDocument: {error}"),
+            );
+        }
+    };
+    let decision = &protocol.guide_protocol.decision;
 
     // Tombstones are checked before the operational catalog. A retired id is
     // neither Unknown nor Accepted, even if a stale external catalog still
@@ -746,99 +736,88 @@ pub fn run_decide(
         );
     }
 
-    // 3. Validate against catalog + gates.
-    match validate_guide_decision(&decision, &report.catalog, gates) {
-        GuideValidation::Accepted => CliEnvelope::ok(
-            "guide.decide",
-            DecideAccepted {
-                recommended_workflow: decision.recommended_workflow.0.clone(),
-                current_phase: decision.current_phase.0.clone(),
-                proposed_next_phase: decision.proposed_next_phase.as_ref().map(|p| p.0.clone()),
-                reason: decision.reason.clone(),
-                enforcement_policy: project.map(resolve_enforcement_policy),
-            },
-        ),
-        GuideValidation::Rejected(reason) => {
-            // The reject envelope carries a typed code + detail (R2: host self-corrects).
-            // Encode in error field; exit reason = RejectedByGate (2).
+    // 3. Validate the recommendation and its exact next OperationContract as
+    // one protocol. No oracle, gate, doctor, adapter, or host action receives a
+    // route unless this composition passes.
+    match validate_guide_protocol(&protocol, &report.catalog, gates) {
+        Ok(route) => {
+            let enforcement_policy = match project.map(resolve_enforcement_policy).transpose() {
+                Ok(policy) => policy,
+                Err(error) => {
+                    return CliEnvelope::err("guide.decide", ExitReason::EnvConfig, error);
+                }
+            };
+            CliEnvelope::ok(
+                "guide.decide",
+                DecideAccepted {
+                    recommended_workflow: decision.recommended_workflow.0.clone(),
+                    current_phase: decision.current_phase.0.clone(),
+                    proposed_next_phase: decision.proposed_next_phase.as_ref().map(|p| p.0.clone()),
+                    reason: decision.reason.clone(),
+                    route,
+                    next_operation: protocol.guide_protocol.next_operation.clone(),
+                    enforcement_policy,
+                },
+            )
+        }
+        Err(reason) => {
             let rejected = DecideRejected {
-                reject_code: reject_code(&reason),
-                detail: format!("{reason:?}"),
+                reject_code: reason.code.as_str().to_owned(),
+                detail: reason.detail,
             };
             let mut env: CliEnvelope<DecideAccepted> =
                 CliEnvelope::err("guide.decide", ExitReason::RejectedByGate, &rejected.detail);
-            // stash the typed reject payload in the error code for machine parsing.
-            if let Some(err) = env.error.as_mut() {
-                err.code.0 = format!("{}:{}", rejected.reject_code, rejected.detail);
+            if let Some(error) = env.error.as_mut() {
+                error.code.0 = format!("{}:{}", rejected.reject_code, rejected.detail);
             }
             env
         }
     }
 }
 
-/// Map a resolved project to a binding enforcement policy. The policy tells
-/// the agent what the runtime will require before executing the recommended
-/// workflow: a covering claim (for durable mutation in build-verify and
-/// beyond) and the autonomy lane (Fast/Rigorous, derived from phase). The
-/// agent reads this and complies; the runtime enforces via `ClaimCoverageGate`
-/// and `PhaseGate` regardless.
+/// Project the exact phase profile from the accepted funnel-autonomy policy.
+/// A missing project phase safely starts at Discovery; a malformed recorded
+/// phase or unavailable policy fails closed rather than inventing defaults.
 fn resolve_enforcement_policy(
     project: &crate::project_cmd::ProjectResolvePayload,
-) -> EnforcementPolicy {
-    let phase = project
-        .current_phase
-        .as_deref()
-        .map_or(Phase::Discovery, |raw| {
-            Phase::parse(raw).unwrap_or(Phase::Discovery)
-        });
-    // Durable mutation is gated from build-verify onward; discovery/spec/plan
-    // do not require a claim (the agent moves fast there).
-    let claim_required = matches!(
-        phase,
-        Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
-    );
-    let lane = if matches!(
-        phase,
-        Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
-    ) {
-        "rigorous"
-    } else {
-        "fast"
+) -> Result<EnforcementPolicy, String> {
+    let phase = match project.current_phase.as_deref() {
+        Some(raw) => Phase::parse(raw)
+            .ok_or_else(|| format!("project records an unsupported current phase: {raw}"))?,
+        None => Phase::Discovery,
     };
-    // Funnel-of-autonomy contact density (principle #6), derived from
-    // `Phase::rank()` so it tracks the documented `density_by_phase` table.
-    // NOTE: discovery/spec are HIGH contact (agent provokes/extracts/confirms);
-    // plan/evolve are MEDIUM (human approves slicing or corrects course, then
-    // the agent proceeds); build-verify/ready-operate are LOW (near-silent —
-    // the agent must NOT ask permission for already-aligned work). Do not lump
-    // plan in with discovery/spec: the prior comment did, which caused agents
-    // to over-ask during mechanical plan/build execution (gap D4, fixed
-    // 2026-07-07).
-    let contact_density = match phase {
-        Phase::Discovery | Phase::Specification => "high",
-        Phase::Route | Phase::Plan | Phase::Evolve => "medium",
-        Phase::BuildVerify | Phase::ReadyOperate => "low",
-    };
-    // The runtime attaches these automatically based on project state (FASE 2).
-    let automatic_gates = vec!["claim-coverage".to_string(), "phase".to_string()];
-    EnforcementPolicy {
-        claim_required,
-        lane: lane.to_string(),
-        automatic_gates,
-        contact_density: contact_density.to_string(),
-    }
-}
-
-/// Map a [`GuideRejection`] to a stable machine-readable code string.
-fn reject_code(r: &GuideRejection) -> String {
-    match r {
-        GuideRejection::UnrecognizedCurrentPhase { .. } => "unrecognized_current_phase",
-        GuideRejection::UnknownWorkflow { .. } => "unknown_workflow",
-        GuideRejection::NotEligibleInPhase { .. } => "not_eligible_in_phase",
-        GuideRejection::IllegalTransition(_) => "illegal_transition",
-        GuideRejection::UnrecognizedProposedPhase { .. } => "unrecognized_proposed_phase",
-    }
-    .into()
+    let policy = load_accepted_funnel_autonomy_policy().map_err(|rejection| {
+        format!(
+            "accepted funnel-autonomy policy is unavailable: {}",
+            rejection
+                .issues
+                .iter()
+                .map(|issue| format!("{}: {}", issue.path, issue.message))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    })?;
+    let profile = evaluate_funnel_phase(policy, phase)
+        .map_err(|rejection| {
+            format!(
+                "accepted funnel-autonomy phase profile is invalid: {}",
+                rejection
+                    .issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.path, issue.message))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        })?
+        .profile;
+    Ok(EnforcementPolicy {
+        claim_required: profile.claim_required_for_mutation,
+        lane: profile.lane,
+        automatic_gates: profile.automatic_gates,
+        contact_density: profile.contact_density,
+        ambiguity_pressure: profile.ambiguity_pressure,
+        procedural_confirmation: profile.procedural_confirmation,
+    })
 }
 
 // ============================================================================
@@ -946,6 +925,7 @@ fn forward_gates_for(phase: Phase) -> (Vec<StatusGate>, Vec<String>) {
         Phase::Specification => (Some(GateKind::SystemDesign), Some(Phase::Plan)),
         Phase::Plan => (Some(GateKind::StoryReady), Some(Phase::BuildVerify)),
         Phase::BuildVerify => (Some(GateKind::Readiness), Some(Phase::ReadyOperate)),
+        Phase::ReadyOperate => (Some(GateKind::Release), Some(Phase::Evolve)),
         _ => (None, None),
     };
     let pending_gates = gate
@@ -1101,7 +1081,7 @@ pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
 ///
 /// # Errors
 ///
-/// Returns `ExitError::invalid_value` when `--decision-file` is missing
+/// Returns `ExitError::invalid_value` when `--protocol-file` is missing
 /// or an argument is unrecognized, and `ExitError::with_code` (via
 /// [`emit_guide`]) when the decide envelope carries a non-zero exit code.
 pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
@@ -1115,13 +1095,11 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
-            "--decision-file" => {
+            "--protocol-file" | "--decision-file" => {
+                let flag = args[idx].trim_start_matches("--").to_owned();
                 idx += 1;
                 decision_file = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "decide",
-                    "decision-file",
+                    args, idx, "decide", &flag,
                 )?));
             }
             "--root" => {
@@ -1160,7 +1138,7 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     }
 
     let decision_file = decision_file.ok_or_else(|| {
-        let message = "guide decide: --decision-file is required";
+        let message = "guide decide: --protocol-file is required";
         eprintln!("{message}");
         guide_invalid_value_with_usage("decide", message)
     })?;
@@ -1663,34 +1641,91 @@ mod tests {
 
     // --- guide decide tests (S3.3) ---
 
-    use std::io::Write;
-    fn write_decision(tmp: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
-        let p = tmp.join(name);
-        let mut f = std::fs::File::create(&p).unwrap();
-        f.write_all(body.as_bytes()).unwrap();
-        p
+    fn base_protocol() -> GuideProtocolDocument {
+        yaml_serde::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../docs/fixtures/guide-protocol-v0/facilitation.yaml"
+        )))
+        .expect("guide protocol fixture")
     }
 
-    const VALID_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: brainstorming\n  reason: start here\n  current_phase: 1-discovery\n";
-    const PLAN_IN_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: create-epics\n  reason: skip\n  current_phase: 1-discovery\n";
-    const UNKNOWN_WF: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: nope\n  reason: x\n  current_phase: 1-discovery\n";
-    const BAD_YAML: &str = "schema_version: \"0.1\"\nguide_decision: { not valid";
+    fn protocol_for(
+        workflow: &str,
+        phase: &str,
+        proposed_next_phase: Option<&str>,
+    ) -> GuideProtocolDocument {
+        let mut document = base_protocol();
+        let protocol = &mut document.guide_protocol;
+        protocol.decision.recommended_workflow = StableId(workflow.to_owned());
+        protocol.decision.current_phase = StableId(phase.to_owned());
+        protocol.decision.proposed_next_phase =
+            proposed_next_phase.map(|value| StableId(value.to_owned()));
+        protocol
+            .next_operation
+            .operation_contract
+            .recommendation
+            .workflow = StableId(workflow.to_owned());
+        protocol
+            .next_operation
+            .operation_contract
+            .recommendation
+            .phase = StableId(proposed_next_phase.unwrap_or(phase).to_owned());
+        protocol.next_operation.operation_contract.contract_id =
+            StableId(format!("op_guide_{workflow}"));
+        document
+    }
+
+    fn write_protocol(
+        tmp: &std::path::Path,
+        name: &str,
+        document: &GuideProtocolDocument,
+    ) -> std::path::PathBuf {
+        let path = tmp.join(name);
+        let body = yaml_serde::to_string(document).expect("serialize guide protocol");
+        std::fs::write(&path, body).expect("write guide protocol");
+        path
+    }
+
+    fn write_raw(tmp: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
+        let path = tmp.join(name);
+        std::fs::write(&path, body).expect("write raw fixture");
+        path
+    }
+
+    const BAD_YAML: &str = "schema_version: \"0.1\"\nguide_protocol: { not valid";
 
     #[test]
     fn decide_accepts_valid_in_phase_decision() {
         let tmp = tempfile_dir();
-        let df = write_decision(&tmp, "d.yaml", VALID_DISCOVERY);
+        let df = write_protocol(
+            &tmp,
+            "d.yaml",
+            &protocol_for("brainstorming", "1-discovery", None),
+        );
         let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(env.ok, "should accept: {:?}", env.error);
         assert_eq!(env.exit_code(), 0);
         let p = env.data.as_ref().expect("payload");
         assert_eq!(p.recommended_workflow, "brainstorming");
+        assert_eq!(p.route, GuideRoute::Facilitation);
+        assert_eq!(
+            p.next_operation
+                .operation_contract
+                .recommendation
+                .workflow
+                .0,
+            "brainstorming"
+        );
     }
 
     #[test]
     fn decide_rejects_ineligible_workflow_with_typed_code() {
         let tmp = tempfile_dir();
-        let df = write_decision(&tmp, "d.yaml", PLAN_IN_DISCOVERY);
+        let df = write_protocol(
+            &tmp,
+            "d.yaml",
+            &protocol_for("create-epics", "1-discovery", None),
+        );
         let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "rejected_by_gate");
@@ -1702,7 +1737,7 @@ mod tests {
     #[test]
     fn decide_rejects_unknown_workflow() {
         let tmp = tempfile_dir();
-        let df = write_decision(&tmp, "d.yaml", UNKNOWN_WF);
+        let df = write_protocol(&tmp, "d.yaml", &protocol_for("nope", "1-discovery", None));
         let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         let code = env.error.as_ref().expect("error").code.0.clone();
@@ -1712,8 +1747,11 @@ mod tests {
     #[test]
     fn retired_workflow_is_typed_and_never_unknown_or_accepted() {
         let tmp = tempfile_dir();
-        let retired = "schema_version: '0.1'\nguide_decision:\n  recommended_workflow: architecture\n  reason: stale host recommendation\n  current_phase: 1-discovery\n";
-        let df = write_decision(&tmp, "retired.yaml", retired);
+        let df = write_protocol(
+            &tmp,
+            "retired.yaml",
+            &protocol_for("architecture", "1-discovery", None),
+        );
         let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
 
         assert_eq!(env.exit_reason.0, "rejected_by_gate");
@@ -1738,11 +1776,12 @@ mod tests {
         let decision_path = tmp.join("retired.yaml");
 
         for tombstone in &tombstones.workflow_retirement_tombstone_catalog.tombstones {
-            let decision = format!(
-                "schema_version: '0.1'\nguide_decision:\n  recommended_workflow: {}\n  reason: stale host recommendation\n  current_phase: 1-discovery\n",
-                tombstone.workflow_id.0
-            );
-            std::fs::write(&decision_path, decision).expect("write retired decision");
+            let document = protocol_for(&tombstone.workflow_id.0, "1-discovery", None);
+            std::fs::write(
+                &decision_path,
+                yaml_serde::to_string(&document).expect("serialize retired protocol"),
+            )
+            .expect("write retired protocol");
             let envelope = run_decide(&decision_path, Some(&real_catalog_dir()), &[], None);
 
             assert!(!envelope.ok, "{} must not route", tombstone.workflow_id.0);
@@ -1784,7 +1823,7 @@ mod tests {
     #[test]
     fn decide_returns_invalid_decision_shape_on_bad_yaml() {
         let tmp = tempfile_dir();
-        let df = write_decision(&tmp, "d.yaml", BAD_YAML);
+        let df = write_raw(&tmp, "d.yaml", BAD_YAML);
         let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "invalid_decision_shape");
@@ -1948,12 +1987,12 @@ mod tests {
         assert_guide_error_projects_only_subcommand_usage(
             &decide_error,
             "decide",
-            "guide decide: --decision-file is required",
+            "guide decide: --protocol-file is required",
         );
 
         // `guide status` without --phase no longer errors: it falls back to
         // the authoritative `state.yaml` phase (or `1-discovery` when no root
-        // is provided). Only `--decision-file` is required on `decide`.
+        // is provided). Only `--protocol-file` is required on `decide`.
         run_guide_status(&args(&[])).expect("status falls back to 1-discovery");
 
         let govern_error = run_guide_govern_simulate(&args(&[])).expect_err("missing bundle file");
@@ -2102,9 +2141,11 @@ mod tests {
     #[test]
     fn contact_density_is_high_in_discovery_and_specification() {
         for phase in ["1-discovery", "2-specification"] {
-            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)))
+                .expect("accepted funnel policy");
             assert_eq!(
-                policy.contact_density, "high",
+                policy.contact_density,
+                FunnelContactDensity::High,
                 "phase {phase} must be high-contact (agent provokes/extracts/confirms)"
             );
         }
@@ -2117,9 +2158,11 @@ mod tests {
         // without asking for procedural confirmation. Evolve is the same shape
         // (correct-course feedback, then proceed).
         for phase in ["3-plan", "6-evolve"] {
-            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)))
+                .expect("accepted funnel policy");
             assert_eq!(
-                policy.contact_density, "medium",
+                policy.contact_density,
+                FunnelContactDensity::Medium,
                 "phase {phase} must be medium-contact (approve, then execute)"
             );
         }
@@ -2130,9 +2173,11 @@ mod tests {
         // The near-silent lane. Asking for permission on already-aligned,
         // gated, mechanical work here is a funnel violation, not a courtesy.
         for phase in ["4-build-verify", "5-ready-operate"] {
-            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)))
+                .expect("accepted funnel policy");
             assert_eq!(
-                policy.contact_density, "low",
+                policy.contact_density,
+                FunnelContactDensity::Low,
                 "phase {phase} must be low-contact (near-silent contractual execution)"
             );
         }
@@ -2141,13 +2186,41 @@ mod tests {
     #[test]
     fn contact_density_defaults_to_medium_for_route_and_missing_phase() {
         // Route (rank 0) and missing/unparseable phase both fall back safely.
-        let route_policy = resolve_enforcement_policy(&resolve_payload(Some("0-route")));
-        assert_eq!(route_policy.contact_density, "medium");
-        let none_policy = resolve_enforcement_policy(&resolve_payload(None));
+        let route_policy = resolve_enforcement_policy(&resolve_payload(Some("0-route")))
+            .expect("accepted route policy");
+        assert_eq!(route_policy.contact_density, FunnelContactDensity::Medium);
+        let none_policy =
+            resolve_enforcement_policy(&resolve_payload(None)).expect("accepted discovery policy");
         assert_eq!(
-            none_policy.contact_density, "high",
+            none_policy.contact_density,
+            FunnelContactDensity::High,
             "missing phase falls back to discovery, which is high-contact"
         );
+    }
+
+    #[test]
+    fn enforcement_policy_projects_typed_funnel_controls() {
+        let policy = resolve_enforcement_policy(&resolve_payload(Some("4-build-verify")))
+            .expect("accepted build-verify policy");
+        assert_eq!(policy.lane, FunnelLane::Rigorous);
+        assert_eq!(
+            policy.ambiguity_pressure,
+            FunnelAmbiguityPressure::GateReview
+        );
+        assert_eq!(
+            policy.procedural_confirmation,
+            FunnelProceduralConfirmation::Forbidden
+        );
+        assert!(policy
+            .automatic_gates
+            .contains(&FunnelAutomaticGate::ProtectedBoundary));
+    }
+
+    #[test]
+    fn malformed_project_phase_fails_closed() {
+        let error = resolve_enforcement_policy(&resolve_payload(Some("invented-phase")))
+            .expect_err("unknown phase must not fall back");
+        assert!(error.contains("unsupported current phase"));
     }
 
     #[test]
@@ -2155,7 +2228,8 @@ mod tests {
         // Non-regression for JSON consumers (host agents, MCP projection):
         // the new field must serialize and deserialize cleanly alongside the
         // existing fields, and old payloads without it must still parse.
-        let policy = resolve_enforcement_policy(&resolve_payload(Some("4-build-verify")));
+        let policy = resolve_enforcement_policy(&resolve_payload(Some("4-build-verify")))
+            .expect("accepted build-verify policy");
         let json = serde_json::to_string(&policy).expect("serialize");
         assert!(
             json.contains("\"contact_density\":\"low\""),

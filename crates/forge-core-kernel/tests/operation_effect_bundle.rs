@@ -1,4 +1,6 @@
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -136,14 +138,14 @@ fn bundle_is_deterministic_and_preserves_constituent_identity() {
 fn normalized_overlapping_write_targets_fail_closed() {
     let (operation, refs, mut effects) = operation_and_effects();
     effects[1].tool_effect_contract.write_set[0].reference =
-        ".FORGE-METHOD\\out\\first.txt".to_owned();
+        ".FORGE-METHOD/out/first.txt".to_owned();
 
     let error = compose_operation_effect_bundle(repo_root(), &operation, &refs, &effects)
         .expect_err("case-folded overlap must fail");
-    assert!(matches!(
-        error,
-        OperationEffectBundleError::OverlappingWrite { .. }
-    ));
+    assert!(
+        matches!(error, OperationEffectBundleError::OverlappingWrite { .. }),
+        "unexpected overlap error: {error:?}"
+    );
 }
 
 #[test]
@@ -173,12 +175,16 @@ fn logical_and_physical_aliases_of_the_same_write_fail_closed() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn one_wal_transaction_rolls_back_writes_from_every_constituent_effect() {
     let (operation, refs, effects) = operation_and_effects();
     let root = temp_root("rollback");
     fs::create_dir_all(root.join(".forge-method/out")).expect("create output parent");
-    fs::write(root.join(".forge-method/blocker"), b"not-a-directory").expect("create blocker");
+    let blocked_parent = root.join(".forge-method/blocker");
+    fs::create_dir(&blocked_parent).expect("create blocked parent");
+    fs::set_permissions(&blocked_parent, fs::Permissions::from_mode(0o500))
+        .expect("make second write fail after preflight");
     let bundle =
         compose_operation_effect_bundle(&root, &operation, &refs, &effects).expect("bundle");
     let wal_ref = ".forge-method/wal/effects.ndjson";
@@ -194,13 +200,21 @@ fn one_wal_transaction_rolls_back_writes_from_every_constituent_effect() {
         "tx-operation-wide-rollback",
     );
 
-    assert_eq!(result.status, EffectApplicationStatus::RolledBack);
-    assert!(result.rolled_back);
-    assert!(!root.join(".forge-method/out/first.txt").exists());
+    fs::set_permissions(&blocked_parent, fs::Permissions::from_mode(0o700))
+        .expect("restore blocked parent permissions");
     assert_eq!(
-        fs::read(root.join(".forge-method/blocker")).expect("read blocker"),
-        b"not-a-directory"
+        result.status,
+        EffectApplicationStatus::RolledBack,
+        "unexpected application result: {result:?}"
     );
+    assert!(result.rolled_back);
+    assert_eq!(
+        result.applied_refs,
+        vec![".forge-method/out/first.txt"],
+        "the first constituent write must have entered the transaction before rollback"
+    );
+    assert!(!root.join(".forge-method/out/first.txt").exists());
+    assert!(!blocked_parent.join("child.txt").exists());
     let wal = fs::read_to_string(root.join(wal_ref)).expect("read WAL");
     assert!(wal.contains("tx-operation-wide-rollback"));
     assert!(wal.contains("\"stage\":\"rollback_complete\""));

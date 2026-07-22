@@ -7,21 +7,20 @@
 //!
 //! - `blocked`: anti-pattern in source + flag → fail-closed, WAL untouched,
 //!   trace emitted.
-//! - `passes_when_clean`: clean source + flag → gate passes; the operation
-//!   reaches the runtime (the plan is `AwaitingHuman`, so no WAL is written)
-//!   without a risk-audit error, proving the gate did not block.
+//! - `passes_when_clean`: clean source + flag → gate passes; the ready mutation
+//!   plan reaches the runtime and stops before application because this focused
+//!   fixture deliberately omits the effect input.
 //! - `without_flag_skips_audit`: anti-pattern in source, NO flag → gate does
 //!   not attach; no risk-audit error.
 //! - `invalid_rules_yaml`: malformed rules YAML + flag → `ParseYaml` error
 //!   propagated clearly (the CLI still loads/validates the rule set before
 //!   constructing the gate).
 //!
-//! NOTE: the kernel gate runs after the CLI loads the operation contract (the
-//! kernel needs the plan). To isolate the gate from contract correctness, the
-//! blocked/clean tests point `--operation` at a valid non-mutating fixture
-//! (`facilitate-first-product-idea.yaml`, whose plan is `AwaitingHuman`) copied
-//! into the scaffold. The gate preamble still runs before the plan-status
-//! early-return, so the gate is evaluated.
+//! NOTE: mutation gates run only for a `ReadyToCallOperation` plan, after the
+//! kernel has validated the fixed durable layout and retained one producer
+//! boundary. The scaffold therefore carries the minimal cross-reference closure
+//! for `execute-trivial-write.yaml`; the CLI intentionally omits `--effect` so a
+//! clean audit cannot apply anything or append to the WAL.
 
 use assert_cmd::Command;
 use serde_json::Value;
@@ -44,14 +43,13 @@ fn repo_root() -> PathBuf {
 /// Consumer project layout: `<parent>/app` is the project, `<parent>/forge-app`
 /// is the sidecar carrying `<parent>/forge-app/.forge-method` as `state_root`.
 /// Mirrors the layout used by `operation_sidecar_e2e.rs::consumer_fixture`,
-/// kept minimal (no command/effect contracts copied). A single non-mutating
-/// operation fixture is copied in so the flow reaches the kernel's gate
-/// preamble (V3.A): the gate now runs inside the kernel against the plan, so
-/// the operation contract must load successfully for the gate to evaluate.
+/// but copies only the reference closure needed to produce one ready mutation
+/// plan. The effect document is indexed but never supplied to the executor, so
+/// the focused clean path cannot apply it.
 struct ConsumerScaffold {
     app: PathBuf,
     state_root: PathBuf,
-    /// Path (under `app`) of the copied non-mutating operation contract.
+    /// Path (under `app`) of the copied ready operation contract.
     operation_path: PathBuf,
 }
 
@@ -76,16 +74,42 @@ fn fresh_consumer(label: &str) -> ConsumerScaffold {
     )
     .expect("write project link");
     fs::write(app.join("README.md"), "# app\n").expect("write app readme");
-    // Copy a non-mutating operation fixture whose plan resolves to
-    // `AwaitingHuman`. The gate preamble in `execute_operation` runs before
-    // the plan-status early-return, so the gate still evaluates whether or
-    // not the plan would proceed to the WAL.
-    let fixture =
-        repo_root().join("docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml");
-    let op_dir = app.join("contracts/operations");
-    fs::create_dir_all(&op_dir).expect("create operations dir");
-    let operation_path = op_dir.join("facilitate-first-product-idea.yaml");
-    fs::copy(&fixture, &operation_path).expect("copy operation fixture");
+    fs::write(
+        state_root.join("state.yaml"),
+        "schema_version: forge_project_state_v1\n\
+         current_phase: \"4-build-verify\"\n\
+         updated_at: null\n",
+    )
+    .expect("write authoritative phase");
+
+    let operation_dir = app.join("docs/fixtures/operation-contract-v0");
+    let effect_dir = app.join("contracts/effects");
+    let claim_dir = app.join("contracts/claims");
+    fs::create_dir_all(&operation_dir).expect("create operations dir");
+    fs::create_dir_all(&effect_dir).expect("create effects dir");
+    fs::create_dir_all(&claim_dir).expect("create claims dir");
+
+    let operation_path = operation_dir.join("execute-trivial-write.yaml");
+    fs::copy(
+        repo_root().join("docs/fixtures/operation-contract-v0/execute-trivial-write.yaml"),
+        &operation_path,
+    )
+    .expect("copy ready operation fixture");
+    fs::copy(
+        repo_root().join("contracts/effects/tool-effect-contract-v0.yaml"),
+        effect_dir.join("tool-effect-contract-v0.yaml"),
+    )
+    .expect("copy effect contract definition");
+    fs::copy(
+        repo_root().join("contracts/effects/story-artifact-write-effect.yaml"),
+        effect_dir.join("story-artifact-write-effect.yaml"),
+    )
+    .expect("copy effect fixture");
+    fs::copy(
+        repo_root().join("contracts/claims/story-v2-010-active-claim.yaml"),
+        claim_dir.join("story-v2-010-active-claim.yaml"),
+    )
+    .expect("copy claim fixture");
     ConsumerScaffold {
         app,
         state_root,
@@ -106,8 +130,8 @@ fn write_source(app: &Path, body: &str) {
 
 /// Run `execute-operation` against the scaffold with the given rules arg.
 /// `rules_arg` controls whether `--require-risk-audit <path>` is appended.
-/// The operation points at the scaffold's copied non-mutating fixture so the
-/// flow reaches the kernel gate (V3.A).
+/// The operation points at the scaffold's ready mutation fixture so the kernel
+/// admits the retained producer boundary and evaluates the configured gate.
 fn run_execute_operation(
     scaffold: &ConsumerScaffold,
     rules_arg: Option<&Path>,
@@ -168,15 +192,15 @@ fn execute_operation_passes_when_risk_audit_clean() {
     // Clean source: no anti-patterns matched by fail-soft.yaml.
     write_source(&scaffold.app, "pub fn answer() -> u32 {\n    42\n}\n");
     let output = run_execute_operation(&scaffold, Some(&fail_soft_rules()));
-    // The operation fixture's plan is `AwaitingHuman`, so the runtime returns
-    // without writing the WAL. Crucially the gate must NOT have blocked: stderr
-    // must not mention a risk-audit failure.
+    // The ready plan passes the audit and then stops because this focused test
+    // does not supply the declared effect input. Crucially the gate must NOT
+    // have blocked: stderr must not mention a risk-audit failure.
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !stderr.contains("risk-audit gate failed"),
         "clean source must pass the gate; stderr: {stderr}"
     );
-    // WAL is not written: the plan awaits a human, so no effects applied.
+    // WAL is not written because no effect input was supplied.
     let wal = scaffold.state_root.join("wal/effects.ndjson");
     assert!(
         !wal.exists(),

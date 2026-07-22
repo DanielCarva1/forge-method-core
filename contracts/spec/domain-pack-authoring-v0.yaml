@@ -1,0 +1,162 @@
+schema_version: "0.1"
+spec: "domain_pack_authoring_v0"
+status: "c7_1_implemented"
+purpose: >-
+  Define the pure, deterministic, candidate-only authoring core for producing a
+  minimal generic Domain Pack skeleton and combining existing validation,
+  composition, exact-lock compatibility, promotion readiness, reviewed-registry
+  readiness, and adversarial diagnostics into one author-facing test report.
+
+dependency:
+  story_dependency: "C6.1"
+  existing_primitives:
+    - "validate_domain_pack_candidate"
+    - "compose_domain_packs"
+    - "evaluate_domain_pack_compatibility"
+    - "evaluate_domain_pack_promotion"
+    - "evaluate_domain_pack_reviewed_registry_evolution"
+
+contract_families:
+  skeleton_request:
+    rust_type: "DomainPackAuthorSkeletonRequestDocument"
+    root_key: "domain_pack_author_skeleton_request"
+    role: >-
+      Explicit publisher, name, version, namespace, sealed Core binding,
+      persistent project requirements, provenance, and logical artifact paths
+      for one generic skeleton generation request.
+  skeleton:
+    rust_type: "DomainPackAuthorSkeletonDocument"
+    root_key: "domain_pack_author_skeleton"
+    role: >-
+      In-memory typed manifest/content/license bytes, separate raw/canonical
+      bindings, candidate input, project requirements, and composition request.
+  test_request:
+    rust_type: "DomainPackAuthorTestRequestDocument"
+    root_key: "domain_pack_author_test_request"
+    role: >-
+      Typed candidate and composition request plus caller-provided exact raw
+      manifest/content/license sidecars and optional read-only evidence.
+  test_report:
+    rust_type: "DomainPackAuthorTestReportDocument"
+    root_key: "domain_pack_author_test_report"
+    role: >-
+      Stable diagnostic evidence covering structural/artifact, composition,
+      exact-lock compatibility, learning/reviewed-registry readiness,
+      adversarial checks, requirement gaps, closed issues, and report digest.
+
+authority_boundary:
+  authority: "candidate_only"
+  invariant: >-
+    Every C7.1 input and output is untrusted candidate evidence. Parsing a
+    skeleton, evaluating its report, or serializing a digest grants no trust,
+    review, installation, activation, execution, credential, tool, filesystem,
+    network, subprocess, lifecycle apply, commit, signing, or publication
+    authority.
+  exact_lock_comparison: >-
+    An optional lifecycle-operation value selects semantics for the existing
+    read-only compatibility comparison only. It is not an apply request and C7.1
+    does not expose lifecycle receipt, active-pointer, commit, or activation
+    authority in its report.
+  prohibited:
+    - "remote acquisition, cache, transport, or discovery"
+    - "signing, publishing, revocation, registry evolution, or trust anchoring"
+    - "lifecycle preflight, apply, commit, installation, or activation"
+    - "execution of evaluators, adapters, tools, prompts, or external capabilities"
+    - "domain-specific Forge Core Rust"
+
+skeleton_generation:
+  deterministic: true
+  side_effects: "none"
+  output: >-
+    Returns bytes and typed documents only. A later CLI adapter owns selecting
+    paths and writing any bytes; the decision layer never touches a filesystem.
+  minimum_contents:
+    - "explicit publisher, name, namespace, and strict semantic version"
+    - "exact sealed Core bundle and policy digests"
+    - "independent project requirements preserved verbatim"
+    - "source kind/URI/revision/digest, authors, SPDX expression, and license template"
+    - "manifest/content/license logical artifact refs with raw and canonical SHA-256 pins"
+    - "empty explicit dependency, conflict, replacement-slot, and replacement-declaration placeholders"
+    - "namespace, empty policy overlay, and explicit empty contribution sections"
+  genericity: >-
+    The skeleton contains no game, host, or other domain-specific Rust behavior.
+    Empty contribution sections are editable placeholders, not a claim that a
+    requirement has been satisfied.
+
+test_workflow:
+  ordering: >-
+    Sidecars, diagnostics, and aggregate issues are sorted/deduplicated by
+    stable closed fields before digesting canonical JSON.
+  structural_and_artifact: >-
+    The direct candidate must appear exactly in the composition request. Its
+    caller-supplied raw sidecars are sent to the established candidate validator;
+    raw bytes and canonical semantics are separately checked.
+  composition: >-
+    The existing composer is invoked over all caller sidecars. Its candidate
+    projection remains the source of dependency/conflict/cycle/shadowing,
+    namespace, contribution, evaluator, adapter, lifecycle, capability, and
+    dangling-reference diagnostics.
+  compatibility: >-
+    When supplied, exact current/proposed locks and an independently sealed Core
+    are sent unchanged to the existing compatibility evaluator. C7.1 projects
+    only its status, stable report digest, and normalized diagnostics.
+  learning: >-
+    When supplied, durable promotion dossier/candidate/review/conflict evidence
+    is sent unchanged to the non-authoritative promotion evaluator.
+  reviewed_registry: >-
+    When supplied, candidate registry snapshots are sent unchanged to the
+    existing reviewed-registry evolution evaluator. C7.1 additionally makes an
+    exact candidate's deprecated, revoked, or superseded eligibility explicit.
+  adversarial: >-
+    Candidate prose with prompt-injection/tool-execution indicators and declared
+    external executable/runtime/credential/authority capabilities or non-built-in
+    adapters are blockers in this pure author workflow. The text remains inert
+    diagnostic input and is never executed or interpolated into a prompt.
+
+fail_closed_cases:
+  contract_boundary:
+    - "unknown fields and invented authority values reject during typed deserialization"
+    - "invalid author schema, blank identity, unsafe artifact ref, and malformed source digest block skeleton generation"
+  artifact_and_structure:
+    - "missing material, raw/canonical tamper, typed raw-sidecar mismatch, and coordinate/version mismatch"
+    - "invalid evaluator, adapter, lifecycle, capability, or fixture variants"
+    - "dangling references, dependency conflicts, cycles, replacements, and unresolved conflicts"
+    - "Core/pack shadowing and namespace/contribution collision"
+    - "incompatible Core, malformed compatibility, or changed independent requirements"
+  gaps_and_evidence:
+    - "missing domain and capability gaps remain explicit and block a ready report"
+    - "invalid locks, trust degradation, or executable capability denial"
+    - "no-op or regressing evidence, non-independent/missing/rejected review, and unresolved learning conflict"
+    - "deprecated, revoked, or superseded reviewed records"
+  safety:
+    - "unsafe prompt/tool prose"
+    - "external executable capability, adapter, or evaluator claims"
+
+integrity:
+  digest_grammar: "sha256:<64 lowercase hexadecimal characters>"
+  digest_method: "canonical JSON followed by SHA-256"
+  stable_outputs:
+    - "skeleton_digest excludes its own field"
+    - "report_digest excludes its own field"
+    - "raw and canonical artifact pins remain separate"
+
+implementation:
+  contracts: "crates/forge-core-contracts/src/domain_pack_authoring.rs"
+  decisions: "crates/forge-core-decisions/src/domain_pack_authoring.rs"
+  cli_adapter: "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  source_tests:
+    - "crates/forge-core-contracts/tests/domain_pack_authoring.rs"
+    - "crates/forge-core-decisions/tests/domain_pack_authoring.rs"
+    - "crates/forge-core-cli/tests/domain_pack_authoring_cli_e2e.rs"
+  cli_integration: >-
+    The additive domain-pack author skeleton/test adapter may perform bounded
+    explicit request reads, materialize the exact returned skeleton bytes only
+    beneath a fresh caller-selected output root, and render the existing report.
+    It must not interpret readiness as authority or touch lifecycle, trust,
+    signing, publication, activation, network, subprocess, or Forge state.
+
+references:
+  - "contracts/spec/domain-pack-v0.yaml"
+  - "contracts/spec/domain-pack-learning-v0.yaml"
+  - "contracts/spec/domain-pack-lifecycle-v0.yaml"
+  - "contracts/plan/product-gap-closure-plan.yaml"

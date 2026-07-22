@@ -23,6 +23,7 @@
 
 pub mod assurance_cmd;
 pub mod autonomy_cmd;
+pub mod backup_cmd;
 pub mod claim;
 pub mod cli_error;
 pub mod cli_util;
@@ -44,6 +45,7 @@ pub(crate) mod host_adapter_manifest;
 pub mod host_adapter_policy_cmd;
 pub(crate) mod host_adapter_projection;
 pub mod host_adapter_verify_cmd;
+pub mod host_support_matrix_cmd;
 // `host_command` here (the CLI's manifest/projection-side helpers) shadows
 // the same-named module re-exported from `forge_core_crypto` (which contains
 // only the two admission predicates `source_ref_is_immutable` and
@@ -62,9 +64,12 @@ pub(crate) mod mcp_replay_anchor_cmd;
 pub(crate) mod mcp_snapshot_cmd;
 pub mod memory_cmd;
 pub mod preflight_cmd;
+pub mod product_lifecycle_cmd;
 pub mod project_cmd;
 pub mod project_profile;
+pub mod project_reinitialize_cmd;
 pub mod research_cmd;
+pub mod restore_cmd;
 pub mod risk_audit_cmd;
 pub mod risk_audit_trace;
 pub mod start_cmd;
@@ -96,6 +101,7 @@ pub use effect_index::{
 // `tests/validate.rs`, and `forge-contract-validator` keep importing
 // `run_validate`, `ValidateSummary`, `ValidateCheck`, `ValidateDiagnostic`,
 // and `ValidationStatus` directly from `forge_core_cli`.
+pub use forge_core_validate::{load_authorized_markdown, MarkdownFileLoadError};
 pub use validate::{
     run_validate, ValidateCheck, ValidateDiagnostic, ValidateSummary, ValidationStatus,
 };

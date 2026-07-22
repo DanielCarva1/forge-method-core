@@ -1,0 +1,133 @@
+schema_version: "0.1"
+artifact_kind: "host-origin-broker-conformance-contract"
+contract_id: "eval.host-origin-broker-conformance.v0"
+status: "required_before_C1_source_completion"
+requirements_ref: "contracts/spec/workflow-host-origin-adapter-v0.yaml"
+
+purpose: >-
+  Prevent a host adapter, broker, or convenient local signer from being called
+  human-origin assured until it proves native interaction binding, non-oracle
+  key use, independent administration, replay safety, privacy, and durable
+  recovery against public product surfaces.
+
+pass_policy:
+  all_required_cases_must_pass: true
+  any_ledger_append_on_rejection_fails: true
+  any_secret_in_output_state_or_environment_fails: true
+  structural_fixture_success_is_not_field_evidence: true
+
+implementation_checkpoint:
+  state: "partial_rust_core_only"
+  covered_by_targeted_tests:
+    - "v0.2 provenance required, bounded, control-character-free, adapter-SemVer-checked, profile-compatible, and descriptor-recomputed"
+    - "unknown/raw transcript fields rejected by deny_unknown_fields"
+    - "signature authentication precedes semantic and native-provenance content validation in live and historical verification"
+    - "v0.1 signing bytes, signature, event digest, and recovery-only admission frozen"
+    - "public CLI routes legacy v0.1 and freshness- or revocation-ineligible v0.2 events only into historical verification; absent an exact durable companion they cannot append"
+    - "a second valid v0.2 envelope reusing one native tuple with changed packet, nonce, and descriptor is rejected with byte-identical governance and replay WALs"
+    - "native interaction replay-origin v2 is stable across packet/nonce changes; a lock-held replay reservation precedes governance commit without appending replay bytes"
+    - "freshness and principal/broker registry digests are rechecked after replay-lock acquisition; expiry while waiting drops the nonmutating reservation with both WALs unchanged"
+    - "after an injected no-byte replay-WAL append failure, the durable origin companion rejects a changed packet/nonce that reuses the native tuple with both WALs byte-identical; exact historical retry then repairs replay once"
+    - "historical recovery refuses effective-epoch drift with byte-identical governance and replay WALs instead of reconciling by append"
+    - "ledger epoch 0.5 activation, permanence, historical-prefix preservation, and downgrade rejection"
+  covered_by_expensive_test:
+    - "the P6d public-path journey advances the external Domain Pack lifecycle while the workflow ledger remains on the prior effective epoch, revokes the broker, and proves historical retry leaves both WALs byte-identical"
+  still_required:
+    - "selected-host native event and exact-confirmation conformance"
+    - "non-exportable signer and non-oracle evidence"
+    - "separate host/operator administration capability"
+    - "real process-crash failpoints at ledger/replay durable boundaries and a multiprocess adapter corpus"
+required_dimensions:
+  - id: "native-origin"
+    cases:
+      - "native user message produces one signed v0.2 envelope bound to exact host event/session/interaction handles"
+      - "native confirmation displays exact project, packet, semantic answer, subject, profile, separation domain, and expiry"
+      - "agent-provided text, subject label, host label, event handle, or confirmation claim cannot create native authority"
+      - "interaction-kind and issuer-profile mismatch is rejected"
+  - id: "signer-non-oracle"
+    cases:
+      - "direct CLI signing request is unavailable"
+      - "MCP signing request is unavailable"
+      - "agent call to broker IPC with arbitrary packet or semantic input is rejected"
+      - "forged stdin, environment, config, bearer file, or command-hook invocation is rejected"
+      - "same native interaction cannot sign a second packet by changing nonce"
+      - "key bytes never appear in project, sidecar, model context, logs, argv, output, inherited environment, or crash artifact"
+  - id: "confused-deputy"
+    cases:
+      - "confirmation shown for packet A cannot produce an envelope for packet B"
+      - "project, policy, head, snapshot, state, effective epoch, registry, subject, profile, kind, or separation-domain drift is rejected"
+      - "stale, expired, future-dated, cross-session, and cross-project interactions are rejected"
+      - "agent-triggered UI cannot auto-accept or suppress the exact confirmation"
+  - id: "administration"
+    cases:
+      - "agent-created ceremony/public-key files cannot enroll authority in supported-host mode"
+      - "enroll, rotate, and revoke require a separate native operator/admin capability"
+      - "stale registry CAS, forged admin approval, profile escalation, and cross-project registry are rejected"
+      - "rotation retains the old public key as revoked for historical verification only"
+      - "revocation blocks new events immediately and cannot destroy exact historical recovery"
+  - id: "wire-and-history"
+    cases:
+      - "v0.2 missing or tampered native provenance fails before mutation"
+      - "v0.1 envelope cannot authorize a new mutation"
+      - "v0.1 exact historical event can reconcile only an already-durable matching receipt"
+      - "frozen v0.1 signing bytes, event digest, ledger bytes, and replay-origin digest remain byte-identical"
+      - "unknown event/provenance fields and ledger epoch downgrade fail closed"
+  - id: "replay-and-crash"
+    cases:
+      - "exact retry before any durable write creates one outcome"
+      - "crash after action/provenance ledger commit but before replay commit recovers one receipt"
+      - "committed retry returns the prior receipt and never appends again"
+      - "reuse of event, native interaction, nonce, packet, or replay origin under changed coordinates is rejected"
+      - "torn/corrupt/aliased registry, ledger, WAL, or anchor fails closed"
+  - id: "privacy"
+    cases:
+      - "only bounded opaque references, exact versions, closed kinds, times, and canonical digests persist"
+      - "raw prompt, transcript, email, display name, auth token, URL query, and host secret are absent"
+      - "provenance descriptor digest is not computed from raw transcript bytes"
+      - "redacted diagnostics remain sufficient to identify exact adapter/host versions and failed invariant"
+  - id: "install-and-rollback"
+    cases:
+      - "clean adapter installation and repeated idempotent installation"
+      - "partial configuration and unsupported host version produce typed setup gaps"
+      - "interrupted update retains the prior working adapter and broker registry"
+      - "adapter rollback never rolls back project ledger, replay state, or broker revocation"
+      - "uninstall removes product-owned integration while retaining project authority by default"
+
+host_capability_result:
+  required_fields:
+    - "host_kind"
+    - "exact_host_version"
+    - "adapter_id"
+    - "exact_adapter_version"
+    - "source_commit"
+    - "conformance_state"
+    - "case_inventory_digest"
+    - "result_bundle_digest"
+    - "residual_limitations"
+  allowed_states:
+    unsupported: "one or more required host capabilities are unavailable"
+    candidate: "design or experimental API exists but source conformance is incomplete"
+    conformant_source: "all local deterministic/adversarial cases pass for exact source"
+    conformant_released: "matching verified release asset repeats the suite"
+    field_verified: "matching released asset also has independently reviewed real-host evidence"
+
+required_test_topology:
+  per_work_part:
+    - "direct authority crate tests"
+    - "direct workflow contract/kernel tests"
+    - "new adversarial fixture subset"
+  C1_closure:
+    - "frozen historical compatibility corpus"
+    - "broker action/intent multiprocess E2E"
+    - "host adapter conformance runner"
+    - "crash failpoint matrix around ledger and replay boundaries"
+  release_only:
+    - "full workspace"
+    - "native platform matrix"
+    - "release archive and clean-install matrix"
+    - "production-host P7F journey"
+
+claim_boundary: >-
+  Passing this contract at source level does not establish a published adapter,
+  physical human presence, reviewer independence, or production-host support.
+  Those require the exact released asset and field evidence.

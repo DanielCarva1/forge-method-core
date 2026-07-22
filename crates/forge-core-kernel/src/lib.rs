@@ -60,9 +60,7 @@ use forge_core_contracts::{
     CommandContractDocument, OperationContractDocument, RepoPath, StableId,
 };
 use forge_core_store::{
-    append_effect_target_metadata_records_with_durability, append_json_line_with_durability,
-    apply_file_effect_transaction_with_wal_lock_with_durability, EffectApplicationPayload,
-    EffectApplicationResult, EffectApplicationStatus, WalDurability,
+    EffectApplicationPayload, EffectApplicationResult, EffectApplicationStatus, WalDurability,
 };
 use forge_core_validate::{
     validate_command, validate_operation, validate_operation_cross_references,
@@ -79,6 +77,7 @@ use tracing::instrument;
 
 mod evidence;
 pub mod gate;
+mod guide_protocol;
 mod operation_effect_bundle;
 mod planning;
 mod prepared_execution;
@@ -95,6 +94,7 @@ pub mod builtin_gates;
 pub use builtin_gates::*;
 pub use evidence::*;
 pub use gate::*;
+pub use guide_protocol::*;
 pub use operation_effect_bundle::*;
 pub use planning::*;
 pub use prepared_execution::*;
@@ -190,6 +190,7 @@ mod tests {
             br#"{"status":"passed"}"#,
         );
         let temp_root = fresh_temp_root("metadata-append-failure");
+        fs::create_dir_all(temp_root.join(".forge-method")).expect("create state root");
         let index_path = temp_root.join(".forge-method/index/effect-targets.ndjson");
         fs::create_dir_all(&index_path).expect("create directory where metadata file should be");
         let mut context = RuntimeOperationExecutionContext::single_root(&temp_root);

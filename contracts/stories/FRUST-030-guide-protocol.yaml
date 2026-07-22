@@ -1,0 +1,83 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "FRUST-030"
+status: "implemented"
+slice: "guide-operation-protocol"
+title: "Return the exact next validated OperationContract from Guide"
+intent: >-
+  Make the default guide path consume one closed typed protocol that composes the
+  existing GuideDecision with the exact next OperationContractDocument, validates
+  both views as one route, and returns that operation without allowing a host to
+  invent phase state or control flow.
+
+decision_sources:
+  - "contracts/backlog/rust-only-core-backlog.yaml#FRUST-030"
+  - "contracts/guidance/guide-protocol.yaml"
+  - "contracts/policies/human-agent-interface.yaml"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "contracts/stories/FRUST-020-operation-contract-planning.yaml"
+
+owned_files:
+  - "contracts/guidance/guide-protocol.yaml"
+  - "contracts/stories/FRUST-030-guide-protocol.yaml"
+  - "contracts/backlog/rust-only-core-backlog.yaml"
+  - "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
+  - "docs/product-status.md"
+  - "docs/product-gap-register.md"
+  - "docs/generated/command-surface.md"
+  - "docs/fixtures/guide-protocol-v0/facilitation.yaml"
+  - "crates/forge-core-contracts/src/guide_protocol.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-kernel/src/guide_protocol.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
+  - "crates/forge-core-kernel/tests/guide_protocol.rs"
+  - "crates/forge-core-cli/src/guide.rs"
+  - "crates/forge-core-cli/tests/guide_e2e.rs"
+  - "crates/forge-core-command-surface/src/lib.rs"
+
+constraints:
+  - "Compose the existing GuideDecision and OperationContractDocument types; do not create parallel phase, workflow, action, gate, execution, or mutation authority."
+  - "GuideDecision validation, structural OperationContract validation, schema provenance, workflow, phase, allowed actions, state version, diagnostics, and route policy all fail closed before acceptance."
+  - "The CLI returns the exact validated OperationContractDocument without host reconstruction or substitution."
+  - "The canonical input is --protocol-file; --decision-file is only a parser alias and cannot admit a standalone GuideDecisionDocument."
+  - "Facilitation, research, visual alignment, correct-course, already-done, and mechanical execution are closed typed routes."
+  - "Protocol acceptance grants no mutation authority; existing reference validation, planner, executor, producer admission, gates, and effect application remain independent downstream owners."
+  - "Only RuntimePlanStatus::ReadyToCallOperation may enter durable mutation authority."
+  - "Ordinary automatic phase planning remains stopped at BuildVerify, and C5.2 still guards ReadyOperate and Evolve admission."
+  - "Candidate documents gain no signing, trust, admission, install, activation, lifecycle, protected-anchor, private-key, or phase-mutation authority."
+  - "selected_host remains none."
+
+acceptance_criteria:
+  - "Guide accepts only a complete GuideProtocolDocument carrying an exact next OperationContractDocument."
+  - "Accepted output includes the closed route and exact next operation before any oracle, gate, doctor, or host action proceeds."
+  - "Closed route policy covers facilitation, research, visual alignment, correct-course, already-done, and mechanical execution."
+  - "Source tests reject host-invented phase, workflow, operation provenance, actor policy, and allowed-action drift."
+  - "The public command surface names --protocol-file and decision-only input fails the protocol shape."
+
+checks:
+  passed:
+    - "cargo fmt --package forge-core-contracts"
+    - "cargo fmt --package forge-core-command-surface"
+    - "cargo fmt --package forge-core-kernel"
+    - "cargo fmt --package forge-core-cli"
+    - "cargo check --locked -p forge-core-contracts --all-targets"
+    - "cargo check --locked -p forge-core-command-surface --all-targets"
+    - "cargo check --locked -p forge-core-kernel --all-targets"
+    - "cargo check --locked -p forge-core-cli --all-targets"
+    - "python3 scripts/check-static-structured-text.py"
+    - "python3 scripts/check-public-promises.py"
+    - "git diff --check"
+  deferred:
+    - "Rust test execution"
+    - "full workspace tests"
+    - "runtime integration and end-to-end execution"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, independent review, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "FRUST-031 now supplies one accepted funnel-autonomy policy across guide, operation, destructive, release, and authority consumers."
+  - "C5.2 and C5.3 source are complete pending deferred runtime, stabilization, hosted, publication, and field evidence."
+  - "C5.3 complete repeated-episode persistence and authority-free replacement continuity are source-complete pending that evidence."
+  - "Reference-host selection, exact-host support, external broker private-key custody, release publication, and field evidence remain outside this story."

@@ -1,0 +1,66 @@
+schema_version: "0.1"
+mcp_surface:
+  contract_id: "surface.mcp.common-borrowed-shell.v0"
+  transport: mcp
+  authority: core_only
+  derived_from_manifest: true
+  projection_authoritative: false
+  preserved_fields:
+    - command_kind
+    - mutation_class
+    - authority_class
+    - safe_auto_invocation_triggers
+    - output_treatment
+    - required_contracts
+    - setup_gaps
+  setup_gap_types:
+    - missing_executable
+    - missing_adapter
+    - unsupported_host_version
+    - invalid_configuration
+    - missing_required_contract
+    - exact_host_execution_unavailable
+  projections_must_not:
+    - network_retrieval_authority
+    - install_authority
+    - update_authority
+    - crl_authority
+    - certificate_transparency_authority
+    - rekor_authority
+    - tuf_authority
+    - signing_authority
+    - mutation_authority
+    - host_selection
+    - host_support_claim
+    - host_release_claim
+    - projection_authority_promotion
+  ocsp_delegated_responder:
+    supplied_responder_certificate_input: true
+    ordered_issuer_chain_input: true
+    selected_authority_identity_output: true
+    verified_authority_evidence_output: true
+    network_authority: false
+    install_authority: false
+    update_authority: false
+    crl_authority: false
+    certificate_transparency_authority: false
+    rekor_authority: false
+    tuf_authority: false
+    signing_authority: false
+    mutation_authority: false
+  default_mode: read_only
+  mutation_authority: forbidden
+  signing_authority: forbidden
+  signer_tool_exposed: false
+  mutation_policy:
+    default_tools_read_only: true
+    explicit_core_admission_required: true
+    client_annotations_are_advisory: true
+  recognition:
+    runtime_kind_sufficient: false
+    manifest_recognition_sufficient: false
+    cannot_establish:
+      - installability
+      - human_origin_assurance
+      - governed_mutation
+      - support

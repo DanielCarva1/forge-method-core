@@ -15,7 +15,7 @@ use crate::cli_error::ExitError;
 use crate::cli_util::{
     emit_envelope_or_err, parse_strict_or_err, require_value_or_err, resolve_now_unix,
 };
-use crate::io_util::{atomic_write, DirLock};
+use crate::io_util::atomic_write;
 use forge_core_command_surface::COMMAND_ISOLATION;
 use forge_core_contracts::common::StableId;
 use forge_core_contracts::isolation::{
@@ -26,9 +26,99 @@ use forge_core_contracts::{CliEnvelope, ExitReason, RepoPath, ENVELOPE_SCHEMA_VE
 use forge_core_decisions::isolation::{
     detect_isolation_conflict, propose_merge, transition_status, validate_isolation_contract,
 };
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 const LOCKFILE: &str = ".forge-isolation.lock";
+
+#[allow(dead_code)]
+const MAX_ISOLATION_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+
+#[allow(dead_code)]
+/// Opaque retained authority for isolation-contract mutation.
+pub(crate) struct LockedIsolationContracts {
+    lock: crate::io_util::DirLock,
+}
+
+#[allow(dead_code)]
+/// One exact isolation YAML and its stable identity projection.
+pub(crate) struct IsolationEntrySnapshot {
+    relative_path: String,
+    raw: Vec<u8>,
+    raw_sha256: String,
+    contract: IsolationContract,
+}
+
+#[allow(dead_code)]
+impl IsolationEntrySnapshot {
+    pub(crate) fn relative_path(&self) -> &str {
+        &self.relative_path
+    }
+
+    pub(crate) fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+
+    pub(crate) fn raw_sha256(&self) -> &str {
+        &self.raw_sha256
+    }
+
+    pub(crate) const fn contract(&self) -> &IsolationContract {
+        &self.contract
+    }
+}
+
+#[allow(dead_code)]
+/// Stable sorted no-follow projection captured under mutation authority.
+pub(crate) struct IsolationContractsSnapshot {
+    entries: Vec<IsolationEntrySnapshot>,
+}
+
+#[allow(dead_code)]
+impl IsolationContractsSnapshot {
+    pub(crate) fn entries(&self) -> &[IsolationEntrySnapshot] {
+        &self.entries
+    }
+}
+
+pub(crate) fn acquire_isolation_contracts_authority(
+    isolation_dir: &Path,
+) -> std::io::Result<LockedIsolationContracts> {
+    let lock = crate::io_util::DirLock::acquire(isolation_dir, LOCKFILE)?;
+    Ok(LockedIsolationContracts { lock })
+}
+
+#[allow(dead_code)]
+pub(crate) fn snapshot_isolation_contracts_under_authority(
+    locked: &LockedIsolationContracts,
+) -> std::io::Result<IsolationContractsSnapshot> {
+    use std::io::{Error, ErrorKind};
+    let projected = locked
+        .lock
+        .directory_identity()
+        .read_sorted_direct_files_bounded("yaml", MAX_ISOLATION_DOCUMENT_BYTES)?;
+    let mut entries = Vec::with_capacity(projected.len());
+    for (relative_file, raw) in projected {
+        let document: IsolationContractDocument =
+            yaml_serde::from_slice(&raw).map_err(|error| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    format!("{}: {error}", relative_file.display()),
+                )
+            })?;
+        let relative_path = relative_file
+            .to_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "non-UTF-8 isolation path"))?
+            .to_owned();
+        entries.push(IsolationEntrySnapshot {
+            relative_path,
+            raw_sha256: format!("sha256:{:x}", Sha256::digest(&raw)),
+            raw,
+            contract: document.isolation_contract,
+        });
+    }
+    Ok(IsolationContractsSnapshot { entries })
+}
 
 // ---------------------------------------------------------------------------
 // payloads (DD17: machine-readable, same envelope as guide/* and claim/*)
@@ -106,7 +196,7 @@ pub fn run_propose(
         return rejection("propose", e, &contract.id);
     }
     // 2) collision against existing live contracts (under lock)
-    let lock = match DirLock::acquire(isolation_dir, LOCKFILE) {
+    let lock = match acquire_isolation_contracts_authority(isolation_dir) {
         Ok(l) => l,
         Err(e) => return env_config("propose", isolation_dir, &e.to_string()),
     };
@@ -235,7 +325,7 @@ pub fn run_transition(
     now_unix: i64,
 ) -> CliEnvelope<IsolationProposePayload> {
     let _ = now_unix;
-    let lock = match DirLock::acquire(isolation_dir, LOCKFILE) {
+    let lock = match acquire_isolation_contracts_authority(isolation_dir) {
         Ok(l) => l,
         Err(e) => return env_config("transition", isolation_dir, &e.to_string()),
     };
@@ -1239,6 +1329,42 @@ mod tests {
         assert!(errs.is_empty());
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0], c);
+    }
+    #[test]
+    fn retained_isolation_authority_projects_exact_sorted_bytes_and_blocks_producer() {
+        let d = dir();
+        let make_contract = |id: &str, agent: &str, branch: &str, path: &str| IsolationContract {
+            id: StableId(id.to_owned()),
+            agent_id: StableId(agent.to_owned()),
+            branch_name: branch.to_owned(),
+            worktree_path: RepoPath(path.to_owned()),
+            base_ref: "main".to_owned(),
+            created_at: "2027-01-01T00:00:00Z".to_owned(),
+            status: IsolationStatus::Active,
+            merge_policy: MergePolicy::Merge,
+            claim_id: None,
+        };
+        save_isolation(&d, &make_contract("iso-z", "zed", "zed/s5", "../wt/z")).unwrap();
+        save_isolation(&d, &make_contract("iso-a", "alice", "alice/s5", "../wt/a")).unwrap();
+
+        let locked = acquire_isolation_contracts_authority(&d).expect("retained authority");
+        let snapshot = snapshot_isolation_contracts_under_authority(&locked).expect("projection");
+        assert_eq!(snapshot.entries().len(), 2);
+        assert_eq!(snapshot.entries()[0].contract().id.0, "iso-a");
+        for entry in snapshot.entries() {
+            assert_eq!(
+                entry.raw(),
+                std::fs::read(d.join(entry.relative_path())).unwrap()
+            );
+            assert_eq!(
+                entry.raw_sha256(),
+                format!("sha256:{:x}", Sha256::digest(entry.raw()))
+            );
+        }
+        let Err(error) = acquire_isolation_contracts_authority(&d) else {
+            panic!("producer lock must contend");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
     }
 
     // --- review S4.6 C1 / M2 regression ----------------------------------

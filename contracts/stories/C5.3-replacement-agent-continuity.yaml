@@ -1,0 +1,67 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C5.3"
+status: "implemented"
+slice: "ready-operate-evolve"
+title: "Implement durable replacement-agent continuity"
+intent: >-
+  Persist every complete repeated post-BuildVerify episode and the joined Request,
+  Completion, HealthRecovery, and claim-WAL audit state so a fresh process can
+  reconstruct the exact active release episode without hidden chat context or
+  recreated authority.
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/post-build-verify-episode-v0.yaml"
+  - "contracts/claims/claim-contract-v0.yaml"
+  - "contracts/requests/request-contract-v0.yaml"
+  - "contracts/completion/completion-contract-v0.yaml"
+  - "contracts/recovery/health-recovery-contract-v0.yaml"
+  - "contracts/evals/minimal-coordination-eval-suite.yaml"
+
+owned_files:
+  - "contracts/stories/C5.3-replacement-agent-continuity.yaml"
+  - "docs/post-build-verify-episodes.md"
+  - "crates/forge-core-contracts/src/workflow_governance.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-workflow-governance-tcb/src/lib.rs"
+  - "crates/forge-core-workflow-governance-tcb/tests/workflow_governance_ledger.rs"
+  - "crates/forge-core-kernel/src/workflow_governance/adapter.rs"
+
+constraints:
+  - "Every new post-BuildVerify episode record carries the complete validated PostBuildVerifyEpisodeDocument; historical 0.7 summary records remain readable but cannot satisfy replacement reconstruction."
+  - "The first complete replacement-continuity or coordination record advances the retained workflow-ledger epoch to 0.8 and all successors remain at that epoch."
+  - "Generic ledger append rejects both complete episode and coordination mutation routes; only dedicated retained-lock TCB APIs may append them."
+  - "Request lifecycle is sender-owned at initial Pending and target-driver-owned thereafter, with closed legal transitions, immutable request fields, required response evidence, strict deadlines, and exact retry reads."
+  - "Accepted is an intermediate lifecycle state; terminal response states must remain allowed by the request contract."
+  - "Runtime Request and Claim joins use exact stable durable IDs. Shared schema contract_ref paths and static repository fixture paths never identify a live durable instance."
+  - "Mutation handoff is evidence only and must bind the exact target driver, requested operation, live claim ID, nonempty authority references, and exact ToolEffectContract references."
+  - "Completion requires the exact current state version, exact live claim ID, claimant, lease expiry, and proof; invalidated, stale, conflicting, expired, or mismatched completion is rejected."
+  - "Stalled or crashed runtime recovery cannot reassign automatically; reviewed handoff or reclaim requires exact durable Request and live Claim IDs, and the request target driver owns the recovery record."
+  - "Replacement projection returns cloned candidate/audit values only and never retained locks, claims, capabilities, private keys, signing authority, trust authority, release authority, mutation authority, phase authority, lifecycle authority, protected-anchor authority, install/activation authority, or host-selection authority."
+  - "Private external broker keys must remain in their owner-specific backup procedure and must never be copied into Forge state or Forge backups."
+  - "selected_host remains none"
+
+acceptance_criteria:
+  - "A complete generation-chained episode persists the exact release identity, BuildVerify snapshot, rollback baseline, observations, evidence, feedback, intake, evolution identity, continuity subject, and next action."
+  - "Fresh durable reads reconstruct the latest complete episode for the active release plus latest Request, Completion, HealthRecovery, and claim-WAL projections."
+  - "Claim projection classifies exact claim IDs as live, expired, or non-active without returning claim authority."
+  - "Historical 0.7 summary-only ledgers remain recoverable for audit but fail closed when asked for complete replacement state."
+  - "Focused source tests cover dedicated append ownership, legal and illegal request transitions, immutable fields, typed dependency resolution, exact durable IDs, response evidence, deadlines, mutation handoff, completion proof and conflicts, recovery joins, deterministic retry, repeated episodes, claim liveness, and authority-free serialization."
+
+checks:
+  passed:
+    - "cargo check --locked -p forge-core-workflow-governance-tcb --all-targets"
+    - "cargo check --locked -p forge-core-kernel --all-targets"
+  deferred:
+    - "Rust test execution"
+    - "runtime fresh-process and end-to-end execution"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, independent review, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "C5.3 source is complete pending deferred runtime and hosted evidence; deserialized records remain audit/recovery data rather than authority."
+  - "Deployment, rollback execution, release publication, host selection, and external signer custody remain with their existing authority owners."
+  - "C3.2-C3.4 own cumulative runtime stabilization, hosted CI, publication, independent verification, and field evidence after every remaining source story compiles."

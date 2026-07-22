@@ -1,24 +1,83 @@
 # Verification guide
 
 Verification is proportional while editing and cumulative at a checkpoint. The
-executable ownership/trigger source is [`.github/workflows/ci.yml`](../.github/workflows/ci.yml);
-this guide explains its P7G topology without claiming that source configuration
-alone met a time budget.
+normal evidence topology is [`.github/workflows/ci.yml`](../.github/workflows/ci.yml);
+the independent pull-request enforcement boundary is
+[`.github/workflows/msrv-policy.yml`](../.github/workflows/msrv-policy.yml). This
+guide describes their topology without claiming that source configuration alone
+met a time budget or changed repository settings.
 
 ## Tier topology
 
 | Tier | Trigger | Per-step budget | Owned evidence |
 |---|---|---:|---|
 | **Tier 0: static/docs** | Every pull request and push to `main`/`master` | 120 seconds | Generated workspace layout, local Markdown links, public-promise audit, evidence-tool tests, Rust formatting |
+| **MSRV** | Every pull request and push to `main`/`master`, after Tier 0 completes (even if Tier 0 failed or was skipped) | 300 seconds contract test; 1,800 seconds compile | Exact PyYAML 6.0.3 provisioning and Rust 1.85.1, locked workspace, every Cargo target and feature, adversarial lane tests |
 | **Focused package/integration** | Every pull request and push to `main`/`master`, after Tier 0 | 900 seconds | Generated command/release subjects, retirement runtime, test inventories, all-feature pedantic clippy, aggregate validation and regression anchors |
 | **Platform** | Every pull request and push to `main`/`master`, after Tier 0; native Linux, Windows, Intel macOS, Apple Silicon macOS matrix | 1,800 seconds | Workspace all-target compilation and default workspace tests on every runner; each non-Linux runner also compiles the expensive P6d target |
 | **Expensive cumulative journey** | Push to `main`/`master` only, after Tier 0 + focused + platform succeed | 1,800 seconds | Exact Linux P6d reference-pack real-process journey once |
 
-Job timeouts (10, 45, 40, and 35 minutes respectively) are outer safety bounds.
+Job timeouts (10, 35, 45, 40, and 35 minutes respectively) are outer safety bounds.
 Each wrapped step also enforces its own hard wall-clock timeout, terminates its
 complete child process tree, and persists timing evidence. Pull requests do not
 execute the expensive journey, but focused all-feature clippy compiles its code
 on Linux and every non-Linux platform has a dedicated feature-gated compile.
+
+The workspace declares `rust-version = "1.85"` because Cargo's manifest field
+expresses a stable release line as major.minor. CI pins patch release **1.85.1**
+to make compiler behavior reproducible while staying within that declared 1.85
+line; the patch pin does not raise the source MSRV to a different Rust release.
+The MSRV job deliberately has no Cargo cache, so a newer compiler cannot seed it
+and the lane cannot save artifacts for other jobs. Its job-level `if: always()`
+is required by the checker: `static_docs` finishing as failed or skipped cannot
+suppress normal MSRV evidence. The `Verify MSRV lane contract` step first
+installs exact `PyYAML==6.0.3` with dependency installation disabled
+(`--no-deps`), rather than trusting runner-preinstalled Python packages, and only
+then starts the structured checker tests. `scripts/check-msrv.py` requires that
+exact provisioning command and order, discovers every `crates/*/Cargo.toml`,
+reconciles it with explicit workspace members, and parses each member's features
+and package policy. Its duplicate-key-safe structured YAML check rejects aliases,
+merges, unknown protected jobs/steps/keys, unapproved inherited or job/step
+environment, mutable protected action references, credential persistence, and any
+MSRV step outside the exact named sequence and closed per-step fields. The
+accepted compile remains the wrapped exact `cargo +1.85.1 check --locked
+--workspace --all-targets --all-features`; the always-run timing upload cannot
+change that step's result.
+
+## Independent pull-request enforcement
+
+Repository rules must require the exact check context **`MSRV Policy / Enforce
+trusted MSRV policy`** for pull requests. This repository change defines that
+check; it does **not** claim the external repository rule was configured.
+
+`.github/workflows/msrv-policy.yml` uses `pull_request_target`, so GitHub selects
+the workflow from the trusted base commit rather than from the pull request. It
+grants only `contents: read`, pins both checkout actions by commit, disables
+credential persistence, and checks out the immutable event-provided base and
+head SHAs into separate `trusted/` and `candidate/` directories. After exact
+pinned/no-dependency PyYAML provisioning, it executes only
+`trusted/scripts/check-msrv.py`. Candidate CI, policy workflow, and Cargo
+manifests are parsed as data; candidate scripts, actions, build files, and Rust
+code are never executed by this policy job. A fork candidate must be readable
+with the read-only token; checkout or required-file failure rejects the policy
+check closed. No environment with secrets or write authority may be attached to
+this job.
+
+The trusted checker requires the candidate policy workflow and CI workflow to
+retain exact triggers, permissions, immutable checkout references, protected job
+and step topology, pinned actions, no persisted credentials, and the trusted-only
+checker command. It also rejects policy deletion/rename, symbolic-link
+substitution, `if`/`continue-on-error` bypasses, compiler/cache overrides, and
+both direct skip attacks (`static_docs.if: false` and `msrv.if: false`).
+
+A skipped result from a required in-repository PR job is not equivalent to a
+successful enforcement decision, and a checker inside the mutable guarded job
+cannot enforce its own execution. The required base-workflow context is therefore
+the security boundary. There is a one-time bootstrap limitation: the first pull
+request that introduces `msrv-policy.yml` cannot run that new base workflow.
+Merge and review that bootstrap through an existing trusted administrative path,
+then configure the repository rule before relying on the context for subsequent
+pull requests.
 
 ## Timing and failure evidence
 
@@ -36,6 +95,7 @@ The report records exact argv/display, runner OS/architecture/name/environment,
 cache context, elapsed/budget seconds, underlying command exit, budget status,
 outcome, and wrapper exit. It is uploaded even after failure:
 
+- `ci-timing-msrv` (14-day retention)
 - `ci-timing-static-docs`
 - `ci-timing-focused`
 - `ci-timing-platform-${{ matrix.id }}`
@@ -62,8 +122,23 @@ Tier 0 parity when static/generated surfaces are affected:
 ```bash
 python scripts/generate-workspace-layout.py --check
 python scripts/check-doc-links.py
-cargo fmt --all -- --check
 ```
+cargo fmt --all -- --check
+
+MSRV topology and exact-toolchain parity:
+
+```bash
+python scripts/check-msrv.py
+python scripts/test-msrv.py
+cargo +1.85.1 check --locked --workspace --all-targets --all-features
+```
+
+The adversarial suite includes a standalone, parse-valid let-chain fixture that
+a post-1.85 compiler accepts but Rust 1.85.1 rejects with the intended `E0658`
+language-stability diagnostic. A successful local run is source-topology
+evidence only. Hosted evidence exists only after the `msrv` job runs on GitHub
+and retains its `ci-timing-msrv` artifact; that native hosted run is pending for
+an unpushed change.
 
 Focused development uses the smallest owning package/integration commands:
 

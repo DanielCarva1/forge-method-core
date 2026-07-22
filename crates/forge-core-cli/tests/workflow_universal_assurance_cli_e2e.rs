@@ -8,19 +8,26 @@
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
-    workflow_broker_event_signing_bytes, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+    AuthorizedWorkflowBrokerControlPlane, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
     WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    PrincipalId, StableId, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    workflow_broker_expected_audience, PrincipalId, RuntimeKind, StableId,
+    WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
+    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
+    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
+    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
     WorkflowRepresentativeEnvironment, WorkflowRepresentativeFailureMode,
     WorkflowRepresentativeScenarioReference, WorkflowRepresentativeSliceDefinition,
-    WorkflowRepresentativeSliceDefinitionDocument, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
+    WorkflowRepresentativeSliceDefinitionDocument, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const HUMAN_ISSUER: &str = "broker.assurance.human";
@@ -125,37 +132,106 @@ struct Broker<'a> {
     key: &'a SigningKey,
 }
 
-fn trust_broker(parent: &Path, app: &str, broker: &Broker<'_>) -> Value {
-    let key_path = parent.join(format!("{}.pub", broker.issuer_id));
-    let ceremony_path = parent.join(format!("{}.ceremony", broker.issuer_id));
-    fs::write(&key_path, hex(&broker.key.verifying_key().to_bytes())).expect("public key");
-    fs::write(
-        &ceremony_path,
-        format!("operator enrolled {} outside the agent\n", broker.issuer_id),
-    )
-    .expect("ceremony");
-    let profile = match broker.profile {
-        WorkflowBrokerIssuerProfile::Human => "human",
-        WorkflowBrokerIssuerProfile::Reviewer => "reviewer",
-        WorkflowBrokerIssuerProfile::Runtime => "runtime",
+fn install_strict_registry(state_root: &Path, project_id: &str, brokers: &[Broker<'_>]) -> String {
+    let project_id = StableId(project_id.to_owned());
+    let workflow_id = StableId("workflow.governance".to_owned());
+    let audience = workflow_broker_expected_audience(&project_id, &workflow_id);
+    let host_binding = WorkflowBrokerHostBinding {
+        host_kind: RuntimeKind::ForgeStandalone,
+        host_version: "0.12.0".to_owned(),
+        adapter_id: StableId("adapter.forge-standalone.universal-e2e".to_owned()),
+        adapter_version: "0.1.0".to_owned(),
+        host_installation_id: StableId("host.installation.universal-assurance-e2e".to_owned()),
+        protocol_version: "workflow-host-origin-v1".to_owned(),
     };
-    ok(&workflow(
-        app,
-        &[
-            "broker",
-            "trust",
-            "--issuer-id",
-            broker.issuer_id,
-            "--profile",
+    let admin_key = SigningKey::from_bytes(&[35; 32]);
+    let enrolled_at = now().saturating_sub(60);
+    let mut credentials = vec![WorkflowBrokerPublicCredentialMetadata {
+        credential_id: StableId("credential.workflow.universal-assurance-admin".to_owned()),
+        broker_id: StableId("broker.workflow.universal-assurance-admin".to_owned()),
+        subject_id: StableId("administrator.workflow.universal-assurance".to_owned()),
+        purpose: WorkflowBrokerCredentialPurpose::RegistryAdministrator,
+        profile: WorkflowBrokerCredentialProfile::Administrator,
+        algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+        public_key_hex: hex(&admin_key.verifying_key().to_bytes()),
+        key_generation: 1,
+        status: WorkflowBrokerCredentialStatus::Active,
+        custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+        host_binding: host_binding.clone(),
+        allowed_operations: Vec::new(),
+        not_before_unix: enrolled_at,
+        revoked_at_unix: None,
+        predecessor_credential_id: None,
+        enrollment_operation_id: StableId(
+            "admin.operation.workflow.universal-assurance-genesis".to_owned(),
+        ),
+        revocation_operation_id: None,
+    }];
+    credentials.extend(brokers.iter().map(|broker| {
+        let profile = match broker.profile {
+            WorkflowBrokerIssuerProfile::Human => WorkflowBrokerCredentialProfile::Human,
+            WorkflowBrokerIssuerProfile::Reviewer => WorkflowBrokerCredentialProfile::Reviewer,
+            WorkflowBrokerIssuerProfile::Runtime => WorkflowBrokerCredentialProfile::Runtime,
+        };
+        let allowed_operations = if broker.profile == WorkflowBrokerIssuerProfile::Human {
+            vec![
+                WorkflowBrokerBoundOperation::Evidence,
+                WorkflowBrokerBoundOperation::IntentRevision,
+            ]
+        } else {
+            vec![WorkflowBrokerBoundOperation::Evidence]
+        };
+        WorkflowBrokerPublicCredentialMetadata {
+            credential_id: StableId(format!("credential.{}", broker.issuer_id)),
+            broker_id: StableId(format!("installation.{}", broker.issuer_id)),
+            subject_id: StableId(broker.issuer_id.to_owned()),
+            purpose: WorkflowBrokerCredentialPurpose::EventIssuer,
             profile,
-            "--public-key-file",
-            &key_path.display().to_string(),
-            "--ceremony-ref",
-            &format!("operator://ceremony/{}", broker.issuer_id),
-            "--ceremony-file",
-            &ceremony_path.display().to_string(),
-        ],
-    ))
+            algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+            public_key_hex: hex(&broker.key.verifying_key().to_bytes()),
+            key_generation: 1,
+            status: WorkflowBrokerCredentialStatus::Active,
+            custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+            host_binding: host_binding.clone(),
+            allowed_operations,
+            not_before_unix: enrolled_at,
+            revoked_at_unix: None,
+            predecessor_credential_id: None,
+            enrollment_operation_id: StableId(
+                "admin.operation.workflow.universal-assurance-genesis".to_owned(),
+            ),
+            revocation_operation_id: None,
+        }
+    }));
+    credentials.sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+    let document = WorkflowBrokerPublicRegistryDocument {
+        schema_version: WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION.to_owned(),
+        audience: audience.clone(),
+        project_id: project_id.clone(),
+        workflow_id: workflow_id.clone(),
+        registry_generation: 1,
+        previous_registry_digest: None,
+        required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
+        credentials,
+    };
+    AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+        document.clone(),
+        &audience,
+        &project_id,
+        &workflow_id,
+    )
+    .expect("strict broker registry fixture");
+    let path = state_root
+        .parent()
+        .expect("sidecar root")
+        .join("operator/workflow-broker-registry.yaml");
+    fs::create_dir_all(path.parent().expect("registry parent")).expect("registry directory");
+    fs::write(
+        path,
+        yaml_serde::to_string(&document).expect("strict broker registry YAML"),
+    )
+    .expect("preconfigured external broker registry");
+    audience
 }
 
 #[allow(clippy::too_many_arguments)] // Every signed wire coordinate remains visible in this authority proof.
@@ -179,11 +255,44 @@ fn envelope(
         project_id: StableId(project_id.to_owned()),
         action_packet_digest: packet_digest.to_owned(),
         semantic_input,
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.universal-e2e".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: match broker.profile {
+                WorkflowBrokerIssuerProfile::Human => {
+                    WorkflowBrokerHostInteractionKind::NativeHumanConfirmation
+                }
+                WorkflowBrokerIssuerProfile::Reviewer => {
+                    WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation
+                }
+                WorkflowBrokerIssuerProfile::Runtime => {
+                    WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation
+                }
+            },
+            host_event_ref: format!("host-event-{nonce}-0001"),
+            host_session_ref: format!("host-session-{nonce}-0001"),
+            host_interaction_ref: format!("host-interaction-{nonce}-0001"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }),
         issued_at_unix,
         expires_at_unix: issued_at_unix + 300,
         nonce: format!("p7b2-{nonce}-nonce"),
         signature: String::new(),
     };
+    let provenance = envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
     let bytes = workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
     envelope.signature = hex(&broker.key.sign(&bytes).to_bytes());
     envelope
@@ -295,10 +404,18 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
         .args(["init", &app.display().to_string()])
         .output();
     let app_arg = app.display().to_string();
-    ok(&bin()
+    let started = ok(&bin()
         .args(["start", "--root", &app_arg, "--json"])
         .output()
         .expect("start"));
+    let state_root = PathBuf::from(
+        started["data"]["project"]["state_root"]
+            .as_str()
+            .expect("state root"),
+    );
+    let initial_project_id = started["data"]["project"]["project_id"]
+        .as_str()
+        .expect("project id");
     ok(&workflow(&app_arg, &["init"]));
     upgrade_to_latest(&app_arg);
 
@@ -334,13 +451,15 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
         key: &same_domain_runtime_key,
         ..runtime
     };
-    let trusted = trust_broker(&parent, &app_arg, &human);
-    trust_broker(&parent, &app_arg, &reviewer);
-    trust_broker(&parent, &app_arg, &runtime);
-    trust_broker(&parent, &app_arg, &same_domain_runtime);
-    let audience = trusted["data"]["audience"]
-        .as_str()
-        .expect("broker audience");
+    // Simulate selected-host provisioning of a public strict registry. All
+    // private keys remain in memory and Forge receives no genesis or generic
+    // signing authority.
+    let audience = install_strict_registry(
+        &state_root,
+        initial_project_id,
+        &[human, reviewer, runtime, same_domain_runtime],
+    );
+    let audience = audience.as_str();
 
     let next = ok(&workflow(&app_arg, &["next"]));
     let intent_packet = &next["data"]["authorization"]["action_packets"][0];

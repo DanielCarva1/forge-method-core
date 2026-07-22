@@ -10,18 +10,28 @@ use crate::{
     MAX_DOMAIN_PACK_DISCOVERY_CAPABILITIES_PER_REQUIREMENT, MAX_DOMAIN_PACK_DISCOVERY_REQUIREMENTS,
 };
 use forge_core_contracts::{
-    DomainPackAcquisitionCeremony, DomainPackAcquisitionDerivationInput,
-    DomainPackAcquisitionDerivedInputs, DomainPackAcquisitionDerivedInputsDocument,
+    DomainPackAcquisitionCatalogDocument, DomainPackAcquisitionCeremony,
+    DomainPackAcquisitionDerivationInput, DomainPackAcquisitionDerivedInputs,
+    DomainPackAcquisitionDerivedInputsDocument, DomainPackAcquisitionOperation,
     DomainPackAcquisitionPlan, DomainPackAcquisitionPlanDocument, DomainPackAcquisitionPlanStatus,
-    DomainPackAcquisitionPlanningInput, DomainPackCandidateAuthority, DomainPackCompositionRequest,
+    DomainPackAcquisitionPlanningInput, DomainPackCandidateApprovalRequirement,
+    DomainPackCandidateAuthority, DomainPackCompositionRequest,
     DomainPackCompositionRequestDocument, DomainPackDependencySourcePolicy,
-    DomainPackDuplicateVersionPolicy, DomainPackPrereleasePolicy,
+    DomainPackDuplicateVersionPolicy, DomainPackExpectedLifecycleState,
+    DomainPackInitializedProjectCandidateSelection, DomainPackInitializedProjectDerivation,
+    DomainPackInitializedProjectDerivationDocument, DomainPackInitializedProjectDerivationGap,
+    DomainPackInitializedProjectDerivationInput, DomainPackInitializedProjectDerivationMaterial,
+    DomainPackInitializedProjectDerivationOutcome, DomainPackInitializedProjectDerivedInputs,
+    DomainPackInitializedProjectGenerationMaterial, DomainPackInitializedProjectIntent,
+    DomainPackInitializedProjectOperation, DomainPackLifecycleOperation,
+    DomainPackLifecycleRequest, DomainPackLifecycleRequestDocument, DomainPackPrereleasePolicy,
     DomainPackProjectRequirementsDocument, DomainPackResolutionCandidate,
     DomainPackResolutionPolicy, DomainPackResolutionRequest, DomainPackResolutionRequestDocument,
     DomainPackResolutionRoot, DomainPackResolutionRootReason, DomainPackResolutionStatus,
     DomainPackSemanticAssurance, DomainPackSourceAssurance, DomainPackUnrelatedUpdatePolicy,
     DomainPackVersionSelectionPolicy, DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION,
-    DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION, DOMAIN_PACK_SCHEMA_VERSION,
+    DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
+    DOMAIN_PACK_SCHEMA_VERSION,
 };
 use semver::{Version, VersionReq};
 use serde::Serialize;
@@ -45,6 +55,11 @@ pub enum DomainPackAcquisitionIssueCode {
     CandidateMaterialAmbiguous,
     CandidateMaterialMismatch,
     ResolutionBlocked,
+    InvalidInitializedIntent,
+    StaleInitializedState,
+    InvalidActiveLock,
+    InvalidTargetLock,
+    OperationMaterialMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,6 +265,267 @@ pub fn plan_domain_pack_acquisition(
         ));
     }
     Ok(document)
+}
+
+/// Derive exact candidate-only resolver, composer, and lifecycle requests for
+/// one initialized-project operation.
+///
+/// # Errors
+/// Returns deterministic issues for malformed evidence, invalid exact locks,
+/// operation/material disagreement, or resolver failure. Stale state bindings,
+/// candidate approval, unmatched demand, and degraded-empty states remain typed
+/// gaps in the returned document.
+pub fn derive_domain_pack_initialized_project_lifecycle(
+    input: &DomainPackInitializedProjectDerivationInput,
+) -> Result<DomainPackInitializedProjectDerivationDocument, DomainPackAcquisitionRejection> {
+    let intent_document = &input.intent;
+    let intent = &intent_document.domain_pack_initialized_project_intent;
+    if intent_document.schema_version != DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION
+        || intent.authority != DomainPackCandidateAuthority::CandidateOnly
+        || !valid_id(&intent.intent_id.0)
+        || !valid_id(&intent.project_id.0)
+        || !valid_id(&intent.principal_id.0)
+        || !valid_digest(&intent.expected_state.active_lock_digest)
+        || !valid_digest(&intent.expected_state.lifecycle_head_digest)
+        || !valid_digest(&intent.expected_state.project_snapshot_digest)
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::InvalidInitializedIntent,
+            "intent",
+            "initialized-project intent is malformed or is not candidate-only",
+        ));
+    }
+    if !valid_exact_lock(&input.active_lock) {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::InvalidActiveLock,
+            "active_lock",
+            "active exact lock failed schema, digest, or payload validation",
+        ));
+    }
+    validate_generation(
+        &input.active_generation,
+        &input.active_lock,
+        "active_generation",
+    )?;
+
+    let expected_state = initialized_expected_state(&intent.expected_state);
+    let mut gaps = Vec::new();
+    if input.initialized_state != intent.expected_state {
+        gaps.push(
+            DomainPackInitializedProjectDerivationGap::StateBindingMismatch {
+                expected: intent.expected_state.clone(),
+                observed: input.initialized_state.clone(),
+            },
+        );
+    }
+    let active = &input.active_lock.domain_pack_exact_lock;
+    if active.lock_digest != intent.expected_state.active_lock_digest {
+        gaps.push(
+            DomainPackInitializedProjectDerivationGap::ActiveLockMismatch {
+                expected_active_lock_digest: intent.expected_state.active_lock_digest.clone(),
+                presented_active_lock_digest: active.lock_digest.clone(),
+            },
+        );
+    }
+    if active.payload.project_id != intent.project_id {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::StaleInitializedState,
+            "active_lock.payload.project_id",
+            "active lock belongs to a different project",
+        ));
+    }
+
+    let outcome = if gaps.is_empty() {
+        match (&intent.operation, &input.material) {
+            (
+                DomainPackInitializedProjectOperation::Install { selection },
+                DomainPackInitializedProjectDerivationMaterial::Candidate { acquisition },
+            ) => derive_initialized_candidate(
+                input,
+                selection,
+                acquisition,
+                DomainPackAcquisitionOperation::Install,
+                DomainPackLifecycleOperation::Install {
+                    root: selected_coordinate(acquisition)?,
+                },
+                None,
+                &expected_state,
+                &mut gaps,
+            )?,
+            (
+                DomainPackInitializedProjectOperation::Upgrade {
+                    pack,
+                    expected_from,
+                    target_requirement,
+                    required_content_digest,
+                    selection,
+                },
+                DomainPackInitializedProjectDerivationMaterial::Candidate { acquisition },
+            ) => derive_initialized_candidate(
+                input,
+                selection,
+                acquisition,
+                DomainPackAcquisitionOperation::Upgrade,
+                DomainPackLifecycleOperation::Upgrade {
+                    pack: pack.clone(),
+                    expected_from: expected_from.clone(),
+                    target_requirement: target_requirement.clone(),
+                    required_content_digest: required_content_digest.clone(),
+                },
+                Some((
+                    pack,
+                    expected_from,
+                    target_requirement,
+                    required_content_digest.as_ref(),
+                )),
+                &expected_state,
+                &mut gaps,
+            )?,
+            (
+                DomainPackInitializedProjectOperation::Remove { pack },
+                DomainPackInitializedProjectDerivationMaterial::CurrentGeneration { generation },
+            ) => {
+                if generation != &input.active_generation {
+                    return Err(single_issue(
+                        DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                        "material.generation",
+                        "current-generation material does not equal the independently presented active generation",
+                    ));
+                }
+                derive_generation_operation(
+                    input,
+                    generation,
+                    &input.active_lock,
+                    DomainPackLifecycleOperation::Remove { pack: pack.clone() },
+                    GenerationChange::Remove(pack),
+                    &expected_state,
+                    &mut gaps,
+                )?
+            }
+            (
+                DomainPackInitializedProjectOperation::Rollback {
+                    target_receipt_digest,
+                    target_lock_digest,
+                },
+                DomainPackInitializedProjectDerivationMaterial::Rollback {
+                    target_lock,
+                    target_generation,
+                },
+            ) => {
+                if !valid_digest(target_receipt_digest)
+                    || !valid_digest(target_lock_digest)
+                    || !valid_exact_lock(target_lock)
+                    || target_lock.domain_pack_exact_lock.lock_digest != *target_lock_digest
+                {
+                    return Err(single_issue(
+                        DomainPackAcquisitionIssueCode::InvalidTargetLock,
+                        "material.target_lock",
+                        "rollback target does not match the requested receipt and exact lock",
+                    ));
+                }
+                validate_generation(target_generation, target_lock, "material.target_generation")?;
+                derive_generation_operation(
+                    input,
+                    target_generation,
+                    target_lock,
+                    DomainPackLifecycleOperation::Rollback {
+                        target_receipt_digest: target_receipt_digest.clone(),
+                        target_lock_digest: target_lock_digest.clone(),
+                    },
+                    GenerationChange::UseExact,
+                    &expected_state,
+                    &mut gaps,
+                )?
+            }
+            (
+                DomainPackInitializedProjectOperation::RebaseCore {
+                    target_release_id,
+                    expected_from_core_digest,
+                    target_core_digest,
+                },
+                DomainPackInitializedProjectDerivationMaterial::RebaseCore {
+                    target_core,
+                    target_catalog,
+                },
+            ) => {
+                if active.payload.core.bundle_digest != *expected_from_core_digest
+                    || target_core.bundle_digest != *target_core_digest
+                    || target_core == &active.payload.core
+                    || !valid_id(&target_release_id.0)
+                {
+                    return Err(single_issue(
+                        DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                        "intent.operation",
+                        "Core rebase does not bind the active and target Core digests",
+                    ));
+                }
+                derive_rebase_operation(
+                    input,
+                    target_core,
+                    target_catalog,
+                    DomainPackLifecycleOperation::RebaseCore {
+                        target_release_id: target_release_id.clone(),
+                        expected_from_core_digest: expected_from_core_digest.clone(),
+                        target_core_digest: target_core_digest.clone(),
+                    },
+                    &expected_state,
+                    &mut gaps,
+                )?
+            }
+            _ => {
+                return Err(single_issue(
+                    DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                    "material",
+                    "derivation material does not match the initialized-project operation",
+                ));
+            }
+        }
+    } else {
+        DomainPackInitializedProjectDerivationOutcome::Blocked
+    };
+
+    let mut derived = DomainPackInitializedProjectDerivation {
+        derivation_id: derived_id("initialized", &intent.intent_id.0),
+        authority: DomainPackCandidateAuthority::CandidateOnly,
+        intent_digest: canonical_digest(intent_document).map_err(|message| {
+            single_issue(
+                DomainPackAcquisitionIssueCode::InvalidDigest,
+                "intent",
+                message,
+            )
+        })?,
+        expected_state,
+        active_lock_digest: active.lock_digest.clone(),
+        outcome,
+        gaps,
+        derivation_digest: String::new(),
+    };
+    derived.derivation_digest = canonical_digest(&derived).map_err(|message| {
+        single_issue(
+            DomainPackAcquisitionIssueCode::InvalidDigest,
+            "initialized_derivation",
+            message,
+        )
+    })?;
+    Ok(DomainPackInitializedProjectDerivationDocument {
+        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
+        domain_pack_initialized_project_derivation: derived,
+    })
+}
+
+/// Verify an initialized-project derivation by exact deterministic replay.
+#[must_use]
+pub fn verify_domain_pack_initialized_project_derivation(
+    document: &DomainPackInitializedProjectDerivationDocument,
+    input: &DomainPackInitializedProjectDerivationInput,
+) -> bool {
+    document.schema_version == DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION
+        && valid_digest(
+            &document
+                .domain_pack_initialized_project_derivation
+                .derivation_digest,
+        )
+        && derive_domain_pack_initialized_project_lifecycle(input).as_ref() == Ok(document)
 }
 
 /// Derive deterministic P6 resolver and composer inputs for an exact install
@@ -636,6 +912,685 @@ pub fn verify_domain_pack_acquisition_derived_inputs(
     canonical_digest(&digest_subject).is_ok_and(|actual| actual == claimed_digest)
 }
 
+fn derive_initialized_candidate(
+    initialized: &DomainPackInitializedProjectDerivationInput,
+    selection: &DomainPackInitializedProjectCandidateSelection,
+    acquisition: &DomainPackAcquisitionDerivationInput,
+    expected_operation: DomainPackAcquisitionOperation,
+    lifecycle_operation: DomainPackLifecycleOperation,
+    upgrade: Option<(
+        &forge_core_contracts::DomainPackCoordinate,
+        &String,
+        &String,
+        Option<&String>,
+    )>,
+    expected_state: &DomainPackExpectedLifecycleState,
+    gaps: &mut Vec<DomainPackInitializedProjectDerivationGap>,
+) -> Result<DomainPackInitializedProjectDerivationOutcome, DomainPackAcquisitionRejection> {
+    let planning_intent = &acquisition
+        .planning_input
+        .intent
+        .domain_pack_acquisition_intent;
+    let plan = &acquisition.plan.domain_pack_acquisition_plan;
+    if selection.approval
+        != DomainPackCandidateApprovalRequirement::ExplicitOperatorApprovalRequired
+        || selection.acquisition_id != planning_intent.acquisition_id
+        || selection.assurance_binding != planning_intent.assurance_binding
+        || selection.discovery_projection_digest != planning_intent.discovery_projection_digest
+        || selection.demand_digest != planning_intent.demand_digest
+        || selection.candidate_id != planning_intent.candidate_id
+        || selection.requirement_ref != planning_intent.requirement_ref
+        || planning_intent.operation != expected_operation
+        || plan.operation != expected_operation
+        || planning_intent.expected_project_snapshot_digest
+            != initialized
+                .intent
+                .domain_pack_initialized_project_intent
+                .expected_state
+                .project_snapshot_digest
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+            "material.acquisition",
+            "candidate selection does not bind the exact acquisition operation and initialized snapshot",
+        ));
+    }
+    if let Some(gap) = acquisition
+        .planning_input
+        .discovery
+        .domain_pack_discovery_projection
+        .gaps
+        .iter()
+        .find(|gap| gap.requirement_ref == selection.requirement_ref)
+    {
+        gaps.push(DomainPackInitializedProjectDerivationGap::UnmatchedDemand {
+            demand_digest: selection.demand_digest.clone(),
+            gap: gap.clone(),
+        });
+        return Ok(DomainPackInitializedProjectDerivationOutcome::Blocked);
+    }
+    gaps.push(
+        DomainPackInitializedProjectDerivationGap::CandidateApprovalRequired {
+            candidate_id: selection.candidate_id.clone(),
+        },
+    );
+
+    let mut candidate_inputs = derive_domain_pack_acquisition_inputs(acquisition)?;
+    let derived = &mut candidate_inputs.domain_pack_acquisition_derived_inputs;
+    let active_lock = &initialized.active_lock.domain_pack_exact_lock;
+    {
+        let request = &mut derived.resolution_request.domain_pack_resolution_request;
+        if request.project_id != active_lock.payload.project_id
+            || request.core != active_lock.payload.core
+        {
+            return Err(single_issue(
+                DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                "material.acquisition",
+                "candidate resolver inputs do not match the active project and sealed Core",
+            ));
+        }
+        request.current_lock = Some(initialized.active_lock.clone());
+        let selected_root = request.roots.first().cloned().ok_or_else(|| {
+            single_issue(
+                DomainPackAcquisitionIssueCode::InvalidAcquisitionPlan,
+                "material.acquisition.resolution_request.roots",
+                "candidate acquisition did not derive one selected root",
+            )
+        })?;
+        request.roots.clone_from(&active_lock.payload.roots);
+        if let Some((pack, expected_from, target_requirement, required_content_digest)) = upgrade {
+            let selected = &plan.selected;
+            let target_version_matches = Version::parse(&selected.pack.version)
+                .ok()
+                .zip(VersionReq::parse(target_requirement).ok())
+                .is_some_and(|(version, requirement)| requirement.matches(&version));
+            if !active_lock.payload.packages.iter().any(|locked| {
+                locked.identity.publisher == pack.publisher
+                    && locked.identity.name == pack.name
+                    && locked.identity.version == *expected_from
+            }) || selected.pack.publisher != pack.publisher
+                || selected.pack.name != pack.name
+                || !target_version_matches
+                || required_content_digest.is_some_and(|digest| digest != &selected.content_digest)
+            {
+                return Err(single_issue(
+                    DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                    "intent.operation",
+                    "upgrade candidate does not match the requested coordinate, version, and content",
+                ));
+            }
+            let Some(root) = request.roots.iter_mut().find(|root| root.pack == *pack) else {
+                return Err(single_issue(
+                    DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                    "active_lock.payload.roots",
+                    "upgrade target has no active resolution root",
+                ));
+            };
+            root.version_requirement.clone_from(target_requirement);
+            root.required_content_digest = Some(selected.content_digest.clone());
+            root.reason = DomainPackResolutionRootReason::UpgradeIntent;
+        } else {
+            if request
+                .roots
+                .iter()
+                .any(|root| root.pack == selected_root.pack)
+            {
+                return Err(single_issue(
+                    DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                    "intent.operation",
+                    "install candidate coordinate is already rooted in the active lock",
+                ));
+            }
+            request.roots.push(selected_root);
+        }
+        request.roots.sort_by(|left, right| {
+            left.pack
+                .publisher
+                .cmp(&right.pack.publisher)
+                .then_with(|| left.pack.name.cmp(&right.pack.name))
+        });
+    }
+
+    derived.resolution_projection =
+        resolve_domain_packs(&derived.resolution_request, &acquisition.registry);
+    let resolution = &derived
+        .resolution_projection
+        .domain_pack_resolution_projection;
+    if resolution.status != DomainPackResolutionStatus::Resolved
+        || !resolution.issues.is_empty()
+        || !resolution.rejected.is_empty()
+        || resolution.selected.iter().any(|resolved| {
+            resolved.source_assurance != DomainPackSourceAssurance::ExplicitlyUntrusted
+                || resolved.semantic_assurance != DomainPackSemanticAssurance::Unreviewed
+        })
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::ResolutionBlocked,
+            "resolution",
+            "initialized-project candidate resolution is not clean and candidate-only",
+        ));
+    }
+    if resolution
+        .selected
+        .iter()
+        .filter(|resolved| {
+            resolved.identity.publisher == plan.selected.pack.publisher
+                && resolved.identity.name == plan.selected.pack.name
+                && resolved.identity.version == plan.selected.pack.version
+                && resolved.package.package_digest == plan.selected.package_digest
+                && resolved.package.content.canonical_sha256 == plan.selected.content_digest
+                && resolved.registry_record_digest == plan.selected.supply_chain_record_digest
+        })
+        .count()
+        != 1
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::CandidateMaterialMismatch,
+            "resolution.selected",
+            "initialized-project resolution does not retain the exact approved candidate",
+        ));
+    }
+    let composition_candidates = resolution
+        .selected
+        .iter()
+        .map(|resolved| {
+            let matches = derived
+                .resolution_request
+                .domain_pack_resolution_request
+                .candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate.input.manifest.domain_pack_manifest.identity == resolved.identity
+                        && candidate.package == resolved.package
+                        && candidate.registry_record_digest.as_deref()
+                            == Some(resolved.registry_record_digest.as_str())
+                })
+                .collect::<Vec<_>>();
+            match matches.as_slice() {
+                [candidate] => Ok(candidate.input.clone()),
+                [] => Err(single_issue(
+                    DomainPackAcquisitionIssueCode::CandidateMaterialMismatch,
+                    "resolution.selected",
+                    "resolved initialized package lacks exact composition material",
+                )),
+                _ => Err(single_issue(
+                    DomainPackAcquisitionIssueCode::CandidateMaterialAmbiguous,
+                    "resolution.selected",
+                    "resolved initialized package has ambiguous composition material",
+                )),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    derived
+        .composition_request
+        .domain_pack_composition_request
+        .candidates = composition_candidates;
+    derived
+        .composition_request
+        .domain_pack_composition_request
+        .core
+        .clone_from(&active_lock.payload.core);
+    let mut digest_subject = derived.clone();
+    digest_subject.derivation_digest.clear();
+    derived.derivation_digest = canonical_digest(&digest_subject).map_err(|message| {
+        single_issue(
+            DomainPackAcquisitionIssueCode::InvalidDigest,
+            "candidate_inputs",
+            message,
+        )
+    })?;
+
+    let lifecycle_request = lifecycle_request(
+        &initialized.intent.domain_pack_initialized_project_intent,
+        expected_state,
+        lifecycle_operation,
+        canonical_digest(&derived.resolution_request).map_err(|message| {
+            single_issue(
+                DomainPackAcquisitionIssueCode::InvalidDigest,
+                "candidate_inputs.resolution_request",
+                message,
+            )
+        })?,
+    );
+    Ok(
+        DomainPackInitializedProjectDerivationOutcome::TrustCeremonyRequired {
+            acquisition_plan: acquisition.plan.clone(),
+            derived_inputs: DomainPackInitializedProjectDerivedInputs {
+                resolution_request: derived.resolution_request.clone(),
+                resolution_projection: derived.resolution_projection.clone(),
+                composition_request: derived.composition_request.clone(),
+            },
+            lifecycle_request,
+            required_ceremonies: required_ceremonies(),
+        },
+    )
+}
+
+fn lifecycle_only_outcome(
+    intent: &DomainPackInitializedProjectIntent,
+    expected_state: &DomainPackExpectedLifecycleState,
+    operation: DomainPackLifecycleOperation,
+    derived_inputs: DomainPackInitializedProjectDerivedInputs,
+) -> Result<DomainPackInitializedProjectDerivationOutcome, DomainPackAcquisitionRejection> {
+    let resolution_request_digest =
+        canonical_digest(&derived_inputs.resolution_request).map_err(|message| {
+            single_issue(
+                DomainPackAcquisitionIssueCode::InvalidDigest,
+                "derived_inputs.resolution_request",
+                message,
+            )
+        })?;
+    Ok(
+        DomainPackInitializedProjectDerivationOutcome::LifecyclePreflightRequired {
+            lifecycle_request: lifecycle_request(
+                intent,
+                expected_state,
+                operation,
+                resolution_request_digest,
+            ),
+            derived_inputs,
+        },
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+enum GenerationChange<'a> {
+    Remove(&'a forge_core_contracts::DomainPackCoordinate),
+    UseExact,
+}
+
+fn derive_generation_operation(
+    initialized: &DomainPackInitializedProjectDerivationInput,
+    generation: &DomainPackInitializedProjectGenerationMaterial,
+    source_lock: &forge_core_contracts::DomainPackExactLockDocument,
+    operation: DomainPackLifecycleOperation,
+    change: GenerationChange<'_>,
+    expected_state: &DomainPackExpectedLifecycleState,
+    gaps: &mut Vec<DomainPackInitializedProjectDerivationGap>,
+) -> Result<DomainPackInitializedProjectDerivationOutcome, DomainPackAcquisitionRejection> {
+    let source = &source_lock.domain_pack_exact_lock;
+    let mut roots = source.payload.roots.clone();
+    match change {
+        GenerationChange::Remove(pack) => {
+            let before = roots.len();
+            roots.retain(|root| root.pack != *pack);
+            if roots.len() == before {
+                return Err(single_issue(
+                    DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                    "active_lock.payload.roots",
+                    "remove target has no active resolution root",
+                ));
+            }
+        }
+        GenerationChange::UseExact => {}
+    }
+    let derived_inputs = rederive_initialized_inputs(
+        initialized,
+        generation,
+        &source.payload.core,
+        &generation.catalog,
+        roots,
+        "generation",
+    )?;
+    if let Some(gap) = degraded_empty_gap(source) {
+        gaps.push(gap);
+        return Ok(DomainPackInitializedProjectDerivationOutcome::Blocked);
+    }
+    lifecycle_only_outcome(
+        &initialized.intent.domain_pack_initialized_project_intent,
+        expected_state,
+        operation,
+        derived_inputs,
+    )
+}
+
+fn derive_rebase_operation(
+    initialized: &DomainPackInitializedProjectDerivationInput,
+    target_core: &forge_core_contracts::DomainPackCoreBinding,
+    target_catalog: &DomainPackAcquisitionCatalogDocument,
+    operation: DomainPackLifecycleOperation,
+    expected_state: &DomainPackExpectedLifecycleState,
+    gaps: &mut Vec<DomainPackInitializedProjectDerivationGap>,
+) -> Result<DomainPackInitializedProjectDerivationOutcome, DomainPackAcquisitionRejection> {
+    let active = &initialized.active_lock.domain_pack_exact_lock;
+    if target_catalog.schema_version != DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION
+        || target_catalog.core != *target_core
+        || !valid_digest(
+            &target_catalog
+                .registry
+                .domain_pack_supply_chain_registry
+                .snapshot_digest,
+        )
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+            "material.target_catalog",
+            "Core rebase catalog does not bind the requested target Core and registry snapshot",
+        ));
+    }
+    let derived_inputs = rederive_initialized_inputs(
+        initialized,
+        &initialized.active_generation,
+        target_core,
+        target_catalog,
+        active.payload.roots.clone(),
+        "rebase",
+    )?;
+    if let Some(gap) = degraded_empty_gap(active) {
+        gaps.push(gap);
+        return Ok(DomainPackInitializedProjectDerivationOutcome::Blocked);
+    }
+    lifecycle_only_outcome(
+        &initialized.intent.domain_pack_initialized_project_intent,
+        expected_state,
+        operation,
+        derived_inputs,
+    )
+}
+
+fn rederive_initialized_inputs(
+    initialized: &DomainPackInitializedProjectDerivationInput,
+    generation: &DomainPackInitializedProjectGenerationMaterial,
+    target_core: &forge_core_contracts::DomainPackCoreBinding,
+    catalog: &DomainPackAcquisitionCatalogDocument,
+    mut roots: Vec<DomainPackResolutionRoot>,
+    kind: &str,
+) -> Result<DomainPackInitializedProjectDerivedInputs, DomainPackAcquisitionRejection> {
+    if catalog.core != *target_core
+        || catalog.schema_version != DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION
+        || !valid_digest(
+            &catalog
+                .registry
+                .domain_pack_supply_chain_registry
+                .snapshot_digest,
+        )
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+            "generation.catalog",
+            "generation catalog does not bind the resolver Core and registry snapshot",
+        ));
+    }
+    let candidates = sorted_candidates(&catalog.candidates).map_err(|message| {
+        single_issue(
+            DomainPackAcquisitionIssueCode::CandidateMaterialMismatch,
+            "generation.catalog.candidates",
+            message,
+        )
+    })?;
+    validate_candidate_materials(&candidates)?;
+    roots.sort_by(|left, right| {
+        left.pack
+            .publisher
+            .cmp(&right.pack.publisher)
+            .then_with(|| left.pack.name.cmp(&right.pack.name))
+    });
+    let intent = &initialized.intent.domain_pack_initialized_project_intent;
+    let mut resolution_request = generation.resolution_request.clone();
+    DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.clone_into(&mut resolution_request.schema_version);
+    let resolution = &mut resolution_request.domain_pack_resolution_request;
+    resolution.request_id = derived_id(
+        &format!("initialized-{kind}-resolution"),
+        &intent.intent_id.0,
+    );
+    resolution.authority = DomainPackCandidateAuthority::CandidateOnly;
+    resolution.project_id = intent.project_id.clone();
+    resolution
+        .forge_core_version
+        .clone_from(&catalog.forge_core_version);
+    resolution.core = target_core.clone();
+    resolution.requirements = generation.requirements.clone();
+    resolution.roots = roots;
+    resolution.current_lock = Some(initialized.active_lock.clone());
+    resolution.registry_snapshot_digest.clone_from(
+        &catalog
+            .registry
+            .domain_pack_supply_chain_registry
+            .snapshot_digest,
+    );
+    resolution.candidates.clone_from(&candidates);
+
+    let resolution_projection = resolve_domain_packs(&resolution_request, &catalog.registry);
+    let replayed = &resolution_projection.domain_pack_resolution_projection;
+    if replayed.status != DomainPackResolutionStatus::Resolved
+        || !replayed.issues.is_empty()
+        || !replayed.rejected.is_empty()
+        || replayed.selected.iter().any(|resolved| {
+            resolved.source_assurance != DomainPackSourceAssurance::ExplicitlyUntrusted
+                || resolved.semantic_assurance != DomainPackSemanticAssurance::Unreviewed
+        })
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::ResolutionBlocked,
+            "resolution",
+            "initialized generation cannot be replayed as a clean candidate-only resolution",
+        ));
+    }
+    let composition_candidates = replayed
+        .selected
+        .iter()
+        .map(|resolved| {
+            let matches = candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate.input.manifest.domain_pack_manifest.identity == resolved.identity
+                        && candidate.package == resolved.package
+                        && candidate.registry_record_digest.as_deref()
+                            == Some(resolved.registry_record_digest.as_str())
+                })
+                .collect::<Vec<_>>();
+            match matches.as_slice() {
+                [candidate] => Ok(candidate.input.clone()),
+                [] => Err(single_issue(
+                    DomainPackAcquisitionIssueCode::CandidateMaterialMismatch,
+                    "resolution.selected",
+                    "resolved generation package lacks exact composition material",
+                )),
+                _ => Err(single_issue(
+                    DomainPackAcquisitionIssueCode::CandidateMaterialAmbiguous,
+                    "resolution.selected",
+                    "resolved generation package has ambiguous composition material",
+                )),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut composition_request = generation.composition_request.clone();
+    DOMAIN_PACK_SCHEMA_VERSION.clone_into(&mut composition_request.schema_version);
+    let composition = &mut composition_request.domain_pack_composition_request;
+    composition.request_id = derived_id(
+        &format!("initialized-{kind}-composition"),
+        &intent.intent_id.0,
+    );
+    composition.authority = DomainPackCandidateAuthority::CandidateOnly;
+    composition
+        .forge_core_version
+        .clone_from(&catalog.forge_core_version);
+    composition.core = target_core.clone();
+    composition.requirements = generation
+        .requirements
+        .domain_pack_project_requirements
+        .clone();
+    composition.candidates = composition_candidates;
+    Ok(DomainPackInitializedProjectDerivedInputs {
+        resolution_request,
+        resolution_projection,
+        composition_request,
+    })
+}
+
+fn validate_generation(
+    generation: &DomainPackInitializedProjectGenerationMaterial,
+    lock: &forge_core_contracts::DomainPackExactLockDocument,
+    path: &str,
+) -> Result<(), DomainPackAcquisitionRejection> {
+    let exact_lock = &lock.domain_pack_exact_lock;
+    let resolution = &generation
+        .resolution_projection
+        .domain_pack_resolution_projection;
+    let composition = &generation
+        .composition_projection
+        .domain_pack_composition_projection;
+    if generation.requirements.schema_version != DOMAIN_PACK_SCHEMA_VERSION
+        || generation.catalog.schema_version != DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION
+        || generation.catalog.forge_core_version
+            != generation
+                .resolution_request
+                .domain_pack_resolution_request
+                .forge_core_version
+        || generation.catalog.core != exact_lock.payload.core
+        || generation.catalog.candidates
+            != generation
+                .resolution_request
+                .domain_pack_resolution_request
+                .candidates
+        || generation
+            .resolution_request
+            .domain_pack_resolution_request
+            .project_id
+            != exact_lock.payload.project_id
+        || generation
+            .resolution_request
+            .domain_pack_resolution_request
+            .core
+            != exact_lock.payload.core
+        || generation
+            .resolution_request
+            .domain_pack_resolution_request
+            .requirements
+            != generation.requirements
+        || generation
+            .resolution_request
+            .domain_pack_resolution_request
+            .registry_snapshot_digest
+            != exact_lock.payload.registry_snapshot_digest
+        || generation
+            .composition_request
+            .domain_pack_composition_request
+            .forge_core_version
+            != generation
+                .resolution_request
+                .domain_pack_resolution_request
+                .forge_core_version
+        || generation
+            .composition_request
+            .domain_pack_composition_request
+            .core
+            != exact_lock.payload.core
+        || generation
+            .composition_request
+            .domain_pack_composition_request
+            .requirements
+            != generation.requirements.domain_pack_project_requirements
+        || generation
+            .catalog
+            .registry
+            .domain_pack_supply_chain_registry
+            .snapshot_digest
+            != exact_lock.payload.registry_snapshot_digest
+        || resolution.resolution_digest != exact_lock.payload.resolution_digest
+        || composition.composition_digest != exact_lock.payload.composition_digest
+        || !canonical_digest(&generation.requirements)
+            .is_ok_and(|digest| digest == exact_lock.payload.requirements_digest)
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+            path,
+            "generation material does not exactly bind its immutable lock",
+        ));
+    }
+    Ok(())
+}
+
+fn initialized_expected_state(
+    state: &forge_core_contracts::DomainPackInitializedProjectStateBinding,
+) -> DomainPackExpectedLifecycleState {
+    DomainPackExpectedLifecycleState::Initialized {
+        generation: state.generation,
+        active_lock_digest: state.active_lock_digest.clone(),
+        lifecycle_head_digest: state.lifecycle_head_digest.clone(),
+        project_snapshot_digest: state.project_snapshot_digest.clone(),
+    }
+}
+
+fn lifecycle_request(
+    intent: &DomainPackInitializedProjectIntent,
+    expected_state: &DomainPackExpectedLifecycleState,
+    operation: DomainPackLifecycleOperation,
+    resolution_request_digest: String,
+) -> DomainPackLifecycleRequestDocument {
+    DomainPackLifecycleRequestDocument {
+        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
+        domain_pack_lifecycle_request: DomainPackLifecycleRequest {
+            request_id: derived_id("lifecycle", &intent.intent_id.0),
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            project_id: intent.project_id.clone(),
+            principal_id: intent.principal_id.clone(),
+            operation,
+            expected_state: expected_state.clone(),
+            resolution_request_digest,
+            project_snapshot_digest: intent.expected_state.project_snapshot_digest.clone(),
+        },
+    }
+}
+
+fn selected_coordinate(
+    acquisition: &DomainPackAcquisitionDerivationInput,
+) -> Result<forge_core_contracts::DomainPackCoordinate, DomainPackAcquisitionRejection> {
+    if !verify_domain_pack_acquisition_plan(&acquisition.plan) {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::InvalidAcquisitionPlan,
+            "material.acquisition.plan",
+            "candidate acquisition plan is invalid",
+        ));
+    }
+    let selected = &acquisition.plan.domain_pack_acquisition_plan.selected.pack;
+    Ok(forge_core_contracts::DomainPackCoordinate {
+        publisher: selected.publisher.clone(),
+        name: selected.name.clone(),
+    })
+}
+
+fn degraded_empty_gap(
+    active_lock: &forge_core_contracts::DomainPackExactLock,
+) -> Option<DomainPackInitializedProjectDerivationGap> {
+    if !active_lock.payload.packages.is_empty()
+        || active_lock.payload.unresolved_composition_gaps.is_empty()
+    {
+        return None;
+    }
+    let mut unresolved_requirement_refs = active_lock
+        .payload
+        .unresolved_composition_gaps
+        .iter()
+        .map(|gap| gap.requirement_ref.clone())
+        .collect::<Vec<_>>();
+    unresolved_requirement_refs.sort();
+    unresolved_requirement_refs.dedup();
+    Some(DomainPackInitializedProjectDerivationGap::DegradedEmpty {
+        proposed_lock_digest: active_lock.lock_digest.clone(),
+        unresolved_requirement_refs,
+    })
+}
+
+fn valid_exact_lock(document: &forge_core_contracts::DomainPackExactLockDocument) -> bool {
+    let lock = &document.domain_pack_exact_lock;
+    document.schema_version == DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION
+        && valid_digest(&lock.lock_digest)
+        && valid_id(&lock.payload.project_id.0)
+        && valid_digest(&lock.payload.core.bundle_digest)
+        && valid_digest(&lock.payload.core.policy_set_digest)
+        && valid_digest(&lock.payload.requirements_digest)
+        && valid_digest(&lock.payload.registry_snapshot_digest)
+        && valid_digest(&lock.payload.reviewer_registry_digest)
+        && valid_digest(&lock.payload.reviewed_registry_digest)
+        && valid_digest(&lock.payload.trust_policy_digest)
+        && valid_digest(&lock.payload.capability_registry_digest)
+        && valid_digest(&lock.payload.sandbox_policy_digest)
+        && valid_digest(&lock.payload.resolution_digest)
+        && valid_digest(&lock.payload.composition_digest)
+        && canonical_digest(&lock.payload).is_ok_and(|digest| digest == lock.lock_digest)
+}
+
 fn derivation_input_within_limits(input: &DomainPackAcquisitionDerivationInput) -> bool {
     let registry = &input.registry.domain_pack_supply_chain_registry;
     !input.candidates.is_empty()
@@ -836,6 +1791,7 @@ pub fn verify_domain_pack_acquisition_plan(document: &DomainPackAcquisitionPlanD
 
 fn required_ceremonies() -> Vec<DomainPackAcquisitionCeremony> {
     vec![
+        DomainPackAcquisitionCeremony::OperatorCandidateApproval,
         DomainPackAcquisitionCeremony::OperatorTrustPolicy,
         DomainPackAcquisitionCeremony::SupplyChainRegistryVerification,
         DomainPackAcquisitionCeremony::IndependentReviewedRegistryVerification,
@@ -914,8 +1870,11 @@ mod tests {
         DomainPackArtifactBinding, DomainPackCandidateInput, DomainPackCompatibility,
         DomainPackCredentialStatus, DomainPackDiscoveryRequestDocument, DomainPackIdentity,
         DomainPackNamespaceGrant, DomainPackPackageBinding, DomainPackPublisherCredential,
-        DomainPackRegistryPackageRecord, DomainPackResolutionCandidate,
-        DomainPackSupplyChainRegistry, DomainPackSupplyChainRegistryDocument, RepoPath, StableId,
+        DomainPackRegistryArtifactSet, DomainPackRegistryMirror, DomainPackRegistryMirrorTransport,
+        DomainPackRegistryPackageRecord, DomainPackRemoteArtifactDescriptor,
+        DomainPackRemoteArtifactKind, DomainPackRemoteArtifactMediaType,
+        DomainPackResolutionCandidate, DomainPackSupplyChainRegistry,
+        DomainPackSupplyChainRegistryDocument, RepoPath, StableId,
         DOMAIN_PACK_DISCOVERY_SCHEMA_VERSION, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
     };
 
@@ -948,6 +1907,63 @@ mod tests {
             },
             request,
             discovery,
+        }
+    }
+
+    fn remote_descriptor(
+        kind: DomainPackRemoteArtifactKind,
+        binding: DomainPackArtifactBinding,
+        media_type: DomainPackRemoteArtifactMediaType,
+    ) -> DomainPackRemoteArtifactDescriptor {
+        DomainPackRemoteArtifactDescriptor {
+            kind,
+            object_path: RepoPath(format!(
+                "objects/sha256/{}",
+                &binding.raw_sha256["sha256:".len()..]
+            )),
+            binding,
+            // The established P7c fixture uses synthetic digest pins rather
+            // than retained bytes. Keep a nonzero bounded descriptor while
+            // preserving the exact binding to those pins.
+            byte_length: 32,
+            media_type,
+        }
+    }
+
+    fn registry_artifacts(package: &DomainPackPackageBinding) -> DomainPackRegistryArtifactSet {
+        let content = DomainPackArtifactBinding {
+            artifact_ref: package.content.content_ref.clone(),
+            raw_sha256: package.content.raw_sha256.clone(),
+            canonical_sha256: package.content.canonical_sha256.clone(),
+        };
+        DomainPackRegistryArtifactSet {
+            manifest: remote_descriptor(
+                DomainPackRemoteArtifactKind::Manifest,
+                package.manifest.clone(),
+                DomainPackRemoteArtifactMediaType::ApplicationYaml,
+            ),
+            content: remote_descriptor(
+                DomainPackRemoteArtifactKind::Content,
+                content,
+                DomainPackRemoteArtifactMediaType::ApplicationYaml,
+            ),
+            license: remote_descriptor(
+                DomainPackRemoteArtifactKind::License,
+                package.license.clone(),
+                DomainPackRemoteArtifactMediaType::TextPlain,
+            ),
+            fixtures: package
+                .fixtures
+                .iter()
+                .cloned()
+                .map(|binding| {
+                    remote_descriptor(
+                        DomainPackRemoteArtifactKind::Fixture,
+                        binding,
+                        DomainPackRemoteArtifactMediaType::ApplicationYaml,
+                    )
+                })
+                .collect(),
         }
     }
 
@@ -1040,6 +2056,13 @@ mod tests {
                     valid_from_unix: 0,
                     valid_until_unix: 300,
                 }],
+                mirrors: vec![DomainPackRegistryMirror {
+                    mirror_id: StableId("mirror.acquisition.fixture".to_owned()),
+                    priority: 0,
+                    transport: DomainPackRegistryMirrorTransport::Https {
+                        base_url: "https://registry.example.invalid/domain-packs".to_owned(),
+                    },
+                }],
                 packages: vec![DomainPackRegistryPackageRecord {
                     identity: resolution_candidate
                         .input
@@ -1048,10 +2071,15 @@ mod tests {
                         .identity
                         .clone(),
                     package_digest: package.package_digest.clone(),
-                    manifest_digest: package.manifest.canonical_sha256.clone(),
-                    content_digest: package.content.canonical_sha256.clone(),
-                    license_digest: package.license.canonical_sha256.clone(),
-                    fixture_digests: Vec::new(),
+                    manifest_digest: package.manifest.raw_sha256.clone(),
+                    content_digest: package.content.raw_sha256.clone(),
+                    license_digest: package.license.raw_sha256.clone(),
+                    fixture_digests: package
+                        .fixtures
+                        .iter()
+                        .map(|fixture| fixture.raw_sha256.clone())
+                        .collect(),
+                    artifacts: registry_artifacts(&package),
                     namespace_grant_id: StableId("grant.acquisition.fixture".to_owned()),
                     publisher_credential_id: StableId("credential.acquisition.fixture".to_owned()),
                     publisher_signature_hex: "00".repeat(64),
@@ -1113,8 +2141,16 @@ mod tests {
             .identity
             .clone();
         record.package_digest = candidate.package.package_digest.clone();
-        record.manifest_digest = candidate.package.manifest.canonical_sha256.clone();
-        record.content_digest = candidate.package.content.canonical_sha256.clone();
+        record.manifest_digest = candidate.package.manifest.raw_sha256.clone();
+        record.content_digest = candidate.package.content.raw_sha256.clone();
+        record.license_digest = candidate.package.license.raw_sha256.clone();
+        record.fixture_digests = candidate
+            .package
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.raw_sha256.clone())
+            .collect();
+        record.artifacts = registry_artifacts(&candidate.package);
         record.record_digest = candidate
             .registry_record_digest
             .clone()
@@ -1136,7 +2172,7 @@ mod tests {
             plan.status,
             DomainPackAcquisitionPlanStatus::TrustCeremonyRequired
         );
-        assert_eq!(plan.required_ceremonies.len(), 5);
+        assert_eq!(plan.required_ceremonies.len(), 6);
         assert!(verify_domain_pack_acquisition_plan(
             &plan_domain_pack_acquisition(&input()).expect("persisted acquisition plan")
         ));

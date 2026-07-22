@@ -8,6 +8,7 @@ forge-core-command-surface = { path = "../forge-core-command-surface" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-decisions = { path = "../forge-core-decisions" }
 ed25519-dalek.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_canonicalizer.workspace = true

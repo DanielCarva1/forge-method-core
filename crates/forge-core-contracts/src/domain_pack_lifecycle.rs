@@ -5,10 +5,16 @@
 //! active generation.
 
 use crate::{
+    DomainPackAcquisitionCatalogDocument, DomainPackAcquisitionCeremony,
+    DomainPackAcquisitionDerivationInput, DomainPackAcquisitionPlanDocument,
     DomainPackArtifactBinding, DomainPackCandidateAuthority,
-    DomainPackCompositionProjectionDocument, DomainPackCoordinate, DomainPackExactLockDocument,
-    DomainPackResolutionProjectionDocument, DomainPackRuntimeCapabilityGap,
-    DomainPackSandboxDecision, DomainPackTrustDisposition, StableId,
+    DomainPackCompositionProjectionDocument, DomainPackCompositionRequestDocument,
+    DomainPackCoordinate, DomainPackCoreBinding, DomainPackDiscoveryGap,
+    DomainPackExactLockDocument, DomainPackInitializedProjectIntentDocument,
+    DomainPackInitializedProjectStateBinding, DomainPackProjectRequirementsDocument,
+    DomainPackResolutionProjectionDocument, DomainPackResolutionRequestDocument,
+    DomainPackRuntimeCapabilityGap, DomainPackSandboxDecision, DomainPackTrustDisposition,
+    StableId,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -199,6 +205,140 @@ pub enum DomainPackExpectedLifecycleState {
         active_lock_digest: String,
         lifecycle_head_digest: String,
         project_snapshot_digest: String,
+    },
+}
+
+/// One high-level derivation boundary for every initialized-project lifecycle
+/// operation. The exact active lock is presented alongside the intent so the
+/// derivation cannot reconstruct current state from unbound host claims.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectDerivationInput {
+    pub intent: DomainPackInitializedProjectIntentDocument,
+    /// Independently presented current state. It must exactly equal the intent
+    /// binding before any request can be derived.
+    pub initialized_state: DomainPackInitializedProjectStateBinding,
+    pub active_lock: DomainPackExactLockDocument,
+    /// Exact persisted request/projection material for the bound active lock.
+    /// Derivation replays these inputs and checks their digests against the lock
+    /// rather than reconstructing them from host-selected summaries.
+    pub active_generation: DomainPackInitializedProjectGenerationMaterial,
+    pub material: DomainPackInitializedProjectDerivationMaterial,
+}
+
+/// Exact resolver/composer source material for one immutable generation.
+/// Catalog contents provide full candidate documents; the request and
+/// projection pairs preserve the exact roots, requirements, and deterministic
+/// decisions that produced the generation's lock.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectGenerationMaterial {
+    pub requirements: DomainPackProjectRequirementsDocument,
+    pub catalog: DomainPackAcquisitionCatalogDocument,
+    pub resolution_request: DomainPackResolutionRequestDocument,
+    pub resolution_projection: DomainPackResolutionProjectionDocument,
+    pub composition_request: DomainPackCompositionRequestDocument,
+    pub composition_projection: DomainPackCompositionProjectionDocument,
+}
+
+/// Operation-specific evidence required to replay the existing resolver and
+/// composition boundary. Variant/intent agreement is checked semantically and
+/// no variant carries lifecycle mutation authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DomainPackInitializedProjectDerivationMaterial {
+    Candidate {
+        acquisition: DomainPackAcquisitionDerivationInput,
+    },
+    CurrentGeneration {
+        /// Exact active-generation evidence. It must equal the independently
+        /// presented `active_generation` before a current-generation operation
+        /// can proceed to lifecycle preflight.
+        generation: DomainPackInitializedProjectGenerationMaterial,
+    },
+    Rollback {
+        target_lock: DomainPackExactLockDocument,
+        target_generation: DomainPackInitializedProjectGenerationMaterial,
+    },
+    RebaseCore {
+        target_core: DomainPackCoreBinding,
+        target_catalog: DomainPackAcquisitionCatalogDocument,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectDerivationDocument {
+    pub schema_version: String,
+    pub domain_pack_initialized_project_derivation: DomainPackInitializedProjectDerivation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectDerivation {
+    pub derivation_id: StableId,
+    pub authority: DomainPackCandidateAuthority,
+    pub intent_digest: String,
+    pub expected_state: DomainPackExpectedLifecycleState,
+    pub active_lock_digest: String,
+    pub outcome: DomainPackInitializedProjectDerivationOutcome,
+    pub gaps: Vec<DomainPackInitializedProjectDerivationGap>,
+    pub derivation_digest: String,
+}
+
+/// Closed result of initialized-state derivation. Candidate operations remain
+/// visibly separated from trust; non-candidate operations proceed only to the
+/// existing lifecycle preflight boundary. Gaps are data, not collapsed errors.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DomainPackInitializedProjectDerivationOutcome {
+    TrustCeremonyRequired {
+        acquisition_plan: DomainPackAcquisitionPlanDocument,
+        derived_inputs: DomainPackInitializedProjectDerivedInputs,
+        lifecycle_request: DomainPackLifecycleRequestDocument,
+        required_ceremonies: Vec<DomainPackAcquisitionCeremony>,
+    },
+    LifecyclePreflightRequired {
+        lifecycle_request: DomainPackLifecycleRequestDocument,
+        derived_inputs: DomainPackInitializedProjectDerivedInputs,
+    },
+    Blocked,
+}
+
+/// Exact candidate-only resolver and composer inputs derived from the bound
+/// initialized generation. Candidate operations retain their acquisition plan
+/// separately; every operation binds `current_lock` to the exact active lock.
+/// The lifecycle TCB rechecks these inputs and owns trust, preflight, and
+/// activation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectDerivedInputs {
+    pub resolution_request: DomainPackResolutionRequestDocument,
+    pub resolution_projection: DomainPackResolutionProjectionDocument,
+    pub composition_request: DomainPackCompositionRequestDocument,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DomainPackInitializedProjectDerivationGap {
+    StateBindingMismatch {
+        expected: DomainPackInitializedProjectStateBinding,
+        observed: DomainPackInitializedProjectStateBinding,
+    },
+    ActiveLockMismatch {
+        expected_active_lock_digest: String,
+        presented_active_lock_digest: String,
+    },
+    CandidateApprovalRequired {
+        candidate_id: StableId,
+    },
+    UnmatchedDemand {
+        demand_digest: String,
+        gap: DomainPackDiscoveryGap,
+    },
+    DegradedEmpty {
+        proposed_lock_digest: String,
+        unresolved_requirement_refs: Vec<StableId>,
     },
 }
 

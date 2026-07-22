@@ -32,21 +32,25 @@ use forge_core_decisions::{
     GuaranteeStatus, ReplayProtectionObservation, ReplayReservationStatus,
     EXECUTION_ADMISSION_SCHEMA_VERSION,
 };
+use forge_core_store::producer_quiescence::{
+    admit_effect_producer, EffectProducerGuard, HostQuiescenceGuard, ProducerBoundary,
+    ProducerBoundaryError,
+};
 use forge_core_store::replay_wal::{
     acquire_owned_replay_commit_guard, consume_replay_key_hash_under_effect_lock,
-    reserve_replay_nonce, OwnedReplayCommitGuard, ReplayConsumeResult, ReplayReservation,
-    ReplayWalError,
+    reserve_replay_nonce_under_effect_lock, OwnedReplayCommitGuard, ReplayConsumeResult,
+    ReplayReservation, ReplayWalError,
 };
 use forge_core_store::{
-    acquire_effect_store_lock, append_effect_replay_completion_under_lock, append_trace_event,
-    apply_file_effect_transaction_with_provenance_under_lock, collect_validation_yaml_documents,
-    pending_effect_replay_commits_under_lock, preflight_file_effect_transaction_under_lock,
-    recover_effect_wal, repair_effect_wal_tail_under_lock, sha256_content_hash,
-    AppendJsonLineError, EffectApplicationPayload, EffectApplicationResult,
-    EffectApplicationStatus, EffectExecutionProvenance, EffectExecutionProvenanceError,
-    EffectPreflightResult, EffectPreflightStatus, EffectReplayCommitBinding,
-    EffectReplayCompletionResult, EffectReplayReconciliationError, EffectStoreLockError,
-    EffectWalRecoveryStatus,
+    acquire_effect_store_lock_under_boundary, append_effect_replay_completion_under_lock,
+    append_trace_event_under_boundary, apply_file_effect_transaction_with_provenance_under_lock,
+    collect_validation_yaml_documents, pending_effect_replay_commits_under_lock,
+    preflight_file_effect_transaction_under_lock, recover_effect_wal_under_lock,
+    repair_effect_wal_tail_under_lock, sha256_content_hash, AppendJsonLineError,
+    EffectApplicationPayload, EffectApplicationResult, EffectApplicationStatus,
+    EffectExecutionProvenance, EffectExecutionProvenanceError, EffectPreflightResult,
+    EffectPreflightStatus, EffectReplayCommitBinding, EffectReplayCompletionResult,
+    EffectReplayReconciliationError, EffectStoreLockError, EffectWalRecoveryStatus,
 };
 use forge_core_trace::{
     TraceActor, TraceAuthority, TraceCost, TraceEvent, TraceEventKind, TraceRef, TraceRisk,
@@ -570,7 +574,9 @@ pub struct PreparedExecutionTransaction {
     commit_descriptor: PreparedCommitDescriptor,
     commit_digest: String,
     initial_preflight: EffectPreflightResult,
+    // Drop exact lock authority before releasing the root-wide admission.
     replay_guard: OwnedReplayCommitGuard,
+    producer_admission: EffectProducerGuard,
 }
 
 impl fmt::Debug for PreparedExecutionTransaction {
@@ -901,8 +907,12 @@ impl LateAdmittedExecutionTransaction {
             &authority_grants,
         );
         let principal_trace_event_id = principal_trace.event_id.clone();
-        append_trace_event(self.prepared.environment.state_root(), &principal_trace)
-            .map_err(ExecutionCommitError::PrincipalTrace)?;
+        append_trace_event_under_boundary(
+            &self.prepared.producer_admission,
+            self.prepared.environment.state_root(),
+            &principal_trace,
+        )
+        .map_err(ExecutionCommitError::PrincipalTrace)?;
         let application = apply_file_effect_transaction_with_provenance_under_lock(
             self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
@@ -1102,6 +1112,7 @@ pub enum PrepareExecutionError {
         requirement: &'static str,
         diagnostics: Vec<String>,
     },
+    ProducerAdmission(ProducerBoundaryError),
     CommitDescriptor(String),
     EffectLock(String),
     EffectPreflightBlocked(Box<EffectPreflightResult>),
@@ -1196,6 +1207,9 @@ impl fmt::Display for PrepareExecutionError {
             ),
             Self::CommitDescriptor(source) => {
                 write!(formatter, "commit descriptor failed: {source}")
+            }
+            Self::ProducerAdmission(source) => {
+                write!(formatter, "producer admission failed: {source}")
             }
             Self::EffectLock(source) => write!(formatter, "effect lock failed: {source}"),
             Self::EffectPreflightBlocked(result) => {
@@ -1293,6 +1307,7 @@ impl std::error::Error for ExecutionCommitError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ExecutionReplayReconciliationError {
+    ProducerAdmission(ProducerBoundaryError),
     EffectLock(String),
     EffectRecovery(Vec<String>),
     EffectWal(EffectReplayReconciliationError),
@@ -1313,6 +1328,12 @@ pub enum ExecutionReplayReconciliationError {
 impl fmt::Display for ExecutionReplayReconciliationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ProducerAdmission(error) => {
+                write!(
+                    formatter,
+                    "effect recovery producer admission failed: {error}"
+                )
+            }
             Self::EffectLock(error) => write!(formatter, "effect recovery lock failed: {error}"),
             Self::EffectRecovery(diagnostics) => write!(
                 formatter,
@@ -1597,7 +1618,12 @@ pub fn prepare_execution_transaction(
         .map_err(|error| PrepareExecutionError::CommitDescriptor(error.to_string()))?;
     let commit_digest = sha256_content_hash(&canonical);
 
-    let effect_lock = acquire_effect_store_lock(
+    // One root-scoped effect-producer admission precedes the exact effect lock
+    // and every replay/trace/WAL mutation, then remains live through commit.
+    let producer_admission = admit_effect_producer(environment.state_root(), false)
+        .map_err(PrepareExecutionError::ProducerAdmission)?;
+    let effect_lock = acquire_effect_store_lock_under_boundary(
+        &producer_admission,
         environment.effect_store_root(),
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     )?;
@@ -1614,8 +1640,10 @@ pub fn prepare_execution_transaction(
         )));
     }
 
-    let reservation = reserve_replay_nonce(
+    let reservation = reserve_replay_nonce_under_effect_lock(
         environment.state_root(),
+        &effect_lock,
+        PREPARED_EFFECT_LOCK_FROM_STATE_ROOT,
         principal.principal_id(),
         principal.audience(),
         authorization.nonce(),
@@ -1652,6 +1680,7 @@ pub fn prepare_execution_transaction(
         commit_digest,
         initial_preflight,
         replay_guard,
+        producer_admission,
     })
 }
 
@@ -1667,7 +1696,29 @@ pub fn prepare_execution_transaction(
 pub fn reconcile_prepared_execution_commits(
     environment: &TrustedExecutionEnvironment,
 ) -> Result<ExecutionReplayReconciliationResult, ExecutionReplayReconciliationError> {
-    let effect_lock = acquire_effect_store_lock(
+    let producer_admission = admit_effect_producer(environment.state_root(), false)
+        .map_err(ExecutionReplayReconciliationError::ProducerAdmission)?;
+    reconcile_prepared_execution_commits_under_boundary(environment, &producer_admission)
+}
+
+/// Reconcile prepared commits while backup retains exclusive host quiescence.
+///
+/// This typed path is intentionally hidden from normal producer callers: it
+/// reuses only the exact exclusive boundary and never attempts shared admission.
+#[doc(hidden)]
+pub fn reconcile_prepared_execution_commits_under_host_quiescence(
+    environment: &TrustedExecutionEnvironment,
+    quiescence: &HostQuiescenceGuard,
+) -> Result<ExecutionReplayReconciliationResult, ExecutionReplayReconciliationError> {
+    reconcile_prepared_execution_commits_under_boundary(environment, quiescence)
+}
+
+fn reconcile_prepared_execution_commits_under_boundary(
+    environment: &TrustedExecutionEnvironment,
+    boundary: &impl ProducerBoundary,
+) -> Result<ExecutionReplayReconciliationResult, ExecutionReplayReconciliationError> {
+    let effect_lock = acquire_effect_store_lock_under_boundary(
+        boundary,
         environment.effect_store_root(),
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     )
@@ -1679,8 +1730,10 @@ pub fn reconcile_prepared_execution_commits(
         PREPARED_EFFECT_WAL_RELATIVE_PATH,
     )
     .map_err(ExecutionReplayReconciliationError::EffectWal)?;
-    let effect_recovery = recover_effect_wal(
+    let effect_recovery = recover_effect_wal_under_lock(
         environment.effect_store_root(),
+        &effect_lock,
+        PREPARED_EFFECT_LOCK_RELATIVE_PATH,
         PREPARED_EFFECT_WAL_RELATIVE_PATH,
     );
     if effect_recovery.status == EffectWalRecoveryStatus::RecoveryFailed {

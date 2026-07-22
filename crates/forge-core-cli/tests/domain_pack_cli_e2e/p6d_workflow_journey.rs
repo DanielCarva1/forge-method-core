@@ -3,8 +3,10 @@
 
 use super::*;
 use forge_core_authority::{
-    AttestationInput, CanonicalIntent, PrincipalCredentialStatus, PrincipalRegistryContract,
-    PrincipalRegistryDocument, PrincipalRegistryEntry,
+    workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
+    AuthorizedWorkflowBrokerControlPlane, PrincipalCredentialStatus, PrincipalRegistryContract,
+    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowBrokerEventEnvelope,
+    WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_decisions::{
@@ -13,7 +15,10 @@ use forge_core_decisions::{
     DomainPackCandidateMaterial, DomainPackCapabilityDemand, DomainPackCompatibilityInput,
     DomainPackTrustEvaluationInput, DomainPackTrustSelectedPackage,
 };
-use forge_core_store::sha256_content_hash;
+use forge_core_store::{
+    sha256_content_hash, workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+};
+use forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::process::Output;
@@ -27,6 +32,9 @@ const WORKER_CREDENTIAL: &str = "credential.workflow.p6d-worker";
 const WORKER_TWO_CREDENTIAL: &str = "credential.workflow.p6d-worker-two";
 const RUNTIME_CREDENTIAL: &str = "credential.workflow.p6d-runtime";
 const RUNTIME_TWO_CREDENTIAL: &str = "credential.workflow.p6d-runtime-two";
+const C1_BROKER_ISSUER_ID: &str = "broker.host.human.p6d-c1";
+const C1_BROKER_PRINCIPAL_ID: &str = "principal.human.p6d-c1";
+const C1_BROKER_SEPARATION_DOMAIN: &str = "human-session.p6d-c1";
 const CLI_SUBPROCESS_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn heartbeat(started: Instant, phase: &str) {
@@ -78,6 +86,23 @@ impl ReferenceProject {
 
     fn workflow(&self, subcommand: &str, tail: &[String]) -> Output {
         self.workflow_with_env(subcommand, tail, None)
+    }
+    fn workflow_nested(&self, group: &str, action: &str, tail: &[String]) -> Output {
+        let mut args = vec![
+            "workflow".to_owned(),
+            group.to_owned(),
+            action.to_owned(),
+            "--root".to_owned(),
+            self.app.display().to_string(),
+            "--json".to_owned(),
+        ];
+        args.extend_from_slice(tail);
+        Command::cargo_bin("forge-core")
+            .expect("forge-core binary")
+            .timeout(CLI_SUBPROCESS_TIMEOUT)
+            .args(&args)
+            .output()
+            .expect("fresh nested forge-core process")
     }
 
     fn workflow_with_env(
@@ -176,8 +201,28 @@ fn reference_material<'a>(
     )
 }
 
+fn reference_artifact_descriptor(
+    kind: DomainPackRemoteArtifactKind,
+    binding: DomainPackArtifactBinding,
+    raw: &[u8],
+) -> DomainPackRemoteArtifactDescriptor {
+    let object_digest = binding
+        .raw_sha256
+        .strip_prefix("sha256:")
+        .expect("reference raw digest prefix");
+    let object_path = RepoPath(format!("objects/sha256/{object_digest}"));
+    DomainPackRemoteArtifactDescriptor {
+        kind,
+        binding,
+        object_path,
+        byte_length: u64::try_from(raw.len()).expect("reference artifact byte length"),
+        media_type: DomainPackRemoteArtifactMediaType::ApplicationYaml,
+    }
+}
+
 /// Reuse the P6b signer/key topology, replacing only the exact package subject
 /// and then re-sealing every dependent digest and signature.
+#[allow(clippy::too_many_lines)]
 fn write_signed_reference_supply(
     project: &ReferenceProject,
     request: &DomainPackCompositionRequestDocument,
@@ -188,6 +233,51 @@ fn write_signed_reference_supply(
     let candidate = &request.domain_pack_composition_request.candidates[0];
     let manifest = &candidate.manifest.domain_pack_manifest;
     let package_digest = canonical_digest(candidate);
+    let (manifest_raw, content_raw, license_raw) = reference_material(project, candidate);
+    let artifacts = DomainPackRegistryArtifactSet {
+        manifest: reference_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Manifest,
+            candidate.manifest_binding.clone(),
+            &manifest_raw,
+        ),
+        content: reference_artifact_descriptor(
+            DomainPackRemoteArtifactKind::Content,
+            DomainPackArtifactBinding {
+                artifact_ref: manifest.content.content_ref.clone(),
+                raw_sha256: manifest.content.raw_sha256.clone(),
+                canonical_sha256: manifest.content.canonical_sha256.clone(),
+            },
+            &content_raw,
+        ),
+        license: reference_artifact_descriptor(
+            DomainPackRemoteArtifactKind::License,
+            manifest.provenance.license_text.clone(),
+            &license_raw,
+        ),
+        fixtures: candidate
+            .content
+            .domain_pack_content
+            .fixtures
+            .iter()
+            .map(|fixture| {
+                let raw = fs::read(project.artifacts.join(&fixture.artifact.artifact_ref.0))
+                    .expect("reference fixture");
+                reference_artifact_descriptor(
+                    DomainPackRemoteArtifactKind::Fixture,
+                    fixture.artifact.clone(),
+                    &raw,
+                )
+            })
+            .collect(),
+    };
+    let manifest_digest = artifacts.manifest.binding.raw_sha256.clone();
+    let content_digest = artifacts.content.binding.raw_sha256.clone();
+    let license_digest = artifacts.license.binding.raw_sha256.clone();
+    let fixture_digests = artifacts
+        .fixtures
+        .iter()
+        .map(|fixture| fixture.binding.raw_sha256.clone())
+        .collect();
 
     let rule = &mut policy.domain_pack_trust_policy.rules[0];
     rule.pack = DomainPackCoordinate {
@@ -206,22 +296,11 @@ fn write_signed_reference_supply(
         let record = &mut snapshot.packages[0];
         record.identity = manifest.identity.clone();
         record.package_digest.clone_from(&package_digest);
-        record
-            .manifest_digest
-            .clone_from(&candidate.manifest_binding.canonical_sha256);
-        record
-            .content_digest
-            .clone_from(&manifest.content.canonical_sha256);
-        record
-            .license_digest
-            .clone_from(&manifest.provenance.license_text.canonical_sha256);
-        record.fixture_digests = candidate
-            .content
-            .domain_pack_content
-            .fixtures
-            .iter()
-            .map(|fixture| fixture.artifact.canonical_sha256.clone())
-            .collect();
+        record.manifest_digest = manifest_digest;
+        record.content_digest = content_digest;
+        record.license_digest = license_digest;
+        record.fixture_digests = fixture_digests;
+        record.artifacts = artifacts;
         record.record_digest = domain_pack_package_record_digest(record).expect("package digest");
         let publisher_key = SigningKey::from_bytes(&[42_u8; 32]);
         let publisher_bytes =
@@ -1385,13 +1464,6 @@ fn required_str<'a>(value: &'a Value, pointer: &str) -> &'a str {
         .unwrap_or_else(|| panic!("missing string {pointer}: {value:#}"))
 }
 
-fn required_u64(value: &Value, pointer: &str) -> u64 {
-    value
-        .pointer(pointer)
-        .and_then(Value::as_u64)
-        .unwrap_or_else(|| panic!("missing integer {pointer}: {value:#}"))
-}
-
 struct WorkflowAuthority {
     human: SigningKey,
     human_two: SigningKey,
@@ -1399,6 +1471,8 @@ struct WorkflowAuthority {
     worker_two: SigningKey,
     runtime: SigningKey,
     runtime_two: SigningKey,
+    c1_human: SigningKey,
+    broker_audience: String,
 }
 
 impl WorkflowAuthority {
@@ -1514,6 +1588,160 @@ impl WorkflowAuthority {
             yaml_serde::to_string(&registry).expect("workflow registry YAML"),
         )
         .expect("workflow registry");
+
+        let c1_human = SigningKey::from_bytes(&[97_u8; 32]);
+        let admin = SigningKey::from_bytes(&[98_u8; 32]);
+        let project_id = StableId("project.agent-built-game".to_owned());
+        let workflow_id = StableId("workflow.governance".to_owned());
+        let broker_audience = workflow_broker_expected_audience(&project_id, &workflow_id);
+        let host_binding = WorkflowBrokerHostBinding {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.p6d".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            host_installation_id: StableId("host.installation.p6d".to_owned()),
+            protocol_version: "workflow-host-origin-v1".to_owned(),
+        };
+        let enrollment_operation_id = StableId("admin.operation.p6d-genesis".to_owned());
+        let enrolled_at = now().saturating_sub(60);
+        let event_credential =
+            |credential_id: &str,
+             broker_id: &str,
+             subject_id: &str,
+             profile: WorkflowBrokerCredentialProfile,
+             key: &SigningKey,
+             allowed_operations: Vec<WorkflowBrokerBoundOperation>| {
+                WorkflowBrokerPublicCredentialMetadata {
+                    credential_id: StableId(credential_id.to_owned()),
+                    broker_id: StableId(broker_id.to_owned()),
+                    subject_id: StableId(subject_id.to_owned()),
+                    purpose: WorkflowBrokerCredentialPurpose::EventIssuer,
+                    profile,
+                    algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+                    public_key_hex: hex(key.verifying_key().as_bytes()),
+                    key_generation: 1,
+                    status: WorkflowBrokerCredentialStatus::Active,
+                    custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+                    host_binding: host_binding.clone(),
+                    allowed_operations,
+                    not_before_unix: enrolled_at,
+                    revoked_at_unix: None,
+                    predecessor_credential_id: None,
+                    enrollment_operation_id: enrollment_operation_id.clone(),
+                    revocation_operation_id: None,
+                }
+            };
+        let human_operations = vec![
+            WorkflowBrokerBoundOperation::Applicability,
+            WorkflowBrokerBoundOperation::Decision,
+            WorkflowBrokerBoundOperation::Evidence,
+            WorkflowBrokerBoundOperation::Waiver,
+        ];
+        let reviewer_operations = vec![WorkflowBrokerBoundOperation::Evidence];
+        let runtime_operations = vec![
+            WorkflowBrokerBoundOperation::Capability,
+            WorkflowBrokerBoundOperation::Evidence,
+        ];
+        let mut credentials = vec![
+            WorkflowBrokerPublicCredentialMetadata {
+                credential_id: StableId("credential.workflow.p6d-admin".to_owned()),
+                broker_id: StableId("broker.workflow.p6d-admin".to_owned()),
+                subject_id: StableId("administrator.workflow.p6d".to_owned()),
+                purpose: WorkflowBrokerCredentialPurpose::RegistryAdministrator,
+                profile: WorkflowBrokerCredentialProfile::Administrator,
+                algorithm: WorkflowBrokerPublicKeyAlgorithm::Ed25519,
+                public_key_hex: hex(admin.verifying_key().as_bytes()),
+                key_generation: 1,
+                status: WorkflowBrokerCredentialStatus::Active,
+                custody: WorkflowBrokerCustodyKind::HostIsolatedNonExportable,
+                host_binding: host_binding.clone(),
+                allowed_operations: Vec::new(),
+                not_before_unix: enrolled_at,
+                revoked_at_unix: None,
+                predecessor_credential_id: None,
+                enrollment_operation_id: enrollment_operation_id.clone(),
+                revocation_operation_id: None,
+            },
+            event_credential(
+                HUMAN_CREDENTIAL,
+                "broker.workflow.p6d-human",
+                HUMAN_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Human,
+                &human,
+                human_operations.clone(),
+            ),
+            event_credential(
+                HUMAN_TWO_CREDENTIAL,
+                "broker.workflow.p6d-human-two",
+                HUMAN_TWO_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Human,
+                &human_two,
+                human_operations,
+            ),
+            event_credential(
+                WORKER_CREDENTIAL,
+                "broker.workflow.p6d-worker",
+                WORKER_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Reviewer,
+                &worker,
+                reviewer_operations.clone(),
+            ),
+            event_credential(
+                WORKER_TWO_CREDENTIAL,
+                "broker.workflow.p6d-worker-two",
+                WORKER_TWO_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Reviewer,
+                &worker_two,
+                reviewer_operations,
+            ),
+            event_credential(
+                RUNTIME_CREDENTIAL,
+                "broker.workflow.p6d-runtime",
+                RUNTIME_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Runtime,
+                &runtime,
+                runtime_operations.clone(),
+            ),
+            event_credential(
+                RUNTIME_TWO_CREDENTIAL,
+                "broker.workflow.p6d-runtime-two",
+                RUNTIME_TWO_CREDENTIAL,
+                WorkflowBrokerCredentialProfile::Runtime,
+                &runtime_two,
+                runtime_operations,
+            ),
+            event_credential(
+                "credential.workflow.p6d-c1-human",
+                "broker.workflow.p6d-c1-human",
+                C1_BROKER_ISSUER_ID,
+                WorkflowBrokerCredentialProfile::Human,
+                &c1_human,
+                vec![WorkflowBrokerBoundOperation::IntentRevision],
+            ),
+        ];
+        credentials.sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+        let broker_registry = WorkflowBrokerPublicRegistryDocument {
+            schema_version: WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION.to_owned(),
+            audience: broker_audience.clone(),
+            project_id: project_id.clone(),
+            workflow_id: workflow_id.clone(),
+            registry_generation: 1,
+            previous_registry_digest: None,
+            required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
+            credentials,
+        };
+        AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
+            broker_registry.clone(),
+            &broker_audience,
+            &project_id,
+            &workflow_id,
+        )
+        .expect("strict P6d broker registry fixture");
+        fs::write(
+            project.operator.join("workflow-broker-registry.yaml"),
+            yaml_serde::to_string(&broker_registry).expect("strict P6d broker registry YAML"),
+        )
+        .expect("publish preconfigured external broker registry");
         Self {
             human,
             human_two,
@@ -1521,79 +1749,156 @@ impl WorkflowAuthority {
             worker_two,
             runtime,
             runtime_two,
+            c1_human,
+            broker_audience,
         }
     }
 
-    fn attestation<T: Serialize>(
-        &self,
-        credential: &str,
-        action: &str,
-        request: &T,
-    ) -> AttestationInput {
-        let key = match credential {
-            HUMAN_CREDENTIAL => &self.human,
-            HUMAN_TWO_CREDENTIAL => &self.human_two,
-            WORKER_CREDENTIAL => &self.worker,
-            WORKER_TWO_CREDENTIAL => &self.worker_two,
-            RUNTIME_CREDENTIAL => &self.runtime,
-            RUNTIME_TWO_CREDENTIAL => &self.runtime_two,
-            _ => panic!("unknown P6d workflow credential {credential}"),
-        };
-        let issued = i64::try_from(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_secs(),
-        )
-        .expect("clock fits i64");
-        let mut attestation = AttestationInput {
-            credential_id: Some(credential.to_owned()),
-            audience: Some(WORKFLOW_AUDIENCE.to_owned()),
-            execution_intent_digest: None,
-            nonce: format!(
-                "p6d-{action}-{issued}-{}-{}",
-                learning_hash(credential),
-                learning_hash(&canonical_digest(request))
-            ),
-            ts: issued,
-            signature: String::new(),
-            public_key_hex: hex(&key.verifying_key().to_bytes()),
-        };
-        let intent = CanonicalIntent {
-            tool: "workflow".to_owned(),
-            arguments: serde_json::json!({
-                "action": action,
-                "request": serde_json::to_value(request).expect("workflow request JSON")
-            }),
-            credential_id: attestation.credential_id.clone(),
-            audience: attestation.audience.clone(),
-            execution_intent_digest: None,
-            nonce: attestation.nonce.clone(),
-            ts: attestation.ts,
-        };
-        attestation.signature = hex(&key
-            .sign(&intent.canonical_bytes().expect("canonical intent"))
-            .to_bytes());
-        attestation
-    }
-
-    fn write_authorization<T: Serialize>(
+    #[allow(clippy::too_many_lines)]
+    fn write_broker_action(
         &self,
         project: &ReferenceProject,
+        guidance: &Value,
         label: &str,
         credential: &str,
-        action: &str,
-        request: &T,
-    ) -> (PathBuf, PathBuf) {
-        let request_path =
-            write_typed_json(&project.inputs, &format!("{label}-request.json"), request);
-        let attestation = self.attestation(credential, action, request);
-        let attestation_path = write_typed_json(
-            &project.inputs,
-            &format!("{label}-attestation.json"),
-            &attestation,
+        packet_digest: String,
+        semantic_input: WorkflowBrokerSemanticInput,
+    ) -> PathBuf {
+        let (key, profile, principal, separation_domain) = match credential {
+            HUMAN_CREDENTIAL => (
+                &self.human,
+                WorkflowBrokerIssuerProfile::Human,
+                "principal.workflow.p6d-human",
+                "human-session.p6d-primary",
+            ),
+            HUMAN_TWO_CREDENTIAL => (
+                &self.human_two,
+                WorkflowBrokerIssuerProfile::Human,
+                "principal.workflow.p6d-human-two",
+                "human-session.p6d-secondary",
+            ),
+            WORKER_CREDENTIAL => (
+                &self.worker,
+                WorkflowBrokerIssuerProfile::Reviewer,
+                "principal.workflow.p6d-worker",
+                "reviewer-installation.p6d-primary",
+            ),
+            WORKER_TWO_CREDENTIAL => (
+                &self.worker_two,
+                WorkflowBrokerIssuerProfile::Reviewer,
+                "principal.workflow.p6d-worker-two",
+                "reviewer-installation.p6d-secondary",
+            ),
+            RUNTIME_CREDENTIAL => (
+                &self.runtime,
+                WorkflowBrokerIssuerProfile::Runtime,
+                "principal.workflow.p6d-runtime",
+                "runtime-installation.p6d-primary",
+            ),
+            RUNTIME_TWO_CREDENTIAL => (
+                &self.runtime_two,
+                WorkflowBrokerIssuerProfile::Runtime,
+                "principal.workflow.p6d-runtime-two",
+                "runtime-installation.p6d-secondary",
+            ),
+            _ => panic!("unknown P6d broker credential {credential}"),
+        };
+        let interaction_kind = match profile {
+            WorkflowBrokerIssuerProfile::Human => {
+                WorkflowBrokerHostInteractionKind::NativeHumanConfirmation
+            }
+            WorkflowBrokerIssuerProfile::Reviewer => {
+                WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation
+            }
+            WorkflowBrokerIssuerProfile::Runtime => {
+                WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation
+            }
+        };
+        let issued_at_unix = now();
+        let nonce = format!(
+            "p6d-{label}-{issued_at_unix}-{}",
+            learning_hash(&packet_digest)
         );
-        (request_path, attestation_path)
+        let mut envelope = WorkflowBrokerEventEnvelope {
+            schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+            audience: self.broker_audience.clone(),
+            issuer_id: StableId(credential.to_owned()),
+            issuer_profile: profile,
+            origin_principal_id: PrincipalId(principal.to_owned()),
+            separation_domain: StableId(separation_domain.to_owned()),
+            event_kind: semantic_input.kind(),
+            project_id: StableId(required_str(guidance, "/data/project_id").to_owned()),
+            action_packet_digest: packet_digest,
+            semantic_input,
+            native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+                host_kind: RuntimeKind::ForgeStandalone,
+                host_version: "0.12.0".to_owned(),
+                adapter_id: StableId("adapter.forge-standalone.p6d".to_owned()),
+                adapter_version: "0.1.0".to_owned(),
+                interaction_kind,
+                host_event_ref: format!("host-event-{nonce}"),
+                host_session_ref: "host-session-p6d-0001".to_owned(),
+                host_interaction_ref: format!("host-interaction-{nonce}"),
+                host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+                host_observed_at_unix: issued_at_unix,
+            }),
+            issued_at_unix,
+            expires_at_unix: issued_at_unix + 300,
+            nonce,
+            signature: String::new(),
+        };
+        let provenance = envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("native host provenance");
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &envelope.project_id,
+            &envelope.action_packet_digest,
+            &envelope.semantic_input,
+        )
+        .expect("host descriptor digest");
+        envelope.signature = hex(&key
+            .sign(
+                &workflow_broker_event_signing_bytes(&envelope)
+                    .expect("workflow broker event signing bytes"),
+            )
+            .to_bytes());
+        write_typed_json(
+            &project.inputs,
+            &format!("{label}-broker-envelope.json"),
+            &envelope,
+        )
+    }
+
+    fn apply_broker_action(
+        &self,
+        project: &ReferenceProject,
+        guidance: &Value,
+        label: &str,
+        credential: &str,
+        packet_digest: String,
+        semantic_input: WorkflowBrokerSemanticInput,
+    ) -> Value {
+        let envelope_path = self.write_broker_action(
+            project,
+            guidance,
+            label,
+            credential,
+            packet_digest,
+            semantic_input,
+        );
+        eprintln!("P6d broker apply: start label={label}");
+        let result = ok(
+            &project.workflow_nested(
+                "action",
+                "apply",
+                &command_args(&["--origin-envelope-file", &path_arg(&envelope_path)]),
+            ),
+            "workflow.action.apply",
+        );
+        eprintln!("P6d broker apply: complete label={label}");
+        result
     }
 }
 
@@ -1614,11 +1919,138 @@ fn now() -> u64 {
         .as_secs()
 }
 
-fn guidance_after_record(guidance: &Value, record: &Value) -> Value {
-    let mut current = guidance.clone();
-    current["data"]["ledger_head_digest"] = record["data"]["record_digest"].clone();
-    current["data"]["state_version"] = record["data"]["state_version"].clone();
-    current
+fn signed_c1_broker_envelope(
+    key: &SigningKey,
+    audience: &str,
+    guidance: &Value,
+    packet_digest: String,
+    semantic_input: WorkflowBrokerSemanticInput,
+    nonce: &str,
+) -> WorkflowBrokerEventEnvelope {
+    let issued_at_unix = now();
+    let mut envelope = WorkflowBrokerEventEnvelope {
+        schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
+        audience: audience.to_owned(),
+        issuer_id: StableId(C1_BROKER_ISSUER_ID.to_owned()),
+        issuer_profile: WorkflowBrokerIssuerProfile::Human,
+        origin_principal_id: PrincipalId(C1_BROKER_PRINCIPAL_ID.to_owned()),
+        separation_domain: StableId(C1_BROKER_SEPARATION_DOMAIN.to_owned()),
+        event_kind: semantic_input.kind(),
+        project_id: StableId(required_str(guidance, "/data/project_id").to_owned()),
+        action_packet_digest: packet_digest,
+        semantic_input,
+        native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+            host_kind: RuntimeKind::ForgeStandalone,
+            host_version: "0.12.0".to_owned(),
+            adapter_id: StableId("adapter.forge-standalone.p6d".to_owned()),
+            adapter_version: "0.1.0".to_owned(),
+            interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+            host_event_ref: format!("host-event-{nonce}"),
+            host_session_ref: "host-session-p6d-c1-0001".to_owned(),
+            host_interaction_ref: format!("host-interaction-{nonce}"),
+            host_event_descriptor_digest: format!("sha256:{}", "0".repeat(64)),
+            host_observed_at_unix: issued_at_unix,
+        }),
+        issued_at_unix,
+        expires_at_unix: issued_at_unix + 300,
+        nonce: nonce.to_owned(),
+        signature: String::new(),
+    };
+    let provenance = envelope
+        .native_host_provenance
+        .as_mut()
+        .expect("native host provenance");
+    provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )
+    .expect("host descriptor digest");
+    let signing_bytes =
+        workflow_broker_event_signing_bytes(&envelope).expect("broker signing bytes");
+    envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
+    envelope
+}
+
+fn current_action_packet<'a>(guidance: &'a Value, kind: &str, subject_ref: &str) -> &'a Value {
+    let data = &guidance["data"];
+    data["authorization"]["action_packets"]
+        .as_array()
+        .and_then(|packets| {
+            packets.iter().find(|packet| {
+                packet["authorization_kind"] == kind
+                    && packet["binding"]["subject_ref"] == subject_ref
+                    && packet["binding"]["state_version"] == data["state_version"]
+                    && packet["binding"]["ledger_head_digest"] == data["ledger_head_digest"]
+            })
+        })
+        .unwrap_or_else(|| panic!("missing current {kind} packet for {subject_ref}: {guidance:#}"))
+}
+
+fn current_action_packet_digest(guidance: &Value, kind: &str, subject_ref: &str) -> String {
+    current_action_packet(guidance, kind, subject_ref)["packet_digest"]
+        .as_str()
+        .expect("current action packet digest")
+        .to_owned()
+}
+
+fn broker_subject(
+    guidance: &Value,
+    packet: &Value,
+    subject_ref: &str,
+) -> (WorkflowEvidenceSubjectKind, String) {
+    let subject_kinds = packet["input_contract"]["subject_kinds"]
+        .as_array()
+        .unwrap_or_else(|| panic!("packet has no closed subject kinds: {packet:#}"));
+    let allows = |kind: &str| subject_kinds.iter().any(|candidate| candidate == kind);
+    if allows("project_snapshot") {
+        return (
+            WorkflowEvidenceSubjectKind::ProjectSnapshot,
+            required_str(guidance, "/data/project_id").to_owned(),
+        );
+    }
+    if allows("artifact") {
+        return (
+            WorkflowEvidenceSubjectKind::Artifact,
+            "README.md".to_owned(),
+        );
+    }
+    if allows("repository_state") {
+        return (
+            WorkflowEvidenceSubjectKind::RepositoryState,
+            required_str(guidance, "/data/project_id").to_owned(),
+        );
+    }
+    if allows("runtime") {
+        return (
+            WorkflowEvidenceSubjectKind::Runtime,
+            format!("runtime:p6d:{subject_ref}"),
+        );
+    }
+    if allows("external_system") {
+        return (
+            WorkflowEvidenceSubjectKind::ExternalSystem,
+            format!("external-system:p6d:{subject_ref}"),
+        );
+    }
+    if allows("human_decision") {
+        return (
+            WorkflowEvidenceSubjectKind::HumanDecision,
+            format!("human-decision:p6d:{subject_ref}"),
+        );
+    }
+    panic!("packet has no supported P6d subject kind: {packet:#}");
+}
+
+fn broker_receipt_next(record: &Value) -> Value {
+    let next = record["data"]["next"]
+        .as_object()
+        .map(|_| record["data"]["next"].clone())
+        .expect("workflow broker receipt next guidance");
+    let mut guidance = record.clone();
+    guidance["data"] = next;
+    guidance
 }
 
 fn authorize_applicability(
@@ -1627,92 +2059,20 @@ fn authorize_applicability(
     guidance: &Value,
     label: &str,
 ) -> Value {
-    let data = &guidance["data"];
-    let basis_refs = vec!["README.md".to_owned()];
-    let basis = vec![WorkflowContentAddressedReference {
-        subject_ref: "README.md".to_owned(),
-        subject_digest: sha256_content_hash(
-            &fs::read(project.app.join("README.md")).expect("basis bytes"),
-        ),
-    }];
-    let observed = now();
-    let request = forge_core_authority::WorkflowApplicabilityAuthorizationRequest {
-        project_id: StableId(required_str(data, "/project_id").to_owned()),
-        policy_bundle_digest: required_str(data, "/bundle_digest").to_owned(),
-        policy_ref: StableId(required_str(data, "/selected_policy_ref").to_owned()),
-        state_version: required_u64(data, "/state_version"),
-        current_phase: StableId(required_str(data, "/current_phase").to_owned()),
-        snapshot_digest: required_str(data, "/snapshot_digest").to_owned(),
-        ledger_head_digest: required_str(data, "/ledger_head_digest").to_owned(),
-        applicable: true,
-        evaluator_ref: StableId("evaluator.workflow.applicability.human".to_owned()),
-        authority_scope: StableId("workflow.applicability.assess".to_owned()),
-        basis_refs,
-        basis_digest: canonical_digest(&basis),
-        observed_at_unix: observed,
-        expires_at_unix: observed + 3_600,
-    };
-    let (request_path, attestation_path) = authority.write_authorization(
+    let policy_ref = required_str(guidance, "/data/selected_policy_ref");
+    let packet_digest = current_action_packet_digest(guidance, "applicability", policy_ref);
+    let record = authority.apply_broker_action(
         project,
+        guidance,
         label,
         HUMAN_CREDENTIAL,
-        "applicability_assess",
-        &request,
+        packet_digest,
+        WorkflowBrokerSemanticInput::Applicability {
+            applicable: true,
+            basis_refs: vec!["README.md".to_owned()],
+        },
     );
-    let record = ok(
-        &project.workflow(
-            "applicability-authorize",
-            &command_args(&[
-                "--request-file",
-                &path_arg(&request_path),
-                "--attestation-file",
-                &path_arg(&attestation_path),
-            ]),
-        ),
-        "workflow.applicability_authorize",
-    );
-    guidance_after_record(guidance, &record)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn write_evidence_authorization(
-    project: &ReferenceProject,
-    authority: &WorkflowAuthority,
-    guidance: &Value,
-    label: &str,
-    credential: &str,
-    claim_ref: &str,
-    evaluator_ref: &str,
-    provider: WorkflowEvaluatorProvider,
-    kind: WorkflowEvidenceKind,
-    strength: WorkflowEvidenceStrength,
-) -> (PathBuf, PathBuf) {
-    let data = &guidance["data"];
-    let observed = now();
-    let request = forge_core_authority::WorkflowEvidenceAuthorizationRequest {
-        project_id: StableId(required_str(data, "/project_id").to_owned()),
-        policy_bundle_digest: required_str(data, "/bundle_digest").to_owned(),
-        policy_ref: StableId(required_str(data, "/selected_policy_ref").to_owned()),
-        claim_ref: StableId(claim_ref.to_owned()),
-        evaluator_ref: StableId(evaluator_ref.to_owned()),
-        provider,
-        kind,
-        strength,
-        outcome: WorkflowEvidenceOutcome::Pass,
-        subject_kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
-        subject_ref: required_str(data, "/project_id").to_owned(),
-        subject_digest: required_str(data, "/snapshot_digest").to_owned(),
-        scenario_digest: sha256_content_hash(format!("p6d:{label}").as_bytes()),
-        state_version: required_u64(data, "/state_version"),
-        current_phase: StableId(required_str(data, "/current_phase").to_owned()),
-        snapshot_digest: required_str(data, "/snapshot_digest").to_owned(),
-        ledger_head_digest: required_str(data, "/ledger_head_digest").to_owned(),
-        readiness_target: serde_json::from_value(data["target"].clone())
-            .expect("guidance readiness target"),
-        observed_at_unix: observed,
-        expires_at_unix: Some(observed + 3_600),
-    };
-    authority.write_authorization(project, label, credential, "evidence_authorize", &request)
+    broker_receipt_next(&record)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1728,31 +2088,27 @@ fn authorize_evidence(
     kind: WorkflowEvidenceKind,
     strength: WorkflowEvidenceStrength,
 ) -> Value {
-    let (request_path, attestation_path) = write_evidence_authorization(
+    let _ = (evaluator_ref, provider, kind, strength);
+    let packet = current_action_packet(guidance, "evidence", claim_ref);
+    let packet_digest = packet["packet_digest"]
+        .as_str()
+        .expect("evidence packet digest")
+        .to_owned();
+    let (subject_kind, subject_ref) = broker_subject(guidance, packet, claim_ref);
+    let record = authority.apply_broker_action(
         project,
-        authority,
         guidance,
         label,
         credential,
-        claim_ref,
-        evaluator_ref,
-        provider,
-        kind,
-        strength,
+        packet_digest,
+        WorkflowBrokerSemanticInput::Evidence {
+            outcome: WorkflowEvidenceOutcome::Pass,
+            subject_kind,
+            subject_ref,
+            scenario_ref: "README.md".to_owned(),
+        },
     );
-    let record = ok(
-        &project.workflow(
-            "evidence-authorize",
-            &command_args(&[
-                "--request-file",
-                &path_arg(&request_path),
-                "--attestation-file",
-                &path_arg(&attestation_path),
-            ]),
-        ),
-        "workflow.evidence_authorize",
-    );
-    guidance_after_record(guidance, &record)
+    broker_receipt_next(&record)
 }
 
 /// Append every required observation under a fresh ledger head. Different
@@ -1895,7 +2251,6 @@ fn authorize_declared_policy_evidence(
                 strength,
             );
             if ordinal == 0 && observation == 0 && evaluator.minimum_passing_observations > 1 {
-                guidance = ok(&project.workflow("next", &[]), "workflow.next");
                 assert_eq!(
                     guidance["data"]["selected_policy_ref"], expected_policy,
                     "one observation incorrectly satisfied plural evidence"
@@ -1928,53 +2283,34 @@ fn authorize_policy_capabilities_matching(
     include: impl Fn(&StableId) -> bool,
 ) -> Value {
     for requirement in &policy.capability_requirements {
-        if !include(&requirement.id) {
+        let is_current_gap = guidance["data"]["simulation"]["candidate_capability_gaps"]
+            .as_array()
+            .is_some_and(|gaps| gaps.iter().any(|gap| gap["id"] == requirement.id.0));
+        if !include(&requirement.id) || !is_current_gap {
             continue;
         }
         assert_eq!(guidance["data"]["selected_policy_ref"], policy.id.0);
-        let data = &guidance["data"];
-        let observed = now();
-        let request = forge_core_authority::WorkflowCapabilityAuthorizationRequest {
-            project_id: StableId(required_str(data, "/project_id").to_owned()),
-            policy_bundle_digest: required_str(data, "/bundle_digest").to_owned(),
-            policy_ref: StableId(required_str(data, "/selected_policy_ref").to_owned()),
-            capability_ref: requirement.id.clone(),
-            state_version: required_u64(data, "/state_version"),
-            current_phase: StableId(required_str(data, "/current_phase").to_owned()),
-            snapshot_digest: required_str(data, "/snapshot_digest").to_owned(),
-            ledger_head_digest: required_str(data, "/ledger_head_digest").to_owned(),
-            probe_kind: requirement.probe_kind,
-            available: true,
-            authority_scope: StableId("workflow.capability.authorize".to_owned()),
-            probe_ref: format!("runtime:p6d:{}", requirement.id.0),
-            probe_digest: sha256_content_hash(requirement.id.0.as_bytes()),
-            subject_kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
-            subject_ref: required_str(data, "/project_id").to_owned(),
-            subject_digest: required_str(data, "/snapshot_digest").to_owned(),
-            observed_at_unix: observed,
-            expires_at_unix: Some(observed + 3_600),
-        };
+        let packet = current_action_packet(&guidance, "capability", &requirement.id.0);
+        let packet_digest = packet["packet_digest"]
+            .as_str()
+            .expect("capability packet digest")
+            .to_owned();
+        let (subject_kind, subject_ref) = broker_subject(&guidance, packet, &requirement.id.0);
         let label = format!("reference-capability-{}", requirement.id.0);
-        let (request_path, attestation_path) = authority.write_authorization(
+        let record = authority.apply_broker_action(
             project,
+            &guidance,
             &label,
             RUNTIME_CREDENTIAL,
-            "capability_authorize",
-            &request,
+            packet_digest,
+            WorkflowBrokerSemanticInput::Capability {
+                available: true,
+                probe_ref: "README.md".to_owned(),
+                subject_kind,
+                subject_ref,
+            },
         );
-        let record = ok(
-            &project.workflow(
-                "capability-authorize",
-                &command_args(&[
-                    "--request-file",
-                    &path_arg(&request_path),
-                    "--attestation-file",
-                    &path_arg(&attestation_path),
-                ]),
-            ),
-            "workflow.capability_authorize",
-        );
-        guidance = guidance_after_record(&guidance, &record);
+        guidance = broker_receipt_next(&record);
     }
     guidance
 }
@@ -2009,6 +2345,7 @@ fn effective_policy<'a>(
 /// missing when crossing an Explore -> Execute or Execute -> Release boundary.
 /// Each synthetic view changes request binding fields only; every write still
 /// passes through `require_active_policy` and advances the real CAS record.
+#[allow(clippy::too_many_lines)]
 fn close_boundary_rechecks(
     project: &ReferenceProject,
     authority: &WorkflowAuthority,
@@ -2025,6 +2362,42 @@ fn close_boundary_rechecks(
             .len()
         + 1;
     for _ in 0..bound {
+        let mut progressed = false;
+        let selected_policy_ref =
+            required_str(&guidance["data"], "/selected_policy_ref").to_owned();
+        let selected_policy = effective_policy(core, request, &selected_policy_ref);
+        let missing_selected_claims = guidance["data"]["simulation"]["candidate_claim_results"]
+            .as_array()
+            .expect("typed selected claim results")
+            .iter()
+            .filter(|claim| !matches!(claim["status"].as_str(), Some("verified" | "waived")))
+            .filter_map(|claim| claim["claim_id"].as_str().map(ToOwned::to_owned))
+            .collect::<Vec<_>>();
+        for claim_ref in missing_selected_claims {
+            guidance = authorize_policy_claim_evidence(
+                project,
+                authority,
+                selected_policy,
+                &claim_ref,
+                guidance,
+            );
+            progressed = true;
+        }
+        if guidance["data"]["simulation"]["candidate_capability_gaps"]
+            .as_array()
+            .is_some_and(|gaps| !gaps.is_empty())
+        {
+            guidance = authorize_policy_capabilities(project, authority, selected_policy, guidance);
+            progressed = true;
+        }
+        if !guidance["data"]["simulation"]["candidate_decision_requests"]
+            .as_array()
+            .is_none_or(Vec::is_empty)
+        {
+            guidance = authorize_decision(project, authority, &guidance, selected_policy);
+            progressed = true;
+        }
+
         let boundaries = guidance["data"]["boundary_rechecks"]
             .as_array()
             .cloned()
@@ -2032,7 +2405,6 @@ fn close_boundary_rechecks(
         if boundaries.is_empty() {
             return guidance;
         }
-        let mut progressed = false;
         for boundary in boundaries {
             let policy_ref = required_str(&boundary, "/policy_ref");
             let policy = effective_policy(core, request, policy_ref);
@@ -2040,6 +2412,19 @@ fn close_boundary_rechecks(
             view["data"]["selected_policy_ref"] = Value::String(policy_ref.to_owned());
             view["data"]["target"] = boundary["requested_target"].clone();
             view["data"]["simulation"] = boundary["simulation"].clone();
+
+            let missing_claims = boundary["simulation"]["candidate_claim_results"]
+                .as_array()
+                .expect("typed claim results")
+                .iter()
+                .filter(|claim| !matches!(claim["status"].as_str(), Some("verified" | "waived")))
+                .filter_map(|claim| claim["claim_id"].as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>();
+            for claim_ref in missing_claims {
+                view =
+                    authorize_policy_claim_evidence(project, authority, policy, &claim_ref, view);
+                progressed = true;
+            }
 
             let missing_capabilities = boundary["simulation"]["candidate_capability_gaps"]
                 .as_array()
@@ -2057,19 +2442,6 @@ fn close_boundary_rechecks(
                 );
                 progressed = true;
             }
-
-            let missing_claims = boundary["simulation"]["candidate_claim_results"]
-                .as_array()
-                .expect("typed claim results")
-                .iter()
-                .filter(|claim| !matches!(claim["status"].as_str(), Some("verified" | "waived")))
-                .filter_map(|claim| claim["claim_id"].as_str().map(ToOwned::to_owned))
-                .collect::<Vec<_>>();
-            for claim_ref in missing_claims {
-                view =
-                    authorize_policy_claim_evidence(project, authority, policy, &claim_ref, view);
-                progressed = true;
-            }
             if !boundary["simulation"]["candidate_decision_requests"]
                 .as_array()
                 .is_none_or(Vec::is_empty)
@@ -2083,7 +2455,6 @@ fn close_boundary_rechecks(
             progressed,
             "boundary rechecks made no CAS progress: {guidance:#}"
         );
-        guidance = ok(&project.workflow("next", &[]), "workflow.next");
     }
     panic!("boundary rechecks did not converge within the policy bound")
 }
@@ -2171,53 +2542,47 @@ fn authorize_decision(
         .iter()
         .find(|alternative| alternative.id == rule.recommended_alternative_ref)
         .expect("recommended decision alternative");
-    let data = &guidance["data"];
     let packet_digest = current_decision_packet_digest(guidance, policy, rule);
-    let consequences_ack_digest = canonical_digest(&serde_json::json!({
-        "schema_version": "workflow_decision_consequence_ack_v1",
-        "packet_digest": packet_digest,
-        "decision_ref": rule.id,
-        "selected_alternative_ref": alternative.id,
-        "consequences": alternative.consequences,
-    }));
-    let request = forge_core_authority::WorkflowDecisionAuthorizationRequest {
-        project_id: StableId(required_str(data, "/project_id").to_owned()),
-        policy_bundle_digest: required_str(data, "/bundle_digest").to_owned(),
-        policy_ref: policy.id.clone(),
-        decision_ref: rule.id.clone(),
-        selected_alternative_ref: alternative.id.clone(),
-        state_version: required_u64(data, "/state_version"),
-        current_phase: StableId(required_str(data, "/current_phase").to_owned()),
-        snapshot_digest: required_str(data, "/snapshot_digest").to_owned(),
-        ledger_head_digest: required_str(data, "/ledger_head_digest").to_owned(),
-        readiness_target: required_str(data, "/target").to_owned(),
-        consequences_ack_digest,
-    };
-    let (request_path, attestation_path) = authority.write_authorization(
+    let record = authority.apply_broker_action(
         project,
+        guidance,
         &format!("decision-{}", rule.id.0),
         HUMAN_CREDENTIAL,
-        "decision_resolve",
-        &request,
+        packet_digest,
+        WorkflowBrokerSemanticInput::Decision {
+            selected_alternative_ref: alternative.id.clone(),
+        },
     );
-    let record = ok(
-        &project.workflow(
-            "decision-resolve",
-            &command_args(&[
-                "--request-file",
-                &path_arg(&request_path),
-                "--attestation-file",
-                &path_arg(&attestation_path),
-            ]),
-        ),
-        "workflow.decision_resolve",
-    );
-    guidance_after_record(guidance, &record)
+    broker_receipt_next(&record)
 }
 
-fn assert_fresh_resume(project: &ReferenceProject, guidance: &Value) {
+fn resume_without_state_mutation(project: &ReferenceProject, guidance: &Value) -> Value {
+    let before = snapshot(&project.state);
     let resumed = ok(&project.workflow("resume", &[]), "workflow.resume");
-    assert_eq!(resumed["data"], guidance["data"]);
+    assert_eq!(snapshot(&project.state), before);
+    for pointer in [
+        "/authority",
+        "/project_id",
+        "/bundle_id",
+        "/bundle_digest",
+        "/state_version",
+        "/current_phase",
+        "/snapshot_digest",
+        "/ledger_head_digest",
+        "/selected_policy_ref",
+        "/target",
+        "/effective",
+        "/release",
+        "/domain_pack_degraded",
+        "/domain_pack_gaps",
+    ] {
+        assert_eq!(
+            resumed["data"].pointer(pointer),
+            guidance["data"].pointer(pointer),
+            "workflow.resume changed durable guidance field {pointer}"
+        );
+    }
+    resumed
 }
 
 fn assert_rejected_without_state_mutation(
@@ -2242,32 +2607,35 @@ fn reject_artifact_only_for_representative_claim(
     policy: &WorkflowGovernancePolicy,
     claim_ref: &str,
 ) {
-    let claim = policy
-        .claims
-        .iter()
-        .find(|claim| claim.id.0 == claim_ref)
-        .expect("representative claim");
-    let (request_path, attestation_path) = write_evidence_authorization(
+    assert!(
+        policy.claims.iter().any(|claim| claim.id.0 == claim_ref),
+        "missing representative claim {claim_ref}"
+    );
+    let packet = current_action_packet(guidance, "evidence", claim_ref);
+    assert!(packet["input_contract"]["subject_kinds"]
+        .as_array()
+        .is_some_and(|kinds| !kinds.iter().any(|kind| kind == "artifact")));
+    let envelope_path = authority.write_broker_action(
         project,
-        authority,
         guidance,
         &format!("artifact-only-{claim_ref}"),
         RUNTIME_CREDENTIAL,
-        claim_ref,
-        &claim.evaluator_ref.0,
-        WorkflowEvaluatorProvider::RepositoryInspector,
-        WorkflowEvidenceKind::ArtifactInspection,
-        WorkflowEvidenceStrength::InspectedArtifact,
+        packet["packet_digest"]
+            .as_str()
+            .expect("representative evidence packet digest")
+            .to_owned(),
+        WorkflowBrokerSemanticInput::Evidence {
+            outcome: WorkflowEvidenceOutcome::Pass,
+            subject_kind: WorkflowEvidenceSubjectKind::Artifact,
+            subject_ref: "README.md".to_owned(),
+            scenario_ref: "README.md".to_owned(),
+        },
     );
     let before = snapshot(&project.state);
-    let rejected = project.workflow(
-        "evidence-authorize",
-        &command_args(&[
-            "--request-file",
-            &path_arg(&request_path),
-            "--attestation-file",
-            &path_arg(&attestation_path),
-        ]),
+    let rejected = project.workflow_nested(
+        "action",
+        "apply",
+        &command_args(&["--origin-envelope-file", &path_arg(&envelope_path)]),
     );
     assert_rejected_without_state_mutation(
         project,
@@ -2283,6 +2651,61 @@ fn complete_ready(project: &ReferenceProject, guidance: &Value) -> Value {
         "{guidance:#}"
     );
     complete_selected(project, guidance)
+}
+
+fn complete_ready_after_rechecks(
+    project: &ReferenceProject,
+    authority: &WorkflowAuthority,
+    core: &WorkflowGovernanceBundleDocument,
+    request: &DomainPackCompositionRequestDocument,
+    mut guidance: Value,
+) -> Value {
+    const COMPLETION_ATTEMPTS: usize = 2;
+
+    let selected_policy_ref = required_str(&guidance["data"], "/selected_policy_ref").to_owned();
+    for attempt in 0..COMPLETION_ATTEMPTS {
+        assert_eq!(
+            guidance["data"]["status"], "ready_to_complete",
+            "{guidance:#}"
+        );
+        let before = snapshot(&project.state);
+        let output = complete_output(project, &guidance);
+        if output.status.success() {
+            return ok(&output, "workflow.complete");
+        }
+
+        let failure = envelope(&output);
+        let message = required_str(&failure, "/error/message");
+        let (expected_exit_code, expected_exit_reason) = match message {
+            "selected policy is not ready for governed completion" => (2, "rejected_by_gate"),
+            "governed completion drifted during late recheck; refresh and retry from new guidance" => {
+                (4, "conflict")
+            }
+            _ => panic!(
+                "workflow.complete failed unexpectedly status={:?}\n{failure:#}",
+                output.status.code()
+            ),
+        };
+        assert_eq!(
+            output.status.code(),
+            Some(expected_exit_code),
+            "{failure:#}"
+        );
+        assert_eq!(failure["exit_reason"], expected_exit_reason, "{failure:#}");
+        assert_eq!(snapshot(&project.state), before);
+        assert!(
+            attempt + 1 < COMPLETION_ATTEMPTS,
+            "workflow.complete remained temporally incomplete after bounded rechecks: {failure:#}"
+        );
+
+        guidance = resume_without_state_mutation(project, &guidance);
+        assert_eq!(
+            guidance["data"]["selected_policy_ref"], selected_policy_ref,
+            "completion retry changed selected policy: {guidance:#}"
+        );
+        guidance = close_boundary_rechecks(project, authority, core, request, guidance);
+    }
+    unreachable!("bounded completion loop always returns or panics")
 }
 
 fn reject_incomplete_completion(project: &ReferenceProject, guidance: &Value) {
@@ -2327,44 +2750,46 @@ fn advance_core_until(
                 &format!("core-auto-applicability-{selected}"),
             );
         }
-        guidance = authorize_policy_capabilities(project, authority, policy, guidance);
         for claim in &policy.claims {
             guidance =
                 authorize_policy_claim_evidence(project, authority, policy, &claim.id.0, guidance);
         }
+        // Capability receipts are intentionally short-lived. Probe after the
+        // potentially slow evidence sequence so completion observes a current
+        // runtime receipt even on constrained hosts.
+        guidance = authorize_policy_capabilities(project, authority, policy, guidance);
         if policy.decision_rules.is_empty() {
             // Completion performs the same late TCB recheck; avoid a redundant
             // read-only subprocess for ordinary core policies.
             complete_selected(project, &guidance);
             continue;
         }
-        guidance = ok(&project.workflow("next", &[]), "workflow.next");
         if !guidance["data"]["simulation"]["candidate_decision_requests"]
             .as_array()
             .is_none_or(Vec::is_empty)
         {
-            let _decision_record = authorize_decision(project, authority, &guidance, policy);
-            guidance = ok(&project.workflow("next", &[]), "workflow.next");
+            guidance = authorize_decision(project, authority, &guidance, policy);
         }
         complete_ready(project, &guidance);
     }
     panic!("core policies did not route to {target_policy}")
 }
 
-fn complete_selected(project: &ReferenceProject, guidance: &Value) -> Value {
+fn complete_output(project: &ReferenceProject, guidance: &Value) -> Output {
     let snapshot = required_str(&guidance["data"], "/snapshot_digest").to_owned();
-    ok(
-        &project.workflow(
-            "complete",
-            &command_args(&[
-                "--if-snapshot",
-                &snapshot,
-                "--principal",
-                "principal.workflow.p6d-runtime",
-            ]),
-        ),
-        "workflow.complete",
+    project.workflow(
+        "complete",
+        &command_args(&[
+            "--if-snapshot",
+            &snapshot,
+            "--principal",
+            "principal.workflow.p6d-runtime",
+        ]),
     )
+}
+
+fn complete_selected(project: &ReferenceProject, guidance: &Value) -> Value {
+    ok(&complete_output(project, guidance), "workflow.complete")
 }
 
 #[test]
@@ -2619,14 +3044,54 @@ fn p6d_reference_pack_real_journey() {
         0
     );
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
+    let c1_broker_key = &authority.c1_human;
+    let c1_broker_audience = &authority.broker_audience;
+
+    // The strict action surface requires a durable human-origin intent before
+    // any policy mutation becomes actionable.
+    let intent_guidance = ok(&project.workflow("next", &[]), "workflow.next");
+    assert_eq!(
+        intent_guidance["data"]["selected_policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    let c1_intent_packet_digest = current_action_packet_digest(
+        &intent_guidance,
+        "intent_revision",
+        "intent.workflow.project.agent-built-game",
+    );
+    let c1_envelope = signed_c1_broker_envelope(
+        c1_broker_key,
+        c1_broker_audience,
+        &intent_guidance,
+        c1_intent_packet_digest,
+        WorkflowBrokerSemanticInput::IntentRevision {
+            desired_outcome: "Deliver a trustworthy single-platform vertical slice".to_owned(),
+            constraints: vec!["Keep authority and replay state fail-closed".to_owned()],
+            preferences: vec!["Prefer the smallest reviewable playable slice".to_owned()],
+            unacceptable_outcomes: vec!["Do not claim unsupported host assurance".to_owned()],
+            uncertainties: vec!["Selected host conformance remains pending".to_owned()],
+            conversation_ref: "conversation://p6d-c1/intent-0001".to_owned(),
+            conversation_digest: sha256_content_hash(b"p6d-c1-intent-conversation-0001"),
+        },
+        "p6d-c1-intent-0001",
+    );
+    let c1_envelope_path = write_typed_json(
+        &project.inputs,
+        "c1-broker-intent-envelope.json",
+        &c1_envelope,
+    );
+    let intent_record = ok(
+        &project.workflow_nested(
+            "action",
+            "apply",
+            &command_args(&["--origin-envelope-file", &path_arg(&c1_envelope_path)]),
+        ),
+        "workflow.action.apply",
+    );
 
     // Core ordering remains sealed. Progress its three discovery policies
     // honestly before the appended reference discovery policy can run.
-    let discover = ok(&project.workflow("next", &[]), "workflow.next");
-    assert_eq!(
-        discover["data"]["selected_policy_ref"],
-        "policy.workflow.discover-intent"
-    );
+    let discover = broker_receipt_next(&intent_record);
     let discover = authorize_evidence(
         &project,
         &authority,
@@ -2708,16 +3173,14 @@ fn p6d_reference_pack_real_journey() {
         .is_some_and(|actions| actions.iter().all(|action| action["kind"] != "ask_human")));
     let discovery_policy =
         reference_policy(&request, "reference.game-development.policy.discovery");
-    let reference =
-        authorize_policy_capabilities(&project, &authority, discovery_policy, reference);
-    let _reference = authorize_declared_policy_evidence(
+    let reference = authorize_declared_policy_evidence(
         &project,
         &authority,
         &request,
         "reference.game-development.policy.discovery",
         reference,
     );
-    let decision = ok(&project.workflow("next", &[]), "workflow.next");
+    let decision = authorize_policy_capabilities(&project, &authority, discovery_policy, reference);
     let requests = decision["data"]["simulation"]["candidate_decision_requests"]
         .as_array()
         .expect("reference decision requests");
@@ -2733,10 +3196,8 @@ fn p6d_reference_pack_real_journey() {
     assert!(decision["data"]["simulation"]["candidate_next_actions"]
         .as_array()
         .is_some_and(|actions| actions.iter().any(|action| action["kind"] == "ask_human")));
-    assert_fresh_resume(&project, &decision);
-    let _decision_record = authorize_decision(&project, &authority, &decision, discovery_policy);
-    let discovery_ready = ok(&project.workflow("next", &[]), "workflow.next");
-    assert_fresh_resume(&project, &discovery_ready);
+    let discovery_ready = authorize_decision(&project, &authority, &decision, discovery_policy);
+    let discovery_ready = resume_without_state_mutation(&project, &discovery_ready);
     complete_ready(&project, &discovery_ready);
 
     // The universal execute/release policies remain ahead of pack policies.
@@ -2759,29 +3220,33 @@ fn p6d_reference_pack_real_journey() {
     // authorization signed against the prior head must fail without mutation.
     let playable_claim = &playable_policy.claims[0];
     let playable_evaluator = &playable_policy.evaluators[0];
-    let (credentials, kind, strength) = evidence_authority(playable_evaluator.provider);
-    let (stale_request, stale_attestation) = write_evidence_authorization(
+    let (credentials, _, _) = evidence_authority(playable_evaluator.provider);
+    let stale_packet = current_action_packet(&playable, "evidence", &playable_claim.id.0);
+    let stale_packet_digest = stale_packet["packet_digest"]
+        .as_str()
+        .expect("stale evidence packet digest")
+        .to_owned();
+    let (stale_subject_kind, stale_subject_ref) =
+        broker_subject(&playable, stale_packet, &playable_claim.id.0);
+    let stale_envelope = authority.write_broker_action(
         &project,
-        &authority,
         &playable,
         "stale-playable-evidence",
         credentials[0],
-        &playable_claim.id.0,
-        &playable_evaluator.id.0,
-        playable_evaluator.provider,
-        kind,
-        strength,
+        stale_packet_digest,
+        WorkflowBrokerSemanticInput::Evidence {
+            outcome: WorkflowEvidenceOutcome::Pass,
+            subject_kind: stale_subject_kind,
+            subject_ref: stale_subject_ref,
+            scenario_ref: "README.md".to_owned(),
+        },
     );
     let playable = authorize_policy_capabilities(&project, &authority, playable_policy, playable);
     let state_after_capability = snapshot(&project.state);
-    let stale = project.workflow(
-        "evidence-authorize",
-        &command_args(&[
-            "--request-file",
-            &path_arg(&stale_request),
-            "--attestation-file",
-            &path_arg(&stale_attestation),
-        ]),
+    let stale = project.workflow_nested(
+        "action",
+        "apply",
+        &command_args(&["--origin-envelope-file", &path_arg(&stale_envelope)]),
     );
     assert_rejected_without_state_mutation(
         &project,
@@ -2789,18 +3254,21 @@ fn p6d_reference_pack_real_journey() {
         &state_after_capability,
         "does not match current governance state",
     );
-    let _playable_evidence = authorize_policy_claim_evidence(
+    let playable = authorize_policy_claim_evidence(
         &project,
         &authority,
         playable_policy,
         &playable_claim.id.0,
         playable,
     );
-    let playable_ready = ok(&project.workflow("next", &[]), "workflow.next");
+    let playable_ready =
+        authorize_policy_capabilities(&project, &authority, playable_policy, playable);
     let playable_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, playable_ready);
-    assert_fresh_resume(&project, &playable_ready);
-    complete_ready(&project, &playable_ready);
+    let playable_ready = resume_without_state_mutation(&project, &playable_ready);
+    let playable_ready =
+        close_boundary_rechecks(&project, &authority, &core, &request, playable_ready);
+    complete_ready_after_rechecks(&project, &authority, &core, &request, playable_ready);
 
     let first_use_policy = reference_policy(
         &request,
@@ -2822,29 +3290,31 @@ fn p6d_reference_pack_real_journey() {
         first_use_policy,
         "reference.game-development.claim.first-use-playtest.representative-session",
     );
-    let _first_use_independent_evidence = authorize_policy_claim_evidence(
+    let first_use_partial = authorize_policy_claim_evidence(
         &project,
         &authority,
         first_use_policy,
         "reference.game-development.claim.first-use-playtest.independent-review",
         first_use,
     );
-    let first_use_partial = ok(&project.workflow("next", &[]), "workflow.next");
     assert_ne!(first_use_partial["data"]["status"], "ready_to_complete");
     reject_incomplete_completion(&project, &first_use_partial);
-    assert_fresh_resume(&project, &first_use_partial);
-    let _first_use_representative_evidence = authorize_policy_claim_evidence(
+    let first_use_partial = resume_without_state_mutation(&project, &first_use_partial);
+    let first_use = authorize_policy_claim_evidence(
         &project,
         &authority,
         first_use_policy,
         "reference.game-development.claim.first-use-playtest.representative-session",
         first_use_partial,
     );
-    let first_use_ready = ok(&project.workflow("next", &[]), "workflow.next");
+    let first_use_ready =
+        authorize_policy_capabilities(&project, &authority, first_use_policy, first_use);
     let first_use_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, first_use_ready);
-    assert_fresh_resume(&project, &first_use_ready);
-    complete_ready(&project, &first_use_ready);
+    let first_use_ready = resume_without_state_mutation(&project, &first_use_ready);
+    let first_use_ready =
+        close_boundary_rechecks(&project, &authority, &core, &request, first_use_ready);
+    complete_ready_after_rechecks(&project, &authority, &core, &request, first_use_ready);
 
     let packaging_policy = reference_policy(
         &request,
@@ -2859,17 +3329,16 @@ fn p6d_reference_pack_real_journey() {
     assert_eq!(packaging["data"]["target"], "release");
     let packaging =
         authorize_policy_capabilities(&project, &authority, packaging_policy, packaging);
-    let _packaging_clean_evidence = authorize_policy_claim_evidence(
+    let packaging_partial = authorize_policy_claim_evidence(
         &project,
         &authority,
         packaging_policy,
         "reference.game-development.claim.packaging.clean-package-identity",
         packaging,
     );
-    let packaging_partial = ok(&project.workflow("next", &[]), "workflow.next");
     assert_ne!(packaging_partial["data"]["status"], "ready_to_complete");
     reject_incomplete_completion(&project, &packaging_partial);
-    assert_fresh_resume(&project, &packaging_partial);
+    let packaging_partial = resume_without_state_mutation(&project, &packaging_partial);
     let packaging = authorize_policy_claim_evidence(
         &project,
         &authority,
@@ -2877,18 +3346,21 @@ fn p6d_reference_pack_real_journey() {
         "reference.game-development.claim.packaging.installed-runtime-behavior",
         packaging_partial,
     );
-    let _packaging_final_evidence = authorize_policy_claim_evidence(
+    let packaging = authorize_policy_claim_evidence(
         &project,
         &authority,
         packaging_policy,
         "reference.game-development.claim.packaging.release-audit",
         packaging,
     );
-    let packaging_ready = ok(&project.workflow("next", &[]), "workflow.next");
+    let packaging_ready =
+        authorize_policy_capabilities(&project, &authority, packaging_policy, packaging);
     let packaging_ready =
         close_boundary_rechecks(&project, &authority, &core, &request, packaging_ready);
-    assert_fresh_resume(&project, &packaging_ready);
-    complete_ready(&project, &packaging_ready);
+    let packaging_ready = resume_without_state_mutation(&project, &packaging_ready);
+    let packaging_ready =
+        close_boundary_rechecks(&project, &authority, &core, &request, packaging_ready);
+    complete_ready_after_rechecks(&project, &authority, &core, &request, packaging_ready);
 
     heartbeat(started, "core-rebase-plan");
     let release_status = ok(
@@ -2978,6 +3450,12 @@ fn p6d_reference_pack_real_journey() {
         &path_arg(&project.state),
         "--json",
     ]);
+    let workflow_wal = project.state.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+    let replay_wal = project.state.join(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
+    let workflow_before_external_lifecycle =
+        fs::read(&workflow_wal).expect("workflow WAL before external lifecycle advance");
+    let replay_before_external_lifecycle =
+        fs::read(&replay_wal).expect("replay WAL before external lifecycle advance");
     for (subcommand, command) in [
         ("preflight", "domain-pack preflight"),
         ("apply", "domain-pack apply"),
@@ -2995,6 +3473,44 @@ fn p6d_reference_pack_real_journey() {
             );
         }
     }
+    assert_eq!(
+        fs::read(&workflow_wal).expect("workflow WAL after external lifecycle advance"),
+        workflow_before_external_lifecycle,
+        "external Domain Pack lifecycle commit must leave the workflow ledger on its prior effective epoch"
+    );
+    assert_eq!(
+        fs::read(&replay_wal).expect("replay WAL after external lifecycle advance"),
+        replay_before_external_lifecycle,
+        "external Domain Pack lifecycle commit must not touch broker replay state"
+    );
+    let historical_retry = project.workflow_nested(
+        "action",
+        "apply",
+        &command_args(&["--origin-envelope-file", &path_arg(&c1_envelope_path)]),
+    );
+    assert!(
+        !historical_retry.status.success(),
+        "historical broker retry must refuse lifecycle/ledger effective-epoch drift"
+    );
+    let historical_retry = envelope(&historical_retry);
+    assert_eq!(historical_retry["ok"], false, "{historical_retry:#}");
+    assert!(
+        historical_retry["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message
+                .contains("verified human authorization does not match current governance state")),
+        "unexpected lifecycle-ahead refusal: {historical_retry:#}"
+    );
+    assert_eq!(
+        fs::read(&workflow_wal).expect("workflow WAL after historical refusal"),
+        workflow_before_external_lifecycle,
+        "historical recovery must not reconcile the lifecycle by appending governance state"
+    );
+    assert_eq!(
+        fs::read(&replay_wal).expect("replay WAL after historical refusal"),
+        replay_before_external_lifecycle,
+        "historical recovery must refuse before replay repair"
+    );
     let degraded_next = ok(&project.workflow("next", &[]), "workflow.next");
     assert_eq!(degraded_next["data"]["status"], "blocked");
     assert_eq!(degraded_next["data"]["domain_pack_degraded"], true);
@@ -3019,42 +3535,49 @@ fn p6d_reference_pack_real_journey() {
                 .as_str()
                 .is_some_and(|message| !message.is_empty())
     }));
-    assert_fresh_resume(&project, &degraded_next);
+    let degraded_next = resume_without_state_mutation(&project, &degraded_next);
 
-    let clean_claim = packaging_policy
-        .claims
-        .iter()
-        .find(|claim| {
-            claim.id.0 == "reference.game-development.claim.packaging.clean-package-identity"
-        })
-        .expect("clean package claim");
-    let clean_evaluator = packaging_policy
-        .evaluators
-        .iter()
-        .find(|evaluator| evaluator.id == clean_claim.evaluator_ref)
-        .expect("clean package evaluator");
-    let (credentials, kind, strength) = evidence_authority(clean_evaluator.provider);
-    let (blocked_request, blocked_attestation) = write_evidence_authorization(
+    let degraded_claim_ref = "claim.workflow.discover-intent.intent-grounded";
+    assert_eq!(
+        degraded_next["data"]["selected_policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    let packet = current_action_packet(&degraded_next, "evidence", degraded_claim_ref);
+    assert_eq!(
+        packet["binding"]["policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    assert_eq!(packet["binding"]["subject_ref"], degraded_claim_ref);
+    assert_eq!(
+        packet["required_authority"]["required_grant"],
+        "workflow.evidence.authorize_human"
+    );
+    assert!(packet["required_authority"]["accepted_roles"]
+        .as_array()
+        .is_some_and(|roles| roles.iter().any(|role| role == "human")));
+    let packet_digest = packet["packet_digest"]
+        .as_str()
+        .expect("degraded evidence packet digest")
+        .to_owned();
+    let (subject_kind, subject_ref) = broker_subject(&degraded_next, packet, degraded_claim_ref);
+    let blocked_envelope = authority.write_broker_action(
         &project,
-        &authority,
         &degraded_next,
         "degraded-evidence-mutation",
-        credentials[0],
-        &clean_claim.id.0,
-        &clean_evaluator.id.0,
-        clean_evaluator.provider,
-        kind,
-        strength,
+        HUMAN_CREDENTIAL,
+        packet_digest,
+        WorkflowBrokerSemanticInput::Evidence {
+            outcome: WorkflowEvidenceOutcome::Pass,
+            subject_kind,
+            subject_ref,
+            scenario_ref: "README.md".to_owned(),
+        },
     );
     let degraded_state = snapshot(&project.state);
-    let blocked_evidence = project.workflow(
-        "evidence-authorize",
-        &command_args(&[
-            "--request-file",
-            &path_arg(&blocked_request),
-            "--attestation-file",
-            &path_arg(&blocked_attestation),
-        ]),
+    let blocked_evidence = project.workflow_nested(
+        "action",
+        "apply",
+        &command_args(&["--origin-envelope-file", &path_arg(&blocked_envelope)]),
     );
     assert_rejected_without_state_mutation(
         &project,
