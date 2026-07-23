@@ -23,6 +23,23 @@ const MAX_RETAINED_PROJECT_DEPTH: usize = 256;
 const PROJECT_CAPABILITY_NONCE_BYTES: usize = 32;
 const RETAINED_PROJECT_ANCHOR_SCHEMA_VERSION: &str = "forge-retained-project-anchors-v1";
 
+#[derive(Debug, Clone, Copy)]
+enum RetainedFileAliasPolicy {
+    SingleLink,
+    StableAliases,
+    StoreOwnedAnchorMutation,
+}
+
+impl RetainedFileAliasPolicy {
+    const fn allows_multiple_links(self) -> bool {
+        !matches!(self, Self::SingleLink)
+    }
+
+    const fn allows_alias_metadata_changes(self) -> bool {
+        matches!(self, Self::StoreOwnedAnchorMutation)
+    }
+}
+
 /// Opaque Store-owned witness for one exact accepted project tree.
 ///
 /// The type has no public fields or `Clone` implementation. Its display path is
@@ -34,7 +51,8 @@ pub struct RetainedProjectTree {
     directories: Vec<RetainedTreeDirectory>,
     files: Vec<RetainedTreeFile>,
     snapshot_digest: String,
-    allow_store_owned_file_anchors: bool,
+    regular_file_snapshot_digest: String,
+    file_alias_policy: RetainedFileAliasPolicy,
 }
 
 /// Store-private binding between a lifecycle lock and the exact governed
@@ -360,11 +378,33 @@ impl RetainedProjectTree {
         maximum_entries: usize,
         maximum_bytes: u64,
     ) -> Result<Self, RetainedProjectTreeError> {
-        Self::capture_with_file_anchor_policy(
+        Self::capture_with_file_alias_policy(
             project_root.as_ref(),
             maximum_entries,
+            None,
             maximum_bytes,
-            false,
+            RetainedFileAliasPolicy::SingleLink,
+        )
+    }
+
+    /// Capture a read-only project observation that may already have file aliases.
+    ///
+    /// Existing hard links are accepted, but their exact link count and change
+    /// metadata are frozen at capture and rechecked at every later boundary. This
+    /// policy is suitable only for ephemeral observation; it grants no anchor or
+    /// mutation authority.
+    pub fn capture_allowing_stable_file_aliases(
+        project_root: impl AsRef<Path>,
+        maximum_entries: usize,
+        maximum_files: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, RetainedProjectTreeError> {
+        Self::capture_with_file_alias_policy(
+            project_root.as_ref(),
+            maximum_entries,
+            Some(maximum_files),
+            maximum_bytes,
+            RetainedFileAliasPolicy::StableAliases,
         )
     }
 
@@ -380,23 +420,31 @@ impl RetainedProjectTree {
         maximum_entries: usize,
         maximum_bytes: u64,
     ) -> Result<Self, RetainedProjectTreeError> {
-        Self::capture_with_file_anchor_policy(
+        Self::capture_with_file_alias_policy(
             project_root.as_ref(),
             maximum_entries,
+            None,
             maximum_bytes,
-            true,
+            RetainedFileAliasPolicy::StoreOwnedAnchorMutation,
         )
     }
 
-    fn capture_with_file_anchor_policy(
+    fn capture_with_file_alias_policy(
         project_root: &Path,
         maximum_entries: usize,
+        maximum_files: Option<usize>,
         maximum_bytes: u64,
-        allow_store_owned_file_anchors: bool,
+        file_alias_policy: RetainedFileAliasPolicy,
     ) -> Result<Self, RetainedProjectTreeError> {
         if maximum_entries == 0 {
             return Err(RetainedProjectTreeError::ResourceLimit {
                 resource: "snapshot entries",
+                maximum: 0,
+            });
+        }
+        if maximum_files == Some(0) {
+            return Err(RetainedProjectTreeError::ResourceLimit {
+                resource: "snapshot files",
                 maximum: 0,
             });
         }
@@ -435,21 +483,37 @@ impl RetainedProjectTree {
             }],
             files: Vec::new(),
             snapshot_digest: String::new(),
-            allow_store_owned_file_anchors,
+            regular_file_snapshot_digest: String::new(),
+            file_alias_policy,
         };
         let mut digest_entries = Vec::new();
         let mut accepted_entries = 0usize;
+        let mut accepted_files = 0usize;
         let mut accepted_bytes = 0u64;
         tree.capture_directory(
             0,
             maximum_entries,
+            maximum_files,
             maximum_bytes,
             &mut accepted_entries,
+            &mut accepted_files,
             &mut accepted_bytes,
             &mut digest_entries,
         )?;
         tree.validate_ancestry()?;
         tree.validate_namespace_pass()?;
+        let mut regular_file_entries = tree
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.relative_path.clone(),
+                    crate::sha256_content_hash(&file.exact_bytes),
+                )
+            })
+            .collect::<Vec<_>>();
+        regular_file_entries.sort();
+        tree.regular_file_snapshot_digest = digest_entries_digest(&regular_file_entries)?;
         digest_entries.sort();
         tree.snapshot_digest = digest_entries_digest(&digest_entries)?;
         Ok(tree)
@@ -460,6 +524,17 @@ impl RetainedProjectTree {
     #[must_use]
     pub fn snapshot_digest(&self) -> &str {
         &self.snapshot_digest
+    }
+
+    /// Digest of the retained regular-file path/content pairs only.
+    ///
+    /// Workflow governance uses this compatibility projection to preserve its
+    /// persisted v0 snapshot digest contract for link-free projects. Directory
+    /// namespace and every ancestor binding remain retained and are still checked
+    /// by [`Self::revalidate`]; links and special objects fail closed at capture.
+    #[must_use]
+    pub fn regular_file_snapshot_digest(&self) -> &str {
+        &self.regular_file_snapshot_digest
     }
 
     /// Build the canonical exact-identity inventory consumed by a Store-owned
@@ -732,6 +807,14 @@ impl RetainedProjectTree {
         let mut digest_entries = self.revalidate_files()?;
         self.validate_namespace_pass()?;
         self.validate_ancestry()?;
+        digest_entries.sort();
+        let actual_regular_file_digest = digest_entries_digest(&digest_entries)?;
+        if actual_regular_file_digest != self.regular_file_snapshot_digest {
+            return Err(identity_error(
+                &self.display_root,
+                "retained regular-file digest differs from its admitted snapshot",
+            ));
+        }
         for directory in self.directories.iter().skip(1) {
             digest_entries.push((
                 directory.relative_path.clone(),
@@ -761,7 +844,11 @@ impl RetainedProjectTree {
                 .display_root
                 .join(relative_path_to_path(&file.relative_path));
             let metadata = RetainedMetadata::capture(&file.handle, &display_path)?;
-            validate_file_metadata(&metadata, &display_path, false)?;
+            validate_file_metadata(
+                &metadata,
+                &display_path,
+                RetainedFileAliasPolicy::SingleLink,
+            )?;
         }
         self.revalidate()
     }
@@ -807,8 +894,10 @@ impl RetainedProjectTree {
         &mut self,
         directory_index: usize,
         maximum_entries: usize,
+        maximum_files: Option<usize>,
         maximum_bytes: u64,
         accepted_entries: &mut usize,
+        accepted_files: &mut usize,
         accepted_bytes: &mut u64,
         digest_entries: &mut Vec<(String, String)>,
     ) -> Result<(), RetainedProjectTreeError> {
@@ -878,17 +967,22 @@ impl RetainedProjectTree {
                 self.capture_directory(
                     child_index,
                     maximum_entries,
+                    maximum_files,
                     maximum_bytes,
                     accepted_entries,
+                    accepted_files,
                     accepted_bytes,
                     digest_entries,
                 )?;
             } else if is_regular_file(&metadata) {
-                validate_file_metadata(
-                    &metadata,
-                    &display_path,
-                    self.allow_store_owned_file_anchors,
-                )?;
+                *accepted_files = (*accepted_files).saturating_add(1);
+                if maximum_files.is_some_and(|maximum| *accepted_files > maximum) {
+                    return Err(RetainedProjectTreeError::ResourceLimit {
+                        resource: "snapshot files",
+                        maximum: maximum_files.unwrap_or_default() as u64,
+                    });
+                }
+                validate_file_metadata(&metadata, &display_path, self.file_alias_policy)?;
                 let length = metadata.metadata.len();
                 *accepted_bytes = (*accepted_bytes).saturating_add(length);
                 if *accepted_bytes > maximum_bytes {
@@ -898,25 +992,13 @@ impl RetainedProjectTree {
                     });
                 }
                 let exact_bytes = read_retained_file(&handle, length, &display_path)?;
-                validate_stable_file(
-                    &handle,
-                    &metadata,
-                    &display_path,
-                    self.allow_store_owned_file_anchors,
-                )?;
+                validate_stable_file(&handle, &metadata, &display_path, self.file_alias_policy)?;
                 let rebound = platform::open_child(&parent_handle, &entry.name)
                     .map_err(|error| io_error(&display_path, error))?;
                 let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
-                validate_file_metadata(
-                    &rebound_metadata,
-                    &display_path,
-                    self.allow_store_owned_file_anchors,
-                )?;
-                if !same_stable_file_metadata(
-                    &metadata,
-                    &rebound_metadata,
-                    self.allow_store_owned_file_anchors,
-                ) {
+                validate_file_metadata(&rebound_metadata, &display_path, self.file_alias_policy)?;
+                if !same_stable_file_metadata(&metadata, &rebound_metadata, self.file_alias_policy)
+                {
                     return Err(identity_error(
                         &display_path,
                         "file namespace changed while its bytes were retained",
@@ -1072,15 +1154,11 @@ impl RetainedProjectTree {
                         }
                     }
                     RetainedTreeEntryKind::File => {
-                        validate_file_metadata(
-                            &metadata,
-                            &child_display,
-                            self.allow_store_owned_file_anchors,
-                        )?;
+                        validate_file_metadata(&metadata, &child_display, self.file_alias_policy)?;
                         if !same_stable_file_metadata(
                             &self.files[entry.witness_index].metadata,
                             &metadata,
-                            self.allow_store_owned_file_anchors,
+                            self.file_alias_policy,
                         ) {
                             return Err(identity_error(
                                 &child_display,
@@ -1104,22 +1182,15 @@ impl RetainedProjectTree {
                 &file.handle,
                 &file.metadata,
                 &display_path,
-                self.allow_store_owned_file_anchors,
+                self.file_alias_policy,
             )?;
             let parent = &self.directories[file.parent];
             let rebound = platform::open_child(&parent.handle, &file.name_in_parent)
                 .map_err(|error| io_error(&display_path, error))?;
             let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
-            validate_file_metadata(
-                &rebound_metadata,
-                &display_path,
-                self.allow_store_owned_file_anchors,
-            )?;
-            if !same_stable_file_metadata(
-                &file.metadata,
-                &rebound_metadata,
-                self.allow_store_owned_file_anchors,
-            ) {
+            validate_file_metadata(&rebound_metadata, &display_path, self.file_alias_policy)?;
+            if !same_stable_file_metadata(&file.metadata, &rebound_metadata, self.file_alias_policy)
+            {
                 return Err(identity_error(
                     &display_path,
                     "file namespace no longer names the retained file",
@@ -1140,7 +1211,7 @@ impl RetainedProjectTree {
                 &file.handle,
                 &file.metadata,
                 &display_path,
-                self.allow_store_owned_file_anchors,
+                self.file_alias_policy,
             )?;
             let rebound_after = platform::open_child(&parent.handle, &file.name_in_parent)
                 .map_err(|error| io_error(&display_path, error))?;
@@ -1148,7 +1219,7 @@ impl RetainedProjectTree {
             if !same_stable_file_metadata(
                 &file.metadata,
                 &rebound_after_metadata,
-                self.allow_store_owned_file_anchors,
+                self.file_alias_policy,
             ) {
                 return Err(identity_error(
                     &display_path,
@@ -1471,11 +1542,11 @@ fn validate_stable_file(
     handle: &File,
     expected: &RetainedMetadata,
     display_path: &Path,
-    allow_store_owned_file_anchors: bool,
+    file_alias_policy: RetainedFileAliasPolicy,
 ) -> Result<(), RetainedProjectTreeError> {
     let current = RetainedMetadata::capture(handle, display_path)?;
-    validate_file_metadata(&current, display_path, allow_store_owned_file_anchors)?;
-    if same_stable_file_metadata(expected, &current, allow_store_owned_file_anchors) {
+    validate_file_metadata(&current, display_path, file_alias_policy)?;
+    if same_stable_file_metadata(expected, &current, file_alias_policy) {
         Ok(())
     } else {
         Err(identity_error(
@@ -1502,18 +1573,18 @@ fn validate_directory_metadata(
 fn validate_file_metadata(
     metadata: &RetainedMetadata,
     display_path: &Path,
-    allow_store_owned_file_anchors: bool,
+    file_alias_policy: RetainedFileAliasPolicy,
 ) -> Result<(), RetainedProjectTreeError> {
     let links = hard_link_count(metadata);
     if is_regular_file(metadata)
         && !is_reparse(metadata)
-        && (links == 1 || (allow_store_owned_file_anchors && links > 1))
+        && (links == 1 || (file_alias_policy.allows_multiple_links() && links > 1))
     {
         Ok(())
     } else {
         Err(RetainedProjectTreeError::Identity {
             path: display_path.to_path_buf(),
-            reason: if allow_store_owned_file_anchors {
+            reason: if file_alias_policy.allows_multiple_links() {
                 "project file must be a no-follow regular file with at least one live name"
                     .to_owned()
             } else {
@@ -1661,7 +1732,7 @@ fn same_stable_metadata(_left: &RetainedMetadata, _right: &RetainedMetadata) -> 
 fn same_stable_file_metadata(
     left: &RetainedMetadata,
     right: &RetainedMetadata,
-    allow_store_owned_file_anchors: bool,
+    file_alias_policy: RetainedFileAliasPolicy,
 ) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     let left = &left.metadata;
@@ -1675,7 +1746,7 @@ fn same_stable_file_metadata(
         && left.len() == right.len()
         && left.mtime() == right.mtime()
         && left.mtime_nsec() == right.mtime_nsec()
-        && (allow_store_owned_file_anchors
+        && (file_alias_policy.allows_alias_metadata_changes()
             || (left.nlink() == right.nlink()
                 && left.ctime() == right.ctime()
                 && left.ctime_nsec() == right.ctime_nsec()))
@@ -1685,7 +1756,7 @@ fn same_stable_file_metadata(
 fn same_stable_file_metadata(
     left: &RetainedMetadata,
     right: &RetainedMetadata,
-    allow_store_owned_file_anchors: bool,
+    file_alias_policy: RetainedFileAliasPolicy,
 ) -> bool {
     left.file_information.volume_serial_number == right.file_information.volume_serial_number
         && left.file_information.file_index == right.file_information.file_index
@@ -1693,7 +1764,7 @@ fn same_stable_file_metadata(
         && left.file_information.creation_time == right.file_information.creation_time
         && left.file_information.file_size == right.file_information.file_size
         && left.file_information.last_write_time == right.file_information.last_write_time
-        && (allow_store_owned_file_anchors
+        && (file_alias_policy.allows_alias_metadata_changes()
             || left.file_information.number_of_links == right.file_information.number_of_links)
         && !is_reparse(left)
         && !is_reparse(right)
@@ -1703,7 +1774,7 @@ fn same_stable_file_metadata(
 fn same_stable_file_metadata(
     _left: &RetainedMetadata,
     _right: &RetainedMetadata,
-    _allow_store_owned_file_anchors: bool,
+    _file_alias_policy: RetainedFileAliasPolicy,
 ) -> bool {
     false
 }
@@ -2052,6 +2123,7 @@ mod platform {
 mod tests {
     use super::*;
     use std::fs;
+    use std::io::Write as _;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn project_root(label: &str) -> PathBuf {
@@ -2063,6 +2135,155 @@ mod tests {
             "forge-retained-project-{label}-{}-{nonce}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn regular_file_snapshot_digest_preserves_file_only_contract_and_exact_limit() {
+        let root = project_root("regular-file-digest");
+        fs::create_dir_all(root.join("empty")).unwrap();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("README.md"), b"root").unwrap();
+        fs::write(root.join("src/lib.rs"), b"exact").unwrap();
+
+        let retained = RetainedProjectTree::capture(&root, 16, 9).unwrap();
+        let mut entries = vec![
+            ("README.md".to_owned(), crate::sha256_content_hash(b"root")),
+            (
+                "src/lib.rs".to_owned(),
+                crate::sha256_content_hash(b"exact"),
+            ),
+        ];
+        entries.sort();
+        assert_eq!(
+            retained.regular_file_snapshot_digest(),
+            digest_entries_digest(&entries).unwrap()
+        );
+        retained.revalidate().unwrap();
+        drop(retained);
+
+        assert!(matches!(
+            RetainedProjectTree::capture(&root, 16, 8),
+            Err(RetainedProjectTreeError::ResourceLimit {
+                resource: "snapshot bytes",
+                maximum: 8,
+            })
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stable_file_alias_snapshot_freezes_existing_alias_metadata() {
+        let root = project_root("stable-file-aliases");
+        let anchors = project_root("stable-file-aliases-anchor");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&anchors).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"stable").unwrap();
+        fs::hard_link(&leaf, anchors.join("before")).unwrap();
+
+        let retained =
+            RetainedProjectTree::capture_allowing_stable_file_aliases(&root, 16, 1, 6).unwrap();
+        retained.revalidate().unwrap();
+        fs::hard_link(&leaf, anchors.join("after")).unwrap();
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(anchors).unwrap();
+    }
+
+    #[test]
+    fn retained_snapshot_rejects_in_place_file_growth() {
+        let root = project_root("file-growth");
+        fs::create_dir_all(&root).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"fixed").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+
+        let mut writer = fs::OpenOptions::new().append(true).open(&leaf).unwrap();
+        writer.write_all(b" growth").unwrap();
+        writer.sync_all().unwrap();
+        drop(writer);
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn retained_snapshot_rejects_byte_identical_file_replacement() {
+        let root = project_root("file-replacement");
+        fs::create_dir_all(&root).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"same bytes\n").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+
+        fs::remove_file(&leaf).unwrap();
+        fs::write(&leaf, b"same bytes\n").unwrap();
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_snapshot_rejects_regular_file_to_symlink_replacement() {
+        let root = project_root("file-to-symlink");
+        let outside = project_root("file-to-symlink-target");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&outside, b"same bytes\n").unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"same bytes\n").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+
+        fs::remove_file(&leaf).unwrap();
+        std::os::unix::fs::symlink(&outside, &leaf).unwrap();
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_file(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_snapshot_rejects_root_namespace_replacement() {
+        let root = project_root("root-replacement");
+        let displaced = root.with_extension("displaced");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), b"same bytes\n").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+
+        fs::rename(&root, &displaced).unwrap();
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), b"same bytes\n").unwrap();
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(displaced).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_snapshot_rejects_parent_namespace_replacement() {
+        let container = project_root("parent-replacement");
+        let parent = container.join("parent");
+        let displaced = container.join("parent-displaced");
+        let root = parent.join("project");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), b"same bytes\n").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+
+        fs::rename(&parent, &displaced).unwrap();
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), b"same bytes\n").unwrap();
+
+        assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(container).unwrap();
     }
 
     #[test]

@@ -101,6 +101,7 @@ use forge_core_domain_pack_tcb::{
 use forge_core_store::claim_wal::{
     project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
 };
+use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::workflow_action_replay::{
     begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
     workflow_action_replay_origin_fingerprint, WorkflowActionReplayError,
@@ -125,6 +126,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const INITIAL_PHASE: &str = "1-discovery";
 const ADAPTER_SOURCE_ID: &str = "forge.kernel.project-snapshot-adapter.v0";
 const MAX_SNAPSHOT_FILES: usize = 100_000;
+const MAX_SNAPSHOT_ENTRIES: usize = MAX_SNAPSHOT_FILES * 2;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const TRUSTED_WORKFLOW_REGISTRY_RELATIVE_PATH: &str = "operator/workflow-principal-registry.yaml";
 const TRUSTED_WORKFLOW_BROKER_REGISTRY_RELATIVE_PATH: &str =
@@ -141,6 +143,9 @@ const TEST_REPLAY_APPEND_FAILURE_MARKER: &str = ".test-fail-replay-append-after-
 const TEST_REPLAY_APPEND_FAILURE_BACKUP: &str = ".test-replay-wal-before-append-failure";
 #[cfg(test)]
 const TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER: &str = ".test-expire-after-replay-reservation";
+#[cfg(all(test, unix))]
+const TEST_REPLACE_PROJECT_FILE_AFTER_REPLAY_RESERVATION_MARKER: &str =
+    ".test-replace-project-file-after-replay-reservation";
 const DOMAIN_PACK_REBASE_PLAN_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Canonical project binding used by every live governance operation.
@@ -566,6 +571,45 @@ pub struct WorkflowGovernanceProjectAdapter {
     binding: WorkflowGovernanceProjectBinding,
 }
 
+/// Exact read-only project observation retained across one governance operation.
+///
+/// The workflow digest preserves the persisted v0 regular-file projection while
+/// the Store capability also retains and revalidates the complete directory and
+/// ancestor namespace. The capability is never serialized or returned to callers.
+struct RetainedWorkflowProjectSnapshot {
+    tree: RetainedProjectTree,
+}
+
+impl RetainedWorkflowProjectSnapshot {
+    fn capture(root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
+        Self::capture_with_limits(root, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_BYTES)
+    }
+
+    fn capture_with_limits(
+        root: &Path,
+        maximum_files: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let maximum_entries = maximum_files.saturating_mul(2).min(MAX_SNAPSHOT_ENTRIES);
+        let tree = RetainedProjectTree::capture_allowing_stable_file_aliases(
+            root,
+            maximum_entries,
+            maximum_files,
+            maximum_bytes,
+        )?;
+        Ok(Self { tree })
+    }
+
+    fn digest(&self) -> &str {
+        self.tree.regular_file_snapshot_digest()
+    }
+
+    fn revalidate(&self) -> Result<(), WorkflowGovernanceAdapterError> {
+        self.tree.revalidate()?;
+        Ok(())
+    }
+}
+
 /// Exact compare-and-swap bindings required to consume one candidate-only C5.1
 /// episode. The document remains data; only the successful kernel operation can
 /// produce the durable applied record.
@@ -813,7 +857,9 @@ impl WorkflowGovernanceProjectAdapter {
             .as_deref()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
         let state_version = projection.current_state_version().unwrap_or_default();
-        let snapshot = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot = project_snapshot.digest().to_owned();
         if request.expected_ledger_head_digest != head {
             return Err(
                 WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(
@@ -933,6 +979,7 @@ impl WorkflowGovernanceProjectAdapter {
             episode_snapshot: Some(request.document.clone()),
         };
         let identity = self.identity(admitted);
+        project_snapshot.revalidate()?;
         let record = ledger.apply_post_build_verify_episode_unchecked_tcb(
             head,
             &identity,
@@ -1042,7 +1089,9 @@ impl WorkflowGovernanceProjectAdapter {
             &self.binding.state_root,
         )?;
         let genesis = registry.genesis();
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         if !projection.records.is_empty() {
@@ -1085,6 +1134,7 @@ impl WorkflowGovernanceProjectAdapter {
             initial_phase: StableId(INITIAL_PHASE.to_owned()),
         });
         let identity = self.identity(genesis);
+        project_snapshot.revalidate()?;
         let record = ledger.initialize_unchecked_tcb(&identity, 0, event)?;
         projection = ledger.recover()?;
         let effective = domain.admit_effective(genesis)?;
@@ -1161,6 +1211,15 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         now: u64,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        self.action_packets_at_with_snapshot(now, &snapshot)
+    }
+
+    fn action_packets_at_with_snapshot(
+        &self,
+        now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
+    ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let domain = LockedWorkflowDomainPackContext::acquire(
             &self.binding.project_root,
@@ -1172,8 +1231,15 @@ impl WorkflowGovernanceProjectAdapter {
         let effective = domain.admit_effective(admitted)?;
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
-        let guidance =
-            self.guidance_from_projection(&registry, admitted, &effective, &projection, now)?;
+        let guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            snapshot,
+        )?;
+        snapshot.revalidate()?;
         let WorkflowAuthorizationGuidance {
             registry_setup,
             setup_gaps,
@@ -1210,7 +1276,8 @@ impl WorkflowGovernanceProjectAdapter {
         if now == 0 {
             return Err(WorkflowGovernanceAdapterError::Clock);
         }
-        let packet_set = self.action_packets_at(now)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let packet_set = self.action_packets_at_with_snapshot(now, &snapshot)?;
         let packet = packet_set
             .packets
             .into_iter()
@@ -1236,7 +1303,8 @@ impl WorkflowGovernanceProjectAdapter {
             closed_input,
             now,
         )?;
-        if project_snapshot_digest(&self.binding.project_root)? != packet_set.snapshot_digest
+        snapshot.revalidate()?;
+        if snapshot.digest() != packet_set.snapshot_digest
             || projection.head_digest.as_deref() != Some(packet_set.ledger_head_digest.as_str())
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
@@ -1304,6 +1372,8 @@ impl WorkflowGovernanceProjectAdapter {
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let replay_origin_id = stable_replay_origin_id
             .clone()
             .map_or_else(|| broker_replay_origin_id(&audit), Ok)?;
@@ -1319,13 +1389,15 @@ impl WorkflowGovernanceProjectAdapter {
                 &replay_origin_id,
                 &action_record.record_digest,
             )?;
-            let next = self.guidance_from_projection(
+            let next = self.guidance_from_projection_with_snapshot(
                 &registry,
                 admitted,
                 &effective,
                 &projection,
                 unix_time()?,
+                &project_snapshot,
             )?;
+            project_snapshot.revalidate()?;
             return Ok(WorkflowBrokerActionReceipt {
                 action_record,
                 origin_record,
@@ -1354,12 +1426,13 @@ impl WorkflowGovernanceProjectAdapter {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
 
-        let guidance = self.guidance_from_projection(
+        let guidance = self.guidance_from_projection_with_snapshot(
             &registry,
             admitted,
             &effective,
             &projection,
             current_now,
+            &project_snapshot,
         )?;
         // Guidance already derived the canonical packets from this exact
         // projection and snapshot. Later pre-commit checks still reject any
@@ -1427,13 +1500,19 @@ impl WorkflowGovernanceProjectAdapter {
             ));
         let origin_record = batch.push_event(packet.binding.state_version, origin_event)?;
         let phase_advanced_record = if phase_may_advance {
-            self.plan_phase_advance(&effective, batch.projection(), commit_now)?
-                .map(|(state_version, event)| batch.push_event(state_version, event))
-                .transpose()?
+            self.plan_phase_advance_with_snapshot(
+                &effective,
+                batch.projection(),
+                commit_now,
+                &project_snapshot,
+            )?
+            .map(|(state_version, event)| batch.push_event(state_version, event))
+            .transpose()?
         } else {
             None
         };
-        if project_snapshot_digest(&self.binding.project_root)? != packet.binding.snapshot_digest {
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != packet.binding.snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
         let final_commit_now = unix_time()?;
@@ -1452,11 +1531,14 @@ impl WorkflowGovernanceProjectAdapter {
             &replay_origin_id,
             &action_record.record_digest,
         )?;
+        #[cfg(all(test, unix))]
+        inject_byte_identical_project_replacement_after_replay_reservation(
+            &self.binding.state_root,
+            &self.binding.project_root,
+        );
         let locked_commit_now = replay_locked_commit_time(&self.binding.state_root)?;
         if audit.issued_at_unix > locked_commit_now
             || audit.expires_at_unix <= locked_commit_now
-            || project_snapshot_digest(&self.binding.project_root)?
-                != packet.binding.snapshot_digest
             || self.current_trusted_registry_digest()?
                 != packet.binding.trusted_principal_registry_digest
             || self.current_trusted_broker_registry_digest()?
@@ -1464,17 +1546,22 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != packet.binding.snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         batch.commit()?;
         #[cfg(test)]
         inject_replay_append_failure_after_ledger(&self.binding.state_root);
         replay_reservation.commit_after_authoritative_ledger()?;
         let committed = ledger.recover()?;
-        let next = self.guidance_from_projection(
+        let next = self.guidance_from_projection_with_snapshot(
             &registry,
             admitted,
             &effective,
             &committed,
             final_commit_now,
+            &project_snapshot,
         )?;
         Ok(WorkflowBrokerActionReceipt {
             action_record,
@@ -1717,7 +1804,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .clone()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         let plan = self.derive_domain_pack_rebase_plan(
             source,
             target,
@@ -1726,8 +1815,9 @@ impl WorkflowGovernanceProjectAdapter {
             &head_digest,
             &snapshot_digest,
         )?;
+        project_snapshot.revalidate()?;
         if plan.domain_pack_rebase_plan.plan_digest != expected_rebase_plan_digest
-            || project_snapshot_digest(&self.binding.project_root)? != snapshot_digest
+            || project_snapshot.digest() != snapshot_digest
         {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
         }
@@ -1778,6 +1868,8 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
         }
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let source = self.resolve_active_release(&registry, &projection)?;
@@ -1788,13 +1880,13 @@ impl WorkflowGovernanceProjectAdapter {
                     plan.target_release.release_id.0.clone(),
                 )
             })?;
+        project_snapshot.revalidate()?;
         if source.release() != &plan.source_release
             || target.release() != &plan.target_release
             || !target.is_adjacent_successor_of(source)
             || projection.head_digest.as_deref()
                 != Some(plan.exact_cas.expected_workflow_ledger_head_digest.as_str())
-            || project_snapshot_digest(&self.binding.project_root)?
-                != plan.exact_cas.expected_project_snapshot_digest
+            || project_snapshot.digest() != plan.exact_cas.expected_project_snapshot_digest
         {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
         }
@@ -1853,9 +1945,8 @@ impl WorkflowGovernanceProjectAdapter {
             .unwrap_or_default()
             .checked_add(1)
             .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
-        if project_snapshot_digest(&self.binding.project_root)?
-            != plan.exact_cas.expected_project_snapshot_digest
-        {
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != plan.exact_cas.expected_project_snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
         }
         let record = ledger.transition_core_domain_pack_rebase_unchecked_tcb(
@@ -2023,6 +2114,8 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let source = self.resolve_active_release(&registry, &projection)?;
         let target = registry.release_by_id(target_release_id).ok_or_else(|| {
             WorkflowGovernanceAdapterError::UnknownRelease(target_release_id.0.clone())
@@ -2037,7 +2130,8 @@ impl WorkflowGovernanceProjectAdapter {
                 )
             })
         {
-            let replay_snapshot = project_snapshot_digest(&self.binding.project_root)?;
+            project_snapshot.revalidate()?;
+            let replay_snapshot = project_snapshot.digest().to_owned();
             return Self::release_upgrade_receipt(
                 WorkflowGovernanceReleaseUpgradeStatus::AlreadyPinned,
                 &registry,
@@ -2054,7 +2148,7 @@ impl WorkflowGovernanceProjectAdapter {
         {
             return Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch);
         }
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if snapshot_digest != expected_snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch);
         }
@@ -2085,9 +2179,10 @@ impl WorkflowGovernanceProjectAdapter {
             .checked_add(1)
             .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
         // The ledger lock serializes governance writers, not arbitrary project
-        // editors. Narrow the filesystem TOCTOU window with a late snapshot
-        // recheck immediately before the release transition.
-        if project_snapshot_digest(&self.binding.project_root)? != snapshot_digest {
+        // editors. Revalidate the same retained namespace and file handles at the
+        // final boundary so byte-identical replacement cannot satisfy this CAS.
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::ReleaseCasMismatch);
         }
         match ledger.transition_release_unchecked_tcb(
@@ -2211,7 +2306,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2231,6 +2328,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effective,
             &projection,
             &request.policy_ref,
+            &project_snapshot,
         )?;
         if policy.routing.activation != WorkflowPolicyActivation::WhenApplicable {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
@@ -2259,12 +2357,16 @@ impl WorkflowGovernanceProjectAdapter {
         });
         let mut batch = ledger.begin_unchecked_tcb_batch(head, &identity)?;
         let record = batch.push_event(request.state_version, event)?;
-        if let Some((state_version, event)) =
-            self.plan_phase_advance(&effective, batch.projection(), unix_time()?)?
-        {
+        if let Some((state_version, event)) = self.plan_phase_advance_with_snapshot(
+            &effective,
+            batch.projection(),
+            unix_time()?,
+            &project_snapshot,
+        )? {
             batch.push_event(state_version, event)?;
         }
-        if project_snapshot_digest(&self.binding.project_root)? != snapshot_digest {
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
         batch.commit()?;
@@ -2300,7 +2402,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2319,6 +2423,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effective,
             &projection,
             &request.policy_ref,
+            &project_snapshot,
         )?;
         let requirement = policy
             .capability_requirements
@@ -2358,6 +2463,10 @@ impl WorkflowGovernanceProjectAdapter {
             observed_at_unix: request.observed_at_unix,
             expires_at_unix: request.expires_at_unix,
         });
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         Ok(ledger.append_unchecked_tcb_event(head, &identity, request.state_version, event)?)
     }
 
@@ -2390,7 +2499,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2408,6 +2519,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effective,
             &projection,
             &request.policy_ref,
+            &project_snapshot,
         )?;
         if request.readiness_target != active_target
             || request.readiness_target.rank() < policy.routing.readiness_target.rank()
@@ -2498,11 +2610,15 @@ impl WorkflowGovernanceProjectAdapter {
                 ),
             },
             subject,
-            snapshot_digest,
+            snapshot_digest: snapshot_digest.clone(),
             ledger_head_digest: head.to_owned(),
             observed_at_unix: request.observed_at_unix,
             expires_at_unix: request.expires_at_unix,
         });
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         Ok(ledger.append_unchecked_tcb_event(head, &identity, request.state_version, event)?)
     }
 
@@ -2534,7 +2650,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2552,6 +2670,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effective,
             &projection,
             &request.policy_ref,
+            &project_snapshot,
         )?;
         let rule = policy
             .decision_rules
@@ -2633,12 +2752,16 @@ impl WorkflowGovernanceProjectAdapter {
             credential_id: StableId(audit.principal.credential_id),
             public_key_fingerprint: audit.principal.public_key_fingerprint,
             authorization_registry_digest: registry_digest,
-            snapshot_digest,
+            snapshot_digest: snapshot_digest.clone(),
             ledger_head_digest: head.to_owned(),
             authorization_intent_digest: audit.intent_digest,
             signature_fingerprint: audit.signature_fingerprint,
             resolved_at_unix: unix_time()?,
         });
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         Ok(ledger.append_unchecked_tcb_event(head, &identity, request.state_version, event)?)
     }
 
@@ -2671,7 +2794,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2697,6 +2822,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effective,
             &projection,
             &request.policy_ref,
+            &project_snapshot,
         )?;
         let claim = policy
             .claims
@@ -2736,7 +2862,7 @@ impl WorkflowGovernanceProjectAdapter {
             subject: WorkflowEvidenceSubject {
                 kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
                 subject_ref: self.binding.project_id.0.clone(),
-                subject_digest: snapshot_digest,
+                subject_digest: snapshot_digest.clone(),
             },
             snapshot_digest: request.snapshot_digest.clone(),
             ledger_head_digest: head.to_owned(),
@@ -2747,6 +2873,10 @@ impl WorkflowGovernanceProjectAdapter {
             expires_at_unix: u64::try_from(request.expires_at_unix)
                 .map_err(|_| WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?,
         });
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
         Ok(ledger.append_unchecked_tcb_event(head, &identity, request.state_version, event)?)
     }
 
@@ -2780,7 +2910,9 @@ impl WorkflowGovernanceProjectAdapter {
             .head_digest
             .as_deref()
             .ok_or(WorkflowGovernanceLedgerError::NotInitialized)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
         if request.project_id != self.binding.project_id
             || request.policy_bundle_digest
                 != effective.identity().effective_runtime_bundle.bundle_digest
@@ -2839,12 +2971,16 @@ impl WorkflowGovernanceProjectAdapter {
         });
         let mut batch = ledger.begin_unchecked_tcb_batch(head, &identity)?;
         let record = batch.push_event(request.state_version, event)?;
-        if let Some((state_version, event)) =
-            self.plan_phase_advance(&effective, batch.projection(), unix_time()?)?
-        {
+        if let Some((state_version, event)) = self.plan_phase_advance_with_snapshot(
+            &effective,
+            batch.projection(),
+            unix_time()?,
+            &project_snapshot,
+        )? {
             batch.push_event(state_version, event)?;
         }
-        if project_snapshot_digest(&self.binding.project_root)? != snapshot_digest {
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
         }
         batch.commit()?;
@@ -2892,8 +3028,16 @@ impl WorkflowGovernanceProjectAdapter {
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
-        let (guidance, verified) =
-            self.verified_from_projection(&registry, admitted, &effective, &projection, now)?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let (guidance, verified) = self.verified_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &project_snapshot,
+        )?;
         if expected_snapshot_digest.is_some_and(|expected| expected != guidance.snapshot_digest) {
             return Err(WorkflowGovernanceAdapterError::CompletionDrift);
         }
@@ -2906,8 +3050,13 @@ impl WorkflowGovernanceProjectAdapter {
         let completion = verified
             .try_into_completion()
             .map_err(|_| WorkflowGovernanceAdapterError::PolicyIncomplete)?;
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != guidance.snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::CompletionDrift);
+        }
         Ok(PreparedWorkflowGovernanceCompletion {
             completion,
+            project_snapshot,
             project_id: guidance.project_id,
             policy_ref: guidance.selected_policy_ref,
             bundle_digest: guidance.bundle_digest,
@@ -2950,8 +3099,15 @@ impl WorkflowGovernanceProjectAdapter {
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
-        let (fresh, verified) =
-            self.verified_from_projection(&registry, admitted, &effective, &projection, now)?;
+        let project_snapshot = &prepared.project_snapshot;
+        let (fresh, verified) = self.verified_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            project_snapshot,
+        )?;
         if fresh.status != WorkflowGovernanceGuidanceStatus::ReadyToComplete {
             return Err(WorkflowGovernanceAdapterError::CompletionDrift);
         }
@@ -3058,32 +3214,38 @@ impl WorkflowGovernanceProjectAdapter {
             completed_at_unix: now,
         });
         // The ledger lock serializes governance writers, not arbitrary project
-        // editors. Re-hash immediately before append to narrow that TOCTOU
-        // window; this is a drift check, not a claim of filesystem atomicity.
-        if project_snapshot_digest(&self.binding.project_root)? != fresh.snapshot_digest {
+        // editors. Revalidate the exact retained namespace and file handles at
+        // every late boundary rather than accepting a byte-identical remint.
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != fresh.snapshot_digest {
             return Err(WorkflowGovernanceAdapterError::CompletionDrift);
         }
         let mut batch = ledger.begin_unchecked_tcb_batch(&fresh.ledger_head_digest, &identity)?;
         let completed = batch.push_event(completed_state_version, event)?;
-        let phase_advanced = if let Some((state_version, event)) =
-            self.plan_phase_advance(&effective, batch.projection(), now)?
-        {
+        let phase_advanced = if let Some((state_version, event)) = self
+            .plan_phase_advance_with_snapshot(
+                &effective,
+                batch.projection(),
+                now,
+                project_snapshot,
+            )? {
             Some(batch.push_event(state_version, event)?)
         } else {
             None
         };
-        let next_guidance = self.guidance_from_projection(
+        let next_guidance = self.guidance_from_projection_with_snapshot(
             &registry,
             admitted,
             &effective,
             batch.projection(),
             now,
+            project_snapshot,
         )?;
         let continuity_event =
             WorkflowGovernanceEvent::ContinuityRecorded(ContinuityRecordedEvent {
                 from_principal: None,
                 to_principal: continuity_principal,
-                snapshot_digest: fresh.snapshot_digest,
+                snapshot_digest: fresh.snapshot_digest.clone(),
                 context_digest: sha256_content_hash(
                     &serde_json_canonicalizer::to_vec(&next_guidance).map_err(|error| {
                         WorkflowGovernanceAdapterError::Canonicalization(error.to_string())
@@ -3105,13 +3267,18 @@ impl WorkflowGovernanceProjectAdapter {
             .current_state_version()
             .unwrap_or(completed_state_version);
         let continuity = batch.push_event(continuity_state, continuity_event)?;
-        let next = self.guidance_from_projection(
+        let next = self.guidance_from_projection_with_snapshot(
             &registry,
             admitted,
             &effective,
             batch.projection(),
             now,
+            project_snapshot,
         )?;
+        project_snapshot.revalidate()?;
+        if project_snapshot.digest() != fresh.snapshot_digest {
+            return Err(WorkflowGovernanceAdapterError::CompletionDrift);
+        }
         batch.commit()?;
         Ok(WorkflowGovernanceCompletionReceipt {
             authority: WorkflowGovernanceCompletionAuthority::ConsumedAfterLateRecheck,
@@ -3620,17 +3787,35 @@ impl WorkflowGovernanceProjectAdapter {
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
     ) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
-        self.verified_from_projection(registry, admitted, effective, projection, now)
-            .map(|(guidance, _)| guidance)
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        self.guidance_from_projection_with_snapshot(
+            registry, admitted, effective, projection, now, &snapshot,
+        )
     }
 
-    fn verified_from_projection(
+    fn guidance_from_projection_with_snapshot(
         &self,
         registry: &AdmittedWorkflowGovernanceReleaseRegistry,
         admitted: &AdmittedWorkflowGovernanceRelease,
         effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
+    ) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
+        self.verified_from_projection_with_snapshot(
+            registry, admitted, effective, projection, now, snapshot,
+        )
+        .map(|(guidance, _)| guidance)
+    }
+
+    fn verified_from_projection_with_snapshot(
+        &self,
+        registry: &AdmittedWorkflowGovernanceReleaseRegistry,
+        admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+        now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
     ) -> Result<
         (
             WorkflowGovernanceGuidance,
@@ -3640,7 +3825,8 @@ impl WorkflowGovernanceProjectAdapter {
     > {
         let identity = self.identity(admitted);
         validate_identity(projection, &identity, &self.binding.project_root)?;
-        let snapshot_digest = project_snapshot_digest(&self.binding.project_root)?;
+        snapshot.revalidate()?;
+        let snapshot_digest = snapshot.digest().to_owned();
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
         let trusted_broker_registry = self.current_trusted_broker_registry_state()?;
         let derived = derive_receipts(
@@ -3966,9 +4152,16 @@ impl WorkflowGovernanceProjectAdapter {
         effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         requested_policy_ref: &StableId,
+        snapshot: &RetainedWorkflowProjectSnapshot,
     ) -> Result<ReadinessTarget, WorkflowGovernanceAdapterError> {
-        let guidance =
-            self.guidance_from_projection(registry, admitted, effective, projection, unix_time()?)?;
+        let guidance = self.guidance_from_projection_with_snapshot(
+            registry,
+            admitted,
+            effective,
+            projection,
+            unix_time()?,
+            snapshot,
+        )?;
         if &guidance.selected_policy_ref == requested_policy_ref {
             return Ok(guidance.target);
         }
@@ -4099,23 +4292,24 @@ impl WorkflowGovernanceProjectAdapter {
         ))
     }
 
-    fn plan_phase_advance(
+    fn plan_phase_advance_with_snapshot(
         &self,
         effective: &AdmittedEffectiveWorkflowGovernanceBundle,
         projection: &WorkflowGovernanceLedgerProjection,
         now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
     ) -> Result<Option<(u64, WorkflowGovernanceEvent)>, WorkflowGovernanceAdapterError> {
         let current = current_phase(projection)?;
         let Some(current_phase_value) = Phase::parse(&current.0) else {
             return Err(WorkflowGovernanceAdapterError::InvalidPhase(current.0));
         };
-        let snapshot = project_snapshot_digest(&self.binding.project_root)?;
+        snapshot.revalidate()?;
         if !self.phase_boundary_admitted(
             effective,
             projection,
             now,
             current_phase_value,
-            &snapshot,
+            snapshot.digest(),
         )? {
             return Ok(None);
         }
@@ -4131,7 +4325,7 @@ impl WorkflowGovernanceProjectAdapter {
         let event = WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
             from_phase: Some(current),
             to_phase: StableId(next.to_string()),
-            snapshot_digest: snapshot,
+            snapshot_digest: snapshot.digest().to_owned(),
         });
         Ok(Some((state_version, event)))
     }
@@ -4162,6 +4356,7 @@ fn phase_advance_allowed_by_assurance(
 /// Prepared completion authority; opaque and intentionally non-Clone/non-serde.
 pub struct PreparedWorkflowGovernanceCompletion {
     completion: VerifiedWorkflowGovernanceCompletion,
+    project_snapshot: RetainedWorkflowProjectSnapshot,
     project_id: StableId,
     policy_ref: StableId,
     bundle_digest: String,
@@ -4365,6 +4560,7 @@ pub enum WorkflowGovernanceAdapterError {
     SnapshotPathEscape {
         path: PathBuf,
     },
+    RetainedProjectSnapshot(RetainedProjectTreeError),
     ReleaseAdmission(AdmittedWorkflowGovernanceReleaseError),
     DomainPackLifecycle(DomainPackLifecycleStoreError),
     DomainPackRebasePlan(DomainPackRebasePlanError),
@@ -4442,6 +4638,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             }
             Self::SnapshotCapacity { files, bytes } => write!(f, "project snapshot exceeds capacity ({files} files, {bytes} bytes)"),
             Self::SnapshotPathEscape { path } => write!(f, "project snapshot path escapes root: {}", path.display()),
+            Self::RetainedProjectSnapshot(error) => {
+                write!(f, "retained project snapshot failed: {error}")
+            }
             Self::ReleaseAdmission(error) => {
                 write!(f, "workflow release admission failed: {error:?}")
             }
@@ -4537,6 +4736,12 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
 }
 
 impl std::error::Error for WorkflowGovernanceAdapterError {}
+
+impl From<RetainedProjectTreeError> for WorkflowGovernanceAdapterError {
+    fn from(value: RetainedProjectTreeError) -> Self {
+        Self::RetainedProjectSnapshot(value)
+    }
+}
 
 impl From<AdmittedWorkflowGovernanceReleaseError> for WorkflowGovernanceAdapterError {
     fn from(value: AdmittedWorkflowGovernanceReleaseError) -> Self {
@@ -8401,6 +8606,32 @@ fn content_addressed_basis_digest(
     Ok(sha256_content_hash(&canonical))
 }
 
+#[cfg(all(test, unix))]
+fn inject_byte_identical_project_replacement_after_replay_reservation(
+    state_root: &Path,
+    project_root: &Path,
+) {
+    let marker = state_root.join(TEST_REPLACE_PROJECT_FILE_AFTER_REPLAY_RESERVATION_MARKER);
+    if !marker.is_file() {
+        return;
+    }
+    let relative = fs::read_to_string(&marker)
+        .expect("test replacement marker must contain a project-relative path");
+    fs::remove_file(&marker).expect("test replacement marker must be consumed");
+    let relative = Path::new(relative.trim());
+    assert!(
+        relative.components().next().is_some()
+            && relative
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_))),
+        "test replacement path must be non-empty and project-relative"
+    );
+    let target = project_root.join(relative);
+    let bytes = fs::read(&target).expect("test replacement target must be readable");
+    fs::remove_file(&target).expect("test replacement target must be removable");
+    fs::write(&target, bytes).expect("test replacement target must be reminted byte-identically");
+}
+
 fn replay_locked_commit_time(state_root: &Path) -> Result<u64, WorkflowGovernanceAdapterError> {
     let now = unix_time()?;
     #[cfg(not(test))]
@@ -8433,95 +8664,9 @@ fn inject_replay_append_failure_after_ledger(state_root: &Path) {
         .expect("test failpoint must replace the replay WAL path with a directory");
 }
 fn project_snapshot_digest(root: &Path) -> Result<String, WorkflowGovernanceAdapterError> {
-    let mut stack = vec![root.to_path_buf()];
-    let mut entries = Vec::new();
-    let mut files = 0usize;
-    let mut bytes_total = 0u64;
-    while let Some(directory) = stack.pop() {
-        let mut children = fs::read_dir(&directory)
-            .map_err(|error| WorkflowGovernanceAdapterError::Path {
-                field: "project_snapshot",
-                path: directory.clone(),
-                source: error.to_string(),
-            })?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| WorkflowGovernanceAdapterError::Path {
-                field: "project_snapshot",
-                path: directory.clone(),
-                source: error.to_string(),
-            })?;
-        children.sort_by_key(std::fs::DirEntry::file_name);
-        for child in children.into_iter().rev() {
-            let path = child.path();
-            let relative = path.strip_prefix(root).map_err(|_| {
-                WorkflowGovernanceAdapterError::SnapshotPathEscape { path: path.clone() }
-            })?;
-            let name = relative
-                .components()
-                .next()
-                .and_then(|component| component.as_os_str().to_str())
-                .unwrap_or_default();
-            if matches!(name, ".git" | ".forge-method" | "target" | "node_modules") {
-                continue;
-            }
-            let metadata = fs::symlink_metadata(&path).map_err(|error| {
-                WorkflowGovernanceAdapterError::Path {
-                    field: "project_snapshot",
-                    path: path.clone(),
-                    source: error.to_string(),
-                }
-            })?;
-            if metadata.file_type().is_symlink() {
-                let target =
-                    fs::read_link(&path).map_err(|error| WorkflowGovernanceAdapterError::Path {
-                        field: "project_snapshot",
-                        path: path.clone(),
-                        source: error.to_string(),
-                    })?;
-                entries.push((
-                    relative.to_string_lossy().replace('\\', "/"),
-                    format!("symlink:{}", target.display()),
-                ));
-            } else if metadata.is_dir() {
-                let canonical =
-                    path.canonicalize()
-                        .map_err(|error| WorkflowGovernanceAdapterError::Path {
-                            field: "project_snapshot",
-                            path: path.clone(),
-                            source: error.to_string(),
-                        })?;
-                if !canonical.starts_with(root) {
-                    return Err(WorkflowGovernanceAdapterError::SnapshotPathEscape {
-                        path: canonical,
-                    });
-                }
-                stack.push(path);
-            } else if metadata.is_file() {
-                files += 1;
-                bytes_total = bytes_total.saturating_add(metadata.len());
-                if files > MAX_SNAPSHOT_FILES || bytes_total > MAX_SNAPSHOT_BYTES {
-                    return Err(WorkflowGovernanceAdapterError::SnapshotCapacity {
-                        files,
-                        bytes: bytes_total,
-                    });
-                }
-                let bytes =
-                    fs::read(&path).map_err(|error| WorkflowGovernanceAdapterError::Path {
-                        field: "project_snapshot",
-                        path: path.clone(),
-                        source: error.to_string(),
-                    })?;
-                entries.push((
-                    relative.to_string_lossy().replace('\\', "/"),
-                    sha256_content_hash(&bytes),
-                ));
-            }
-        }
-    }
-    entries.sort();
-    let canonical = serde_json_canonicalizer::to_vec(&entries)
-        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
-    Ok(format!("sha256:{:x}", Sha256::digest(canonical)))
+    let snapshot = RetainedWorkflowProjectSnapshot::capture(root)?;
+    snapshot.revalidate()?;
+    Ok(snapshot.digest().to_owned())
 }
 
 fn unix_time() -> Result<u64, WorkflowGovernanceAdapterError> {
@@ -11993,6 +12138,81 @@ mod tests {
             "expired lock-held reservation must be dropped without a replay tombstone"
         );
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn broker_action_rejects_byte_identical_remint_after_replay_reservation() {
+        let (root, state) = temp_project("broker-remint-after-replay-lock");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.broker-apply".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize with replay");
+        accept_test_intent(&adapter);
+        let key = SigningKey::from_bytes(&[43_u8; 32]);
+        let broker_document = install_runtime_broker_registry(&adapter, &key);
+        let now = unix_time().expect("clock");
+        let packets = adapter.action_packets_at(now).expect("packets");
+        let packet = packets
+            .packets
+            .iter()
+            .find(|packet| {
+                matches!(
+                    packet.input_contract,
+                    WorkflowAuthorizationInputContract::Signal {
+                        transition: WorkflowSignalInputTransition::Activate,
+                        ..
+                    }
+                )
+            })
+            .expect("runtime signal packet");
+        let envelope = signed_signal_envelope(
+            &packets.project_id,
+            packet,
+            &key,
+            now,
+            "broker-remint-after-replay-lock-nonce-0001",
+        );
+        let verified = verify_broker_envelope(&broker_document, envelope, now);
+        let workflow_wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let replay_wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let workflow_before = fs::read(&workflow_wal).expect("workflow WAL before remint");
+        let replay_before = fs::read(&replay_wal).expect("replay WAL before remint");
+        let original_bytes = fs::read(root.join("README.md")).expect("project bytes before remint");
+        let marker = state.join(TEST_REPLACE_PROJECT_FILE_AFTER_REPLAY_RESERVATION_MARKER);
+        fs::write(&marker, b"README.md\n").expect("arm byte-identical remint hook");
+
+        assert!(matches!(
+            adapter.apply_verified_broker_action(verified, now),
+            Err(WorkflowGovernanceAdapterError::RetainedProjectSnapshot(_))
+        ));
+        assert!(
+            !marker.exists(),
+            "replacement hook must be consumed only after replay lock acquisition"
+        );
+        assert_eq!(
+            fs::read(root.join("README.md")).expect("project bytes after remint"),
+            original_bytes,
+            "the adversarial replacement must preserve bytes while changing identity"
+        );
+        assert_eq!(
+            fs::read(&workflow_wal).expect("workflow WAL after remint"),
+            workflow_before,
+            "retained identity drift must fail before ledger commit"
+        );
+        assert_eq!(
+            fs::read(&replay_wal).expect("replay WAL after remint"),
+            replay_before,
+            "the dropped replay reservation must leave no tombstone"
+        );
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup fixture");
+    }
+
     #[test]
     fn broker_action_retry_after_dropped_precommit_batch_has_no_replay_tombstone() {
         let (root, state) = temp_project("broker-before-ledger");
@@ -12141,6 +12361,60 @@ mod tests {
         assert_ne!(first, second);
         assert!(!first.contains(&root.to_string_lossy().to_string()));
         assert!(state.ends_with(".forge-method"));
+    }
+
+    #[test]
+    fn retained_workflow_snapshot_preserves_file_projection_and_exact_limit() {
+        let (root, _) = temp_project("retained-workflow-snapshot-limit");
+        fs::create_dir_all(root.join("empty")).expect("empty directory");
+        let retained = RetainedWorkflowProjectSnapshot::capture_with_limits(&root, 16, 8)
+            .expect("exact limit");
+        let store_projection = RetainedProjectTree::capture(&root, 16, 8).expect("store snapshot");
+        assert_eq!(
+            retained.digest(),
+            store_projection.regular_file_snapshot_digest()
+        );
+        retained.revalidate().expect("retained workflow snapshot");
+        assert!(matches!(
+            RetainedWorkflowProjectSnapshot::capture_with_limits(&root, 16, 7),
+            Err(WorkflowGovernanceAdapterError::RetainedProjectSnapshot(
+                RetainedProjectTreeError::ResourceLimit {
+                    resource: "snapshot bytes",
+                    maximum: 7,
+                }
+            ))
+        ));
+        drop(store_projection);
+        drop(retained);
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup fixture");
+    }
+
+    #[test]
+    fn retained_workflow_snapshot_preserves_file_count_limit() {
+        let (root, _) = temp_project("retained-workflow-snapshot-file-limit");
+        fs::remove_file(root.join("README.md")).expect("remove fixture README");
+        fs::create_dir_all(root.join("nested")).expect("nested directory");
+        fs::write(root.join("nested/one"), b"1").expect("first file");
+
+        let retained = RetainedWorkflowProjectSnapshot::capture_with_limits(&root, 1, 1)
+            .expect("one nested file remains within the file-only limit");
+        retained.revalidate().expect("retained nested file");
+        drop(retained);
+
+        fs::remove_file(root.join("nested/one")).expect("remove nested file");
+        fs::remove_dir(root.join("nested")).expect("remove nested directory");
+        fs::write(root.join("one"), b"1").expect("first root file");
+        fs::write(root.join("two"), b"2").expect("second root file");
+        assert!(matches!(
+            RetainedWorkflowProjectSnapshot::capture_with_limits(&root, 1, 2),
+            Err(WorkflowGovernanceAdapterError::RetainedProjectSnapshot(
+                RetainedProjectTreeError::ResourceLimit {
+                    resource: "snapshot files",
+                    maximum: 1,
+                }
+            ))
+        ));
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup fixture");
     }
 
     #[test]

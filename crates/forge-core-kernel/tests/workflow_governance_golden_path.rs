@@ -800,6 +800,47 @@ fn release_upgrade_invalidates_prepared_completion_authority() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn byte_identical_project_remint_invalidates_prepared_completion_authority() {
+    let fixture = SignedFixture::new("prepared-completion-byte-identical-remint");
+    let guidance = fixture.adapter.next().expect("discover guidance");
+    let document = bundle();
+    let policy = selected_policy(&document, &guidance);
+    let request = evidence_request(&guidance, policy, &policy.claims[0].id, 0);
+    fixture
+        .adapter
+        .record_authorized_evidence(fixture.evidence(request))
+        .expect("signed evidence");
+    let prepared = fixture
+        .adapter
+        .prepare_completion()
+        .expect("prepared completion");
+    let wal = fixture
+        .root
+        .join(".forge-method/wal/workflow-governance.ndjson");
+    let wal_before = fs::read(&wal).expect("workflow WAL before remint");
+    let readme = fixture.root.join("README.md");
+    let bytes = fs::read(&readme).expect("README before remint");
+
+    fs::remove_file(&readme).expect("remove retained README namespace entry");
+    fs::write(&readme, bytes).expect("remint README byte-identically");
+
+    assert!(matches!(
+        fixture.adapter.consume_completion(
+            prepared,
+            PrincipalId("principal.workflow.replacement-agent".to_owned()),
+        ),
+        Err(WorkflowGovernanceAdapterError::CompletionDrift
+            | WorkflowGovernanceAdapterError::RetainedProjectSnapshot(_))
+    ));
+    assert_eq!(
+        fs::read(&wal).expect("workflow WAL after remint"),
+        wal_before,
+        "prepared completion drift must fail before ledger commit"
+    );
+}
+
 #[test]
 fn core_assurance_upgrade_invalidates_receipts_and_foundation_prepared_authority() {
     let fixture = SignedFixture::new("core-assurance-upgrade-invalidation");
