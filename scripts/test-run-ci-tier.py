@@ -143,19 +143,21 @@ class RunCiTierTests(unittest.TestCase):
     def test_timeout_escalates_when_child_ignores_term(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "timing.json"
+            ready = Path(directory) / "ready"
             child = (
-                "import signal,time; "
+                "import pathlib,signal,time; "
                 "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                f"pathlib.Path({str(ready)!r}).write_text('ready'); "
                 "time.sleep(10)"
             )
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 [
                     sys.executable,
                     str(WRAPPER),
                     "--tier",
                     "forced-timeout",
                     "--budget-seconds",
-                    "0.1",
+                    "2",
                     "--report",
                     str(report),
                     "--",
@@ -163,12 +165,17 @@ class RunCiTierTests(unittest.TestCase):
                     "-c",
                     child,
                 ],
-                check=False,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
             )
+            deadline = time.monotonic() + 1.5
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(ready.exists(), "child did not install its TERM handler")
+            process.communicate(timeout=5)
             evidence = json.loads(report.read_text())
-            self.assertEqual(completed.returncode, 124)
+            self.assertEqual(process.returncode, 124)
             self.assertEqual(evidence["termination"], "killed")
 
 
