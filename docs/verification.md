@@ -2,10 +2,11 @@
 
 Verification is proportional while editing and cumulative at a checkpoint. The
 normal evidence topology is [`.github/workflows/ci.yml`](../.github/workflows/ci.yml);
-the independent pull-request enforcement boundary is
-[`.github/workflows/msrv-policy.yml`](../.github/workflows/msrv-policy.yml). This
-guide describes their topology without claiming that source configuration alone
-met a time budget or changed repository settings.
+the independent pull-request enforcement boundaries are
+[`.github/workflows/msrv-policy.yml`](../.github/workflows/msrv-policy.yml) and
+[`.github/workflows/release-policy.yml`](../.github/workflows/release-policy.yml).
+This guide describes their topology without claiming that source configuration
+alone met a time budget or changed repository settings.
 
 ## Tier topology
 
@@ -46,38 +47,48 @@ change that step's result.
 
 ## Independent pull-request enforcement
 
-Repository rules must require the exact check context **`MSRV Policy / Enforce
-trusted MSRV policy`** for pull requests. This repository change defines that
-check; it does **not** claim the external repository rule was configured.
+Repository rules must require the exact check contexts **`MSRV Policy / Enforce
+trusted MSRV policy`** and **`Release Policy / Enforce trusted release policy`**
+for pull requests to `main`. These repository files define those checks; they do
+**not** claim the external repository rules were configured.
 
-`.github/workflows/msrv-policy.yml` uses `pull_request_target`, so GitHub selects
-the workflow from the trusted base commit rather than from the pull request. It
-grants only `contents: read`, pins both checkout actions by commit, disables
-credential persistence, and checks out the immutable event-provided base and
-head SHAs into separate `trusted/` and `candidate/` directories. After exact
-pinned/no-dependency PyYAML provisioning, it executes only
-`trusted/scripts/check-msrv.py`. Candidate CI, policy workflow, and Cargo
-manifests are parsed as data; candidate scripts, actions, build files, and Rust
-code are never executed by this policy job. A fork candidate must be readable
-with the read-only token; checkout or required-file failure rejects the policy
-check closed. No environment with secrets or write authority may be attached to
-this job.
+Both policy workflows use `pull_request_target` restricted to pull requests whose
+base branch is `main`, so GitHub selects workflow authority from the protected
+base rather than from the candidate. Each grants only `contents: read`, pins both
+checkout actions by commit, disables credential persistence, and checks out the
+immutable event-provided base and head SHAs into separate `trusted/` and
+`candidate/` directories. After exact pinned/no-dependency PyYAML provisioning,
+each job executes only its checker under `trusted/scripts/`. A fork candidate
+must be readable with the read-only token; checkout or required-file failure
+rejects the policy check closed. No environment with secrets or write authority
+may be attached to either job.
 
-The trusted checker requires the candidate policy workflow and CI workflow to
-retain exact triggers, permissions, immutable checkout references, protected job
-and step topology, pinned actions, no persisted credentials, and the trusted-only
-checker command. It also rejects policy deletion/rename, symbolic-link
-substitution, `if`/`continue-on-error` bypasses, compiler/cache overrides, and
-both direct skip attacks (`static_docs.if: false` and `msrv.if: false`).
+The MSRV checker parses candidate CI, policy, manifests, and its future checker as
+data. It requires exact triggers, permissions, immutable checkout references,
+protected job and step topology, pinned actions, no persisted credentials, and
+the trusted-only checker command. It also rejects policy deletion/rename,
+symbolic-link substitution, checker drift, `if`/`continue-on-error` bypasses,
+compiler/cache overrides, and both direct skip attacks (`static_docs.if: false`
+and `msrv.if: false`). Candidate scripts, actions, build files, and Rust code are
+never executed by the MSRV policy job.
+
+The release checker likewise never executes candidate code. It requires the
+candidate release-policy topology, release-policy checker, and release-lock
+checker to remain bound to the protected-base trust root, then authenticates the
+exact reviewed release workflow bytes, semantic graph, governed local executable
+closure, release payload manifest, locked Cargo invocations, and publication
+permissions. Candidate-owned tests can report regressions but cannot authorize a
+release workflow or checker change.
 
 A skipped result from a required in-repository PR job is not equivalent to a
 successful enforcement decision, and a checker inside the mutable guarded job
-cannot enforce its own execution. The required base-workflow context is therefore
-the security boundary. There is a one-time bootstrap limitation: the first pull
-request that introduces `msrv-policy.yml` cannot run that new base workflow.
-Merge and review that bootstrap through an existing trusted administrative path,
-then configure the repository rule before relying on the context for subsequent
-pull requests.
+cannot enforce its own execution. The required base-workflow contexts are
+therefore the security boundaries. There is a bootstrap limitation: a pull
+request that first introduces either policy, or intentionally changes its
+protected checker trust root, cannot authorize that change using the old base
+policy. Review and integrate such a bootstrap through an existing trusted
+administrative path, then configure both repository rules before relying on the
+contexts for subsequent pull requests.
 
 ## Timing and failure evidence
 

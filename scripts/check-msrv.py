@@ -143,6 +143,23 @@ def _require_regular_data_file(path: Path, root: Path, label: str) -> None:
         raise MsrvCheckError(f"required {label} is missing or not a regular file")
 
 
+def _require_trusted_checker_parity(root: Path) -> None:
+    candidate = root / "scripts/check-msrv.py"
+    trusted = Path(__file__).resolve()
+    _require_regular_data_file(candidate, root, "candidate MSRV checker")
+    try:
+        candidate_bytes = candidate.read_bytes()
+        trusted_bytes = trusted.read_bytes()
+    except OSError as error:
+        raise MsrvCheckError(
+            f"cannot compare candidate MSRV checker with protected base: {error}"
+        ) from error
+    if candidate_bytes != trusted_bytes:
+        raise MsrvCheckError(
+            "candidate MSRV checker differs from the protected-base trust root"
+        )
+
+
 def _load_toml(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as stream:
@@ -378,7 +395,8 @@ def check_policy_workflow_source(source: str) -> None:
         root["on"],
         {
             "pull_request_target": {
-                "types": ["opened", "reopened", "synchronize", "ready_for_review"]
+                "branches": ["main"],
+                "types": ["opened", "reopened", "synchronize", "ready_for_review"],
             }
         },
         "MSRV policy workflow triggers",
@@ -597,6 +615,7 @@ def check(
         raise MsrvCheckError(f"cannot read candidate policy data: {error}") from error
     check_workflow_source(workflow_source)
     check_policy_workflow_source(policy_source)
+    _require_trusted_checker_parity(root)
     return packages
 
 

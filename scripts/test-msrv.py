@@ -470,6 +470,11 @@ class MsrvContractTests(unittest.TestCase):
                 "  pull_request:\n",
                 "workflow triggers",
             ),
+            (
+                "    branches: [main]\n",
+                "    branches: [develop]\n",
+                "workflow triggers",
+            ),
             ("  contents: read\n", "  contents: write\n", "workflow permissions"),
             (
                 "    timeout-minutes: 10\n",
@@ -558,6 +563,29 @@ class MsrvContractTests(unittest.TestCase):
             (workflows / "msrv-policy.yml").symlink_to(POLICY_WORKFLOW)
             with self.assertRaisesRegex(checker.MsrvCheckError, "symbolic link"):
                 checker.check(workflows / "ci.yml", root, workflows / "msrv-policy.yml")
+
+    def test_candidate_msrv_checker_drift_is_rejected_without_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copied_manifests(root)
+            workflows = root / ".github/workflows"
+            workflows.mkdir(parents=True)
+            shutil.copy2(WORKFLOW, workflows / "ci.yml")
+            shutil.copy2(POLICY_WORKFLOW, workflows / "msrv-policy.yml")
+            scripts = root / "scripts"
+            scripts.mkdir()
+            marker = root / "candidate-checker-ran"
+            (scripts / "check-msrv.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).touch()\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                checker.MsrvCheckError, "candidate MSRV checker differs"
+            ):
+                checker.check(workflows / "ci.yml", root, workflows / "msrv-policy.yml")
+            self.assertFalse(marker.exists(), "candidate MSRV checker was executed")
 
     def test_rejects_candidate_root_cargo_compiler_overrides_and_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

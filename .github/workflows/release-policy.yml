@@ -1,4 +1,4 @@
-name: MSRV Policy
+name: Release Policy
 
 on:
   pull_request_target:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   enforce:
-    name: Enforce trusted MSRV policy
+    name: Enforce trusted release policy
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,4 +36,4 @@ jobs:
         run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3
 
       - name: Validate candidate with trusted base checker
-        run: python -I trusted/scripts/check-msrv.py --root candidate --workflow candidate/.github/workflows/ci.yml --policy-workflow candidate/.github/workflows/msrv-policy.yml
+        run: python -I trusted/scripts/check-release-policy.py --root candidate --workflow candidate/.github/workflows/release.yml --policy-workflow candidate/.github/workflows/release-policy.yml
