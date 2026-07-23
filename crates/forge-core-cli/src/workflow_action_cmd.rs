@@ -5,16 +5,14 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use forge_core_authority::{
-    AttestationPolicy, AttestationVerifier, AuthorizedWorkflowBrokerControlPlane,
-    AuthorizedWorkflowBrokerRegistry, HistoricallyVerifiedWorkflowBrokerEvent,
-    WorkflowAuthorizationKind, WorkflowBrokerControlError, WorkflowBrokerError,
-    WorkflowBrokerEventEnvelope, WorkflowBrokerEventKind, WorkflowBrokerFreshnessPolicy,
-    WorkflowBrokerRegistryDocument, WorkflowBrokerVerificationContext,
+    AttestationPolicy, AttestationVerifier, AuthorizedWorkflowBrokerRegistry,
+    HistoricallyVerifiedWorkflowBrokerEvent, WorkflowAuthorizationKind, WorkflowBrokerControlError,
+    WorkflowBrokerError, WorkflowBrokerEventEnvelope, WorkflowBrokerEventKind,
+    WorkflowBrokerFreshnessPolicy, WorkflowBrokerVerificationContext,
     WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
     workflow_broker_expected_audience, CliEnvelope, StableId, WorkflowBrokerBoundOperation,
-    WorkflowBrokerPublicRegistryDocument,
 };
 use forge_core_kernel::{
     PreparedWorkflowAuthorization, WorkflowAuthorizationApprovalBoundary,
@@ -203,11 +201,11 @@ fn apply(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), E
     )
 }
 
-/// Verify one broker envelope through the shared public action path. Strict
-/// registries may admit a current mutation; a legacy registry can only present
-/// typed historical evidence for exact durable recovery. A specialized caller
-/// may require an exact semantic kind; that check happens immediately after
-/// bounded parsing and before any kernel mutation.
+/// Verify one broker envelope through the shared public action path. A strict
+/// registry may admit a current mutation only when its complete administration
+/// journal is verified under the retained Store lock; a standalone legacy
+/// registry can present only typed historical evidence for exact recovery. A
+/// specialized caller may require an exact semantic kind before any mutation.
 pub(crate) fn apply_origin_envelope(
     root: &Path,
     envelope_path: &Path,
@@ -232,21 +230,16 @@ pub(crate) fn apply_origin_envelope(
         ));
     }
     let adapter = resolve_adapter(root)?;
-    let registry_path = adapter.trusted_broker_registry_path();
-    reject_existing_links(&registry_path)?;
-    let registry_raw = read_bounded(&registry_path, "workflow broker registry")?;
     let expected_audience = workflow_broker_expected_audience(
         &adapter.binding().project_id,
         &StableId("workflow.governance".to_owned()),
     );
-    let registry = parse_authorized_broker_registry(
-        &registry_raw,
-        &registry_path,
-        &expected_audience,
-        &adapter.binding().project_id,
-    )?;
-    let receipt = match registry {
-        BrokerRegistryAuthority::Strict(registry) => {
+    let authority = crate::workflow_broker_cmd::lock_workflow_broker_action_authority(root)?;
+    let receipt = match &authority {
+        crate::workflow_broker_cmd::LockedWorkflowBrokerActionAuthority::Strict {
+            control,
+            ..
+        } => {
             let now = now_unix()?;
             let now_i64 = i64::try_from(now)
                 .map_err(|_| ExitError::env_config("system clock exceeds i64".to_owned()))?;
@@ -256,7 +249,7 @@ pub(crate) fn apply_origin_envelope(
                 workflow_id: StableId("workflow.governance".to_owned()),
                 operation: bound_operation(envelope.event_kind),
             };
-            match registry.verify_bound_event(
+            match control.verify_bound_event(
                 envelope.clone(),
                 &context,
                 now_i64,
@@ -268,7 +261,7 @@ pub(crate) fn apply_origin_envelope(
                     | WorkflowBrokerError::IssuerRevoked(_)
                     | WorkflowBrokerError::HistoricalEventNotAdmissible,
                 )) => {
-                    let historical = registry
+                    let historical = control
                         .verify_bound_event_for_recovery(envelope, &context)
                         .map_err(|historical_error| {
                             ExitError::failed(format!(
@@ -284,9 +277,12 @@ pub(crate) fn apply_origin_envelope(
                 }
             }
         }
-        BrokerRegistryAuthority::Legacy(registry) => {
+        crate::workflow_broker_cmd::LockedWorkflowBrokerActionAuthority::LegacyRecoveryOnly {
+            registry,
+            ..
+        } => {
             let historical = verify_legacy_registry_event_for_recovery(
-                &registry,
+                registry,
                 envelope,
                 &adapter.binding().project_id,
             )?;
@@ -295,16 +291,6 @@ pub(crate) fn apply_origin_envelope(
     }
     .map_err(|error| ExitError::failed(format!("workflow action rejected: {error}")))?;
     emit_envelope(CliEnvelope::ok(command, receipt), want_json)
-}
-
-#[derive(Debug)]
-enum BrokerRegistryAuthority {
-    Strict(AuthorizedWorkflowBrokerControlPlane),
-    /// Recovery-only authority for the frozen v0.1 event wire. This variant
-    /// must never mint a live verification capability or accept a v0.2 event,
-    /// whose registry-generation, workflow, host, and operation bindings exist
-    /// only in the strict control plane.
-    Legacy(AuthorizedWorkflowBrokerRegistry),
 }
 
 fn verify_legacy_registry_event_for_recovery(
@@ -324,38 +310,6 @@ fn verify_legacy_registry_event_for_recovery(
             ExitError::failed(format!(
                 "historical workflow broker event rejected: {error}"
             ))
-        })
-}
-
-fn parse_authorized_broker_registry(
-    raw: &str,
-    path: &Path,
-    expected_audience: &str,
-    expected_project_id: &StableId,
-) -> Result<BrokerRegistryAuthority, ExitError> {
-    if let Ok(document) = yaml_serde::from_str::<WorkflowBrokerPublicRegistryDocument>(raw) {
-        let workflow_id = StableId("workflow.governance".to_owned());
-        return AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
-            document,
-            expected_audience,
-            expected_project_id,
-            &workflow_id,
-        )
-        .map(BrokerRegistryAuthority::Strict)
-        .map_err(|error| {
-            ExitError::env_config(format!("invalid strict workflow broker registry: {error}"))
-        });
-    }
-    let document: WorkflowBrokerRegistryDocument = yaml_serde::from_str(raw).map_err(|error| {
-        ExitError::env_config(format!(
-            "invalid workflow broker registry {}: {error}",
-            path.display()
-        ))
-    })?;
-    AuthorizedWorkflowBrokerRegistry::from_document_for_audience(document, expected_audience)
-        .map(BrokerRegistryAuthority::Legacy)
-        .map_err(|error| {
-            ExitError::env_config(format!("invalid workflow broker registry: {error}"))
         })
 }
 
@@ -401,28 +355,6 @@ fn read_bounded(path: &Path, label: &str) -> Result<String, ExitError> {
     }
     std::fs::read_to_string(path)
         .map_err(|error| ExitError::env_config(format!("read {label} {}: {error}", path.display())))
-}
-
-fn reject_existing_links(path: &Path) -> Result<(), ExitError> {
-    for current in path.ancestors() {
-        match std::fs::symlink_metadata(current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(ExitError::env_config(format!(
-                    "workflow broker registry path contains a symlink, junction, or reparse-point alias: {}",
-                    current.display()
-                )));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(ExitError::env_config(format!(
-                    "inspect workflow broker registry path {}: {error}",
-                    current.display()
-                )));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn parse_flags(action: &str, args: &[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError> {
@@ -506,8 +438,8 @@ mod tests {
     use forge_core_authority::{
         workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
         WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerIssuerEntry,
-        WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus, WorkflowBrokerSemanticInput,
-        WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+        WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus, WorkflowBrokerRegistryDocument,
+        WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
     };
     use forge_core_contracts::{
         PrincipalId, RuntimeKind, WorkflowBrokerHostInteractionKind,
@@ -515,30 +447,6 @@ mod tests {
     };
 
     const NOW: i64 = 1_900_000_000;
-
-    #[test]
-    fn apply_registry_admission_rejects_a_foreign_project_audience() {
-        let raw = r#"schema_version: "0.1"
-audience: forge-core:workflow:project.other
-issuers:
-  - issuer_id: broker.test
-    profile: human
-    public_key_hex: d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
-    status: active
-    enrollment:
-      ceremony_ref: ceremony:test:0001
-      ceremony_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-      declared_at_unix: 1
-"#;
-        let error = parse_authorized_broker_registry(
-            raw,
-            Path::new("workflow-broker-registry.yaml"),
-            "forge-core:workflow:project.expected",
-            &StableId("project.expected".to_owned()),
-        )
-        .expect_err("foreign audience must fail before event verification");
-        assert!(error.message().contains("audience"), "{error:?}");
-    }
 
     #[test]
     fn legacy_registry_yields_only_typed_historical_evidence_for_v0_1() {

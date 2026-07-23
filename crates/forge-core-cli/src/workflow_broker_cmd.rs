@@ -65,6 +65,20 @@ pub(crate) struct LockedWorkflowBrokerRegistry {
     expected_workflow_id: StableId,
 }
 
+/// Fully admitted authority retained across one public broker action mutation.
+/// Strict live authority always carries a complete verified administration
+/// journal; a standalone legacy registry remains recovery-only.
+pub(crate) enum LockedWorkflowBrokerActionAuthority {
+    Strict {
+        _store: WorkflowBrokerAdminStore,
+        control: AuthorizedWorkflowBrokerControlPlane,
+    },
+    LegacyRecoveryOnly {
+        _store: WorkflowBrokerAdminStore,
+        registry: AuthorizedWorkflowBrokerRegistry,
+    },
+}
+
 /// Exact public broker-registry bytes; external private keys are structurally
 /// absent from every admitted registry schema.
 pub(crate) struct WorkflowBrokerRegistrySnapshot {
@@ -992,6 +1006,47 @@ pub(crate) fn lock_workflow_broker_registry(
     acquire_backup_lock(&paths)
 }
 
+/// Resolve the only broker authority admitted for a public action and retain
+/// the administration Store lock until the caller finishes the kernel
+/// mutation. A strict registry without its complete genesis/admin journal is
+/// rejected; only the frozen legacy wire may remain registry-only for recovery.
+pub(crate) fn lock_workflow_broker_action_authority(
+    project_root: &Path,
+) -> Result<LockedWorkflowBrokerActionAuthority, ExitError> {
+    let paths = broker_paths(project_root.to_path_buf())?;
+    let store = open_store(&paths)?;
+    if let Some(snapshot) = load_snapshot(&paths, &store)? {
+        return Ok(LockedWorkflowBrokerActionAuthority::Strict {
+            _store: store,
+            control: snapshot.control,
+        });
+    }
+
+    let Some(registry_file) = store.read_registry().map_err(store_error)? else {
+        return Err(not_initialized());
+    };
+    if yaml_serde::from_slice::<WorkflowBrokerPublicRegistryDocument>(registry_file.bytes()).is_ok()
+    {
+        return Err(ExitError::env_config(
+            "strict broker registry exists without durable administration state; live authority is uninitialized"
+                .to_owned(),
+        ));
+    }
+    let document: WorkflowBrokerRegistryDocument = yaml_serde::from_slice(registry_file.bytes())
+        .map_err(|error| {
+            ExitError::env_config(format!(
+                "invalid recovery-only workflow broker registry: {error}"
+            ))
+        })?;
+    let registry =
+        AuthorizedWorkflowBrokerRegistry::from_document_for_audience(document, &paths.audience)
+            .map_err(|error| ExitError::env_config(error.to_string()))?;
+    Ok(LockedWorkflowBrokerActionAuthority::LegacyRecoveryOnly {
+        _store: store,
+        registry,
+    })
+}
+
 /// Read exact public registry bytes under the retained producer authority.
 pub(crate) fn snapshot_workflow_broker_registry(
     locked: &LockedWorkflowBrokerRegistry,
@@ -1506,6 +1561,198 @@ mod tests {
         envelope
     }
 
+    struct InstalledGenesis {
+        base: PathBuf,
+        paths: BrokerPaths,
+        store: WorkflowBrokerAdminStore,
+        admin: SigningKey,
+        control: AuthorizedWorkflowBrokerControlPlane,
+        journal: AdminJournal,
+    }
+
+    fn install_completed_genesis(label: &str) -> InstalledGenesis {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "forge-broker-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        let paths = BrokerPaths {
+            project_id: StableId("project.test".to_owned()),
+            workflow_id: StableId(WORKFLOW_ID.to_owned()),
+            project_root: base.join("project"),
+            state_root: base.join("state"),
+            operator_dir: base.join("operator"),
+            registry: base.join("operator/workflow-broker-registry.yaml"),
+            admin_state: base.join("operator/workflow-broker-admin.json"),
+            audience: "forge-core:workflow:project.test".to_owned(),
+        };
+        std::fs::create_dir_all(&paths.project_root).expect("project");
+        std::fs::create_dir_all(&paths.state_root).expect("state");
+        std::fs::create_dir_all(&paths.operator_dir).expect("operator");
+
+        let admin = SigningKey::from_bytes(&[7_u8; 32]);
+        let event = SigningKey::from_bytes(&[8_u8; 32]);
+        let registry = genesis_registry(&admin, &event);
+        let envelope = genesis_envelope(&admin, &registry);
+        let advance = AuthorizedWorkflowBrokerControlPlane::authorize_genesis(
+            &genesis_trust_anchor(&admin),
+            envelope.clone(),
+            registry,
+            1_900_000_001,
+        )
+        .expect("authorized genesis");
+        let (control, receipt) = advance.into_parts();
+        let registry_yaml = registry_yaml(control.document()).expect("registry YAML");
+        let journal = AdminJournal {
+            schema_version: ADMIN_JOURNAL_SCHEMA_VERSION.to_owned(),
+            project_id: paths.project_id.clone(),
+            workflow_id: paths.workflow_id.clone(),
+            audience: paths.audience.clone(),
+            registry_generation: control.document().registry_generation,
+            registry_digest: Some(control.registry_digest().to_owned()),
+            registry_file_digest: Some(digest(registry_yaml.as_bytes())),
+            receipt_head_digest: Some(receipt.receipt.receipt_digest.clone()),
+            receipts: vec![AppliedAdminOperation { envelope, receipt }],
+            pending: None,
+        };
+        let store = open_store(&paths).expect("store");
+        store
+            .replace_registry(None, registry_yaml.as_bytes())
+            .expect("install registry");
+        store
+            .replace_admin_state(None, &journal_bytes(&journal).expect("journal"))
+            .expect("install journal");
+        load_snapshot(&paths, &store)
+            .expect("valid completed genesis")
+            .expect("completed genesis snapshot");
+
+        InstalledGenesis {
+            base,
+            paths,
+            store,
+            admin,
+            control,
+            journal,
+        }
+    }
+
+    fn replace_journal(fixture: &InstalledGenesis, journal: &AdminJournal) {
+        let current = fixture
+            .store
+            .read_admin_state()
+            .expect("admin state read")
+            .expect("admin state");
+        fixture
+            .store
+            .replace_admin_state(
+                Some(current.raw_sha256()),
+                &journal_bytes(journal).expect("journal bytes"),
+            )
+            .expect("replace journal");
+    }
+
+    fn second_admin_advance(
+        fixture: &InstalledGenesis,
+    ) -> (
+        AuthorizedWorkflowBrokerControlPlane,
+        WorkflowBrokerAdminOperationEnvelope,
+        WorkflowBrokerAdminReceiptDocument,
+    ) {
+        let operation_id = StableId("admin.operation.enroll.2".to_owned());
+        let mut proposed = fixture.control.document().clone();
+        proposed.registry_generation = 2;
+        proposed.previous_registry_digest = Some(fixture.control.registry_digest().to_owned());
+        let replacement_key = SigningKey::from_bytes(&[9_u8; 32]);
+        let mut replacement = credential(
+            "credential.event.2",
+            "issuer.human.second",
+            &replacement_key,
+            WorkflowBrokerCredentialPurpose::EventIssuer,
+        );
+        replacement.enrollment_operation_id = operation_id.clone();
+        proposed.credentials.push(replacement);
+        proposed
+            .credentials
+            .sort_by(|left, right| left.credential_id.0.cmp(&right.credential_id.0));
+
+        let mut envelope = WorkflowBrokerAdminOperationEnvelope {
+            schema_version: WORKFLOW_BROKER_ADMIN_OPERATION_SCHEMA_VERSION.to_owned(),
+            audience: proposed.audience.clone(),
+            project_id: proposed.project_id.clone(),
+            workflow_id: proposed.workflow_id.clone(),
+            operation_id,
+            admin_credential_id: StableId("credential.admin.1".to_owned()),
+            admin_credential_generation: 1,
+            expected_registry_generation: 1,
+            expected_registry_digest: Some(fixture.control.registry_digest().to_owned()),
+            proposed_registry_generation: 2,
+            proposed_registry_digest: workflow_broker_public_registry_digest(&proposed)
+                .expect("proposed registry digest"),
+            operation: WorkflowBrokerAdminOperation::Enroll {
+                credential_id: StableId("credential.event.2".to_owned()),
+            },
+            native_authorization: WorkflowBrokerNativeAdminAuthorization {
+                host_kind: RuntimeKind::Custom,
+                host_version: "1.0.0".to_owned(),
+                adapter_id: StableId("adapter.test".to_owned()),
+                adapter_version: "1.0.0".to_owned(),
+                host_installation_id: StableId("host.installation.test".to_owned()),
+                protocol_version: "workflow-host-origin-v1".to_owned(),
+                admin_session_ref: "admin-session-reference-0002".to_owned(),
+                admin_interaction_ref: "admin-interaction-ref-0002".to_owned(),
+                observed_at_unix: 1_900_000_010,
+                descriptor_digest: digest(b"placeholder"),
+            },
+            issued_at_unix: 1_900_000_010,
+            expires_at_unix: 1_900_000_300,
+            nonce: "admin-enroll-nonce-0002".to_owned(),
+            signature: String::new(),
+        };
+        envelope.native_authorization.descriptor_digest =
+            workflow_broker_native_admin_descriptor_digest(&envelope)
+                .expect("admin descriptor digest");
+        envelope.signature = hex(&fixture
+            .admin
+            .sign(
+                &workflow_broker_admin_operation_signing_bytes(&envelope)
+                    .expect("admin operation signing bytes"),
+            )
+            .to_bytes());
+        let advance = fixture
+            .control
+            .authorize_admin_transition(
+                envelope.clone(),
+                proposed,
+                1_900_000_011,
+                fixture.journal.receipt_head_digest.clone(),
+            )
+            .expect("authorized second transition");
+        let (control, receipt) = advance.into_parts();
+        (control, envelope, receipt)
+    }
+
+    fn assert_no_workflow_authority_state(paths: &BrokerPaths) {
+        for relative in [
+            "wal/workflow-governance.ndjson",
+            "wal/workflow-action-replay.jsonl",
+            "workflow-action-replay.manifest.json",
+        ] {
+            assert!(
+                !paths.state_root.join(relative).exists(),
+                "rejected broker administration changed authority state at {relative}"
+            );
+        }
+    }
+
+    fn cleanup_fixture(fixture: InstalledGenesis) {
+        let base = fixture.base.clone();
+        drop(fixture);
+        std::fs::remove_dir_all(base).expect("cleanup broker fixture");
+    }
+
     #[test]
     fn genesis_authority_and_journal_are_strict_and_secret_free() {
         let admin = SigningKey::from_bytes(&[7_u8; 32]);
@@ -1559,6 +1806,219 @@ mod tests {
         for forbidden in ["private_key", "secret_key", "signing_key", "key_handle"] {
             assert!(!serialized.contains(forbidden), "unexpected {forbidden}");
         }
+    }
+
+    #[test]
+    fn live_admission_rejects_tampered_completed_journal_before_authority_mutation() {
+        let fixture = install_completed_genesis("tampered-completed-journal");
+        let registry_before = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry")
+            .bytes()
+            .to_vec();
+        let mut tampered = fixture.journal.clone();
+        tampered.receipts[0].envelope.nonce.push_str("-tampered");
+        replace_journal(&fixture, &tampered);
+
+        let error = load_snapshot(&fixture.paths, &fixture.store)
+            .expect_err("tampered completed journal must fail closed");
+        assert!(error
+            .to_string()
+            .contains("receipt does not match its retained signed administration envelope"));
+        assert_eq!(
+            fixture
+                .store
+                .read_registry()
+                .expect("registry read")
+                .expect("registry")
+                .bytes(),
+            registry_before
+        );
+        assert_no_workflow_authority_state(&fixture.paths);
+        cleanup_fixture(fixture);
+    }
+
+    #[test]
+    fn live_admission_rejects_missing_completed_receipt_before_authority_mutation() {
+        let fixture = install_completed_genesis("missing-completed-receipt");
+        let registry_before = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry")
+            .bytes()
+            .to_vec();
+        let mut missing = fixture.journal.clone();
+        missing.receipts.clear();
+        replace_journal(&fixture, &missing);
+
+        let error = load_snapshot(&fixture.paths, &fixture.store)
+            .expect_err("missing completed receipt must fail closed");
+        assert!(error
+            .to_string()
+            .contains("administration journal head is inconsistent"));
+        assert_eq!(
+            fixture
+                .store
+                .read_registry()
+                .expect("registry read")
+                .expect("registry")
+                .bytes(),
+            registry_before
+        );
+        assert_no_workflow_authority_state(&fixture.paths);
+        cleanup_fixture(fixture);
+    }
+
+    #[test]
+    fn live_admission_rejects_registry_admin_digest_mismatch_before_authority_mutation() {
+        let fixture = install_completed_genesis("registry-admin-digest-mismatch");
+        let registry_before = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry")
+            .bytes()
+            .to_vec();
+        let mut mismatched = fixture.journal.clone();
+        mismatched.registry_file_digest = Some(digest(b"different registry bytes"));
+        replace_journal(&fixture, &mismatched);
+
+        let error = load_snapshot(&fixture.paths, &fixture.store)
+            .expect_err("registry/admin digest mismatch must fail closed");
+        assert!(error
+            .to_string()
+            .contains("public broker registry differs from durable administration state"));
+        assert_eq!(
+            fixture
+                .store
+                .read_registry()
+                .expect("registry read")
+                .expect("registry")
+                .bytes(),
+            registry_before
+        );
+        assert_no_workflow_authority_state(&fixture.paths);
+        cleanup_fixture(fixture);
+    }
+
+    #[test]
+    fn live_admission_rejects_reordered_receipt_chain_before_authority_mutation() {
+        let fixture = install_completed_genesis("reordered-receipt-chain");
+        let (control, envelope, receipt) = second_admin_advance(&fixture);
+        let registry_yaml = registry_yaml(control.document()).expect("second registry YAML");
+        let current_registry = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry");
+        fixture
+            .store
+            .replace_registry(
+                Some(current_registry.raw_sha256()),
+                registry_yaml.as_bytes(),
+            )
+            .expect("install second registry");
+
+        let mut receipts = fixture.journal.receipts.clone();
+        receipts.push(AppliedAdminOperation { envelope, receipt });
+        let completed = AdminJournal {
+            schema_version: ADMIN_JOURNAL_SCHEMA_VERSION.to_owned(),
+            project_id: fixture.paths.project_id.clone(),
+            workflow_id: fixture.paths.workflow_id.clone(),
+            audience: fixture.paths.audience.clone(),
+            registry_generation: control.document().registry_generation,
+            registry_digest: Some(control.registry_digest().to_owned()),
+            registry_file_digest: Some(digest(registry_yaml.as_bytes())),
+            receipt_head_digest: receipts
+                .last()
+                .map(|applied| applied.receipt.receipt.receipt_digest.clone()),
+            receipts,
+            pending: None,
+        };
+        replace_journal(&fixture, &completed);
+        load_snapshot(&fixture.paths, &fixture.store)
+            .expect("valid two-receipt journal")
+            .expect("valid two-receipt snapshot");
+
+        let registry_before = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry")
+            .bytes()
+            .to_vec();
+        let mut reordered = completed;
+        reordered.receipts.swap(0, 1);
+        replace_journal(&fixture, &reordered);
+        let error = load_snapshot(&fixture.paths, &fixture.store)
+            .expect_err("reordered receipt chain must fail closed");
+        assert!(error
+            .to_string()
+            .contains("administration receipt chain invariant failed"));
+        assert_eq!(
+            fixture
+                .store
+                .read_registry()
+                .expect("registry read")
+                .expect("registry")
+                .bytes(),
+            registry_before
+        );
+        assert_no_workflow_authority_state(&fixture.paths);
+        cleanup_fixture(fixture);
+    }
+
+    #[test]
+    fn live_admission_rejects_inconsistent_pending_state_before_authority_mutation() {
+        let fixture = install_completed_genesis("inconsistent-pending-state");
+        let (control, envelope, receipt) = second_admin_advance(&fixture);
+        let proposed_registry_yaml =
+            registry_yaml(control.document()).expect("proposed registry YAML");
+        let mut journal = fixture.journal.clone();
+        journal.pending = Some(PendingAdminTransition {
+            operation_id: receipt.receipt.operation_id.clone(),
+            operation_digest: receipt.receipt.operation_digest.clone(),
+            expected_registry_file_digest: journal.registry_file_digest.clone(),
+            proposed_registry: control.document().clone(),
+            proposed_registry_yaml: proposed_registry_yaml.clone(),
+            proposed_registry_file_digest: digest(proposed_registry_yaml.as_bytes()),
+            envelope,
+            receipt,
+        });
+        validate_journal(&journal, &fixture.paths).expect("valid prepared transition");
+        journal
+            .pending
+            .as_mut()
+            .expect("pending transition")
+            .operation_digest = digest(b"different operation");
+        replace_journal(&fixture, &journal);
+
+        let registry_before = fixture
+            .store
+            .read_registry()
+            .expect("registry read")
+            .expect("registry")
+            .bytes()
+            .to_vec();
+        let error = load_snapshot(&fixture.paths, &fixture.store)
+            .expect_err("inconsistent pending state must fail closed");
+        assert!(error
+            .to_string()
+            .contains("pending workflow broker administration transition is inconsistent"));
+        assert_eq!(
+            fixture
+                .store
+                .read_registry()
+                .expect("registry read")
+                .expect("registry")
+                .bytes(),
+            registry_before
+        );
+        assert_no_workflow_authority_state(&fixture.paths);
+        cleanup_fixture(fixture);
     }
 
     #[test]

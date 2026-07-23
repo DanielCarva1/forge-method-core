@@ -186,6 +186,7 @@ pub enum WorkflowAuthorizationApprovalBoundary {
     HumanApprovalBroker,
     IndependentReviewerBroker,
     TrustedRuntimeBroker,
+    ExternalAuthorityBroker,
     OperatorCredentialBroker,
 }
 
@@ -4712,19 +4713,16 @@ fn broker_evidence_profile_allowed(
 ) -> bool {
     match provider {
         WorkflowEvaluatorProvider::AuthorizedHuman => profile == WorkflowBrokerOriginProfile::Human,
-        WorkflowEvaluatorProvider::IndependentReviewer => {
+        WorkflowEvaluatorProvider::IndependentReviewer
+        | WorkflowEvaluatorProvider::ResearchSource => {
             profile == WorkflowBrokerOriginProfile::Reviewer
         }
         WorkflowEvaluatorProvider::RepositoryInspector
         | WorkflowEvaluatorProvider::DeterministicTool
-        | WorkflowEvaluatorProvider::RepresentativeRuntime => {
+        | WorkflowEvaluatorProvider::RepresentativeRuntime
+        | WorkflowEvaluatorProvider::ExternalAuthority => {
             profile == WorkflowBrokerOriginProfile::Runtime
         }
-        WorkflowEvaluatorProvider::ExternalAuthority
-        | WorkflowEvaluatorProvider::ResearchSource => matches!(
-            profile,
-            WorkflowBrokerOriginProfile::Reviewer | WorkflowBrokerOriginProfile::Runtime
-        ),
     }
 }
 
@@ -5001,7 +4999,13 @@ fn derive_receipts(
                     trusted_broker_registry_digest,
                 );
                 let authority_current = match authority {
-                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => true,
+                    Some(DerivedReceiptTrustRoot::LocalPrincipalRegistry) => {
+                        !matches!(
+                            event.provider,
+                            WorkflowEvaluatorProvider::ExternalAuthority
+                                | WorkflowEvaluatorProvider::ResearchSource
+                        ) && event.subject.kind != WorkflowEvidenceSubjectKind::ExternalSystem
+                    }
                     Some(DerivedReceiptTrustRoot::ExternalBroker(origin)) => {
                         broker_evidence_profile_allowed(event.provider, origin.issuer_profile)
                             && event.provenance.principal.as_ref()
@@ -6438,7 +6442,8 @@ fn validate_broker_packet_audit(
         WorkflowAuthorizationApprovalBoundary::IndependentReviewerBroker => {
             audit.issuer_profile == WorkflowBrokerIssuerProfile::Reviewer
         }
-        WorkflowAuthorizationApprovalBoundary::TrustedRuntimeBroker => {
+        WorkflowAuthorizationApprovalBoundary::TrustedRuntimeBroker
+        | WorkflowAuthorizationApprovalBoundary::ExternalAuthorityBroker => {
             audit.issuer_profile == WorkflowBrokerIssuerProfile::Runtime
         }
         WorkflowAuthorizationApprovalBoundary::OperatorCredentialBroker => matches!(
@@ -8060,9 +8065,9 @@ fn evidence_action_contract(
         ),
         WorkflowEvaluatorProvider::ExternalAuthority => (
             WorkflowAuthorizationRequiredAuthority {
-                accepted_roles: vec![CallerRole::Worker, CallerRole::Runtime],
+                accepted_roles: vec![CallerRole::Runtime],
                 required_grant: StableId("workflow.evidence.authorize_external".to_owned()),
-                approval_boundary: WorkflowAuthorizationApprovalBoundary::OperatorCredentialBroker,
+                approval_boundary: WorkflowAuthorizationApprovalBoundary::ExternalAuthorityBroker,
             },
             WorkflowEvidenceKind::ExternalAuthority,
             WorkflowEvidenceStrength::AuthoritativeAcceptance,
@@ -8073,9 +8078,9 @@ fn evidence_action_contract(
         ),
         WorkflowEvaluatorProvider::ResearchSource => (
             WorkflowAuthorizationRequiredAuthority {
-                accepted_roles: vec![CallerRole::Worker, CallerRole::Runtime],
-                required_grant: StableId("workflow.evidence.authorize_external".to_owned()),
-                approval_boundary: WorkflowAuthorizationApprovalBoundary::OperatorCredentialBroker,
+                accepted_roles: vec![CallerRole::Worker, CallerRole::Driver],
+                required_grant: StableId("workflow.evidence.authorize_review".to_owned()),
+                approval_boundary: WorkflowAuthorizationApprovalBoundary::IndependentReviewerBroker,
             },
             WorkflowEvidenceKind::Research,
             WorkflowEvidenceStrength::IndependentConfirmation,
@@ -8119,6 +8124,7 @@ fn authorization_setup_gaps(
             WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker => human = true,
             WorkflowAuthorizationApprovalBoundary::IndependentReviewerBroker => reviewer = true,
             WorkflowAuthorizationApprovalBoundary::TrustedRuntimeBroker
+            | WorkflowAuthorizationApprovalBoundary::ExternalAuthorityBroker
             | WorkflowAuthorizationApprovalBoundary::OperatorCredentialBroker => runtime = true,
         }
     }
@@ -10914,6 +10920,14 @@ mod tests {
                 ..
             }
         ));
+        assert_eq!(
+            evidence.required_authority.approval_boundary,
+            WorkflowAuthorizationApprovalBoundary::ExternalAuthorityBroker
+        );
+        assert_ne!(
+            evidence.required_authority.approval_boundary,
+            WorkflowAuthorizationApprovalBoundary::OperatorCredentialBroker
+        );
 
         let decision = boundary_packet(
             WorkflowAuthorizationKind::Decision,
@@ -12387,6 +12401,19 @@ mod tests {
         };
 
         assert_eq!(derive(&projection(local.clone())).evidence.len(), 1);
+
+        let mut unverified_external_subject = local.clone();
+        let WorkflowGovernanceEvent::EvaluatorObserved(event) =
+            &mut unverified_external_subject.event
+        else {
+            unreachable!();
+        };
+        event.subject.kind = WorkflowEvidenceSubjectKind::ExternalSystem;
+        event.subject.subject_ref = "external://unverified/system".to_owned();
+        event.subject.subject_digest = format!("sha256:{}", "c".repeat(64));
+        assert!(derive(&projection(unverified_external_subject))
+            .evidence
+            .is_empty());
 
         let mut wrong_provider = local;
         let WorkflowGovernanceEvent::EvaluatorObserved(event) = &mut wrong_provider.event else {

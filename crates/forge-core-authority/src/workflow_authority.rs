@@ -77,7 +77,6 @@ const WAIVER_GRANT: &str = "workflow.waiver.authorize";
 const EVIDENCE_HUMAN_GRANT: &str = "workflow.evidence.authorize_human";
 const EVIDENCE_REVIEW_GRANT: &str = "workflow.evidence.authorize_review";
 const EVIDENCE_RUNTIME_GRANT: &str = "workflow.evidence.authorize_runtime";
-const EVIDENCE_EXTERNAL_GRANT: &str = "workflow.evidence.authorize_external";
 const APPLICABILITY_GRANT: &str = "workflow.applicability.assess";
 const CAPABILITY_GRANT: &str = "workflow.capability.authorize";
 const SIGNAL_GRANT: &str = "workflow.signal.authorize";
@@ -92,7 +91,6 @@ pub const WORKFLOW_CAPABILITY_AUTHORITY_SCOPE: &str = "workflow.capability.autho
 const HUMAN_ROLES: &[CallerRole] = &[CallerRole::Human];
 const REVIEW_ROLES: &[CallerRole] = &[CallerRole::Worker, CallerRole::Driver];
 const RUNTIME_ROLES: &[CallerRole] = &[CallerRole::Runtime];
-const EXTERNAL_ROLES: &[CallerRole] = &[CallerRole::Worker, CallerRole::Runtime];
 
 /// Exact decision selection a human is asked to authorize.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1293,19 +1291,13 @@ fn evidence_authority(
             WorkflowEvidenceStrength::RepresentativeExecution,
         ) => (RUNTIME_ROLES, "runtime role", EVIDENCE_RUNTIME_GRANT),
         (
-            WorkflowEvaluatorProvider::ExternalAuthority,
-            WorkflowEvidenceKind::ExternalAuthority,
-            WorkflowEvidenceStrength::AuthoritativeAcceptance,
-        )
-        | (
-            WorkflowEvaluatorProvider::ResearchSource,
-            WorkflowEvidenceKind::Research,
-            WorkflowEvidenceStrength::IndependentConfirmation,
-        ) => (
-            EXTERNAL_ROLES,
-            "worker or runtime role",
-            EVIDENCE_EXTERNAL_GRANT,
-        ),
+            provider @ (WorkflowEvaluatorProvider::ExternalAuthority
+            | WorkflowEvaluatorProvider::ResearchSource),
+            _,
+            _,
+        ) => {
+            return Err(WorkflowAuthorityError::UnsupportedEvidenceProvider { provider });
+        }
         (provider, kind, strength) => {
             return Err(WorkflowAuthorityError::EvidenceClassificationMismatch {
                 provider,
@@ -2069,16 +2061,6 @@ mod tests {
                 CallerRole::Runtime,
                 EVIDENCE_RUNTIME_GRANT,
             ),
-            (
-                WorkflowEvaluatorProvider::ExternalAuthority,
-                CallerRole::Worker,
-                EVIDENCE_EXTERNAL_GRANT,
-            ),
-            (
-                WorkflowEvaluatorProvider::ResearchSource,
-                CallerRole::Runtime,
-                EVIDENCE_EXTERNAL_GRANT,
-            ),
         ];
 
         for (index, (provider, role, grant)) in cases.into_iter().enumerate() {
@@ -2100,6 +2082,39 @@ mod tests {
             assert_eq!(authorization.principal().role(), role);
             let audit = serde_json::to_string(&authorization.audit()).expect("audit");
             assert!(!audit.contains(&attestation.signature));
+        }
+    }
+
+    #[test]
+    fn local_principal_registry_never_authorizes_external_or_research_evidence() {
+        for (index, provider) in [
+            WorkflowEvaluatorProvider::ExternalAuthority,
+            WorkflowEvaluatorProvider::ResearchSource,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let key = SigningKey::from_bytes(&[u8::try_from(39 + index).expect("fixture key"); 32]);
+            let request = evidence_request(provider);
+            let attestation = sign(&key, EVIDENCE_ACTION, &request, metadata());
+            let registry = registry(
+                &key,
+                CallerRole::Runtime,
+                &["workflow.evidence.authorize_external"],
+                PrincipalCredentialStatus::Active,
+            );
+            assert!(matches!(
+                registry.authorize_workflow_evidence_at(
+                    &verifier(),
+                    request,
+                    &attestation,
+                    NOW,
+                    300,
+                    30,
+                ),
+                Err(WorkflowAuthorityError::UnsupportedEvidenceProvider { provider: rejected })
+                    if rejected == provider
+            ));
         }
     }
 

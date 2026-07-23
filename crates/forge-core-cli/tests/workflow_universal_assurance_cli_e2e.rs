@@ -5,12 +5,15 @@
 //! reviewer binds its exact bytes, and runtime observations stay partial until
 //! every declared scenario passes from a separate origin domain.
 
+#[path = "support/workflow_broker.rs"]
+mod workflow_broker_test_support;
+
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
     workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
-    AuthorizedWorkflowBrokerControlPlane, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
-    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
     workflow_broker_expected_audience, PrincipalId, RuntimeKind, StableId,
@@ -214,23 +217,12 @@ fn install_strict_registry(state_root: &Path, project_id: &str, brokers: &[Broke
         required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
         credentials,
     };
-    AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
-        document.clone(),
-        &audience,
-        &project_id,
-        &workflow_id,
-    )
-    .expect("strict broker registry fixture");
-    let path = state_root
-        .parent()
-        .expect("sidecar root")
-        .join("operator/workflow-broker-registry.yaml");
-    fs::create_dir_all(path.parent().expect("registry parent")).expect("registry directory");
-    fs::write(
-        path,
-        yaml_serde::to_string(&document).expect("strict broker registry YAML"),
-    )
-    .expect("preconfigured external broker registry");
+    let operator_dir = state_root.parent().expect("sidecar root").join("operator");
+    workflow_broker_test_support::install_strict_broker_genesis(
+        &operator_dir,
+        document,
+        &admin_key,
+    );
     audience
 }
 

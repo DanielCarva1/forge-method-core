@@ -1,12 +1,14 @@
 //! Public P7b human-intent journey through the external broker boundary.
 
+#[path = "support/workflow_broker.rs"]
+mod workflow_broker_test_support;
+
 use assert_cmd::Command;
 use ed25519_dalek::{Signer, SigningKey};
 use forge_core_authority::{
     workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
-    AuthorizedWorkflowBrokerControlPlane, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
-    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
-    WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION,
+    WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput,
+    WORKFLOW_BROKER_EVENT_SCHEMA_VERSION, WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
     workflow_broker_expected_audience, PrincipalId, RuntimeKind, StableId,
@@ -131,7 +133,12 @@ fn signed_envelope(
     envelope
 }
 
-fn install_strict_human_registry(state_root: &Path, project_id: &str, key: &SigningKey) -> String {
+fn install_strict_human_registry(
+    state_root: &Path,
+    project_id: &str,
+    key: &SigningKey,
+    with_admin_journal: bool,
+) -> String {
     let project_id = StableId(project_id.to_owned());
     let workflow_id = StableId("workflow.governance".to_owned());
     let audience = workflow_broker_expected_audience(&project_id, &workflow_id);
@@ -144,7 +151,7 @@ fn install_strict_human_registry(state_root: &Path, project_id: &str, key: &Sign
         protocol_version: "workflow-host-origin-v1".to_owned(),
     };
     let admin_key = SigningKey::from_bytes(&[43; 32]);
-    let enrolled_at = now().saturating_sub(60);
+    let enrolled_at = 1_700_000_000;
     let mut credentials = vec![
         WorkflowBrokerPublicCredentialMetadata {
             credential_id: StableId("credential.workflow.intent-cli-admin".to_owned()),
@@ -200,23 +207,21 @@ fn install_strict_human_registry(state_root: &Path, project_id: &str, key: &Sign
         required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
         credentials,
     };
-    AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
-        document.clone(),
-        &audience,
-        &project_id,
-        &workflow_id,
-    )
-    .expect("strict broker registry fixture");
-    let path = state_root
-        .parent()
-        .expect("sidecar root")
-        .join("operator/workflow-broker-registry.yaml");
-    fs::create_dir_all(path.parent().expect("registry parent")).expect("registry directory");
-    fs::write(
-        path,
-        yaml_serde::to_string(&document).expect("strict broker registry YAML"),
-    )
-    .expect("preconfigured external broker registry");
+    let operator_dir = state_root.parent().expect("sidecar root").join("operator");
+    if with_admin_journal {
+        workflow_broker_test_support::install_strict_broker_genesis(
+            &operator_dir,
+            document,
+            &admin_key,
+        );
+    } else {
+        fs::create_dir_all(&operator_dir).expect("registry directory");
+        fs::write(
+            operator_dir.join("workflow-broker-registry.yaml"),
+            yaml_serde::to_string(&document).expect("strict broker registry YAML"),
+        )
+        .expect("registry-only strict broker fixture");
+    }
     audience
 }
 
@@ -304,7 +309,7 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
     // Simulate the selected-host adapter provisioning the public trust anchor.
     // Both private keys remain in memory and no Forge command receives genesis
     // or generic signing authority.
-    let audience = install_strict_human_registry(&state_root, project_id, &key);
+    let audience = install_strict_human_registry(&state_root, project_id, &key, false);
 
     let fresh = ok(&run(&app_arg, &["next"]));
     assert_eq!(
@@ -339,6 +344,41 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
         "human-intent-e2e-nonce-0001",
     );
     let envelope_path = write_envelope(&parent, "intent-revision.json", &envelope);
+
+    // A strict public registry is not independently live authority. Without its
+    // complete externally anchored administration journal, the public binary
+    // rejects an otherwise valid event before touching governance state.
+    let operator_dir = state_root.parent().expect("sidecar root").join("operator");
+    let registry_path = operator_dir.join("workflow-broker-registry.yaml");
+    let admin_state_path = operator_dir.join("workflow-broker-admin.json");
+    let registry_before = fs::read(&registry_path).expect("registry-only fixture bytes");
+    let state_before_registry_only = file_snapshot(&state_root);
+    let registry_only = failed(&run(
+        &app_arg,
+        &[
+            "intent",
+            "record",
+            "--origin-envelope-file",
+            &envelope_path.display().to_string(),
+        ],
+    ));
+    assert!(registry_only["error"]["message"]
+        .as_str()
+        .expect("registry-only error")
+        .contains("strict broker registry exists without durable administration state"));
+    assert_eq!(file_snapshot(&state_root), state_before_registry_only);
+    assert_eq!(
+        fs::read(&registry_path).expect("registry bytes after rejection"),
+        registry_before
+    );
+    assert!(!admin_state_path.exists());
+
+    install_strict_human_registry(&state_root, project_id, &key, true);
+    assert_eq!(
+        fs::read(&registry_path).expect("anchored registry bytes"),
+        registry_before,
+        "adding the journal must not rewrite the selected-host registry"
+    );
     let recorded = ok(&run(
         &app_arg,
         &[
@@ -482,9 +522,10 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
     let stale_message = stale_failure["error"]["message"]
         .as_str()
         .expect("stale error");
-    assert!(stale_message.contains("workflow broker event rejected"));
-    assert!(stale_message.contains("freshness"));
-    assert!(stale_message.contains("historical verification also failed"));
+    assert!(
+        stale_message.contains("does not match current governance state"),
+        "unexpected stale error: {stale_message}"
+    );
 
     let legacy_now = now();
     let mut legacy = signed_envelope(
@@ -527,7 +568,18 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
         before_legacy,
         "schema-downgraded evidence cannot append"
     );
-    assert_eq!(file_snapshot(&state_root), before_stale);
+    let after_rejections = file_snapshot(&state_root);
+    for authority_path in [
+        "wal/workflow-governance.ndjson",
+        "wal/workflow-action-replay.jsonl",
+        "workflow-action-replay.manifest.json",
+    ] {
+        assert_eq!(
+            after_rejections.get(authority_path),
+            before_stale.get(authority_path),
+            "rejected evidence changed authority state at {authority_path}"
+        );
+    }
 
     let _ = fs::remove_dir_all(parent);
 }

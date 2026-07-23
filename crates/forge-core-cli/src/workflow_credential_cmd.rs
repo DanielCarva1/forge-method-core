@@ -65,13 +65,11 @@ impl CredentialProfile {
             ],
             Self::Agent => &[
                 "workflow.evidence.authorize_review",
-                "workflow.evidence.authorize_external",
                 "workflow.signal.authorize",
             ],
             Self::Runtime => &[
                 "workflow.capability.authorize",
                 "workflow.evidence.authorize_runtime",
-                "workflow.evidence.authorize_external",
                 "workflow.signal.authorize",
             ],
         };

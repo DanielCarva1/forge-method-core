@@ -4,9 +4,9 @@
 use super::*;
 use forge_core_authority::{
     workflow_broker_event_signing_bytes, workflow_broker_host_event_descriptor_digest,
-    AuthorizedWorkflowBrokerControlPlane, PrincipalCredentialStatus, PrincipalRegistryContract,
-    PrincipalRegistryDocument, PrincipalRegistryEntry, WorkflowBrokerEventEnvelope,
-    WorkflowBrokerIssuerProfile, WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
+    PrincipalCredentialStatus, PrincipalRegistryContract, PrincipalRegistryDocument,
+    PrincipalRegistryEntry, WorkflowBrokerEventEnvelope, WorkflowBrokerIssuerProfile,
+    WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
 use forge_core_decisions::{
@@ -1540,10 +1540,7 @@ impl WorkflowAuthority {
                         "agent.workflow.p6d-independent-reviewer",
                         CallerRole::Worker,
                         &worker,
-                        &[
-                            "workflow.evidence.authorize_review",
-                            "workflow.evidence.authorize_external",
-                        ],
+                        &["workflow.evidence.authorize_review"],
                     ),
                     principal(
                         WORKER_TWO_CREDENTIAL,
@@ -1551,10 +1548,7 @@ impl WorkflowAuthority {
                         "agent.workflow.p6d-independent-reviewer-two",
                         CallerRole::Worker,
                         &worker_two,
-                        &[
-                            "workflow.evidence.authorize_review",
-                            "workflow.evidence.authorize_external",
-                        ],
+                        &["workflow.evidence.authorize_review"],
                     ),
                     principal(
                         RUNTIME_CREDENTIAL,
@@ -1565,7 +1559,6 @@ impl WorkflowAuthority {
                         &[
                             "workflow.capability.authorize",
                             "workflow.evidence.authorize_runtime",
-                            "workflow.evidence.authorize_external",
                         ],
                     ),
                     principal(
@@ -1577,7 +1570,6 @@ impl WorkflowAuthority {
                         &[
                             "workflow.capability.authorize",
                             "workflow.evidence.authorize_runtime",
-                            "workflow.evidence.authorize_external",
                         ],
                     ),
                 ],
@@ -1730,18 +1722,11 @@ impl WorkflowAuthority {
             required_event_schema_version: WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION.to_owned(),
             credentials,
         };
-        AuthorizedWorkflowBrokerControlPlane::from_document_for_binding(
-            broker_registry.clone(),
-            &broker_audience,
-            &project_id,
-            &workflow_id,
-        )
-        .expect("strict P6d broker registry fixture");
-        fs::write(
-            project.operator.join("workflow-broker-registry.yaml"),
-            yaml_serde::to_string(&broker_registry).expect("strict P6d broker registry YAML"),
-        )
-        .expect("publish preconfigured external broker registry");
+        workflow_broker_test_support::install_strict_broker_genesis(
+            &project.operator,
+            broker_registry,
+            &admin,
+        );
         Self {
             human,
             human_two,
