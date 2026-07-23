@@ -96,6 +96,50 @@ fn run_start_text(app: &Path) -> std::process::Output {
         .expect("run forge-core start in text mode")
 }
 
+fn run_reinitialize(
+    subcommand: &str,
+    app: &Path,
+    destination: &Path,
+    diagnosis: &Path,
+    plan_file: &Path,
+    plan_digest: Option<&str>,
+    confirmation: Option<&str>,
+) -> std::process::Output {
+    let mut command = bin();
+    command
+        .args(["project", "reinitialize", subcommand, "--root"])
+        .arg(app)
+        .arg("--destination")
+        .arg(destination)
+        .args(["--abandoned-authority-id", "abandoned-authority"])
+        .args(["--new-project-id", "successor-project"])
+        .args(["--new-authority-id", "successor-authority"])
+        .arg("--state-loss-diagnosis")
+        .arg(diagnosis)
+        .arg("--plan-file")
+        .arg(plan_file);
+    if let Some(plan_digest) = plan_digest {
+        command.args(["--plan-digest", plan_digest]);
+    }
+    if let Some(confirmation) = confirmation {
+        command.args(["--confirm", confirmation]);
+    }
+    command
+        .arg("--json")
+        .output()
+        .expect("run forge-core project reinitialize")
+}
+
+fn output_envelope(output: &std::process::Output, label: &str) -> Value {
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "{label} must return one JSON envelope: {error}; stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    })
+}
+
 /// Write a Project Link pointing at a sidecar/state root relative to `app`.
 fn write_link(app: &Path, sidecar_rel: &str, state_rel: &str) {
     fs::write(
@@ -879,5 +923,272 @@ fn start_is_idempotent_running_twice_keeps_same_state() {
     assert_eq!(
         app_entries, 1,
         "idempotent: app dir should still contain only the Project Link"
+    );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+#[allow(clippy::too_many_lines)]
+fn reinitialize_resumes_reserved_wal_in_a_fresh_process() {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let parent = FreshParent::new("reinitialize-reserved-retry");
+    let app = parent.path.join("app");
+    let destination = parent.path.join("successor-sidecar");
+    let diagnosis = parent.path.join("state-loss.yaml");
+    let plan_file = parent.path.join("reinitialize-plan.json");
+    fs::create_dir_all(&app).expect("create app root");
+    write_link(
+        &app,
+        "../missing-sidecar",
+        "../missing-sidecar/.forge-method",
+    );
+    let predecessor_link =
+        fs::read(app.join(PROJECT_LINK_FILE_NAME)).expect("read predecessor link");
+
+    let (start_ok, start) = run_start(&app);
+    assert!(
+        !start_ok,
+        "missing sidecar must produce a state-loss diagnosis"
+    );
+    assert_eq!(start["data"]["state"], "link_present_no_sidecar");
+    let mut diagnosis_bytes = yaml_serde::to_string(&start["data"]["state_loss"])
+        .expect("serialize public state-loss diagnosis")
+        .into_bytes();
+    if !diagnosis_bytes.ends_with(b"\n") {
+        diagnosis_bytes.push(b'\n');
+    }
+    fs::write(&diagnosis, &diagnosis_bytes).expect("write exact state-loss diagnosis");
+
+    let planned = run_reinitialize(
+        "plan",
+        &app,
+        &destination,
+        &diagnosis,
+        &plan_file,
+        None,
+        None,
+    );
+    assert!(
+        planned.status.success(),
+        "public reinitialize plan failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&planned.stdout),
+        String::from_utf8_lossy(&planned.stderr)
+    );
+    let planned = output_envelope(&planned, "reinitialize plan");
+    assert_eq!(planned["data"]["selected_host"], Value::Null);
+    let operation_id = planned["data"]["operation_id"]
+        .as_str()
+        .expect("plan operation id");
+    let plan_digest = planned["data"]["plan_digest"]
+        .as_str()
+        .expect("plan digest");
+    let confirmation = planned["data"]["confirmation_token"]
+        .as_str()
+        .expect("plan confirmation token");
+    let sealed_plan: Value =
+        serde_json::from_slice(&fs::read(&plan_file).expect("read sealed reinitialize plan"))
+            .expect("parse sealed reinitialize plan");
+    assert_eq!(sealed_plan["operation_id"], operation_id);
+    assert_eq!(sealed_plan["plan_digest"], plan_digest);
+    assert_eq!(sealed_plan["confirmation_token"], confirmation);
+    assert_eq!(sealed_plan["selected_host"], Value::Null);
+
+    let mut changed_diagnosis = diagnosis_bytes.clone();
+    changed_diagnosis.extend_from_slice(b"# changed after planning\n");
+    fs::write(&diagnosis, changed_diagnosis).expect("change diagnosis after planning");
+    let interrupted = run_reinitialize(
+        "apply",
+        &app,
+        &destination,
+        &diagnosis,
+        &plan_file,
+        Some(plan_digest),
+        Some(confirmation),
+    );
+    assert!(
+        !interrupted.status.success(),
+        "changed diagnosis must interrupt apply"
+    );
+    let interrupted = output_envelope(&interrupted, "interrupted reinitialize apply");
+    assert_eq!(interrupted["ok"], false);
+    assert!(interrupted["error"]["message"].as_str().is_some_and(
+        |message| message.contains("state-loss diagnosis bytes changed after planning")
+    ));
+    assert_eq!(
+        fs::read(app.join(PROJECT_LINK_FILE_NAME)).expect("read predecessor after interruption"),
+        predecessor_link
+    );
+
+    let durable_root = destination
+        .join(".forge-method")
+        .join("locks/project-reinitialize")
+        .join(operation_id);
+    let reserved_path = durable_root.join("wal-reserved.json");
+    assert!(durable_root.join("plan.json").is_file());
+    assert!(reserved_path.is_file());
+    for absent in [
+        "wal-applyprepared.json",
+        "wal-linkinstalled.json",
+        "wal-receiptpublished.json",
+        "receipt.json",
+    ] {
+        assert!(
+            !durable_root.join(absent).exists(),
+            "{absent} advanced before retry"
+        );
+    }
+    let reserved_bytes = fs::read(&reserved_path).expect("read durable Reserved WAL");
+    let reserved: Value =
+        serde_json::from_slice(&reserved_bytes).expect("parse durable Reserved WAL");
+    assert_eq!(reserved["phase"], "reserved");
+    assert_eq!(reserved["operation_id"], operation_id);
+    assert_eq!(reserved["plan_digest"], plan_digest);
+    assert_eq!(reserved["predecessor_identity"], "abandoned-authority");
+    assert_eq!(reserved["successor_project_id"], "successor-project");
+    assert_eq!(reserved["successor_identity"], "successor-authority");
+    assert_eq!(
+        reserved["project_link"],
+        sealed_plan["expected_project_link"]
+    );
+    assert_eq!(
+        reserved["project_link_anchor"]["content_digest"],
+        sealed_plan["expected_project_link"]["sha256"]
+    );
+    assert_eq!(
+        reserved["project_link_anchor"]["byte_length"],
+        sealed_plan["expected_project_link"]["byte_length"]
+    );
+    assert_eq!(
+        reserved["destination_reservation"]["path"],
+        destination.display().to_string()
+    );
+    assert_eq!(
+        reserved["destination_reservation"]["anchor_nonce"],
+        operation_id
+    );
+    assert!(reserved["destination_reservation"]["sha256"]
+        .as_str()
+        .is_some_and(|digest| digest.starts_with("sha256:") && digest.len() == 71));
+    let reservation_marker: Value = serde_json::from_slice(
+        &fs::read(destination.join(".forge-reinitialize-reservation.json"))
+            .expect("read destination reservation marker"),
+    )
+    .expect("parse destination reservation marker");
+    assert_eq!(reservation_marker["operation_id"], operation_id);
+    assert_eq!(reservation_marker["plan_digest"], plan_digest);
+    assert_eq!(
+        reservation_marker["destination"],
+        destination.display().to_string()
+    );
+    let anchor_relative_path = reserved["project_link_anchor"]["anchor_relative_path"]
+        .as_str()
+        .expect("private predecessor anchor path");
+    assert!(destination
+        .join(".forge-method")
+        .join(anchor_relative_path)
+        .is_file());
+
+    fs::write(&diagnosis, &diagnosis_bytes).expect("restore exact diagnosis bytes");
+    let completed = run_reinitialize(
+        "apply",
+        &app,
+        &destination,
+        &diagnosis,
+        &plan_file,
+        Some(plan_digest),
+        Some(confirmation),
+    );
+    assert!(
+        completed.status.success(),
+        "fresh-process Reserved retry failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&completed.stdout),
+        String::from_utf8_lossy(&completed.stderr)
+    );
+    let completed = output_envelope(&completed, "completed reinitialize apply");
+    assert_eq!(completed["data"]["operation_id"], operation_id);
+    assert_eq!(completed["data"]["plan_digest"], plan_digest);
+    assert_eq!(completed["data"]["selected_host"], Value::Null);
+    for present in [
+        "wal-applyprepared.json",
+        "wal-linkinstalled.json",
+        "wal-receiptpublished.json",
+        "receipt.json",
+    ] {
+        assert!(
+            durable_root.join(present).is_file(),
+            "{present} missing after retry"
+        );
+    }
+    assert_eq!(
+        fs::read(&reserved_path).expect("reread durable Reserved WAL"),
+        reserved_bytes
+    );
+    let receipt_path = durable_root.join("receipt.json");
+    let receipt_bytes = fs::read(&receipt_path).expect("read immutable reinitialize receipt");
+    let receipt: Value =
+        serde_json::from_slice(&receipt_bytes).expect("parse immutable reinitialize receipt");
+    assert_eq!(receipt, completed["data"]);
+    let successor_path = app.join(PROJECT_LINK_FILE_NAME);
+    let successor_link = fs::read(&successor_path).expect("read successor link");
+    let successor_metadata = fs::metadata(&successor_path).expect("inspect successor link");
+    let successor_identity = (successor_metadata.dev(), successor_metadata.ino());
+    assert_ne!(successor_link, predecessor_link);
+    let completed_snapshot = tree_snapshot(&parent.path);
+
+    let replayed = run_reinitialize(
+        "apply",
+        &app,
+        &destination,
+        &diagnosis,
+        &plan_file,
+        Some(plan_digest),
+        Some(confirmation),
+    );
+    assert!(
+        replayed.status.success(),
+        "exact receipt replay must succeed"
+    );
+    let replayed = output_envelope(&replayed, "replayed reinitialize apply");
+    assert_eq!(replayed["data"], completed["data"]);
+    assert_eq!(
+        fs::read(&successor_path).expect("read successor after receipt replay"),
+        successor_link
+    );
+    assert_eq!(
+        fs::read(&receipt_path).expect("reread immutable reinitialize receipt"),
+        receipt_bytes
+    );
+    assert_eq!(
+        fs::read(&reserved_path).expect("reread Reserved WAL after receipt replay"),
+        reserved_bytes
+    );
+    let replayed_metadata = fs::metadata(&successor_path).expect("reinspect successor link");
+    assert_eq!(
+        (replayed_metadata.dev(), replayed_metadata.ino()),
+        successor_identity,
+        "exact receipt replay must not reinstall the successor Project Link"
+    );
+    assert_eq!(tree_snapshot(&parent.path), completed_snapshot);
+
+    let resolved = bin()
+        .args(["project", "resolve", "--root"])
+        .arg(&app)
+        .output()
+        .expect("resolve reinitialized project");
+    assert!(
+        resolved.status.success(),
+        "reinitialized project must resolve"
+    );
+    let resolved = output_envelope(&resolved, "project resolve after reinitialize");
+    assert_eq!(resolved["data"]["project_id"], "successor-project");
+    assert_eq!(resolved["data"]["state_exists"], true);
+    assert_eq!(
+        Path::new(
+            resolved["data"]["state_root"]
+                .as_str()
+                .expect("resolved state root")
+        ),
+        destination.join(".forge-method")
     );
 }

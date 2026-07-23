@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::fs;
-use std::io::{self, Read as _};
+use std::io::{self, Read as _, Seek as _, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 
 const PLAN_SCHEMA: &str = "forge_project_reinitialize_plan_v1";
@@ -1745,10 +1745,19 @@ fn read_retained_file_bounded(
     let mut reader = file
         .try_clone()
         .map_err(|error| RetainedProjectLinkCasError::context("clone retained file", error))?;
+    reader
+        .seek(SeekFrom::Start(0))
+        .map_err(|error| RetainedProjectLinkCasError::context("rewind retained file", error))?;
     let mut bytes = Vec::with_capacity(usize::try_from(before.len()).unwrap_or(0));
     reader
+        .take(maximum.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|error| RetainedProjectLinkCasError::context("read retained file", error))?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > maximum {
+        return Err(RetainedProjectLinkCasError::new(
+            "retained authority file exceeds the byte limit",
+        ));
+    }
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != before.len()
         || file
             .metadata()
@@ -1895,5 +1904,67 @@ mod tests {
         assert_eq!(receipt.successor_identity, "new");
         assert_eq!(receipt.destination, "/tmp/forge-new-sidecar");
         assert_eq!(receipt.selected_host, None);
+    }
+
+    #[test]
+    fn bounded_retained_read_starts_at_zero_after_prior_hashing() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "forge-reinitialize-retained-read-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create retained-read test root");
+        let path = root.join(PROJECT_LINK_NAME);
+        let expected = b"retained-project-link\n";
+        fs::write(&path, expected).expect("write retained-read fixture");
+        let mut file = fs::File::open(&path).expect("open retained-read fixture");
+        let identity_before =
+            RetainedDirectory::identity_of(&file).expect("identify retained-read fixture");
+        let metadata_before = file.metadata().expect("inspect retained-read fixture");
+
+        let mut prior_reader = file.try_clone().expect("clone for prior hashing");
+        let mut previously_hashed = Vec::new();
+        prior_reader
+            .read_to_end(&mut previously_hashed)
+            .expect("consume retained file during prior hashing");
+        assert_eq!(previously_hashed, expected);
+        assert_eq!(
+            sha256_content_hash(&previously_hashed),
+            sha256_content_hash(expected)
+        );
+        assert_eq!(
+            file.stream_position().expect("inspect shared file cursor"),
+            u64::try_from(expected.len()).expect("fixture length fits u64")
+        );
+
+        let bytes = read_retained_file_bounded(
+            &file,
+            u64::try_from(expected.len()).expect("fixture length fits u64"),
+        )
+        .expect("bounded read rewinds the shared retained-file cursor");
+        assert_eq!(bytes, expected);
+
+        let error = read_retained_file_bounded(
+            &file,
+            u64::try_from(expected.len() - 1).expect("smaller fixture length fits u64"),
+        )
+        .expect_err("hard byte limit remains enforced");
+        assert!(error
+            .to_string()
+            .contains("retained authority file exceeds the byte limit"));
+        let metadata_after = file.metadata().expect("reinspect retained-read fixture");
+        assert_eq!(metadata_after.len(), metadata_before.len());
+        assert_eq!(
+            RetainedDirectory::identity_of(&file).expect("reidentify retained-read fixture"),
+            identity_before
+        );
+
+        drop(prior_reader);
+        drop(file);
+        fs::remove_dir_all(root).expect("remove retained-read test root");
     }
 }
