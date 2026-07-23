@@ -784,6 +784,11 @@ pub(crate) struct ClaimWalRetainedLock {
     wal_path: PathBuf,
 }
 
+enum ClaimWalAppendOutcome {
+    InPlace,
+    Replaced(RetainedClaimWalLeaf),
+}
+
 impl ClaimWalRetainedLock {
     fn validate(&self, state_root: &Path) -> Result<(), ClaimWalReadError> {
         self.boundary
@@ -796,7 +801,7 @@ impl ClaimWalRetainedLock {
             .root
             .open_leaf_read(
                 Path::new(CLAIM_WAL_LOCK_RELATIVE_PATH),
-                crate::retained_dir::RetainedLeafPolicy::Authority,
+                crate::retained_dir::RetainedLeafPolicy::MutableAuthority,
             )
             .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
         if !current.is_ok_and(|identity| identity == self.lock_identity) {
@@ -810,66 +815,134 @@ impl ClaimWalRetainedLock {
 
     fn append_wal(
         &self,
+        expected: Option<&RetainedClaimWalLeaf>,
         bytes: &[u8],
         durability: crate::WalDurability,
-    ) -> Result<(), ClaimWalAppendError> {
+    ) -> Result<ClaimWalAppendOutcome, ClaimWalAppendError> {
         self.validate(&self.state_root)
             .map_err(|source| ClaimWalAppendError::OpenWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),
             })?;
         let relative = Path::new(CLAIM_WAL_RELATIVE_PATH);
-        let mut file = self
-            .root
-            .open_read_write(relative)
-            .or_else(|source| {
-                if source.kind() == io::ErrorKind::NotFound {
-                    self.root.open_read_write_create(relative)
-                } else {
-                    Err(source)
-                }
-            })
-            .map_err(|source| ClaimWalAppendError::OpenWal {
-                path: self.wal_path.clone(),
-                source: source.to_string(),
-            })?;
-        let identity =
-            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
-                ClaimWalAppendError::OpenWal {
-                    path: self.wal_path.clone(),
-                    source: source.to_string(),
-                }
-            })?;
-        self.root
-            .verify_retained_authority_binding(relative, &file, &identity)
-            .map_err(|source| ClaimWalAppendError::OpenWal {
-                path: self.wal_path.clone(),
-                source: source.to_string(),
-            })?;
-        file.seek(SeekFrom::End(0))
-            .and_then(|_| file.write_all(bytes))
-            .map_err(|source| ClaimWalAppendError::WriteWal {
-                path: self.wal_path.clone(),
-                source: source.to_string(),
-            })?;
-        if let crate::WalDurability::SyncOnAppend = durability {
-            file.sync_data()
-                .map_err(|source| ClaimWalAppendError::SyncWal {
+        if let Some(expected) = expected {
+            expected
+                .validate(&self.root)
+                .map_err(|source| ClaimWalAppendError::OpenWal {
                     path: self.wal_path.clone(),
                     source: source.to_string(),
                 })?;
         }
-        self.root
-            .verify_retained_authority_binding(relative, &file, &identity)
-            .map_err(|source| ClaimWalAppendError::WriteWal {
-                path: self.wal_path.clone(),
-                source: source.to_string(),
-            })?;
+        let opened = match expected {
+            Some(_) => self.root.open_read_write(relative),
+            None => self.root.open_write_new(relative),
+        };
+        let outcome = match (opened, expected) {
+            (Ok(mut file), expected) => {
+                let identity = crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(
+                    |source| ClaimWalAppendError::OpenWal {
+                        path: self.wal_path.clone(),
+                        source: source.to_string(),
+                    },
+                )?;
+                if expected.is_some_and(|expected| expected.identity != identity) {
+                    return Err(ClaimWalAppendError::OpenWal {
+                        path: self.wal_path.clone(),
+                        source: "claim WAL changed identity before retained append".to_owned(),
+                    });
+                }
+                self.root
+                    .mutate_authority_file(relative, &mut file, &identity, |file| {
+                        file.seek(SeekFrom::End(0))?;
+                        file.write_all(bytes)
+                    })
+                    .map_err(|source| ClaimWalAppendError::WriteWal {
+                        path: self.wal_path.clone(),
+                        source: source.to_string(),
+                    })?;
+                if let crate::WalDurability::SyncOnAppend = durability {
+                    self.root
+                        .mutate_authority_file(relative, &mut file, &identity, |file| {
+                            file.sync_data()
+                        })
+                        .map_err(|source| ClaimWalAppendError::SyncWal {
+                            path: self.wal_path.clone(),
+                            source: source.to_string(),
+                        })?;
+                }
+                ClaimWalAppendOutcome::InPlace
+            }
+            (Err(source), Some(expected)) if source.kind() == io::ErrorKind::InvalidData => {
+                #[cfg(unix)]
+                {
+                    drop(source);
+                    ClaimWalAppendOutcome::Replaced(
+                        self.append_wal_by_replacement(relative, expected, bytes)?,
+                    )
+                }
+                #[cfg(not(unix))]
+                return Err(ClaimWalAppendError::OpenWal {
+                    path: self.wal_path.clone(),
+                    source: source.to_string(),
+                });
+            }
+            (Err(source), _) => {
+                return Err(ClaimWalAppendError::OpenWal {
+                    path: self.wal_path.clone(),
+                    source: source.to_string(),
+                });
+            }
+        };
         self.validate(&self.state_root)
             .map_err(|source| ClaimWalAppendError::OpenWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),
-            })
+            })?;
+        Ok(outcome)
+    }
+
+    #[cfg(unix)]
+    fn append_wal_by_replacement(
+        &self,
+        relative: &Path,
+        expected: &RetainedClaimWalLeaf,
+        bytes: &[u8],
+    ) -> Result<RetainedClaimWalLeaf, ClaimWalAppendError> {
+        let replacement_len = expected
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .ok_or_else(|| ClaimWalAppendError::WriteWal {
+                path: self.wal_path.clone(),
+                source: "claim WAL replacement length overflow".to_owned(),
+            })?;
+        let mut replacement = Vec::with_capacity(replacement_len);
+        replacement.extend_from_slice(&expected.bytes);
+        replacement.extend_from_slice(bytes);
+        write_durable_replaced_file_retained_from_expected_with_commit(
+            self,
+            relative,
+            expected,
+            &replacement,
+            || Ok(()),
+        )
+        .map_err(|source| ClaimWalAppendError::WriteWal {
+            path: self.wal_path.clone(),
+            source: source.to_string(),
+        })?;
+        let file = self
+            .root
+            .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority)
+            .map_err(|source| ClaimWalAppendError::OpenWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            })?;
+        retain_open_claim_wal_leaf(&self.root, relative, file, u64::MAX).map_err(|source| {
+            ClaimWalAppendError::OpenWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            }
+        })
     }
 }
 
@@ -1028,9 +1101,10 @@ fn append_claim_wal_record_under_retained_lock(
             path: guard.wal_path.clone(),
             source: source.to_string(),
         })?;
-    guard.append_wal(&record_bytes, durability)?;
+    let append_outcome =
+        guard.append_wal(recovery.active_wal.as_ref(), &record_bytes, durability)?;
     recovery
-        .observe_append(guard, &record_bytes)
+        .observe_append(guard, &record_bytes, append_outcome)
         .map_err(|source| ClaimWalAppendError::WriteWal {
             path: guard.wal_path.clone(),
             source: source.to_string(),
@@ -2270,6 +2344,11 @@ impl RetainedCheckpointWitnessBundle {
         self.active_wal.bytes.clear();
         self.active_wal.bytes.extend_from_slice(bytes);
     }
+
+    fn replace_active_wal(&mut self, active_wal: &RetainedClaimWalLeaf) -> io::Result<()> {
+        self.active_wal = clone_retained_claim_leaf(&self.root, active_wal)?;
+        Ok(())
+    }
 }
 
 struct RetainedPristineClaimAuthority {
@@ -2480,12 +2559,16 @@ fn publish_immutable_claim_leaf(
     let parent = relative_path.parent().unwrap_or_else(|| Path::new(""));
     let staging_path = immutable_claim_staging_path(parent)?;
     let mut file = guard.root.open_write_new(&staging_path)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
+    let identity = crate::retained_dir::RetainedDirectory::identity_of(&file)?;
+    guard
+        .root
+        .mutate_authority_file(&staging_path, &mut file, &identity, |file| {
+            file.write_all(bytes)?;
+            file.sync_all()
+        })?;
     if !parent.as_os_str().is_empty() {
         guard.root.sync_directory(parent)?;
     }
-    let identity = crate::retained_dir::RetainedDirectory::identity_of(&file)?;
     validate_retained_claim_leaf(&guard.root, &staging_path, &file, &identity, bytes)?;
     let authority = guard.root.retain_authority()?;
     authority.publish_retained_handle_noreplace(&file, &identity, relative_path)?;
@@ -2787,7 +2870,12 @@ where
     guard
         .validate(&guard.state_root)
         .map_err(|source| io::Error::other(source.to_string()))?;
-    expected.validate(&guard.root)?;
+    expected.validate(&guard.root).map_err(|source| {
+        io::Error::new(
+            source.kind(),
+            format!("retained replacement expected validation failed: {source}"),
+        )
+    })?;
     let _cleanup_debt = crate::replace_retained_file_two_phase_from_expected(
         &guard.root,
         path,
@@ -2801,7 +2889,13 @@ where
                 .validate(&guard.state_root)
                 .map_err(|source| io::Error::other(source.to_string()))
         },
-    )?;
+    )
+    .map_err(|source| {
+        io::Error::new(
+            source.kind(),
+            format!("retained replacement transaction failed: {source}"),
+        )
+    })?;
     Ok(())
 }
 
@@ -3372,28 +3466,46 @@ impl RetainedClaimWalRecovery {
             .map_err(|source| io::Error::other(source.to_string()))
     }
 
-    fn observe_append(&mut self, guard: &ClaimWalRetainedLock, bytes: &[u8]) -> io::Result<()> {
-        if let Some(active_wal) = self.active_wal.as_mut() {
-            active_wal.bytes.extend_from_slice(bytes);
-        } else {
-            let relative = Path::new(CLAIM_WAL_RELATIVE_PATH);
-            let file = guard
-                .root
-                .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority)?;
-            self.active_wal = Some(retain_open_claim_wal_leaf(
-                &guard.root,
-                relative,
-                file,
-                u64::MAX,
-            )?);
-        }
-        if let Some(witness) = self.checkpoint_witness.as_mut() {
-            let expected = self
-                .active_wal
-                .as_ref()
-                .map(|active_wal| active_wal.bytes.as_slice())
-                .unwrap_or_default();
-            witness.update_active_wal_bytes(expected);
+    fn observe_append(
+        &mut self,
+        guard: &ClaimWalRetainedLock,
+        bytes: &[u8],
+        outcome: ClaimWalAppendOutcome,
+    ) -> io::Result<()> {
+        match outcome {
+            ClaimWalAppendOutcome::InPlace => {
+                if let Some(active_wal) = self.active_wal.as_mut() {
+                    active_wal.bytes.extend_from_slice(bytes);
+                } else {
+                    let relative = Path::new(CLAIM_WAL_RELATIVE_PATH);
+                    let file = guard.root.open_leaf_read(
+                        relative,
+                        crate::retained_dir::RetainedLeafPolicy::Authority,
+                    )?;
+                    self.active_wal = Some(retain_open_claim_wal_leaf(
+                        &guard.root,
+                        relative,
+                        file,
+                        u64::MAX,
+                    )?);
+                }
+                if let Some(witness) = self.checkpoint_witness.as_mut() {
+                    let expected = self
+                        .active_wal
+                        .as_ref()
+                        .map(|active_wal| active_wal.bytes.as_slice())
+                        .unwrap_or_default();
+                    witness.update_active_wal_bytes(expected);
+                }
+            }
+            ClaimWalAppendOutcome::Replaced(active_wal) => {
+                self.active_wal = Some(active_wal);
+                if let (Some(witness), Some(active_wal)) =
+                    (self.checkpoint_witness.as_mut(), self.active_wal.as_ref())
+                {
+                    witness.replace_active_wal(active_wal)?;
+                }
+            }
         }
         self.validate(guard)
     }
@@ -3426,13 +3538,9 @@ fn recover_claim_wal_file_under_lock(
     repair: bool,
 ) -> io::Result<RetainedClaimWalRecovery> {
     let relative = Path::new(CLAIM_WAL_RELATIVE_PATH);
-    let opened = if repair {
-        guard.root.open_leaf_read_write_existing(relative)
-    } else {
-        guard
-            .root
-            .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority)
-    };
+    let opened = guard
+        .root
+        .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority);
     let mut retained = match opened {
         Ok(file) => Some(retain_open_claim_wal_leaf(
             &guard.root,
@@ -3476,26 +3584,82 @@ fn recover_claim_wal_file_under_lock(
         guard
             .validate(&guard.state_root)
             .map_err(|source| io::Error::other(source.to_string()))?;
-        let retained = retained.as_mut().ok_or_else(|| {
+        let retained_leaf = retained.as_mut().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "claim WAL disappeared before retained repair",
             )
         })?;
-        guard.root.verify_retained_authority_binding(
-            relative,
-            &retained.file,
-            &retained.identity,
-        )?;
+        retained_leaf.validate(&guard.root)?;
         let repaired_len = usize::try_from(decoded.recovery.last_good_offset)
             .map_err(|_| io::Error::other("claim WAL repair offset does not fit usize"))?;
-        retained.file.set_len(decoded.recovery.last_good_offset)?;
-        retained.file.sync_all()?;
-        retained.bytes.truncate(repaired_len);
-        if let Some(witness) = decoded.checkpoint_witness.as_mut() {
-            witness.update_active_wal_bytes(&retained.bytes);
+        let repaired_bytes = retained_leaf.bytes[..repaired_len].to_vec();
+        let mut replaced = false;
+        match guard.root.open_leaf_read_write_existing(relative) {
+            Ok(mut file) => {
+                let identity = crate::retained_dir::RetainedDirectory::identity_of(&file)?;
+                if identity != retained_leaf.identity {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "claim WAL changed identity before retained repair",
+                    ));
+                }
+                guard
+                    .root
+                    .mutate_authority_file(relative, &mut file, &identity, |file| {
+                        file.set_len(decoded.recovery.last_good_offset)?;
+                        file.sync_all()
+                    })?;
+                retained_leaf.bytes.truncate(repaired_len);
+            }
+            Err(source) if source.kind() == io::ErrorKind::InvalidData => {
+                #[cfg(unix)]
+                {
+                    drop(source);
+                    write_durable_replaced_file_retained_from_expected_with_commit(
+                        guard,
+                        relative,
+                        retained_leaf,
+                        &repaired_bytes,
+                        || Ok(()),
+                    )?;
+                    let file = guard.root.open_leaf_read(
+                        relative,
+                        crate::retained_dir::RetainedLeafPolicy::Authority,
+                    )?;
+                    *retained_leaf =
+                        retain_open_claim_wal_leaf(&guard.root, relative, file, u64::MAX)?;
+                    replaced = true;
+                }
+                #[cfg(not(unix))]
+                return Err(source);
+            }
+            Err(source) => return Err(source),
         }
-        decoded.recovery.repaired = true;
+        if replaced {
+            let active_wal = retained.as_ref().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "claim WAL replacement lost retained repair authority",
+                )
+            })?;
+            let authority = ClaimWalDecodeAuthority { guard, active_wal };
+            let mut repaired = decode_prefix(&guard.wal_path, &active_wal.bytes, Some(&authority));
+            if repaired.recovery.stop_reason != ClaimWalStopReason::CleanEof {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "claim WAL replacement did not produce a clean repaired prefix",
+                ));
+            }
+            repaired.recovery.original_len = original_len;
+            repaired.recovery.repaired = true;
+            decoded = repaired;
+        } else {
+            if let Some(witness) = decoded.checkpoint_witness.as_mut() {
+                witness.update_active_wal_bytes(&repaired_bytes);
+            }
+            decoded.recovery.repaired = true;
+        }
     }
     let retained_recovery = RetainedClaimWalRecovery {
         recovery: decoded.recovery,
@@ -4205,6 +4369,48 @@ mod tests {
             ClaimWalStopReason::CleanEof
         );
         assert_eq!(fs::read(&stale_temp).expect("read orphan"), stale_sentinel);
+        let external_alias = root.0.join("outside-active-alias");
+        fs::hard_link(&first.wal_path, &external_alias).expect("link external active alias");
+
+        let appended = append_claim_wal_record_under_retained_lock(
+            &guard,
+            ClaimWalOperation::Release,
+            &test_claim(),
+            "2027-01-15T08:01:30Z",
+            crate::WalDurability::SyncOnAppend,
+        )
+        .expect("append after retained rotation cleanup debt");
+        assert!(appended.seq > first.checkpoint_seq.expect("first checkpoint seq"));
+        assert_ne!(
+            fs::read(&first.wal_path).expect("read appended replacement"),
+            first_wal
+        );
+        assert_eq!(
+            fs::read(&external_alias).expect("read external alias"),
+            first_wal
+        );
+        assert_eq!(fs::read(&stale_temp).expect("read orphan"), stale_sentinel);
+
+        let clean_after_append = fs::read(&first.wal_path).expect("read clean appended WAL");
+        let repair_alias = root.0.join("outside-torn-repair-alias");
+        fs::hard_link(&first.wal_path, &repair_alias).expect("link torn repair alias");
+        OpenOptions::new()
+            .append(true)
+            .open(&first.wal_path)
+            .expect("open active WAL for torn-tail fixture")
+            .write_all(b"torn")
+            .expect("append torn-tail fixture");
+        let torn_alias_bytes = fs::read(&repair_alias).expect("read torn repair alias");
+        let repaired = recover_claim_wal_for_guard(&guard, true).expect("repair aliased torn tail");
+        assert!(repaired.repaired);
+        assert_eq!(
+            fs::read(&first.wal_path).expect("read repaired active WAL"),
+            clean_after_append
+        );
+        assert_eq!(
+            fs::read(&repair_alias).expect("reread torn repair alias"),
+            torn_alias_bytes
+        );
 
         let second = rotate_claim_wal_if_needed_under_retained_lock(
             &guard,
@@ -4258,6 +4464,31 @@ mod tests {
         drop(guard);
         fs::remove_dir_all(&root.0).expect("remove B");
         fs::rename(displaced, &root.0).expect("restore A");
+
+        let guard = acquire_claim_wal_retained_lock(&root.0).expect("relock restored A");
+        let (recovery, _) = recover_appendable_wal(&guard).expect("retain active A WAL");
+        let expected = recovery.active_wal.as_ref().expect("active A WAL");
+        let displaced_wal = root.0.join("wal/claims.fmw1.inode-a");
+        fs::rename(&guard.wal_path, &displaced_wal).expect("displace active A WAL");
+        fs::write(&guard.wal_path, b"B-leaf-sentinel").expect("shape replacement B WAL");
+        let a_before = fs::read(&displaced_wal).expect("read displaced A WAL");
+        let b_before = fs::read(&guard.wal_path).expect("read replacement B WAL");
+
+        assert!(guard
+            .append_wal(
+                Some(expected),
+                b"must-not-append",
+                crate::WalDurability::NoSync
+            )
+            .is_err());
+        assert_eq!(
+            fs::read(&displaced_wal).expect("read displaced A WAL after"),
+            a_before
+        );
+        assert_eq!(
+            fs::read(&guard.wal_path).expect("read replacement B WAL after"),
+            b_before
+        );
     }
     #[cfg(unix)]
     #[test]

@@ -1025,10 +1025,20 @@ fn initialize_files(
             path: manifest_path.clone(),
             source: source.to_string(),
         })?;
-    manifest
-        .write_all(&bytes)
-        .and_then(|()| manifest.flush())
-        .and_then(|()| manifest.sync_all())
+    let identity =
+        crate::retained_dir::RetainedDirectory::identity_of(&manifest).map_err(|source| {
+            WorkflowActionReplayError::WriteWal {
+                path: manifest_path.clone(),
+                source: source.to_string(),
+            }
+        })?;
+    guard
+        .root
+        .mutate_authority_file(manifest_relative, &mut manifest, &identity, |manifest| {
+            manifest.write_all(&bytes)?;
+            manifest.flush()?;
+            manifest.sync_all()
+        })
         .and_then(|()| guard.root.sync_root())
         .map_err(|source| WorkflowActionReplayError::WriteWal {
             path: manifest_path,
@@ -1116,7 +1126,7 @@ impl WorkflowActionReplayRetainedLock {
             .root
             .open_leaf_read(
                 Path::new(WORKFLOW_ACTION_REPLAY_LOCK_RELATIVE_PATH),
-                crate::retained_dir::RetainedLeafPolicy::Authority,
+                crate::retained_dir::RetainedLeafPolicy::MutableAuthority,
             )
             .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
         if !current.is_ok_and(|identity| identity == self.lock_identity) {
@@ -1153,17 +1163,28 @@ impl WorkflowActionReplayRetainedLock {
 
     fn append_wal(&self, bytes: &[u8]) -> Result<(), WorkflowActionReplayError> {
         self.validate(&self.state_root)?;
+        let relative = Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH);
         let mut file = self
             .root
-            .open_leaf_read_write_existing(Path::new(WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH))
+            .open_leaf_read_write_existing(relative)
             .map_err(|source| WorkflowActionReplayError::WriteWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),
             })?;
-        file.seek(SeekFrom::End(0))
-            .and_then(|_| file.write_all(bytes))
-            .and_then(|()| file.flush())
-            .and_then(|()| file.sync_all())
+        let identity =
+            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+                WorkflowActionReplayError::WriteWal {
+                    path: self.wal_path.clone(),
+                    source: source.to_string(),
+                }
+            })?;
+        self.root
+            .mutate_authority_file(relative, &mut file, &identity, |file| {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(bytes)?;
+                file.flush()?;
+                file.sync_all()
+            })
             .map_err(|source| WorkflowActionReplayError::WriteWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),

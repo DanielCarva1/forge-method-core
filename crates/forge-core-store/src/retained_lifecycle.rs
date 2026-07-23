@@ -1341,9 +1341,16 @@ impl RetainedDomainPackLifecycleStore {
             .map_err(|error| lifecycle_io_error(&self.lock, &record_state_path, error))?;
         let record_identity = RetainedDirectory::identity_of(&record_file)
             .map_err(|error| lifecycle_io_error(&self.lock, &record_state_path, error))?;
-        record_file
-            .write_all(&record_bytes)
-            .and_then(|()| record_file.sync_all())
+        self.lifecycle_root
+            .mutate_authority_file(
+                &record_staging_path,
+                &mut record_file,
+                &record_identity,
+                |record_file| {
+                    record_file.write_all(&record_bytes)?;
+                    record_file.sync_all()
+                },
+            )
             .map_err(|error| lifecycle_io_error(&self.lock, &record_state_path, error))?;
         validate_retained_bytes(
             &record_file,
@@ -1427,9 +1434,16 @@ impl RetainedDomainPackLifecycleStore {
             .map_err(|error| lifecycle_io_error(&self.lock, &selector_state_path, error))?;
         let selector_identity = RetainedDirectory::identity_of(&selector_file)
             .map_err(|error| lifecycle_io_error(&self.lock, &selector_state_path, error))?;
-        selector_file
-            .write_all(&selector_bytes)
-            .and_then(|()| selector_file.sync_all())
+        self.lifecycle_root
+            .mutate_authority_file(
+                &selector_staging_path,
+                &mut selector_file,
+                &selector_identity,
+                |selector_file| {
+                    selector_file.write_all(&selector_bytes)?;
+                    selector_file.sync_all()
+                },
+            )
             .map_err(|error| lifecycle_io_error(&self.lock, &selector_state_path, error))?;
         validate_retained_bytes(
             &selector_file,

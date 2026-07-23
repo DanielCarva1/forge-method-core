@@ -386,20 +386,26 @@ where
             path: target.clone(),
             source: source.to_string(),
         })?;
-    file.seek(SeekFrom::End(0))
-        .and_then(|_| file.write_all(&line))
-        .and_then(|()| file.flush())
+    let identity = retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+        AppendJsonLineError::OpenFile {
+            path: target.clone(),
+            source: source.to_string(),
+        }
+    })?;
+    lock.root
+        .mutate_authority_file(&relative, &mut file, &identity, |file| {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(&line)?;
+            file.flush()?;
+            if let WalDurability::SyncOnAppend = durability {
+                file.sync_all()?;
+            }
+            Ok(())
+        })
         .map_err(|source| AppendJsonLineError::Write {
             path: target.clone(),
             source: source.to_string(),
         })?;
-    if let WalDurability::SyncOnAppend = durability {
-        file.sync_all()
-            .map_err(|source| AppendJsonLineError::Write {
-                path: target.clone(),
-                source: source.to_string(),
-            })?;
-    }
     Ok(target)
 }
 
@@ -485,20 +491,26 @@ where
             path: target.clone(),
             source: source.to_string(),
         })?;
-    file.seek(SeekFrom::End(0))
-        .and_then(|_| file.write_all(&line))
-        .and_then(|()| file.flush())
+    let identity = retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+        AppendJsonLineError::OpenFile {
+            path: target.clone(),
+            source: source.to_string(),
+        }
+    })?;
+    lock.root
+        .mutate_authority_file(&relative, &mut file, &identity, |file| {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(&line)?;
+            file.flush()?;
+            if let WalDurability::SyncOnAppend = durability {
+                file.sync_all()?;
+            }
+            Ok(())
+        })
         .map_err(|source| AppendJsonLineError::Write {
             path: target.clone(),
             source: source.to_string(),
         })?;
-    if let WalDurability::SyncOnAppend = durability {
-        file.sync_all()
-            .map_err(|source| AppendJsonLineError::Write {
-                path: target.clone(),
-                source: source.to_string(),
-            })?;
-    }
 
     Ok(target)
 }
@@ -730,10 +742,19 @@ pub fn append_trace_event_under_boundary(
             path: target.clone(),
             source: source.to_string(),
         })?;
-    file.seek(SeekFrom::End(0))
-        .and_then(|_| file.write_all(&line))
-        .and_then(|()| file.flush())
-        .and_then(|()| file.sync_all())
+    let identity = retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+        AppendJsonLineError::OpenFile {
+            path: target.clone(),
+            source: source.to_string(),
+        }
+    })?;
+    lock.root
+        .mutate_authority_file(&relative, &mut file, &identity, |file| {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(&line)?;
+            file.flush()?;
+            file.sync_all()
+        })
         .map_err(|source| AppendJsonLineError::Write {
             path: target.clone(),
             source: source.to_string(),
@@ -1558,6 +1579,69 @@ pub enum EffectMetadataOutputTreatment {
     KeepRawContentOmitted,
 }
 
+/// Mutable retained handle for the exact `EventLog` member bound to one
+/// designated effect lock. Read and seek access support projection, while all
+/// content mutation remains inside Store and revalidates the retained identity,
+/// namespace binding, and single-link shape at the write boundary.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct RetainedStateFile {
+    file: File,
+    lock: EffectStoreLock,
+    relative_path: PathBuf,
+    identity: retained_dir::RetainedFileIdentity,
+}
+
+impl RetainedStateFile {
+    /// Revalidate the exact retained lock that owns this state member.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the lock entry was replaced or gained an alias.
+    pub fn validate_lock_file(&self) -> io::Result<()> {
+        self.lock
+            .validate_retained_lock_file()
+            .map_err(|source| io::Error::other(source.to_string()))
+    }
+
+    /// Append exact bytes under the retained mutable-authority boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the lock or member path no longer names its
+    /// retained file, its link shape is unsafe for mutation, or the append fails.
+    pub fn append_bytes(&mut self, bytes: &[u8], durability: WalDurability) -> io::Result<()> {
+        self.validate_lock_file()?;
+        self.lock.state_root.mutate_authority_file(
+            &self.relative_path,
+            &mut self.file,
+            &self.identity,
+            |file| {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(bytes)?;
+                file.flush()?;
+                match durability {
+                    WalDurability::SyncOnAppend => file.sync_data(),
+                    WalDurability::NoSync => Ok(()),
+                }
+            },
+        )?;
+        self.validate_lock_file()
+    }
+}
+
+impl Read for RetainedStateFile {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.file.read(buffer)
+    }
+}
+
+impl Seek for RetainedStateFile {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.file.seek(position)
+    }
+}
+
 /// Narrow retained view of the exact authoritative member bound to one
 /// designated effect lock. The private fields prevent construction without a
 /// live lock capability, and every open rechecks the lock-to-member pairing.
@@ -1632,17 +1716,6 @@ impl RetainedStateRoot<'_> {
     pub fn open_read(&self, path: &Path) -> io::Result<File> {
         self.validate_member_path(path)?;
         self.inner.open_read(path)
-    }
-
-    /// Open or create the exact `EventLog` member bound to this retained lock.
-    ///
-    /// # Errors
-    ///
-    /// Returns an I/O error for a lock/member mismatch, unsafe traversal,
-    /// unsupported entry type, or open failure.
-    pub fn open_read_write_create(&self, path: &Path) -> io::Result<File> {
-        self.validate_writable_eventlog_path(path)?;
-        self.inner.open_read_write_create(path)
     }
 }
 
@@ -1995,6 +2068,35 @@ impl EffectStoreLock {
         Ok(capability)
     }
 
+    /// Consume this lock into one exact retained mutable `EventLog` member.
+    /// Keeping the lock inside the returned handle prevents mutation authority
+    /// from outliving the exclusive lock capability that admitted it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error for a changed lock, lock/member mismatch, unsafe
+    /// traversal, unsupported entry type, or open failure.
+    #[doc(hidden)]
+    pub fn into_retained_state_file(self, path: &Path) -> io::Result<RetainedStateFile> {
+        self.validate_retained_lock_file()
+            .map_err(|source| io::Error::other(source.to_string()))?;
+        RetainedStateRoot {
+            inner: &self.state_root,
+            lock_relative_path: &self.state_lock_relative_path,
+        }
+        .validate_writable_eventlog_path(path)?;
+        let file = self.state_root.open_read_write_create(path)?;
+        let identity = retained_dir::RetainedDirectory::identity_of(&file)?;
+        self.validate_retained_lock_file()
+            .map_err(|source| io::Error::other(source.to_string()))?;
+        Ok(RetainedStateFile {
+            lock: self,
+            relative_path: path.to_path_buf(),
+            file,
+            identity,
+        })
+    }
+
     /// Exact state-root directory retained by this lock's producer boundary.
     /// Child access is descriptor-relative and remains capability-gated by the
     /// non-constructible lock guard.
@@ -2025,7 +2127,7 @@ impl EffectStoreLock {
             .state_root
             .open_leaf_read(
                 &self.state_lock_relative_path,
-                retained_dir::RetainedLeafPolicy::Authority,
+                retained_dir::RetainedLeafPolicy::MutableAuthority,
             )
             .and_then(|file| retained_dir::RetainedDirectory::identity_of(&file))
             .map_err(|source| EffectStoreLockError::OpenFile {
@@ -2180,7 +2282,7 @@ impl EffectStoreLock {
             .state_root
             .open_leaf_read(
                 &self.state_lock_relative_path,
-                retained_dir::RetainedLeafPolicy::Authority,
+                retained_dir::RetainedLeafPolicy::MutableAuthority,
             )
             .and_then(|file| retained_dir::RetainedDirectory::identity_of(&file))
             .map_err(|error| error.to_string())?;
@@ -2789,12 +2891,11 @@ impl<'lock> RetainedEffectStoreIo<'lock> {
         self.validate()?;
         let mut writer = self.directory.open_leaf_write_new_authority(relative)?;
         let identity = retained_dir::RetainedDirectory::identity_of(&writer)?;
-        if let Err(error) = writer
-            .write_all(content)
-            .and_then(|()| writer.sync_all())
-            .and_then(|()| {
-                self.directory
-                    .verify_retained_authority_binding(relative, &writer, &identity)
+        if let Err(error) = self
+            .directory
+            .mutate_authority_file(relative, &mut writer, &identity, |writer| {
+                writer.write_all(content)?;
+                writer.sync_all()
             })
             .and_then(|()| self.directory.sync_root())
         {
@@ -3499,7 +3600,11 @@ fn create_two_phase_leaf(
     content: &[u8],
 ) -> io::Result<RetainedTwoPhaseLeaf> {
     let mut file = root.open_leaf_write_new_authority(path)?;
-    if let Err(error) = file.write_all(content).and_then(|()| file.sync_all()) {
+    let identity = retained_dir::RetainedDirectory::identity_of(&file)?;
+    if let Err(error) = root.mutate_authority_file(path, &mut file, &identity, |file| {
+        file.write_all(content)?;
+        file.sync_all()
+    }) {
         return Err(io::Error::new(
             error.kind(),
             format!(
@@ -5137,12 +5242,15 @@ fn rebuild_effect_target_metadata_index_under_publication_root(
     let append = publication_root
         .open_read_write_create(&index_relative)
         .and_then(|mut file| {
-            file.seek(SeekFrom::End(0))?;
-            file.write_all(&content)?;
-            match durability {
-                WalDurability::SyncOnAppend => file.sync_data(),
-                WalDurability::NoSync => Ok(()),
-            }
+            let identity = retained_dir::RetainedDirectory::identity_of(&file)?;
+            publication_root.mutate_authority_file(&index_relative, &mut file, &identity, |file| {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(&content)?;
+                match durability {
+                    WalDurability::SyncOnAppend => file.sync_data(),
+                    WalDurability::NoSync => Ok(()),
+                }
+            })
         });
     if let Err(error) = append {
         return failed_effect_metadata_rebuild(
@@ -7533,7 +7641,7 @@ fn validate_effect_lock_scope(
         .state_root
         .open_leaf_read(
             &effect_lock.state_lock_relative_path,
-            retained_dir::RetainedLeafPolicy::Authority,
+            retained_dir::RetainedLeafPolicy::MutableAuthority,
         )
         .and_then(|file| retained_dir::RetainedDirectory::identity_of(&file));
     if !current_lock_identity.is_ok_and(|identity| identity == effect_lock.lock_identity) {
@@ -7617,15 +7725,22 @@ fn repair_effect_wal_tail_retained(
             source: source.to_string(),
         }
     })?;
-    let repair = if complete_final_record {
-        file.seek(SeekFrom::End(0))
-            .and_then(|_| file.write_all(b"\n"))
-            .and_then(|()| file.sync_all())
-    } else {
-        file.set_len(u64::try_from(tail_start).unwrap_or(u64::MAX))
-            .and_then(|()| file.sync_all())
-    };
-    repair.map_err(|source| EffectReplayReconciliationError::WalRepair {
+    let identity = retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+        EffectReplayReconciliationError::WalRepair {
+            path: wal_path.to_path_buf(),
+            source: source.to_string(),
+        }
+    })?;
+    root.mutate_authority_file(wal_relative, &mut file, &identity, |file| {
+        if complete_final_record {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(b"\n")?;
+        } else {
+            file.set_len(u64::try_from(tail_start).unwrap_or(u64::MAX))?;
+        }
+        file.sync_all()
+    })
+    .map_err(|source| EffectReplayReconciliationError::WalRepair {
         path: wal_path.to_path_buf(),
         source: source.to_string(),
     })?;
@@ -8023,11 +8138,20 @@ fn append_effect_wal_record_for_publication(
             path: display_path.clone(),
             source: source.to_string(),
         })?;
-    file.seek(SeekFrom::End(0))
-        .and_then(|_| file.write_all(&line))
-        .and_then(|()| match durability {
-            WalDurability::SyncOnAppend => file.sync_data(),
-            WalDurability::NoSync => Ok(()),
+    let identity = retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+        AppendJsonLineError::OpenFile {
+            path: display_path.clone(),
+            source: source.to_string(),
+        }
+    })?;
+    publication_root
+        .mutate_authority_file(&relative, &mut file, &identity, |file| {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(&line)?;
+            match durability {
+                WalDurability::SyncOnAppend => file.sync_data(),
+                WalDurability::NoSync => Ok(()),
+            }
         })
         .map_err(|source| AppendJsonLineError::Write {
             path: display_path.clone(),

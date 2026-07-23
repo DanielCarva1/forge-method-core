@@ -2,13 +2,13 @@
 //! state-dependent mutation remains inside this crate.
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use forge_core_store::{
     acquire_effect_store_lock_under_boundary,
     producer_quiescence::{admit_effect_producer, EffectProducerGuard, HostQuiescenceGuard},
-    EffectStoreLock, WalDurability,
+    EffectStoreLock, RetainedStateFile, WalDurability,
 };
 use serde::de::DeserializeOwned;
 
@@ -250,8 +250,7 @@ pub(crate) struct StreamTxn {
     retained_root_path: PathBuf,
     root_identity: Option<(u64, u64)>,
     _producer: EffectProducerGuard,
-    stream_lock: EffectStoreLock,
-    log: File,
+    log: RetainedStateFile,
 }
 
 impl StreamTxn {
@@ -326,21 +325,16 @@ impl StreamTxn {
             .validate_retained_lock_file()
             .map_err(|source| lock_error(root, id, source))?;
 
+        let retained_root_path = stream_lock.retained_state_root_path().to_path_buf();
         let log = stream_lock
-            .retained_state_root()
-            .open_read_write_create(Path::new(id.log_path()))
+            .into_retained_state_file(Path::new(id.log_path()))
             .map_err(|source| append_error(root, id, source))?;
-        validate_leaf(&log).map_err(|source| append_error(root, id, source))?;
 
         Ok(Self {
             display_log_path: root.join(id.log_path()),
-            retained_root_path: stream_lock
-                .retained_state_root()
-                .display_path()
-                .to_path_buf(),
+            retained_root_path,
             root_identity: path_identity(root),
             _producer: producer,
-            stream_lock,
             log,
         })
     }
@@ -377,13 +371,7 @@ impl StreamTxn {
             })?;
         line.push(b'\n');
         self.log
-            .seek(SeekFrom::End(0))
-            .and_then(|_| self.log.write_all(&line))
-            .and_then(|()| self.log.flush())
-            .and_then(|()| match durability {
-                WalDurability::SyncOnAppend => self.log.sync_data(),
-                WalDurability::NoSync => Ok(()),
-            })
+            .append_bytes(&line, durability)
             .map_err(|source| EventLogError::Append {
                 path: self.display_log_path.clone(),
                 source: source.to_string(),
@@ -394,8 +382,8 @@ impl StreamTxn {
     /// not a hostile-race guarantee: a same-user namespace editor can still
     /// race any observation, which is outside the cooperative contract.
     fn reject_detected_replacement<D: Clone>(&self) -> Result<(), EventLogError<D>> {
-        self.stream_lock
-            .validate_retained_lock_file()
+        self.log
+            .validate_lock_file()
             .map_err(|source| EventLogError::Append {
                 path: self.display_log_path.clone(),
                 source: format!(
@@ -1066,5 +1054,36 @@ mod tests {
             std::fs::read(&outside).expect("read outside file"),
             b"outside bytes"
         );
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn hard_link_added_after_open_is_rejected_at_the_append_boundary() {
+        let root = root("hard-link-after-open");
+        let admitted = admit_with_durability(
+            &root,
+            entry("existing"),
+            &policy(vec![MemoryKind::Preference]),
+            WalDurability::NoSync,
+        );
+        assert!(admitted.is_admitted());
+
+        let log_path = root.join(MEMORY_LOG_RELATIVE_PATH);
+        let before = std::fs::read(&log_path).expect("read initial log");
+        let outside = root.with_extension("outside-after-open");
+        let mut transaction =
+            StreamTxn::begin::<String>(&root, StreamId::Memory).expect("open retained stream");
+        std::fs::hard_link(&log_path, &outside).expect("add alias after retained open");
+
+        let event = MemoryEvent::Admitted {
+            sequence: 2,
+            at_unix: 2,
+            entry: entry("blocked"),
+        };
+        let error = transaction
+            .append::<MemoryDomain>(&event, WalDurability::NoSync)
+            .expect_err("mutable alias must fail closed before append");
+        assert!(matches!(error, EventLogError::Append { .. }));
+        assert_eq!(std::fs::read(&outside).expect("read outside alias"), before);
     }
 }

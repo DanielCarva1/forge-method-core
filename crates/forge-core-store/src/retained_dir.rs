@@ -206,9 +206,11 @@ impl RetainedFileLifetimeAnchor {
 pub(crate) enum RetainedLeafPolicy {
     /// Read-only caller input; hard links are allowed.
     SourceRead,
-    /// Store authority or a mutation target. Windows remains singly linked;
-    /// Unix may carry Store-owned hard-link cleanup debt from fd publication.
+    /// Identity-bound Store authority. Unix may carry Store-owned hard-link
+    /// cleanup debt from exact-handle publication; callers must not mutate it.
     Authority,
+    /// In-place mutation authority; the exact retained file must be singly linked.
+    MutableAuthority,
 }
 
 #[derive(Debug)]
@@ -744,23 +746,35 @@ impl RetainedDirectory {
             metadata.file_attributes() & 0x400 != 0x400
         };
         #[cfg(windows)]
-        let authority_link_shape =
-            crate::windows_file_info::file_information(file)?.number_of_links == 1;
+        let link_count =
+            u64::from(crate::windows_file_info::file_information(file)?.number_of_links);
         #[cfg(unix)]
-        let authority_link_shape = {
+        let link_count = {
             use std::os::unix::fs::MetadataExt as _;
-            // Exact-handle Unix publication deliberately leaves the old link as
-            // discoverable Store cleanup debt when no fd-bound unlink exists.
-            // Identity-bound authority therefore accepts retained regular-file
-            // aliases; every mutation still pins and revalidates the exact inode.
-            metadata.nlink() >= 1
+            metadata.nlink()
         };
         #[cfg(not(any(unix, windows)))]
-        let authority_link_shape = false;
-        if !regular || (policy == RetainedLeafPolicy::Authority && !authority_link_shape) {
+        let link_count = 0;
+        let link_shape_supported = match policy {
+            RetainedLeafPolicy::SourceRead => true,
+            // Exact-handle Unix publication deliberately leaves the old link as
+            // discoverable Store cleanup debt when no fd-bound unlink exists.
+            RetainedLeafPolicy::Authority => {
+                #[cfg(unix)]
+                {
+                    link_count >= 1
+                }
+                #[cfg(not(unix))]
+                {
+                    link_count == 1
+                }
+            }
+            RetainedLeafPolicy::MutableAuthority => link_count == 1,
+        };
+        if !regular || !link_shape_supported {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "authority leaf must be a retained regular, non-reparse file with a supported link shape",
+                "retained leaf is not a regular, non-reparse file with the required link shape",
             ));
         }
         Ok(())
@@ -830,6 +844,11 @@ impl RetainedDirectory {
         self.verify_parent_binding(&leaf.parent)
     }
 
+    fn verify_mutable_leaf_binding(&self, leaf: &RetainedAuthorityLeaf) -> io::Result<()> {
+        Self::validate_leaf(&leaf.file, RetainedLeafPolicy::MutableAuthority)?;
+        self.verify_leaf_binding(leaf)
+    }
+
     pub(crate) fn verify_retained_authority_binding(
         &self,
         path: &Path,
@@ -851,6 +870,56 @@ impl RetainedDirectory {
         self.verify_leaf_binding(&rebound)
     }
 
+    pub(crate) fn verify_mutable_authority_binding(
+        &self,
+        path: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+    ) -> io::Result<()> {
+        Self::validate_leaf(retained, RetainedLeafPolicy::MutableAuthority)?;
+        if Self::identity_of(retained)? != *expected {
+            return Err(Self::authority_identity_changed("mutable handle"));
+        }
+        let rebound = self.open_leaf_bound(
+            path,
+            RetainedLeafPolicy::MutableAuthority,
+            platform::FileMode::Read,
+            false,
+        )?;
+        if rebound.identity != *expected {
+            return Err(Self::authority_identity_changed(
+                "mutable namespace binding",
+            ));
+        }
+        Self::validate_leaf(&rebound.file, RetainedLeafPolicy::MutableAuthority)?;
+        self.verify_parent_binding(&rebound.parent)
+    }
+
+    pub(crate) fn mutate_authority_file<R, F>(
+        &self,
+        path: &Path,
+        retained: &mut File,
+        expected: &RetainedFileIdentity,
+        mutation: F,
+    ) -> io::Result<R>
+    where
+        F: FnOnce(&mut File) -> io::Result<R>,
+    {
+        self.verify_mutable_authority_binding(path, retained, expected)?;
+        let mutation_result = mutation(retained);
+        let validation_result = self.verify_mutable_authority_binding(path, retained, expected);
+        match (mutation_result, validation_result) {
+            (Ok(result), Ok(())) => Ok(result),
+            (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
+            (Err(mutation_error), Err(validation_error)) => Err(io::Error::new(
+                validation_error.kind(),
+                format!(
+                    "mutation failed ({mutation_error}); post-mutation binding validation failed ({validation_error})"
+                ),
+            )),
+        }
+    }
+
     pub(crate) fn open_leaf_read(
         &self,
         path: &Path,
@@ -863,7 +932,7 @@ impl RetainedDirectory {
     pub(crate) fn open_leaf_read_write_existing(&self, path: &Path) -> io::Result<File> {
         self.open_leaf_bound(
             path,
-            RetainedLeafPolicy::Authority,
+            RetainedLeafPolicy::MutableAuthority,
             platform::FileMode::ReadWrite,
             false,
         )
@@ -873,7 +942,7 @@ impl RetainedDirectory {
     pub(crate) fn open_leaf_read_write_create_authority(&self, path: &Path) -> io::Result<File> {
         self.open_leaf_bound(
             path,
-            RetainedLeafPolicy::Authority,
+            RetainedLeafPolicy::MutableAuthority,
             platform::FileMode::ReadWriteCreate,
             true,
         )
@@ -885,7 +954,7 @@ impl RetainedDirectory {
     pub(crate) fn open_retained_lock(&self, path: &Path) -> io::Result<File> {
         let (parent, leaf) = self.open_parent_bound(path, true)?;
         let file = platform::open_retained_lock(&parent.handle, &leaf)?;
-        Self::validate_leaf(&file, RetainedLeafPolicy::Authority)?;
+        Self::validate_leaf(&file, RetainedLeafPolicy::MutableAuthority)?;
         let identity = Self::identity_of(&file)?;
         self.verify_parent_binding(&parent)?;
         if Self::direct_authority_identity(&parent.handle, &leaf)? != identity {
@@ -900,7 +969,7 @@ impl RetainedDirectory {
     pub(crate) fn open_leaf_write_new_authority(&self, path: &Path) -> io::Result<File> {
         self.open_leaf_bound(
             path,
-            RetainedLeafPolicy::Authority,
+            RetainedLeafPolicy::MutableAuthority,
             platform::FileMode::ReadWriteNewDelete,
             true,
         )
@@ -1047,7 +1116,7 @@ impl RetainedDirectory {
             }
             match self.open_leaf_bound(
                 &path,
-                RetainedLeafPolicy::Authority,
+                RetainedLeafPolicy::MutableAuthority,
                 platform::FileMode::ReadWriteNewDelete,
                 true,
             ) {
@@ -1790,12 +1859,13 @@ impl RetainedDirectory {
                 "retained replacement temporary parent changed identity",
             ));
         }
-        if let Err(error) = temp
-            .file
-            .write_all(bytes)
-            .and_then(|()| temp.file.sync_all())
+        if let Err(error) = self
+            .mutate_authority_file(&temp.path, &mut temp.file, &temp.identity, |file| {
+                file.write_all(bytes)?;
+                file.sync_all()
+            })
             .and_then(|()| Self::verify_exact_bytes(&mut temp.file, bytes))
-            .and_then(|()| self.verify_leaf_binding(&temp))
+            .and_then(|()| self.verify_mutable_leaf_binding(&temp))
             .and_then(|()| self.sync_parent_binding(&temp.parent))
         {
             return Err(io::Error::new(
@@ -1987,16 +2057,17 @@ impl RetainedDirectory {
 
         let mut leaf = self.open_leaf_bound(
             path,
-            RetainedLeafPolicy::Authority,
+            RetainedLeafPolicy::MutableAuthority,
             platform::FileMode::ReadWriteNewDelete,
             true,
         )?;
-        let result = leaf
-            .file
-            .write_all(bytes)
-            .and_then(|()| leaf.file.sync_all())
+        let result = self
+            .mutate_authority_file(&leaf.path, &mut leaf.file, &leaf.identity, |file| {
+                file.write_all(bytes)?;
+                file.sync_all()
+            })
             .and_then(|()| Self::verify_exact_bytes(&mut leaf.file, bytes))
-            .and_then(|()| self.verify_leaf_binding(&leaf))
+            .and_then(|()| self.verify_mutable_leaf_binding(&leaf))
             .and_then(|()| self.sync_parent_binding(&leaf.parent));
         if let Err(error) = result {
             let cleanup = self.remove_retained_authority_leaf(leaf, |_, _| Ok(()));
@@ -3494,7 +3565,7 @@ mod tests {
     }
 
     #[test]
-    fn authority_accepts_unix_retained_cleanup_links_but_windows_stays_single_link() {
+    fn mutable_authority_rejects_hard_links_while_read_authority_keeps_cleanup_debt_visible() {
         let root_path = std::env::temp_dir().join(format!(
             "forge-retained-leaf-{}-{}",
             std::process::id(),
@@ -3519,7 +3590,55 @@ mod tests {
         assert!(root
             .open_leaf_read(Path::new("linked"), RetainedLeafPolicy::Authority)
             .is_err());
+        assert!(root
+            .open_leaf_read(Path::new("linked"), RetainedLeafPolicy::MutableAuthority,)
+            .is_err());
+        assert!(root.open_read_write(Path::new("linked")).is_err());
         assert_eq!(fs::read(&outside).unwrap(), b"sentinel");
+        drop(root);
+        fs::remove_dir_all(root_path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mutable_authority_rechecks_link_shape_at_the_write_boundary() {
+        let root_path = test_root_path("mutable-link-boundary");
+        fs::create_dir_all(&root_path).unwrap();
+        let target = Path::new("authority.wal");
+        let alias = root_path.join("outside-alias");
+        fs::write(root_path.join(target), b"sentinel").unwrap();
+        let root = RetainedDirectory::open_root(&root_path).unwrap();
+        let mut file = root.open_read_write(target).unwrap();
+        let identity = RetainedDirectory::identity_of(&file).unwrap();
+
+        fs::hard_link(root_path.join(target), &alias).unwrap();
+        let mut mutation_called = false;
+        let error = root
+            .mutate_authority_file(target, &mut file, &identity, |_| {
+                mutation_called = true;
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!mutation_called);
+        assert_eq!(fs::read(&alias).unwrap(), b"sentinel");
+
+        fs::remove_file(&alias).unwrap();
+        let post_error_alias = root_path.join("outside-post-error-alias");
+        let error = root
+            .mutate_authority_file(target, &mut file, &identity, |_| {
+                fs::hard_link(root_path.join(target), &post_error_alias)?;
+                Err::<(), _>(io::Error::other("injected mutation failure"))
+            })
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("injected mutation failure"));
+        assert!(error
+            .to_string()
+            .contains("post-mutation binding validation failed"));
+        assert_eq!(fs::read(&post_error_alias).unwrap(), b"sentinel");
+
+        drop(file);
         drop(root);
         fs::remove_dir_all(root_path).unwrap();
     }

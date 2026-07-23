@@ -523,9 +523,13 @@ impl RetainedCrashReplaceTarget<'_> {
         self.validate()?;
         let staging = absence_claim_path()?;
         let mut file = self.directory.open_leaf_write_new_authority(&staging)?;
-        file.write_all(&absence_claim_bytes()?)?;
-        file.sync_all()?;
         let identity = RetainedDirectory::identity_of(&file)?;
+        let bytes = absence_claim_bytes()?;
+        self.directory
+            .mutate_authority_file(&staging, &mut file, &identity, |file| {
+                file.write_all(&bytes)?;
+                file.sync_all()
+            })?;
         validate_absence_claim_handle(&file, &identity)?;
         let mut claim = RetainedAbsenceClaim {
             directory: self.directory.try_clone()?,

@@ -1427,8 +1427,19 @@ fn initialize_replay_files(guard: &ReplayWalRetainedLock) -> Result<(), ReplayWa
             path: manifest_path.clone(),
             source: source.to_string(),
         })?;
-    file.write_all(&bytes)
-        .and_then(|()| file.sync_all())
+    let identity =
+        crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+            ReplayWalError::OpenWal {
+                path: manifest_path.clone(),
+                source: source.to_string(),
+            }
+        })?;
+    guard
+        .root
+        .mutate_authority_file(manifest_relative, &mut file, &identity, |file| {
+            file.write_all(&bytes)?;
+            file.sync_all()
+        })
         .and_then(|()| guard.root.sync_root())
         .map_err(|source| ReplayWalError::SyncWal {
             path: manifest_path,
@@ -1734,7 +1745,7 @@ impl ReplayWalRetainedLock {
             .root
             .open_leaf_read(
                 Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH),
-                crate::retained_dir::RetainedLeafPolicy::Authority,
+                crate::retained_dir::RetainedLeafPolicy::MutableAuthority,
             )
             .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
         if !current.is_ok_and(|identity| identity == self.lock_identity) {
@@ -1771,16 +1782,27 @@ impl ReplayWalRetainedLock {
 
     fn append_wal(&self, bytes: &[u8]) -> Result<(), ReplayWalError> {
         self.validate(&self.state_root)?;
+        let relative = Path::new(REPLAY_WAL_RELATIVE_PATH);
         let mut file = self
             .root
-            .open_leaf_read_write_existing(Path::new(REPLAY_WAL_RELATIVE_PATH))
+            .open_leaf_read_write_existing(relative)
             .map_err(|source| ReplayWalError::WriteWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),
             })?;
-        file.seek(SeekFrom::End(0))
-            .and_then(|_| file.write_all(bytes))
-            .and_then(|()| file.sync_all())
+        let identity =
+            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+                ReplayWalError::WriteWal {
+                    path: self.wal_path.clone(),
+                    source: source.to_string(),
+                }
+            })?;
+        self.root
+            .mutate_authority_file(relative, &mut file, &identity, |file| {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(bytes)?;
+                file.sync_all()
+            })
             .map_err(|source| ReplayWalError::WriteWal {
                 path: self.wal_path.clone(),
                 source: source.to_string(),
@@ -1847,15 +1869,26 @@ fn recover_replay_wal_file_under_lock(
     if repair && recovery.last_good_offset < original_len && is_safe_torn_tail(recovery.stop_reason)
     {
         guard.validate(&guard.state_root)?;
-        let file = guard
+        let mut file = guard
             .root
             .open_leaf_read_write_existing(relative)
             .map_err(|source| ReplayWalError::RepairWal {
                 path: wal_path.clone(),
                 source: source.to_string(),
             })?;
-        file.set_len(recovery.last_good_offset)
-            .and_then(|()| file.sync_all())
+        let identity =
+            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+                ReplayWalError::RepairWal {
+                    path: wal_path.clone(),
+                    source: source.to_string(),
+                }
+            })?;
+        guard
+            .root
+            .mutate_authority_file(relative, &mut file, &identity, |file| {
+                file.set_len(recovery.last_good_offset)?;
+                file.sync_all()
+            })
             .map_err(|source| ReplayWalError::RepairWal {
                 path: wal_path.clone(),
                 source: source.to_string(),
