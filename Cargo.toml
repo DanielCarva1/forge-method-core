@@ -109,9 +109,25 @@ features = ["plotters", "cargo_bench_support"]
 [workspace.dependencies.assert_cmd]
 version = "2.0"
 
-# Low optimization keeps debug assertions and overflow checks active while
-# making CPU-heavy governance derivation practical in real-process tests.
+# Keep the broad workspace and its test harnesses cheap to compile.
 [profile.test]
+opt-level = 0
+
+# Cargo's `*` override covers dependencies, but not workspace members.
+[profile.test.package."*"]
+opt-level = 1
+
+# Repeated real-process governance derivation and durable replay.
+[profile.test.package.forge-core-decisions]
+opt-level = 1
+
+[profile.test.package.forge-core-domain-pack-tcb]
+opt-level = 1
+
+[profile.test.package.forge-core-kernel]
+opt-level = 1
+
+[profile.test.package.forge-core-workflow-governance-tcb]
 opt-level = 1
 
 # Release profile tuned for the forge-core-cli binary: thin LTO + single
