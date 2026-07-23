@@ -12,6 +12,7 @@ use crate::replay_anchor::{
     snapshot_replay_anchor_under_retained_lock, verify_replay_anchor_under_retained_lock,
     ReplayAnchorRetainedLock, ReplayAnchorStatus, ReplayAnchorVerification, ReplayWalHead,
 };
+use crate::retained_dir::{RetainedDirectory, RetainedFileIdentity};
 use forge_core_authority::{AuthorizedWorkflowBrokerRegistry, WorkflowBrokerRegistryDocument};
 use forge_core_contracts::{
     canonical_archive_path, decode_canonical_archive_path, BackupArchiveEntryType,
@@ -33,11 +34,15 @@ use forge_core_contracts::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+#[cfg(test)]
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufWriter, Cursor, Read, Write};
+#[cfg(windows)]
+use std::fs::OpenOptions;
+use std::fs::{self, File};
+use std::io::{self, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -51,6 +56,56 @@ const MAX_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const BACKUP_AUTHORITY_CATALOG_SCHEMA_VERSION: &str = "forge_backup_authority_catalog_v1";
 const MAX_AUTHORITY_CATALOG_BYTES: u64 = 1024 * 1024;
 const MAX_RECEIPT_BYTES: u64 = 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetainedPublicationKind {
+    Archive,
+    Receipt,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BackupPublicationCrashPoint {
+    ArchiveBeforeMove,
+    ArchiveAfterMove,
+    ReceiptBeforeMove,
+    ReceiptAfterMove,
+}
+
+#[cfg(test)]
+thread_local! {
+    static BACKUP_PUBLICATION_CRASH_POINT: Cell<Option<BackupPublicationCrashPoint>> = const { Cell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) struct BackupPublicationCrashGuard;
+
+#[cfg(test)]
+impl Drop for BackupPublicationCrashGuard {
+    fn drop(&mut self) {
+        BACKUP_PUBLICATION_CRASH_POINT.with(|configured| configured.set(None));
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn inject_backup_publication_crash(
+    point: BackupPublicationCrashPoint,
+) -> BackupPublicationCrashGuard {
+    BACKUP_PUBLICATION_CRASH_POINT.with(|configured| {
+        assert!(configured.replace(Some(point)).is_none());
+    });
+    BackupPublicationCrashGuard
+}
+
+#[cfg(test)]
+fn maybe_inject_backup_publication_crash(point: BackupPublicationCrashPoint) {
+    BACKUP_PUBLICATION_CRASH_POINT.with(|configured| {
+        assert!(
+            configured.get() != Some(point),
+            "injected backup publication crash at {point:?}"
+        );
+    });
+}
 
 /// One source file captured while producer locks and host quiescence are held.
 /// Construction remains crate-private so serialized caller claims cannot become
@@ -3636,33 +3691,40 @@ pub(crate) fn publish_captured_snapshot(
         return Err(BackupError::ExistingDifferent { path: receipt_path });
     }
 
+    let archive_root = RetainedDirectory::open_root(archive_parent)
+        .map_err(|source| io_error(archive_parent, source))?;
+    let destination = publication_leaf(archive_path)?;
     let staging = unique_staging_path(archive_path)?;
-    let result = (|| {
-        write_archive_create_new(snapshot, &staging)?;
-        ensure_nofollow_regular_single_link(&staging)?;
-        let parsed = read_archive(&staging)?;
-        verify_parsed_archive(&parsed)?;
-        if parsed.manifest != snapshot.manifest {
-            return Err(BackupError::Archive {
-                reason: "staged manifest changed".to_owned(),
-            });
-        }
-        rename_create_new(&staging, archive_path)?;
-        sync_parent(archive_path)?;
-        let archive_sha256 = hash_file_bounded(archive_path, MAX_ARCHIVE_BYTES)?;
-        let receipt = build_receipt(&snapshot.manifest, &archive_sha256)?;
-        publish_receipt(&receipt, &receipt_path)?;
-        let verified = verify_archive_with_receipt(archive_path, &receipt_path)?;
-        Ok(publication_from_verified(
-            verified,
-            receipt_path.clone(),
-            false,
-        ))
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&staging);
+    let staging_leaf = publication_leaf(&staging)?;
+    let staging_file = archive_root
+        .open_leaf_write_new_authority(&staging_leaf)
+        .map_err(|source| io_error(&staging, source))?;
+    let staging_file = write_archive_to_retained_file(snapshot, staging_file, &staging)?;
+    let staging_identity = RetainedDirectory::identity_of(&staging_file)
+        .map_err(|source| io_error(&staging, source))?;
+    archive_root
+        .verify_mutable_authority_binding(&staging_leaf, &staging_file, &staging_identity)
+        .map_err(|source| io_error(&staging, source))?;
+    let parsed = read_archive_from_file(&staging_file, &staging)?;
+    verify_parsed_archive(&parsed)?;
+    if parsed.manifest != snapshot.manifest {
+        return Err(BackupError::Archive {
+            reason: "staged manifest changed".to_owned(),
+        });
     }
-    result
+    move_retained_publication_noreplace(
+        &archive_root,
+        &staging_leaf,
+        &staging_file,
+        &staging_identity,
+        &destination,
+        archive_path,
+        RetainedPublicationKind::Archive,
+    )?;
+    let receipt = build_receipt(&snapshot.manifest, &parsed.archive_sha256)?;
+    publish_receipt(&receipt, &receipt_path)?;
+    let verified = verify_archive_with_receipt(archive_path, &receipt_path)?;
+    Ok(publication_from_verified(verified, receipt_path, false))
 }
 
 fn complete_orphaned_archive(
@@ -3797,10 +3859,11 @@ fn verify_parsed_archive(parsed: &ParsedArchive) -> Result<(), BackupError> {
     Ok(())
 }
 
-fn write_archive_create_new(
+fn write_archive_to_retained_file(
     snapshot: &CapturedBackupSnapshot,
+    file: File,
     staging: &Path,
-) -> Result<(), BackupError> {
+) -> Result<File, BackupError> {
     let manifest_bytes =
         serde_json::to_vec(&snapshot.manifest).map_err(|error| BackupError::Manifest {
             reason: format!("serialize failed: {error}"),
@@ -3811,7 +3874,6 @@ fn write_archive_create_new(
             maximum: MAX_MANIFEST_BYTES,
         });
     }
-    let file = open_private_create_new(staging)?;
     let mut writer = BufWriter::new(file);
     writer
         .write_all(ARCHIVE_MAGIC)
@@ -3836,11 +3898,23 @@ fn write_archive_create_new(
     let file = writer
         .into_inner()
         .map_err(|error| io_error(staging, error.into_error()))?;
-    file.sync_all().map_err(|source| io_error(staging, source))
+    file.sync_all()
+        .map_err(|source| io_error(staging, source))?;
+    Ok(file)
 }
 
 fn read_archive(path: &Path) -> Result<ParsedArchive, BackupError> {
-    let archive_bytes = read_file_bounded(path, MAX_ARCHIVE_BYTES)?;
+    parse_archive_bytes(read_file_bounded(path, MAX_ARCHIVE_BYTES)?, path)
+}
+
+fn read_archive_from_file(file: &File, path: &Path) -> Result<ParsedArchive, BackupError> {
+    parse_archive_bytes(
+        read_retained_file_bounded(file, MAX_ARCHIVE_BYTES, path)?,
+        path,
+    )
+}
+
+fn parse_archive_bytes(archive_bytes: Vec<u8>, path: &Path) -> Result<ParsedArchive, BackupError> {
     let archive_sha256 = sha256(&archive_bytes);
     let mut reader = Cursor::new(archive_bytes);
     let mut magic = [0_u8; 16];
@@ -3979,20 +4053,40 @@ fn publish_receipt(document: &BackupReceiptDocument, path: &Path) -> Result<(), 
     let bytes = serde_json::to_vec(document).map_err(|error| BackupError::Receipt {
         reason: format!("serialize failed: {error}"),
     })?;
+    let parent = path.parent().ok_or_else(|| BackupError::InvalidPath {
+        path: path.to_path_buf(),
+        reason: "receipt has no parent".to_owned(),
+    })?;
+    let root = RetainedDirectory::open_root(parent).map_err(|source| io_error(parent, source))?;
+    let destination = publication_leaf(path)?;
     let temporary = unique_staging_path(path)?;
-    let result = (|| {
-        let mut file = open_private_create_new(&temporary)?;
-        file.write_all(&bytes)
-            .map_err(|source| io_error(&temporary, source))?;
-        file.sync_all()
-            .map_err(|source| io_error(&temporary, source))?;
-        rename_create_new(&temporary, path)?;
-        sync_parent(path)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
+    let temporary_leaf = publication_leaf(&temporary)?;
+    let mut file = root
+        .open_leaf_write_new_authority(&temporary_leaf)
+        .map_err(|source| io_error(&temporary, source))?;
+    file.write_all(&bytes)
+        .map_err(|source| io_error(&temporary, source))?;
+    file.sync_all()
+        .map_err(|source| io_error(&temporary, source))?;
+    let identity =
+        RetainedDirectory::identity_of(&file).map_err(|source| io_error(&temporary, source))?;
+    root.verify_mutable_authority_binding(&temporary_leaf, &file, &identity)
+        .map_err(|source| io_error(&temporary, source))?;
+    let retained_bytes = read_retained_file_bounded(&file, MAX_RECEIPT_BYTES, &temporary)?;
+    if retained_bytes != bytes {
+        return Err(BackupError::Receipt {
+            reason: "staged receipt changed before publication".to_owned(),
+        });
     }
-    result
+    move_retained_publication_noreplace(
+        &root,
+        &temporary_leaf,
+        &file,
+        &identity,
+        &destination,
+        path,
+        RetainedPublicationKind::Receipt,
+    )
 }
 
 fn validate_receipt_store(store: &Path, archive_path: &Path) -> Result<PathBuf, BackupError> {
@@ -4041,6 +4135,114 @@ fn receipt_path_for_manifest(
     Ok(store.join(format!("{digest}.receipt.json")))
 }
 
+fn publication_leaf(path: &Path) -> Result<PathBuf, BackupError> {
+    path.file_name()
+        .map(PathBuf::from)
+        .ok_or_else(|| BackupError::InvalidPath {
+            path: path.to_path_buf(),
+            reason: "publication path has no file name".to_owned(),
+        })
+}
+
+fn move_retained_publication_noreplace(
+    root: &RetainedDirectory,
+    source: &Path,
+    retained: &File,
+    identity: &RetainedFileIdentity,
+    destination: &Path,
+    destination_display: &Path,
+    kind: RetainedPublicationKind,
+) -> Result<(), BackupError> {
+    let authority = root
+        .retain_authority()
+        .map_err(|source| io_error(root.display_path(), source))?;
+    #[cfg(test)]
+    let moved = {
+        let (before, after) = match kind {
+            RetainedPublicationKind::Archive => (
+                BackupPublicationCrashPoint::ArchiveBeforeMove,
+                BackupPublicationCrashPoint::ArchiveAfterMove,
+            ),
+            RetainedPublicationKind::Receipt => (
+                BackupPublicationCrashPoint::ReceiptBeforeMove,
+                BackupPublicationCrashPoint::ReceiptAfterMove,
+            ),
+        };
+        authority.move_retained_file_noreplace_with_hooks(
+            source,
+            retained,
+            identity,
+            destination,
+            |_, _, _| {
+                maybe_inject_backup_publication_crash(before);
+                Ok(())
+            },
+            |_, _, _| {
+                maybe_inject_backup_publication_crash(after);
+                Ok(())
+            },
+        )
+    };
+    #[cfg(not(test))]
+    let moved = {
+        let _ = kind;
+        authority.move_retained_file_noreplace(source, retained, identity, destination)
+    };
+    moved.map_err(|source| {
+        if source.kind() == io::ErrorKind::AlreadyExists {
+            BackupError::ExistingDifferent {
+                path: destination_display.to_path_buf(),
+            }
+        } else {
+            io_error(destination_display, source)
+        }
+    })
+}
+
+fn read_retained_file_bounded(
+    retained: &File,
+    maximum: u64,
+    display_path: &Path,
+) -> Result<Vec<u8>, BackupError> {
+    let before = retained
+        .metadata()
+        .map_err(|source| io_error(display_path, source))?;
+    if before.len() > maximum {
+        return Err(BackupError::ResourceLimit {
+            resource: "retained publication bytes",
+            maximum,
+        });
+    }
+    let mut reader = retained
+        .try_clone()
+        .map_err(|source| io_error(display_path, source))?;
+    reader
+        .seek(SeekFrom::Start(0))
+        .map_err(|source| io_error(display_path, source))?;
+    let mut bytes = Vec::with_capacity(usize::try_from(before.len()).unwrap_or(0));
+    Read::by_ref(&mut reader)
+        .take(maximum.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|source| io_error(display_path, source))?;
+    let found = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if found > maximum {
+        return Err(BackupError::ResourceLimit {
+            resource: "retained publication bytes",
+            maximum,
+        });
+    }
+    let after = retained
+        .metadata()
+        .map_err(|source| io_error(display_path, source))?;
+    if before.len() != after.len() || after.len() != found {
+        return Err(BackupError::UnsafeFileType {
+            path: display_path.to_path_buf(),
+            reason: "retained publication changed while read".to_owned(),
+        });
+    }
+    Ok(bytes)
+}
+
 fn unique_staging_path(path: &Path) -> Result<PathBuf, BackupError> {
     let parent = path.parent().ok_or_else(|| BackupError::InvalidPath {
         path: path.to_path_buf(),
@@ -4058,27 +4260,6 @@ fn unique_staging_path(path: &Path) -> Result<PathBuf, BackupError> {
         reason: format!("staging nonce generation failed: {error}"),
     })?;
     Ok(parent.join(format!(".{name}.{}.forge-backup-staging", hex(&nonce))))
-}
-
-fn rename_create_new(source: &Path, destination: &Path) -> Result<(), BackupError> {
-    // `rename` may overwrite on Unix. Linking the same-filesystem staging inode
-    // is the portable create-new publication primitive: an existing destination
-    // makes `hard_link` fail atomically. The staging name is then removed before
-    // the final single-link invariant is accepted.
-    fs::hard_link(source, destination).map_err(|source_error| {
-        if destination.exists() {
-            BackupError::ExistingDifferent {
-                path: destination.to_path_buf(),
-            }
-        } else {
-            io_error(destination, source_error)
-        }
-    })?;
-    if let Err(source_error) = fs::remove_file(source) {
-        let _ = fs::remove_file(destination);
-        return Err(io_error(source, source_error));
-    }
-    ensure_nofollow_regular_single_link(destination)
 }
 
 fn ensure_nofollow_regular_single_link(path: &Path) -> Result<(), BackupError> {
@@ -4193,26 +4374,6 @@ fn validate_opened_regular_single_link(file: &File, path: &Path) -> Result<(), B
         });
     }
     Ok(())
-}
-
-#[cfg(unix)]
-fn open_private_create_new(path: &Path) -> Result<File, BackupError> {
-    use std::os::unix::fs::OpenOptionsExt as _;
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(|source| io_error(path, source))
-}
-
-#[cfg(not(unix))]
-fn open_private_create_new(path: &Path) -> Result<File, BackupError> {
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|source| io_error(path, source))
 }
 
 pub(crate) fn read_file_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, BackupError> {
@@ -4403,31 +4564,6 @@ fn canonicalize_existing_ancestor(path: &Path) -> Result<PathBuf, BackupError> {
             Err(error) => return Err(io_error(candidate, error)),
         }
     }
-}
-
-#[cfg(not(windows))]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    File::open(path)?.sync_all()
-}
-
-#[cfg(windows)]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::fs::OpenOptionsExt as _;
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?
-        .sync_all()
-}
-
-fn sync_parent(path: &Path) -> Result<(), BackupError> {
-    let parent = path.parent().ok_or_else(|| BackupError::InvalidPath {
-        path: path.to_path_buf(),
-        reason: "path has no parent".to_owned(),
-    })?;
-    sync_directory(parent).map_err(|source| io_error(parent, source))
 }
 
 fn io_error(path: &Path, source: io::Error) -> BackupError {

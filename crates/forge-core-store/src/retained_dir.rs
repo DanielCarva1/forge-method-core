@@ -113,10 +113,10 @@ impl RetainedFileAnchorBinding {
 /// Opaque Store-owned lifetime capability for one exact immutable file.
 ///
 /// The capability keeps the private anchor handle open and revalidates both its
-/// namespace name and content binding. On supported Unix targets the private
-/// hard link also prevents object-identifier reuse while persisted authority is
-/// eligible for acceptance. Other platforms fail closed rather than falling
-/// back to reusable platform identifiers.
+/// namespace name and content binding. On supported Unix and Windows targets,
+/// the private exact-handle hard link also prevents object-identifier reuse while
+/// persisted authority is eligible for acceptance. Other platforms fail closed
+/// rather than falling back to reusable platform identifiers.
 pub(crate) struct RetainedFileLifetimeAnchor {
     authority_root: RetainedDirectory,
     anchor_file: File,
@@ -140,7 +140,7 @@ impl RetainedFileLifetimeAnchor {
 
     pub(crate) fn revalidate(&self) -> io::Result<()> {
         let anchor_path = self.binding.validate()?;
-        self.authority_root.verify_retained_authority_binding(
+        self.authority_root.verify_retained_anchor_binding(
             &anchor_path,
             &self.anchor_file,
             &self.anchor_identity,
@@ -151,7 +151,7 @@ impl RetainedFileLifetimeAnchor {
             &self.binding.content_digest,
             self.binding.byte_length,
         )?;
-        self.authority_root.verify_retained_authority_binding(
+        self.authority_root.verify_retained_anchor_binding(
             &anchor_path,
             &self.anchor_file,
             &self.anchor_identity,
@@ -191,12 +191,12 @@ impl RetainedFileLifetimeAnchor {
         target_relative_path: &Path,
     ) -> io::Result<(File, RetainedFileIdentity)> {
         self.revalidate()?;
-        let file =
-            target_root.open_leaf_read(target_relative_path, RetainedLeafPolicy::Authority)?;
+        let file = target_root
+            .open_leaf_read(target_relative_path, RetainedLeafPolicy::AnchoredAuthority)?;
         let identity = RetainedDirectory::identity_of(&file)?;
-        target_root.verify_retained_authority_binding(target_relative_path, &file, &identity)?;
+        target_root.verify_retained_anchor_binding(target_relative_path, &file, &identity)?;
         self.validate_retained_file(&file, &identity)?;
-        target_root.verify_retained_authority_binding(target_relative_path, &file, &identity)?;
+        target_root.verify_retained_anchor_binding(target_relative_path, &file, &identity)?;
         self.revalidate()?;
         Ok((file, identity))
     }
@@ -209,6 +209,9 @@ pub(crate) enum RetainedLeafPolicy {
     /// Identity-bound Store authority. Unix may carry Store-owned hard-link
     /// cleanup debt from exact-handle publication; callers must not mutate it.
     Authority,
+    /// Immutable Store authority kept alive by one or more exact lifetime-anchor
+    /// links. Content and namespace bindings are revalidated before every use.
+    AnchoredAuthority,
     /// In-place mutation authority; the exact retained file must be singly linked.
     MutableAuthority,
 }
@@ -413,10 +416,18 @@ impl RetainedDirectory {
         };
         #[cfg(not(any(unix, windows)))]
         let handle = File::open(path)?;
-        if !handle.metadata()?.is_dir() {
+        let metadata = handle.metadata()?;
+        #[cfg(windows)]
+        let is_supported_directory = {
+            use std::os::windows::fs::MetadataExt as _;
+            metadata.is_dir() && metadata.file_attributes() & 0x400 != 0x400
+        };
+        #[cfg(not(windows))]
+        let is_supported_directory = metadata.is_dir();
+        if !is_supported_directory {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "retained root is not a directory",
+                "retained root is not a real, non-reparse directory",
             ));
         }
         Ok(Self::from_handle(handle, path.to_path_buf()))
@@ -551,7 +562,7 @@ impl RetainedDirectory {
                 Ok(()) => {
                     let anchor_file =
                         platform::open_file(&parent.handle, &leaf, platform::FileMode::Read)?;
-                    Self::validate_leaf(&anchor_file, RetainedLeafPolicy::Authority)?;
+                    Self::validate_leaf(&anchor_file, RetainedLeafPolicy::AnchoredAuthority)?;
                     let anchor_identity = Self::identity_of(&anchor_file)?;
                     if anchor_identity != *expected_identity {
                         return Err(Self::authority_identity_changed(
@@ -599,7 +610,8 @@ impl RetainedDirectory {
         binding: &RetainedFileAnchorBinding,
     ) -> io::Result<RetainedFileLifetimeAnchor> {
         let anchor_path = binding.validate()?;
-        let anchor_file = self.open_leaf_read(&anchor_path, RetainedLeafPolicy::Authority)?;
+        let anchor_file =
+            self.open_leaf_read(&anchor_path, RetainedLeafPolicy::AnchoredAuthority)?;
         let anchor_identity = Self::identity_of(&anchor_file)?;
         validate_retained_content(
             &anchor_file,
@@ -769,6 +781,7 @@ impl RetainedDirectory {
                     link_count == 1
                 }
             }
+            RetainedLeafPolicy::AnchoredAuthority => link_count >= 1,
             RetainedLeafPolicy::MutableAuthority => link_count == 1,
         };
         if !regular || !link_shape_supported {
@@ -868,6 +881,31 @@ impl RetainedDirectory {
             ));
         }
         self.verify_leaf_binding(&rebound)
+    }
+
+    fn verify_retained_anchor_binding(
+        &self,
+        path: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+    ) -> io::Result<()> {
+        Self::validate_leaf(retained, RetainedLeafPolicy::AnchoredAuthority)?;
+        if Self::identity_of(retained)? != *expected {
+            return Err(Self::authority_identity_changed("anchored handle"));
+        }
+        let rebound = self.open_leaf_bound(
+            path,
+            RetainedLeafPolicy::AnchoredAuthority,
+            platform::FileMode::Read,
+            false,
+        )?;
+        if rebound.identity != *expected {
+            return Err(Self::authority_identity_changed(
+                "anchored namespace binding",
+            ));
+        }
+        Self::validate_leaf(&rebound.file, RetainedLeafPolicy::AnchoredAuthority)?;
+        self.verify_parent_binding(&rebound.parent)
     }
 
     pub(crate) fn verify_mutable_authority_binding(
@@ -2052,6 +2090,98 @@ impl RetainedDirectory {
         self.publish_retained_leaf_noreplace(&source, &destination_parent, &destination_leaf, to)
     }
 
+    fn move_retained_file_noreplace(
+        &self,
+        from: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+        to: &Path,
+    ) -> io::Result<()> {
+        self.move_retained_file_noreplace_with_hooks(
+            from,
+            retained,
+            expected,
+            to,
+            |_, _, _| Ok(()),
+            |_, _, _| Ok(()),
+        )
+    }
+
+    fn move_retained_file_noreplace_with_hooks<B, A>(
+        &self,
+        from: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+        to: &Path,
+        mut before_move: B,
+        mut after_move: A,
+    ) -> io::Result<()>
+    where
+        B: FnMut(&Self, &Path, &Path) -> io::Result<()>,
+        A: FnMut(&Self, &Path, &Path) -> io::Result<()>,
+    {
+        if from == to {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "retained no-replace move source and destination are identical",
+            ));
+        }
+        Self::validate_leaf(retained, RetainedLeafPolicy::MutableAuthority)?;
+        if Self::identity_of(retained)? != *expected {
+            return Err(Self::authority_identity_changed("move source handle"));
+        }
+        let source = self.open_leaf_bound(
+            from,
+            RetainedLeafPolicy::MutableAuthority,
+            platform::FileMode::ReadDeleteRename,
+            false,
+        )?;
+        if source.identity != *expected || Self::identity_of(&source.file)? != *expected {
+            return Err(Self::authority_identity_changed("move source namespace"));
+        }
+        let (destination_parent, destination_leaf) = self.open_parent_bound(to, true)?;
+        self.verify_destination_state(&destination_parent, &destination_leaf, None)?;
+        before_move(self, from, to)?;
+        self.verify_mutable_leaf_binding(&source)?;
+        Self::validate_leaf(retained, RetainedLeafPolicy::MutableAuthority)?;
+        if Self::identity_of(retained)? != *expected {
+            return Err(Self::authority_identity_changed("move source handle"));
+        }
+        self.verify_destination_state(&destination_parent, &destination_leaf, None)?;
+
+        // Linearization point: one atomic no-replace namespace move. The source
+        // is a Store-created single-link staging name bound to the exact retained
+        // handle immediately before and after this operation.
+        platform::rename_noreplace(
+            &source.parent.handle,
+            &source.leaf,
+            &destination_parent.handle,
+            &destination_leaf,
+            retained,
+        )?;
+        after_move(self, from, to)?;
+
+        // A failure from this point leaves the committed destination in place.
+        // Retry must recognize and verify it; deleting or isolating it could erase
+        // the only durable publication after the linearization point.
+        self.verify_mutable_authority_binding(to, retained, expected)?;
+        if Self::direct_optional_authority_identity(&source.parent.handle, &source.leaf)?.is_some()
+        {
+            return Err(Self::authority_identity_changed("move source retirement"));
+        }
+        self.sync_parent_binding(&destination_parent)?;
+        if source.parent.identity != destination_parent.identity {
+            self.sync_parent_binding(&source.parent)?;
+        }
+        self.verify_mutable_authority_binding(to, retained, expected)?;
+        if Self::direct_optional_authority_identity(&source.parent.handle, &source.leaf)?.is_some()
+        {
+            return Err(Self::authority_identity_changed("move source retirement"));
+        }
+        self.verify_parent_binding(&source.parent)?;
+        self.verify_parent_binding(&destination_parent)
+    }
+
     fn write_new_authority_file_synced(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
         use std::io::Write as _;
 
@@ -2352,6 +2482,21 @@ impl RetainedAuthorityDirectory<'_> {
         result
     }
 
+    pub(crate) fn move_retained_file_noreplace(
+        &self,
+        from: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+        to: &Path,
+    ) -> io::Result<()> {
+        self.validate()?;
+        let result = self
+            .directory
+            .move_retained_file_noreplace(from, retained, expected, to);
+        self.validate()?;
+        result
+    }
+
     pub(crate) fn remove_file_with_validation<H>(
         &self,
         path: &Path,
@@ -2438,6 +2583,33 @@ impl RetainedAuthorityDirectory<'_> {
         let result = self
             .directory
             .rename_authority_file_noreplace(from, to, hook);
+        self.validate()?;
+        result
+    }
+
+    #[cfg(test)]
+    pub(crate) fn move_retained_file_noreplace_with_hooks<B, A>(
+        &self,
+        from: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+        to: &Path,
+        before_move: B,
+        after_move: A,
+    ) -> io::Result<()>
+    where
+        B: FnMut(&RetainedDirectory, &Path, &Path) -> io::Result<()>,
+        A: FnMut(&RetainedDirectory, &Path, &Path) -> io::Result<()>,
+    {
+        self.validate()?;
+        let result = self.directory.move_retained_file_noreplace_with_hooks(
+            from,
+            retained,
+            expected,
+            to,
+            before_move,
+            after_move,
+        );
         self.validate()?;
         result
     }
@@ -2820,7 +2992,14 @@ mod platform {
     }
     #[repr(C)]
     struct FileRenameInfo {
-        replace_if_exists: i32,
+        replace_if_exists: u8,
+        root_directory: Handle,
+        file_name_length: u32,
+        file_name: [u16; 1],
+    }
+    #[repr(C)]
+    struct FileLinkInformation {
+        replace_if_exists: u8,
         root_directory: Handle,
         file_name_length: u32,
         file_name: [u16; 1],
@@ -2844,6 +3023,13 @@ mod platform {
             create_options: u32,
             ea_buffer: *mut std::ffi::c_void,
             ea_length: u32,
+        ) -> NtStatus;
+        fn NtSetInformationFile(
+            file_handle: Handle,
+            io_status_block: *mut IoStatusBlock,
+            file_information: *mut std::ffi::c_void,
+            length: u32,
+            file_information_class: u32,
         ) -> NtStatus;
         fn RtlNtStatusToDosError(status: NtStatus) -> u32;
     }
@@ -2981,11 +3167,86 @@ mod platform {
         )
     }
 
-    pub fn link_lifetime_anchor_noreplace(_: &File, _: &File, _: &OsStr) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "generation-safe retained file anchors are unsupported on Windows without exact handle-bound hard-link creation",
-        ))
+    pub fn link_lifetime_anchor_noreplace(
+        retained_source: &File,
+        to_parent: &File,
+        to: &OsStr,
+    ) -> io::Result<()> {
+        // FileLinkInformation uses the BOOLEAN ReplaceIfExists layout below.
+        // FileLinkInformationEx is class 72 and requires the ULONG Flags layout.
+        const FILE_LINK_INFORMATION_CLASS: u32 = 11;
+
+        RetainedDirectory::validate_leaf(retained_source, RetainedLeafPolicy::AnchoredAuthority)?;
+        let wide: Vec<u16> = to.encode_wide().collect();
+        if wide.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "lifetime-anchor target is empty",
+            ));
+        }
+        let name_bytes = wide
+            .len()
+            .checked_mul(std::mem::size_of::<u16>())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "lifetime-anchor target too long",
+                )
+            })?;
+        let size = std::mem::size_of::<FileLinkInformation>()
+            .checked_add(name_bytes)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "lifetime-anchor target too long",
+                )
+            })?;
+        let mut storage = vec![0_u8; size];
+        let info = storage.as_mut_ptr().cast::<FileLinkInformation>();
+        // SAFETY: storage has the computed FILE_LINK_INFORMATION header and trailing UTF-16 bytes.
+        unsafe {
+            (*info).replace_if_exists = 0;
+            (*info).root_directory = to_parent.as_raw_handle().cast();
+            (*info).file_name_length = u32::try_from(name_bytes).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "lifetime-anchor target too long",
+                )
+            })?;
+            std::ptr::copy_nonoverlapping(
+                wide.as_ptr(),
+                (*info).file_name.as_mut_ptr(),
+                wide.len(),
+            );
+        }
+        let mut io_status = IoStatusBlock {
+            value: IoStatusValue { status: 0 },
+            information: 0,
+        };
+        // SAFETY: the exact source and destination-parent handles remain live and
+        // storage is initialized for the duration of the native call.
+        let status = unsafe {
+            NtSetInformationFile(
+                retained_source.as_raw_handle().cast(),
+                &mut io_status,
+                info.cast(),
+                u32::try_from(size).map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "lifetime-anchor buffer too long",
+                    )
+                })?,
+                FILE_LINK_INFORMATION_CLASS,
+            )
+        };
+        if status < 0 {
+            // SAFETY: pure NTSTATUS conversion.
+            Err(io::Error::from_raw_os_error(
+                unsafe { RtlNtStatusToDosError(status) } as i32,
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn rename_noreplace(
@@ -2995,22 +3256,29 @@ mod platform {
         to: &OsStr,
         retained_source: &File,
     ) -> io::Result<()> {
-        const FILE_RENAME_INFO_CLASS: u32 = 3;
+        const FILE_RENAME_INFORMATION_CLASS: u32 = 10;
+
         let wide: Vec<u16> = to.encode_wide().collect();
-        let extra =
-            wide.len().saturating_sub(1).checked_mul(2).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "rename target too long")
-            })?;
+        if wide.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "rename target is empty",
+            ));
+        }
+        let name_bytes = wide
+            .len()
+            .checked_mul(std::mem::size_of::<u16>())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "rename target too long"))?;
         let size = std::mem::size_of::<FileRenameInfo>()
-            .checked_add(extra)
+            .checked_add(name_bytes)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "rename target too long"))?;
         let mut storage = vec![0_u8; size];
         let info = storage.as_mut_ptr().cast::<FileRenameInfo>();
-        // SAFETY: storage has the computed FILE_RENAME_INFO header and trailing UTF-16 bytes.
+        // SAFETY: storage has the FILE_RENAME_INFORMATION header and trailing UTF-16 bytes.
         unsafe {
             (*info).replace_if_exists = 0;
             (*info).root_directory = to_parent.as_raw_handle().cast();
-            (*info).file_name_length = u32::try_from(wide.len() * 2).map_err(|_| {
+            (*info).file_name_length = u32::try_from(name_bytes).map_err(|_| {
                 io::Error::new(io::ErrorKind::InvalidInput, "rename target too long")
             })?;
             std::ptr::copy_nonoverlapping(
@@ -3019,19 +3287,28 @@ mod platform {
                 wide.len(),
             );
         }
-        // SAFETY: retained_source is the exact source handle and storage is initialized.
-        let result = unsafe {
-            SetFileInformationByHandle(
+        let mut io_status = IoStatusBlock {
+            value: IoStatusValue { status: 0 },
+            information: 0,
+        };
+        // SAFETY: retained_source is the exact DELETE-capable source handle, the
+        // destination parent remains retained, and storage is initialized.
+        let status = unsafe {
+            NtSetInformationFile(
                 retained_source.as_raw_handle().cast(),
-                FILE_RENAME_INFO_CLASS,
+                &mut io_status,
                 info.cast(),
                 u32::try_from(size).map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidInput, "rename buffer too long")
                 })?,
+                FILE_RENAME_INFORMATION_CLASS,
             )
         };
-        if result == 0 {
-            Err(io::Error::last_os_error())
+        if status < 0 {
+            // SAFETY: pure NTSTATUS conversion.
+            Err(io::Error::from_raw_os_error(
+                unsafe { RtlNtStatusToDosError(status) } as i32,
+            ))
         } else {
             Ok(())
         }
@@ -3107,6 +3384,7 @@ mod platform {
 mod tests {
     use super::*;
     use std::fs;
+    use std::io::Write as _;
 
     fn test_root_path(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -3117,6 +3395,22 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    fn retained_test_link_count(file: &File) -> u64 {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            file.metadata().unwrap().nlink()
+        }
+        #[cfg(windows)]
+        {
+            u64::from(
+                crate::windows_file_info::file_information(file)
+                    .unwrap()
+                    .number_of_links,
+            )
+        }
     }
 
     #[test]
@@ -3134,6 +3428,7 @@ mod tests {
     }
 
     #[cfg(any(
+        windows,
         target_os = "linux",
         target_os = "android",
         target_os = "macos",
@@ -3185,6 +3480,7 @@ mod tests {
     }
 
     #[cfg(any(
+        windows,
         target_os = "linux",
         target_os = "android",
         target_os = "macos",
@@ -3441,6 +3737,116 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(fs::read(root_path.join(&target)).unwrap(), b"substitute");
+        drop(root);
+        fs::remove_dir_all(root_path).unwrap();
+    }
+
+    #[test]
+    fn retained_noreplace_move_publishes_exact_single_link_source() {
+        let root_path = test_root_path("exact-move");
+        fs::create_dir_all(&root_path).unwrap();
+        let source = PathBuf::from(".source.forge-staging");
+        let destination = PathBuf::from("destination");
+        let root = RetainedDirectory::open_root(&root_path).unwrap();
+        let mut retained = root.open_leaf_write_new_authority(&source).unwrap();
+        retained.write_all(b"original").unwrap();
+        retained.sync_all().unwrap();
+        let identity = RetainedDirectory::identity_of(&retained).unwrap();
+        root.verify_mutable_authority_binding(&source, &retained, &identity)
+            .unwrap();
+        let authority = root.retain_authority().unwrap();
+
+        authority
+            .move_retained_file_noreplace(&source, &retained, &identity, &destination)
+            .unwrap();
+
+        assert!(!root_path.join(&source).exists());
+        assert_eq!(fs::read(root_path.join(&destination)).unwrap(), b"original");
+        let published = File::open(root_path.join(&destination)).unwrap();
+        assert_eq!(
+            RetainedDirectory::identity_of(&published).unwrap(),
+            identity
+        );
+        assert_eq!(retained_test_link_count(&published), 1);
+        drop(published);
+        drop(authority);
+        drop(retained);
+        drop(root);
+        fs::remove_dir_all(root_path).unwrap();
+    }
+
+    #[test]
+    fn retained_noreplace_move_preserves_destination_race() {
+        let root_path = test_root_path("exact-move-destination-race");
+        fs::create_dir_all(&root_path).unwrap();
+        let source = PathBuf::from(".source.forge-staging");
+        let destination = PathBuf::from("destination");
+        let root = RetainedDirectory::open_root(&root_path).unwrap();
+        let mut retained = root.open_leaf_write_new_authority(&source).unwrap();
+        retained.write_all(b"original").unwrap();
+        retained.sync_all().unwrap();
+        let identity = RetainedDirectory::identity_of(&retained).unwrap();
+        let authority = root.retain_authority().unwrap();
+
+        let error = authority
+            .move_retained_file_noreplace_with_hooks(
+                &source,
+                &retained,
+                &identity,
+                &destination,
+                |_, _, to| fs::write(root_path.join(to), b"destination sentinel"),
+                |_, _, _| Ok(()),
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(fs::read(root_path.join(&source)).unwrap(), b"original");
+        assert_eq!(
+            fs::read(root_path.join(&destination)).unwrap(),
+            b"destination sentinel"
+        );
+        drop(authority);
+        drop(retained);
+        drop(root);
+        fs::remove_dir_all(root_path).unwrap();
+    }
+
+    #[test]
+    fn retained_noreplace_move_keeps_committed_destination_after_post_move_failure() {
+        let root_path = test_root_path("exact-move-post-commit-failure");
+        fs::create_dir_all(&root_path).unwrap();
+        let source = PathBuf::from(".source.forge-staging");
+        let destination = PathBuf::from("destination");
+        let root = RetainedDirectory::open_root(&root_path).unwrap();
+        let mut retained = root.open_leaf_write_new_authority(&source).unwrap();
+        retained.write_all(b"original").unwrap();
+        retained.sync_all().unwrap();
+        let identity = RetainedDirectory::identity_of(&retained).unwrap();
+        let authority = root.retain_authority().unwrap();
+
+        let error = authority
+            .move_retained_file_noreplace_with_hooks(
+                &source,
+                &retained,
+                &identity,
+                &destination,
+                |_, _, _| Ok(()),
+                |_, _, _| Err(io::Error::other("injected post-move failure")),
+            )
+            .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert!(!root_path.join(&source).exists());
+        assert_eq!(fs::read(root_path.join(&destination)).unwrap(), b"original");
+        let published = File::open(root_path.join(&destination)).unwrap();
+        assert_eq!(
+            RetainedDirectory::identity_of(&published).unwrap(),
+            identity
+        );
+        assert_eq!(retained_test_link_count(&published), 1);
+        drop(published);
+        drop(authority);
+        drop(retained);
         drop(root);
         fs::remove_dir_all(root_path).unwrap();
     }

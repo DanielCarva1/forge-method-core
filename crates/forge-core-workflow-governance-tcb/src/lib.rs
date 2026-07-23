@@ -3466,9 +3466,8 @@ fn replace_file_with_recovery_protocol(target: &Path, content: &[u8]) -> io::Res
         next_digest: sha256_digest(content),
     };
 
-    // Each fixed artifact is synced before the subsequent namespace change.
-    // `sync_parent_dir` is best-effort on Windows, where std cannot open a
-    // directory with the flags required by `FlushFileBuffers`.
+    // Each fixed artifact and its retained parent namespace are synced before
+    // the subsequent namespace change. Durability failures are always fatal.
     write_new_synced_file(&paths.next, content)?;
     sync_parent_dir(parent)?;
     maybe_inject_replacement_crash(ReplacementCrashPoint::NextSynced);
@@ -3805,7 +3804,36 @@ fn sync_parent_dir(parent: &Path) -> io::Result<()> {
     File::open(parent)?.sync_all()
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn sync_parent_dir(parent: &Path) -> io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    if parent.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "parent directory is empty",
+        ));
+    }
+    let directory = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(parent)?;
+    let metadata = directory.metadata()?;
+    use std::os::windows::fs::MetadataExt as _;
+    if !metadata.is_dir() || metadata.file_attributes() & 0x400 == 0x400 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "workflow-governance WAL parent is not a real, non-reparse directory",
+        ));
+    }
+    directory.sync_all()
+}
+
+#[cfg(all(not(unix), not(windows)))]
 fn sync_parent_dir(parent: &Path) -> io::Result<()> {
     if parent.as_os_str().is_empty() {
         return Err(io::Error::new(
@@ -3813,8 +3841,7 @@ fn sync_parent_dir(parent: &Path) -> io::Result<()> {
             "parent directory is empty",
         ));
     }
-    let _ = File::open(parent).and_then(|file| file.sync_all());
-    Ok(())
+    File::open(parent)?.sync_all()
 }
 
 #[cfg(unix)]

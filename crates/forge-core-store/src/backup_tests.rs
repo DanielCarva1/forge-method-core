@@ -384,6 +384,69 @@ fn archive_orphan_retry_completes_receipt_but_receipt_without_archive_fails_clos
 }
 
 #[test]
+fn archive_and_receipt_move_crashes_converge_without_hardlink_debt() {
+    let cases = [
+        (
+            "archive-before",
+            BackupPublicationCrashPoint::ArchiveBeforeMove,
+            false,
+            false,
+        ),
+        (
+            "archive-after",
+            BackupPublicationCrashPoint::ArchiveAfterMove,
+            true,
+            false,
+        ),
+        (
+            "receipt-before",
+            BackupPublicationCrashPoint::ReceiptBeforeMove,
+            true,
+            false,
+        ),
+        (
+            "receipt-after",
+            BackupPublicationCrashPoint::ReceiptAfterMove,
+            true,
+            true,
+        ),
+    ];
+
+    for (label, crash_point, archive_committed, receipt_committed) in cases {
+        let root = TempDir::new(label);
+        let archive = root.0.join("archives/project.forge-backup");
+        let receipt_dir = root.0.join("receipts");
+        fs::create_dir_all(&receipt_dir).expect("receipt dir");
+        let captured = snapshot();
+        let receipt = receipt_path_for(&captured, &receipt_dir).expect("receipt path");
+        let guard = inject_backup_publication_crash(crash_point);
+        let interrupted = std::panic::catch_unwind(|| {
+            let _ = publish_captured_snapshot(&captured, &archive, &receipt_dir);
+        });
+        assert!(interrupted.is_err(), "{label} must hit its crash hook");
+        drop(guard);
+        assert_eq!(archive.exists(), archive_committed, "{label} archive");
+        assert_eq!(receipt.exists(), receipt_committed, "{label} receipt");
+
+        let recovered = publish_captured_snapshot(&captured, &archive, &receipt_dir)
+            .unwrap_or_else(|error| panic!("{label} retry failed: {error}"));
+        assert!(recovered.already_published || !archive_committed);
+        verify_backup_archive(&archive, &receipt_dir)
+            .unwrap_or_else(|error| panic!("{label} verification failed: {error}"));
+        let archive_metadata = fs::symlink_metadata(&archive).expect("archive metadata");
+        let receipt_metadata = fs::symlink_metadata(&receipt).expect("receipt metadata");
+        assert_eq!(
+            path_hard_link_count(&archive, &archive_metadata).expect("archive link count"),
+            1
+        );
+        assert_eq!(
+            path_hard_link_count(&receipt, &receipt_metadata).expect("receipt link count"),
+            1
+        );
+    }
+}
+
+#[test]
 fn existing_different_archive_is_never_overwritten() {
     let root = TempDir::new("existing-different");
     let archive = root.0.join("archives/project.forge-backup");
