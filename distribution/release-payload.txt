@@ -11,6 +11,13 @@ CONTEXT.md
 CHANGELOG.md
 LICENSE
 contracts/plan/agent-native-guidance-plan.yaml
+contracts/spec/C1.1-codex-host-capability-decision.yaml
+contracts/spec/C1.1-pi-host-capability-decision.yaml
+contracts/spec/C1.1-opencode-host-capability-decision.yaml
+contracts/spec/host-origin-broker-conformance-v0.yaml
+contracts/spec/workflow-host-origin-adapter-v0.yaml
+contracts/spec/workflow-action-origin-broker-v0.yaml
+contracts/plan/product-gap-closure-plan.yaml
 contracts/spec/operation-wide-transaction-v0.yaml
 contracts/spec/replay-protection-wal-v0.yaml
 contracts/spec/replay-external-anchor-v0.yaml
@@ -26,6 +33,7 @@ docs/getting-started.md
 docs/agent-integration.md
 docs/operator-guide.md
 docs/product-status.md
+docs/product-gap-register.md
 docs/security-model.md
 docs/domain-packs.md
 docs/verification.md

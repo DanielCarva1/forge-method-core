@@ -46,19 +46,32 @@ workflow_action_origin_broker:
     trust_bootstrap: >-
       A host/operator performs an explicit out-of-agent trust ceremony that
       installs only the broker public key, broker identity, allowed origin
-      profiles, and validity policy. Forge never provisions or stores the
-      broker private key.
+      profile, and enrollment evidence. Forge never provisions or stores the
+      broker private key. The current CLI applies a source-versioned default
+      freshness policy; the registry does not install caller-configurable validity
+      policy.
+    implementation_limit: >-
+      The Rust core now admits only the v0.2 envelope for new mutations, requires
+      signed opaque native-host provenance, and retains frozen v0.1 bytes solely
+      for exact historical recovery. This does not yet establish a supported
+      human-origin product: the registry lifecycle remains cooperative operator
+      CLI and no selected host adapter has demonstrated isolated signer custody
+      plus host-authenticated enrollment. C1 closes that deployment gap under
+      contracts/spec/workflow-host-origin-adapter-v0.yaml.
     signed_envelope:
       binds:
-        - "broker_id_and_key_id"
-        - "origin_event_id_and_nonce"
+        - "issuer_id; the verified public-key fingerprint is derived from the admitted registry and signature"
+        - "nonce; the canonical event digest is derived from the complete signed envelope"
         - "project_id"
         - "action_packet_digest"
         - "authenticated_origin_subject"
         - "origin_profile_and_separation_domain"
         - "closed_semantic_input"
         - "issued_at_and_expires_at"
+        - "v0.2 opaque host kind/version, adapter id/version, interaction kind, host event/session/interaction references, descriptor digest, and host-observed time"
       rules:
+        - "v0.1 is rejected for every new mutation and is accepted only by the historical recovery capability"
+        - "v0.2 recomputes the domain-separated host descriptor digest and rejects raw transcript fields"
         - "unknown fields and unsupported profile/action combinations fail closed"
         - "the broker signature is verified before semantic materialization"
         - "host-provided labels alone never establish human, reviewer, or runtime independence"
@@ -66,21 +79,25 @@ workflow_action_origin_broker:
 
   one_call_apply:
     command_shape: >-
-      workflow action apply consumes one current packet digest and either one
-      host-origin envelope or a deliberately cooperative local credential for
-      actions whose packet permits that weaker mode.
+      workflow action apply consumes one host-origin envelope and regenerates its
+      current packet by digest. The separate workflow action authorize command
+      accepts a cooperative local credential only when that packet explicitly
+      permits the weaker operator_credential_broker boundary; apply has no local-
+      credential branch.
     transaction:
       - "resolve the canonical Project Link and fixed authority stores"
       - "derive the current action packet from admitted state"
       - "verify packet equality, broker registry, signature, profile, freshness, and ledger/replay reconciliation"
       - "materialize the exact kind-specific authorization request in the kernel"
       - "verify authority and perform the kernel late-binding recheck"
+      - "acquire an exclusive lock-held packet/native-origin reservation against the deterministic planned action record without mutating the replay WAL"
       - "append the action and origin companion atomically in the governed ledger"
-      - "index the durable receipt in the replay WAL with reserve plus commit records"
+      - "commit the replay reservation after the authoritative ledger commit"
       - "return the receipt plus newly derived workflow guidance"
     recovery:
-      before_ledger_commit: "no replay reservation exists; the ledger lock serializes a still-current exact retry"
-      after_ledger_before_replay_commit: "the origin companion is authoritative and an exact retry repairs a missing or reserved replay index"
+      before_replay_reservation: "no durable effect exists and a still-current exact attempt may proceed"
+      after_reservation_before_ledger_commit: "the reservation exists only under the retained replay lock; failure or crash releases it with byte-identical replay WAL state"
+      after_ledger_before_replay_commit: "the origin companion is authoritative and an exact retry appends or repairs the replay reserve/commit index"
       after_commit: "an exact retry returns the prior receipt and never appends twice"
       response_lost: "a replacement process reconstructs the outcome from durable state"
 
@@ -105,8 +122,9 @@ workflow_action_origin_broker:
       - "symlink, junction, reparse-point, and physical-root alias attempts"
 
   product_claim_boundary: >-
-    This protocol can prove that Forge accepted an event signed by a configured
-    external broker and bound it to one exact current action. Physical human
-    presence, actor independence, and runtime integrity are properties of the
-    selected host broker and its deployment; Forge must not infer them from a
-    local credential label.
+    The v0.2 core protocol proves that Forge accepted a provenance-bearing event
+    signed by a configured external broker and bound it to one exact current
+    action; its replay identity also prevents one opaque native interaction from
+    authorizing another packet by changing the nonce. Physical human presence,
+    actor independence, signer isolation, and runtime integrity remain properties
+    of a conformant selected host broker and deployment, not of an adapter label.

@@ -1,0 +1,187 @@
+schema_version: "0.1"
+artifact_kind: "workflow-host-origin-adapter-security-contract"
+contract_id: "spec.workflow-host-origin-adapter.v0"
+status: "implemented_rust_core_pending_host_evidence"
+
+purpose: >-
+  Define the minimum host, broker, provenance, administration, and recovery
+  boundary required before Forge may treat a signed external event as evidence
+  of a native human, reviewer, or runtime interaction rather than merely proof
+  that a configured key signed agent-supplied bytes.
+
+scope:
+  reuses:
+    - "current kernel-derived workflow action packets"
+    - "external broker public-key registry and profile separation"
+    - "workflow action apply signature/freshness verification"
+    - "ledger action plus BrokerOriginApplied adjacency"
+    - "reserve/commit replay WAL and historical recovery"
+  excludes:
+    - "a model or agent inside the broker"
+    - "raw transcript persistence"
+    - "mutating workflow commands exposed through default MCP"
+    - "a generic sign request reachable from CLI, MCP, shell, environment, or agent-controlled IPC"
+
+closed_enums:
+  interaction_kind:
+    - "native_human_message"
+    - "native_human_confirmation"
+    - "native_reviewer_confirmation"
+    - "attested_runtime_observation"
+  conformance_state:
+    - "unsupported"
+    - "candidate"
+    - "conformant_source"
+    - "conformant_released"
+    - "field_verified"
+  custody_kind:
+    - "os_non_exportable_key"
+    - "hardware_backed_key"
+    - "remote_broker_key"
+  admin_operation:
+    - "enroll"
+    - "rotate"
+    - "revoke"
+
+trust_zones:
+  native_host_ui:
+    owns:
+      - "native user or reviewer interaction"
+      - "exact confirmation display"
+      - "host session and interaction identity"
+    must_not_trust:
+      - "agent assertions that a human approved"
+      - "chat text as proof of who submitted it"
+  broker_signer:
+    owns:
+      - "non-exportable or externally isolated private key use"
+      - "freshness and one-interaction/one-authorization consumption"
+    must_not_expose:
+      - "private key bytes"
+      - "generic signing API"
+      - "agent-selectable principal, profile, separation domain, packet, or semantic answer"
+  forge_core:
+    owns:
+      - "current packet derivation and equality"
+      - "registry/signature/profile/freshness verification"
+      - "semantic request materialization"
+      - "ledger, replay, and recovery"
+    cannot_prove:
+      - "physical human presence without a conformant deployed host broker"
+      - "host integrity from an adapter label"
+  agent_process:
+    may:
+      - "relay an already signed envelope to workflow action apply"
+      - "request a native confirmation through the supported host contract"
+    must_not:
+      - "construct an authenticated-host capability"
+      - "invoke signing directly"
+      - "enroll, rotate, or revoke broker authority in supported-host mode"
+
+invariants:
+  - id: "HOB-001"
+    statement: "Signing requires a native host-authenticated interaction or explicit native confirmation; agent content alone is never sufficient."
+  - id: "HOB-002"
+    statement: "The private key is absent from project, sidecar state, model context, command output, inherited environment, Forge MCP, and agent-callable IPC."
+  - id: "HOB-003"
+    statement: "The confirmation binds the exact project, current action packet, closed semantic answer, subject, profile, separation domain, host session, and expiry."
+  - id: "HOB-004"
+    statement: "One native interaction cannot authorize multiple packet digests by changing the broker nonce."
+  - id: "HOB-005"
+    statement: "Enrollment, rotation, and revocation require a separate host/operator admin capability and durable admin receipt; a ceremony file is evidence, not authority."
+  - id: "HOB-006"
+    statement: "Default MCP remains read-only and no broker signer or authority-admin tool is added to it."
+  - id: "HOB-007"
+    statement: "Historical v0.1 broker events remain verifiable only for exact already-durable recovery and never satisfy a new native-origin claim."
+  - id: "HOB-008"
+    statement: "No raw prompt, transcript, email, display name, auth token, URL query, or host secret enters the signed provenance or ledger companion."
+
+wire_migration:
+  rust_core_status: "implemented_with_targeted_tests"
+  legacy_recovery_event_schema: "0.1"
+  current_event_schema: "0.2"
+  current_signing_domain: "forge-method:workflow-origin-broker:v2"
+  current_ledger_epoch: "0.5"
+  native_host_provenance:
+    required_for_new_admission: true
+    fields:
+      host_kind: "closed RuntimeKind value"
+      host_version: "bounded nonblank control-character-free host-reported version string"
+      adapter_id: "StableId"
+      adapter_version: "bounded SemVer"
+      interaction_kind: "closed interaction_kind"
+      host_event_ref: "bounded opaque high-entropy host-local handle"
+      host_session_ref: "bounded opaque high-entropy host-local handle"
+      host_interaction_ref: "bounded opaque high-entropy host-local handle"
+      host_event_descriptor_digest: >-
+        SHA-256 over a domain-separated canonical descriptor containing only
+        the opaque handles, exact host/adapter versions, interaction kind,
+        host-observed time, project id, action-packet digest, and semantic-input
+        digest; never a digest of raw transcript bytes.
+      host_observed_at_unix: "positive host-observed event time bounded by envelope freshness"
+    validation:
+      - "deny unknown fields"
+      - "reject blank, control-character, unbounded, malformed adapter-SemVer, and non-lowercase-SHA-256 values"
+      - "recompute the descriptor digest rather than trusting a caller digest"
+      - "require profile/interaction-kind compatibility"
+      - "require v0.2 provenance before new mutation"
+  historical_compatibility:
+    - "v0.1 signing bytes and event digest are frozen by deterministic authority fixtures"
+    - "v0.1 is accepted only by historical recovery after an exact durable companion is found"
+    - "optional ledger fields use default plus skip_serializing_if none so old record digests remain byte-identical"
+    - "replay-origin v1 derivation is retained for old events; provenance-bearing events use a distinct v2 domain"
+    - "ledger epoch 0.5 is permanent after the first provenance-bearing companion and downgrade fails closed"
+
+  implementation_evidence:
+    - "forge-core-authority::workflow_origin_broker::tests::frozen_v0_1_bytes_remain_recovery_only"
+    - "forge-core-authority::workflow_origin_broker::tests::v0_2_requires_valid_opaque_native_host_provenance"
+    - "forge-core-authority::workflow_origin_broker::tests::v0_2_rejects_profile_time_reference_and_tamper_attacks"
+    - "forge-core-kernel::workflow_governance::adapter::tests::native_host_replay_origin_is_stable_across_packet_and_nonce_changes"
+    - "forge-core-store::workflow_action_replay::tests::lock_held_reservation_is_nonmutating_until_authoritative_commit"
+    - "forge-core-kernel::workflow_governance::adapter::tests::broker_action_repairs_replay_append_failure_after_authoritative_ledger"
+    - "forge-core-kernel::workflow_governance::adapter::tests::broker_action_rechecks_expiry_after_replay_lock_acquisition"
+    - "forge-core-kernel::workflow_governance::adapter::tests::broker_action_repairs_replay_commit_after_durable_ledger_response_loss"
+    - "forge-core-kernel::workflow_governance::adapter::tests::broker_action_retry_after_dropped_precommit_batch_has_no_replay_tombstone"
+    - "forge-core-workflow-governance-tcb::replacement_protocol_tests::native_host_provenance_advances_wire_to_0_5_without_rewriting_history"
+  expensive_implementation_evidence:
+    - "forge-core-cli::domain_pack_cli_e2e::p6d_workflow_journey::p6d_reference_pack_real_journey lifecycle-ahead historical-retry WAL invariance"
+broker_invocation:
+  allowed:
+    - "host UI process calls a non-exportable keystore only from its native event callback"
+    - "isolated remote broker validates a mutually authenticated host assertion and requires native confirmation"
+  forbidden:
+    - "sign(file|stdin|json|packet_digest) CLI"
+    - "MCP signing or broker-admin tool"
+    - "local socket accepting agent-shaped semantic input without an unforgeable native host capability"
+    - "environment-variable or project-file bearer token"
+    - "command hook whose executable can be called directly with forged stdin and no unforgeable host invocation proof"
+
+administration:
+  requirement: >-
+    Supported-host mode must add a separate operator/host-authenticated admin
+    capability for enroll, rotate, and revoke. Existing workflow broker CLI
+    lifecycle remains cooperative/migration-only until it consumes that
+    capability; its ceremony digest alone cannot support a human-origin claim.
+  rotation_order:
+    - "verify admin capability and exact current registry digest"
+    - "persist new active public key plus retained old key marked revoked"
+    - "durably sync registry and admin receipt"
+    - "make the new registry digest visible to packet derivation"
+  recovery_rule: "Revoked retained public keys may verify exact historical receipts but cannot admit new events."
+
+storage_engine_practices:
+  - "Version records explicitly; never reinterpret old canonical bytes under new semantics."
+  - "Hash canonical bytes and domain-separate event, descriptor, replay-origin, and ledger-record digests."
+  - "Acquire an exclusive replay lock, preflight the exact native-origin tuple and final reserve/commit capacity without appending, retain the lock across the action/provenance ledger commit, then append replay reserve/commit state; a failed pre-ledger attempt therefore cannot strand a tombstone."
+  - "Treat each durable provenance companion as a native-tuple replay conflict index during the post-ledger/pre-replay gap; only the exact signed event may repair missing replay state."
+  - "Use retained locks, write-new plus fsync plus atomic replace plus parent-directory sync for authority metadata."
+  - "Make recovery idempotent and test crashes at every durable ordering boundary."
+  - "Historical replay repair must reject effective-epoch drift rather than append a reconciliation event to the workflow ledger."
+  - "Keep unknown/corrupt/torn state fail-closed; never repair authority by truncating to a convenient prefix."
+  - "Use deterministic fixtures, failpoints, property tests, and frozen historical bytes at closure gates."
+
+claim_boundary: >-
+  Source conformance proves that an exact adapter implementation enforces this
+  contract under its stated OS/host boundary. Only a matching released asset
+  and real-host evidence may promote that result to conformant_released or
+  field_verified.

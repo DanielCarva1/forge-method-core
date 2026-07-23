@@ -1,0 +1,211 @@
+schema_version: "0.1"
+spec: "domain_pack_remote_acquisition_v0"
+status: "c6_2_implemented"
+purpose: >-
+  Define the candidate-only C6.2 contract and implemented source boundary for
+  acquiring immutable Domain Pack bytes from the existing signed supply-chain
+  registry. This specification adds no trust, installation, activation,
+  reviewed-registry, or lifecycle authority.
+
+catalog_authority:
+  sole_catalog: "DomainPackSupplyChainRegistryDocument"
+  rule: >-
+    C6.2 extends the existing signed registry subject with mirrors and complete
+    immutable descriptor sets. Discovery, a remote request, a plan, a fetch
+    observation, a receipt, and a cache projection are not a rival catalog and
+    cannot stand in for catalog signature verification plus operator anchoring.
+  signed_registry_fields:
+    mirrors:
+      rust_type: "DomainPackRegistryMirror"
+      identity: "stable mirror_id"
+      ordering: "priority ascending, then lexical stable mirror_id"
+      transports:
+        - "https base URL without credentials, query, fragment, backslash, traversal, or control characters"
+        - "operator-provisioned opaque local location_id, never a caller filesystem path"
+    artifacts:
+      rust_type: "DomainPackRegistryArtifactSet"
+      complete_set: "exactly manifest, content, license, and ordered fixtures"
+      descriptor:
+        rust_type: "DomainPackRemoteArtifactDescriptor"
+        binding: "reuse DomainPackArtifactBinding artifact_ref/raw_sha256/canonical_sha256"
+        object_path: "relative objects/sha256/<64 lowercase raw SHA-256 hex>"
+        byte_length: "exact non-negative byte length"
+        media_type: "closed media-type enum"
+        artifact_kind: "closed manifest/content/license/fixture enum"
+      correspondence: >-
+        Descriptor raw pins must equal the established manifest_digest,
+        content_digest, license_digest, and fixture_digests in the same signed
+        record. package_digest retains its existing package-level semantics and
+        is not a cache key or a transport locator.
+  signature_owner_requirement: >-
+    The authority implementation includes mirrors in the registry snapshot
+    signature subject and artifacts in the package-record signature subject,
+    validates both before admission, and migrates constructors and fixtures.
+    Publisher signatures therefore bind complete package/artifact descriptors,
+    while registry signatures separately bind mirrors and snapshot state.
+
+contract_surface:
+  schema_version: "0.1"
+  module: "domain_pack_remote_acquisition"
+  documents:
+    - "DomainPackRemoteAcquisitionRequestDocument"
+    - "DomainPackRemoteAcquisitionPlanDocument"
+    - "DomainPackRemoteUntrustedFetchObservationDocument"
+    - "DomainPackRemoteFetchEvidenceDocument"
+    - "DomainPackRemoteFetchReceiptDocument"
+    - "DomainPackRemoteCacheEntryDocument"
+    - "DomainPackRemoteCacheProjectionDocument"
+    - "DomainPackRemoteRollbackInputDocument"
+  common_invariants:
+    - "all document and nested record structs deny unknown fields"
+    - "all serializable authority fields are DomainPackCandidateAuthority::CandidateOnly"
+    - "canonical integrity digests are canonical JSON SHA-256 tokens in the existing sha256:<64 lowercase hex> grammar"
+    - "raw, canonical, snapshot, record, package, receipt, lock, and cache-key digests use the same SHA-256 token grammar"
+    - "there is no serializable trusted, installed, active, commit, or activation authority variant"
+
+request_and_plan:
+  request: >-
+    Binds explicit operator candidate selection, exact discovery/demand evidence,
+    one complete catalog snapshot, one exact contained registry record, its exact
+    package binding, network mode, signed-order mirror policy, cache policy, and
+    optional operator-anchored local head.
+  plan: >-
+    Repeats exact candidate/catalog/package bindings and names every artifact
+    under a catalog mirror only. It may require candidate bytes, require cache-
+    only candidate bytes, or block; it cannot authorize trust or a lifecycle
+    transition.
+  network_modes:
+    online_required: "network transport is required; cache may supply corroborating candidate bytes only when the later owner permits it"
+    prefer_cache: "verify exact cache bytes first; a miss may proceed only through the signed mirror order"
+    offline_only: >-
+      deny network transport. Require a matching operator-anchored local head,
+      an exact catalog snapshot that is still valid at host-checked time, an
+      operator-provisioned local mirror, exact raw bytes, and fresh current
+      revocation evaluation. A local head has no independent freshness extension.
+  mirror_policy: "signed_priority_then_mirror_id only; no caller-selected endpoint, reordering, or unknown mirror"
+  artifact_location: >-
+    A location is an artifact descriptor plus mirror_id and the descriptor's
+    exact content-addressed object_path. The base transport remains in the signed
+    registry mirror metadata and is never embedded in the descriptor.
+
+fetch_and_receipt:
+  observations: >-
+    Network-mirror, cache, and operator-anchored local-mirror reads are untrusted
+    fetch observations. They bind source, descriptor/location, observed raw and
+    canonical SHA-256, observed length, and closed media type before recheck.
+  evidence: >-
+    Evidence aggregates bounded observations into candidate_bytes_verified or
+    blocked. Candidate byte verification is not publisher trust, semantic review,
+    installation, lifecycle commit, or activation.
+  receipt: >-
+    A receipt binds plan/catalog/record/package identities and exact verified
+    artifact bytes. It is immutable candidate evidence for later owners and does
+    not promote authority.
+
+cache:
+  key: "exact descriptor raw_sha256 only"
+  authority: "cache presence and cache projection are non-authoritative availability evidence"
+  policy:
+    kind: "reject_on_full only"
+    limits:
+      - "max_entry_bytes"
+      - "max_entries"
+      - "max_total_bytes"
+    admission: >-
+      Admission deterministically rejects with cache_full if an exact verified
+      entry would exceed any limit. It does not evict, overwrite divergent bytes,
+      expand limits, or fall back to an unpinned object.
+  integrity: >-
+    A cache entry must repeat its descriptor raw cache key and byte length and
+    trace to a receipt digest. Every read recomputes raw/canonical/length/media
+    bindings; a cache hit cannot establish freshness, signature validity,
+    revocation status, trust, review, install, or activation.
+
+offline_and_revocation:
+  local_head: >-
+    An operator-protected local head binds registry_id, audience, generation,
+    snapshot_digest, and precisely the catalog expiry. It is a retained anchor
+    reference, not a local re-signing mechanism or freshness lease.
+  current_time: >-
+    The lifecycle/TCB owner supplies actual host-checked time; caller-provided
+    time cannot revive an expired snapshot or credential.
+  revocation: >-
+    Revocations are cumulative for current policy evaluation. A fresh current
+    anchored catalog is required for current revocation/policy decisions;
+    historical cache/receipt data cannot bypass a current revocation. New
+    resolution, upgrade, activation, and rollback of a revoked package block.
+  removal_exception: >-
+    Removing an already active revoked package remains allowed, including a
+    degraded result with explicit requirement gaps. Removal may not mutate or
+    introduce a different package under the revocation exception.
+
+rollback:
+  retained_material:
+    - "historical exact lifecycle receipt and receipt digest"
+    - "historical exact lock and lock digest"
+    - "historical generation and generation digest"
+    - "historical exact raw object digests and byte lengths"
+  current_policy_material: "fresh current anchored catalog solely for current revocation and policy evaluation"
+  prohibition: >-
+    The rollback input intentionally contains no network mode, mirror selection,
+    download request, fetch observation, cache policy, cache projection, or cache
+    fallback. A rollback redownload attempt blocks.
+
+authority_ladder:
+  - "discovery"
+  - "operator selection"
+  - "catalog verify/anchor"
+  - "download/cache byte verify"
+  - "trust policy"
+  - "reviewed registry"
+  - "preflight"
+  - "private commit authority"
+  - "explicit commit/activation"
+
+negative_cases:
+  - "signed mirror, descriptor, package, record, or snapshot field tamper"
+  - "duplicate mirror ID, unknown mirror ID, or same ID with equivocated transport"
+  - "invalid HTTPS scheme/host/location, credentials, query, fragment, control character, backslash, absolute path, or traversal"
+  - "descriptor kind/set/order mismatch, duplicate logical/object path, raw pin, canonical pin, length, or media-type mismatch"
+  - "non-content-addressed object path or raw digest grammar mismatch"
+  - "cache poisoning, cache-entry tamper, divergent cache key, cache over-limit, or silent eviction"
+  - "offline cache miss, absent/mismatched/stale local head, absent local mirror, expired catalog, or current revocation"
+  - "revoked-package mutation under the removal exception"
+  - "rollback download/cache dependency or rollback of a currently revoked package"
+  - "implicit discovery-to-trust/install/activation shortcut"
+
+dependent_owner_boundaries:
+  authority: "sign and validate mirror/descriptor fields as part of existing registry and record subjects"
+  decisions: "derive candidate-only online/cache/offline attempts and consume exact candidate receipts without conflating trust or lifecycle"
+  tcb: "enforce anchored catalog state, exact-byte verification, deterministic cache admission/read integrity, revocation, rollback provenance, preflight, and private commit authority"
+  cli: >-
+    Import and verify the exact operator-provisioned object set beneath an
+    explicit local artifact root. The current adapter performs no DNS, TLS,
+    redirect handling, subprocess download, general network transport, trust,
+    lifecycle commit, installation, or activation.
+
+implementation:
+  contracts:
+    - "crates/forge-core-contracts/src/domain_pack_remote_acquisition.rs"
+    - "crates/forge-core-contracts/src/domain_pack_resolution.rs"
+    - "crates/forge-core-contracts/src/domain_pack_policy.rs"
+    - "crates/forge-core-contracts/src/backup_manifest.rs"
+  authority: "crates/forge-core-authority/src/domain_pack_supply_chain.rs"
+  decisions: "crates/forge-core-decisions/src/domain_pack_remote_acquisition.rs"
+  tcb: "crates/forge-core-domain-pack-tcb/src/lib.rs"
+  cli_adapter: "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  command_surface: "crates/forge-core-command-surface/src/lib.rs"
+  source_tests:
+    - "crates/forge-core-contracts/tests/domain_pack_remote_acquisition.rs"
+    - "crates/forge-core-authority/tests/domain_pack_supply_chain.rs"
+    - "crates/forge-core-decisions/tests/domain_pack_remote_acquisition.rs"
+    - "crates/forge-core-domain-pack-tcb/tests/lifecycle.rs"
+    - "crates/forge-core-cli/tests/domain_pack_acquisition_cli_e2e.rs"
+
+status_boundary: >-
+  C6.2 source is implemented and its affected source-test targets compile. The
+  current CLI boundary verifies exact local candidate bytes derived from signed
+  catalog plans; it is not an in-process network client. Runtime and heavy
+  stabilization tests, failure injection, hosted CI, release/publication,
+  independent semantic review, real-host execution, and field evidence remain
+  deferred to C3.2-C3.4.

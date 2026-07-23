@@ -10,6 +10,7 @@ domain_pack_supply_chain_registry:
   expires_at_unix: 1
   publisher_credentials: []
   namespace_grants: []
+  mirrors: []
   packages: []
   revocations: []
   snapshot_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

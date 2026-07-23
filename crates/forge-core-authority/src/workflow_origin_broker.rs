@@ -11,7 +11,8 @@ use std::fmt;
 
 use ed25519_dalek::{Signature, VerifyingKey};
 use forge_core_contracts::{
-    PrincipalId, StableId, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    PrincipalId, StableId, WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+    WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
     MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
     MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
     MAX_WORKFLOW_INTENT_TOTAL_BYTES,
@@ -22,8 +23,20 @@ use sha2::{Digest, Sha256};
 use crate::DEFAULT_MAX_FUTURE_SKEW_SECONDS;
 
 pub const WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION: &str = "0.1";
-pub const WORKFLOW_BROKER_EVENT_SCHEMA_VERSION: &str = "0.1";
+pub const WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION: &str = "0.1";
+pub const WORKFLOW_BROKER_EVENT_SCHEMA_VERSION: &str = "0.2";
 pub const WORKFLOW_BROKER_SIGNATURE_DOMAIN: &[u8] = b"forge-method:workflow-origin-broker:v1\0";
+pub const WORKFLOW_BROKER_SIGNATURE_DOMAIN_V2: &[u8] = b"forge-method:workflow-origin-broker:v2\0";
+pub const WORKFLOW_BROKER_HOST_DESCRIPTOR_DOMAIN: &[u8] =
+    b"forge-method:workflow-host-event-descriptor:v1\0";
+pub const WORKFLOW_BROKER_SEMANTIC_INPUT_DOMAIN: &[u8] =
+    b"forge-method:workflow-broker-semantic-input:v1\0";
+const MAX_WORKFLOW_BROKER_VERSION_BYTES: usize = 128;
+const MAX_WORKFLOW_BROKER_IDENTIFIER_BYTES: usize = 160;
+const MAX_WORKFLOW_BROKER_PUBLIC_REF_BYTES: usize = 256;
+const MAX_WORKFLOW_BROKER_OPAQUE_REF_BYTES: usize = 256;
+const MIN_WORKFLOW_BROKER_OPAQUE_REF_BYTES: usize = 16;
+const MAX_HOST_OBSERVATION_TO_ISSUANCE_SECONDS: u64 = 300;
 
 /// Operator declaration for externally performed enrollment.
 ///
@@ -163,6 +176,8 @@ pub struct WorkflowBrokerEventEnvelope {
     pub project_id: StableId,
     pub action_packet_digest: String,
     pub semantic_input: WorkflowBrokerSemanticInput,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_host_provenance: Option<WorkflowBrokerNativeHostProvenance>,
     pub issued_at_unix: u64,
     pub expires_at_unix: u64,
     pub nonce: String,
@@ -215,6 +230,7 @@ pub struct VerifiedWorkflowBrokerEventAudit {
     pub signature_fingerprint: String,
     pub enrollment_ceremony_digest: String,
     pub replay_key: WorkflowBrokerReplayKey,
+    pub native_host_provenance: Option<WorkflowBrokerNativeHostProvenance>,
     pub issued_at_unix: u64,
     pub expires_at_unix: u64,
 }
@@ -316,7 +332,11 @@ impl AuthorizedWorkflowBrokerRegistry {
         document: WorkflowBrokerRegistryDocument,
         expected_audience: &str,
     ) -> Result<Self, WorkflowBrokerError> {
-        require_nonblank("expected_audience", expected_audience)?;
+        validate_bounded_protocol_text(
+            "expected_audience",
+            expected_audience,
+            MAX_WORKFLOW_BROKER_PUBLIC_REF_BYTES,
+        )?;
         if document.audience != expected_audience {
             return Err(WorkflowBrokerError::AudienceMismatch);
         }
@@ -336,7 +356,11 @@ impl AuthorizedWorkflowBrokerRegistry {
                 document.schema_version,
             ));
         }
-        require_nonblank("audience", &document.audience)?;
+        validate_bounded_protocol_text(
+            "audience",
+            &document.audience,
+            MAX_WORKFLOW_BROKER_PUBLIC_REF_BYTES,
+        )?;
         if document.issuers.is_empty() {
             return Err(WorkflowBrokerError::EmptyRegistry);
         }
@@ -344,8 +368,8 @@ impl AuthorizedWorkflowBrokerRegistry {
         let mut keys = BTreeSet::new();
         let mut issuers = Vec::with_capacity(document.issuers.len());
         for entry in document.issuers {
-            require_nonblank("issuer_id", &entry.issuer_id.0)?;
-            require_nonblank("enrollment.ceremony_ref", &entry.enrollment.ceremony_ref)?;
+            validate_bounded_identifier("issuer_id", &entry.issuer_id.0)?;
+            validate_public_reference("enrollment.ceremony_ref", &entry.enrollment.ceremony_ref)?;
             require_digest(
                 "enrollment.ceremony_digest",
                 &entry.enrollment.ceremony_digest,
@@ -359,10 +383,13 @@ impl AuthorizedWorkflowBrokerRegistry {
             if !ids.insert(entry.issuer_id.0.clone()) {
                 return Err(WorkflowBrokerError::DuplicateIssuer(entry.issuer_id.0));
             }
-            let bytes = decode_fixed::<32>(&entry.public_key_hex)
+            let bytes = decode_lower_hex_fixed::<32>(&entry.public_key_hex)
                 .ok_or_else(|| WorkflowBrokerError::InvalidPublicKey(entry.issuer_id.0.clone()))?;
             let verifying_key = VerifyingKey::from_bytes(&bytes)
                 .map_err(|_| WorkflowBrokerError::InvalidPublicKey(entry.issuer_id.0.clone()))?;
+            if verifying_key.is_weak() {
+                return Err(WorkflowBrokerError::WeakPublicKey(entry.issuer_id.0));
+            }
             if !keys.insert(verifying_key.to_bytes()) {
                 return Err(WorkflowBrokerError::DuplicatePublicKey);
             }
@@ -389,41 +416,13 @@ impl AuthorizedWorkflowBrokerRegistry {
         now_unix: i64,
         freshness: WorkflowBrokerFreshnessPolicy,
     ) -> Result<VerifiedWorkflowBrokerEvent, WorkflowBrokerError> {
-        if envelope.schema_version != WORKFLOW_BROKER_EVENT_SCHEMA_VERSION {
-            return Err(WorkflowBrokerError::UnsupportedEventSchema(
-                envelope.schema_version,
-            ));
-        }
-        if envelope.audience != self.audience {
-            return Err(WorkflowBrokerError::AudienceMismatch);
-        }
-        if &envelope.project_id != expected_project_id {
-            return Err(WorkflowBrokerError::ProjectMismatch);
-        }
-        require_digest("action_packet_digest", &envelope.action_packet_digest)?;
-        require_nonblank("origin_principal_id", &envelope.origin_principal_id.0)?;
-        require_nonblank("separation_domain", &envelope.separation_domain.0)?;
-        if envelope.event_kind != envelope.semantic_input.kind() {
-            return Err(WorkflowBrokerError::EventKindMismatch);
-        }
-        validate_nonce(&envelope.nonce)?;
-        validate_freshness(&envelope, now_unix, freshness)?;
-        validate_semantic_input(&envelope.semantic_input)?;
-
+        validate_event_schema_shape(&envelope, true)?;
         let issuer = self
             .issuers
             .iter()
             .find(|issuer| issuer.entry.issuer_id == envelope.issuer_id)
             .ok_or_else(|| WorkflowBrokerError::UnknownIssuer(envelope.issuer_id.0.clone()))?;
-        if issuer.entry.status != WorkflowBrokerIssuerStatus::Active {
-            return Err(WorkflowBrokerError::IssuerRevoked(envelope.issuer_id.0));
-        }
-        if issuer.entry.profile != envelope.issuer_profile {
-            return Err(WorkflowBrokerError::IssuerProfileMismatch);
-        }
-        require_profile_kind(envelope.issuer_profile, envelope.event_kind)?;
-
-        let signature_bytes = decode_fixed::<64>(&envelope.signature)
+        let signature_bytes = decode_lower_hex_fixed::<64>(&envelope.signature)
             .ok_or(WorkflowBrokerError::InvalidSignatureEncoding)?;
         issuer
             .verifying_key
@@ -433,6 +432,29 @@ impl AuthorizedWorkflowBrokerRegistry {
             )
             .map_err(|_| WorkflowBrokerError::InvalidSignature)?;
 
+        if envelope.audience != self.audience {
+            return Err(WorkflowBrokerError::AudienceMismatch);
+        }
+        if &envelope.project_id != expected_project_id {
+            return Err(WorkflowBrokerError::ProjectMismatch);
+        }
+        require_digest("action_packet_digest", &envelope.action_packet_digest)?;
+        validate_bounded_identifier("origin_principal_id", &envelope.origin_principal_id.0)?;
+        validate_bounded_identifier("separation_domain", &envelope.separation_domain.0)?;
+        if envelope.event_kind != envelope.semantic_input.kind() {
+            return Err(WorkflowBrokerError::EventKindMismatch);
+        }
+        validate_nonce(&envelope.nonce)?;
+        validate_freshness(&envelope, now_unix, freshness)?;
+        validate_semantic_input(&envelope.semantic_input)?;
+        if issuer.entry.status != WorkflowBrokerIssuerStatus::Active {
+            return Err(WorkflowBrokerError::IssuerRevoked(envelope.issuer_id.0));
+        }
+        if issuer.entry.profile != envelope.issuer_profile {
+            return Err(WorkflowBrokerError::IssuerProfileMismatch);
+        }
+        require_profile_kind(envelope.issuer_profile, envelope.event_kind)?;
+        validate_event_native_host_provenance(&envelope)?;
         let event_digest = workflow_broker_event_digest(&envelope)?;
         let replay_key = WorkflowBrokerReplayKey {
             issuer_id: envelope.issuer_id.clone(),
@@ -455,6 +477,7 @@ impl AuthorizedWorkflowBrokerRegistry {
             signature_fingerprint: raw_digest(&signature_bytes),
             enrollment_ceremony_digest: issuer.entry.enrollment.ceremony_digest.clone(),
             replay_key,
+            native_host_provenance: envelope.native_host_provenance,
             issued_at_unix: envelope.issued_at_unix,
             expires_at_unix: envelope.expires_at_unix,
         };
@@ -463,7 +486,6 @@ impl AuthorizedWorkflowBrokerRegistry {
             audit,
         })
     }
-
     /// Verify an old event solely for exact durable receipt reconciliation.
     /// Freshness and active issuer status are intentionally not admission
     /// inputs here; signature, retained key ownership, audience, project,
@@ -478,35 +500,13 @@ impl AuthorizedWorkflowBrokerRegistry {
         envelope: WorkflowBrokerEventEnvelope,
         expected_project_id: &StableId,
     ) -> Result<HistoricallyVerifiedWorkflowBrokerEvent, WorkflowBrokerError> {
-        if envelope.schema_version != WORKFLOW_BROKER_EVENT_SCHEMA_VERSION {
-            return Err(WorkflowBrokerError::UnsupportedEventSchema(
-                envelope.schema_version,
-            ));
-        }
-        if envelope.audience != self.audience {
-            return Err(WorkflowBrokerError::AudienceMismatch);
-        }
-        if &envelope.project_id != expected_project_id {
-            return Err(WorkflowBrokerError::ProjectMismatch);
-        }
-        require_digest("action_packet_digest", &envelope.action_packet_digest)?;
-        require_nonblank("origin_principal_id", &envelope.origin_principal_id.0)?;
-        require_nonblank("separation_domain", &envelope.separation_domain.0)?;
-        if envelope.event_kind != envelope.semantic_input.kind() {
-            return Err(WorkflowBrokerError::EventKindMismatch);
-        }
-        validate_nonce(&envelope.nonce)?;
-        validate_semantic_input(&envelope.semantic_input)?;
+        validate_event_schema_shape(&envelope, false)?;
         let issuer = self
             .issuers
             .iter()
             .find(|issuer| issuer.entry.issuer_id == envelope.issuer_id)
             .ok_or_else(|| WorkflowBrokerError::UnknownIssuer(envelope.issuer_id.0.clone()))?;
-        if issuer.entry.profile != envelope.issuer_profile {
-            return Err(WorkflowBrokerError::IssuerProfileMismatch);
-        }
-        require_profile_kind(envelope.issuer_profile, envelope.event_kind)?;
-        let signature_bytes = decode_fixed::<64>(&envelope.signature)
+        let signature_bytes = decode_lower_hex_fixed::<64>(&envelope.signature)
             .ok_or(WorkflowBrokerError::InvalidSignatureEncoding)?;
         issuer
             .verifying_key
@@ -515,6 +515,26 @@ impl AuthorizedWorkflowBrokerRegistry {
                 &Signature::from_bytes(&signature_bytes),
             )
             .map_err(|_| WorkflowBrokerError::InvalidSignature)?;
+
+        if envelope.audience != self.audience {
+            return Err(WorkflowBrokerError::AudienceMismatch);
+        }
+        if &envelope.project_id != expected_project_id {
+            return Err(WorkflowBrokerError::ProjectMismatch);
+        }
+        require_digest("action_packet_digest", &envelope.action_packet_digest)?;
+        validate_bounded_identifier("origin_principal_id", &envelope.origin_principal_id.0)?;
+        validate_bounded_identifier("separation_domain", &envelope.separation_domain.0)?;
+        if envelope.event_kind != envelope.semantic_input.kind() {
+            return Err(WorkflowBrokerError::EventKindMismatch);
+        }
+        validate_nonce(&envelope.nonce)?;
+        validate_semantic_input(&envelope.semantic_input)?;
+        if issuer.entry.profile != envelope.issuer_profile {
+            return Err(WorkflowBrokerError::IssuerProfileMismatch);
+        }
+        require_profile_kind(envelope.issuer_profile, envelope.event_kind)?;
+        validate_event_native_host_provenance(&envelope)?;
         let event_digest = workflow_broker_event_digest(&envelope)?;
         let replay_key = WorkflowBrokerReplayKey {
             issuer_id: envelope.issuer_id.clone(),
@@ -537,6 +557,7 @@ impl AuthorizedWorkflowBrokerRegistry {
             signature_fingerprint: raw_digest(&signature_bytes),
             enrollment_ceremony_digest: issuer.entry.enrollment.ceremony_digest.clone(),
             replay_key,
+            native_host_provenance: envelope.native_host_provenance,
             issued_at_unix: envelope.issued_at_unix,
             expires_at_unix: envelope.expires_at_unix,
         };
@@ -555,7 +576,7 @@ pub fn workflow_broker_event_signing_bytes(
     envelope: &WorkflowBrokerEventEnvelope,
 ) -> Result<Vec<u8>, WorkflowBrokerError> {
     #[derive(Serialize)]
-    struct Signed<'a> {
+    struct SignedV1<'a> {
         schema_version: &'a str,
         audience: &'a str,
         issuer_id: &'a StableId,
@@ -570,31 +591,318 @@ pub fn workflow_broker_event_signing_bytes(
         expires_at_unix: u64,
         nonce: &'a str,
     }
-    let signed = Signed {
-        schema_version: &envelope.schema_version,
-        audience: &envelope.audience,
-        issuer_id: &envelope.issuer_id,
-        issuer_profile: envelope.issuer_profile,
-        origin_principal_id: &envelope.origin_principal_id,
-        separation_domain: &envelope.separation_domain,
-        event_kind: envelope.event_kind,
-        project_id: &envelope.project_id,
-        action_packet_digest: &envelope.action_packet_digest,
-        semantic_input: &envelope.semantic_input,
-        issued_at_unix: envelope.issued_at_unix,
-        expires_at_unix: envelope.expires_at_unix,
-        nonce: &envelope.nonce,
+
+    #[derive(Serialize)]
+    struct SignedV2<'a> {
+        schema_version: &'a str,
+        audience: &'a str,
+        issuer_id: &'a StableId,
+        issuer_profile: WorkflowBrokerIssuerProfile,
+        origin_principal_id: &'a PrincipalId,
+        separation_domain: &'a StableId,
+        event_kind: WorkflowBrokerEventKind,
+        project_id: &'a StableId,
+        action_packet_digest: &'a str,
+        semantic_input: &'a WorkflowBrokerSemanticInput,
+        native_host_provenance: &'a WorkflowBrokerNativeHostProvenance,
+        issued_at_unix: u64,
+        expires_at_unix: u64,
+        nonce: &'a str,
+    }
+
+    validate_event_schema_shape(envelope, false)?;
+    let (value, domain) = match envelope.schema_version.as_str() {
+        WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION => (
+            serde_json::to_value(SignedV1 {
+                schema_version: &envelope.schema_version,
+                audience: &envelope.audience,
+                issuer_id: &envelope.issuer_id,
+                issuer_profile: envelope.issuer_profile,
+                origin_principal_id: &envelope.origin_principal_id,
+                separation_domain: &envelope.separation_domain,
+                event_kind: envelope.event_kind,
+                project_id: &envelope.project_id,
+                action_packet_digest: &envelope.action_packet_digest,
+                semantic_input: &envelope.semantic_input,
+                issued_at_unix: envelope.issued_at_unix,
+                expires_at_unix: envelope.expires_at_unix,
+                nonce: &envelope.nonce,
+            }),
+            WORKFLOW_BROKER_SIGNATURE_DOMAIN,
+        ),
+        WORKFLOW_BROKER_EVENT_SCHEMA_VERSION => (
+            serde_json::to_value(SignedV2 {
+                schema_version: &envelope.schema_version,
+                audience: &envelope.audience,
+                issuer_id: &envelope.issuer_id,
+                issuer_profile: envelope.issuer_profile,
+                origin_principal_id: &envelope.origin_principal_id,
+                separation_domain: &envelope.separation_domain,
+                event_kind: envelope.event_kind,
+                project_id: &envelope.project_id,
+                action_packet_digest: &envelope.action_packet_digest,
+                semantic_input: &envelope.semantic_input,
+                native_host_provenance: envelope
+                    .native_host_provenance
+                    .as_ref()
+                    .ok_or(WorkflowBrokerError::MissingNativeHostProvenance)?,
+                issued_at_unix: envelope.issued_at_unix,
+                expires_at_unix: envelope.expires_at_unix,
+                nonce: &envelope.nonce,
+            }),
+            WORKFLOW_BROKER_SIGNATURE_DOMAIN_V2,
+        ),
+        other => {
+            return Err(WorkflowBrokerError::UnsupportedEventSchema(
+                other.to_owned(),
+            ))
+        }
     };
-    let value = serde_json::to_value(signed)
-        .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
+    let value = value.map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
     let canonical = serde_json_canonicalizer::to_vec(&value)
         .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
-    let mut bytes = Vec::with_capacity(WORKFLOW_BROKER_SIGNATURE_DOMAIN.len() + canonical.len());
-    bytes.extend_from_slice(WORKFLOW_BROKER_SIGNATURE_DOMAIN);
+    let mut bytes = Vec::with_capacity(domain.len() + canonical.len());
+    bytes.extend_from_slice(domain);
     bytes.extend_from_slice(&canonical);
     Ok(bytes)
 }
 
+/// Recompute the signed, content-free descriptor for one native host event.
+///
+/// # Errors
+/// Returns a canonicalization error if the typed descriptor cannot be encoded.
+pub fn workflow_broker_host_event_descriptor_digest(
+    provenance: &WorkflowBrokerNativeHostProvenance,
+    project_id: &StableId,
+    action_packet_digest: &str,
+    semantic_input: &WorkflowBrokerSemanticInput,
+) -> Result<String, WorkflowBrokerError> {
+    let semantic_value = serde_json::to_value(semantic_input)
+        .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
+    let semantic_digest =
+        canonical_domain_digest(WORKFLOW_BROKER_SEMANTIC_INPUT_DOMAIN, &semantic_value)?;
+    let descriptor = serde_json::json!({
+        "schema_version": "workflow_host_event_descriptor_v1",
+        "host_kind": provenance.host_kind,
+        "host_version": provenance.host_version,
+        "adapter_id": provenance.adapter_id,
+        "adapter_version": provenance.adapter_version,
+        "interaction_kind": provenance.interaction_kind,
+        "host_event_ref": provenance.host_event_ref,
+        "host_session_ref": provenance.host_session_ref,
+        "host_interaction_ref": provenance.host_interaction_ref,
+        "host_observed_at_unix": provenance.host_observed_at_unix,
+        "project_id": project_id,
+        "action_packet_digest": action_packet_digest,
+        "semantic_input_digest": semantic_digest,
+    });
+    canonical_domain_digest(WORKFLOW_BROKER_HOST_DESCRIPTOR_DOMAIN, &descriptor)
+}
+
+fn canonical_domain_digest(
+    domain: &[u8],
+    value: &serde_json::Value,
+) -> Result<String, WorkflowBrokerError> {
+    let canonical = serde_json_canonicalizer::to_vec(value)
+        .map_err(|error| WorkflowBrokerError::Canonicalization(error.to_string()))?;
+    let mut bytes = Vec::with_capacity(domain.len() + canonical.len());
+    bytes.extend_from_slice(domain);
+    bytes.extend_from_slice(&canonical);
+    Ok(raw_digest(&bytes))
+}
+
+fn validate_event_schema_shape(
+    envelope: &WorkflowBrokerEventEnvelope,
+    new_admission: bool,
+) -> Result<(), WorkflowBrokerError> {
+    match envelope.schema_version.as_str() {
+        WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION => {
+            if new_admission {
+                return Err(WorkflowBrokerError::HistoricalEventNotAdmissible);
+            }
+            if envelope.native_host_provenance.is_some() {
+                return Err(WorkflowBrokerError::UnexpectedNativeHostProvenance);
+            }
+            Ok(())
+        }
+        WORKFLOW_BROKER_EVENT_SCHEMA_VERSION => {
+            if envelope.native_host_provenance.is_none() {
+                return Err(WorkflowBrokerError::MissingNativeHostProvenance);
+            }
+            Ok(())
+        }
+        other => Err(WorkflowBrokerError::UnsupportedEventSchema(
+            other.to_owned(),
+        )),
+    }
+}
+
+fn validate_event_native_host_provenance(
+    envelope: &WorkflowBrokerEventEnvelope,
+) -> Result<(), WorkflowBrokerError> {
+    match envelope.native_host_provenance.as_ref() {
+        Some(provenance) => validate_native_host_provenance(envelope, provenance),
+        None => Ok(()),
+    }
+}
+
+fn validate_native_host_provenance(
+    envelope: &WorkflowBrokerEventEnvelope,
+    provenance: &WorkflowBrokerNativeHostProvenance,
+) -> Result<(), WorkflowBrokerError> {
+    validate_bounded_protocol_text(
+        "native_host_provenance.host_version",
+        &provenance.host_version,
+        MAX_WORKFLOW_BROKER_VERSION_BYTES,
+    )?;
+    validate_bounded_protocol_text(
+        "native_host_provenance.adapter_id",
+        &provenance.adapter_id.0,
+        MAX_WORKFLOW_BROKER_VERSION_BYTES,
+    )?;
+    validate_bounded_protocol_text(
+        "native_host_provenance.adapter_version",
+        &provenance.adapter_version,
+        MAX_WORKFLOW_BROKER_VERSION_BYTES,
+    )?;
+    validate_exact_semver(
+        "native_host_provenance.adapter_version",
+        &provenance.adapter_version,
+    )?;
+    validate_opaque_host_ref(
+        "native_host_provenance.host_event_ref",
+        &provenance.host_event_ref,
+    )?;
+    validate_opaque_host_ref(
+        "native_host_provenance.host_session_ref",
+        &provenance.host_session_ref,
+    )?;
+    validate_opaque_host_ref(
+        "native_host_provenance.host_interaction_ref",
+        &provenance.host_interaction_ref,
+    )?;
+    require_digest(
+        "native_host_provenance.host_event_descriptor_digest",
+        &provenance.host_event_descriptor_digest,
+    )?;
+    if provenance.host_observed_at_unix == 0
+        || provenance.host_observed_at_unix > envelope.issued_at_unix
+        || envelope
+            .issued_at_unix
+            .saturating_sub(provenance.host_observed_at_unix)
+            > MAX_HOST_OBSERVATION_TO_ISSUANCE_SECONDS
+    {
+        return Err(WorkflowBrokerError::HostObservationOutOfBounds);
+    }
+    let compatible = matches!(
+        (envelope.issuer_profile, provenance.interaction_kind),
+        (
+            WorkflowBrokerIssuerProfile::Human,
+            WorkflowBrokerHostInteractionKind::NativeHumanMessage
+                | WorkflowBrokerHostInteractionKind::NativeHumanConfirmation
+        ) | (
+            WorkflowBrokerIssuerProfile::Reviewer,
+            WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation
+        ) | (
+            WorkflowBrokerIssuerProfile::Runtime,
+            WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation
+        )
+    );
+    if !compatible {
+        return Err(WorkflowBrokerError::HostInteractionProfileMismatch);
+    }
+    let expected = workflow_broker_host_event_descriptor_digest(
+        provenance,
+        &envelope.project_id,
+        &envelope.action_packet_digest,
+        &envelope.semantic_input,
+    )?;
+    if provenance.host_event_descriptor_digest != expected {
+        return Err(WorkflowBrokerError::HostDescriptorDigestMismatch);
+    }
+    Ok(())
+}
+
+fn validate_bounded_protocol_text(
+    field: &'static str,
+    value: &str,
+    maximum: usize,
+) -> Result<(), WorkflowBrokerError> {
+    if value.trim().is_empty() || value.len() > maximum || value.chars().any(char::is_control) {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "must be non-blank, bounded, and control-character-free",
+        });
+    }
+    Ok(())
+}
+
+fn validate_opaque_host_ref(field: &'static str, value: &str) -> Result<(), WorkflowBrokerError> {
+    if !(MIN_WORKFLOW_BROKER_OPAQUE_REF_BYTES..=MAX_WORKFLOW_BROKER_OPAQUE_REF_BYTES)
+        .contains(&value.len())
+        || !value.is_ascii()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':'))
+        || value.contains("://")
+    {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "must be a bounded content-free opaque ASCII handle",
+        });
+    }
+    Ok(())
+}
+
+fn validate_public_reference(field: &'static str, value: &str) -> Result<(), WorkflowBrokerError> {
+    if !(MIN_WORKFLOW_BROKER_OPAQUE_REF_BYTES..=MAX_WORKFLOW_BROKER_PUBLIC_REF_BYTES)
+        .contains(&value.len())
+        || !value.is_ascii()
+        || !value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':' | b'/')
+        })
+    {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason:
+                "must be a bounded public reference without query, credential, or control syntax",
+        });
+    }
+    Ok(())
+}
+
+fn validate_bounded_identifier(
+    field: &'static str,
+    value: &str,
+) -> Result<(), WorkflowBrokerError> {
+    if value.is_empty()
+        || value.len() > MAX_WORKFLOW_BROKER_IDENTIFIER_BYTES
+        || !value.is_ascii()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':'))
+    {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "must be a bounded opaque ASCII identifier",
+        });
+    }
+    Ok(())
+}
+
+fn validate_exact_semver(field: &'static str, value: &str) -> Result<(), WorkflowBrokerError> {
+    let parsed = semver::Version::parse(value).map_err(|_| WorkflowBrokerError::InvalidField {
+        field,
+        reason: "must be an exact SemVer version",
+    })?;
+    if parsed.to_string() != value {
+        return Err(WorkflowBrokerError::InvalidField {
+            field,
+            reason: "must use canonical exact SemVer spelling",
+        });
+    }
+    Ok(())
+}
 /// Canonical identity of the complete event, including its signature.
 ///
 /// # Errors
@@ -774,7 +1082,14 @@ fn validate_freshness(
 }
 
 fn validate_nonce(value: &str) -> Result<(), WorkflowBrokerError> {
-    if !(16..=256).contains(&value.len()) || value.chars().any(char::is_control) {
+    if !(MIN_WORKFLOW_BROKER_OPAQUE_REF_BYTES..=MAX_WORKFLOW_BROKER_OPAQUE_REF_BYTES)
+        .contains(&value.len())
+        || !value.is_ascii()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':'))
+        || value.contains("://")
+    {
         Err(WorkflowBrokerError::InvalidNonce)
     } else {
         Ok(())
@@ -823,8 +1138,12 @@ fn require_digest(field: &'static str, value: &str) -> Result<(), WorkflowBroker
     }
 }
 
-fn decode_fixed<const N: usize>(value: &str) -> Option<[u8; N]> {
-    if value.len() != N * 2 {
+fn decode_lower_hex_fixed<const N: usize>(value: &str) -> Option<[u8; N]> {
+    if value.len() != N * 2
+        || value
+            .bytes()
+            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
+    {
         return None;
     }
     let mut bytes = [0_u8; N];
@@ -832,6 +1151,27 @@ fn decode_fixed<const N: usize>(value: &str) -> Option<[u8; N]> {
         *byte = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16).ok()?;
     }
     Some(bytes)
+}
+
+/// Canonical public-key fingerprint used by registry projections and durable
+/// provenance. The digest is over the semantic 32-byte Ed25519 key, never its
+/// textual hex spelling.
+///
+/// # Errors
+///
+/// Returns a typed error when the key is not canonical lowercase Ed25519 hex or
+/// resolves to a weak public key.
+pub fn workflow_broker_public_key_fingerprint(
+    public_key_hex: &str,
+) -> Result<String, WorkflowBrokerError> {
+    let bytes = decode_lower_hex_fixed::<32>(public_key_hex)
+        .ok_or_else(|| WorkflowBrokerError::InvalidPublicKey("public-key".to_owned()))?;
+    let key = VerifyingKey::from_bytes(&bytes)
+        .map_err(|_| WorkflowBrokerError::InvalidPublicKey("public-key".to_owned()))?;
+    if key.is_weak() {
+        return Err(WorkflowBrokerError::WeakPublicKey("public-key".to_owned()));
+    }
+    Ok(raw_digest(&key.to_bytes()))
 }
 
 fn raw_digest(bytes: &[u8]) -> String {
@@ -842,10 +1182,17 @@ fn raw_digest(bytes: &[u8]) -> String {
 pub enum WorkflowBrokerError {
     UnsupportedRegistrySchema(String),
     UnsupportedEventSchema(String),
+    HistoricalEventNotAdmissible,
+    MissingNativeHostProvenance,
+    UnexpectedNativeHostProvenance,
+    HostObservationOutOfBounds,
+    HostInteractionProfileMismatch,
+    HostDescriptorDigestMismatch,
     EmptyRegistry,
     DuplicateIssuer(String),
     DuplicatePublicKey,
     InvalidPublicKey(String),
+    WeakPublicKey(String),
     InvalidField {
         field: &'static str,
         reason: &'static str,
@@ -874,10 +1221,28 @@ impl fmt::Display for WorkflowBrokerError {
             Self::UnsupportedEventSchema(found) => {
                 write!(formatter, "unsupported broker event schema '{found}'")
             }
+            Self::HistoricalEventNotAdmissible => formatter.write_str(
+                "legacy broker events are recovery-only and cannot authorize a new mutation",
+            ),
+            Self::MissingNativeHostProvenance => {
+                formatter.write_str("broker event is missing native host provenance")
+            }
+            Self::UnexpectedNativeHostProvenance => {
+                formatter.write_str("legacy broker event cannot contain native host provenance")
+            }
+            Self::HostObservationOutOfBounds => {
+                formatter.write_str("native host observation time is out of bounds")
+            }
+            Self::HostInteractionProfileMismatch => formatter
+                .write_str("native host interaction kind is incompatible with broker profile"),
+            Self::HostDescriptorDigestMismatch => {
+                formatter.write_str("native host event descriptor digest mismatch")
+            }
             Self::EmptyRegistry => formatter.write_str("broker registry is empty"),
             Self::DuplicateIssuer(value) => write!(formatter, "duplicate broker issuer '{value}'"),
             Self::DuplicatePublicKey => formatter.write_str("broker public keys must be unique"),
             Self::InvalidPublicKey(value) => write!(formatter, "invalid key for issuer '{value}'"),
+            Self::WeakPublicKey(value) => write!(formatter, "weak key for issuer '{value}'"),
             Self::InvalidField { field, reason } => write!(formatter, "invalid {field}: {reason}"),
             Self::UnknownIssuer(value) => write!(formatter, "unknown broker issuer '{value}'"),
             Self::IssuerRevoked(value) => write!(formatter, "broker issuer '{value}' is revoked"),
@@ -902,6 +1267,7 @@ impl std::error::Error for WorkflowBrokerError {}
 mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
+    use forge_core_contracts::RuntimeKind;
 
     const NOW: i64 = 1_900_000_000;
 
@@ -992,8 +1358,34 @@ mod tests {
         );
     }
 
+    fn refresh_host_descriptor(envelope: &mut WorkflowBrokerEventEnvelope) {
+        let provenance = envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("native host provenance");
+        provenance.interaction_kind = match envelope.issuer_profile {
+            WorkflowBrokerIssuerProfile::Human => {
+                WorkflowBrokerHostInteractionKind::NativeHumanConfirmation
+            }
+            WorkflowBrokerIssuerProfile::Reviewer => {
+                WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation
+            }
+            WorkflowBrokerIssuerProfile::Runtime => {
+                WorkflowBrokerHostInteractionKind::AttestedRuntimeObservation
+            }
+        };
+        provenance.host_observed_at_unix = envelope.issued_at_unix;
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &envelope.project_id,
+            &envelope.action_packet_digest,
+            &envelope.semantic_input,
+        )
+        .expect("host descriptor");
+    }
+
     fn unsigned() -> WorkflowBrokerEventEnvelope {
-        WorkflowBrokerEventEnvelope {
+        let mut envelope = WorkflowBrokerEventEnvelope {
             schema_version: WORKFLOW_BROKER_EVENT_SCHEMA_VERSION.to_owned(),
             audience: "forge-host:test".to_owned(),
             issuer_id: StableId("broker.host".to_owned()),
@@ -1006,11 +1398,25 @@ mod tests {
             semantic_input: WorkflowBrokerSemanticInput::Decision {
                 selected_alternative_ref: StableId("alternative.safe".to_owned()),
             },
+            native_host_provenance: Some(WorkflowBrokerNativeHostProvenance {
+                host_kind: RuntimeKind::ForgeStandalone,
+                host_version: "0.12.0".to_owned(),
+                adapter_id: StableId("adapter.forge-standalone".to_owned()),
+                adapter_version: "0.1.0".to_owned(),
+                interaction_kind: WorkflowBrokerHostInteractionKind::NativeHumanConfirmation,
+                host_event_ref: "event-ref-0000000001".to_owned(),
+                host_session_ref: "session-ref-00000001".to_owned(),
+                host_interaction_ref: "interaction-ref-000001".to_owned(),
+                host_event_descriptor_digest: digest('0'),
+                host_observed_at_unix: NOW as u64 - 5,
+            }),
             issued_at_unix: NOW as u64 - 5,
             expires_at_unix: NOW as u64 + 120,
             nonce: "origin-event-nonce-0001".to_owned(),
             signature: String::new(),
-        }
+        };
+        refresh_host_descriptor(&mut envelope);
+        envelope
     }
 
     fn unsigned_intent_revision() -> WorkflowBrokerEventEnvelope {
@@ -1036,6 +1442,27 @@ mod tests {
         mut envelope: WorkflowBrokerEventEnvelope,
         key: &SigningKey,
     ) -> WorkflowBrokerEventEnvelope {
+        refresh_host_descriptor(&mut envelope);
+        let bytes = workflow_broker_event_signing_bytes(&envelope).expect("bytes");
+        envelope.signature = hex(&key.sign(&bytes).to_bytes());
+        envelope
+    }
+
+    fn sign_exact_provenance(
+        mut envelope: WorkflowBrokerEventEnvelope,
+        key: &SigningKey,
+    ) -> WorkflowBrokerEventEnvelope {
+        let provenance = envelope
+            .native_host_provenance
+            .as_mut()
+            .expect("native host provenance");
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &envelope.project_id,
+            &envelope.action_packet_digest,
+            &envelope.semantic_input,
+        )
+        .expect("host descriptor");
         let bytes = workflow_broker_event_signing_bytes(&envelope).expect("bytes");
         envelope.signature = hex(&key.sign(&bytes).to_bytes());
         envelope
@@ -1054,6 +1481,201 @@ mod tests {
         )
     }
 
+    #[test]
+    fn v0_2_requires_valid_opaque_native_host_provenance() {
+        let key = key();
+        let registry = registry(&key, WorkflowBrokerIssuerProfile::Human);
+
+        let mut missing = unsigned();
+        missing.native_host_provenance = None;
+        assert_eq!(
+            workflow_broker_event_signing_bytes(&missing).expect_err("missing provenance"),
+            WorkflowBrokerError::MissingNativeHostProvenance
+        );
+
+        let mut mismatched = unsigned();
+        mismatched
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .host_event_descriptor_digest = digest('f');
+        let bytes = workflow_broker_event_signing_bytes(&mismatched).expect("shape-valid bytes");
+        mismatched.signature = hex(&key.sign(&bytes).to_bytes());
+        assert_eq!(
+            verify(&registry, mismatched, NOW).expect_err("descriptor mismatch"),
+            WorkflowBrokerError::HostDescriptorDigestMismatch
+        );
+
+        let mut malformed_version = unsigned();
+        malformed_version
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .adapter_version = "v0.1".to_owned();
+        refresh_host_descriptor(&mut malformed_version);
+        malformed_version
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .adapter_version = "v0.1".to_owned();
+        let provenance = malformed_version
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance");
+        provenance.host_event_descriptor_digest = workflow_broker_host_event_descriptor_digest(
+            provenance,
+            &malformed_version.project_id,
+            &malformed_version.action_packet_digest,
+            &malformed_version.semantic_input,
+        )
+        .expect("descriptor");
+        let bytes = workflow_broker_event_signing_bytes(&malformed_version).expect("signed shape");
+        malformed_version.signature = hex(&key.sign(&bytes).to_bytes());
+        assert!(matches!(
+            verify(&registry, malformed_version, NOW),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "native_host_provenance.adapter_version",
+                ..
+            })
+        ));
+
+        let mut raw = serde_json::to_value(unsigned()).expect("event JSON");
+        raw.as_object_mut().expect("event object").insert(
+            "raw_transcript".to_owned(),
+            serde_json::json!("human said yes"),
+        );
+        assert!(serde_json::from_value::<WorkflowBrokerEventEnvelope>(raw).is_err());
+    }
+
+    #[test]
+    fn v0_2_rejects_profile_time_reference_and_tamper_attacks() {
+        let key = key();
+        let registry = registry(&key, WorkflowBrokerIssuerProfile::Human);
+
+        let mut incompatible = unsigned();
+        incompatible
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .interaction_kind = WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation;
+        assert_eq!(
+            verify(&registry, sign_exact_provenance(incompatible, &key), NOW)
+                .expect_err("human profile cannot assert reviewer interaction"),
+            WorkflowBrokerError::HostInteractionProfileMismatch
+        );
+
+        let issued_at = unsigned().issued_at_unix;
+        for observed_at in [
+            0,
+            issued_at + 1,
+            issued_at - MAX_HOST_OBSERVATION_TO_ISSUANCE_SECONDS - 1,
+        ] {
+            let mut invalid_time = unsigned();
+            invalid_time
+                .native_host_provenance
+                .as_mut()
+                .expect("provenance")
+                .host_observed_at_unix = observed_at;
+            assert_eq!(
+                verify(&registry, sign_exact_provenance(invalid_time, &key), NOW)
+                    .expect_err("host observation time must be bounded"),
+                WorkflowBrokerError::HostObservationOutOfBounds
+            );
+        }
+
+        for invalid_ref in [
+            "short",
+            "opaque ref contains whitespace",
+            "referência-não-ascii-0001",
+            "opaque-control-\u{1b}-ref-0001",
+        ] {
+            let mut invalid_reference = unsigned();
+            invalid_reference
+                .native_host_provenance
+                .as_mut()
+                .expect("provenance")
+                .host_event_ref = invalid_ref.to_owned();
+            assert!(matches!(
+                verify(
+                    &registry,
+                    sign_exact_provenance(invalid_reference, &key),
+                    NOW,
+                ),
+                Err(WorkflowBrokerError::InvalidField {
+                    field: "native_host_provenance.host_event_ref",
+                    ..
+                })
+            ));
+        }
+
+        let mut tampered_after_signing = sign(unsigned(), &key);
+        tampered_after_signing
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .interaction_kind = WorkflowBrokerHostInteractionKind::NativeReviewerConfirmation;
+        assert_eq!(
+            verify(&registry, tampered_after_signing, NOW)
+                .expect_err("signed provenance tamper must fail before content validation"),
+            WorkflowBrokerError::InvalidSignature
+        );
+
+        let mut semantic_tamper = sign(unsigned(), &key);
+        let WorkflowBrokerSemanticInput::Decision {
+            selected_alternative_ref,
+        } = &mut semantic_tamper.semantic_input
+        else {
+            panic!("decision semantic fixture");
+        };
+        selected_alternative_ref.0.clear();
+        assert_eq!(
+            verify(&registry, semantic_tamper.clone(), NOW)
+                .expect_err("live verification must authenticate before semantic validation"),
+            WorkflowBrokerError::InvalidSignature
+        );
+        assert_eq!(
+            registry
+                .verify_event_for_recovery(semantic_tamper, &StableId("project.test".to_owned()),)
+                .expect_err("recovery verification must authenticate before semantic validation"),
+            WorkflowBrokerError::InvalidSignature
+        );
+    }
+    #[test]
+    fn frozen_v0_1_bytes_remain_recovery_only() {
+        let key = key();
+        let registry = registry(&key, WorkflowBrokerIssuerProfile::Human);
+        let mut envelope = unsigned();
+        envelope.schema_version = WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION.to_owned();
+        envelope.native_host_provenance = None;
+        envelope.signature.clear();
+
+        let signing_bytes = workflow_broker_event_signing_bytes(&envelope).expect("v0.1 bytes");
+        assert_eq!(
+            &signing_bytes[..WORKFLOW_BROKER_SIGNATURE_DOMAIN.len()],
+            WORKFLOW_BROKER_SIGNATURE_DOMAIN
+        );
+        assert_eq!(
+            std::str::from_utf8(&signing_bytes[WORKFLOW_BROKER_SIGNATURE_DOMAIN.len()..])
+                .expect("canonical UTF-8"),
+            r#"{"action_packet_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","audience":"forge-host:test","event_kind":"decision","expires_at_unix":1900000120,"issued_at_unix":1899999995,"issuer_id":"broker.host","issuer_profile":"human","nonce":"origin-event-nonce-0001","origin_principal_id":"principal.human.owner","project_id":"project.test","schema_version":"0.1","semantic_input":{"kind":"decision","selected_alternative_ref":"alternative.safe"},"separation_domain":"human.owner.session"}"#
+        );
+        envelope.signature = hex(&key.sign(&signing_bytes).to_bytes());
+        assert_eq!(
+            envelope.signature,
+            "20b52d86c9b0629392d82d9b8f58b73957b9eee2bba6c0623339afe84b03fc35d6d14b5157e910937bda434ad57317015bc771a93a891ac35079ae586ccb430d"
+        );
+        assert_eq!(
+            workflow_broker_event_digest(&envelope).expect("v0.1 digest"),
+            "sha256:46c466f5c032c8d5b722d4cef8034a0fe7572df804c260d5b39d948db2d1cdc6"
+        );
+        assert_eq!(
+            verify(&registry, envelope.clone(), NOW).expect_err("v0.1 new admission"),
+            WorkflowBrokerError::HistoricalEventNotAdmissible
+        );
+        registry
+            .verify_event_for_recovery(envelope, &StableId("project.test".to_owned()))
+            .expect("v0.1 exact historical recovery");
+    }
     #[test]
     fn verifies_external_signature_and_returns_kernel_replay_identity() {
         let key = key();
@@ -1394,6 +2016,114 @@ mod tests {
                 expected
             );
         }
+    }
+
+    #[test]
+    fn registry_and_provenance_reject_weak_keys_and_secret_bearing_public_handles() {
+        let signing_key = key();
+        let mut unsafe_registry = WorkflowBrokerRegistryDocument {
+            schema_version: WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION.to_owned(),
+            audience: "forge-host:test".to_owned(),
+            issuers: vec![WorkflowBrokerIssuerEntry {
+                issuer_id: StableId("broker.host".to_owned()),
+                profile: WorkflowBrokerIssuerProfile::Human,
+                public_key_hex: hex(signing_key.verifying_key().as_bytes()),
+                status: WorkflowBrokerIssuerStatus::Active,
+                enrollment: WorkflowBrokerEnrollmentDeclaration {
+                    ceremony_ref: "operator://ceremony/1?token=secret".to_owned(),
+                    ceremony_digest: digest('a'),
+                    declared_at_unix: NOW as u64 - 60,
+                },
+            }],
+        };
+        assert!(matches!(
+            AuthorizedWorkflowBrokerRegistry::from_document(unsafe_registry.clone()),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "enrollment.ceremony_ref",
+                ..
+            })
+        ));
+        unsafe_registry.issuers[0].enrollment.ceremony_ref =
+            "operator://ceremony/safe-1".to_owned();
+        unsafe_registry.issuers[0].public_key_hex = "00".repeat(32);
+        assert!(matches!(
+            AuthorizedWorkflowBrokerRegistry::from_document(unsafe_registry),
+            Err(WorkflowBrokerError::InvalidPublicKey(_) | WorkflowBrokerError::WeakPublicKey(_))
+        ));
+
+        let registry = registry(&signing_key, WorkflowBrokerIssuerProfile::Human);
+        for unsafe_ref in [
+            "https://host.example/event/1234",
+            "operator@example.test-event-1234",
+            "event-ref-0001?token=secret",
+            "event-ref-0001#transcript",
+        ] {
+            let mut envelope = unsigned();
+            envelope
+                .native_host_provenance
+                .as_mut()
+                .expect("provenance")
+                .host_event_ref = unsafe_ref.to_owned();
+            assert!(matches!(
+                verify(
+                    &registry,
+                    sign_exact_provenance(envelope, &signing_key),
+                    NOW
+                ),
+                Err(WorkflowBrokerError::InvalidField {
+                    field: "native_host_provenance.host_event_ref",
+                    ..
+                })
+            ));
+        }
+    }
+
+    #[test]
+    fn canonical_key_fingerprint_uses_semantic_ed25519_bytes() {
+        let signing_key = key();
+        let public_key_hex = hex(signing_key.verifying_key().as_bytes());
+        assert_eq!(
+            workflow_broker_public_key_fingerprint(&public_key_hex).expect("fingerprint"),
+            raw_digest(signing_key.verifying_key().as_bytes())
+        );
+        assert!(matches!(
+            workflow_broker_public_key_fingerprint(&public_key_hex.to_uppercase()),
+            Err(WorkflowBrokerError::InvalidPublicKey(_))
+        ));
+    }
+
+    #[test]
+    fn bounded_host_versions_and_identity_fields_fail_closed() {
+        let signing_key = key();
+        let registry = registry(&signing_key, WorkflowBrokerIssuerProfile::Human);
+        let mut control_bearing_version = unsigned();
+        control_bearing_version
+            .native_host_provenance
+            .as_mut()
+            .expect("provenance")
+            .host_version = "host-version\n1".to_owned();
+        assert!(matches!(
+            verify(
+                &registry,
+                sign_exact_provenance(control_bearing_version, &signing_key),
+                NOW,
+            ),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "native_host_provenance.host_version",
+                ..
+            })
+        ));
+
+        let mut secret_identity = unsigned();
+        secret_identity.origin_principal_id =
+            PrincipalId("principal.owner?credential=secret".to_owned());
+        assert!(matches!(
+            verify(&registry, sign(secret_identity, &signing_key), NOW),
+            Err(WorkflowBrokerError::InvalidField {
+                field: "origin_principal_id",
+                ..
+            })
+        ));
     }
 
     #[test]

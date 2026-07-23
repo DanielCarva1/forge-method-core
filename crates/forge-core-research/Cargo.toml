@@ -4,16 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-eventlog = { path = "../forge-core-eventlog" }
-forge-core-store = { path = "../forge-core-store" }
 forge-core-validate = { path = "../forge-core-validate" }
-serde.workspace = true
-serde_json.workspace = true
 schemars.workspace = true
-sha2.workspace = true
-tracing.workspace = true
+serde.workspace = true
 yaml_serde.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
+forge-core-contracts = { path = "../forge-core-contracts" }

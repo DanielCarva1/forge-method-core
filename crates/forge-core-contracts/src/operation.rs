@@ -38,6 +38,11 @@ pub struct OperationContract {
     pub command_refs: Vec<CommandRef>,
     #[serde(default)]
     pub effect_contract_refs: Vec<RepoPath>,
+    /// Typed protected boundaries declared by the authority response. These
+    /// declarations never grant authority; the planner and runtime gates use
+    /// them only to restore stricter policy requirements.
+    #[serde(default)]
+    pub risk_boundaries: Vec<OperationRiskBoundary>,
     pub diagnostics: Diagnostics,
 }
 
@@ -373,7 +378,20 @@ pub enum OperationGateScope {
     Lane,
     ProductArea,
     Integration,
+    Destructive,
     Release,
+    Authority,
+}
+
+/// A protected operation boundary that restores rigorous review and gate
+/// requirements under the accepted funnel-autonomy policy. Declaring a
+/// boundary is descriptive only and cannot authorize the operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationRiskBoundary {
+    Destructive,
+    Release,
+    Authority,
 }
 
 #[cfg(test)]

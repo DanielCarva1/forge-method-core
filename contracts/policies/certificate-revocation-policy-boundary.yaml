@@ -1,7 +1,7 @@
 schema_version: "0.1"
 policy: "certificate_revocation_policy_boundary"
 status: "active"
-summary: "Forge Core verifies a Sigstore-style short-lived certificate revocation policy by checking declared policy mode, certificate lifetime, and trusted signing time inside the certificate validity window, while keeping explicit CRL/OCSP status and TUF freshness out of scope."
+summary: "Forge Core verifies the Sigstore-style short-lived certificate policy branch by checking declared policy mode, certificate lifetime, and trusted signing time inside the certificate validity window. Explicit supplied/offline CRL status and direct-issuer or strictly supplied delegated-responder OCSP status are separate read-only source boundaries whose affected packages passed locked all-target compilation; runtime evidence remains pending. Network retrieval and TUF freshness remain out of scope."
 canonical_terms:
   certificate_revocation_policy: "A typed policy section that tells Forge which revocation strategy is acceptable for this verifier."
   short_lived_certificate_strategy: "A policy strategy where a Fulcio-style short-lived certificate plus trusted signing time is accepted without CRL or OCSP network status for this boundary."
@@ -29,8 +29,8 @@ rules:
     rule: "Forge must require trusted_signing_time_unix and fail if it falls outside the certificate validity window."
   - id: "explicit_status_not_implied"
     rule: "Passing this verifier means revocation is not checked by short-lived policy; it must not be reported as CRL/OCSP good or not revoked."
-  - id: "explicit_status_deferred"
-    rule: "revocation.mode=explicit_status_required must fail until Forge has a dedicated CRL/OCSP status verifier."
+  - id: "explicit_status_separate"
+    rule: "revocation.mode=explicit_status_required does not pass this short-lived-policy command; callers must use the dedicated supplied/offline CRL or OCSP verifier. The OCSP product CLI source accepts either no delegated material for direct-issuer behavior or a strict supplied responder certificate with ordered issuer-chain paths, and grants no network or mutation authority; runtime evidence remains pending."
 evidence_basis:
   - source_id: "sigstore_security_model_short_lived_certificates"
     supports: "Sigstore uses short-lived certificates and a transparency/timestamp model instead of normal long-lived certificate revocation flows."
@@ -49,10 +49,10 @@ implementation_refs:
 acceptance:
   - "forge-core host-adapter-verify-certificate-revocation-policy --json returns status=passed when short_lived_certificate policy, certificate lifetime, and trusted signing time all match."
   - "The verifier fails when certificate lifetime exceeds max_certificate_lifetime_seconds."
-  - "The verifier fails when revocation.mode=explicit_status_required because CRL/OCSP status verification is not implemented in this boundary."
+  - "The short-lived-policy verifier fails closed for revocation.mode=explicit_status_required and directs authority to the separate supplied/offline CRL or OCSP verifier rather than implying status."
   - "The host adapter manifest exposes the verifier as read-only validation with no workflow authority."
   - "Verifier output states revocation_status=not_checked_by_short_lived_policy on pass and lists CRL/OCSP/TUF/install authority as deferred."
-inference_boundary: "This boundary verifies only the policy acceptability of a Sigstore-style short-lived certificate revocation strategy using supplied certificate validity and trusted signing time. It does not fetch or verify CRLs, query OCSP, claim a certificate is not revoked, refresh TUF trusted roots, mutate installations, or decide release update authority."
+inference_boundary: "This command verifies only the policy acceptability of a Sigstore-style short-lived certificate revocation strategy using supplied certificate validity and trusted signing time. Separate read-only boundaries verify supplied/offline CRL evidence and direct-issuer or strictly supplied delegated-responder OCSP evidence. OCSP runtime evidence remains pending. No revocation command fetches network evidence, refreshes TUF trusted roots, mutates installations, signs artifacts, or decides release update authority."
 failure_modes_prevented:
   - "Certificate validity is mislabeled as explicit revocation status."
   - "CT or Rekor evidence is treated as CRL/OCSP evidence."
@@ -60,5 +60,5 @@ failure_modes_prevented:
   - "A trusted signing time outside certificate validity is accepted."
   - "Revocation policy verification is mistaken for TUF freshness or update authority."
 next_boundary:
-  id: "explicit_crl_ocsp_revocation_status_boundary"
-  question: "How should Forge verify explicit CRL or OCSP revocation status, freshness, and offline failure policy without blocking the short-lived certificate strategy?"
+  id: "revocation_network_retrieval_policy"
+  question: "Should a future host/network adapter retrieve revocation evidence without broadening the supplied/offline verifier or granting install/update authority?"

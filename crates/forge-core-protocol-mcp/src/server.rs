@@ -38,10 +38,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use forge_core_command_surface::{command_by_name, JsonMode};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ContentBlock, ErrorData, Implementation, JsonObject,
+    CallToolRequestParam, CallToolResult, Content, ErrorData, Implementation, JsonObject,
     ListToolsResult, Meta, ServerCapabilities, ServerInfo, Tool,
 };
-use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
+use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, ServiceExt};
 
 use crate::allowlist::{Allowlist, AllowlistPolicy};
@@ -252,7 +252,8 @@ impl ForgeMcpServer {
     #[must_use]
     fn check_attestation_gate(
         &self,
-        request: &CallToolRequestParams,
+        request: &CallToolRequestParam,
+        meta: &Meta,
         tool_name: &str,
         is_mutate: bool,
     ) -> Option<crate::attestation::AttestationGateOutcome> {
@@ -261,10 +262,10 @@ impl ForgeMcpServer {
             // Not required: read-only under default policy, or NeverRequired.
             // If an attestation is present we still try to verify it (defense
             // in depth) but a missing one is allowed.
-            return self.verify_present_attestation(request, tool_name);
+            return self.verify_present_attestation(request, meta, tool_name);
         }
         // Required for this tool class: must be present and valid.
-        match extract_attestation(request) {
+        match extract_attestation(meta) {
             Some(Ok(att)) => match self.verify_attestation(request, tool_name, &att) {
                 Ok(()) => None,
                 Err(e) => Some(crate::attestation::AttestationGateOutcome::Invalid(
@@ -283,10 +284,11 @@ impl ForgeMcpServer {
     #[must_use]
     fn verify_present_attestation(
         &self,
-        request: &CallToolRequestParams,
+        request: &CallToolRequestParam,
+        meta: &Meta,
         tool_name: &str,
     ) -> Option<crate::attestation::AttestationGateOutcome> {
-        match extract_attestation(request) {
+        match extract_attestation(meta) {
             Some(Ok(att)) => match self.verify_attestation(request, tool_name, &att) {
                 Ok(()) => None,
                 Err(e) => Some(crate::attestation::AttestationGateOutcome::Invalid(
@@ -304,7 +306,7 @@ impl ForgeMcpServer {
     /// verify it.
     fn verify_attestation(
         &self,
-        request: &CallToolRequestParams,
+        request: &CallToolRequestParam,
         tool_name: &str,
         att: &crate::attestation::AttestationInput,
     ) -> Result<(), crate::attestation::AttestationError> {
@@ -314,10 +316,11 @@ impl ForgeMcpServer {
 
     fn authorize_mutating_request(
         &self,
-        request: &CallToolRequestParams,
+        request: &CallToolRequestParam,
+        meta: &Meta,
         tool_name: &str,
     ) -> Result<VerifiedExecutionAuthorization, McpAdapterError> {
-        let attestation = match extract_attestation(request) {
+        let attestation = match extract_attestation(meta) {
             Some(Ok(attestation)) => attestation,
             Some(Err(error)) => {
                 return Err(McpAdapterError::DeniedByAttestation {
@@ -358,7 +361,8 @@ impl ForgeMcpServer {
     /// executor, never through the read-only subprocess path.
     fn dispatch_mutation_in_process(
         &self,
-        request: &CallToolRequestParams,
+        request: &CallToolRequestParam,
+        meta: &Meta,
         tool_name: &str,
     ) -> Result<McpMutationExecutionResult, McpAdapterError> {
         let policy =
@@ -375,7 +379,7 @@ impl ForgeMcpServer {
                         .to_owned(),
             });
         }
-        let authorization = self.authorize_mutating_request(request, tool_name)?;
+        let authorization = self.authorize_mutating_request(request, meta, tool_name)?;
         let call = verified_call_from_arguments(authorization, request.arguments.as_ref())
             .map_err(|error| McpAdapterError::ArgumentMapping(error.to_string()))?;
         let executor = self.config.mutation_executor.as_ref().ok_or_else(|| {
@@ -558,7 +562,7 @@ fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
 }
 
 fn canonical_intent(
-    request: &CallToolRequestParams,
+    request: &CallToolRequestParam,
     tool_name: &str,
     attestation: &crate::attestation::AttestationInput,
 ) -> crate::attestation::CanonicalIntent {
@@ -607,17 +611,20 @@ fn copy_minimal_process_environment(command: &mut Command) {
     }
 }
 
-/// Extract the Tool-Call Attestation from the MCP request's `_meta.attestation`
-/// field (ADR-0006 Decision 4).
+/// Extract the Tool-Call Attestation from authoritative MCP request context
+/// `_meta.attestation` (ADR-0006 Decision 4).
+///
+/// rmcp 0.11 deserializes wire `_meta` into request extensions and supplies it
+/// as [`RequestContext::meta`]. Direct tests pass an explicit [`Meta`] through
+/// the same seam, so typed params can never override transport metadata.
 ///
 /// Returns `None` if no attestation is present (caller decides if that is
 /// allowed). Returns `Some(Ok(att))` on successful extraction, or
 /// `Some(Err(..))` if the field is present but malformed (a present-but-
 /// unparseable attestation is a rejection, never silently ignored).
 fn extract_attestation(
-    request: &CallToolRequestParams,
+    meta: &Meta,
 ) -> Option<Result<crate::attestation::AttestationInput, AttestationExtractError>> {
-    let meta = request.meta.as_ref()?;
     let att_value = meta.0.get("attestation")?;
     Some(
         serde_json::from_value::<crate::attestation::AttestationInput>(att_value.clone()).map_err(
@@ -654,24 +661,30 @@ impl std::error::Error for AttestationExtractError {}
 
 impl ServerHandler for ForgeMcpServer {
     fn get_info(&self) -> ServerInfo {
-        // Advertise Forge as the server; capabilities limited to tools.
-        let capabilities = ServerCapabilities::builder().enable_tools().build();
-        let mut info = ServerInfo::new(capabilities);
-        info.server_info = Implementation::new("forge-core-mcp", env!("CARGO_PKG_VERSION"));
-        info.instructions = Some(
-            "Forge Method MCP adapter. Read-only tools are pass-throughs over \
-             pinned `forge-core` CLI commands. The sole execute-operation mutation \
-             path requires explicit reconciled trusted deployment for its exact effect scope."
-                .into(),
-        );
-        info
+        ServerInfo {
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            server_info: Implementation {
+                name: "forge-core-mcp".to_owned(),
+                title: None,
+                version: env!("CARGO_PKG_VERSION").to_owned(),
+                icons: None,
+                website_url: None,
+            },
+            instructions: Some(
+                "Forge Method MCP adapter. Read-only tools are pass-throughs over \
+                 pinned `forge-core` CLI commands. The sole execute-operation mutation \
+                 path requires explicit reconciled trusted deployment for its exact effect scope."
+                    .into(),
+            ),
+            ..ServerInfo::default()
+        }
     }
 
     fn list_tools(
         &self,
-        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _request: Option<rmcp::model::PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + MaybeSendFuture + '_ {
+    ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
         let tools: Vec<Tool> = self
             .config
             .allowlist
@@ -683,25 +696,18 @@ impl ServerHandler for ForgeMcpServer {
 
     fn call_tool(
         &self,
-        mut request: CallToolRequestParams,
+        request: CallToolRequestParam,
         context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<CallToolResult, ErrorData>> + MaybeSendFuture + '_ {
-        // rmcp lifts protocol `_meta` out of typed request params and into the
-        // RequestContext before dispatch. Restore it at this adapter boundary
-        // so wire attestations and direct in-process calls share one verifier.
-        if !context.meta.0.is_empty() {
-            let request_meta = request.meta.get_or_insert_with(Meta::new);
-            for (key, value) in context.meta.0 {
-                request_meta.0.entry(key).or_insert(value);
-            }
-        }
-        std::future::ready(self.handle_call_tool(request))
+    ) -> impl Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
+        // rmcp deserializes wire `_meta` into RequestContext. Treat that
+        // transport-derived value as authoritative; typed params have no meta.
+        std::future::ready(self.handle_call_tool(request, &context.meta))
     }
 }
 
 impl ForgeMcpServer {
     /// The synchronous body of `call_tool`, separated so it can be unit-tested
-    /// without a live rmcp transport.
+    /// with explicit metadata while production dispatch uses `RequestContext::meta`.
     ///
     /// Enforcement order (ADR-0006):
     /// 1. Allowlist lookup (also tells us mutate-ness).
@@ -711,7 +717,8 @@ impl ForgeMcpServer {
     #[allow(clippy::needless_pass_by_value)] // trait-adjacent; param by-value matches call_tool
     fn handle_call_tool(
         &self,
-        request: CallToolRequestParams,
+        request: CallToolRequestParam,
+        meta: &Meta,
     ) -> Result<CallToolResult, ErrorData> {
         let tool_name = request.name.as_ref().to_string();
 
@@ -723,7 +730,7 @@ impl ForgeMcpServer {
             if let Err(error) = self.config.validate_process_security() {
                 return Ok(rejection_result(&tool_name, &error.to_string()));
             }
-            return match self.dispatch_mutation_in_process(&request, &tool_name) {
+            return match self.dispatch_mutation_in_process(&request, meta, &tool_name) {
                 Ok(result) => {
                     let (status, is_error) = match result.status() {
                         McpMutationExecutionStatus::Applied => ("applied", false),
@@ -738,9 +745,9 @@ impl ForgeMcpServer {
                     })
                     .to_string();
                     if is_error {
-                        Ok(CallToolResult::error(vec![ContentBlock::text(envelope)]))
+                        Ok(CallToolResult::error(vec![Content::text(envelope)]))
                     } else {
-                        Ok(CallToolResult::success(vec![ContentBlock::text(envelope)]))
+                        Ok(CallToolResult::success(vec![Content::text(envelope)]))
                     }
                 }
                 Err(error) => Ok(rejection_result(&tool_name, &error.to_string())),
@@ -748,7 +755,7 @@ impl ForgeMcpServer {
         }
         let argv = arguments_to_argv(request.arguments.as_ref());
         // Optional/read-only Tool-Call Attestation gate (ADR-0006 Decision 4).
-        if let Some(att_err) = self.check_attestation_gate(&request, &tool_name, false) {
+        if let Some(att_err) = self.check_attestation_gate(&request, meta, &tool_name, false) {
             // Gate denial surfaces as a tool-level error result.
             let (tool, reason) = match att_err {
                 crate::attestation::AttestationGateOutcome::RequiredMissing => (
@@ -763,9 +770,7 @@ impl ForgeMcpServer {
         }
 
         match self.invoke_tool(&tool_name, &argv) {
-            Ok(envelope_json) => Ok(CallToolResult::success(vec![ContentBlock::text(
-                envelope_json,
-            )])),
+            Ok(envelope_json) => Ok(CallToolResult::success(vec![Content::text(envelope_json)])),
             // All three gate denials surface identically as a tool-level error
             // carrying the structured rejection payload.
             Err(
@@ -781,9 +786,7 @@ impl ForgeMcpServer {
                 // The subprocess rejected (non-zero exit). Surface the envelope
                 // JSON it emitted (it carries structured self-correction data)
                 // and mark the MCP result as an error.
-                Ok(CallToolResult::error(vec![ContentBlock::text(
-                    envelope_json,
-                )]))
+                Ok(CallToolResult::error(vec![Content::text(envelope_json)]))
             }
             Err(McpAdapterError::UnknownTool(t)) => Err(ErrorData::invalid_request(
                 format!("unknown tool: {t}"),
@@ -827,8 +830,9 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         .into(),
     };
     let empty_schema = JsonObject::new();
-    Tool::new(allowed.name.clone(), description, Arc::new(empty_schema))
-        .with_title(format!("forge-core {}", allowed.name))
+    let mut tool = Tool::new(allowed.name.clone(), description, Arc::new(empty_schema));
+    tool.title = Some(format!("forge-core {}", allowed.name));
+    tool
 }
 
 /// Build a MCP `CallToolResult` for a gate rejection (Allowlist/MutateGate/
@@ -841,7 +845,7 @@ fn rejection_result(tool: &str, reason: &str) -> CallToolResult {
         "tool": tool,
         "reason": reason,
     });
-    CallToolResult::error(vec![ContentBlock::text(payload.to_string())])
+    CallToolResult::error(vec![Content::text(payload.to_string())])
 }
 
 /// Best-effort extraction of `exit_reason` from an envelope JSON string, for
@@ -1302,20 +1306,26 @@ mcp_deployment_policy:
         }
     }
 
-    /// Build a `CallToolRequestParams` with `_meta.attestation` set.
+    fn tool_request(tool: &str, arguments: Option<JsonObject>) -> CallToolRequestParam {
+        CallToolRequestParam {
+            name: tool.to_owned().into(),
+            arguments,
+        }
+    }
+
+    /// Build typed params plus explicit authoritative `_meta.attestation`.
     #[allow(clippy::needless_pass_by_value)] // test helper; att moved into meta
     fn request_with_attestation(
         tool: &str,
         arguments: JsonObject,
         att: crate::attestation::AttestationInput,
-    ) -> CallToolRequestParams {
-        use rmcp::model::Meta;
+    ) -> (CallToolRequestParam, Meta) {
         let mut meta_map = JsonObject::new();
         meta_map.insert("attestation".into(), serde_json::to_value(&att).unwrap());
-        let mut req = CallToolRequestParams::new(tool.to_string());
-        req.arguments = (!arguments.is_empty()).then_some(arguments);
-        req.meta = Some(Meta(meta_map));
-        req
+        (
+            tool_request(tool, (!arguments.is_empty()).then_some(arguments)),
+            Meta(meta_map),
+        )
     }
 
     #[test]
@@ -1325,11 +1335,10 @@ mcp_deployment_policy:
         let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
         // P4b.2c can commit and reconcile one admitted effect internally, but the
         // stdio surface remains disabled until trusted deployment wiring is explicit.
-        let mut req = CallToolRequestParams::new("execute-operation");
         let mut arguments = JsonObject::new();
         arguments.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
-        req.arguments = Some(arguments);
-        let res = server.handle_call_tool(req).unwrap();
+        let req = tool_request("execute-operation", Some(arguments));
+        let res = server.handle_call_tool(req, &Meta::new()).unwrap();
         assert!(res.is_error.unwrap_or(false));
         assert!(content_text(&res).contains("operator principal registry"));
     }
@@ -1348,9 +1357,9 @@ mcp_deployment_policy:
             "nonce-registered-0001",
             current_unix_seconds(),
         );
-        let req = request_with_attestation("execute-operation", args, att);
+        let (req, meta) = request_with_attestation("execute-operation", args, att);
         let authorization = server
-            .authorize_mutating_request(&req, "execute-operation")
+            .authorize_mutating_request(&req, &meta, "execute-operation")
             .expect("registry-authorized execution");
         assert_eq!(
             authorization.principal().principal_id().0,
@@ -1358,7 +1367,7 @@ mcp_deployment_policy:
         );
         assert_eq!(authorization.principal().agent_id().0, "codex-main");
 
-        let result = server.handle_call_tool(req).expect("tool result");
+        let result = server.handle_call_tool(req, &meta).expect("tool result");
         assert!(result.is_error.unwrap_or(false));
         assert!(content_text(&result).contains("in-process mutation executor"));
     }
@@ -1390,11 +1399,11 @@ mcp_deployment_policy:
             "nonce-in-process-0001",
             current_unix_seconds(),
         );
-        let request =
+        let (request, meta) =
             request_with_attestation(MCP_EXECUTE_OPERATION_TOOL, arguments.clone(), attestation);
 
         let result = server
-            .dispatch_mutation_in_process(&request, MCP_EXECUTE_OPERATION_TOOL)
+            .dispatch_mutation_in_process(&request, &meta, MCP_EXECUTE_OPERATION_TOOL)
             .expect("private in-process dispatch");
         assert_eq!(result.status(), crate::McpMutationExecutionStatus::Applied);
         assert_eq!(result.payload()["source"], "in-process-test-executor");
@@ -1414,7 +1423,7 @@ mcp_deployment_policy:
         drop(recorded);
 
         let public_result = server
-            .handle_call_tool(request)
+            .handle_call_tool(request, &meta)
             .expect("public handler execution");
         assert!(!public_result.is_error.unwrap_or(false));
         assert!(content_text(&public_result).contains("in-process-test-executor"));
@@ -1445,9 +1454,9 @@ mcp_deployment_policy:
             current_unix_seconds(),
         );
 
-        let request = request_with_attestation("execute-operation", args, attestation);
+        let (request, meta) = request_with_attestation("execute-operation", args, attestation);
         let error = server
-            .authorize_mutating_request(&request, "execute-operation")
+            .authorize_mutating_request(&request, &meta, "execute-operation")
             .expect_err("caller-selected key must fail registry authorization");
         assert!(error
             .to_string()
@@ -1507,9 +1516,9 @@ mcp_deployment_policy:
             "nonce-registered-0002",
             current_unix_seconds(),
         );
-        let req = request_with_attestation("execute-operation", args, att);
+        let (req, meta) = request_with_attestation("execute-operation", args, att);
         let error = server
-            .authorize_mutating_request(&req, "execute-operation")
+            .authorize_mutating_request(&req, &meta, "execute-operation")
             .expect_err("tampered intent must fail");
         assert!(error.to_string().contains("attestation signature invalid"));
     }
@@ -1523,8 +1532,8 @@ mcp_deployment_policy:
             allowlist: Allowlist::default_read_only(),
             ..mutate_config_with_fake_binary(bin)
         });
-        let req = CallToolRequestParams::new("preview");
-        let res = server.handle_call_tool(req).unwrap();
+        let req = tool_request("preview", None);
+        let res = server.handle_call_tool(req, &Meta::new()).unwrap();
         assert!(!res.is_error.unwrap_or(true));
     }
 
@@ -1542,9 +1551,8 @@ mcp_deployment_policy:
         let server = ForgeMcpServer::new(cfg);
         let mut args = JsonObject::new();
         args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
-        let mut req = CallToolRequestParams::new("execute-operation");
-        req.arguments = Some(args);
-        let res = server.handle_call_tool(req).unwrap();
+        let req = tool_request("execute-operation", Some(args));
+        let res = server.handle_call_tool(req, &Meta::new()).unwrap();
         assert!(res.is_error.unwrap_or(false));
         assert!(content_text(&res).contains("operator principal registry"));
     }
@@ -1559,8 +1567,8 @@ mcp_deployment_policy:
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(require_all_config_with_fake_binary(bin));
-        let req = CallToolRequestParams::new("preview");
-        let res = server.handle_call_tool(req).unwrap();
+        let req = tool_request("preview", None);
+        let res = server.handle_call_tool(req, &Meta::new()).unwrap();
         assert!(
             res.is_error.unwrap_or(false),
             "RequireAll must reject read-only without attestation, got: {}",
@@ -1578,8 +1586,8 @@ mcp_deployment_policy:
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(require_all_config_with_fake_binary(bin));
         let att = sign_test_attestation("preview", serde_json::json!({}), "n-rall", 1_700_000_000);
-        let req = request_with_attestation("preview", JsonObject::new(), att);
-        let res = server.handle_call_tool(req).unwrap();
+        let (req, meta) = request_with_attestation("preview", JsonObject::new(), att);
+        let res = server.handle_call_tool(req, &meta).unwrap();
         assert!(
             !res.is_error.unwrap_or(true),
             "RequireAll + valid attestation must pass, got: {}",
@@ -1607,8 +1615,8 @@ mcp_deployment_policy:
         let orig = sig_chars[0];
         sig_chars[0] = if orig == '0' { '1' } else { '0' };
         att.signature = sig_chars.into_iter().collect();
-        let req = request_with_attestation("preview", JsonObject::new(), att);
-        let res = server.handle_call_tool(req).unwrap();
+        let (req, meta) = request_with_attestation("preview", JsonObject::new(), att);
+        let res = server.handle_call_tool(req, &meta).unwrap();
         assert!(
             res.is_error.unwrap_or(false),
             "tampered attestation on read-only must be rejected (defense in depth), got: {}",
@@ -1632,9 +1640,9 @@ mcp_deployment_policy:
         let mut meta_map = JsonObject::new();
         // A bare string is not a deserializable AttestationInput.
         meta_map.insert("attestation".into(), serde_json::json!("not valid json"));
-        let mut req = CallToolRequestParams::new("preview");
-        req.meta = Some(rmcp::model::Meta(meta_map));
-        let res = server.handle_call_tool(req).unwrap();
+        let req = tool_request("preview", None);
+        let meta = Meta(meta_map);
+        let res = server.handle_call_tool(req, &meta).unwrap();
         assert!(
             res.is_error.unwrap_or(false),
             "malformed _meta.attestation must be rejected, got: {}",
@@ -1700,25 +1708,23 @@ mcp_deployment_policy:
 
     #[test]
     fn handle_call_tool_success_returns_envelope() {
-        use rmcp::model::CallToolRequestParams;
         let envelope = r#"{"ok":true,"exit_reason":"ok","data":{"phase":"1"}}"#;
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(config_with_fake_binary(bin));
-        let req = CallToolRequestParams::new("preview"); // default read-only MCP projection
-                                                         // Test the synchronous handler body directly (no RequestContext needed).
-        let res = server.handle_call_tool(req).expect("call ok");
+        let req = tool_request("preview", None); // default read-only MCP projection
+                                                 // Test the synchronous handler body directly with explicit empty metadata.
+        let res = server.handle_call_tool(req, &Meta::new()).expect("call ok");
         assert!(!res.is_error.unwrap_or(false));
         assert!(content_text(&res).contains("\"ok\":true"));
     }
 
     #[test]
     fn handle_call_tool_denies_unallowlisted() {
-        use rmcp::model::CallToolRequestParams;
         let bin = make_fake_forge_core(true, "{}");
         let server = ForgeMcpServer::new(config_with_fake_binary(bin));
-        let req = CallToolRequestParams::new("definitely-not-allowlisted");
+        let req = tool_request("definitely-not-allowlisted", None);
         let res = server
-            .handle_call_tool(req)
+            .handle_call_tool(req, &Meta::new())
             .expect("gate denial is Ok(result)");
         // Gate denial surfaces as a tool-level error result (is_error=true),
         // not a protocol Err(ErrorData).
@@ -1728,13 +1734,14 @@ mcp_deployment_policy:
 
     #[test]
     fn handle_call_tool_surfaces_command_rejection() {
-        use rmcp::model::CallToolRequestParams;
         let envelope =
             r#"{"ok":false,"exit_reason":"rejected_by_gate","error":{"message":"nope"}}"#;
         let bin = make_fake_forge_core(false, envelope);
         let server = ForgeMcpServer::new(config_with_fake_binary(bin));
-        let req = CallToolRequestParams::new("preview");
-        let res = server.handle_call_tool(req).expect("Ok even on cmd reject");
+        let req = tool_request("preview", None);
+        let res = server
+            .handle_call_tool(req, &Meta::new())
+            .expect("Ok even on cmd reject");
         assert!(res.is_error.unwrap_or(false));
         assert!(content_text(&res).contains("rejected_by_gate"));
     }
@@ -1769,14 +1776,10 @@ mcp_deployment_policy:
     }
 
     fn content_text(result: &rmcp::model::CallToolResult) -> String {
-        use rmcp::model::ContentBlock;
         result
             .content
             .iter()
-            .map(|c| match c {
-                ContentBlock::Text(t) => t.text.as_str(),
-                _ => "",
-            })
+            .filter_map(|content| content.as_text().map(|text| text.text.as_str()))
             .collect()
     }
 }

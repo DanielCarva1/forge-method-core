@@ -1,0 +1,167 @@
+schema_version: "0.1"
+backup_manifest_contract:
+  id: project-state-backup-manifest-v1
+  status: frozen
+  rust_schema:
+    document: forge_core_contracts::BackupManifestDocument
+    schema_version: forge_project_state_backup_manifest_v1
+    format: forge_project_state_backup_v1
+    unknown_versions: reject
+    unknown_fields: reject
+  security_claims:
+    integrity_only:
+      api: BackupManifestDocument::validate_integrity
+      proves: canonical self-consistency, closed typed source inventory, entry hashes, and cross-bindings
+      does_not_prove: authenticity, freshness, or whole-set substitution/rollback resistance
+      warning: manifest_set_digest is recomputable and never a trust root
+    authenticity_and_restore:
+      s03_public_success_api: none
+      reason: retained filesystem guards, archive readers, protected receipt loading, and restore publication belong to C2-S04
+      c2_s04_required_opaque_inputs:
+        - a private-field verified archive capability minted only after no-follow exact-member and exact Project Link byte verification
+        - a private-field retained exclusive mutation/quiescence guard backed by real OS locks or an opaque host boundary
+        - a private-field trusted backup receipt loaded and verified from operator-protected storage disjoint from archive and staging
+      trusted_receipt_provenance:
+        archive_derived: forbidden
+        caller_comment_or_boolean: forbidden
+        minimum_binding: [manifest_set_digest, project_id, exact_project_link_sha256, workflow_release, effective_epoch, replay_monotonic_head, domain_pack_monotonic_heads, archived_public_registry_raw_sha256]
+        story_boundary: C2-S04 must implement protected receipt I/O and private constructors; S03 deliberately cannot mint proof of future I/O
+  canonical_set_digest:
+    encoding: RFC 8785 JSON Canonicalization Scheme
+    exclusion: backup_manifest.manifest_set_digest is removed before canonicalization
+    input: forge-method:project-state-backup-set:v1\0 || u64be(canonical_byte_length) || canonical_bytes
+    output: sha256:<64-lowercase-hex>
+  source_enumerator:
+    roots:
+      - exact project/.forge-method.yaml
+      - complete no-follow recursive state root
+      - exact provisioned sidecar/operator public registry files
+    classifier_api: BackupManifestDocument::classify_source_file
+    complete_enumeration_api: BackupManifestDocument::verify_source_enumeration
+    invariant: every no-follow regular source file normalizes to exactly one injective canonical archive identity and is either one exact typed member or one explicit shipped exclusion; unknown files reject
+    metadata: [raw_repo_relative_utf8_os_path, no_follow_entry_type, no_follow_hard_link_count, byte_length, sha256]
+    source_normalization: target-platform Rust Path::components removes repeated separators and CurDir; empty, absolute, prefix, root, ParentDir, and non-UTF-8 inputs reject
+    canonical_archive_encoding: normalize components, preserve only ASCII alphanumeric plus '-' '_' '.' bytes, uppercase-percent-encode every other UTF-8 byte within its component, join components with '/', and encode '%' itself as '%25'
+    reversibility: each archive component must decode as UTF-8 and re-encode byte-for-byte to the same canonical spelling; lowercase/redundant escapes and escaped separators are noncanonical
+    alias_closure: two raw enumerated spellings with one normalized archive identity reject as a duplicate; exact effect physical_ref spelling remains independently bound
+    classification_precedence: forbidden-private -> producer-lock -> crash-temporary -> incomplete-staging -> exact canonical manifest entry lookup
+    broad_family_override: forbidden; a listed artifact/evidence/snapshot/runtime/story/agent descendant that matches an exclusion is still excluded and makes complete enumeration fail
+    archive_verification_is_not_enumeration: true
+    explicit_exclusions:
+      producer_locks:
+        - state-root/locks/**
+        - state-root/domain-pack-learning/capture.lock
+        - state-root/claims-active/.forge-claim.lock
+        - state-root/contracts/isolations/.forge-isolation.lock
+      crash_private:
+        - crash-replace .forge-next/.forge-previous/.forge-transaction siblings
+        - atomic-write .tmp and effect .forge-tmp/.forge-bak siblings
+        - claim-WAL and project-state temporary siblings
+        - domain-packs/generations/staging/**
+        - workflow/operator secret roots, private-keys/**, '*.key', and '*.pem'
+  source_derived_inventory:
+    always_present: [project/.forge-method.yaml, state-root/ledger.ndjson, state-root/replay-wal.manifest.json, state-root/wal/replay.fmr1]
+    conditional_stores:
+      - project state and claim WAL rotation closure
+      - workflow governance and workflow action replay WALs
+      - effect WAL/compaction, memory events, research/sources.ndjson, governance/conflicts.ndjson
+      - Domain Pack lifecycle generations, ledger records, receipts, and exact object union
+      - Domain Pack local learning index plus exact content-addressed object closure
+      - isolation contract identities/agents/raw digests under contracts/isolations
+      - workflow principal and broker archived public registry raw bytes
+      - claims, handoffs, artifacts, evidence, snapshots, ledgers/requests with every shipped-safe typed suffix, runtime, stories, agents, preflight, effect index, and trace families
+    domain_pack_learning:
+      index: domain-pack-learning/index.json
+      closure: each sorted parsed record binds candidate_id, candidate_digest, raw_sha256, exact object_relative_path, and object entry SHA-256
+      race_prevention: capture.lock retained across index/object source projection and copy; otherwise opaque exclusive quiescence required
+    isolation_contracts:
+      closure: each sorted projection binds isolation_id, agent_id, exact YAML path, and raw SHA-256
+      race_prevention: .forge-isolation.lock retained across projection and copy
+    declared_effect_outputs:
+      generic_catch_all: forbidden
+      cross_binding_api: BackupManifestDocument::verify_effect_metadata_index_bytes
+      source: exact archived index/effect-targets.ndjson bytes read while effect-index and effect-WAL locks plus producer quiescence remain retained
+      binding: sorted operation_id, effect_id, exact file-backed target kind, exact caller logical_ref, exact shipped physical_ref spelling, canonical encoded state-relative archive identity, access_mode, content SHA-256, byte length, exact source-frame SHA-256, and exact archive-entry material/SHA-256/length
+      physical_identity_closure: duplicate live normalized physical identities reject across generic and typed target keys even if operation/effect identities differ
+      declared_fallback_namespace: only canonical state-relative custom/** descendants; the exact custom root, lookalike components, and arbitrary wal/index/domain-pack/runtime paths are forbidden unless an independently typed exact occupant supplies a non-Declared material
+      reserved_internal_families: never omit a live generic file_path; reserved descendants resolve to their exact typed material before occupants, an independently typed exact occupant outside those families may inherit only that non-Declared material, and textual family-root files use DeclaredEffectOutput
+      family_roots: textual allowed-prefix spellings ending in '/.' or repeated separators normalize to a representable family-root file; a family-root file cannot coexist with descendants in one archive
+      resolver_mirror:
+        crate_cycle: forbidden; the wire-compatible mirror remains in forge-core-contracts because forge-core-store depends on it
+        source_evidence:
+          file_path_safety_and_spelling: crates/forge-core-store/src/lib.rs:3361-3415,3517-3524,3558-3559,3619-3623
+          typed_projection_and_safe_logical_id: crates/forge-core-store/src/lib.rs:3524-3551,3562-3616
+          unsupported_non_file_backed: crates/forge-core-store/src/lib.rs:3552-3556,3758-3785,3979-4003
+          read_rejection_and_metadata_source: crates/forge-core-store/src/lib.rs:3648-3665,3758-3785,3979-4003
+        file_path: apply target-platform Rust Path::components empty/absolute/prefix/root/parent checks, retain accepted caller spelling in physical_ref, and canonical-encode normalized components only for archive identity and duplicate-path closure
+        typed_ids: apply reference path-likeness, exact allowed prefix/exact forms, otherwise safe_logical_id character sanitization, dot trimming, ASCII-alphanumeric requirement, and extension behavior with no invented length or normalization limit
+        streams: path-like ledger/request references preserve every safe suffix and extension below their allowed prefix; ID forms alone acquire .ndjson
+      platform_portability_preflight:
+        creation_platform: accepted UTF-8 names follow that target's Path::components semantics; valid Linux backslash/control/newline names are encoded rather than rejected
+        destination: before extraction C2-S04 must decode every canonical identity, reject unsupported destination names before any write, and never substitute, case-fold, trim, or silently rename a component
+        collision_rule: decoded destination identities must remain injective under destination filesystem semantics or restore preflight fails atomically
+      s04_algorithm:
+        - retain effect metadata-index append lock before effect WAL lock in BACKUP_LOCK_ORDER and keep producer quiescence through parse, copy, and stable enumeration
+        - read exact metadata-index bytes once; require byte length and SHA-256 to equal the EffectMetadataIndex archive entry
+        - split only newline-terminated shipped JSON record frames; strict-deserialize the mirrored 0.1 EffectTargetMetadataRecord schema and require exact serde re-encoding
+        - hash each raw JSON frame without its newline and validate schema/record kind, nonblank operation/effect/actor identities, redaction hint, target-specific logical_ref grammar, and exact shipped physical_ref
+        - require create/write/append to carry a valid final content_hash; require delete to carry no content hash and byte_len zero; reject read metadata records
+        - validate every historical frame before source-order latest/delete replacement keyed exactly as shipped by target_kind plus logical_ref; the final record is authoritative and a final delete removes that target from the live set
+        - for every record recompute shipped physical_ref exactly from target_kind plus logical_ref, require exact spelling equality, then normalize and canonical-encode components without rejecting representable Linux names
+        - omit only repository FilePath records outside the state root; every live state-root output enters closure, duplicate normalized physical identities reject, and outputs sort by canonical state-relative identity
+        - map reserved descendants to exact typed material before occupants; otherwise inherit only an independently typed exact non-Declared occupant, or admit DeclaredEffectOutput solely for canonical custom/** descendants and textual family-root files; exclusions remain exact and exclusion-first
+        - compare the complete derived projection, including physical_ref and raw frame digest, with declared_effect_outputs; cross-bind target kind, logical/physical identity, access mode, hash, length, material, and exact entry bytes
+        - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
+  domain_pack_external_provisioning:
+    lifecycle_independent: true
+    operator_sources_before_activation_or_interrupted_acquisition: supported
+    supply_chain_anchor_state: [not_provisioned, provisioned]
+    operator_sources_anchor_implication: operator_sources_present requires both supply-chain and reviewed-learning anchors plus both observations, including no-active/interrupted acquisition state
+    reviewed_learning_anchor_state: [not_provisioned, provisioned]
+    binding_when_provisioned:
+      - exact operator-sources raw SHA-256, operator root identity, public input paths, and public input SHA-256 values
+      - supply-chain/reviewer/reviewed monotonic head identities, generations, and digests
+      - active lifecycle generation digests when active
+  public_workflow_registries:
+    archived_material_identity: exact raw registry SHA-256
+    undefined_identity_set_digest: removed
+    current_machine_state: not represented by archived material
+    replacement_machine_absence: legitimate; C2-S04 reads current protected monotonic authorities independently and never manufactures presence from archive
+  snapshot_protocol:
+    mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
+    real_producer_locks_include:
+      - Domain Pack external anchors, operator sources, rebase, lifecycle, and learning capture
+      - workflow credential/broker registries, workflow governance, claims-active cache mutation, claim WAL, action replay, memory, research, governance conflicts, and isolations
+      - command evidence, effect index, effect WAL, replay WAL, trace, and protected replay anchor
+    claim_mutation_order: acquire and retain claims-active/.forge-claim.lock -> load authoritative claim WAL -> acquire locks/claims.wal.lock for WAL recovery/append/rotation -> release claim-WAL lock -> atomically write claims-active YAML cache while the outer claims-active lock remains retained -> release outer lock
+    backup_claim_order: ClaimCacheMutation immediately precedes ClaimWal in BACKUP_LOCK_ORDER; S04 retains both in that order before enumerating/copying claim WAL rotation closure and claim cache
+    unlocked_producers: require opaque_exclusive_quiescence_required_by_restore_engine plus stable complete enumeration
+    effect_replay_order: effect_wal must immediately precede replay_wal in the normative order; the hostile lock fixture specifically reverses only this pair
+    assertion_boolean: forbidden
+  replay_anchor:
+    preserved_source_fields: [schema_version, deployment_id, epoch, generation, previous_anchor_digest, head]
+    invariants:
+      - deployment_id is nonblank and at most 256 bytes
+      - generation is nonzero; generation one has no predecessor and later generations require one
+      - epoch is 32-byte lowercase hex
+      - record_count equals last_seq
+      - manifest digest, WAL prefix digest, and WAL byte length equal archived entries
+  archive_entry_policy:
+    no_follow: required
+    regular_file_only: true
+    hardlink_count: exactly_one
+    archive_member_identity: canonical encoded path only; every member decodes and re-encodes identically
+    impossible_topology: reject any regular-file member that is also a path-component prefix of another member
+    rejects: [symlink, hardlink, device, fifo, socket, directory, duplicate, alias, impossible_file_plus_descendant, omitted, extra, substituted, unclassified]
+  fixtures:
+    valid:
+      - contracts/fixtures/backup-manifest/valid/empty-pre-rotation-v1.yaml
+      - contracts/fixtures/backup-manifest/valid/multi-generation-v1.yaml
+      - contracts/fixtures/backup-manifest/valid/no-active-provisioned-v1.yaml
+      - contracts/fixtures/backup-manifest/valid/replacement-machine-public-material-v1.yaml
+    semantic_hostile:
+      path: contracts/fixtures/backup-manifest/hostile/
+      invariant: every named file is a full parse-valid unique document and is enumerated by the Rust semantic-rejection test
+    parse_rejection:
+      path: contracts/fixtures/backup-manifest/parse-rejection/
+      invariant: strict-deserialization evidence is exercised separately and never counted as semantic coverage

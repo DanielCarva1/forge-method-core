@@ -1,4 +1,4 @@
-schema_version: "0.3"
+schema_version: "0.4"
 domain_pack_lifecycle_spec:
   id: "spec.domain-pack-lifecycle-v0"
   status: "implementation"
@@ -18,9 +18,17 @@ domain_pack_lifecycle_spec:
       snapshot, same-generation fork, or skipped generation cannot mint the
       opaque activation capability.
   schema_families:
-    version: "0.3"
+    version: "0.4"
     roots:
       - "domain_pack_supply_chain_registry"
+      - "domain_pack_remote_acquisition_request"
+      - "domain_pack_remote_acquisition_plan"
+      - "domain_pack_remote_untrusted_fetch_observation"
+      - "domain_pack_remote_fetch_evidence"
+      - "domain_pack_remote_fetch_receipt"
+      - "domain_pack_remote_cache_entry"
+      - "domain_pack_remote_cache_projection"
+      - "domain_pack_remote_rollback_input"
       - "domain_pack_trust_policy"
       - "domain_pack_runtime_capability_registry"
       - "domain_pack_capability_sandbox_policy"
@@ -71,8 +79,51 @@ domain_pack_lifecycle_spec:
       package, manifest, content, license, or registry-record digests block the
       entire coordinate; last-write-wins is forbidden.
     revocation: >-
-      Revoked exact package identities cannot enter new resolution, upgrade,
-      activation, or rollback. Removal of a revoked active pack remains allowed.
+      Revocation is cumulative for current-policy evaluation. A fresh current
+      anchored catalog, rather than a retained receipt, lock, generation, cache,
+      or local head, solely decides current revocation/policy. Revoked exact
+      package identities cannot enter new resolution, upgrade, activation, or
+      rollback. Removal of a revoked active pack remains allowed, but that
+      exception cannot mutate an eligible remaining package or introduce one.
+  remote_acquisition:
+    catalog: >-
+      DomainPackSupplyChainRegistryDocument remains the sole signed catalog.
+      Its signature subject includes closed stable mirrors and each package
+      record's complete descriptor set for manifest/content/license/fixtures;
+      package_digest retains its established package-level semantics.
+    mirrors: >-
+      A mirror has a stable ID and signed priority. Selection is priority
+      ascending then stable mirror-ID lexical tie-break only. HTTPS bases reject
+      credentials, query, fragment, control characters, backslashes, and
+      traversal; operator-provisioned local mirrors use opaque operator location
+      IDs rather than caller filesystem paths.
+    descriptors: >-
+      Each descriptor reuses DomainPackArtifactBinding for logical RepoPath and
+      exact raw/canonical SHA-256 pins, and separately binds a normalized
+      objects/sha256/<raw-hex> path, byte length, closed media type, and closed
+      artifact kind. Descriptor raw pins and fixture order exactly match the
+      established registry-record digest fields.
+    fetch_cache: >-
+      Remote requests, plans, observations, evidence, receipts, cache entries,
+      and projections remain candidate-only. Cache presence is non-authoritative.
+      Keys are raw SHA-256 only, every read rechecks raw/canonical/length/media
+      pins, and cache admission uses bounded reject_on_full without eviction,
+      overwrite, expansion, or unpinned fallback.
+    offline: >-
+      OfflineOnly denies network transport and requires a still-valid matching
+      operator-anchored local head, exact signed catalog snapshot, operator local
+      mirror, exact bytes, host-checked expiry, and current revocation. A local
+      head has no freshness extension and cannot bypass revocation.
+    rollback: >-
+      Rollback retains historical exact receipt, lock, generation, and objects;
+      it separately consumes a fresh current anchored catalog only for current
+      revocation/policy. It performs no download or cache dependency. A
+      redownload/cache attempt is a blocked input, not a fallback.
+    authority_ladder: >-
+      discovery -> operator selection -> catalog verify/anchor -> download/cache
+      byte verify -> trust policy -> reviewed registry -> preflight -> private
+      commit authority -> explicit commit/activation. No serialized remote value
+      represents trusted, installed, active, commit, or activation authority.
   resolution:
     algorithm:
       - "bound and validate the complete candidate universe before search"
@@ -166,8 +217,9 @@ domain_pack_lifecycle_spec:
       expired credential or snapshot.
     rollback: >-
       Rollback is a new forward transaction. It revalidates the selected prior
-      reachable receipt and byte-identical lock against current revocation,
-      core, requirements, trust, and sandbox.
+      reachable receipt and byte-identical lock plus retained exact objects
+      against fresh current revocation, core, requirements, trust, and sandbox;
+      it never redownloads or relies on cache availability.
     operation_intent: >-
       Install must add one previously absent exact install root; upgrade binds active
       version, target requirement, and optional content digest; remove must
@@ -234,6 +286,11 @@ domain_pack_lifecycle_spec:
     - "crash before and after every active-pointer replacement stage"
     - "non-concurrent tamper of immutable object, generation, lock, ledger, receipt, pointer, or project snapshot"
     - "rollback to a now-revoked package"
+    - "signed remote field tamper, duplicate/unknown/equivocated mirrors, malformed locations, credentials, fragments, traversal, or invalid object paths"
+    - "remote descriptor kind/set/raw/canonical/length/media mismatch and cache poisoning/tamper/full"
+    - "offline cache miss, absent/mismatched/stale local head, expired catalog, or revoked package"
+    - "revoked-package mutation under the removal exception and a rollback redownload/cache dependency"
+    - "implicit discovery/download/trust/install/activation shortcut"
     - "remove preserving explicit domain and capability gaps"
     - "static junction, symlink, reparse-point, traversal, special-file, and oversized input"
   p6c_integration: >-

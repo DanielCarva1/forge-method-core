@@ -1,0 +1,87 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C6.2"
+status: "implemented"
+slice: "domain-pack-normal-lifecycle"
+title: "Implement immutable remote Domain Pack acquisition semantics"
+intent: >-
+  Implement the bounded typed source path for acquiring immutable Domain Pack
+  candidate bytes through the existing signed supply-chain catalog without
+  granting discovery, download, cache, receipt, trust, installation, lifecycle,
+  or activation authority implicitly.
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/domain-pack-v0.yaml"
+  - "contracts/spec/domain-pack-lifecycle-v0.yaml"
+  - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
+
+owned_files:
+  - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
+  - "contracts/stories/C6.2-immutable-remote-domain-pack-acquisition.yaml"
+  - "docs/domain-packs.md"
+  - "docs/product-status.md"
+  - "docs/product-gap-register.md"
+  - "crates/forge-core-contracts/src/domain_pack_remote_acquisition.rs"
+  - "crates/forge-core-contracts/src/domain_pack_resolution.rs"
+  - "crates/forge-core-contracts/src/domain_pack_policy.rs"
+  - "crates/forge-core-contracts/src/backup_manifest.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-contracts/tests/domain_pack_remote_acquisition.rs"
+  - "crates/forge-core-authority/src/domain_pack_supply_chain.rs"
+  - "crates/forge-core-authority/src/lib.rs"
+  - "crates/forge-core-authority/tests/domain_pack_supply_chain.rs"
+  - "crates/forge-core-decisions/src/domain_pack_remote_acquisition.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-decisions/tests/domain_pack_remote_acquisition.rs"
+  - "crates/forge-core-domain-pack-tcb/src/lib.rs"
+  - "crates/forge-core-domain-pack-tcb/tests/lifecycle.rs"
+  - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  - "crates/forge-core-cli/tests/domain_pack_acquisition_cli_e2e.rs"
+  - "crates/forge-core-command-surface/src/lib.rs"
+
+constraints:
+  - "The existing DomainPackSupplyChainRegistryDocument is the sole signed catalog authority; do not introduce a rival catalog."
+  - "Publisher signatures bind complete package/artifact descriptors; registry signatures separately bind mirrors and snapshot state."
+  - "Reuse DomainPackArtifactBinding raw/canonical pins and logical RepoPath; keep transport bases separate from immutable object paths."
+  - "Allow only HTTPS and operator-provisioned-local mirror transports, stable mirror IDs, signed priority ordering, normalized content-addressed paths, exact lengths, closed media types, and closed artifact kinds."
+  - "Every serializable remote request/plan/evidence/receipt/cache/rollback contract is candidate_only and deny_unknown_fields."
+  - "Use the repository sha256:<64 lowercase hex> grammar and canonical JSON digest idiom; do not create another digest grammar."
+  - "Network mode and cache policy are required closed fields with no permissive serde default."
+  - "Cache keys are raw SHA-256 and cache presence is non-authoritative; bounded reject_on_full is deterministic and has no eviction fallback."
+  - "OfflineOnly requires a still-valid matching operator-anchored local head, a local signed mirror, exact bytes, and current revocation; it cannot extend freshness."
+  - "Rollback retains exact historical receipt/lock/generation/objects and separately consumes a fresh current anchored catalog for revocation/policy; it never downloads or depends on cache."
+  - "Removal of a revoked active package remains allowed; mutation, new resolution, upgrade, activation, and rollback of that revoked package remain blocked."
+  - "Keep the authority ladder explicit: discovery -> operator selection -> catalog verify/anchor -> download/cache byte verify -> trust policy -> reviewed registry -> preflight -> private commit authority -> explicit commit/activation."
+  - "The CLI imports exact operator-provisioned local object bytes only; it performs no DNS, TLS, redirects, subprocess download, general network transport, trust, lifecycle commit, installation, or activation."
+  - "The protected live registry anchor uses schema v2 with cumulative revocation material; backup observations may recognize historical v1 without granting migration authority."
+
+acceptance_criteria:
+  - "The signed registry type carries closed mirror metadata and every package record carries a non-defaulted complete descriptor set."
+  - "All descriptor raw pins correspond exactly to the existing record digest fields, object paths are raw-digest addressed, and malformed/mismatched descriptor data rejects."
+  - "Publisher and registry verification covers their complete package/artifact and mirror/snapshot subjects, and protected anchor progression is monotonic."
+  - "A typed request and plan bind exact discovery, catalog snapshot, registry record, package, network/cache policy, and artifact locations without a trusted/installed/active state."
+  - "Typed observations/evidence/receipt bind source, raw/canonical hashes, lengths, media types, catalog/record/package identities, and canonical integrity digests."
+  - "Cache entry/projection contracts enforce raw-key correspondence and reject_on_full limits; every cache read is rehashed, reparsed, and rejoined as non-authoritative evidence."
+  - "Offline and rollback inputs make stale/revoked/cache-miss/redownload failure modes explicit and unrepresentable as success."
+  - "Cumulative revocations cannot be silently removed or changed, and exact rollback provenance remains distinct from current revocation evaluation."
+  - "The CLI rejects missing, extra, symlinked, special, over-deep, over-count, wrong-length, wrong-media, raw-digest, canonical-digest, package, and catalog joins beneath the local artifact root."
+  - "Focused source cases cover serde unknown fields, closed enums, required policy/default denial, canonical digest mutation, signature subjects, transport/descriptor rejection, cache poisoning/full behavior, offline/revocation/rollback blocks, and absence of lifecycle shortcuts."
+
+checks:
+  permitted:
+    - "YAML parse changed contract/story/spec/plan files"
+    - "existing non-Cargo static checkers"
+    - "scoped git diff --check over owned paths"
+    - "targeted locked Cargo checks for affected crates and all source-test targets"
+  deferred:
+    - "Rust test execution, rustfmt, CI, runtime/stabilization gates, failure injection, publication, independent review, real-host, and field evidence"
+
+blocks:
+  - "The shipped CLI adapter is a local candidate-byte verifier, not a network transport or downloader."
+  - "Trust policy, reviewed-registry admission, lifecycle preflight, private commit authority, installation, and activation remain separately owned."
+  - "No selected host, supported remote endpoint, public release, or field-verified acquisition journey is claimed."
+
+next_workflow:
+  - "C7.2 may consume the immutable signed descriptor and cumulative-revocation contracts without receiving trust or publication authority."
+  - "C3.2-C3.4 own deferred runtime, heavy/stabilization, hosted-CI, release/publication, independent-review, real-host, and field evidence."

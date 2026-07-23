@@ -5,6 +5,12 @@
 //! and never touch the WAL or the effect store.
 
 use super::*;
+use forge_core_contracts::funnel_autonomy::FunnelPhaseProfile;
+use forge_core_contracts::operation::OperationRiskBoundary;
+use forge_core_decisions::{
+    evaluate_funnel_operation, load_accepted_funnel_autonomy_policy, FunnelOperationDisposition,
+    FunnelOperationReason,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeReadSnapshot<'a> {
@@ -36,6 +42,10 @@ pub struct RuntimePlan {
     pub gate_status: OperationGateStatus,
     pub human_input_requirement: HumanInputRequirement,
     pub prompt: Option<HumanPrompt>,
+    pub funnel_disposition: FunnelOperationDisposition,
+    pub funnel_phase_profile: Option<FunnelPhaseProfile>,
+    pub funnel_reasons: Vec<FunnelOperationReason>,
+    pub protected_boundaries: Vec<OperationRiskBoundary>,
     pub command_refs: Vec<CommandRef>,
     pub effect_contract_refs: Vec<RepoPath>,
     pub reasons: Vec<RuntimePlanReason>,
@@ -122,6 +132,10 @@ pub enum RuntimeReadyBlocker {
     GateMissing,
     GatePending,
     HumanInputRequired,
+    FunnelPolicyUnavailable,
+    FunnelOperationBlocked,
+    FunnelGateRequired,
+    FunnelReviewRequired,
     GateMissingOrPending,
     RequiredGateStatusUnknown,
     MutationRequiresReview,
@@ -189,6 +203,10 @@ pub enum RuntimePlanReason {
     OperationDiagnosticsErrors,
     GateBlocked,
     HumanInputRequired,
+    FunnelPolicyUnavailable,
+    FunnelOperationBlocked,
+    FunnelGateRequired,
+    FunnelReviewRequired,
     GateMissingOrPending,
     MutationRequiresReview,
     HumanCheckpointRequired,
@@ -499,6 +517,30 @@ fn plan_operation_inner(
 
     let operation = &document.operation_contract;
     let mut reasons = Vec::new();
+    let (
+        funnel_disposition,
+        funnel_phase_profile,
+        funnel_reasons,
+        protected_boundaries,
+        funnel_policy_unavailable,
+    ) = match load_accepted_funnel_autonomy_policy()
+        .and_then(|policy| evaluate_funnel_operation(policy, operation, &[]))
+    {
+        Ok(decision) => (
+            decision.disposition,
+            decision.phase_profile,
+            decision.reasons,
+            decision.protected_boundaries,
+            false,
+        ),
+        Err(_) => (
+            FunnelOperationDisposition::Blocked,
+            None,
+            Vec::new(),
+            operation.risk_boundaries.clone(),
+            true,
+        ),
+    };
 
     let status = if validation_error_count > 0 {
         reasons.push(RuntimePlanReason::ValidationErrors);
@@ -509,17 +551,29 @@ fn plan_operation_inner(
     } else if !operation.diagnostics.errors.is_empty() {
         reasons.push(RuntimePlanReason::OperationDiagnosticsErrors);
         RuntimePlanStatus::Blocked
+    } else if funnel_policy_unavailable {
+        reasons.push(RuntimePlanReason::FunnelPolicyUnavailable);
+        RuntimePlanStatus::Blocked
+    } else if funnel_disposition == FunnelOperationDisposition::Blocked {
+        reasons.push(RuntimePlanReason::FunnelOperationBlocked);
+        RuntimePlanStatus::Blocked
     } else if operation.gates.current_gate_status == OperationGateStatus::Blocked {
         reasons.push(RuntimePlanReason::GateBlocked);
         RuntimePlanStatus::Blocked
     } else if operation.human.input_requirement == HumanInputRequirement::Required {
         reasons.push(RuntimePlanReason::HumanInputRequired);
         RuntimePlanStatus::AwaitingHuman
+    } else if funnel_disposition == FunnelOperationDisposition::GateRequired {
+        reasons.push(RuntimePlanReason::FunnelGateRequired);
+        RuntimePlanStatus::GateRequired
     } else if gate_is_missing_or_pending(operation.gates.current_gate_status)
         && !operation.gates.required_before_mutation.is_empty()
     {
         reasons.push(RuntimePlanReason::GateMissingOrPending);
         RuntimePlanStatus::GateRequired
+    } else if funnel_disposition == FunnelOperationDisposition::ReviewRequired {
+        reasons.push(RuntimePlanReason::FunnelReviewRequired);
+        RuntimePlanStatus::ReviewRequired
     } else if operation.authority.mutation_policy == MutationPolicy::RequiresReview {
         reasons.push(RuntimePlanReason::MutationRequiresReview);
         RuntimePlanStatus::ReviewRequired
@@ -559,6 +613,10 @@ fn plan_operation_inner(
         gate_status: operation.gates.current_gate_status,
         human_input_requirement: operation.human.input_requirement,
         prompt: meaningful_prompt(&operation.human.prompt),
+        funnel_disposition,
+        funnel_phase_profile,
+        funnel_reasons,
+        protected_boundaries,
         command_refs: operation.command_refs.clone(),
         effect_contract_refs: operation.effect_contract_refs.clone(),
         reasons,
@@ -691,6 +749,18 @@ fn ready_plan_blockers(plan: &RuntimePlan) -> Vec<RuntimeReadyBlocker> {
             }
             RuntimePlanReason::HumanInputRequired => {
                 push_ready_blocker(&mut blockers, RuntimeReadyBlocker::HumanInputRequired);
+            }
+            RuntimePlanReason::FunnelPolicyUnavailable => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::FunnelPolicyUnavailable);
+            }
+            RuntimePlanReason::FunnelOperationBlocked => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::FunnelOperationBlocked);
+            }
+            RuntimePlanReason::FunnelGateRequired => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::FunnelGateRequired);
+            }
+            RuntimePlanReason::FunnelReviewRequired => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::FunnelReviewRequired);
             }
             RuntimePlanReason::GateMissingOrPending => {
                 push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissingOrPending);

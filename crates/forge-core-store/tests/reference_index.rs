@@ -18,17 +18,19 @@ use forge_core_store::{
     apply_file_effect_transaction, apply_file_effect_transaction_with_wal,
     apply_file_effect_transaction_with_wal_lock, build_effect_metadata_context,
     build_reference_index, collect_known_repo_paths, collect_validation_yaml_documents,
-    compact_effect_wal, query_effect_target_metadata_index, rebuild_effect_target_metadata_index,
-    recover_effect_wal, sha256_content_hash, try_acquire_effect_store_lock, AppendJsonLineError,
-    EffectApplicationPayload, EffectApplicationReason, EffectApplicationStatus,
-    EffectMetadataAdapterTrigger, EffectMetadataConsumerUse, EffectMetadataContextBuildOptions,
-    EffectMetadataContextBuildReason, EffectMetadataContextBuildStatus,
-    EffectMetadataForbiddenAuthority, EffectStoreLockError, EffectTargetMetadataIndexQuery,
-    EffectTargetMetadataIndexQueryReason, EffectTargetMetadataIndexQueryStatus,
-    EffectTargetMetadataIndexRebuildReason, EffectTargetMetadataIndexRebuildStatus,
-    EffectTargetMetadataRecord, EffectTargetMetadataRecordKind, EffectWalCompactionReason,
-    EffectWalCompactionStatus, EffectWalOriginal, EffectWalRecord, EffectWalRecoveryReason,
-    EffectWalRecoveryStatus, EffectWalStage, ReferenceIndexBuilder, ReferenceIndexOptions,
+    compact_effect_wal_with_lock, query_effect_target_metadata_index,
+    rebuild_effect_target_metadata_index, rebuild_effect_target_metadata_index_with_lock,
+    recover_effect_wal_with_lock, sha256_content_hash, try_acquire_effect_store_lock,
+    AppendJsonLineError, EffectApplicationPayload, EffectApplicationReason,
+    EffectApplicationStatus, EffectMetadataAdapterTrigger, EffectMetadataConsumerUse,
+    EffectMetadataContextBuildOptions, EffectMetadataContextBuildReason,
+    EffectMetadataContextBuildStatus, EffectMetadataForbiddenAuthority, EffectStoreLockError,
+    EffectTargetMetadataIndexQuery, EffectTargetMetadataIndexQueryReason,
+    EffectTargetMetadataIndexQueryStatus, EffectTargetMetadataIndexRebuildReason,
+    EffectTargetMetadataIndexRebuildStatus, EffectTargetMetadataRecord,
+    EffectTargetMetadataRecordKind, EffectWalCompactionReason, EffectWalCompactionStatus,
+    EffectWalOriginal, EffectWalRecord, EffectWalRecoveryReason, EffectWalRecoveryStatus,
+    EffectWalStage, ReferenceIndexBuilder, ReferenceIndexOptions,
 };
 use forge_core_validate::{
     validate_claim_cross_references, validate_completion_cross_references,
@@ -40,6 +42,8 @@ use forge_core_validate::{
     validate_yaml_known_repo_references, validate_yaml_source_id_references, ReferenceIndex,
 };
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -240,10 +244,12 @@ fn temp_store_root(test_name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time after epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!(
+    let root = std::env::temp_dir().join(format!(
         "forge-core-store-{test_name}-{}-{nanos}",
         std::process::id()
-    ))
+    ));
+    fs::create_dir_all(root.join(".forge-method")).expect("create test state root");
+    root
 }
 
 #[test]
@@ -461,7 +467,10 @@ fn append_json_line_rejects_path_escape() {
         error,
         AppendJsonLineError::InvalidRelativePath { .. }
     ));
-    assert!(!root.exists());
+    assert!(fs::read_dir(root.join(".forge-method"))
+        .expect("read untouched state root")
+        .next()
+        .is_none());
 }
 
 #[test]
@@ -514,6 +523,44 @@ fn apply_file_effect_transaction_applies_create_write_and_append() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+fn apply_file_effect_transaction_cannot_mutate_during_exact_root_quiescence() {
+    let root = temp_store_root("apply-file-effect-quiescence");
+    let read_ref = ".forge-method/input.txt";
+    let create_ref = ".forge-method/artifacts/blocked.txt";
+    fs::write(root.join(read_ref), b"input").expect("write read file");
+    let effect = test_effect(
+        vec![effect_write(create_ref, AccessMode::Create, None)],
+        read_ref,
+        sha256_content_hash(b"input"),
+    );
+    let payloads = vec![payload(create_ref, b"must-not-cross-quiescence")];
+    let quiescence = forge_core_store::producer_quiescence::quiesce_host_producers(
+        &root,
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+    .expect("quiesce exact effect state root");
+
+    let blocked = apply_file_effect_transaction(&root, &effect, &payloads);
+    assert_eq!(blocked.status, EffectApplicationStatus::Blocked);
+    assert_eq!(
+        blocked.reasons,
+        vec![EffectApplicationReason::StoreLockFailed]
+    );
+    assert!(
+        !root.join(create_ref).exists(),
+        "effect write crossed host quiescence"
+    );
+
+    drop(quiescence);
+    let applied = apply_file_effect_transaction(&root, &effect, &payloads);
+    assert_eq!(applied.status, EffectApplicationStatus::Applied);
+    assert_eq!(
+        fs::read(root.join(create_ref)).expect("read post-quiescence effect"),
+        b"must-not-cross-quiescence"
+    );
+    let _ = fs::remove_dir_all(root);
+}
 #[test]
 fn apply_file_effect_transaction_projects_artifact_and_evidence_ids() {
     let root = temp_store_root("project-artifact-evidence");
@@ -963,6 +1010,7 @@ fn apply_file_effect_transaction_blocks_stale_read_without_writing() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[cfg(unix)]
 #[test]
 fn apply_file_effect_transaction_rolls_back_when_later_write_fails() {
     let root = temp_store_root("apply-file-effect-rollback");
@@ -971,8 +1019,11 @@ fn apply_file_effect_transaction_rolls_back_when_later_write_fails() {
     let blocked_ref = ".forge-method/blocker/child.txt";
     fs::create_dir_all(root.join(".forge-method")).expect("create root");
     fs::create_dir_all(root.join(".forge-method/out")).expect("create out dir");
+    let blocked_parent = root.join(".forge-method/blocker");
+    fs::create_dir(&blocked_parent).expect("create blocked parent");
+    fs::set_permissions(&blocked_parent, fs::Permissions::from_mode(0o500))
+        .expect("make later write fail after preflight");
     fs::write(root.join(read_ref), b"input").expect("write read file");
-    fs::write(root.join(".forge-method/blocker"), b"not a directory").expect("write blocker");
     let effect = test_effect(
         vec![
             effect_write(first_ref, AccessMode::Create, None),
@@ -988,15 +1039,15 @@ fn apply_file_effect_transaction_rolls_back_when_later_write_fails() {
 
     let result = apply_file_effect_transaction(&root, &effect, &payloads);
 
+    fs::set_permissions(&blocked_parent, fs::Permissions::from_mode(0o700))
+        .expect("restore blocked parent permissions");
     assert_eq!(result.status, EffectApplicationStatus::RolledBack);
     assert!(result
         .reasons
         .contains(&EffectApplicationReason::ApplyFailed));
+    assert_eq!(result.applied_refs, vec![first_ref]);
     assert!(!root.join(first_ref).exists());
-    assert_eq!(
-        fs::read(root.join(".forge-method/blocker")).expect("read blocker"),
-        b"not a directory"
-    );
+    assert!(!blocked_parent.join("child.txt").exists());
     let _ = fs::remove_dir_all(root);
 }
 
@@ -1109,10 +1160,11 @@ fn rebuild_effect_target_metadata_index_from_committed_wal() {
     assert_eq!(application.status, EffectApplicationStatus::Applied);
     let _ = fs::remove_file(root.join(index_ref));
 
-    let rebuild = rebuild_effect_target_metadata_index(
+    let rebuild = rebuild_effect_target_metadata_index_with_lock(
         &root,
         wal_ref,
         index_ref,
+        ".forge-method/locks/rebuild-effect-metadata.lock",
         Some("2026-06-25T00:00:00Z"),
     );
 
@@ -1291,7 +1343,8 @@ fn recover_effect_wal_restores_incomplete_transaction() {
     )
     .expect("append write applied");
 
-    let recovery = recover_effect_wal(&root, wal_ref);
+    let recovery =
+        recover_effect_wal_with_lock(&root, wal_ref, ".forge-method/locks/recover-effects.lock");
 
     assert_eq!(recovery.status, EffectWalRecoveryStatus::Recovered);
     assert_eq!(
@@ -1445,7 +1498,8 @@ fn compact_effect_wal_drops_closed_records_and_keeps_incomplete() {
     )
     .expect("append incomplete before image");
 
-    let result = compact_effect_wal(&root, wal_ref);
+    let result =
+        compact_effect_wal_with_lock(&root, wal_ref, ".forge-method/locks/compact-effects.lock");
 
     assert_eq!(result.status, EffectWalCompactionStatus::Compacted);
     assert_eq!(

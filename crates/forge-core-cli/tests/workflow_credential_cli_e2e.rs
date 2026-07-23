@@ -113,10 +113,13 @@ fn public_cli_provisions_signs_rotates_and_revokes_without_consumer_state() {
     )
     .expect("request file");
     let attestation_path = parent.join("attestation.json");
-    let signed = credential(
-        &app_arg,
-        &[
+    let signing_oracle = bin()
+        .args([
+            "workflow",
+            "credential",
             "sign",
+            "--root",
+            &app_arg,
             "--credential-id",
             "credential.workflow.human",
             "--kind",
@@ -125,14 +128,16 @@ fn public_cli_provisions_signs_rotates_and_revokes_without_consumer_state() {
             &request_path.display().to_string(),
             "--output-file",
             &attestation_path.display().to_string(),
-        ],
-    );
-    assert_eq!(signed["data"]["action"], "signed_applicability_assess");
-    let attestation: Value =
-        serde_json::from_slice(&fs::read(attestation_path).expect("attestation bytes"))
-            .expect("attestation JSON");
-    assert_eq!(attestation["credential_id"], "credential.workflow.human");
-    assert_eq!(attestation["signature"].as_str().map(str::len), Some(128));
+            "--json",
+        ])
+        .output()
+        .expect("signing-oracle attempt");
+    assert!(!signing_oracle.status.success());
+    let signing_oracle: Value =
+        serde_json::from_slice(&signing_oracle.stdout).expect("failure envelope");
+    assert_eq!(signing_oracle["ok"], false);
+    assert_eq!(signing_oracle["exit_reason"], "invalid_decision_shape");
+    assert!(!attestation_path.exists());
 
     let rotated = credential(
         &app_arg,
@@ -182,7 +187,7 @@ fn public_cli_provisions_signs_rotates_and_revokes_without_consumer_state() {
     assert!(!rejected.status.success());
     let rejected: Value = serde_json::from_slice(&rejected.stdout).expect("failure envelope");
     assert_eq!(rejected["ok"], false);
-    assert_eq!(rejected["exit_reason"], "env_config");
+    assert_eq!(rejected["exit_reason"], "invalid_decision_shape");
     assert!(!app.join(".forge-method").exists());
 }
 

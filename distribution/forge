@@ -1,25 +1,168 @@
-#!/usr/bin/env sh
-# Forge wrapper (POSIX) — delegates to forge-core in the same directory.
+#!/bin/sh -p
+# Forge release wrapper (POSIX shell) — delegates to forge-core beside it.
+# Every declared package target provides /bin/sh and its kernel passes the one
+# shebang argument. Fixing both /bin/sh and POSIX sh's -p option keeps interpreter
+# selection and privileged startup outside an attacker-controlled environment.
+#
+# Supported release packages are GNU/Linux x86_64/aarch64 and macOS
+# x86_64/arm64.  Invocation-symlink resolution is deliberately limited to
+# those targets and to system-controlled uname, getconf, and readlink paths;
+# an attacker-selected PATH is never used for those utilities.  The Linux
+# GNU ABI check uses glibc's getconf query because uname cannot identify libc.
 #
 # The Forge Method skill (`start-forge`) looks for a `forge` command on PATH
-# first, falling back to `forge-core`. This thin wrapper lets releases ship a
-# single archive containing both names, so users do not have to alias anything
-# themselves. Install this file alongside `forge-core` with executable bits:
+# first, falling back to `forge-core`. Install both files from the archive:
 #
 #     tar xzf forge-core-<arch>-<os>.tar.gz
 #     install -m 0755 forge forge-core ~/.local/bin/
 #
-# The wrapper resolves the directory of the real binary (handles symlinks via
-# `readlink` when available, falls back to `$0` dirname) so it keeps working
-# whether invoked directly, through a symlink, or via PATH lookup.
-set -eu
+# The resolved wrapper directory is made physical with `cd -P`, and the
+# packaged binary must be a non-symlink regular file in that directory. Thus
+# a PATH entry, relocation, or wrapper symlink cannot select another core.
+#
+# Security contract: invoke the installed executable directly (for example,
+# `forge` or `/path/to/forge`) so the kernel applies `#!/bin/sh -p`. Privileged
+# shell startup ignores startup environment such as imported shell functions,
+# SHELLOPTS, BASHOPTS, BASH_ENV, and ENV before this file is parsed. Explicitly
+# running `sh forge` bypasses the shebang option and is not a secure launcher.
+# Backslash-quoted `command` spellings below retain alias/lookup hardening after
+# startup without an in-script function-sanitization bootstrap.
+\command set -eu
 
-# Resolve the directory containing this script, following one level of symlink.
-self="$0"
-if command -v readlink >/dev/null 2>&1; then
-    link=$(readlink -f "$self" 2>/dev/null || true)
-    [ -n "$link" ] && self="$link"
+fail() {
+    \command printf '%s\n' "forge wrapper: $*" >&2
+    \command exit 127
+}
+
+# A shell may pass only the command name in $0 when PATH lookup was used.
+# Split PATH with parameter expansion rather than IFS field splitting: POSIX
+# lookup treats every empty component (including a wholly empty PATH and the
+# leading/interior/trailing cases) as the current directory, while shell field
+# splitting is permitted to discard trailing empty fields.
+self=$0
+case $self in
+    */*) ;;
+    *)
+        \command [ "${PATH+x}" = x ] || \fail "cannot locate wrapper $self through an unset PATH"
+        path_rest=$PATH
+        found=
+        while \command :; do
+            case $path_rest in
+                *:*) entry=${path_rest%%:*}; path_rest=${path_rest#*:}; more=1 ;;
+                *) entry=$path_rest; more= ;;
+            esac
+            \command [ -n "$entry" ] || entry=.
+            candidate=$entry/$self
+            # Match executable PATH lookup: skip non-executable files and
+            # dangling links rather than shadowing a later entry.
+            if \command [ -f "$candidate" ] && \command [ -x "$candidate" ]; then
+                self=$candidate
+                found=1
+                \command break
+            fi
+            \command [ -n "$more" ] || \command break
+        done
+        \command [ -n "$found" ] || \fail "cannot locate wrapper $self through PATH"
+        ;;
+esac
+
+# Choose a resolver only after verifying the supported release boundary with
+# system-controlled tools. readlink is not POSIX; accept it only at fixed
+# system locations expected on declared targets, and fail closed if absent.
+select_readlink() {
+    uname_bin=
+    if \command [ -f /usr/bin/uname ] && \command [ -x /usr/bin/uname ]; then
+        uname_bin=/usr/bin/uname
+    elif \command [ -f /bin/uname ] && \command [ -x /bin/uname ]; then
+        uname_bin=/bin/uname
+    else
+        \fail "cannot resolve invocation symlink: no trusted platform detector"
+    fi
+    if ! platform_os=$(\command "$uname_bin" -s 2>/dev/null) ||
+       ! platform_arch=$(\command "$uname_bin" -m 2>/dev/null); then
+        \fail "cannot resolve invocation symlink: platform detection failed"
+    fi
+
+    case $platform_os:$platform_arch in
+        Linux:x86_64|Linux:aarch64)
+            getconf_bin=
+            if \command [ -f /usr/bin/getconf ] && \command [ -x /usr/bin/getconf ]; then
+                getconf_bin=/usr/bin/getconf
+            elif \command [ -f /bin/getconf ] && \command [ -x /bin/getconf ]; then
+                getconf_bin=/bin/getconf
+            else
+                \fail "unsupported symlink resolver platform: GNU libc not detected"
+            fi
+            if ! libc_version=$(\command "$getconf_bin" GNU_LIBC_VERSION 2>/dev/null); then
+                \fail "unsupported symlink resolver platform: GNU libc not detected"
+            fi
+            case $libc_version in
+                "glibc "?*) ;;
+                *) \fail "unsupported symlink resolver platform: GNU libc not detected" ;;
+            esac
+            if \command [ -f /usr/bin/readlink ] && \command [ -x /usr/bin/readlink ]; then
+                readlink_bin=/usr/bin/readlink
+            elif \command [ -f /bin/readlink ] && \command [ -x /bin/readlink ]; then
+                readlink_bin=/bin/readlink
+            else
+                \fail "cannot resolve invocation symlink: no trusted resolver"
+            fi
+            ;;
+        Darwin:x86_64|Darwin:arm64)
+            if \command [ -f /usr/bin/readlink ] && \command [ -x /usr/bin/readlink ]; then
+                readlink_bin=/usr/bin/readlink
+            else
+                \fail "cannot resolve invocation symlink: no trusted resolver"
+            fi
+            ;;
+        *)
+            \fail "unsupported symlink resolver platform: $platform_os/$platform_arch"
+            ;;
+    esac
+}
+
+# Resolve every invocation symlink, including relative targets. The bound fails
+# closed on loops. A sentinel preserves target names ending in newlines; the
+# two suffix removals discard only the sentinel and readlink's output delimiter.
+readlink_bin=
+symlink_count=0
+while \command [ -L "$self" ]; do
+    symlink_count=$((symlink_count + 1))
+    \command [ "$symlink_count" -le 40 ] || \fail "symlink loop while resolving $0"
+    if \command [ -z "$readlink_bin" ]; then
+        \select_readlink
+    fi
+    if ! target=$(\command "$readlink_bin" "$self" && \command printf '\001'); then
+        \fail "cannot read invocation symlink $self"
+    fi
+    target=${target%?}
+    target=${target%?}
+    case $target in
+        /*) self=$target ;;
+        *)
+            case $self in
+                */*) base=${self%/*}; \command [ -n "$base" ] || base=/ ;;
+                *) base=. ;;
+            esac
+            self=$base/$target
+            ;;
+    esac
+done
+
+\command [ -f "$self" ] && \command [ ! -L "$self" ] || \fail "wrapper target is not a regular file: $self"
+case $self in
+    */*) bin_dir=${self%/*}; \command [ -n "$bin_dir" ] || bin_dir=/ ;;
+    *) bin_dir=. ;;
+esac
+if ! bin_dir=$(CDPATH= \command cd -P "$bin_dir" 2>/dev/null && \command pwd -P && \command printf '\001'); then
+    \fail "cannot resolve package directory for $self"
 fi
-bin_dir=$(cd "$(dirname "$self")" && pwd)
+bin_dir=${bin_dir%?}
+bin_dir=${bin_dir%?}
 
-exec "$bin_dir/forge-core" "$@"
+binary=$bin_dir/forge-core
+if \command [ ! -f "$binary" ] || \command [ -L "$binary" ] || \command [ ! -x "$binary" ]; then
+    \fail "missing or unsafe packaged binary: $binary"
+fi
+
+\command exec "$binary" "$@"

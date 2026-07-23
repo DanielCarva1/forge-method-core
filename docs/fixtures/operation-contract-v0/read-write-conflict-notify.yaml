@@ -45,8 +45,8 @@ operation_contract:
       registry_ref: null
     write_authority:
       requires_driver_claim: false
-      requires_lane_claim: false
-      claim_contract_ref: null
+      requires_lane_claim: true
+      claim_contract_ref: "contracts/claims/story-v2-010-active-claim.yaml"
     completion:
       must_check_completion: false
       completion_contract_ref: null

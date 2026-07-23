@@ -8,7 +8,7 @@
 use forge_core_cli::guide::{
     run_decide, run_describe, run_status, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION,
 };
-use forge_core_contracts::CliEnvelope;
+use forge_core_contracts::{CliEnvelope, GuideProtocolDocument, StableId};
 use std::io::Write;
 
 fn catalog_dir() -> std::path::PathBuf {
@@ -29,32 +29,29 @@ fn tmp_decision(name: &str, body: &str) -> std::path::PathBuf {
     p
 }
 
-#[derive(serde::Serialize)]
-struct DecisionYaml<'a> {
-    schema_version: &'a str,
-    guide_decision: DecisionBody<'a>,
-}
-
-#[derive(serde::Serialize)]
-struct DecisionBody<'a> {
-    recommended_workflow: &'a str,
-    reason: &'a str,
-    current_phase: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    proposed_next_phase: Option<&'a str>,
-}
-
 fn decision_file(wf: &str, phase: &str, next: Option<&str>, reason: &str) -> std::path::PathBuf {
-    let doc = DecisionYaml {
-        schema_version: "0.1",
-        guide_decision: DecisionBody {
-            recommended_workflow: wf,
-            reason,
-            current_phase: phase,
-            proposed_next_phase: next,
-        },
-    };
-    let body = yaml_serde::to_string(&doc).unwrap();
+    let mut document: GuideProtocolDocument = yaml_serde::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/fixtures/guide-protocol-v0/facilitation.yaml"
+    )))
+    .expect("guide protocol fixture");
+    let protocol = &mut document.guide_protocol;
+    protocol.decision.recommended_workflow = StableId(wf.to_owned());
+    reason.clone_into(&mut protocol.decision.reason);
+    protocol.decision.current_phase = StableId(phase.to_owned());
+    protocol.decision.proposed_next_phase = next.map(|value| StableId(value.to_owned()));
+    protocol
+        .next_operation
+        .operation_contract
+        .recommendation
+        .workflow = StableId(wf.to_owned());
+    protocol
+        .next_operation
+        .operation_contract
+        .recommendation
+        .phase = StableId(next.unwrap_or(phase).to_owned());
+    protocol.next_operation.operation_contract.contract_id = StableId(format!("op_guide_{wf}"));
+    let body = yaml_serde::to_string(&document).unwrap();
     tmp_decision("decision.yaml", &body)
 }
 

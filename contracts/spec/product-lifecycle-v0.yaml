@@ -1,0 +1,155 @@
+schema_version: "0.1"
+product_lifecycle_spec:
+  id: "spec.product-lifecycle-v0"
+  status: "implementation"
+  purpose: >-
+    Provide an explicit ordinary-user setup, status, diagnostics, immutable
+    install, update, rollback, and product-owned uninstall surface without
+    treating consumer projects, Forge sidecars, operator anchors, backups, or
+    externally owned private keys as installation state.
+  public_surface:
+    command: "forge-core lifecycle"
+    subcommands:
+      - "setup --install-root <path>"
+      - "status --install-root <path>"
+      - "doctor --install-root <path>"
+      - "install --install-root <path> --release-file <yaml> [--explicit-canary-opt-in]"
+      - "update --install-root <path> --release-file <yaml> [--explicit-canary-opt-in]"
+      - "rollback --install-root <path>"
+      - "uninstall --install-root <path>"
+    authority: "mixed_by_subcommand"
+    output: "shared_cli_envelope_optional_json"
+    mcp_visibility: "allowlist_only"
+  release_document:
+    rust_type: "ProductLifecycleReleaseDocument"
+    schema_version: "0.1"
+    candidate_only: true
+    unknown_fields: "deny"
+    fixture: "docs/fixtures/product-lifecycle-v0/valid/release.yaml"
+    required_release_fields:
+      - "stable release id"
+      - "semantic version"
+      - "running-core compatibility requirement"
+      - "stable, canary, or dev channel"
+      - "immutable source reference"
+      - "provenance reference"
+      - "rollback reference"
+      - "one or more typed change records"
+      - "one or more typed assets"
+    asset_rules:
+      - "Source and install paths are normalized safe relative RepoPath values."
+      - "Every asset has an exact sha256:<64 lowercase hex> digest."
+      - "Asset ids and install paths are unique and the bundle has exactly one core binary."
+      - "Core binaries and wrappers are host-neutral; host adapters and host configurations name one RuntimeKind."
+      - "Host configurations are never executable."
+  install_root:
+    selection: "explicit_only"
+    inference_from_consumer_project: false
+    inference_from_sidecar: false
+    ownership_marker: ".forge-product-lifecycle.json"
+    lock_file: ".lifecycle.lock"
+    store_namespace: "product-lifecycle"
+    store_owner_marker: "product-lifecycle/owner.json"
+    state_file: "product-lifecycle/state.json"
+    staging_directory: "product-lifecycle/staging"
+    generation_directory: "product-lifecycle/generations"
+    generation_manifest: "generation.json"
+    generation_receipt: "receipt.json"
+    generation_asset_directory: "assets"
+    setup_rules:
+      - "A missing root may be created and marked by setup."
+      - "An exact existing marker makes setup idempotent."
+      - "A nonempty unmarked root is rejected rather than claimed."
+      - "Symlink path components and non-directory roots are rejected."
+  verification:
+    before_mutation:
+      - "Closed release-contract validation passes."
+      - "Release and asset source files are bounded regular files opened without following the final path and with hard-link ambiguity rejected."
+      - "The existing host-adapter distribution admission permits the target and channel."
+      - "Stable is admitted, canary requires explicit opt-in, and dev is rejected for general installation."
+      - "The existing local artifact verifier passes required distribution evidence."
+      - "The no-follow loaded bytes exactly match the declared SHA-256 after verifier return."
+      - "The running forge-core version satisfies compatible_core_version."
+    explicit_deferrals:
+      - "cryptographic signature verification when no separate authority-owned verification result is supplied"
+      - "provenance predicate semantic verification"
+      - "transparency-log inclusion verification"
+      - "publication, support, release authority, and host selection"
+  generation_model:
+    identity: "generation-<canonical-release-sha256-hex>"
+    publication: "fresh staged directory renamed into the owned generations directory"
+    metadata:
+      - "generation-local canonical generation.json"
+      - "generation-local canonical receipt.json"
+      - "generation-local exact asset bytes under assets/"
+      - "exact active, previous, and installed asset inventory in product-lifecycle/state.json"
+      - "no parallel top-level state file or receipt tree"
+    install: >-
+      Requires no active generation. An exact retry is idempotent; a distinct
+      active release must use update.
+    update: >-
+      Requires an active generation, rejects semantic-version downgrade and
+      same-version content drift, and retains the former active generation as
+      the previous working generation.
+    rollback: >-
+      Verifies the complete prior generation inventory and metadata before
+      swapping active and previous generation identities.
+  diagnostics:
+    selected_host: null
+    status_observations:
+      - "ownership marker validity"
+      - "active and previous generation/version"
+      - "typed active release notes"
+      - "exact, missing, digest-mismatched, or unsafe host-configuration files"
+    doctor_additions:
+      - "all generation release and receipt metadata"
+      - "matching audit receipts"
+      - "all active installed asset digests"
+  uninstall:
+    deletion_rule: >-
+      Remove only regular files at exact product-owned inventory paths when
+      their observed digest still matches the recorded digest; remove
+      directories only when empty.
+    preserve_on_mismatch: true
+    always_outside_custody:
+      - "consumer projects"
+      - "Forge project sidecars and Project Links"
+      - "operator trust and replay anchors"
+      - "backups and restore receipts"
+      - "external broker public registries"
+      - "external broker private keys"
+      - "signing keys, trust roots, and private keys"
+      - "unknown or operator-modified files"
+  authority_boundary:
+    release_document: "candidate data only"
+    lifecycle_state_and_receipts: "audit and local inventory data only"
+    deserialization_grants:
+      claim: false
+      mutation: false
+      phase_transition: false
+      release: false
+      signing: false
+      trust: false
+      private_key: false
+      distribution_admission: false
+      install_or_activation: false
+      protected_anchor: false
+      host_selection: false
+    selected_host: null
+    private_external_broker_keys: >-
+      Private external broker keys remain in their owner-specific backup
+      procedure and are never copied into Forge state or Forge backups.
+  evidence_boundary:
+    source_complete: true
+    compiled_targets:
+      - "forge-core-contracts --all-targets"
+      - "forge-core-store --all-targets"
+      - "forge-core-command-surface --all-targets"
+      - "forge-core-cli --all-targets"
+    deferred:
+      - "Rust test execution"
+      - "interruption and mixed-version lifecycle corpus"
+      - "failure injection, stress, fuzzing, and benchmarks"
+      - "MSRV, platform, and target matrices"
+      - "hosted CI"
+      - "publication, release, downloaded-asset verification, real-host, and field evidence"

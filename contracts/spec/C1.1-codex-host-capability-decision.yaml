@@ -1,0 +1,123 @@
+schema_version: "0.1"
+artifact_kind: "host-capability-decision"
+decision_id: "C1.1.codex-host-capability"
+status: "concluded_exact_version_negative"
+decided_at: "2026-07-15"
+
+question: >-
+  Can a current Codex-native plugin/skill/MCP integration authenticate a native
+  human interaction, show an authority-specific confirmation, and use a broker
+  key that the Codex agent cannot read or invoke as a signing oracle?
+
+requirements_ref: "contracts/spec/workflow-host-origin-adapter-v0.yaml"
+exact_local_subject:
+  product: "OpenAI Codex CLI"
+  version: "0.143.0"
+  package: "@openai/codex"
+  package_repository: "https://github.com/openai/codex"
+  evidence_scope: >-
+    Locally installed official package CLI help and app-server protocol schemas
+    generated with the exact binary. This is capability-spike evidence, not a
+    support claim or substitute for version-pinned public documentation.
+
+observed_surfaces:
+  - surface: "skills"
+    maturity: "stable product surface"
+    observation: "Skills can guide the model/agent."
+    authority_verdict: "insufficient"
+    reason: "Instructions and chat content do not authenticate the physical submitter or protect signer invocation."
+  - surface: "MCP client"
+    maturity: "stable product surface"
+    observation: "Codex can configure and call MCP servers."
+    authority_verdict: "insufficient"
+    reason: "An MCP call is agent/tool initiated; exposing signing or broker administration would create the forbidden oracle."
+  - surface: "plugins and hooks"
+    maturity: "CLI reports plugins and hooks as stable"
+    observation: >-
+      Generated protocol types include plugin hook metadata and the event names
+      userPromptSubmit, permissionRequest, sessionStart, and stop. Command hooks
+      have trust metadata.
+    authority_verdict: "not_yet_sufficient"
+    reason: >-
+      The inspected protocol provides no unforgeable hook-invocation capability,
+      no non-agent key-custody guarantee, and no evidence that a command hook
+      executable cannot be invoked directly by the agent with forged input.
+  - surface: "Codex command/file/MCP approvals"
+    maturity: "stable and experimental fields coexist"
+    observation: "The app-server protocol carries native approval requests and user decisions for Codex operations."
+    authority_verdict: "not_reusable_as_forge_authority"
+    reason: "Approval of a Codex tool operation does not bind a Forge action packet or Forge closed semantic answer."
+  - surface: "app-server custom client"
+    maturity: "experimental"
+    observation: >-
+      The generated protocol exposes client-originated turn/start input,
+      clientUserMessageId, user-message items, request-user-input flows, thread
+      and turn identifiers, and approval request/response messages.
+    authority_verdict: "insufficient_for_C1_selection"
+    reason: >-
+      A Forge-owned client could receive native input before sending a turn, but
+      the inspected transport has only self-declared clientInfo/capabilities;
+      approval decisions and dynamic-tool results are client-supplied; approval
+      routing may target auto_review or guardian_subagent; and attestation/generate
+      requests have no subject while the client returns an opaque token. None of
+      these fields proves human presence, binds a Forge packet/semantic answer, or
+      makes signer invocation unavailable to the Codex child and its shell/tools.
+direct_protocol_evidence:
+  - file: "InitializeParams.ts and ClientInfo.ts"
+    finding: "initialize carries self-declared client name/title/version and optional capabilities, with no authenticated client principal or native-human assertion"
+  - file: "ServerRequest.ts and CommandExecutionRequestApprovalParams.ts"
+    finding: "server requests route thread/turn/item/callback identifiers and command details, but contain no Forge subject binding or cryptographic human-origin proof"
+  - file: "CommandExecutionRequestApprovalResponse.ts, FileChangeRequestApprovalResponse.ts, and PermissionsRequestApprovalResponse.ts"
+    finding: "the app-server client supplies decision or granted-permission values"
+  - file: "ApprovalsReviewer.ts"
+    finding: "review routing explicitly includes user, auto_review, and guardian_subagent, so an approval-shaped response is not inherently human"
+  - file: "AttestationGenerateParams.ts and AttestationGenerateResponse.ts"
+    finding: "the request is empty and the app-server client supplies an opaque token; no local schema binds human interaction, Forge packet, semantic answer, signer, or key custody"
+  - file: "TurnStartParams.ts"
+    finding: "thread input, clientUserMessageId, metadata, context, reviewer, approval policy, sandbox, and permissions are client-provided protocol values"
+  - file: "ServerNotification.ts"
+    finding: "thread/turn/item/hook notifications are lifecycle protocol messages, not authenticated native-human capabilities"
+
+
+capability_matrix:
+  manifest_recognized: "yes"
+  generic_read_only_mcp_possible: "yes_pending_real_config_test"
+  native_user_event_plugin_proven: "no"
+  authority_specific_native_confirmation_plugin_proven: "no"
+  non_agent_signer_custody_plugin_proven: "no"
+  broker_admin_boundary_plugin_proven: "no"
+  deterministic_plugin_install_and_rollback_proven: "no"
+  forge_owned_app_server_client_possible: "protocol_possible_but_current_C1_security_boundary_unproven"
+
+resolution:
+  codex_native_plugin_claim: "unsupported_for_human_origin_assurance"
+  codex_skill_claim: "guidance_only"
+  codex_mcp_claim: "read_only_only_until_real_configuration_evidence"
+  forge_standalone_with_codex_app_server: "not_selected_on_current_evidence"
+  selected_C1_reference_host: "not_yet_selected_codex_rejected"
+
+next_spike:
+  target: "Select and spike the next host with a native authenticated-event API and OS-backed non-exportable signer boundary"
+  must_prove:
+    - "native UI receives the human message before model/tool exposure"
+    - "exact Forge semantic answer and packet are shown in a native confirmation"
+    - "key use is non-exportable and unavailable to Codex shell/MCP/tools"
+    - "host event/session/interaction handles are generated outside agent control"
+    - "agent cannot invoke signing, enrollment, rotation, or revocation"
+    - "agent-capable child processes are OS-isolated from the broker process and cannot inspect it, signal it as an oracle, or access its credential store"
+    - "user presence is enforced by the host or key provider rather than inferred from client-supplied approval fields"
+    - "protocol version negotiation and rollback fail closed"
+  stop_conditions:
+    - "app-server protocol cannot be pinned or changes without compatibility negotiation"
+    - "Codex child tools can read or invoke the signer/key"
+    - "confirmation can be synthesized or accepted by agent content"
+    - "the adapter must expose mutation through default MCP"
+
+claim_boundary: >-
+  Codex 0.143.0 exposes useful lifecycle, hook, approval, and app-server protocol
+  shapes, but none of the inspected schemas establishes an unforgeable native
+  human-origin signer boundary. Normal Codex plugin/skill/MCP is unsupported for
+  human-origin assurance, and the Forge-owned app-server client candidate fails
+  C1 selection on current evidence. Codex may be reconsidered only with separate
+  evidence for authenticated native input, exact Forge confirmation, OS isolation,
+  non-exportable user-presence key use, and non-agent administration.

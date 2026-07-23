@@ -19,7 +19,7 @@ operation_contract:
     next_operation: null
     host_action: "request_confirmation"
     phase: "6-evolve"
-    workflow: "correct-course"
+    workflow: "guidance-engine"
     action: "address_user_frustration"
   authority:
     mutation_policy: "forbidden"

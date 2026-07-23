@@ -34,10 +34,83 @@ pub struct DomainPackSupplyChainRegistry {
     pub expires_at_unix: u64,
     pub publisher_credentials: Vec<DomainPackPublisherCredential>,
     pub namespace_grants: Vec<DomainPackNamespaceGrant>,
+    /// Signed transport metadata used only to locate immutable artifact bytes.
+    /// It does not create another catalog or grant package authority.
+    pub mirrors: Vec<DomainPackRegistryMirror>,
     pub packages: Vec<DomainPackRegistryPackageRecord>,
     pub revocations: Vec<DomainPackPackageRevocation>,
     pub snapshot_digest: String,
     pub signatures: Vec<DomainPackRegistrySignature>,
+}
+
+/// A signed mirror endpoint. The transport base is intentionally separate from
+/// artifact object paths: a catalog record names only a normalized immutable
+/// object path beneath a selected mirror, never an arbitrary URL or local path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackRegistryMirror {
+    pub mirror_id: StableId,
+    pub priority: u16,
+    pub transport: DomainPackRegistryMirrorTransport,
+}
+
+/// Closed mirror transports. An operator-provisioned local mirror carries an
+/// opaque operator location id, not an agent-supplied filesystem path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DomainPackRegistryMirrorTransport {
+    Https { base_url: String },
+    OperatorProvisionedLocal { location_id: StableId },
+}
+
+/// The role of one immutable package artifact. The descriptor set has exactly
+/// one manifest/content/license descriptor and zero or more fixture descriptors.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainPackRemoteArtifactKind {
+    Manifest,
+    Content,
+    License,
+    Fixture,
+}
+
+/// A closed media-type vocabulary prevents an artifact declaration from turning
+/// a consumer-selected parser into an unbounded remote execution surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainPackRemoteArtifactMediaType {
+    ApplicationYaml,
+    ApplicationJson,
+    TextPlain,
+    ApplicationOctetStream,
+}
+
+/// Immutable descriptor signed through its containing registry record.
+///
+/// `binding` deliberately reuses the established raw/canonical SHA-256 pins and
+/// logical `RepoPath`. `object_path` is a normalized, content-addressed path
+/// relative to a selected mirror transport and must be
+/// `objects/sha256/<raw-hex>` for `binding.raw_sha256`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackRemoteArtifactDescriptor {
+    pub kind: DomainPackRemoteArtifactKind,
+    pub binding: DomainPackArtifactBinding,
+    pub object_path: RepoPath,
+    pub byte_length: u64,
+    pub media_type: DomainPackRemoteArtifactMediaType,
+}
+
+/// Complete immutable artifact descriptor set for one signed package record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackRegistryArtifactSet {
+    pub manifest: DomainPackRemoteArtifactDescriptor,
+    pub content: DomainPackRemoteArtifactDescriptor,
+    pub license: DomainPackRemoteArtifactDescriptor,
+    pub fixtures: Vec<DomainPackRemoteArtifactDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -70,6 +143,9 @@ pub struct DomainPackRegistryPackageRecord {
     pub content_digest: String,
     pub license_digest: String,
     pub fixture_digests: Vec<String>,
+    /// Complete signed manifest/content/license/fixture byte descriptors.
+    /// `package_digest` above preserves its established package-level semantics.
+    pub artifacts: DomainPackRegistryArtifactSet,
     pub namespace_grant_id: StableId,
     pub publisher_credential_id: StableId,
     pub publisher_signature_hex: String,

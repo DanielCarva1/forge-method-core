@@ -1,0 +1,4 @@
+schema_version: forge_project_link_v1
+project_id: app
+sidecar_root: ../forge-app
+state_root: ../forge-app/.forge-method

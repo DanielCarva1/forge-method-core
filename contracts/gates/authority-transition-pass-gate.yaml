@@ -1,0 +1,24 @@
+schema_version: "0.1"
+gate_contract:
+  id: "gate.authority_transition.pass"
+  contract_ref: "contracts/gates/gate-contract-v0.yaml"
+  gate:
+    scope: "authority"
+    status: "pass"
+    checked_at: "2026-07-20T00:00:00Z"
+    checked_by: "human-reviewer"
+  target:
+    kind: "project"
+    id: "forge-method-rust"
+    product_area: "runtime-core"
+    paths: []
+  evidence_refs:
+    - kind: "human_approval"
+      ref: "contracts/policies/funnel-autonomy.yaml"
+    - kind: "security_review"
+      ref: "contracts/operations/operation-contract-v0.yaml"
+  promotion:
+    policy: "no_promotion"
+    parent_gate_ref: null
+  blocks:
+    operations: []

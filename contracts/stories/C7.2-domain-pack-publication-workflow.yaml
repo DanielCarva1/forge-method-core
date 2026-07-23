@@ -1,0 +1,73 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C7.2"
+status: "implemented"
+slice: "domain-pack-package-review-catalog-workflow"
+title: "Bind candidate Domain Pack publication and cumulative revocation evidence"
+intent: >-
+  Build the bounded source-only workflow from C7.1 package authoring through
+  immutable C6.2 descriptors, external signing request/evidence, independent
+  review readiness, unsigned catalog evolution, and cumulative revocation.
+
+depends_on:
+  - "C6.2"
+  - "C7.1"
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/domain-pack-authoring-v0.yaml"
+  - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
+  - "contracts/spec/domain-pack-learning-v0.yaml"
+  - "contracts/spec/domain-pack-publication-v0.yaml"
+
+owned_files:
+  - "contracts/spec/domain-pack-publication-v0.yaml"
+  - "contracts/stories/C7.2-domain-pack-publication-workflow.yaml"
+  - "crates/forge-core-contracts/src/domain_pack_publication.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-contracts/tests/domain_pack_publication.rs"
+  - "crates/forge-core-decisions/src/domain_pack_publication.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-decisions/tests/domain_pack_publication.rs"
+
+constraints:
+  - "Every C7.2 input and output is candidate_only and all serializable C7.2 structs deny unknown fields."
+  - "Reuse C7.1 author-test evaluation and P6c promotion/review readiness; do not duplicate authoring or promotion semantics."
+  - "Reuse C6.2 DomainPackRegistryPackageRecord, artifact set/descriptors, supply-chain registry, and revocation records."
+  - "Run C6.2 remote artifact metadata validation structurally; do not claim signature, policy, anchor, or trusted catalog validation."
+  - "Bind exact raw/canonical manifest, content, license, fixture, provenance, compatibility, author-report, dossier, and reviewer evidence."
+  - "Request external signing only through exact typed subjects and the named existing authority signing protocol."
+  - "Do not implement private-key custody, key generation, generic signing, signing-byte construction, or cryptographic signature verification."
+  - "Do not implement network transport, remote publication, catalog admission, trust provisioning, revocation enforcement against an anchor, lifecycle install/apply/commit, or activation."
+  - "Catalog candidates carry empty snapshot_digest and no registry signatures until existing authority owners compute/verify/admit them."
+  - "Catalog successors retain prior package/catalog metadata and every cumulative revocation fact; a revocation only appends one new immutable fact."
+  - "Do not modify domain_pack_cmd.rs, command surface, authority/TCB code, Cargo manifests, planning/status files, or active C6.2/C7.1 implementation files except additive lib.rs exports."
+
+acceptance_criteria:
+  - "Package preparation reruns a typed C7.1 author test and requires compatible exact-lock evidence before exposing a record candidate."
+  - "Prepared records exactly match C7.1 identity/content/provenance and C6.2 descriptor/pin fields; fixture bindings remain exact."
+  - "Preparation rejects pre-populated publisher signatures, while treating record digest as a grammar-checked claim to be recomputed by the existing authority."
+  - "Review readiness reruns the existing promotion evaluator and retains the exact P6c input, dossier, and independent reviewer documents so catalog evolution reproduces the candidate-only projection."
+  - "Publisher and registry external-signing requests contain no private key or signing bytes, identify the authority-owned protocol, and bind exact record/catalog subjects."
+  - "External evidence is syntax- and cross-reference-checked only and serializes as unverified_evidence_bound, never as verified/admitted/published."
+  - "Catalog evolution creates only an unsigned candidate direct successor with exact predecessor/generation and supplied publisher evidence/review readiness."
+  - "Revocation evolution preserves every prior revocation fact exactly, appends only a unique valid target fact, and exposes a deterministic cumulative list."
+  - "Focused source tests cover closed wire fields, candidate-only serialization, package compatibility/descriptor blockers, cumulative revocation carry-forward, external registry signing request, and unverified evidence output."
+
+checks:
+  permitted:
+    - "YAML parse changed C7.2 spec/story files"
+    - "scoped git diff --check over C7.2-owned paths"
+    - "targeted locked Cargo checks for affected crates and all source-test targets"
+  deferred:
+    - "Rust test execution, rustfmt, CI, runtime/stabilization gates, remote publication, independent review, hosted evidence, commits, and pushes"
+
+blocks:
+  - "Existing supply-chain authority owners must recompute canonical record/catalog digests, construct signing bytes, verify detached signatures, apply trust policy, and advance the protected anchor."
+  - "A later transport/CLI owner may publish authority-admitted catalog material to a remote endpoint; C7.2 has no remote capability."
+  - "Existing lifecycle and TCB owners retain resolution, preflight, private commit, installation, activation, and revocation enforcement boundaries."
+
+next_workflow:
+  - "External signer obtains authority-defined bytes for a C7.2 request and returns detached evidence."
+  - "Authority owner independently verifies evidence and admits/anchors only a valid catalog snapshot."
+  - "Downstream C6.2/lifecycle owners may consume admitted catalog material without treating C7.2 readiness as authority."

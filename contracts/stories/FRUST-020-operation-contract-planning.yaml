@@ -1,0 +1,60 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "FRUST-020"
+status: "implemented"
+slice: "runtime-operation-core"
+title: "Complete typed OperationContract planning behavior"
+intent: >-
+  Complete the bounded OperationContract planner/executor source story so typed
+  read/status, review, gate, human-handoff, and executable outcomes are
+  deterministic, validated before planning, and unable to enter durable mutation
+  authority when the plan is not ready to call an operation.
+
+decision_sources:
+  - "contracts/backlog/rust-only-core-backlog.yaml#FRUST-020"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "contracts/policies/rust-runtime-execution-boundary.yaml"
+  - "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
+  - "contracts/migration/operation-contract-plan-grill-audit.yaml"
+
+owned_files:
+  - "contracts/stories/FRUST-020-operation-contract-planning.yaml"
+  - "contracts/backlog/rust-only-core-backlog.yaml"
+  - "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
+  - "docs/product-status.md"
+  - "docs/product-gap-register.md"
+  - "crates/forge-core-kernel/src/wal_orchestration.rs"
+  - "crates/forge-core-kernel/tests/operation_plan.rs"
+
+constraints:
+  - "OperationContractDocument validation and reference validation precede runtime planning."
+  - "Only RuntimePlanStatus::ReadyToCallOperation may enter durable layout validation, retained producer admission, mutation-gate evaluation, staging, command execution, evidence append, or effect application."
+  - "Read-only status, required review, missing/pending gate, and human-handoff outcomes return their typed plan without creating the Forge state root."
+  - "Hosts and adapters may render or execute the returned route but may not invent a different next operation, phase, authority, or control flow."
+  - "This story does not weaken C5.2 guarded phase admission or grant candidate documents phase, trust, signing, lifecycle, or persistence authority."
+
+acceptance_criteria:
+  - "Allowed mechanical operations remain ready to call and denied or gate-blocked operations remain fail closed."
+  - "The already-done fixture deterministically returns read-only status with no next operation and no durable mutation."
+  - "The expired-claim fixture deterministically returns reviewed record-request handoff with no durable mutation."
+  - "A runtime handoff missing its double gate remains gate-required, while a merely suggestible handoff waits for explicit human input."
+  - "Correct-course and report-only fixtures do not enter durable producer admission, mutation gates, staging, commands, evidence append, or effects."
+  - "Focused source tests assert planner status, reason, next operation, executor status, and absence of a created state root."
+
+checks:
+  passed:
+    - "cargo fmt --package forge-core-kernel"
+    - "cargo check --locked -p forge-core-kernel --all-targets"
+  deferred:
+    - "Rust test execution"
+    - "full workspace tests"
+    - "runtime integration and end-to-end execution"
+    - "failure injection, stress, fuzzing, and benchmarks"
+    - "MSRV, platform, and target matrices"
+    - "hosted CI"
+    - "publication, release, independent review, real-host, and field evidence"
+
+follow_on_boundaries:
+  - "FRUST-030 owns the exact next validated OperationContract guide protocol."
+  - "FRUST-031 owns one accepted funnel-autonomy policy across guide, operation, destructive, release, and authority consumers."
+  - "C5.3 complete repeated-episode persistence and authority-free replacement continuity are source-complete pending deferred runtime and hosted evidence."

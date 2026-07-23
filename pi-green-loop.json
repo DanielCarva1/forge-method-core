@@ -1,7 +1,12 @@
 {
   "timeoutMs": 600000,
   "checks": [
-    { "name": "fmt",   "kind": "lint",      "command": "cargo fmt --all -- --check" },
-    { "name": "check", "kind": "typecheck", "command": "cargo check --workspace" }
+    { "name": "structured-text", "kind": "lint", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-static-structured-text.py" },
+    { "name": "doc-links", "kind": "lint", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-doc-links.py" },
+    { "name": "public-promises", "kind": "lint", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-public-promises.py" },
+    { "name": "msrv-policy", "kind": "lint", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-msrv.py" },
+    { "name": "release-locking", "kind": "lint", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-release-locking.py" },
+    { "name": "diff-check", "kind": "lint", "command": "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check 137b3cf43b123d4b15c45b544a3e3060e714ffb9" },
+    { "name": "workspace-compile-feedback", "kind": "compile", "command": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets" }
   ]
 }

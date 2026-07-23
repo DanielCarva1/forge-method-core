@@ -1,0 +1,73 @@
+schema_version: "0.1"
+artifact_kind: "implementation-story"
+story_id: "C7.1"
+status: "implemented"
+slice: "domain-pack-authoring-core"
+title: "Provide a pure candidate-only Domain Pack author workflow"
+intent: >-
+  Generate a minimal typed generic Domain Pack skeleton and compose established
+  candidate validation, deterministic composition, exact-lock compatibility,
+  learning/promotion, reviewed-registry readiness, and focused adversarial
+  diagnostics into one deterministic author-facing test report.
+
+depends_on:
+  - "C6.1"
+
+decision_sources:
+  - "contracts/plan/product-gap-closure-plan.yaml"
+  - "contracts/spec/domain-pack-v0.yaml"
+  - "contracts/spec/domain-pack-learning-v0.yaml"
+  - "contracts/spec/domain-pack-lifecycle-v0.yaml"
+  - "contracts/spec/domain-pack-authoring-v0.yaml"
+
+owned_files:
+  - "contracts/spec/domain-pack-authoring-v0.yaml"
+  - "contracts/stories/C7.1-domain-pack-author-workflow.yaml"
+  - "docs/domain-pack-authoring.md"
+  - "crates/forge-core-contracts/src/domain_pack_authoring.rs"
+  - "crates/forge-core-contracts/src/lib.rs"
+  - "crates/forge-core-contracts/tests/domain_pack_authoring.rs"
+  - "crates/forge-core-decisions/src/domain_pack_authoring.rs"
+  - "crates/forge-core-decisions/src/lib.rs"
+  - "crates/forge-core-decisions/tests/domain_pack_authoring.rs"
+  - "crates/forge-core-cli/src/domain_pack_cmd.rs"
+  - "crates/forge-core-cli/tests/domain_pack_authoring_cli_e2e.rs"
+  - "crates/forge-core-command-surface/src/lib.rs"
+
+constraints:
+  - "All C7.1 authority is candidate_only; contracts must reject unknown fields and invented authority values."
+  - "The pure decision layer performs no filesystem, network, subprocess, adapter, evaluator, prompt, tool, signing, publishing, trust-anchor, lifecycle, apply, commit, installation, or activation operation."
+  - "Reuse existing validate_domain_pack_candidate and compose_domain_packs semantics; do not duplicate candidate/composition logic."
+  - "Use evaluate_domain_pack_compatibility only as exact-lock comparison evidence and expose no lifecycle authority in C7.1 report output."
+  - "Use the existing promotion and reviewed-registry evolution readiness evaluators only when their optional evidence is supplied."
+  - "Preserve independent project requirements and every missing domain/capability gap; never delete requirements to manufacture success."
+  - "The pure decision layer returns typed documents and bound bytes only; the additive CLI adapter may materialize those exact bytes beneath a fresh explicit output root or render the report."
+  - "The CLI adapter must not touch lifecycle/trust/publication/activation state, network, subprocesses, or Forge state roots."
+  - "Keep the skeleton generic. Do not copy a game or other domain-specific reference fixture into C7.1 source."
+  - "Do not modify C6.2 authority/TCB semantics, Cargo manifests, or existing domain fixtures."
+
+acceptance_criteria:
+  - "A deterministic skeleton carries explicit coordinates, provenance/authorship/license, sealed Core bundle/policy digests, requirements, namespace/contribution sections, dependency/conflict/replacement placeholders, and raw/canonical manifest/content/license bindings."
+  - "The author test accepts typed candidate/composition input and caller-supplied raw sidecars, then emits one stable candidate-only report with structural, artifact, composition, compatibility, learning/readiness, reviewed-registry, adversarial, gap, and aggregate sections."
+  - "Exact raw/canonical mismatch, coordinate mismatch, missing sidecars, malformed contract material, invalid contribution variants, dependency/cycle/conflict, dangling reference, shadowing, collision, Core incompatibility, and explicit requirement gaps fail closed."
+  - "Unsafe prompt/tool prose and executable/runtime/credential/external-authority capability claims remain inert diagnostics and fail closed."
+  - "Compatibility/learning/readiness reports normalize existing evaluator diagnostics without becoming trust, registry, lifecycle, or activation evidence."
+  - "Deprecated, revoked, superseded, no-op, regressing, non-independent, missing/rejected-review, and unresolved-conflict evidence is explicit and blocks ready output."
+  - "Focused source tests cover skeleton determinism, unknown fields, candidate-only serialization, sidecar tamper, deterministic ordering, shadowing, explicit gaps, optional evaluator sections, and absence of activation/lifecycle authority in output."
+
+checks:
+  permitted:
+    - "YAML parse changed spec/story files"
+    - "scoped git diff --check over owned paths"
+    - "targeted locked Cargo checks for affected crates and all source-test targets"
+  deferred:
+    - "Rust test execution, rustfmt, CI, runtime/stabilization gates, publication, and hosted evidence"
+
+blocks:
+  - "The shipped CLI adapter remains strictly non-authoritative and may only materialize skeleton bytes or render a report."
+  - "C7.2 owns signing, publication, revocation, and reviewed-registry evolution authority."
+  - "Existing trusted lifecycle/TCB owners retain all apply, commit, installation, and activation boundaries."
+
+next_workflow:
+  - "Hand off typed skeleton bytes and report documents to any future CLI/SDK adapter without granting authority."
+  - "Keep trust, review, publication, lifecycle, and activation ceremonies on their existing independent paths."

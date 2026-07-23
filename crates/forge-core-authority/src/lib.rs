@@ -16,6 +16,7 @@ pub mod domain_pack_supply_chain;
 pub mod execution_handoff;
 pub mod principal_registry;
 pub mod workflow_authority;
+pub mod workflow_broker_control;
 pub mod workflow_origin_broker;
 pub mod workflow_release_review;
 pub mod workflow_release_review_v2;
@@ -43,12 +44,15 @@ pub use domain_pack_promotion::{
     DOMAIN_PACK_REVIEWER_REGISTRY_ROTATION_SIGNATURE_DOMAIN,
 };
 pub use domain_pack_supply_chain::{
-    domain_pack_package_record_digest, domain_pack_publisher_signing_bytes,
-    domain_pack_registry_signing_bytes, domain_pack_registry_snapshot_digest,
+    domain_pack_cumulative_revocation_digest, domain_pack_package_record_digest,
+    domain_pack_publisher_signing_bytes, domain_pack_registry_signing_bytes,
+    domain_pack_registry_snapshot_digest, select_domain_pack_supply_chain_record,
     verify_domain_pack_supply_chain_snapshot, AnchoredDomainPackSupplyChainSnapshot,
-    DomainPackRegistryAnchor, DomainPackRegistryAnchorAdvance, DomainPackRegistryAnchorReplayAudit,
+    AnchoredDomainPackSupplyChainSnapshotAudit, DomainPackRegistryAnchor,
+    DomainPackRegistryAnchorAdvance, DomainPackRegistryAnchorReplayAudit,
     DomainPackRegistryAnchorVersion, DomainPackSupplyChainAuditAuthority,
-    DomainPackSupplyChainError, VerifiedDomainPackRegistrySignerAudit,
+    DomainPackSupplyChainError, SelectedDomainPackSupplyChainRecord,
+    SelectedDomainPackSupplyChainRecordAudit, VerifiedDomainPackRegistrySignerAudit,
     VerifiedDomainPackSupplyChainEntry, VerifiedDomainPackSupplyChainEntryAudit,
     VerifiedDomainPackSupplyChainSnapshot, VerifiedDomainPackSupplyChainSnapshotAudit,
     DOMAIN_PACK_PUBLISHER_SIGNATURE_DOMAIN, DOMAIN_PACK_REGISTRY_SIGNATURE_DOMAIN,
@@ -78,15 +82,25 @@ pub use workflow_authority::{
     WorkflowEvidenceAuthorizationRequest, WorkflowSignalAuthorization,
     WorkflowSignalAuthorizationRequest, WorkflowWaiverAuthorizationRequest, WorkflowWaiverSubject,
 };
+pub use workflow_broker_control::{
+    validate_workflow_broker_host_binding, validate_workflow_broker_public_credential_document,
+    AuthorizedWorkflowBrokerControlPlane, AuthorizedWorkflowBrokerRegistryAdvance,
+    HistoricallyVerifiedBoundWorkflowBrokerEvent, VerifiedBoundWorkflowBrokerEvent,
+    VerifiedBoundWorkflowBrokerEventAudit, VerifiedWorkflowBrokerAdminRetry,
+    WorkflowBrokerControlError, WorkflowBrokerVerificationContext,
+};
 pub use workflow_origin_broker::{
     workflow_broker_event_digest, workflow_broker_event_signing_bytes,
+    workflow_broker_host_event_descriptor_digest, workflow_broker_public_key_fingerprint,
     AuthorizedWorkflowBrokerRegistry, HistoricallyVerifiedWorkflowBrokerEvent,
     VerifiedWorkflowBrokerEvent, VerifiedWorkflowBrokerEventAudit,
     WorkflowBrokerEnrollmentDeclaration, WorkflowBrokerError, WorkflowBrokerEventEnvelope,
     WorkflowBrokerEventKind, WorkflowBrokerFreshnessPolicy, WorkflowBrokerIssuerEntry,
     WorkflowBrokerIssuerProfile, WorkflowBrokerIssuerStatus, WorkflowBrokerRegistryDocument,
     WorkflowBrokerReplayKey, WorkflowBrokerSemanticInput, WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
-    WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_SIGNATURE_DOMAIN,
+    WORKFLOW_BROKER_HOST_DESCRIPTOR_DOMAIN, WORKFLOW_BROKER_LEGACY_EVENT_SCHEMA_VERSION,
+    WORKFLOW_BROKER_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_SEMANTIC_INPUT_DOMAIN,
+    WORKFLOW_BROKER_SIGNATURE_DOMAIN, WORKFLOW_BROKER_SIGNATURE_DOMAIN_V2,
 };
 pub use workflow_release_review::{
     verify_workflow_release_admission_authorization, workflow_release_admission_payload_digest,

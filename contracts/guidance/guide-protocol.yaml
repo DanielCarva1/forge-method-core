@@ -1,0 +1,130 @@
+schema_version: "0.1"
+protocol: "guide_protocol"
+status: "accepted"
+purpose: >-
+  Bind one validated GuideDecision to the exact next validated
+  OperationContractDocument before a host may render a prompt, call another Forge
+  surface, or request mechanical execution.
+
+canonical_sources:
+  backlog: "contracts/backlog/rust-only-core-backlog.yaml#FRUST-030"
+  guide_decision_contract: "crates/forge-core-contracts/src/guide_decision.rs"
+  operation_contract: "contracts/operations/operation-contract-v0.yaml"
+  human_agent_interface: "contracts/policies/human-agent-interface.yaml"
+  planner_story: "contracts/stories/FRUST-020-operation-contract-planning.yaml"
+
+contract_surface:
+  schema_version: "0.1"
+  document: "GuideProtocolDocument"
+  body: "GuideProtocol"
+  composition:
+    decision: "GuideDecision"
+    next_operation: "OperationContractDocument"
+  rust_contract: "crates/forge-core-contracts/src/guide_protocol.rs"
+  validator: "forge_core_kernel::validate_guide_protocol"
+  cli_input: "forge-core guide decide --protocol-file <path>"
+  cli_success_fields:
+    - "recommended_workflow"
+    - "current_phase"
+    - "proposed_next_phase"
+    - "reason"
+    - "route"
+    - "next_operation"
+  legacy_input_alias: >-
+    --decision-file remains a parser spelling alias only. Its file must still be a
+    complete GuideProtocolDocument; a standalone GuideDecisionDocument is rejected.
+
+validation_order:
+  - "Require the exact accepted guide-protocol schema version."
+  - "Validate the existing GuideDecision against catalog membership, phase eligibility, and provided transition gates."
+  - "Run existing structural OperationContract validation."
+  - "Require the accepted OperationContract schema version and source.operation=guide."
+  - "Require exact workflow equality between the decision and next operation."
+  - "Require the next-operation phase to equal the validated proposed phase, or the current phase when no transition is proposed."
+  - "Require exact allowed-actions equality between the decision and next operation."
+  - "Require project_ref.state_version to equal coordination_scope.concurrency.expected_state_version."
+  - "Reject unresolved operation error diagnostics."
+  - "Classify one closed route and validate its route-specific policy."
+
+closed_routes:
+  - id: "facilitation"
+    classification: "autonomy.mode=facilitate unless a more specific closed workflow route applies"
+    policy:
+      - "mutation forbidden, side effects read-only, execution observe-only"
+      - "no command or effect-contract references"
+      - "next actor is human and host action requests confirmation"
+      - "no next Forge operation"
+      - "required human question"
+  - id: "research"
+    classification: "autonomy.mode=research"
+    policy:
+      - "mutation forbidden, side effects read-only, execution observe-only"
+      - "no command or effect-contract references"
+      - "next actor is host_agent and host action calls the returned operation route"
+      - "no nested next Forge operation and no human input requirement"
+  - id: "visual_alignment"
+    classification: "workflow=visual-alignment-prototype"
+    policy:
+      - "same non-mutating, human-question boundary as facilitation"
+  - id: "correct_course"
+    classification: "workflow=guidance-engine and recommendation.action=address_user_frustration"
+    policy:
+      - "same non-mutating, human-question boundary as facilitation"
+  - id: "already_done"
+    classification: "recommendation.action=story_already_done"
+    policy:
+      - "autonomy observe, mutation forbidden, side effects read-only, execution observe-only"
+      - "no command, effect-contract, nested-operation, or human-input authority"
+      - "next actor is human and host action shows status"
+  - id: "mechanical_execution"
+    classification: "autonomy.mode=execute"
+    policy:
+      - "next actor is host_agent and host action calls the exact returned next operation"
+      - "a next Forge operation is present"
+      - "mutation, side effects, and execution are not observe-only placeholders"
+      - "no human input requirement"
+      - "acceptance itself grants no mutation authority; the existing planner and executor independently validate admission"
+
+authority_boundaries:
+  - "GuideProtocol composes existing GuideDecision and OperationContract types; it defines no parallel phase, workflow, action, gate, execution, or mutation authority."
+  - "The exact accepted next_operation is returned without host substitution or reconstruction."
+  - "A host may render or submit the exact returned route but may not invent a different workflow, phase, action set, state version, actor, operation source, or control flow."
+  - "Structural guide validation does not replace OperationContract reference validation, runtime planning, durable producer admission, gate evaluation, or effect execution."
+  - "Only RuntimePlanStatus::ReadyToCallOperation may proceed toward durable mutation authority."
+  - "Candidate documents do not gain signing, trust, admission, install, activation, lifecycle, protected-anchor, private-key, or phase-mutation authority."
+  - "Ordinary automatic phase planning continues to stop at BuildVerify; ReadyOperate and Evolve remain guarded by C5.2 exact-state admission."
+  - "No exact host is selected, supported, released, or field-verified; selected_host remains none."
+  - "External broker private keys remain in owner-specific backup procedures and never enter Forge state or Forge backups."
+
+fail_closed_rejections:
+  - "unsupported_schema_version"
+  - "unrecognized_current_phase"
+  - "unknown_workflow"
+  - "not_eligible_in_phase"
+  - "illegal_transition"
+  - "unrecognized_proposed_phase"
+  - "operation_contract_invalid"
+  - "operation_source_not_guide"
+  - "workflow_mismatch"
+  - "phase_mismatch"
+  - "allowed_actions_mismatch"
+  - "state_version_mismatch"
+  - "operation_diagnostics_errors"
+  - "unsupported_route"
+  - "route_policy_mismatch"
+
+source_evidence:
+  fixture: "docs/fixtures/guide-protocol-v0/facilitation.yaml"
+  contract_tests: "crates/forge-core-contracts/src/guide_protocol.rs"
+  route_tests: "crates/forge-core-kernel/tests/guide_protocol.rs"
+  cli_tests:
+    - "crates/forge-core-cli/src/guide.rs"
+    - "crates/forge-core-cli/tests/guide_e2e.rs"
+
+status_boundary: >-
+  The typed composition, closed route validator, exact-operation CLI projection,
+  fixtures, and source-test targets are implemented and compile-scoped evidence is
+  recorded by FRUST-030. This does not claim Rust test execution, runtime or E2E
+  execution, complete reference resolution at the guide layer, a selected or
+  supported host, hosted CI, publication, release, independent review, or field
+  evidence.

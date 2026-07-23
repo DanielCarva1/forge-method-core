@@ -5,8 +5,8 @@
 //! verification, lifecycle authorization, or commit authority.
 
 use crate::{
-    DomainPackCandidateAuthority, DomainPackCompositionRequestDocument, DomainPackCoreBinding,
-    DomainPackDiscoveryMatch, DomainPackDiscoveryProjectionDocument,
+    DomainPackCandidateAuthority, DomainPackCompositionRequestDocument, DomainPackCoordinate,
+    DomainPackCoreBinding, DomainPackDiscoveryMatch, DomainPackDiscoveryProjectionDocument,
     DomainPackDiscoveryRequestDocument, DomainPackProjectRequirements,
     DomainPackResolutionCandidate, DomainPackResolutionProjectionDocument,
     DomainPackResolutionRequestDocument, DomainPackSupplyChainRegistryDocument,
@@ -16,6 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION: &str = "0.1";
+pub const DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION: &str = "0.1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +43,93 @@ pub struct DomainPackAcquisitionIntent {
 #[serde(rename_all = "snake_case")]
 pub enum DomainPackAcquisitionOperation {
     Install,
+    Upgrade,
+    Rollback,
+    Remove,
+    RebaseCore,
+}
+
+/// High-level operator intent for changing an already initialized project.
+///
+/// This document is candidate-only input to deterministic derivation. It does
+/// not grant package trust, lifecycle preflight authority, installation, or
+/// activation authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectIntentDocument {
+    pub schema_version: String,
+    pub domain_pack_initialized_project_intent: DomainPackInitializedProjectIntent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectIntent {
+    pub intent_id: StableId,
+    pub authority: DomainPackCandidateAuthority,
+    pub project_id: StableId,
+    pub principal_id: StableId,
+    pub expected_state: DomainPackInitializedProjectStateBinding,
+    pub operation: DomainPackInitializedProjectOperation,
+}
+
+/// Exact initialized state against which a high-level intent must be derived.
+/// The lifecycle TCB still independently compares these values with durable
+/// state before it may preflight or apply a request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectStateBinding {
+    pub generation: u64,
+    pub active_lock_digest: String,
+    pub lifecycle_head_digest: String,
+    pub project_snapshot_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DomainPackInitializedProjectOperation {
+    Install {
+        selection: DomainPackInitializedProjectCandidateSelection,
+    },
+    Upgrade {
+        pack: DomainPackCoordinate,
+        expected_from: String,
+        target_requirement: String,
+        required_content_digest: Option<String>,
+        selection: DomainPackInitializedProjectCandidateSelection,
+    },
+    Rollback {
+        target_receipt_digest: String,
+        target_lock_digest: String,
+    },
+    Remove {
+        pack: DomainPackCoordinate,
+    },
+    RebaseCore {
+        target_release_id: StableId,
+        expected_from_core_digest: String,
+        target_core_digest: String,
+    },
+}
+
+/// Exact discovery and candidate-selection evidence for operations that add or
+/// replace a package. Explicit operator approval is deliberately represented as
+/// a requirement, never as authority already carried by this document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackInitializedProjectCandidateSelection {
+    pub acquisition_id: StableId,
+    pub assurance_binding: DurableAssuranceEpochBinding,
+    pub discovery_projection_digest: String,
+    pub demand_digest: String,
+    pub candidate_id: StableId,
+    pub requirement_ref: StableId,
+    pub approval: DomainPackCandidateApprovalRequirement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainPackCandidateApprovalRequirement {
+    ExplicitOperatorApprovalRequired,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -80,6 +168,7 @@ pub enum DomainPackAcquisitionPlanStatus {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DomainPackAcquisitionCeremony {
+    OperatorCandidateApproval,
     OperatorTrustPolicy,
     SupplyChainRegistryVerification,
     IndependentReviewedRegistryVerification,

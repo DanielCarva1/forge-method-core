@@ -466,7 +466,7 @@ fn preflight_profile_path(root: &Path) -> Result<PathBuf, ExitError> {
             Ok(PathBuf::from(project.state_root).join(PREFLIGHT_PROFILE_FILE_NAME))
         }
         Ok(project) => Err(ExitError::env_config(format!(
-            "preflight: Project Link state root {} is missing; run forge-core start to repair the complete sidecar before preflight",
+            "preflight: Project Link proves prior initialization but linked state root {} is unavailable; preserve all authority bytes, run forge-core start --json for typed diagnosis, and require an explicit verified recovery before preflight",
             project.state_root
         ))),
         Err(crate::project_cmd::ProjectResolveError::MissingProjectLink { .. }) => {

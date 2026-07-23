@@ -19,12 +19,16 @@ use sha2::{Digest, Sha256};
 
 use tracing::instrument;
 
+use crate::{
+    run_host_adapter_manifest, run_host_adapter_projection, HostAdapterEvidenceProjection,
+    HostAdapterMutationClass, HostAdapterProjectionTarget, HostAdapterSetupGap,
+};
 use forge_core_authority::{
     verify_workflow_retirement_authorization_v2, WorkflowRetirementExpectedContextV2,
 };
 use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
-    AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
+    AssuranceCaseDocument, ClaimContractDocument, CliJsonSurfaceDocument, CommandContractDocument,
     CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, DomainPackActivePointerDocument, DomainPackCandidateInput,
     DomainPackCapabilitySandboxPolicyDocument, DomainPackCompatibilityReportDocument,
@@ -36,9 +40,11 @@ use forge_core_contracts::{
     DomainPackResolutionRequestDocument, DomainPackReviewedRegistryDocument,
     DomainPackReviewerRegistryDocument, DomainPackRuntimeCapabilityRegistryDocument,
     DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, FieldEvidenceRegistry,
-    GateContractDocument, HealthRecoveryContractDocument, OperationContractDocument,
-    RequestContractDocument, RuntimeCapabilityDocument, RuntimeHandoffContractDocument,
-    RuntimeRegistryEntryDocument, ToolEffectContractDocument, WorkflowBehavioralArtifactReference,
+    GateContractDocument, HealthRecoveryContractDocument, HostConformanceDocument,
+    HostSupportMatrixDocument, MarkdownRetirementDocument, McpSurfaceDocument,
+    OperationContractDocument, ProjectedField, ProjectionProhibition, RequestContractDocument,
+    RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
+    SetupGapKind, ToolEffectContractDocument, WorkflowBehavioralArtifactReference,
     WorkflowBehavioralCorpusClass, WorkflowBehavioralCorpusSetDocument,
     WorkflowBehavioralCoveragePolicyDocument, WorkflowBehavioralDisposition,
     WorkflowBehavioralReviewSubjectDocument, WorkflowBehavioralScenarioCorpusDocument,
@@ -69,17 +75,20 @@ use forge_core_decisions::{
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
     validate_assurance_case, validate_claim, validate_claim_cross_references, validate_command,
-    validate_completion, validate_completion_cross_references, validate_coordination_eval,
+    validate_common_borrowed_shell_contracts, validate_completion,
+    validate_completion_cross_references, validate_coordination_eval,
     validate_coordination_eval_cross_references, validate_decision_close,
     validate_decision_close_cross_references, validate_evidence_registry, validate_gate,
     validate_gate_cross_references, validate_health_recovery,
     validate_health_recovery_cross_references, validate_inventory, validate_inventory_references,
-    validate_operation, validate_operation_cross_references, validate_request,
-    validate_request_cross_references, validate_runtime_capability, validate_runtime_handoff,
-    validate_runtime_handoff_cross_references, validate_runtime_registry_cross_references,
-    validate_runtime_registry_entry, validate_tool_effect, validate_tool_effect_cross_references,
-    validate_yaml_known_repo_references, validate_yaml_source_id_references, Diagnostic,
-    DiagnosticCode, DiagnosticSeverity, ReferenceIndex, ReferenceKind, ValidationReport,
+    validate_markdown_retirement, validate_operation, validate_operation_cross_references,
+    validate_request, validate_request_cross_references, validate_runtime_capability,
+    validate_runtime_handoff, validate_runtime_handoff_cross_references,
+    validate_runtime_registry_cross_references, validate_runtime_registry_entry,
+    validate_tool_effect, validate_tool_effect_cross_references,
+    validate_workspace_architecture_contracts, validate_yaml_known_repo_references,
+    validate_yaml_source_id_references, Diagnostic, DiagnosticCode, DiagnosticSeverity,
+    ReferenceIndex, ReferenceKind, ValidationReport,
 };
 
 struct DomainPackOwnedMaterial {
@@ -347,6 +356,8 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     // are already covered by the named-dir-instance + known-repo-ref checks
     // above when present.
     if !is_consumer {
+        validate_markdown_retirement_authority(root, &mut summary);
+        validate_common_borrowed_shell_authority(root, &mut summary);
         validate_operation_fixtures(root, &index, &mut summary);
         validate_side_contracts(root, &index, &mut summary);
         validate_runtime_contracts(root, &index, &mut summary);
@@ -361,10 +372,443 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         validate_domain_pack_lifecycle_foundation(root, &mut summary);
         validate_domain_pack_learning_foundation(root, &mut summary);
         validate_domain_pack_reference_foundation(root, &mut summary);
+        validate_workspace_architecture_authority(root, &mut summary);
+        validate_host_support_matrix_authority(root, &mut summary);
     }
 
     summary.finish();
     summary
+}
+
+fn validate_host_support_matrix_authority(root: &Path, summary: &mut ValidateSummary) {
+    let path = root.join("contracts/hosts/host-support-matrix-v0.yaml");
+    if let Some(document) = read_yaml::<HostSupportMatrixDocument>(&path, summary) {
+        let diagnostics = match document.validate() {
+            Ok(()) => Vec::new(),
+            Err(error) => vec![Diagnostic::error(
+                DiagnosticCode::HostConformanceInvalid,
+                "host_support_matrix",
+                error.to_string(),
+            )],
+        };
+        summary.add_validation_diagnostics("host_support_matrix", &diagnostics);
+    }
+}
+
+fn validate_workspace_architecture_authority(root: &Path, summary: &mut ValidateSummary) {
+    match validate_workspace_architecture_contracts(root) {
+        Ok(report) => {
+            let diagnostics = report
+                .issues
+                .into_iter()
+                .map(|issue| {
+                    Diagnostic::error(
+                        DiagnosticCode::YamlParseFailed,
+                        "workspace_architecture",
+                        format!("{}: {}", issue.code, issue.detail),
+                    )
+                })
+                .collect::<Vec<_>>();
+            summary.add_validation_diagnostics("workspace_architecture", &diagnostics);
+        }
+        Err(error) => summary.add_validation_diagnostics(
+            "workspace_architecture",
+            &[Diagnostic::error(
+                DiagnosticCode::YamlReadFailed,
+                "workspace_architecture",
+                error,
+            )],
+        ),
+    }
+}
+
+fn validate_markdown_retirement_authority(root: &Path, summary: &mut ValidateSummary) {
+    let path = root.join("contracts/migration/markdown-debt-inventory.yaml");
+    if let Some(document) = read_yaml::<MarkdownRetirementDocument>(&path, summary) {
+        summary.add_report(
+            "markdown_retirement_authority",
+            validate_markdown_retirement(root, &document),
+        );
+    }
+}
+
+/// Load and validate the three core-owned common borrowed-shell documents as
+/// one named authority check. Exact-host execution remains outside this source
+/// contract and therefore cannot be promoted by a clean structural result.
+fn validate_common_borrowed_shell_authority(root: &Path, summary: &mut ValidateSummary) {
+    const HOST_REF: &str = "contracts/hosts/host-conformance.yaml";
+    const CLI_JSON_REF: &str = "contracts/surfaces/cli-json.yaml";
+    const MCP_REF: &str = "contracts/surfaces/mcp.yaml";
+
+    let mut report = ValidationReport::new();
+    let host = read_core_authority_yaml::<HostConformanceDocument>(root, HOST_REF, &mut report);
+    let cli_json =
+        read_core_authority_yaml::<CliJsonSurfaceDocument>(root, CLI_JSON_REF, &mut report);
+    let mcp = read_core_authority_yaml::<McpSurfaceDocument>(root, MCP_REF, &mut report);
+    if let (Some(host), Some(cli_json), Some(mcp)) = (host, cli_json, mcp) {
+        report.extend(validate_common_borrowed_shell_contracts(
+            &host, &cli_json, &mcp,
+        ));
+        validate_generated_host_adapter_projections(&cli_json, &mcp, &mut report);
+    }
+    summary.add_report("common_borrowed_shell_contract_authority", report);
+}
+
+fn validate_generated_host_adapter_projections(
+    cli_json: &CliJsonSurfaceDocument,
+    mcp: &McpSurfaceDocument,
+    report: &mut ValidationReport,
+) {
+    let manifest = run_host_adapter_manifest();
+    let preserved_field_names = [
+        (ProjectedField::CommandKind, "command_kind"),
+        (ProjectedField::MutationClass, "mutation_class"),
+        (ProjectedField::AuthorityClass, "authority_class"),
+        (
+            ProjectedField::SafeAutoInvocationTriggers,
+            "safe_auto_invocation_triggers",
+        ),
+        (ProjectedField::OutputTreatment, "output_treatment"),
+        (ProjectedField::RequiredContracts, "required_contracts"),
+        (ProjectedField::SetupGaps, "setup_gaps"),
+    ];
+    let setup_gap_mapping = [
+        (
+            SetupGapKind::MissingExecutable,
+            HostAdapterSetupGap::MissingExecutable,
+        ),
+        (
+            SetupGapKind::MissingAdapter,
+            HostAdapterSetupGap::MissingAdapter,
+        ),
+        (
+            SetupGapKind::UnsupportedHostVersion,
+            HostAdapterSetupGap::UnsupportedHostVersion,
+        ),
+        (
+            SetupGapKind::InvalidConfiguration,
+            HostAdapterSetupGap::InvalidConfiguration,
+        ),
+        (
+            SetupGapKind::MissingRequiredContract,
+            HostAdapterSetupGap::MissingRequiredContract,
+        ),
+        (
+            SetupGapKind::ExactHostExecutionUnavailable,
+            HostAdapterSetupGap::ExactHostExecutionUnavailable,
+        ),
+    ];
+    let projection_prohibition_mapping = [
+        (
+            ProjectionProhibition::NetworkRetrievalAuthority,
+            "perform network retrieval",
+        ),
+        (
+            ProjectionProhibition::InstallAuthority,
+            "grant install authority",
+        ),
+        (
+            ProjectionProhibition::UpdateAuthority,
+            "grant update authority",
+        ),
+        (ProjectionProhibition::CrlAuthority, "grant CRL authority"),
+        (
+            ProjectionProhibition::CertificateTransparencyAuthority,
+            "grant Certificate Transparency authority",
+        ),
+        (
+            ProjectionProhibition::RekorAuthority,
+            "grant Rekor authority",
+        ),
+        (ProjectionProhibition::TufAuthority, "grant TUF authority"),
+        (
+            ProjectionProhibition::SigningAuthority,
+            "grant signing authority",
+        ),
+        (
+            ProjectionProhibition::MutationAuthority,
+            "grant mutation authority",
+        ),
+        (ProjectionProhibition::HostSelection, "select a host"),
+        (
+            ProjectionProhibition::HostSupportClaim,
+            "claim host support",
+        ),
+        (
+            ProjectionProhibition::HostReleaseClaim,
+            "claim a host release",
+        ),
+        (
+            ProjectionProhibition::ProjectionAuthorityPromotion,
+            "promote projection metadata into authority",
+        ),
+    ];
+    let expected_preserved = std::iter::once("canonical_usage")
+        .chain(preserved_field_names.iter().map(|(_, name)| *name))
+        .collect::<BTreeSet<_>>();
+    let expected_prohibitions = projection_prohibition_mapping
+        .iter()
+        .map(|(_, text)| *text)
+        .collect::<BTreeSet<_>>();
+    let contract_preserved = cli_json
+        .cli_json_surface
+        .preserved_fields
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mcp_preserved = mcp
+        .mcp_surface
+        .preserved_fields
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let known_preserved = preserved_field_names
+        .iter()
+        .map(|(field, _)| *field)
+        .collect::<BTreeSet<_>>();
+    let known_gaps = setup_gap_mapping
+        .iter()
+        .map(|(gap, _)| *gap)
+        .collect::<BTreeSet<_>>();
+    let known_prohibitions = projection_prohibition_mapping
+        .iter()
+        .map(|(prohibition, _)| *prohibition)
+        .collect::<BTreeSet<_>>();
+    if contract_preserved != known_preserved
+        || mcp_preserved != known_preserved
+        || cli_json
+            .cli_json_surface
+            .setup_gap_types
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != known_gaps
+        || mcp
+            .mcp_surface
+            .setup_gap_types
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != known_gaps
+        || cli_json
+            .cli_json_surface
+            .projections_must_not
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != known_prohibitions
+        || mcp
+            .mcp_surface
+            .projections_must_not
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            != known_prohibitions
+    {
+        report.push(Diagnostic::error(
+            DiagnosticCode::HostSurfaceContractInvalid,
+            "host_adapter_projection.closed_fields",
+            "surface contracts do not map exactly to the generated projection's closed field and setup-gap types",
+        ));
+    }
+
+    for target in [
+        HostAdapterProjectionTarget::BorrowedShell,
+        HostAdapterProjectionTarget::McpTools,
+    ] {
+        let projection = run_host_adapter_projection(target);
+        let actual_preserved = projection
+            .authority_boundary
+            .projected_metadata_must_preserve
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let actual_prohibitions = projection
+            .authority_boundary
+            .projections_must_not
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        if projection.projection_authoritative
+            || projection.derived_from_manifest != manifest.manifest_id
+            || projection.authority_boundary.source_of_truth != manifest.manifest_id
+            || actual_preserved != expected_preserved
+            || projection
+                .authority_boundary
+                .projected_metadata_must_preserve
+                .len()
+                != expected_preserved.len()
+            || actual_prohibitions != expected_prohibitions
+            || projection.authority_boundary.projections_must_not.len()
+                != expected_prohibitions.len()
+        {
+            report.push(Diagnostic::error(
+                DiagnosticCode::HostSurfaceContractInvalid,
+                format!("host_adapter_projection.{target:?}.authority_boundary"),
+                "generated projection must be non-authoritative, derived from the real manifest, preserve the complete closed metadata surface, and exactly retain every typed authority prohibition",
+            ));
+        }
+
+        let expected_commands = manifest
+            .commands
+            .iter()
+            .filter(|command| {
+                target != HostAdapterProjectionTarget::McpTools
+                    || command.mutation_class == HostAdapterMutationClass::ReadOnly
+            })
+            .collect::<Vec<_>>();
+        if projection.commands.len() != expected_commands.len() {
+            report.push(Diagnostic::error(
+                DiagnosticCode::HostSurfaceContractInvalid,
+                format!("host_adapter_projection.{target:?}.commands"),
+                "generated projection command inventory drifted from the real manifest",
+            ));
+        }
+        for command in expected_commands {
+            let Some(projected) = projection
+                .commands
+                .iter()
+                .find(|projected| projected.source_command == command.name)
+            else {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::HostSurfaceContractInvalid,
+                    format!("host_adapter_projection.{target:?}.{}", command.name),
+                    "manifest command is missing from the generated projection",
+                ));
+                continue;
+            };
+            let expected_evidence_projection =
+                if command.name == "host-adapter-verify-certificate-ocsp-status" {
+                    vec![
+                        HostAdapterEvidenceProjection::OcspResponderAuthorityIdentity,
+                        HostAdapterEvidenceProjection::OcspVerifiedAuthorityEvidence,
+                    ]
+                } else {
+                    Vec::new()
+                };
+            if projected.command_kind != command.command_kind
+                || projected.mutation_class != command.mutation_class
+                || projected.authority_class != command.authority_class
+                || projected.required_contracts != command.required_contracts
+                || projected.safe_auto_invocation_triggers != command.safe_auto_invocation_triggers
+                || projected.output_treatment != command.output_treatment
+                || projected.setup_gaps != command.setup_gaps
+                || projected.evidence_projection != expected_evidence_projection
+                || projected.canonical_usage.is_empty()
+            {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::HostSurfaceContractInvalid,
+                    format!("host_adapter_projection.{target:?}.{}", command.name),
+                    "generated command projection does not preserve the real manifest metadata and manifest-owned typed setup gaps",
+                ));
+            }
+            if command.name == "host-adapter-verify-certificate-ocsp-status" {
+                let usage_has_offline_material = projected
+                    .canonical_usage
+                    .contains("--ocsp-responder-certificate-path")
+                    && projected
+                        .canonical_usage
+                        .contains("--ocsp-responder-issuer-certificate-path");
+                let mcp_schema_has_offline_material = target
+                    != HostAdapterProjectionTarget::McpTools
+                    || projected.mcp_tool.as_ref().is_some_and(|tool| {
+                        tool.input_schema["additionalProperties"] == false
+                            && tool.input_schema["properties"]["ocsp_responder_certificate_path"]
+                                .is_object()
+                            && tool.input_schema["properties"]
+                                ["ocsp_responder_issuer_certificate_path"]
+                                .is_object()
+                            && tool.input_schema["dependentRequired"]
+                                ["ocsp_responder_issuer_certificate_path"]
+                                == serde_json::json!(["ocsp_responder_certificate_path"])
+                    });
+                if !usage_has_offline_material || !mcp_schema_has_offline_material {
+                    report.push(Diagnostic::error(
+                        DiagnosticCode::HostSurfaceContractInvalid,
+                        format!("host_adapter_projection.{target:?}.ocsp_delegated_responder"),
+                        "generated OCSP projection must expose strict supplied responder certificate and ordered issuer-chain inputs",
+                    ));
+                }
+            }
+            match target {
+                HostAdapterProjectionTarget::BorrowedShell => {
+                    let valid = projected.borrowed_shell.as_ref().is_some_and(|shell| {
+                        shell.argv_prefix == vec!["forge-core".to_string(), command.name.clone()]
+                            && shell.explicit_invocation_required
+                                == (command.mutation_class != HostAdapterMutationClass::ReadOnly)
+                            && shell.may_auto_invoke
+                                == (command.mutation_class == HostAdapterMutationClass::ReadOnly)
+                    }) && projected.mcp_tool.is_none()
+                        && projected.app_ui.is_none();
+                    if !valid {
+                        report.push(Diagnostic::error(
+                            DiagnosticCode::HostSurfaceContractInvalid,
+                            format!("host_adapter_projection.borrowed_shell.{}", command.name),
+                            "borrowed-shell projection must preserve argv-only mutation admission without cross-surface authority",
+                        ));
+                    }
+                }
+                HostAdapterProjectionTarget::McpTools => {
+                    let valid = command.mutation_class == HostAdapterMutationClass::ReadOnly
+                        && projected.mcp_tool.as_ref().is_some_and(|tool| {
+                            tool.annotations.read_only_hint
+                                && !tool.annotations.destructive_hint
+                                && !tool.annotations.open_world_hint
+                        })
+                        && projected.borrowed_shell.is_none()
+                        && projected.app_ui.is_none();
+                    if !valid {
+                        report.push(Diagnostic::error(
+                            DiagnosticCode::HostSurfaceContractInvalid,
+                            format!("host_adapter_projection.mcp_tools.{}", command.name),
+                            "default MCP projection must remain local, read-only, nonmutating, and nonsigning",
+                        ));
+                    }
+                }
+                HostAdapterProjectionTarget::AppUi => unreachable!(),
+            }
+        }
+        if target == HostAdapterProjectionTarget::McpTools
+            && projection
+                .commands
+                .iter()
+                .any(|command| command.mutation_class != HostAdapterMutationClass::ReadOnly)
+        {
+            report.push(Diagnostic::error(
+                DiagnosticCode::HostSurfaceContractInvalid,
+                "host_adapter_projection.mcp_tools.mutation",
+                "default MCP projection contains a mutating or operational-maintenance command",
+            ));
+        }
+    }
+}
+
+fn read_core_authority_yaml<T: serde::de::DeserializeOwned>(
+    root: &Path,
+    reference: &str,
+    report: &mut ValidationReport,
+) -> Option<T> {
+    match fs::read_to_string(root.join(reference)) {
+        Ok(text) => match yaml_serde::from_str(&text) {
+            Ok(document) => Some(document),
+            Err(error) => {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::ParseYamlFailed,
+                    reference,
+                    error.to_string(),
+                ));
+                None
+            }
+        },
+        Err(error) => {
+            report.push(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
+                reference,
+                error.to_string(),
+            ));
+            None
+        }
+    }
 }
 
 /// Recompute the repository-owned P6a neutral corpus from exact raw sidecars.

@@ -66,7 +66,9 @@ pub enum GateScope {
     Lane,
     ProductArea,
     Integration,
+    Destructive,
     Release,
+    Authority,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

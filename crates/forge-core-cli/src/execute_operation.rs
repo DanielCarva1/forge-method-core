@@ -30,10 +30,10 @@ use forge_core_contracts::{
 };
 use forge_core_contracts::{Phase, StableId};
 use forge_core_kernel::{
-    execute_operation, CitationGate, ClaimCoverageGate, GateRejection, OperationGate, PhaseGate,
-    RiskAuditGate, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
-    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
-    RuntimeOperationExecutionContext, RuntimeReadSnapshot,
+    execute_operation, CitationGate, ClaimCoverageGate, FunnelAutonomyGate, GateRejection,
+    OperationGate, PhaseGate, RiskAuditGate, RuntimeEffectPayloadKind,
+    RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
+    RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
 use forge_core_store::{build_reference_index, derive_state, WalDurability};
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
@@ -421,11 +421,9 @@ pub fn run_execute_operation(
             let trace_id = format!("{}.risk-audit", input.tx_id_prefix);
             let run_id = format!("{}.risk-audit.{}", input.tx_id_prefix, input.recorded_at);
             let rule_set_ref = rules_path.to_string_lossy().to_string();
-            let trace_state_root = effect_store_root.join(".forge-method");
             Some(RiskAuditGate {
                 ruleset,
                 project_root: root.clone(),
-                trace_state_root,
                 trace_id,
                 run_id,
                 recorded_at: input.recorded_at.clone(),
@@ -511,12 +509,8 @@ pub fn run_execute_operation(
     // kernel runs them (fail-closed) before any WAL append. The flags
     // `--require-risk-audit` / `--require-citation` are now CONFIG: they
     // decide WHICH gates attach, not WHERE the check runs.
-    let mut context = RuntimeOperationExecutionContext::single_root(&root);
-    context.effect_store_root = &effect_store_root;
-    context.evidence_log_relative_path = ".forge-method/evidence/command-execution.ndjson";
-    context.wal_relative_path = ".forge-method/wal/effects.ndjson";
-    context.lock_relative_path = ".forge-method/locks/effects.lock";
-    context.effect_metadata_index_relative_path = ".forge-method/index/effect-targets.ndjson";
+    let mut context =
+        RuntimeOperationExecutionContext::project_and_effect_roots(&root, &effect_store_root);
     context.recorded_at = &input.recorded_at;
     context.tx_id_prefix = &input.tx_id_prefix;
     context.durability = input.durability;
@@ -526,6 +520,19 @@ pub fn run_execute_operation(
     if let Some(gate) = citation_gate {
         context = context.with_gate(Box::new(gate));
     }
+    // FRUST-031: the accepted funnel policy is an unconditional execution
+    // boundary. The gate receives the exact operation and effect documents that
+    // will enter the kernel; callers cannot substitute another policy. It can
+    // only reject and grants no mutation, phase, release, signing, private-key,
+    // or host-selection authority.
+    let funnel_effect_documents = effects
+        .iter()
+        .map(|effect| effect.document.clone())
+        .collect::<Vec<_>>();
+    context = context.with_gate(Box::new(FunnelAutonomyGate::new(
+        &operation,
+        &funnel_effect_documents,
+    )));
     // V5 — proportional coordination gates. These attach by DEFAULT (not via a
     // flag) based on the project's resolved state, implementing "scale with
     // the agent, never constrain": a solo agent doing low-autonomy work in

@@ -117,6 +117,15 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         return Ok(());
     }
     let command = format!("workflow.{}", parsed.subcommand.replace('-', "_"));
+    if legacy_direct_authorization_is_disabled(&parsed.subcommand) {
+        return emit_failure(
+            &command,
+            ExitReason::RejectedByGate,
+            "legacy request-file and attestation-file authorization is disabled; use `workflow action authorize` for an operator_credential_broker packet or `workflow action apply` for an already-signed external broker envelope"
+                .to_owned(),
+            parsed.want_json,
+        );
+    }
     if let Err(message) = validate_release_args(&parsed) {
         return emit_failure(
             &command,
@@ -338,14 +347,10 @@ fn complete(
     args: &WorkflowCliArgs,
 ) -> Result<Value, forge_core_kernel::WorkflowGovernanceAdapterError> {
     let expected = required(args, "if-snapshot").map_err(invalid_observation)?;
-    let current = adapter.next()?;
-    if expected != current.snapshot_digest {
-        return Err(forge_core_kernel::WorkflowGovernanceAdapterError::CompletionDrift);
-    }
     let principal = PrincipalId(
         optional(args, "principal").unwrap_or_else(|| "principal.replacement-agent".to_owned()),
     );
-    let prepared = adapter.prepare_completion()?;
+    let prepared = adapter.prepare_completion_for_snapshot(&expected)?;
     adapter
         .consume_completion(prepared, principal)
         .map(|receipt| serde_json::to_value(receipt).expect("serializable completion receipt"))
@@ -626,6 +631,15 @@ fn invalid_observation(message: String) -> forge_core_kernel::WorkflowGovernance
 }
 
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
+    if let Some(flag) = ["request-file", "attestation-file"]
+        .iter()
+        .find(|flag| args.flags.contains_key(**flag))
+    {
+        return Err(format!(
+            "--{flag} is not valid for workflow {}; direct request/attestation authorization is retired; use `workflow action authorize` or `workflow action apply`",
+            args.subcommand
+        ));
+    }
     match args.subcommand.as_str() {
         "action-packets" | "release-status" | "retirement-status" if !args.flags.is_empty() => {
             Err(format!(
@@ -721,6 +735,18 @@ fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
     }
 }
 
+fn legacy_direct_authorization_is_disabled(subcommand: &str) -> bool {
+    matches!(
+        subcommand,
+        "applicability-authorize"
+            | "capability-authorize"
+            | "decision-resolve"
+            | "evidence-authorize"
+            | "signal-authorize"
+            | "waiver-authorize"
+    )
+}
+
 fn emit_failure(
     command: &str,
     reason: ExitReason,
@@ -764,6 +790,23 @@ mod tests {
     }
 
     #[test]
+    fn legacy_direct_authorization_subcommands_are_all_hard_gated() {
+        for subcommand in [
+            "applicability-authorize",
+            "capability-authorize",
+            "decision-resolve",
+            "evidence-authorize",
+            "signal-authorize",
+            "waiver-authorize",
+        ] {
+            assert!(legacy_direct_authorization_is_disabled(subcommand));
+        }
+        for permitted in ["action", "intent", "complete", "release-status"] {
+            assert!(!legacy_direct_authorization_is_disabled(permitted));
+        }
+    }
+
+    #[test]
     fn parser_rejects_conflicting_applicability() {
         let args = argv(&[
             "workflow",
@@ -778,6 +821,19 @@ mod tests {
     fn trusted_clock_override_is_not_accepted() {
         let args = argv(&["workflow", "next", "--now-unix", "9999999999"]);
         assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn live_commands_reject_retired_authority_files() {
+        for flag in ["--request-file", "--attestation-file"] {
+            let parsed = parse_args(&argv(&["workflow", "next", flag, "missing-authority.json"]))
+                .expect(
+                    "generic parser recognizes retired authority flags for hard-gated commands",
+                );
+            let error = validate_release_args(&parsed).expect_err("live command must reject flag");
+            assert!(error.contains("is not valid for workflow next"), "{error}");
+            assert!(error.contains("authorization is retired"), "{error}");
+        }
     }
 
     #[test]

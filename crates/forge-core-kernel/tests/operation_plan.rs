@@ -2,7 +2,9 @@ use forge_core_contracts::command::{
     CommandExecutor, CommandKind, CommandSafety, CommandSideEffectPolicy, CwdPolicy,
     EnvInheritPolicy, EnvPolicy, NetworkPolicy, OutputCapture, OutputPolicy, Platform,
 };
-use forge_core_contracts::operation::{ForgeOperation, OperationGateStatus};
+use forge_core_contracts::operation::{
+    ForgeOperation, OperationGateStatus, OperationSideEffectPolicy,
+};
 use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_contracts::{
     CommandContract, CommandContractDocument, OperationContractDocument, RepoPath, StableId,
@@ -12,22 +14,26 @@ use forge_core_kernel::{
     command_execution_evidence_record, plan_operation, plan_operation_with_snapshot,
     prepare_effect_transaction, preview_operation_with_snapshot, preview_runtime_plan,
     ready_operation_with_snapshot, ready_runtime_plan, run_staged_read_only_command,
-    stage_operation_effects, CommandExecutionContext, RuntimeCommandExecutionReason,
+    stage_operation_effects, CommandExecutionContext, RiskAuditGate, RuntimeCommandExecutionReason,
     RuntimeCommandExecutionStatus, RuntimeEffectPayload, RuntimeEffectPayloadKind,
     RuntimeEffectStagingReason, RuntimeEffectStagingStatus, RuntimeEffectTransactionReason,
     RuntimeEffectTransactionStatus, RuntimeEvidenceKind, RuntimeOperationCommandInput,
-    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecutionContext,
-    RuntimeOperationExecutionReason, RuntimeOperationExecutionStatus, RuntimePlanReason,
-    RuntimePlanStatus, RuntimePreviewStatus, RuntimeReadSnapshot, RuntimeReadyBlocker,
-    RuntimeReadyEvidenceKind, RuntimeReadyStatus, RuntimeRiskLevel,
+    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
+    RuntimeOperationExecutionContext, RuntimeOperationExecutionReason,
+    RuntimeOperationExecutionStatus, RuntimePlanReason, RuntimePlanStatus, RuntimePreviewStatus,
+    RuntimeReadSnapshot, RuntimeReadyBlocker, RuntimeReadyEvidenceKind, RuntimeReadyStatus,
+    RuntimeRiskLevel,
 };
 use forge_core_store::{build_reference_index, WalDurability};
-use forge_core_validate::ReferenceIndex;
+use forge_core_validate::{
+    risk_audit::{RiskAuditRuleSet, RISK_AUDIT_SCHEMA_VERSION},
+    ReferenceIndex,
+};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn fixture(name: &str) -> OperationContractDocument {
@@ -128,6 +134,39 @@ fn fresh_temp_root(label: &str) -> PathBuf {
     path
 }
 
+fn execute_nonmutating_plan_without_state_root(
+    document: &OperationContractDocument,
+    index: &ReferenceIndex,
+    label: &str,
+) -> RuntimeOperationExecution {
+    let temp_root = fresh_temp_root(label);
+    let state_root = temp_root.join(".forge-method");
+    assert!(!state_root.exists());
+    let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
+
+    let execution = forge_core_kernel::execute_operation(
+        document,
+        RuntimeReadSnapshot::new(index),
+        &[],
+        &[],
+        &[],
+        &context,
+    )
+    .expect("nonmutating planner outcome must not be rejected by mutation gates");
+
+    assert!(execution.staging.is_none());
+    assert!(execution.command_executions.is_empty());
+    assert_eq!(execution.command_evidence_appended, 0);
+    assert!(execution.effect_transactions.is_empty());
+    assert!(execution.effect_applications.is_empty());
+    assert!(
+        !state_root.exists(),
+        "nonmutating planner outcome created durable state at {}",
+        state_root.display()
+    );
+    execution
+}
+
 fn cargo_version_command(id: &str) -> CommandContractDocument {
     CommandContractDocument {
         schema_version: "0.1".to_string(),
@@ -188,6 +227,39 @@ fn mechanical_story_execute_fixture_can_call_operation() {
 }
 
 #[test]
+fn mechanical_story_without_lane_claim_requires_review() {
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document
+        .operation_contract
+        .coordination_scope
+        .write_authority
+        .claim_contract_ref = None;
+    let plan = plan_operation(&document);
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReviewRequired);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::FunnelReviewRequired]);
+}
+
+#[test]
+fn publish_operation_requires_release_gate_from_accepted_funnel_policy() {
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document.operation_contract.authority.side_effect_policy = OperationSideEffectPolicy::Publish;
+    let plan = plan_operation(&document);
+
+    assert_eq!(plan.status, RuntimePlanStatus::GateRequired);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::FunnelGateRequired]);
+}
+
+#[test]
+fn authority_transition_fixture_requires_authority_gate() {
+    let document = fixture("authority-transition-gate-required.yaml");
+    let plan = plan_operation(&document);
+
+    assert_eq!(plan.status, RuntimePlanStatus::GateRequired);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::FunnelGateRequired]);
+}
+
+#[test]
 fn release_gate_fixture_requires_gate_before_advance() {
     let document = fixture("release-gate-required.yaml");
     let plan = plan_operation(&document);
@@ -239,6 +311,150 @@ fn host_drift_fixture_does_not_become_ready_to_execute() {
     assert_eq!(plan.status, RuntimePlanStatus::AwaitingHuman);
     assert_eq!(plan.reasons, vec![RuntimePlanReason::HumanInputRequired]);
     assert_ne!(plan.status, RuntimePlanStatus::ReadyToCallOperation);
+}
+
+#[test]
+fn already_done_story_routes_to_read_only_status_without_durable_mutation() {
+    let document = fixture("already-done-story.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReadOnlyStatus);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::ShowStatusOnly]);
+    assert_eq!(plan.next_operation, None);
+    assert_eq!(plan.validation_error_count, 0);
+    assert_eq!(plan.reference_error_count, 0);
+
+    let execution =
+        execute_nonmutating_plan_without_state_root(&document, &index, "already-done-story");
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanNotReady]
+    );
+    assert_eq!(execution.plan.status, RuntimePlanStatus::ReadOnlyStatus);
+}
+
+#[test]
+fn expired_claim_routes_to_reviewed_handoff_without_durable_mutation() {
+    let document = fixture("expired-claim-handoff.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReviewRequired);
+    assert_eq!(
+        plan.reasons,
+        vec![RuntimePlanReason::MutationRequiresReview]
+    );
+    assert_eq!(plan.next_operation, Some(ForgeOperation::RecordRequest));
+    assert_eq!(plan.validation_error_count, 0);
+    assert_eq!(plan.reference_error_count, 0);
+
+    let execution =
+        execute_nonmutating_plan_without_state_root(&document, &index, "expired-claim-handoff");
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanNotReady]
+    );
+    assert_eq!(execution.plan.status, RuntimePlanStatus::ReviewRequired);
+}
+
+#[test]
+fn missing_runtime_handoff_double_gate_stays_gate_required_without_mutation() {
+    let document = fixture("runtime-handoff-missing-double-gate.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::GateRequired);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::GateMissingOrPending]);
+    assert_eq!(plan.next_operation, Some(ForgeOperation::Gate));
+    assert_eq!(plan.validation_error_count, 0);
+    assert_eq!(plan.reference_error_count, 0);
+
+    let execution = execute_nonmutating_plan_without_state_root(
+        &document,
+        &index,
+        "runtime-handoff-missing-double-gate",
+    );
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanNotReady]
+    );
+    assert_eq!(execution.plan.status, RuntimePlanStatus::GateRequired);
+}
+
+#[test]
+fn suggestible_runtime_handoff_waits_for_human_without_durable_mutation() {
+    let document = fixture("runtime-handoff-suggestible.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::AwaitingHuman);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::HumanInputRequired]);
+    assert_eq!(plan.next_operation, None);
+    assert!(plan.prompt.is_some());
+    assert_eq!(plan.validation_error_count, 0);
+    assert_eq!(plan.reference_error_count, 0);
+
+    let execution = execute_nonmutating_plan_without_state_root(
+        &document,
+        &index,
+        "runtime-handoff-suggestible",
+    );
+    assert_eq!(
+        execution.status,
+        RuntimeOperationExecutionStatus::AwaitingHuman
+    );
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanAwaitingHuman]
+    );
+    assert_eq!(execution.plan.status, RuntimePlanStatus::AwaitingHuman);
+}
+
+#[test]
+fn correct_course_waits_for_human_without_durable_mutation() {
+    let document = fixture("correct-course-frustrated-user.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::AwaitingHuman);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::HumanInputRequired]);
+    assert_eq!(plan.next_operation, None);
+    assert!(plan.prompt.is_some());
+
+    let execution =
+        execute_nonmutating_plan_without_state_root(&document, &index, "correct-course");
+    assert_eq!(
+        execution.status,
+        RuntimeOperationExecutionStatus::AwaitingHuman
+    );
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanAwaitingHuman]
+    );
+}
+
+#[test]
+fn report_only_status_does_not_enter_durable_mutation_boundary() {
+    let document = fixture("observe-project-status.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReadOnlyStatus);
+    assert_eq!(plan.reasons, vec![RuntimePlanReason::ShowStatusOnly]);
+    assert_eq!(plan.next_operation, None);
+
+    let execution =
+        execute_nonmutating_plan_without_state_root(&document, &index, "report-only-status");
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::PlanNotReady]
+    );
+    assert_eq!(execution.plan.status, RuntimePlanStatus::ReadOnlyStatus);
 }
 
 #[test]
@@ -344,7 +560,7 @@ fn ready_report_fails_closed_for_pending_gate_even_without_required_gate() {
     let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
     let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
 
-    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(ready.plan_status, RuntimePlanStatus::GateRequired);
     assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
     assert!(!ready.ready);
     assert!(ready
@@ -352,11 +568,9 @@ fn ready_report_fails_closed_for_pending_gate_even_without_required_gate() {
         .contains(&RuntimeReadyBlocker::GatePending));
     assert!(preview.blockers.contains(&RuntimeReadyBlocker::GatePending));
     assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
-    // Regression for the preview_status/blockers integrity bug (F01.1):
-    // a nominally-Ready plan with ready-blockers must surface as Blocked, and
-    // the human must receive guidance. Previously status was Ready while
-    // risk_level was Blocked and next_human_action was None.
-    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    // The accepted funnel policy restores a gate before the ready/preview
+    // boundary; preserve that typed state and keep human guidance visible.
+    assert_eq!(preview.status, RuntimePreviewStatus::GateRequired);
     assert!(preview.next_human_action.is_some());
 }
 
@@ -390,7 +604,7 @@ fn ready_report_fails_closed_for_unknown_gate_status_even_without_required_gate(
     let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
     let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
 
-    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(ready.plan_status, RuntimePlanStatus::GateRequired);
     assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
     assert!(!ready.ready);
     assert!(ready
@@ -400,8 +614,9 @@ fn ready_report_fails_closed_for_unknown_gate_status_even_without_required_gate(
         .blockers
         .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
     assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
-    // Regression for the preview_status/blockers integrity bug (F01.1).
-    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    // The accepted funnel policy fails closed with a typed gate requirement
+    // before ready/preview projection.
+    assert_eq!(preview.status, RuntimePreviewStatus::GateRequired);
     assert!(preview.next_human_action.is_some());
 }
 
@@ -718,6 +933,7 @@ fn execute_operation_waits_without_side_effects_when_plan_needs_human() {
     let document = fixture("facilitate-first-product-idea.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
     let temp_root = fresh_temp_root("awaiting-human");
+    fs::create_dir_all(temp_root.join(".forge-method")).expect("state root");
     let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
 
     let execution = forge_core_kernel::execute_operation(
@@ -741,7 +957,7 @@ fn execute_operation_waits_without_side_effects_when_plan_needs_human() {
     assert!(execution.staging.is_none());
     assert!(execution.command_executions.is_empty());
     assert!(execution.effect_applications.is_empty());
-    assert!(!temp_root.join(".forge-method").exists());
+    assert!(!temp_root.join(".forge-method/evidence").exists());
 }
 
 #[test]
@@ -749,6 +965,7 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
     let document = fixture("mechanical-story-execute.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
     let temp_root = fresh_temp_root("missing-command");
+    fs::create_dir_all(temp_root.join(".forge-method")).expect("state root");
     let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
 
     let execution = forge_core_kernel::execute_operation(
@@ -771,12 +988,62 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
     assert!(execution.effect_applications.is_empty());
     assert!(!temp_root.join(".forge-method/artifacts").exists());
 }
+#[test]
+fn preclosed_gate_writes_nothing_before_risk_audit_evaluation() {
+    let document = fixture("mechanical-story-execute.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let temp_root = fresh_temp_root("quiescent-operation");
+    let state_root = temp_root.join(".forge-method");
+    fs::create_dir_all(&state_root).expect("state root");
+    let quiescence = forge_core_store::producer_quiescence::quiesce_host_producers(
+        &state_root,
+        &AtomicBool::new(false),
+    )
+    .expect("host quiescence");
+    let context = RuntimeOperationExecutionContext::single_root(&temp_root)
+        .with_gate(Box::new(RiskAuditGate {
+            ruleset: RiskAuditRuleSet {
+                schema_version: RISK_AUDIT_SCHEMA_VERSION.to_owned(),
+                rules: Vec::new(),
+            },
+            project_root: temp_root.clone(),
+            trace_id: "preclosed".to_owned(),
+            run_id: "preclosed".to_owned(),
+            recorded_at: "2026-07-02T00:00:00Z".to_owned(),
+            rule_set_ref: "rules.yaml".to_owned(),
+        }))
+        .audited();
+
+    let execution = forge_core_kernel::execute_operation(
+        &document,
+        RuntimeReadSnapshot::new(&index),
+        &[],
+        &[],
+        &[],
+        &context,
+    )
+    .expect("producer rejection is an execution result, not a gate rejection");
+
+    assert_eq!(execution.status, RuntimeOperationExecutionStatus::Failed);
+    assert_eq!(
+        execution.reasons,
+        vec![RuntimeOperationExecutionReason::ProducerAdmissionFailed]
+    );
+    assert_eq!(execution.command_evidence_appended, 0);
+    assert!(!state_root.join("traces/events.ndjson").exists());
+    assert!(!state_root
+        .join("evidence/command-execution.ndjson")
+        .exists());
+    assert!(!state_root.join("wal/effects.ndjson").exists());
+    drop(quiescence);
+}
 
 #[test]
 fn legacy_execution_blocks_multiple_effects_before_any_side_effect() {
     let document = fixture("read-write-conflict-notify.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
     let temp_root = fresh_temp_root("operation-wide-required");
+    fs::create_dir_all(temp_root.join(".forge-method")).expect("state root");
     let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
 
     let execution = forge_core_kernel::execute_operation(
@@ -798,7 +1065,7 @@ fn legacy_execution_blocks_multiple_effects_before_any_side_effect() {
     assert_eq!(execution.command_evidence_appended, 0);
     assert!(execution.effect_transactions.is_empty());
     assert!(execution.effect_applications.is_empty());
-    assert!(!temp_root.join(".forge-method").exists());
+    assert!(!temp_root.join(".forge-method/evidence").exists());
 }
 
 #[test]
@@ -828,6 +1095,7 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
         br#"{"status":"passed"}"#,
     );
     let temp_root = fresh_temp_root("execute-success");
+    fs::create_dir_all(temp_root.join(".forge-method")).expect("state root");
     let mut context = RuntimeOperationExecutionContext::single_root(&temp_root);
     context.recorded_at = "2026-06-25T00:00:00Z";
     context.tx_id_prefix = "test-execute-operation";
@@ -1072,16 +1340,20 @@ fn preview_report_read_only_when_execution_mode_is_observe_only() {
 }
 
 #[test]
-fn preview_report_publish_side_effect_classified_as_high_risk() {
-    // Variant coverage for F01.6: no fixture exercised side_effect_policy=Publish,
-    // so RuntimeRiskLevel::High was never asserted.
+fn preview_runtime_plan_publish_side_effect_classified_as_high_risk() {
+    // Publish contracts require a gate under the accepted funnel policy, so a
+    // document-level preview correctly reports Blocked risk until that boundary
+    // is satisfied. Exercise the pure preview projection with an otherwise-ready
+    // plan to cover the intrinsic High classification without weakening the gate.
     use forge_core_contracts::operation::OperationSideEffectPolicy;
 
-    let mut document = fixture("mechanical-story-execute.yaml");
-    document.operation_contract.authority.side_effect_policy = OperationSideEffectPolicy::Publish;
+    let document = fixture("mechanical-story-execute.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
+    let mut plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    assert_eq!(plan.status, RuntimePlanStatus::ReadyToCallOperation);
+    plan.side_effect_policy = OperationSideEffectPolicy::Publish;
 
-    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_runtime_plan(&plan);
 
     assert!(preview.operation_mutates_state);
     assert_eq!(preview.risk_level, RuntimeRiskLevel::High);

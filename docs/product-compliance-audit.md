@@ -56,16 +56,20 @@ inventory shape/version, not absence of vulnerabilities.
 
 ## Remaining program
 
-The typed plan and stories remain authoritative for sequence/exit criteria:
+The [canonical gap register](product-gap-register.md) distinguishes implementation
+absence, partial public surfaces, engineering debt, and external evidence. The
+[typed closure plan](../contracts/plan/product-gap-closure-plan.yaml) owns the
+sequence and exit criteria:
 
-1. Execute or verify P7E release correctness at the intended tag; do not infer
-   publication from source or tag text alone.
-2. Run and independently review P7F on a supported production host; structural
-   checker success is insufficient.
-3. Collect P7G consecutive-run timing and inventory/failure-injection evidence.
-4. Keep P7H promises, payload, generated help, links, and fork obligations
-   aligned as source changes.
-5. Plan P8 Ready/Operate/Evolve and P9 Domain Pack SDK/ecosystem only from
-   evidence-backed remaining gaps.
+1. Close the first-use external human-authority and one named-host vertical
+   slice without giving the agent human or reviewer signing authority.
+2. Fail closed on linked-sidecar loss and add owned install, diagnosis, update,
+   uninstall, backup, and restore lifecycles.
+3. Close release-control debts, publish the matching immutable release, and
+   independently verify exact downloaded assets.
+4. Run and independently review P7F on that supported production host and
+   collect P7G consecutive-run timing/failure evidence.
+5. Expand host breadth, then implement P8 Ready/Operate/Evolve and P9 Domain
+   Pack lifecycle/SDK work from the same gap register.
 
 This status audit cannot grant runtime authority or mark P7 complete.

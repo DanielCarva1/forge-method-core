@@ -628,43 +628,49 @@ fn checksum_corruption_fails_closed_and_is_never_repaired() {
 }
 
 #[test]
-fn concurrent_reservations_for_same_nonce_have_exactly_one_winner() {
-    let root = Arc::new(temp_root("concurrent"));
-    initialize_replay_wal(root.as_ref()).expect("initialize replay WAL");
-    let barrier = Arc::new(Barrier::new(8));
-    let digest = digest('5');
-    let mut workers = Vec::new();
-    for _ in 0..8 {
-        let root = Arc::clone(&root);
-        let barrier = Arc::clone(&barrier);
-        let digest = digest.clone();
-        workers.push(std::thread::spawn(move || {
-            barrier.wait();
-            reserve_replay_nonce(
-                root.as_ref(),
-                &principal(),
-                AUDIENCE,
-                "nonce-concurrent",
-                &digest,
-            )
-        }));
-    }
+fn concurrent_reservations_stress_shared_boundary_reuse_without_false_quiescing() {
+    const ROUNDS: usize = 16;
+    const WORKERS: usize = 16;
 
-    let results: Vec<_> = workers
-        .into_iter()
-        .map(|worker| worker.join().expect("worker must not panic"))
-        .collect();
-    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
-    assert_eq!(
-        results
+    let root = Arc::new(temp_root("concurrent-stress"));
+    initialize_replay_wal(root.as_ref()).expect("initialize replay WAL");
+    let digest = digest('5');
+
+    for round in 0..ROUNDS {
+        let barrier = Arc::new(Barrier::new(WORKERS));
+        let nonce = format!("nonce-concurrent-{round}");
+        let mut workers = Vec::new();
+        for _ in 0..WORKERS {
+            let root = Arc::clone(&root);
+            let barrier = Arc::clone(&barrier);
+            let digest = digest.clone();
+            let nonce = nonce.clone();
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                reserve_replay_nonce(root.as_ref(), &principal(), AUDIENCE, &nonce, &digest)
+            }));
+        }
+
+        let results: Vec<_> = workers
+            .into_iter()
+            .map(|worker| worker.join().expect("worker must not panic"))
+            .collect();
+        let winners = results.iter().filter(|result| result.is_ok()).count();
+        let duplicates = results
             .iter()
             .filter(|result| matches!(result, Err(ReplayWalError::DuplicateNonce { .. })))
-            .count(),
-        7
-    );
+            .count();
+        assert_eq!(winners, 1, "round {round} must have exactly one winner");
+        assert_eq!(
+            duplicates,
+            WORKERS - 1,
+            "round {round} returned a non-duplicate admission error: {results:?}"
+        );
+    }
+
     let recovery = recover_replay_wal(root.as_ref(), false).expect("recover WAL");
-    assert_eq!(recovery.valid_record_count, 1);
-    assert_eq!(recovery.reservations.len(), 1);
+    assert_eq!(recovery.valid_record_count, ROUNDS);
+    assert_eq!(recovery.reservations.len(), ROUNDS);
 
     fs::remove_dir_all(root.as_ref()).expect("clean test root");
 }

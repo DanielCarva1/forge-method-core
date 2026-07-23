@@ -1,0 +1,67 @@
+schema_version: "0.1"
+product_lifecycle_recovery_spec:
+  id: "spec.C2.4-product-lifecycle-recovery-v0"
+  status: "source-corpus"
+  purpose: >-
+    Define a closed, host-neutral source corpus for recovery and mixed-version
+    observations around the explicit product lifecycle root. The corpus is
+    candidate test data and expected observations, not a lifecycle protocol,
+    recovery executor, or authority grant.
+  subject_contract:
+    product_lifecycle_spec: "contracts/spec/product-lifecycle-v0.yaml"
+    corpus_fixture: "docs/fixtures/product-lifecycle-recovery-v0/C2.4-product-lifecycle-recovery-corpus.yaml"
+    selected_host: null
+  closed_schema:
+    unknown_fields: "deny"
+    case_fields:
+      - "case_id"
+      - "category"
+      - "preconditions"
+      - "interruption_or_input"
+      - "requested_operation"
+      - "expected_result"
+      - "required_observations"
+      - "preservation_requirements"
+  common_invariants:
+    - "Every case names an explicit install root; no consumer repository, current directory, Project Link, or Forge sidecar may supply or infer it."
+    - "A recovery observation must fail closed on malformed state, unsafe paths, mismatched marker, or incomplete immutable generation; it must not silently repair, adopt, or activate data."
+    - "A staged but unpublished generation is never active merely because its files exist."
+    - "Update rejects a semantic-version downgrade and same-version distinct-content drift before active-state mutation."
+    - "Status and doctor report observations only. selected_host remains null even when retained configuration names a host runtime."
+    - "Uninstall preserves unknown, modified, unsafe, consumer, sidecar, operator-anchor, backup, restore-receipt, registry, and external-key state."
+    - "Private external broker keys never enter lifecycle state, corpus state, Forge backups, fixtures, or replacement-machine material."
+  required_categories:
+    - "partial_setup"
+    - "stale_host_configuration"
+    - "interrupted_update"
+    - "downgrade"
+    - "wrapper_mismatch"
+    - "retained_state_uninstall"
+    - "backup_interruption"
+    - "replacement_machine_restore"
+  authority_boundary:
+    corpus_documents: "candidate data and expected observations only"
+    deserialization_grants:
+      claim: false
+      mutation: false
+      phase_transition: false
+      release: false
+      signing: false
+      trust: false
+      admission: false
+      install: false
+      activation: false
+      lifecycle: false
+      protected_anchor: false
+      private_key: false
+      host_selection: false
+    selected_host: null
+  evidence_boundary:
+    source_cases_complete: true
+    unexecuted_stabilization_evidence:
+      - "Rust test execution"
+      - "failure injection and crash-interruption execution"
+      - "mixed-version runtime execution"
+      - "backup and replacement-machine restore execution"
+      - "stress, fuzzing, benchmarks, MSRV, platform, and target matrices"
+      - "hosted CI, publication, release, real-host, and field evidence"

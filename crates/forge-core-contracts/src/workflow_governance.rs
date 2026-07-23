@@ -11,6 +11,11 @@ use crate::assurance::{
     ReadinessTarget, UniversalAssuranceLens, WorkflowHumanIntentRevision,
 };
 use crate::common::{PrincipalId, StableId};
+use crate::completion::CompletionContractDocument;
+use crate::post_build_verify_episode::PostBuildVerifyEpisodeDocument;
+use crate::recovery::HealthRecoveryContractDocument;
+use crate::request::{RequestContractDocument, RequestStatus};
+use crate::runtime::RuntimeKind;
 use crate::workflow_release::{
     WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
 };
@@ -37,6 +42,23 @@ pub const WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION: &str = "0.3";
 /// The new event cannot appear under frozen `0.1`/`0.2`/`0.3` wires; readers
 /// preserve all historical bytes and permanently retain `0.4` thereafter.
 pub const WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION: &str = "0.4";
+/// Ledger records written from the first provenance-bearing broker companion.
+/// Readers preserve frozen `0.1` through `0.4` bytes; `0.5` remains active after
+/// native host provenance until the strict replay successor advances to `0.6`.
+pub const WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION: &str = "0.5";
+/// Ledger records written from the first strict broker companion carrying the
+/// rotation-stable native-interaction replay digest. Frozen `0.5` companions
+/// decode with no strict digest; `0.6` requires one and is permanent thereafter.
+pub const WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION: &str = "0.6";
+/// Ledger records written from the first kernel-admitted post-BuildVerify
+/// episode route. Frozen `0.1` through `0.6` histories remain readable, while
+/// the typed C5.2 event and every successor record require this wire epoch.
+pub const WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION: &str = "0.7";
+/// Ledger records written from the first C5.3 replacement-continuity snapshot or
+/// coordination-state event. Frozen `0.7` episode summaries remain readable;
+/// `0.8` requires the complete candidate snapshot and permanently carries exact
+/// request, completion, and health-recovery projections for fresh processes.
+pub const WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION: &str = "0.8";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -380,6 +402,8 @@ pub enum WorkflowGovernanceEvent {
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     CoreDomainPackRebased(Box<CoreDomainPackRebasedEvent>),
     PhaseAdvanced(PhaseAdvancedEvent),
+    PostBuildVerifyEpisodeApplied(PostBuildVerifyEpisodeAppliedEvent),
+    CoordinationStateApplied(CoordinationStateAppliedEvent),
     ApplicabilityAssessed(ApplicabilityAssessedEvent),
     SignalChanged(SignalChangedEvent),
     CapabilityProbed(CapabilityProbedEvent),
@@ -414,6 +438,32 @@ pub struct HumanIntentRevisionAcceptedEvent {
     pub accepted_at_unix: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowBrokerHostInteractionKind {
+    NativeHumanMessage,
+    NativeHumanConfirmation,
+    NativeReviewerConfirmation,
+    AttestedRuntimeObservation,
+}
+
+/// Signed, content-free native-host provenance. Handles are opaque host-local
+/// identifiers; the descriptor digest never commits raw transcript bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowBrokerNativeHostProvenance {
+    pub host_kind: RuntimeKind,
+    pub host_version: String,
+    pub adapter_id: StableId,
+    pub adapter_version: String,
+    pub interaction_kind: WorkflowBrokerHostInteractionKind,
+    pub host_event_ref: String,
+    pub host_session_ref: String,
+    pub host_interaction_ref: String,
+    pub host_event_descriptor_digest: String,
+    pub host_observed_at_unix: u64,
+}
+
 /// Durable provenance companion for one action produced from a separately
 /// verified external broker event. This is audit data only; deserializing it
 /// never grants broker, principal, or workflow mutation authority.
@@ -432,8 +482,15 @@ pub struct BrokerOriginAppliedEvent {
     pub signature_fingerprint: String,
     pub enrollment_ceremony_digest: String,
     pub broker_registry_digest: String,
+    /// Rotation-stable strict-control-plane identity for one native host
+    /// interaction. Historical `0.5` companions omit this field; new strict
+    /// companions must carry it under the `0.6` ledger wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_interaction_replay_digest: Option<String>,
     pub issued_at_unix: u64,
     pub expires_at_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_host_provenance: Option<WorkflowBrokerNativeHostProvenance>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -553,6 +610,124 @@ pub struct PhaseAdvancedEvent {
     pub from_phase: Option<StableId>,
     pub to_phase: StableId,
     pub snapshot_digest: String,
+}
+
+/// Closed C5.2 route admitted by the kernel after replaying a candidate-only
+/// C5.1 episode against exact current workflow state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PostBuildVerifyEpisodeOutcome {
+    AdvancedToReadyOperate,
+    AdvancedToEvolve,
+    RollbackAssessmentOpened,
+    EvolutionTriageOpened,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PostBuildVerifyGateKind {
+    Readiness,
+    Release,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyAdmittedGateResult {
+    pub kind: PostBuildVerifyGateKind,
+    pub status: crate::gate::GateStatus,
+    pub effective_bundle_digest: String,
+}
+
+/// Durable audit projection for one C5.2 route. Deserializing this event never
+/// recreates the kernel admission that produced it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyEpisodeAppliedEvent {
+    pub episode_id: StableId,
+    pub generation: u64,
+    #[serde(default)]
+    pub previous_episode_digest: Option<String>,
+    pub episode_digest: String,
+    pub release_subject: WorkflowGovernanceReleaseIdentity,
+    pub decision_digest: String,
+    pub from_phase: StableId,
+    #[serde(default)]
+    pub to_phase: Option<StableId>,
+    pub outcome: PostBuildVerifyEpisodeOutcome,
+    pub snapshot_digest: String,
+    pub prior_ledger_head_digest: String,
+    pub prior_state_version: u64,
+    #[serde(default)]
+    pub admitted_gate: Option<PostBuildVerifyAdmittedGateResult>,
+    /// Complete C5.1 candidate bytes retained for C5.3 fresh-process recovery.
+    /// Historical `0.7` records omit this field. Deserialization remains audit
+    /// projection only and never recreates the consumed kernel admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub episode_snapshot: Option<PostBuildVerifyEpisodeDocument>,
+}
+
+/// One append-only coordination-state projection admitted under the same retained
+/// workflow-ledger lock as its exact state-version and head bindings. These values
+/// remain audit/recovery data; they do not grant claim, mutation, phase, release,
+/// signing, private-key, trust, install, activation, or lifecycle authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationStateAppliedEvent {
+    pub prior_ledger_head_digest: String,
+    pub prior_state_version: u64,
+    pub state: CoordinationStateRecord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    content = "payload",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum CoordinationStateRecord {
+    Request(CoordinationRequestState),
+    Completion(CoordinationCompletionState),
+    HealthRecovery(CoordinationHealthRecoveryState),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationRequestState {
+    pub request: RequestContractDocument,
+    #[serde(default)]
+    pub previous_status: Option<RequestStatus>,
+    pub actor_agent_id: StableId,
+    #[serde(default)]
+    pub response_evidence_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mutation_handoff: Option<CoordinationMutationHandoff>,
+}
+
+/// Evidence-only binding showing which already-authorized driver/effect lane must
+/// perform a requested mutation. The request and this handoff cannot apply it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationMutationHandoff {
+    pub driver_agent_id: StableId,
+    pub requested_operation: StableId,
+    pub claim_contract_ref: crate::common::RepoPath,
+    pub authority_refs: Vec<String>,
+    pub effect_contract_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationCompletionState {
+    pub completion: CompletionContractDocument,
+    pub applied_claim_id: StableId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CoordinationHealthRecoveryState {
+    pub recovery: HealthRecoveryContractDocument,
+    pub actor_agent_id: StableId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -19,7 +19,7 @@ operation_contract:
     next_operation: "record_artifact"
     host_action: "call_operation"
     phase: "4-build-verify"
-    workflow: "build-story"
+    workflow: "quick-dev"
     action: "run_story_step"
   authority:
     mutation_policy: "allowed"

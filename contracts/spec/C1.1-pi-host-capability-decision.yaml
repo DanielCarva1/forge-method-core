@@ -1,0 +1,95 @@
+schema_version: "0.1"
+artifact_kind: "host-capability-decision"
+decision_id: "C1.1.pi-host-capability"
+status: "concluded_exact_version_negative"
+decided_at: "2026-07-15"
+
+question: >-
+  Can Pi authenticate a native human submit/confirmation event and protect a
+  Forge broker signer/admin capability from the agent, shell, tools, extensions,
+  and same-OS process authority?
+
+requirements_ref: "contracts/spec/workflow-host-origin-adapter-v0.yaml"
+exact_local_subject:
+  product: "Pi coding agent"
+  version: "0.80.7"
+  package: "@earendil-works/pi-coding-agent"
+  evidence_scope: >-
+    Complete installed README and extension/TUI/SDK/security/containerization/
+    package/RPC/session documentation plus installed declarations and runtime.
+    This is an exact local source-capability review, not released-host evidence.
+
+observed_surfaces:
+  - surface: "input event"
+    evidence: "dist/core/extensions/types.d.ts InputEvent/InputSource and dist/core/agent-session.js prompt path"
+    observation: >-
+      InputEvent carries text, images, and a source label. It is emitted before
+      model execution, but prompt callers can select interactive, rpc, or extension
+      source and no identity, signature, trusted capability, or event ID is present.
+    authority_verdict: "unauthenticated_label_only"
+  - surface: "confirmation and custom TUI"
+    evidence: "dist/core/extensions/types.d.ts ExtensionContext UI declarations"
+    observation: >-
+      Extensions can show confirm dialogs and alter or replace interactive UI,
+      editor text, headers, footers, and terminal handling.
+    authority_verdict: "presentation_only"
+    reason: >-
+      No trusted display path, canonical Forge packet/semantic binding, signer
+      identity, or user-presence capability accompanies the callback.
+  - surface: "session and request identifiers"
+    evidence: "dist/core/session-manager.js and dist/modes/rpc/rpc-mode.js"
+    observation: >-
+      Sessions/entries and RPC requests use random identifiers, while tool call IDs
+      originate in provider/model tool calls.
+    authority_verdict: "correlation_only"
+    reason: >-
+      InputEvent has no event ID, and RPC responders with the request ID can supply
+      answers; correlation does not authenticate native human origin.
+  - surface: "extension and shell authority"
+    evidence: "docs/security.md, dist/core/extensions/loader.js, and extension API exec declarations"
+    observation: >-
+      Pi documents no sandbox; extensions load in-process and can execute binaries,
+      while the normal agent surface includes shell/tool execution.
+    authority_verdict: "fails_same_os_isolation"
+    reason: >-
+      A signer or credential reachable by the Pi user/process cannot be claimed
+      inaccessible to agent tools or extensions without a separate OS boundary.
+  - surface: "provider credentials"
+    evidence: "dist/core/model-registry.d.ts and dist/core/auth-storage.d.ts"
+    observation: >-
+      The model registry exposes provider key/header retrieval and local auth
+      storage manages provider login/logout credentials.
+    authority_verdict: "not_a_forge_signer_or_admin_boundary"
+  - surface: "packages and self-update"
+    evidence: "docs/packages.md and dist/core/package-manager-cli.d.ts"
+    observation: >-
+      Exact npm specs/git refs can be configured, but package management exposes
+      install/remove/update/list rather than a trusted rollback protocol.
+    authority_verdict: "partial_packaging_only"
+
+capability_matrix:
+  native_input_before_model_hook: "yes_but_unauthenticated"
+  native_user_event_authentication_proven: "no"
+  exact_confirmation_presentation_possible: "yes"
+  exact_confirmation_as_human_authority_proven: "no"
+  opaque_input_event_id_outside_agent_control_proven: "no"
+  non_exportable_signer_custody_proven: "no"
+  no_agent_callable_signing_oracle_proven: "no"
+  separate_broker_admin_boundary_proven: "no"
+  deterministic_adapter_install_and_rollback_proven: "no"
+
+resolution:
+  pi_extension_claim: "unsupported_for_human_origin_assurance"
+  pi_rpc_claim: "unsupported_for_human_origin_assurance"
+  selected_C1_reference_host: "not_selected"
+  reconsideration_condition: >-
+    Reconsider only with a host-authenticated input capability, trusted exact
+    confirmation, separately isolated non-exportable user-presence signer,
+    non-agent administration, and authority-safe version rollback.
+
+claim_boundary: >-
+  Pi 0.80.7 can implement a useful best-effort extension gate, but its inspected
+  input source, confirmation, IDs, RPC, extension, shell, and credential surfaces
+  do not establish C1 authority under the same-OS child/tool threat. Forge must
+  not infer physical human presence or independent review from InputSource,
+  ctx.ui.confirm, session/tool/RPC IDs, an extension hook, or same-user key files.

@@ -32,8 +32,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read as _, Write as _};
+use std::fs::{self, File};
+use std::io::{self, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
 
 const MAGIC: [u8; 4] = *b"FMR1";
@@ -221,7 +221,7 @@ struct PreparedConsume {
 }
 
 struct ReplayGuardState {
-    _replay_lock: ReplayWalLock,
+    replay_lock: ReplayWalRetainedLock,
     wal_path: PathBuf,
     reserved: ReplayReservation,
     prepared: PreparedConsume,
@@ -273,7 +273,9 @@ impl ReplayCommitGuard<'_> {
     /// Returns [`ReplayWalError`] if the prepared consume frame cannot be
     /// appended and synced. Both locks remain held until this call returns.
     pub fn consume(self) -> Result<ReplayConsumeResult, ReplayWalError> {
-        append_and_sync(&self.state.wal_path, &self.state.prepared.bytes)?;
+        self.state
+            .replay_lock
+            .append_wal(&self.state.prepared.bytes)?;
         Ok(ReplayConsumeResult {
             wal_path: self.state.wal_path.clone(),
             seq: self.state.prepared.seq,
@@ -377,7 +379,7 @@ impl OwnedReplayCommitGuard {
         self,
     ) -> Result<ConsumedReplayEffectGuard, ReplayWalError> {
         let Self { state, effect_lock } = self;
-        append_and_sync(&state.wal_path, &state.prepared.bytes)?;
+        state.replay_lock.append_wal(&state.prepared.bytes)?;
         let result = ReplayConsumeResult {
             wal_path: state.wal_path.clone(),
             seq: state.prepared.seq,
@@ -674,10 +676,10 @@ pub fn initialize_replay_wal(
     state_root: impl AsRef<Path>,
 ) -> Result<ReplayWalInitializationResult, ReplayWalError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let _lock = acquire_replay_lock(&state_root)?;
-    let initialized = ensure_replay_initialized_under_lock(&state_root, true)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let initialized = ensure_replay_initialized_under_lock(&lock, true)?;
     if !initialized {
-        let recovery = recover_replay_wal_under_lock(&replay_wal_path(&state_root), false)?;
+        let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, false)?;
         ensure_appendable(&recovery)?;
     }
     Ok(ReplayWalInitializationResult {
@@ -740,11 +742,74 @@ pub fn reserve_replay_nonce(
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, true)?;
     ensure_appendable(&recovery)?;
+    reserve_replay_nonce_recovered(
+        &lock,
+        wal_path,
+        &recovery,
+        key_hash,
+        intent_digest,
+        commit_digest,
+    )
+}
 
+/// Durably reserve a nonce while the caller retains the exact effect lock.
+///
+/// This is the runtime admission path for the kernel. It derives replay
+/// authority from the already-held effect lock, preserving the global
+/// `effect lock -> replay lock` order without admitting another producer. The
+/// replay manifest/WAL pair must already be initialized, and any prior
+/// observation of the nonce is rejected permanently.
+///
+/// # Errors
+///
+/// Returns [`ReplayWalError`] for invalid input, effect-lock scope mismatch,
+/// absent or corrupt replay initialization, a previously observed nonce, or a
+/// failed durable revision-1 append.
+#[allow(clippy::too_many_arguments)]
+pub fn reserve_replay_nonce_under_effect_lock(
+    state_root: impl AsRef<Path>,
+    effect_lock: &crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    principal_id: &PrincipalId,
+    audience: &str,
+    nonce: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+) -> Result<ReplayReserveResult, ReplayWalError> {
+    validate_sha256_digest(intent_digest)?;
+    validate_commit_digest(commit_digest)?;
+    let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
+    let scope = retained_effect_scope(
+        state_root.as_ref(),
+        effect_lock,
+        expected_effect_lock_relative_path,
+    )?;
+    let wal_path = replay_wal_path(&scope.state_root_display);
+    let replay_lock = ReplayWalRetainedLock::acquire_under_effect_scope(&scope)?;
+    let recovery =
+        recover_replay_wal_under_retained_lock(&scope.state_root_display, &replay_lock, true)?;
+    ensure_appendable(&recovery)?;
+    reserve_replay_nonce_recovered(
+        &replay_lock,
+        wal_path,
+        &recovery,
+        key_hash,
+        intent_digest,
+        commit_digest,
+    )
+}
+
+fn reserve_replay_nonce_recovered(
+    replay_lock: &ReplayWalRetainedLock,
+    wal_path: PathBuf,
+    recovery: &ReplayWalRecovery,
+    key_hash: String,
+    intent_digest: &str,
+    commit_digest: &str,
+) -> Result<ReplayReserveResult, ReplayWalError> {
     if let Some(existing) = recovery.reservations.get(&key_hash) {
         return Err(ReplayWalError::DuplicateNonce {
             key_hash,
@@ -764,8 +829,8 @@ pub fn reserve_replay_nonce(
         expected_revision: None,
     };
     let bytes = encode_payload_record(seq, &payload)?;
-    ensure_append_capacity(&recovery, bytes.len())?;
-    append_and_sync(&wal_path, &bytes)?;
+    ensure_append_capacity(recovery, bytes.len())?;
+    replay_lock.append_wal(&bytes)?;
 
     Ok(ReplayReserveResult {
         wal_path,
@@ -821,11 +886,11 @@ pub fn consume_replay_nonce_non_boundary(
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
     let state_root = trusted_state_root(state_root.as_ref())?;
     let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    let recovery = recover_replay_wal_under_retained_lock(&state_root, &lock, true)?;
     ensure_appendable(&recovery)?;
     consume_replay_recovered(
+        &lock,
         wal_path,
         &recovery,
         &key_hash,
@@ -867,14 +932,18 @@ pub fn consume_replay_key_hash_under_effect_lock(
             reason: "must be greater than zero",
         });
     }
-    let state_root = trusted_state_root(state_root.as_ref())?;
-    validate_effect_lock_scope(&state_root, effect_lock, expected_effect_lock_relative_path)?;
-    let wal_path = replay_wal_path(&state_root);
-    let _replay_lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    let scope = retained_effect_scope(
+        state_root.as_ref(),
+        effect_lock,
+        expected_effect_lock_relative_path,
+    )?;
+    let wal_path = replay_wal_path(&scope.state_root_display);
+    let replay_lock = ReplayWalRetainedLock::acquire_under_effect_scope(&scope)?;
+    let recovery =
+        recover_replay_wal_under_retained_lock(&scope.state_root_display, &replay_lock, true)?;
     ensure_appendable(&recovery)?;
     consume_replay_recovered(
+        &replay_lock,
         wal_path,
         &recovery,
         key_hash,
@@ -885,6 +954,7 @@ pub fn consume_replay_key_hash_under_effect_lock(
 }
 
 fn consume_replay_recovered(
+    replay_lock: &ReplayWalRetainedLock,
     wal_path: PathBuf,
     recovery: &ReplayWalRecovery,
     key_hash: &str,
@@ -950,7 +1020,7 @@ fn consume_replay_recovered(
     };
     let bytes = encode_payload_record(seq, &payload)?;
     ensure_append_capacity(recovery, bytes.len())?;
-    append_and_sync(&wal_path, &bytes)?;
+    replay_lock.append_wal(&bytes)?;
     Ok(ReplayConsumeResult {
         wal_path,
         seq,
@@ -1063,15 +1133,14 @@ fn prepare_replay_guard_state(
         });
     }
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
-    let state_root = trusted_state_root(state_root)?;
-    validate_effect_lock_scope(&state_root, effect_lock, expected_effect_lock_relative_path)?;
+    let scope = retained_effect_scope(state_root, effect_lock, expected_effect_lock_relative_path)?;
 
-    // Lock ordering is load-bearing: the EffectStoreLock already exists before
-    // replay acquisition and is retained by the borrowed or owned public guard.
-    let replay_lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    let wal_path = replay_wal_path(&state_root);
-    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    // Lock ordering is load-bearing: this clones the already-held effect
+    // boundary rather than admitting a producer from an ambient pathname.
+    let replay_lock = ReplayWalRetainedLock::acquire_under_effect_scope(&scope)?;
+    let wal_path = replay_wal_path(&scope.state_root_display);
+    let recovery =
+        recover_replay_wal_under_retained_lock(&scope.state_root_display, &replay_lock, true)?;
     ensure_appendable(&recovery)?;
     let Some(existing) = recovery.reservations.get(&key_hash) else {
         return Err(ReplayWalError::ReservationMissing { key_hash });
@@ -1126,7 +1195,7 @@ fn prepare_replay_guard_state(
     };
 
     Ok(ReplayGuardState {
-        _replay_lock: replay_lock,
+        replay_lock,
         wal_path,
         reserved: existing.clone(),
         prepared: PreparedConsume {
@@ -1153,10 +1222,50 @@ pub fn recover_replay_wal(
     repair: bool,
 ) -> Result<ReplayWalRecovery, ReplayWalError> {
     let state_root = trusted_state_root(state_root.as_ref())?;
-    let wal_path = replay_wal_path(&state_root);
-    let _lock = acquire_replay_lock(&state_root)?;
-    ensure_replay_initialized_under_lock(&state_root, false)?;
-    recover_replay_wal_under_lock(&wal_path, repair)
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    recover_replay_wal_under_retained_lock(&state_root, &lock, repair)
+}
+
+/// Capture replay recovery plus exact WAL/manifest bytes under one retained root and lock.
+pub(crate) fn capture_replay_authority(
+    state_root: &Path,
+) -> Result<(ReplayWalRecovery, Vec<u8>, Vec<u8>), ReplayWalError> {
+    let state_root = trusted_state_root(state_root)?;
+    let lock = acquire_replay_wal_retained_lock(&state_root)?;
+    capture_replay_authority_under_retained_lock(&state_root, &lock)
+}
+
+/// Capture replay authority without reacquiring an already-held producer boundary.
+pub(crate) fn capture_replay_authority_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+) -> Result<(ReplayWalRecovery, Vec<u8>, Vec<u8>), ReplayWalError> {
+    let state_root = trusted_state_root(state_root)?;
+    let lock = acquire_replay_wal_retained_lock_under_boundary(boundary, &state_root)?;
+    capture_replay_authority_under_retained_lock(&state_root, &lock)
+}
+
+fn capture_replay_authority_under_retained_lock(
+    state_root: &Path,
+    lock: &ReplayWalRetainedLock,
+) -> Result<(ReplayWalRecovery, Vec<u8>, Vec<u8>), ReplayWalError> {
+    let recovery = recover_replay_wal_under_retained_lock(state_root, lock, false)?;
+    let wal_bytes = lock
+        .read_bounded(Path::new(REPLAY_WAL_RELATIVE_PATH), REPLAY_WAL_MAX_BYTES)
+        .map_err(|source| ReplayWalError::ReadWal {
+            path: replay_wal_path(state_root),
+            source: source.to_string(),
+        })?;
+    let manifest_bytes = lock
+        .read_bounded(
+            Path::new(REPLAY_WAL_MANIFEST_RELATIVE_PATH),
+            MANIFEST_MAX_BYTES,
+        )
+        .map_err(|source| ReplayWalError::InvalidManifest {
+            path: replay_wal_manifest_path(state_root),
+            source: source.to_string(),
+        })?;
+    Ok((recovery, wal_bytes, manifest_bytes))
 }
 
 fn validate_nonblank(field: &'static str, value: &str) -> Result<(), ReplayWalError> {
@@ -1235,103 +1344,71 @@ fn trusted_state_root(path: &Path) -> Result<PathBuf, ReplayWalError> {
 }
 
 fn ensure_replay_initialized_under_lock(
-    state_root: &Path,
+    guard: &ReplayWalRetainedLock,
     create_if_absent: bool,
 ) -> Result<bool, ReplayWalError> {
-    let wal_path = replay_wal_path(state_root);
-    let manifest_path = replay_wal_manifest_path(state_root);
-    let wal_exists = path_exists(&wal_path)?;
-    let manifest_exists = path_exists(&manifest_path)?;
+    let wal_relative = Path::new(REPLAY_WAL_RELATIVE_PATH);
+    let manifest_relative = Path::new(REPLAY_WAL_MANIFEST_RELATIVE_PATH);
+    let wal_exists = guard.exists(wal_relative)?;
+    let manifest_exists = guard.exists(manifest_relative)?;
     match (manifest_exists, wal_exists) {
         (false, false) if create_if_absent => {
-            initialize_replay_files(state_root, &wal_path, &manifest_path)?;
+            initialize_replay_files(guard)?;
             Ok(true)
         }
         (false, false) => Err(ReplayWalError::NotInitialized {
-            state_root: state_root.to_path_buf(),
+            state_root: guard.state_root.clone(),
         }),
         (true, true) => {
-            validate_replay_manifest(&manifest_path)?;
-            ensure_regular_file(state_root, &wal_path)?;
+            validate_replay_manifest(guard)?;
+            guard.ensure_regular(wal_relative)?;
             Ok(false)
         }
         _ => Err(ReplayWalError::InitializationMismatch {
-            manifest_path,
+            manifest_path: replay_wal_manifest_path(&guard.state_root),
             manifest_exists,
-            wal_path,
+            wal_path: guard.wal_path.clone(),
             wal_exists,
         }),
     }
 }
 
-fn path_exists(path: &Path) -> Result<bool, ReplayWalError> {
-    path.try_exists()
-        .map_err(|source| ReplayWalError::StateRootUnavailable {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        })
-}
-
-fn ensure_regular_file(state_root: &Path, path: &Path) -> Result<(), ReplayWalError> {
-    let metadata = fs::symlink_metadata(path).map_err(|source| ReplayWalError::ReadWal {
-        path: path.to_path_buf(),
-        source: source.to_string(),
-    })?;
-    if !metadata.file_type().is_file() {
-        return Err(ReplayWalError::ReadWal {
-            path: path.to_path_buf(),
-            source: "authority file must be a regular non-symlink file".to_owned(),
-        });
-    }
-    let canonical = fs::canonicalize(path).map_err(|source| ReplayWalError::ReadWal {
-        path: path.to_path_buf(),
-        source: source.to_string(),
-    })?;
-    if !canonical.starts_with(state_root) {
-        return Err(ReplayWalError::ReadWal {
-            path: path.to_path_buf(),
-            source: "authority file resolves outside the trusted state root".to_owned(),
-        });
-    }
-    Ok(())
-}
-
-fn initialize_replay_files(
-    state_root: &Path,
-    wal_path: &Path,
-    manifest_path: &Path,
-) -> Result<(), ReplayWalError> {
-    create_wal_parent(state_root, wal_path)?;
-    let wal_parent = wal_path.parent().ok_or_else(|| ReplayWalError::CreateDir {
-        path: wal_path.to_path_buf(),
-        source: "WAL path has no parent".to_owned(),
-    })?;
-    sync_directory(state_root).map_err(|source| ReplayWalError::SyncWal {
-        path: state_root.to_path_buf(),
-        source: source.to_string(),
-    })?;
-
-    let wal = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(wal_path)
-        .map_err(|source| ReplayWalError::OpenWal {
-            path: wal_path.to_path_buf(),
+fn initialize_replay_files(guard: &ReplayWalRetainedLock) -> Result<(), ReplayWalError> {
+    let wal_relative = Path::new(REPLAY_WAL_RELATIVE_PATH);
+    let wal_parent = wal_relative.parent().expect("WAL has parent");
+    guard
+        .root
+        .create_dir_all(wal_parent)
+        .map_err(|source| ReplayWalError::CreateDir {
+            path: guard.state_root.join(wal_parent),
             source: source.to_string(),
         })?;
+    guard
+        .root
+        .sync_root()
+        .map_err(|source| ReplayWalError::SyncWal {
+            path: guard.state_root.clone(),
+            source: source.to_string(),
+        })?;
+    let wal =
+        guard
+            .root
+            .open_write_new(wal_relative)
+            .map_err(|source| ReplayWalError::OpenWal {
+                path: guard.wal_path.clone(),
+                source: source.to_string(),
+            })?;
     wal.sync_all().map_err(|source| ReplayWalError::SyncWal {
-        path: wal_path.to_path_buf(),
+        path: guard.wal_path.clone(),
         source: source.to_string(),
     })?;
-    sync_directory(wal_parent).map_err(|source| ReplayWalError::SyncWal {
-        path: wal_parent.to_path_buf(),
-        source: source.to_string(),
-    })?;
-    sync_directory(state_root).map_err(|source| ReplayWalError::SyncWal {
-        path: state_root.to_path_buf(),
-        source: source.to_string(),
-    })?;
+    guard
+        .root
+        .sync_directory(wal_parent)
+        .map_err(|source| ReplayWalError::SyncWal {
+            path: guard.state_root.join(wal_parent),
+            source: source.to_string(),
+        })?;
 
     let manifest = ReplayWalManifest {
         schema_version: REPLAY_WAL_SCHEMA_VERSION.to_owned(),
@@ -1341,37 +1418,50 @@ fn initialize_replay_files(
     let bytes = serde_json::to_vec(&manifest).map_err(|source| ReplayWalError::Serialize {
         source: source.to_string(),
     })?;
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(manifest_path)
+    let manifest_relative = Path::new(REPLAY_WAL_MANIFEST_RELATIVE_PATH);
+    let manifest_path = replay_wal_manifest_path(&guard.state_root);
+    let mut file = guard
+        .root
+        .open_write_new(manifest_relative)
         .map_err(|source| ReplayWalError::OpenWal {
-            path: manifest_path.to_path_buf(),
+            path: manifest_path.clone(),
             source: source.to_string(),
         })?;
     file.write_all(&bytes)
         .and_then(|()| file.sync_all())
+        .and_then(|()| guard.root.sync_root())
         .map_err(|source| ReplayWalError::SyncWal {
-            path: manifest_path.to_path_buf(),
+            path: manifest_path,
             source: source.to_string(),
-        })?;
-    sync_directory(state_root).map_err(|source| ReplayWalError::SyncWal {
-        path: state_root.to_path_buf(),
-        source: source.to_string(),
-    })
+        })
 }
 
-fn validate_replay_manifest(path: &Path) -> Result<(), ReplayWalError> {
-    ensure_regular_manifest(path)?;
-    let bytes = read_bounded_file(path, MANIFEST_MAX_BYTES).map_err(|source| {
-        ReplayWalError::InvalidManifest {
-            path: path.to_path_buf(),
+fn validate_replay_manifest(guard: &ReplayWalRetainedLock) -> Result<(), ReplayWalError> {
+    let relative = Path::new(REPLAY_WAL_MANIFEST_RELATIVE_PATH);
+    let path = replay_wal_manifest_path(&guard.state_root);
+    let metadata =
+        guard
+            .root
+            .metadata(relative)
+            .map_err(|source| ReplayWalError::InvalidManifest {
+                path: path.clone(),
+                source: source.to_string(),
+            })?;
+    if !metadata.is_file() {
+        return Err(ReplayWalError::InvalidManifest {
+            path,
+            source: "manifest must be a regular non-symlink file".to_owned(),
+        });
+    }
+    let bytes = guard
+        .read_bounded(relative, MANIFEST_MAX_BYTES)
+        .map_err(|source| ReplayWalError::InvalidManifest {
+            path: path.clone(),
             source: source.to_string(),
-        }
-    })?;
+        })?;
     let manifest = serde_json::from_slice::<ReplayWalManifest>(&bytes).map_err(|source| {
         ReplayWalError::InvalidManifest {
-            path: path.to_path_buf(),
+            path: path.clone(),
             source: source.to_string(),
         }
     })?;
@@ -1382,23 +1472,8 @@ fn validate_replay_manifest(path: &Path) -> Result<(), ReplayWalError> {
     };
     if manifest != expected {
         return Err(ReplayWalError::InvalidManifest {
-            path: path.to_path_buf(),
+            path,
             source: "manifest does not describe the supported replay WAL".to_owned(),
-        });
-    }
-    Ok(())
-}
-
-fn ensure_regular_manifest(path: &Path) -> Result<(), ReplayWalError> {
-    let metadata =
-        fs::symlink_metadata(path).map_err(|source| ReplayWalError::InvalidManifest {
-            path: path.to_path_buf(),
-            source: source.to_string(),
-        })?;
-    if !metadata.file_type().is_file() {
-        return Err(ReplayWalError::InvalidManifest {
-            path: path.to_path_buf(),
-            source: "manifest must be a regular non-symlink file".to_owned(),
         });
     }
     Ok(())
@@ -1449,93 +1524,315 @@ fn validate_effect_lock_scope(
     Ok(())
 }
 
-fn create_wal_parent(state_root: &Path, wal_path: &Path) -> Result<(), ReplayWalError> {
-    let parent = wal_path.parent().ok_or_else(|| ReplayWalError::CreateDir {
-        path: wal_path.to_path_buf(),
-        source: "WAL path has no parent".to_owned(),
+pub(crate) fn acquire_replay_wal_retained_lock(
+    state_root: &Path,
+) -> Result<ReplayWalRetainedLock, ReplayWalError> {
+    let boundary = crate::producer_quiescence::admit_producer(state_root).map_err(|source| {
+        ReplayWalError::Lock {
+            path: replay_wal_lock_path(state_root),
+            source: source.to_string(),
+        }
     })?;
-    fs::create_dir_all(parent).map_err(|source| ReplayWalError::CreateDir {
-        path: parent.to_path_buf(),
-        source: source.to_string(),
-    })?;
-    ensure_directory_within_root(state_root, parent)
+    acquire_replay_wal_retained_lock_under_boundary(&boundary, state_root)
 }
 
-fn ensure_directory_within_root(state_root: &Path, directory: &Path) -> Result<(), ReplayWalError> {
-    let canonical =
-        fs::canonicalize(directory).map_err(|source| ReplayWalError::StateRootUnavailable {
-            path: directory.to_path_buf(),
+pub(crate) fn acquire_replay_wal_retained_lock_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+) -> Result<ReplayWalRetainedLock, ReplayWalError> {
+    let boundary = crate::producer_quiescence::BoundaryLease::from_boundary(boundary, state_root)
+        .map_err(|source| ReplayWalError::Lock {
+        path: replay_wal_lock_path(state_root),
+        source: source.to_string(),
+    })?;
+    let state_root = trusted_state_root(state_root)?;
+    let root = boundary
+        .retained_root()
+        .map_err(|source| ReplayWalError::Lock {
+            path: replay_wal_lock_path(&state_root),
             source: source.to_string(),
         })?;
-    if !canonical.starts_with(state_root) {
-        return Err(ReplayWalError::StateRootUnavailable {
-            path: directory.to_path_buf(),
-            source: "directory resolves outside the trusted state root".to_owned(),
+    let relative = Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH);
+    root.create_dir_all(relative.parent().expect("lock has parent"))
+        .map_err(|source| ReplayWalError::CreateDir {
+            path: replay_wal_lock_path(&state_root)
+                .parent()
+                .expect("lock has parent")
+                .to_path_buf(),
+            source: source.to_string(),
+        })?;
+    let path = replay_wal_lock_path(&state_root);
+    let file =
+        root.open_read_write_create(relative)
+            .map_err(|source| ReplayWalError::OpenLock {
+                path: path.clone(),
+                source: source.to_string(),
+            })?;
+    if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
+        return Err(ReplayWalError::OpenLock {
+            path,
+            source: "lock is not a regular file".to_owned(),
         });
     }
-    Ok(())
-}
-
-fn acquire_replay_lock(state_root: &Path) -> Result<ReplayWalLock, ReplayWalError> {
-    let path = replay_wal_lock_path(state_root);
-    let parent = path.parent().ok_or_else(|| ReplayWalError::CreateDir {
+    FileExt::lock(&file).map_err(|source| ReplayWalError::Lock {
         path: path.clone(),
-        source: "lock path has no parent".to_owned(),
-    })?;
-    fs::create_dir_all(parent).map_err(|source| ReplayWalError::CreateDir {
-        path: parent.to_path_buf(),
         source: source.to_string(),
     })?;
-    ensure_directory_within_root(state_root, parent)?;
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&path)
-        .map_err(|source| ReplayWalError::OpenLock {
+    let lock_identity =
+        crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+            ReplayWalError::Lock {
+                path: path.clone(),
+                source: source.to_string(),
+            }
+        })?;
+    boundary
+        .validate_root(&state_root)
+        .map_err(|source| ReplayWalError::Lock {
+            path,
+            source: source.to_string(),
+        })?;
+    Ok(ReplayWalRetainedLock {
+        boundary,
+        root,
+        file,
+        lock_identity,
+        wal_path: replay_wal_path(&state_root),
+        validate_boundary: true,
+        state_root,
+    })
+}
+
+/// Crate-private retained replay-WAL authority.
+
+fn retained_effect_scope(
+    requested_state_root: &Path,
+    effect_lock: &crate::EffectStoreLock,
+    expected_relative_path: &str,
+) -> Result<crate::RetainedEffectReplayScope, ReplayWalError> {
+    let expected_relative = Path::new(expected_relative_path);
+    if expected_relative.as_os_str().is_empty()
+        || expected_relative.is_absolute()
+        || expected_relative
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(ReplayWalError::InvalidInput {
+            field: "expected_effect_lock_relative_path",
+            reason: "must be a normalized non-empty relative path",
+        });
+    }
+    let expected = requested_state_root.join(expected_relative);
+    if expected_relative == Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH) {
+        return Err(ReplayWalError::EffectLockOrderViolation { path: expected });
+    }
+    let scope = effect_lock
+        .replay_scope(expected_relative_path)
+        .map_err(|_| ReplayWalError::EffectLockScopeMismatch {
+            expected,
+            actual: effect_lock.path().to_path_buf(),
+        })?;
+    let requested = crate::retained_dir::RetainedDirectory::open_root(requested_state_root)
+        .map_err(|source| ReplayWalError::StateRootUnavailable {
+            path: requested_state_root.to_path_buf(),
+            source: source.to_string(),
+        })?;
+    if requested
+        .identity()
+        .map_err(|source| ReplayWalError::StateRootUnavailable {
+            path: requested_state_root.to_path_buf(),
+            source: source.to_string(),
+        })?
+        != scope
+            .state_root
+            .identity()
+            .map_err(|source| ReplayWalError::StateRootUnavailable {
+                path: requested_state_root.to_path_buf(),
+                source: source.to_string(),
+            })?
+    {
+        return Err(ReplayWalError::EffectLockScopeMismatch {
+            expected: requested_state_root.join(expected_relative_path),
+            actual: effect_lock.path().to_path_buf(),
+        });
+    }
+    Ok(scope)
+}
+
+impl ReplayWalRetainedLock {
+    pub(crate) fn acquire_under_effect_scope(
+        scope: &crate::RetainedEffectReplayScope,
+    ) -> Result<Self, ReplayWalError> {
+        let relative = Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH);
+        scope
+            .state_root
+            .create_dir_all(relative.parent().expect("lock has parent"))
+            .map_err(|source| ReplayWalError::CreateDir {
+                path: scope.state_root_display.join("locks"),
+                source: source.to_string(),
+            })?;
+        let path = replay_wal_lock_path(&scope.state_root_display);
+        let file = scope
+            .state_root
+            .open_leaf_read_write_create_authority(relative)
+            .map_err(|source| ReplayWalError::OpenLock {
+                path: path.clone(),
+                source: source.to_string(),
+            })?;
+        FileExt::lock(&file).map_err(|source| ReplayWalError::Lock {
             path: path.clone(),
             source: source.to_string(),
         })?;
-    FileExt::lock(&file).map_err(|source| ReplayWalError::Lock {
-        path,
-        source: source.to_string(),
-    })?;
-    Ok(ReplayWalLock { file })
+        let lock_identity =
+            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+                ReplayWalError::Lock {
+                    path: path.clone(),
+                    source: source.to_string(),
+                }
+            })?;
+        Ok(Self {
+            file,
+            boundary: scope.boundary.clone(),
+            root: scope
+                .state_root
+                .try_clone()
+                .map_err(|source| ReplayWalError::Lock {
+                    path: path.clone(),
+                    source: source.to_string(),
+                })?,
+            lock_identity,
+            state_root: scope.state_root_display.clone(),
+            wal_path: replay_wal_path(&scope.state_root_display),
+            validate_boundary: false,
+        })
+    }
 }
-
-struct ReplayWalLock {
+///
+/// This guard proves only replay-WAL ownership. It deliberately carries no
+/// effect-lock field or success flag; backup orchestration must acquire and
+/// retain the Effect WAL authority before acquiring this guard.
+pub(crate) struct ReplayWalRetainedLock {
     file: File,
+    boundary: crate::producer_quiescence::BoundaryLease,
+    root: crate::retained_dir::RetainedDirectory,
+    lock_identity: crate::retained_dir::RetainedFileIdentity,
+    validate_boundary: bool,
+    state_root: PathBuf,
+    wal_path: PathBuf,
 }
 
-impl Drop for ReplayWalLock {
+impl ReplayWalRetainedLock {
+    fn validate(&self, state_root: &Path) -> Result<(), ReplayWalError> {
+        if self.validate_boundary {
+            self.boundary
+                .validate_root(state_root)
+                .map_err(|source| ReplayWalError::ReadWal {
+                    path: replay_wal_path(state_root),
+                    source: source.to_string(),
+                })?;
+        }
+        let current = self
+            .root
+            .open_leaf_read(
+                Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH),
+                crate::retained_dir::RetainedLeafPolicy::Authority,
+            )
+            .and_then(|file| crate::retained_dir::RetainedDirectory::identity_of(&file));
+        if !current.is_ok_and(|identity| identity == self.lock_identity) {
+            return Err(ReplayWalError::ReadWal {
+                path: replay_wal_lock_path(state_root),
+                source: "replay WAL lock identity changed".to_owned(),
+            });
+        }
+        Ok(())
+    }
+
+    fn exists(&self, relative: &Path) -> Result<bool, ReplayWalError> {
+        self.root
+            .exists(relative)
+            .map_err(|source| ReplayWalError::StateRootUnavailable {
+                path: self.state_root.join(relative),
+                source: source.to_string(),
+            })
+    }
+
+    fn ensure_regular(&self, relative: &Path) -> Result<(), ReplayWalError> {
+        self.root
+            .open_leaf_read(relative, crate::retained_dir::RetainedLeafPolicy::Authority)
+            .map(|_| ())
+            .map_err(|source| ReplayWalError::ReadWal {
+                path: self.state_root.join(relative),
+                source: source.to_string(),
+            })
+    }
+
+    fn read_bounded(&self, relative: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
+        self.root.read_authority_bounded(relative, max_bytes)
+    }
+
+    fn append_wal(&self, bytes: &[u8]) -> Result<(), ReplayWalError> {
+        self.validate(&self.state_root)?;
+        let mut file = self
+            .root
+            .open_leaf_read_write_existing(Path::new(REPLAY_WAL_RELATIVE_PATH))
+            .map_err(|source| ReplayWalError::WriteWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            })?;
+        file.seek(SeekFrom::End(0))
+            .and_then(|_| file.write_all(bytes))
+            .and_then(|()| file.sync_all())
+            .map_err(|source| ReplayWalError::WriteWal {
+                path: self.wal_path.clone(),
+                source: source.to_string(),
+            })
+    }
+}
+
+impl Drop for ReplayWalRetainedLock {
     fn drop(&mut self) {
         let _ = FileExt::unlock(&self.file);
     }
 }
 
-fn recover_replay_wal_under_lock(
-    wal_path: &Path,
+/// Recover the matching replay WAL without reacquiring its retained lock.
+pub(crate) fn recover_replay_wal_under_retained_lock(
+    state_root: &Path,
+    guard: &ReplayWalRetainedLock,
     repair: bool,
 ) -> Result<ReplayWalRecovery, ReplayWalError> {
-    let bytes = read_bounded_file(wal_path, REPLAY_WAL_MAX_BYTES).map_err(|source| {
-        if source.kind() == io::ErrorKind::FileTooLarge {
-            let observed = fs::metadata(wal_path)
-                .map_or(REPLAY_WAL_MAX_BYTES.saturating_add(1), |metadata| {
-                    metadata.len()
-                });
-            ReplayWalError::CapacityExceeded {
-                kind: ReplayWalCapacityKind::Bytes,
-                limit: REPLAY_WAL_MAX_BYTES,
-                observed,
+    guard.validate(state_root)?;
+    ensure_replay_initialized_under_lock(guard, false)?;
+    recover_replay_wal_file_under_lock(guard, repair)
+}
+
+fn recover_replay_wal_file_under_lock(
+    guard: &ReplayWalRetainedLock,
+    repair: bool,
+) -> Result<ReplayWalRecovery, ReplayWalError> {
+    let wal_path = &guard.wal_path;
+    let relative = Path::new(REPLAY_WAL_RELATIVE_PATH);
+    let bytes = guard
+        .read_bounded(relative, REPLAY_WAL_MAX_BYTES)
+        .map_err(|source| {
+            if source.kind() == io::ErrorKind::FileTooLarge {
+                let observed = guard
+                    .root
+                    .metadata(relative)
+                    .map_or(REPLAY_WAL_MAX_BYTES.saturating_add(1), |metadata| {
+                        metadata.len()
+                    });
+                ReplayWalError::CapacityExceeded {
+                    kind: ReplayWalCapacityKind::Bytes,
+                    limit: REPLAY_WAL_MAX_BYTES,
+                    observed,
+                }
+            } else {
+                ReplayWalError::ReadWal {
+                    path: wal_path.clone(),
+                    source: source.to_string(),
+                }
             }
-        } else {
-            ReplayWalError::ReadWal {
-                path: wal_path.to_path_buf(),
-                source: source.to_string(),
-            }
-        }
-    })?;
+        })?;
     let original_len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     let mut recovery = decode_prefix(wal_path, &bytes);
     if recovery.stop_reason == ReplayWalStopReason::RecordCapacityExceeded {
@@ -1549,44 +1846,23 @@ fn recover_replay_wal_under_lock(
     }
     if repair && recovery.last_good_offset < original_len && is_safe_torn_tail(recovery.stop_reason)
     {
-        let file = OpenOptions::new()
-            .write(true)
-            .open(wal_path)
+        guard.validate(&guard.state_root)?;
+        let file = guard
+            .root
+            .open_leaf_read_write_existing(relative)
             .map_err(|source| ReplayWalError::RepairWal {
-                path: wal_path.to_path_buf(),
+                path: wal_path.clone(),
                 source: source.to_string(),
             })?;
         file.set_len(recovery.last_good_offset)
             .and_then(|()| file.sync_all())
             .map_err(|source| ReplayWalError::RepairWal {
-                path: wal_path.to_path_buf(),
+                path: wal_path.clone(),
                 source: source.to_string(),
             })?;
         recovery.repaired = true;
     }
     Ok(recovery)
-}
-
-fn read_bounded_file(path: &Path, max_bytes: u64) -> io::Result<Vec<u8>> {
-    let file = File::open(path)?;
-    let metadata_len = file.metadata()?.len();
-    if metadata_len > max_bytes {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            format!("file length {metadata_len} exceeds limit {max_bytes}"),
-        ));
-    }
-    let capacity = usize::try_from(metadata_len).unwrap_or(usize::MAX);
-    let mut bytes = Vec::with_capacity(capacity);
-    file.take(max_bytes.saturating_add(1))
-        .read_to_end(&mut bytes)?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
-        return Err(io::Error::new(
-            io::ErrorKind::FileTooLarge,
-            format!("file grew beyond limit {max_bytes} during read"),
-        ));
-    }
-    Ok(bytes)
 }
 
 fn ensure_appendable(recovery: &ReplayWalRecovery) -> Result<(), ReplayWalError> {
@@ -1668,45 +1944,6 @@ fn encode_record(seq: u64, record_type: u8, payload: &[u8]) -> Result<Vec<u8>, R
     record.extend_from_slice(payload);
     record.extend_from_slice(&payload_crc.to_le_bytes());
     Ok(record)
-}
-
-fn append_and_sync(wal_path: &Path, bytes: &[u8]) -> Result<(), ReplayWalError> {
-    let mut file = OpenOptions::new()
-        .append(true)
-        .open(wal_path)
-        .map_err(|source| ReplayWalError::OpenWal {
-            path: wal_path.to_path_buf(),
-            source: source.to_string(),
-        })?;
-    file.write_all(bytes)
-        .map_err(|source| ReplayWalError::WriteWal {
-            path: wal_path.to_path_buf(),
-            source: source.to_string(),
-        })?;
-    file.sync_all().map_err(|source| ReplayWalError::SyncWal {
-        path: wal_path.to_path_buf(),
-        source: source.to_string(),
-    })
-}
-
-#[cfg(not(windows))]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    File::open(path)?.sync_all()
-}
-
-#[cfg(windows)]
-fn sync_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::fs::OpenOptionsExt as _;
-
-    // Windows requires FILE_FLAG_BACKUP_SEMANTICS to open a directory handle.
-    // File::sync_all then maps to FlushFileBuffers on that durable handle.
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(path)?
-        .sync_all()
 }
 
 fn decode_prefix(wal_path: &Path, bytes: &[u8]) -> ReplayWalRecovery {
@@ -1916,12 +2153,96 @@ fn payload_crc32c(header_prefix: &[u8], payload: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    struct TestRoot(PathBuf);
+
+    impl TestRoot {
+        fn new() -> Self {
+            let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("forge-replay-wal-lock-{}-{id}", std::process::id()));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).expect("create test root");
+            Self(path)
+        }
+    }
+
+    impl Drop for TestRoot {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
     use super::*;
+    use std::fs::OpenOptions;
 
     fn token(character: char) -> String {
         format!("sha256:{}", character.to_string().repeat(64))
     }
 
+    #[test]
+    fn retained_lock_binds_root_recovers_without_relocking_and_releases_on_drop() {
+        let root = TestRoot::new();
+        let other = TestRoot::new();
+        initialize_replay_wal(&root.0).expect("initialize replay WAL");
+        initialize_replay_wal(&other.0).expect("initialize other replay WAL");
+        let guard = acquire_replay_wal_retained_lock(&root.0).expect("acquire retained lock");
+
+        let second = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(replay_wal_lock_path(&root.0))
+            .expect("open second lock handle");
+        let error = FileExt::try_lock(&second).expect_err("retained guard must block");
+        assert!(matches!(error, fs4::TryLockError::WouldBlock));
+
+        let recovery = recover_replay_wal_under_retained_lock(&root.0, &guard, false)
+            .expect("recover under retained lock");
+        assert!(recovery.is_clean());
+        let mismatch = recover_replay_wal_under_retained_lock(&other.0, &guard, false)
+            .expect_err("mismatched root must fail");
+        assert!(matches!(mismatch, ReplayWalError::ReadWal { .. }));
+
+        drop(guard);
+        FileExt::try_lock(&second).expect("drop must release lock");
+        FileExt::unlock(&second).expect("unlock second handle");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_replay_wal_append_on_a_rejects_replacement_b_without_writing_either() {
+        let root = TestRoot::new();
+        initialize_replay_wal(&root.0).expect("initialize A");
+        let guard = acquire_replay_wal_retained_lock(&root.0).expect("lock A");
+        let displaced = root.0.with_extension("inode-a");
+        fs::rename(&root.0, &displaced).expect("displace A");
+        fs::create_dir_all(root.0.join("wal")).expect("create B WAL directory");
+        fs::create_dir_all(root.0.join("locks")).expect("create B lock directory");
+        fs::copy(
+            replay_wal_manifest_path(&displaced),
+            replay_wal_manifest_path(&root.0),
+        )
+        .expect("shape B manifest");
+        fs::write(replay_wal_path(&root.0), b"B-sentinel").expect("shape B WAL");
+        let a_before = fs::read(replay_wal_path(&displaced)).expect("read A");
+        let b_before = fs::read(replay_wal_path(&root.0)).expect("read B");
+
+        assert!(guard.append_wal(b"never-published").is_err());
+        assert_eq!(
+            fs::read(replay_wal_path(&displaced)).expect("read A after"),
+            a_before
+        );
+        assert_eq!(
+            fs::read(replay_wal_path(&root.0)).expect("read B after"),
+            b_before
+        );
+
+        drop(guard);
+        fs::remove_dir_all(&root.0).expect("remove B");
+        fs::rename(displaced, &root.0).expect("restore A");
+    }
     #[test]
     fn decoder_stops_before_record_capacity_allocation() {
         let first = ReplayWalPayload {
