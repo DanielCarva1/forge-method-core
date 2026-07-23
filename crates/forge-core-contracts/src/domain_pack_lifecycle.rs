@@ -19,6 +19,9 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub const DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION: &str =
+    "forge-domain-pack-operator-source-binding-v2";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DomainPackCompatibilityReportDocument {
@@ -164,8 +167,27 @@ pub struct DomainPackLifecycleRequest {
     pub principal_id: StableId,
     pub operation: DomainPackLifecycleOperation,
     pub expected_state: DomainPackExpectedLifecycleState,
+    pub operator_source_binding: DomainPackOperatorSourceBinding,
     pub resolution_request_digest: String,
     pub project_snapshot_digest: String,
+}
+
+/// Exact operator-controlled source paths selected for one immutable lifecycle
+/// generation. Paths are evidence only: the CLI/TCB must retain and reverify the
+/// external files before this candidate binding can participate in admission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DomainPackOperatorSourceBinding {
+    pub schema_version: String,
+    pub generation: u64,
+    pub operator_root: String,
+    pub trust_policy_file: String,
+    pub registry_file: String,
+    pub reviewer_registry_file: String,
+    pub reviewed_registry_file: String,
+    pub capability_registry_file: String,
+    pub sandbox_policy_file: String,
+    pub artifact_root: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -204,6 +226,7 @@ pub enum DomainPackExpectedLifecycleState {
         generation: u64,
         active_lock_digest: String,
         lifecycle_head_digest: String,
+        operator_source_binding_digest: String,
         project_snapshot_digest: String,
     },
 }
@@ -233,6 +256,7 @@ pub struct DomainPackInitializedProjectDerivationInput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DomainPackInitializedProjectGenerationMaterial {
+    pub operator_source_binding: DomainPackOperatorSourceBinding,
     pub requirements: DomainPackProjectRequirementsDocument,
     pub catalog: DomainPackAcquisitionCatalogDocument,
     pub resolution_request: DomainPackResolutionRequestDocument,
@@ -442,6 +466,7 @@ pub struct DomainPackActivePointer {
     pub generation: u64,
     pub active_lock_digest: String,
     pub lifecycle_head_digest: String,
+    pub operator_source_binding_digest: String,
     pub pointer_digest: String,
 }
 
@@ -470,6 +495,7 @@ pub struct DomainPackLifecycleLedgerRecord {
     pub from_pointer_digest: Option<String>,
     pub to_generation: u64,
     pub active_lock_digest: String,
+    pub operator_source_binding_digest: String,
     pub compatibility_report_digest: String,
     pub principal_id: StableId,
     pub observed_at_unix: u64,
@@ -499,6 +525,8 @@ pub struct DomainPackLifecycleReceipt {
     pub reviewed_registry_digest: String,
     pub capability_registry_digest: String,
     pub sandbox_policy_digest: String,
+    pub from_operator_source_binding_digest: Option<String>,
+    pub to_operator_source_binding_digest: String,
     pub from_state: Option<DomainPackActivePointer>,
     pub to_state: DomainPackActivePointer,
     pub prior_ledger_head_digest: Option<String>,
@@ -522,6 +550,7 @@ pub struct DomainPackRecoveryReport {
     pub status: DomainPackRecoveryStatus,
     pub active_state: Option<DomainPackActivePointer>,
     pub lifecycle_head_digest: Option<String>,
+    pub operator_source_binding_digest: Option<String>,
     pub repaired_artifact_refs: Vec<String>,
     pub issues: Vec<DomainPackLifecycleIssue>,
 }

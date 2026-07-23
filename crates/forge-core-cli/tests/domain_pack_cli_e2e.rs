@@ -34,6 +34,32 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+fn test_operator_source_binding(
+    expected: &DomainPackExpectedLifecycleState,
+) -> DomainPackOperatorSourceBinding {
+    let generation = match expected {
+        DomainPackExpectedLifecycleState::Uninitialized { .. } => 0,
+        DomainPackExpectedLifecycleState::Initialized { generation, .. } => generation + 1,
+    };
+    let operator_root = std::env::temp_dir().join("forge-domain-pack-cli-test-operator");
+    let path = |name: &str| operator_root.join(name).display().to_string();
+    DomainPackOperatorSourceBinding {
+        schema_version: DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION.to_owned(),
+        generation,
+        operator_root: operator_root.display().to_string(),
+        trust_policy_file: path("trust-policy.yaml"),
+        registry_file: path("registry.yaml"),
+        reviewer_registry_file: path("reviewers.yaml"),
+        reviewed_registry_file: path("reviewed.yaml"),
+        capability_registry_file: path("capabilities.yaml"),
+        sandbox_policy_file: path("sandbox.yaml"),
+        artifact_root: std::env::temp_dir()
+            .join("forge-domain-pack-cli-test-artifacts")
+            .display()
+            .to_string(),
+    }
+}
+
 fn copy_tree(source: &Path, target: &Path) {
     fs::create_dir_all(target).expect("create fixture destination");
     for entry in fs::read_dir(source).expect("read fixture source") {
@@ -1340,6 +1366,7 @@ fn artifact_guard_preflight(
             principal_id: StableId("principal.fixture".to_owned()),
             operation,
             expected_state: expected_state.clone(),
+            operator_source_binding: test_operator_source_binding(&expected_state),
             resolution_request_digest: digest(90_002),
             project_snapshot_digest,
         },

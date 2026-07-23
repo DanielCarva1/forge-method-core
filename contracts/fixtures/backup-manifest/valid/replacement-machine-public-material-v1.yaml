@@ -36,7 +36,15 @@
           "bundle_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
           "policy_set_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
         },
-        "domain_pack_generation": null,
+        "domain_pack_generation": {
+          "generation": 0,
+          "active_lock_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "composition_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+          "base_core_bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+          "supply_chain_registry_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "reviewer_registry_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "reviewed_registry_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
         "receipt_context_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       },
       "governance_ledger_head_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -53,9 +61,18 @@
       },
       "memory_store": "before_initialization",
       "domain_pack_store": {
-        "status": "no_active_generation",
-        "operator_sources_present": true,
-        "rebase_plan_present": false
+        "status": "active",
+        "rebase_plan_present": false,
+        "active_generation": 0,
+        "generations": [
+          {
+            "generation": 0,
+            "record_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "receipt_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "operator_source_binding_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+            "object_raw_digests": []
+          }
+        ]
       },
       "workflow_principal_registry": "provisioned",
       "workflow_broker_registry": "provisioned",
@@ -76,9 +93,20 @@
       },
       "research_store": "before_initialization",
       "governance_conflict_store": "before_initialization",
-      "domain_pack_operator_sources": {
-        "schema_version": "forge-domain-pack-operator-sources-v1",
-        "file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "domain_pack_learning_store": {
+        "status": "before_first_capture"
+      },
+      "isolation_store": {
+        "status": "empty"
+      },
+      "domain_pack_supply_chain_anchor": "provisioned",
+      "domain_pack_reviewed_learning_anchor": "provisioned",
+      "declared_effect_outputs": [],
+      "active_domain_pack_source_binding": {
+        "schema_version": "forge-domain-pack-operator-source-binding-v2",
+        "generation": 0,
+        "binding_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+        "binding_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "operator_root_identity": "operator://domain-pack/app",
         "trust_policy_file": "operator/trust-policy.yaml",
         "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
@@ -93,23 +121,13 @@
         "sandbox_policy_file": "operator/sandbox.yaml",
         "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "artifact_root": "operator/artifacts"
-      },
-      "domain_pack_learning_store": {
-        "status": "before_first_capture"
-      },
-      "isolation_store": {
-        "status": "empty"
-      },
-      "domain_pack_supply_chain_anchor": "provisioned",
-      "domain_pack_reviewed_learning_anchor": "provisioned",
-      "declared_effect_outputs": []
+      }
     },
     "snapshot_protocol": {
       "mode": "cooperative_locks_with_producer_quiescence_and_stable_enumeration",
       "lock_order": [
         "external_domain_pack_supply_chain_anchor",
         "external_domain_pack_reviewed_learning_anchor",
-        "domain_pack_operator_sources",
         "domain_pack_rebase_plan",
         "domain_pack_lifecycle",
         "domain_pack_learning_capture",
@@ -162,10 +180,94 @@
         "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
       {
-        "material": "domain_pack_operator_sources",
-        "logical_path": "sidecar/.forge-method/domain-packs/operator-sources.yaml",
+        "material": "domain_pack_generation_operator_source_binding",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/operator-source-binding.yaml",
         "entry_type": "regular_file",
         "byte_length": 18,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_active_pointer",
+        "logical_path": "sidecar/.forge-method/domain-packs/active.lock.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 19,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_ledger_record",
+        "logical_path": "sidecar/.forge-method/domain-packs/ledger/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 20,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_manifest",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/generation.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 21,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_catalog",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 22,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_lock",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/lock.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 23,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_preflight",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preflight.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 24,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_compatibility",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/compatibility.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 25,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_receipt",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/receipt.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 26,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_resolution_request",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/resolution-request.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 27,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_composition_request",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/composition-request.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 28,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_generation_trust_input",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/trust-input.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 29,
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "material": "domain_pack_published_receipt",
+        "logical_path": "sidecar/.forge-method/domain-packs/receipts/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 30,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
@@ -244,6 +346,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:4ca8fd5182968ce37937478e1c3e2b0bf43d0c82ebbf3b9529139c2111e81ff0"
+    "manifest_set_digest": "sha256:cf900156830b34f8f49937502d7d34503890cb2ee089a24963ad331ec419f1b7"
   }
 }

@@ -101,12 +101,13 @@ use forge_core_domain_pack_tcb::{
 use forge_core_store::claim_wal::{
     project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
 };
+use forge_core_store::retained_crash_replace::reconcile_file_crash_safe_under_owned_lock;
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::workflow_action_replay::{
     begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
     workflow_action_replay_origin_fingerprint, WorkflowActionReplayError,
 };
-use forge_core_store::{sha256_content_hash, ReferenceIndexBuilder};
+use forge_core_store::{sha256_content_hash, ReferenceIndexBuilder, RetainedEffectStoreRoot};
 use forge_core_validate::{
     validate_completion, validate_health_recovery, validate_request, ReferenceIndex, ReferenceKind,
 };
@@ -137,6 +138,7 @@ const WORKFLOW_AUTHORIZATION_ACTION_PACKET_SCHEMA_VERSION: &str =
 const WORKFLOW_AUTHORIZATION_PREPARATION_TTL_SECONDS: u64 = 300;
 const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
 const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
+const DOMAIN_PACK_REBASE_PLAN_LOCK_RELATIVE_PATH: &str = "locks/domain-packs.rebase-plan.lock";
 #[cfg(test)]
 const TEST_REPLAY_APPEND_FAILURE_MARKER: &str = ".test-fail-replay-append-after-ledger";
 #[cfg(test)]
@@ -708,6 +710,7 @@ struct WorkflowDomainPackRebaseMaterial {
     lifecycle_pointer_digest: String,
     lifecycle_head_digest: String,
     active_lock_digest: String,
+    operator_source_binding_digest: String,
     composition_digest: String,
     supply_chain_registry_digest: String,
     reviewer_registry_digest: String,
@@ -760,6 +763,7 @@ impl LockedWorkflowDomainPackContext {
             lifecycle_pointer_digest: view.lifecycle_pointer_digest().to_owned(),
             lifecycle_head_digest: view.lifecycle_head_digest().to_owned(),
             active_lock_digest: view.lock_digest().to_owned(),
+            operator_source_binding_digest: view.operator_source_binding_digest().to_owned(),
             composition_digest: view.composition_digest().to_owned(),
             supply_chain_registry_digest: view.supply_chain_registry_digest().to_owned(),
             reviewer_registry_digest: view.reviewer_registry_digest().to_owned(),
@@ -1979,25 +1983,38 @@ impl WorkflowGovernanceProjectAdapter {
             .binding
             .state_root
             .join(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH);
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-            Err(error) => {
-                return Err(WorkflowGovernanceAdapterError::Path {
-                    field: "domain_pack_rebase_plan",
-                    path,
-                    source: error.to_string(),
-                });
-            }
+        let bytes = {
+            let retained_root = RetainedEffectStoreRoot::acquire(&self.binding.state_root)
+                .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
+                    source: format!("cannot retain Domain Pack rebase-plan root: {error}"),
+                })?;
+            let lock = retained_root
+                .acquire_effect_store_lock(DOMAIN_PACK_REBASE_PLAN_LOCK_RELATIVE_PATH)
+                .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
+                    source: format!("cannot lock Domain Pack rebase plan: {error}"),
+                })?;
+            let session = reconcile_file_crash_safe_under_owned_lock(
+                lock,
+                Path::new(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH),
+                DOMAIN_PACK_REBASE_PLAN_MAX_BYTES,
+            )
+            .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
+                source: format!("cannot recover Domain Pack rebase plan: {error}"),
+            })?;
+            let Some(mut read) = session.read_exact().map_err(|error| {
+                WorkflowGovernanceAdapterError::ProjectBinding {
+                    source: format!("cannot retain exact Domain Pack rebase plan: {error}"),
+                }
+            })?
+            else {
+                return Ok(false);
+            };
+            read.revalidate()
+                .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
+                    source: format!("Domain Pack rebase plan changed after recovery: {error}"),
+                })?;
+            read.raw_bytes().to_vec()
         };
-        if !metadata.is_file() || metadata.len() > DOMAIN_PACK_REBASE_PLAN_MAX_BYTES {
-            return Err(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch);
-        }
-        let bytes = fs::read(&path).map_err(|error| WorkflowGovernanceAdapterError::Path {
-            field: "domain_pack_rebase_plan",
-            path: path.clone(),
-            source: error.to_string(),
-        })?;
         let plan: DomainPackRebasePlanDocument =
             yaml_serde::from_slice(&bytes).map_err(|error| {
                 WorkflowGovernanceAdapterError::ProjectBinding {
@@ -2019,7 +2036,12 @@ impl WorkflowGovernanceProjectAdapter {
             .domain_pack_rebase_plan
             .exact_cas
             .expected_generation
-            .saturating_add(1);
+            .checked_add(1)
+            .ok_or(WorkflowGovernanceAdapterError::DomainPackRebaseCasMismatch)?;
+        let expected_source_binding_digest = &plan
+            .domain_pack_rebase_plan
+            .exact_cas
+            .expected_operator_source_binding_digest;
         let lifecycle_is_committed_target = matches!(
             &source.lifecycle_operation,
             DomainPackLifecycleOperation::RebaseCore {
@@ -2030,6 +2052,9 @@ impl WorkflowGovernanceProjectAdapter {
                 && expected_from_core_digest == &plan.domain_pack_rebase_plan.source_core.bundle_digest
                 && target_core_digest == &plan.domain_pack_rebase_plan.target_core.bundle_digest
                 && source.pointer.domain_pack_active_pointer.generation == expected_generation
+                && source.operator_source_binding.generation == expected_generation
+                && source.from_operator_source_binding_digest.as_ref()
+                    == Some(expected_source_binding_digest)
         );
         drop(lifecycle);
         if !lifecycle_is_committed_target {
@@ -2080,6 +2105,7 @@ impl WorkflowGovernanceProjectAdapter {
             lifecycle_pointer_digest: material.lifecycle_pointer_digest,
             lifecycle_head_digest: material.lifecycle_head_digest,
             active_lock_digest: material.active_lock_digest,
+            operator_source_binding_digest: material.operator_source_binding_digest,
             composition_digest: material.composition_digest,
             supply_chain_registry_digest: material.supply_chain_registry_digest,
             reviewer_registry_digest: material.reviewer_registry_digest,

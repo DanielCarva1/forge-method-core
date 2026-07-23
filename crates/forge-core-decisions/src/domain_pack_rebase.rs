@@ -123,6 +123,7 @@ pub fn plan_domain_pack_rebase(
         expected_lifecycle_pointer_digest: input.lifecycle_pointer_digest.clone(),
         expected_lifecycle_head_digest: input.lifecycle_head_digest.clone(),
         expected_active_lock_digest: input.active_lock_digest.clone(),
+        expected_operator_source_binding_digest: input.operator_source_binding_digest.clone(),
         expected_composition_digest: input.composition_digest.clone(),
         expected_supply_chain_registry_digest: input.supply_chain_registry_digest.clone(),
         expected_reviewer_registry_digest: input.reviewer_registry_digest.clone(),
@@ -274,6 +275,10 @@ fn validate_input(input: &DomainPackRebasePlanInput) -> Result<(), DomainPackReb
             input.lifecycle_head_digest.as_str(),
         ),
         ("active lock digest", input.active_lock_digest.as_str()),
+        (
+            "operator source binding digest",
+            input.operator_source_binding_digest.as_str(),
+        ),
         ("composition digest", input.composition_digest.as_str()),
         (
             "supply-chain registry digest",

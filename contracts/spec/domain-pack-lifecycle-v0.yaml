@@ -36,6 +36,7 @@ domain_pack_lifecycle_spec:
       - "domain_pack_resolution_projection"
       - "domain_pack_exact_lock"
       - "domain_pack_compatibility_report"
+      - "domain_pack_operator_source_binding"
       - "domain_pack_lifecycle_request"
       - "domain_pack_lifecycle_preflight"
       - "domain_pack_active_pointer"
@@ -205,7 +206,17 @@ domain_pack_lifecycle_spec:
       - "rollback"
     expected_state: >-
       Every request binds the project snapshot plus either uninitialized state
-      or the exact generation, active lock digest, and lifecycle ledger head.
+      or the exact generation, active lock digest, lifecycle ledger head, and
+      canonical operator-source-binding digest.
+    operator_source_transaction: >-
+      Every lifecycle request carries one data-only public source binding whose
+      generation equals the target lifecycle generation. The canonical binding
+      digest is closed through preflight, immutable generation material, ledger,
+      active pointer, receipt, completion, recovery, rebase CAS, and backup.
+      Successors retain the current public paths and increment only generation;
+      rollback retains current operator custody rather than resurrecting the
+      historical target generation's paths. External private keys remain solely
+      in their owner-specific procedure and never enter Forge state or backups.
     preflight: >-
       Under the retained lifecycle lock, the kernel consumes both opaque
       supply-chain and reviewed-registry snapshots, performs the exact dual-axis
@@ -237,13 +248,16 @@ domain_pack_lifecycle_spec:
       active_pointer: "active.lock.yaml"
       immutable_blobs: "objects/<raw-sha256>"
       immutable_generations: "generations/<generation>-<record-digest>/"
+      generation_operator_source_binding: "generations/<generation>-<record-digest>/operator-source-binding.yaml"
       immutable_ledger_records: "ledger/<record-digest>.yaml"
       receipts: "receipts/<receipt-digest>.yaml"
       staging: "staging/<record-digest>/"
       lock: "../locks/domain-packs.lifecycle.lock"
     invariant: >-
-      Complete immutable generation plus one crash-recoverable active pointer.
-      Readers acquire the lifecycle lock and reconcile before reading.
+      Complete immutable generation, including exactly one generation-local
+      operator-source binding, plus one crash-recoverable active pointer. No
+      ambient domain-packs/operator-sources.yaml authority exists. Readers
+      acquire the lifecycle lock and reconcile before reading.
     commit_order:
       - "recover and verify current active pointer and ledger"
       - "compare expected state under the retained OS lock"

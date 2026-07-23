@@ -9,7 +9,7 @@ use forge_core_contracts::{
 };
 
 const ROOT: &str = "../../docs/fixtures/domain-pack-lifecycle-v0";
-const FIXTURE_SCHEMA_VERSION: &str = "0.3";
+const FIXTURE_SCHEMA_VERSION: &str = "0.4";
 
 fn fixture(path: &str) -> String {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(ROOT);
@@ -17,7 +17,7 @@ fn fixture(path: &str) -> String {
 }
 
 #[test]
-fn representative_v03_documents_are_closed_and_candidate_only() {
+fn representative_v04_documents_are_closed_and_candidate_only() {
     let trust: DomainPackTrustPolicyDocument =
         yaml_serde::from_str(&fixture("valid/trust-policy.yaml")).expect("trust policy");
     let registry: DomainPackSupplyChainRegistryDocument =

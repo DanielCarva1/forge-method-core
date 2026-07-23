@@ -28,7 +28,7 @@ use forge_core_contracts::{
     DomainPackLifecyclePreflightDocument, DomainPackLifecyclePreflightStatus,
     DomainPackLifecycleReceiptDocument, DomainPackLifecycleRequest,
     DomainPackLifecycleRequestDocument, DomainPackLockedPackage, DomainPackManifestDocument,
-    DomainPackPackageRevocation, DomainPackRebasePlanDocument,
+    DomainPackOperatorSourceBinding, DomainPackPackageRevocation, DomainPackRebasePlanDocument,
     DomainPackRemoteAcquisitionPlanDocument, DomainPackRemoteAcquisitionRequestDocument,
     DomainPackRemoteArtifactMediaType, DomainPackRemoteCacheProjectionDocument,
     DomainPackRemoteFetchEvidenceDocument, DomainPackRemoteFetchReceiptDocument,
@@ -39,7 +39,8 @@ use forge_core_contracts::{
     DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument,
     DurableAssuranceEpochBinding, RepoPath, StableId, DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION,
     DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
-    DOMAIN_PACK_REMOTE_ACQUISITION_SCHEMA_VERSION, MAX_DOMAIN_PACK_REMOTE_CACHE_ENTRIES,
+    DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION, DOMAIN_PACK_REMOTE_ACQUISITION_SCHEMA_VERSION,
+    MAX_DOMAIN_PACK_REMOTE_CACHE_ENTRIES,
 };
 use forge_core_decisions::domain_pack_acquisition::derive_domain_pack_initialized_project_lifecycle;
 use forge_core_decisions::{
@@ -62,7 +63,7 @@ use forge_core_domain_pack_tcb::{
     domain_pack_project_snapshot_digest, lock_domain_pack_lifecycle,
     lock_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
     DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
-    DomainPackLifecycleStoreError, DOMAIN_PACK_MAX_DOCUMENT_BYTES,
+    DomainPackLifecycleStoreError, LockedDomainPackLifecycle, DOMAIN_PACK_MAX_DOCUMENT_BYTES,
 };
 use forge_core_store::{
     acquire_effect_store_lock, backup::BackupExpectedMember,
@@ -227,18 +228,24 @@ struct DomainPackRegistryAnchorHead {
     cumulative_revocation_digest: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DomainPackOperatorSourceBinding {
-    schema_version: String,
-    operator_root: String,
-    trust_policy_file: String,
-    registry_file: String,
-    reviewer_registry_file: String,
-    reviewed_registry_file: String,
-    capability_registry_file: String,
-    sandbox_policy_file: String,
-    artifact_root: String,
+#[derive(Debug)]
+struct CanonicalDomainPackOperatorSources {
+    operator_root: PathBuf,
+    trust_policy_file: PathBuf,
+    registry_file: PathBuf,
+    reviewer_registry_file: PathBuf,
+    reviewed_registry_file: PathBuf,
+    capability_registry_file: PathBuf,
+    sandbox_policy_file: PathBuf,
+    artifact_root: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SelectedDomainPackOperatorSources {
+    pointer: DomainPackActivePointerDocument,
+    binding: DomainPackOperatorSourceBinding,
+    relative_path: String,
+    raw_sha256: String,
 }
 
 /// Opaque retained authority for the external supply-chain anchor.
@@ -276,15 +283,6 @@ impl OperatorRegistryAnchorSnapshot {
     pub(crate) fn raw_anchor_sha256(&self) -> &str {
         &self.raw_anchor_sha256
     }
-}
-
-/// Opaque retained authority for `domain-packs/operator-sources.yaml`.
-pub(crate) struct LockedDomainPackOperatorSources {
-    root_identity: crate::io_util::RetainedDirectoryIdentity,
-    lock_parent_identity: crate::io_util::RetainedDirectoryIdentity,
-    target_parent_identity: crate::io_util::RetainedDirectoryIdentity,
-    reconciliation: Option<OwnedRetainedCrashReplaceSession>,
-    exact_read: Option<OwnedRetainedCrashReplaceRead>,
 }
 
 /// Opaque retained authority for `domain-packs/rebase-plan.yaml`.
@@ -329,10 +327,7 @@ impl LockedDomainPackBackupAuthorities {
 }
 
 const DOMAIN_PACK_REGISTRY_ANCHOR_SCHEMA_VERSION: &str = "forge-domain-pack-registry-anchor-v2";
-const DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION: &str = "forge-domain-pack-operator-sources-v1";
-const DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH: &str = "domain-packs/operator-sources.yaml";
-const DOMAIN_PACK_OPERATOR_SOURCE_LOCK_RELATIVE_PATH: &str =
-    "locks/domain-packs.operator-sources.lock";
+const LEGACY_DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH: &str = "domain-packs/operator-sources.yaml";
 const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
 const DOMAIN_PACK_REBASE_PLAN_LOCK_RELATIVE_PATH: &str = "locks/domain-packs.rebase-plan.lock";
 const DOMAIN_PACK_REGISTRY_ANCHOR_RELATIVE_PATH: &str = ".forge-domain-pack-registry-anchor.yaml";
@@ -1159,6 +1154,7 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
     let derived = derived.domain_pack_acquisition_derived_inputs;
 
     let controlled_roots = canonical_lifecycle_roots(&project_root, &artifact_root, &state_root)?;
+    reject_legacy_domain_pack_operator_sources(&controlled_roots.state)?;
     let trust_policy_file = trusted_external_file(
         &trust_policy_file,
         "operator trust policy",
@@ -1220,6 +1216,18 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
     ] {
         require_direct_operator_file(path, &operator_anchor.operator_root, label)?;
     }
+    let operator_source_binding = DomainPackOperatorSourceBinding {
+        schema_version: DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION.to_owned(),
+        generation: 0,
+        operator_root: normalized_path(&operator_anchor.operator_root),
+        trust_policy_file: normalized_path(&trust_policy_file),
+        registry_file: normalized_path(&registry_file),
+        reviewer_registry_file: normalized_path(&reviewer_registry_file),
+        reviewed_registry_file: normalized_path(&reviewed_registry_file),
+        capability_registry_file: normalized_path(&capability_registry_file),
+        sandbox_policy_file: normalized_path(&sandbox_policy_file),
+        artifact_root: normalized_path(&controlled_roots.artifacts),
+    };
     let now_unix = trusted_now_unix()?;
     let verified_snapshot =
         verify_domain_pack_supply_chain_snapshot(&trust_policy, &registry, now_unix).map_err(
@@ -1243,21 +1251,6 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
         &reviewed_registry_file,
         now_unix,
     )?;
-    persist_domain_pack_operator_sources(
-        &state_root,
-        &DomainPackOperatorSourceBinding {
-            schema_version: DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION.to_owned(),
-            operator_root: normalized_path(&operator_root),
-            trust_policy_file: normalized_path(&trust_policy_file),
-            registry_file: normalized_path(&registry_file),
-            reviewer_registry_file: normalized_path(&reviewer_registry_file),
-            reviewed_registry_file: normalized_path(&reviewed_registry_file),
-            capability_registry_file: normalized_path(&capability_registry_file),
-            sandbox_policy_file: normalized_path(&sandbox_policy_file),
-            artifact_root: normalized_path(&controlled_roots.artifacts),
-        },
-    )?;
-
     let resolution_request = derived.resolution_request;
     let composition_request = derived.composition_request;
     let mut resolution = resolve_domain_packs(&resolution_request, &registry);
@@ -1496,6 +1489,7 @@ fn run_acquisition_apply(args: &[String]) -> Result<(), ExitError> {
             principal_id,
             operation: operation.clone(),
             expected_state: expected_state.clone(),
+            operator_source_binding,
             resolution_request_digest: canonical_digest(&resolution_request)?,
             project_snapshot_digest: project_snapshot_digest.clone(),
         },
@@ -1633,59 +1627,35 @@ pub(crate) fn apply_domain_pack_core_rebase(
             "domain-pack: rebase plan is not an apply-authorized target-Core plan",
         ));
     }
-    let sources = load_domain_pack_operator_sources(state_root)?;
-    let artifact_root = PathBuf::from(&sources.artifact_root);
-    let controlled_roots = canonical_lifecycle_roots(project_root, &artifact_root, state_root)?;
-    let trust_policy_file = trusted_external_file(
-        Path::new(&sources.trust_policy_file),
-        "operator trust policy",
-        &controlled_roots,
-    )?;
-    let registry_file = trusted_external_file(
-        Path::new(&sources.registry_file),
-        "signed supply-chain registry",
-        &controlled_roots,
-    )?;
-    let reviewer_registry_file = trusted_external_file(
-        Path::new(&sources.reviewer_registry_file),
-        "signed reviewer registry",
-        &controlled_roots,
-    )?;
-    let reviewed_registry_file = trusted_external_file(
-        Path::new(&sources.reviewed_registry_file),
-        "dual-signed reviewed registry",
-        &controlled_roots,
-    )?;
-    let capability_registry_file = trusted_external_file(
-        Path::new(&sources.capability_registry_file),
-        "runtime capability registry",
-        &controlled_roots,
-    )?;
-    let sandbox_policy_file = trusted_external_file(
-        Path::new(&sources.sandbox_policy_file),
-        "capability sandbox policy",
-        &controlled_roots,
-    )?;
-    let operator_root = std::fs::canonicalize(&sources.operator_root).map_err(|error| {
-        ExitError::failed(format!(
-            "domain-pack: cannot resolve persisted operator root: {error}"
-        ))
-    })?;
-    if normalized_path(&operator_root) != sources.operator_root {
-        return Err(ExitError::invalid_value(
-            "domain-pack: persisted operator root is no longer canonical",
+    reject_legacy_domain_pack_operator_sources(state_root)?;
+    let planned_lifecycle = lock_domain_pack_lifecycle_for_project(project_root, state_root)
+        .map_err(map_lifecycle_error)?;
+    let planned_sources =
+        selected_domain_pack_operator_sources(&planned_lifecycle)?.ok_or_else(|| {
+            ExitError::conflict("domain-pack: active generation has no source binding")
+        })?;
+    drop(planned_lifecycle);
+    if planned_sources
+        .pointer
+        .domain_pack_active_pointer
+        .operator_source_binding_digest
+        != plan.exact_cas.expected_operator_source_binding_digest
+    {
+        return Err(ExitError::conflict(
+            "domain-pack: operator-source binding changed after rebase planning",
         ));
     }
-    for (path, label) in [
-        (&trust_policy_file, "operator trust policy"),
-        (&registry_file, "signed supply-chain registry"),
-        (&reviewer_registry_file, "signed reviewer registry"),
-        (&reviewed_registry_file, "dual-signed reviewed registry"),
-        (&capability_registry_file, "runtime capability registry"),
-        (&sandbox_policy_file, "capability sandbox policy"),
-    ] {
-        require_direct_operator_file(path, &operator_root, label)?;
-    }
+    let artifact_root = PathBuf::from(&planned_sources.binding.artifact_root);
+    let controlled_roots = canonical_lifecycle_roots(project_root, &artifact_root, state_root)?;
+    let resolved_sources =
+        resolve_domain_pack_operator_sources(&planned_sources.binding, &controlled_roots)?;
+    let operator_root = resolved_sources.operator_root.clone();
+    let trust_policy_file = resolved_sources.trust_policy_file.clone();
+    let registry_file = resolved_sources.registry_file.clone();
+    let reviewer_registry_file = resolved_sources.reviewer_registry_file.clone();
+    let reviewed_registry_file = resolved_sources.reviewed_registry_file.clone();
+    let capability_registry_file = resolved_sources.capability_registry_file.clone();
+    let sandbox_policy_file = resolved_sources.sandbox_policy_file.clone();
     let project_snapshot_digest = domain_pack_project_snapshot_digest(&controlled_roots.project)
         .map_err(map_lifecycle_error)?;
     if project_snapshot_digest != plan.exact_cas.expected_project_snapshot_digest {
@@ -1750,20 +1720,41 @@ pub(crate) fn apply_domain_pack_core_rebase(
     let mut lifecycle =
         lock_domain_pack_lifecycle_for_project(&controlled_roots.project, &controlled_roots.state)
             .map_err(map_lifecycle_error)?;
+    let selected_sources = selected_domain_pack_operator_sources(&lifecycle)?.ok_or_else(|| {
+        ExitError::conflict("domain-pack: active generation has no source binding")
+    })?;
+    if selected_sources != planned_sources {
+        return Err(ExitError::conflict(
+            "domain-pack: active operator-source selection changed while external authorities were locked",
+        ));
+    }
     let source = lifecycle
         .active_rebase_source()
         .map_err(map_lifecycle_error)?;
+    if source.operator_source_binding != selected_sources.binding {
+        return Err(ExitError::conflict(
+            "domain-pack: active rebase source differs from the selected operator-source binding",
+        ));
+    }
     let source_pointer = &source.pointer.domain_pack_active_pointer;
     if source_pointer.generation != plan.exact_cas.expected_generation
         || source_pointer.pointer_digest != plan.exact_cas.expected_lifecycle_pointer_digest
         || source_pointer.lifecycle_head_digest != plan.exact_cas.expected_lifecycle_head_digest
         || source_pointer.active_lock_digest != plan.exact_cas.expected_active_lock_digest
+        || source_pointer.operator_source_binding_digest
+            != plan.exact_cas.expected_operator_source_binding_digest
         || source.exact_lock.domain_pack_exact_lock.payload.core != plan.source_core
     {
         return Err(ExitError::conflict(
             "domain-pack: active lifecycle generation changed after rebase planning",
         ));
     }
+    let target_generation = source_pointer
+        .generation
+        .checked_add(1)
+        .ok_or_else(|| ExitError::conflict("domain-pack: lifecycle generation is exhausted"))?;
+    let mut successor_source_binding = source.operator_source_binding.clone();
+    successor_source_binding.generation = target_generation;
     let source_lock = &source.exact_lock.domain_pack_exact_lock.payload;
     if source_lock.registry_snapshot_digest != plan.exact_cas.expected_supply_chain_registry_digest
         || source_lock.reviewer_registry_digest != plan.exact_cas.expected_reviewer_registry_digest
@@ -1780,7 +1771,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     let mut resolution_request = source.resolution_request.clone();
     resolution_request.domain_pack_resolution_request.request_id = StableId(format!(
         "domain-pack.rebase.resolution.{}",
-        source_pointer.generation + 1
+        target_generation
     ));
     resolution_request.domain_pack_resolution_request.core = target_core.clone();
     resolution_request
@@ -1873,7 +1864,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
         .domain_pack_composition_request
         .request_id = StableId(format!(
         "domain-pack.rebase.composition.{}",
-        source_pointer.generation + 1
+        target_generation
     ));
     composition_request.domain_pack_composition_request.core = target_core.clone();
     let owned_materials = load_composition_materials(&composition_request, &artifact_root)?;
@@ -2000,6 +1991,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
         generation: source_pointer.generation,
         active_lock_digest: source_pointer.active_lock_digest.clone(),
         lifecycle_head_digest: source_pointer.lifecycle_head_digest.clone(),
+        operator_source_binding_digest: source_pointer.operator_source_binding_digest.clone(),
         project_snapshot_digest: project_snapshot_digest.clone(),
     };
     let lifecycle_request = DomainPackLifecycleRequestDocument {
@@ -2007,13 +1999,14 @@ pub(crate) fn apply_domain_pack_core_rebase(
         domain_pack_lifecycle_request: DomainPackLifecycleRequest {
             request_id: StableId(format!(
                 "domain-pack.rebase.lifecycle.{}",
-                source_pointer.generation + 1
+                target_generation
             )),
             authority: DomainPackCandidateAuthority::CandidateOnly,
             project_id: source_lock.project_id.clone(),
             principal_id,
             operation: operation.clone(),
             expected_state: expected_state.clone(),
+            operator_source_binding: successor_source_binding,
             resolution_request_digest: canonical_digest(&resolution_request)?,
             project_snapshot_digest: project_snapshot_digest.clone(),
         },
@@ -2021,7 +2014,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     let compatibility = evaluate_domain_pack_compatibility(&DomainPackCompatibilityInput {
         report_id: StableId(format!(
             "domain-pack.rebase.compatibility.{}",
-            source_pointer.generation + 1
+            target_generation
         )),
         operation,
         sealed_core: target_core.clone(),
@@ -2060,7 +2053,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
         domain_pack_lifecycle_preflight: DomainPackLifecyclePreflight {
             preflight_id: StableId(format!(
                 "domain-pack.rebase.preflight.{}",
-                source_pointer.generation + 1
+                target_generation
             )),
             authority: DomainPackCandidateAuthority::CandidateOnly,
             request_digest: canonical_digest(&lifecycle_request)?,
@@ -2356,9 +2349,18 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
     let composition_request_file = required(composition_request_file)?;
     let trust_input_file = required(trust_input_file)?;
     let project_root = required(project_root)?;
+    let preflight: DomainPackLifecyclePreflightDocument =
+        read_typed(&preflight_file, "lifecycle preflight")?;
+    let requested_sources = preflight
+        .domain_pack_lifecycle_preflight
+        .request
+        .domain_pack_lifecycle_request
+        .operator_source_binding
+        .clone();
     let now_unix = trusted_now_unix()?;
 
     let controlled_roots = canonical_lifecycle_roots(&project_root, &artifact_root, &state_root)?;
+    reject_legacy_domain_pack_operator_sources(&controlled_roots.state)?;
     let trust_policy_file = trusted_external_file(
         &trust_policy_file,
         "operator trust policy",
@@ -2379,12 +2381,26 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         "dual-signed reviewed registry",
         &controlled_roots,
     )?;
+    let resolved_sources =
+        resolve_domain_pack_operator_sources(&requested_sources, &controlled_roots)?;
+    if trust_policy_file != resolved_sources.trust_policy_file
+        || registry_file != resolved_sources.registry_file
+        || reviewer_registry_file != resolved_sources.reviewer_registry_file
+        || reviewed_registry_file != resolved_sources.reviewed_registry_file
+    {
+        return Err(ExitError::conflict(
+            "domain-pack: supplied operator files differ from the lifecycle request source binding",
+        ));
+    }
 
-    let preflight: DomainPackLifecyclePreflightDocument =
-        read_typed(&preflight_file, "lifecycle preflight")?;
-    let owned_artifacts = load_immutable_artifacts(&preflight, &artifact_root)?;
+    let owned_artifacts = load_immutable_artifacts(&preflight, &controlled_roots.artifacts)?;
     let artifacts = immutable_artifact_views(&owned_artifacts);
     let mut operator_anchor = lock_operator_registry_anchor(&registry_file)?;
+    if operator_anchor.operator_root != resolved_sources.operator_root {
+        return Err(ExitError::conflict(
+            "domain-pack: locked operator root differs from the lifecycle request source binding",
+        ));
+    }
     require_direct_operator_file(
         &reviewer_registry_file,
         &operator_anchor.operator_root,
@@ -2406,6 +2422,22 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         read_typed(&composition_request_file, "composition request")?;
     let trust_input: DomainPackTrustEvaluationInput =
         read_typed(&trust_input_file, "trust evaluation input")?;
+    let capability_registry: DomainPackRuntimeCapabilityRegistryDocument = read_typed(
+        &resolved_sources.capability_registry_file,
+        "runtime capability registry",
+    )?;
+    let sandbox_policy: DomainPackCapabilitySandboxPolicyDocument = read_typed(
+        &resolved_sources.sandbox_policy_file,
+        "capability sandbox policy",
+    )?;
+    if trust_input.capability_registry
+        != capability_registry.domain_pack_runtime_capability_registry
+        || trust_input.sandbox_policy != sandbox_policy.domain_pack_capability_sandbox_policy
+    {
+        return Err(ExitError::conflict(
+            "domain-pack: trust input differs from the lifecycle request capability or sandbox source",
+        ));
+    }
 
     let expected_project_snapshot_digest = &preflight
         .domain_pack_lifecycle_preflight
@@ -2442,7 +2474,7 @@ fn run_lifecycle_authorized(args: &[String], apply: bool) -> Result<(), ExitErro
         &reviewed_registry_file,
         now_unix,
     )?;
-    let owned = load_composition_materials(&composition_request, &artifact_root)?;
+    let owned = load_composition_materials(&composition_request, &resolved_sources.artifact_root)?;
     let materials = material_views(&composition_request, &owned);
     let mut lifecycle =
         lock_domain_pack_lifecycle_for_project(&controlled_roots.project, &controlled_roots.state)
@@ -2958,67 +2990,54 @@ pub(crate) fn lock_domain_pack_backup_authorities(
     state_root: &Path,
     verified_at_unix: u64,
 ) -> Result<LockedDomainPackBackupAuthorities, ExitError> {
-    let source_path = state_root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH);
-    let planned_raw = match crate::io_util::read_regular_file_no_follow_bounded(
-        &source_path,
-        DOMAIN_PACK_MAX_DOCUMENT_BYTES,
-    ) {
-        Ok(raw) => Some(raw),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(error) => {
-            return Err(ExitError::failed(format!(
-                "domain-pack: cannot plan backup operator authority: {error}"
-            )))
+    reject_legacy_domain_pack_operator_sources(state_root)?;
+    let planned_lifecycle = lock_domain_pack_lifecycle_for_project(project_root, state_root)
+        .map_err(map_lifecycle_error)?;
+    let planned_sources = selected_domain_pack_operator_sources(&planned_lifecycle)?;
+    drop(planned_lifecycle);
+
+    let (supply_chain, reviewed_learning) = if let Some(selected) = &planned_sources {
+        let artifact_root = PathBuf::from(&selected.binding.artifact_root);
+        let roots = canonical_lifecycle_roots(project_root, &artifact_root, state_root)?;
+        let resolved = resolve_domain_pack_operator_sources(&selected.binding, &roots)?;
+        let supply = lock_operator_registry_anchor(&resolved.registry_file)?;
+        if supply.operator_root != resolved.operator_root {
+            return Err(ExitError::conflict(
+                "domain-pack: backup supply-chain authority differs from the active source binding",
+            ));
         }
-    };
-    let planned_binding = planned_raw
-        .as_deref()
-        .map(|raw| {
-            yaml_serde::from_slice::<DomainPackOperatorSourceBinding>(raw).map_err(|error| {
-                ExitError::invalid_value(format!(
-                    "domain-pack: operator-source binding is invalid: {error}"
-                ))
-            })
-        })
-        .transpose()?;
-    let (supply_chain, reviewed_learning) = if let Some(binding) = &planned_binding {
-        let operator_root = PathBuf::from(&binding.operator_root);
-        let registry_file = PathBuf::from(&binding.registry_file);
-        let reviewer_registry_file = PathBuf::from(&binding.reviewer_registry_file);
-        let accepted_registry_file = PathBuf::from(&binding.reviewed_registry_file);
-        let supply = lock_operator_registry_anchor(&registry_file)?;
         let reviewed = crate::domain_pack_learning_cmd::lock_reviewed_snapshot_for_lifecycle(
-            &operator_root,
-            &reviewer_registry_file,
-            &accepted_registry_file,
+            &resolved.operator_root,
+            &resolved.reviewer_registry_file,
+            &resolved.reviewed_registry_file,
             verified_at_unix,
         )?;
         (Some(supply), Some(reviewed))
     } else {
         (None, None)
     };
-    let mut operator_sources = lock_domain_pack_operator_sources(state_root)?;
-    let operator_snapshot = snapshot_domain_pack_operator_sources(&mut operator_sources)?;
-    if operator_snapshot.raw() != planned_raw.as_deref() {
-        return Err(ExitError::conflict(
-            "domain-pack: operator-source binding changed during backup lock acquisition",
-        ));
-    }
+
     let mut rebase_plan = lock_domain_pack_rebase_plan(state_root)?;
     let rebase_snapshot = snapshot_domain_pack_rebase_plan(&mut rebase_plan)?;
-    // These two producers participate in the Store root boundary. Drain and
+    // External authorities are locked before lifecycle is reacquired. The exact
+    // pointer, ledger head, source digest, source bytes, and generation path must
+    // still equal the pre-probe before the backup handoff can proceed.
+    let lifecycle = lock_domain_pack_lifecycle_for_project(project_root, state_root)
+        .map_err(map_lifecycle_error)?;
+    let selected_sources = selected_domain_pack_operator_sources(&lifecycle)?;
+    if selected_sources != planned_sources {
+        return Err(ExitError::conflict(
+            "domain-pack: active operator-source selection changed during backup lock acquisition",
+        ));
+    }
+    drop(lifecycle);
+
+    // These producers participate in the Store root boundary. Drain and
     // validate them before returning, but do not retain their effect leases: a
     // retained lease would make the immediately following host-quiescence
     // acquisition a forbidden process-local upgrade. Any producer entering the
     // small handoff window is drained by that exclusive root acquisition before
     // source bytes are observed.
-    let lifecycle =
-        lock_domain_pack_lifecycle_for_project(project_root, state_root).map_err(|error| {
-            ExitError::failed(format!(
-                "domain-pack: cannot validate lifecycle for backup: {error}"
-            ))
-        })?;
-    drop(lifecycle);
     let learning_capture =
         acquire_effect_store_lock(state_root, "domain-pack-learning/capture.lock").map_err(
             |error| {
@@ -3029,19 +3048,22 @@ pub(crate) fn lock_domain_pack_backup_authorities(
         )?;
     drop(learning_capture);
     let mut expected_members = Vec::new();
-    for snapshot in [&operator_snapshot, &rebase_snapshot] {
-        if let Some(raw) = snapshot.raw() {
-            expected_members.push(BackupExpectedMember {
-                logical_path: format!("sidecar/.forge-method/{}", snapshot.relative_path()),
-                sha256: sha256_bytes(raw),
-            });
-        }
+    if let Some(selected) = &selected_sources {
+        expected_members.push(BackupExpectedMember {
+            logical_path: format!("sidecar/.forge-method/{}", selected.relative_path),
+            sha256: selected.raw_sha256.clone(),
+        });
+    }
+    if let Some(raw) = rebase_snapshot.raw() {
+        expected_members.push(BackupExpectedMember {
+            logical_path: format!("sidecar/.forge-method/{}", rebase_snapshot.relative_path()),
+            sha256: sha256_bytes(raw),
+        });
     }
     // Release the retained root effect lease before the caller takes host
     // quiescence. The snapshots above remain CAS-bound expected members, and
     // the exclusive boundary drains any producer entering this handoff window.
     drop(rebase_plan);
-    drop(operator_sources);
     Ok(LockedDomainPackBackupAuthorities {
         expected_members,
         _supply_chain: supply_chain,
@@ -3255,6 +3277,194 @@ fn normalized_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+fn reject_legacy_domain_pack_operator_sources(state_root: &Path) -> Result<(), ExitError> {
+    let path = state_root.join(LEGACY_DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH);
+    match std::fs::symlink_metadata(&path) {
+        Ok(_) => Err(ExitError::conflict(format!(
+            "domain-pack: legacy ambient operator-source state '{}' is not lifecycle authority and must be removed by an explicit operator migration",
+            path.display()
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(ExitError::failed(format!(
+            "domain-pack: cannot inspect legacy operator-source state '{}': {error}",
+            path.display()
+        ))),
+    }
+}
+
+fn resolve_domain_pack_operator_sources(
+    binding: &DomainPackOperatorSourceBinding,
+    roots: &CanonicalLifecycleRoots,
+) -> Result<CanonicalDomainPackOperatorSources, ExitError> {
+    if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION {
+        return Err(ExitError::invalid_value(
+            "domain-pack: operator-source binding has unsupported schema",
+        ));
+    }
+    let operator_root = canonical_external_operator_root(Path::new(&binding.operator_root), roots)?;
+    if normalized_path(&operator_root) != binding.operator_root {
+        return Err(ExitError::conflict(
+            "domain-pack: operator-source root is no longer canonical",
+        ));
+    }
+    let trust_policy_file = trusted_external_file(
+        Path::new(&binding.trust_policy_file),
+        "operator trust policy",
+        roots,
+    )?;
+    let registry_file = trusted_external_file(
+        Path::new(&binding.registry_file),
+        "signed supply-chain registry",
+        roots,
+    )?;
+    let reviewer_registry_file = trusted_external_file(
+        Path::new(&binding.reviewer_registry_file),
+        "signed reviewer registry",
+        roots,
+    )?;
+    let reviewed_registry_file = trusted_external_file(
+        Path::new(&binding.reviewed_registry_file),
+        "dual-signed reviewed registry",
+        roots,
+    )?;
+    let capability_registry_file = trusted_external_file(
+        Path::new(&binding.capability_registry_file),
+        "runtime capability registry",
+        roots,
+    )?;
+    let sandbox_policy_file = trusted_external_file(
+        Path::new(&binding.sandbox_policy_file),
+        "capability sandbox policy",
+        roots,
+    )?;
+    for (path, configured, label) in [
+        (
+            &trust_policy_file,
+            binding.trust_policy_file.as_str(),
+            "operator trust policy",
+        ),
+        (
+            &registry_file,
+            binding.registry_file.as_str(),
+            "signed supply-chain registry",
+        ),
+        (
+            &reviewer_registry_file,
+            binding.reviewer_registry_file.as_str(),
+            "signed reviewer registry",
+        ),
+        (
+            &reviewed_registry_file,
+            binding.reviewed_registry_file.as_str(),
+            "dual-signed reviewed registry",
+        ),
+        (
+            &capability_registry_file,
+            binding.capability_registry_file.as_str(),
+            "runtime capability registry",
+        ),
+        (
+            &sandbox_policy_file,
+            binding.sandbox_policy_file.as_str(),
+            "capability sandbox policy",
+        ),
+    ] {
+        if normalized_path(path) != configured {
+            return Err(ExitError::conflict(format!(
+                "domain-pack: {label} is no longer canonical"
+            )));
+        }
+        require_direct_operator_file(path, &operator_root, label)?;
+    }
+    let artifact_root = canonicalize_existing_root(
+        Path::new(&binding.artifact_root),
+        "operator-source artifact root",
+    )?;
+    if artifact_root != roots.artifacts || normalized_path(&artifact_root) != binding.artifact_root
+    {
+        return Err(ExitError::conflict(
+            "domain-pack: artifact root differs from the operator-source binding",
+        ));
+    }
+    Ok(CanonicalDomainPackOperatorSources {
+        operator_root,
+        trust_policy_file,
+        registry_file,
+        reviewer_registry_file,
+        reviewed_registry_file,
+        capability_registry_file,
+        sandbox_policy_file,
+        artifact_root,
+    })
+}
+
+fn selected_domain_pack_operator_sources(
+    lifecycle: &LockedDomainPackLifecycle,
+) -> Result<Option<SelectedDomainPackOperatorSources>, ExitError> {
+    let Some(pointer) = lifecycle.projection().active_pointer.clone() else {
+        return Ok(None);
+    };
+    let pointer_value = &pointer.domain_pack_active_pointer;
+    let record = lifecycle
+        .projection()
+        .ledger_records
+        .last()
+        .filter(|record| {
+            record.to_generation == pointer_value.generation
+                && record.record_digest == pointer_value.lifecycle_head_digest
+                && record.operator_source_binding_digest
+                    == pointer_value.operator_source_binding_digest
+        })
+        .ok_or_else(|| {
+            ExitError::conflict(
+                "domain-pack: active operator-source binding has no exact lifecycle head",
+            )
+        })?;
+    let token = canonical_sha256_token(&record.record_digest, "lifecycle record digest")?;
+    let relative_path = format!(
+        "domain-packs/generations/{:020}-{token}/operator-source-binding.yaml",
+        record.to_generation
+    );
+    let inventory = lifecycle.raw_inventory().map_err(map_lifecycle_error)?;
+    let raw = inventory
+        .files()
+        .iter()
+        .find(|file| file.relative_path() == relative_path)
+        .map(forge_core_domain_pack_tcb::DomainPackRawLifecycleFile::raw_bytes)
+        .ok_or_else(|| {
+            ExitError::conflict(
+                "domain-pack: active operator-source binding is absent from lifecycle inventory",
+            )
+        })?;
+    let binding: DomainPackOperatorSourceBinding = parse(raw, Path::new(&relative_path))?;
+    if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION
+        || binding.generation != pointer_value.generation
+        || canonical_digest(&binding)? != pointer_value.operator_source_binding_digest
+    {
+        return Err(ExitError::conflict(
+            "domain-pack: active operator-source binding differs from lifecycle selection",
+        ));
+    }
+    Ok(Some(SelectedDomainPackOperatorSources {
+        pointer,
+        binding,
+        relative_path,
+        raw_sha256: sha256_bytes(raw),
+    }))
+}
+
+fn canonical_sha256_token<'a>(value: &'a str, label: &str) -> Result<&'a str, ExitError> {
+    value
+        .strip_prefix("sha256:")
+        .filter(|token| {
+            token.len() == 64
+                && token
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+        .ok_or_else(|| ExitError::invalid_value(format!("domain-pack: invalid {label}")))
+}
+
 fn bind_domain_pack_effect_directories(
     state_root: &Path,
     lock_relative_path: &str,
@@ -3313,109 +3523,6 @@ fn replace_domain_pack_file_exact(
         ))
     })?;
     Ok(installed)
-}
-
-pub(crate) fn lock_domain_pack_operator_sources(
-    state_root: &Path,
-) -> Result<LockedDomainPackOperatorSources, ExitError> {
-    let retained_root =
-        forge_core_store::RetainedEffectStoreRoot::acquire(state_root).map_err(|error| {
-            ExitError::failed(format!(
-                "domain-pack: cannot bind operator-source effect root: {error}"
-            ))
-        })?;
-    let (root_identity, lock_parent_identity, target_parent_identity) =
-        bind_domain_pack_effect_directories(
-            state_root,
-            DOMAIN_PACK_OPERATOR_SOURCE_LOCK_RELATIVE_PATH,
-            DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH,
-        )?;
-    let lock = crate::io_util::acquire_effect_store_lock_retained(
-        &retained_root,
-        DOMAIN_PACK_OPERATOR_SOURCE_LOCK_RELATIVE_PATH,
-    )
-    .map_err(|error| {
-        ExitError::failed(format!(
-            "domain-pack: cannot lock operator-source binding: {error}"
-        ))
-    })?;
-    validate_domain_pack_effect_directories(
-        &root_identity,
-        &lock_parent_identity,
-        &target_parent_identity,
-    )?;
-    let reconciliation = reconcile_file_crash_safe_under_owned_lock(
-        lock,
-        Path::new(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH),
-        DOMAIN_PACK_MAX_DOCUMENT_BYTES,
-    )
-    .map_err(|error| {
-        ExitError::failed(format!(
-            "domain-pack: cannot recover operator-source binding: {error}"
-        ))
-    })?;
-    validate_domain_pack_effect_directories(
-        &root_identity,
-        &lock_parent_identity,
-        &target_parent_identity,
-    )?;
-    Ok(LockedDomainPackOperatorSources {
-        root_identity,
-        lock_parent_identity,
-        target_parent_identity,
-        reconciliation: Some(reconciliation),
-        exact_read: None,
-    })
-}
-
-#[allow(dead_code)]
-pub(crate) fn snapshot_domain_pack_operator_sources(
-    locked: &mut LockedDomainPackOperatorSources,
-) -> Result<DomainPackStateFileSnapshot, ExitError> {
-    snapshot_domain_pack_state_file(
-        &locked.root_identity,
-        &locked.lock_parent_identity,
-        &locked.target_parent_identity,
-        &mut locked.reconciliation,
-        &mut locked.exact_read,
-        DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH,
-    )
-}
-
-fn persist_domain_pack_operator_sources(
-    state_root: &Path,
-    binding: &DomainPackOperatorSourceBinding,
-) -> Result<(), ExitError> {
-    let locked = lock_domain_pack_operator_sources(state_root)?;
-    let raw = yaml_serde::to_string(binding)
-        .map_err(|error| {
-            ExitError::failed(format!(
-                "domain-pack: cannot serialize operator-source binding: {error}"
-            ))
-        })?
-        .into_bytes();
-    let reconciliation = locked.reconciliation.ok_or_else(|| {
-        ExitError::failed("domain-pack: operator-source reconciliation authority was consumed")
-    })?;
-    replace_domain_pack_file_exact(reconciliation, &raw, "operator-source binding").map(drop)
-}
-
-fn load_domain_pack_operator_sources(
-    state_root: &Path,
-) -> Result<DomainPackOperatorSourceBinding, ExitError> {
-    let path = state_root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH);
-    let mut locked = lock_domain_pack_operator_sources(state_root)?;
-    let snapshot = snapshot_domain_pack_operator_sources(&mut locked)?;
-    let raw = snapshot.raw().ok_or_else(|| {
-        ExitError::invalid_value("domain-pack: operator-source binding is not provisioned")
-    })?;
-    let binding: DomainPackOperatorSourceBinding = parse(raw, &path)?;
-    if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION {
-        return Err(ExitError::invalid_value(
-            "domain-pack: operator-source binding has unsupported schema",
-        ));
-    }
-    Ok(binding)
 }
 
 pub(crate) fn lock_domain_pack_rebase_plan(
@@ -4564,25 +4671,10 @@ mod backup_seam_tests {
     }
 
     #[test]
-    fn retained_state_file_authorities_project_exact_recovered_bytes() {
+    fn retained_rebase_plan_projects_exact_recovered_bytes() {
         let root = state_root();
-        let sources = b"schema_version: exact-sources\n# preserved\n";
         let rebase = b"schema_version: exact-rebase\n";
-        std::fs::write(
-            root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH),
-            sources,
-        )
-        .unwrap();
         std::fs::write(root.join(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH), rebase).unwrap();
-
-        let mut source_guard = lock_domain_pack_operator_sources(&root).unwrap();
-        let source_snapshot = snapshot_domain_pack_operator_sources(&mut source_guard).unwrap();
-        assert_eq!(
-            source_snapshot.relative_path(),
-            DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH
-        );
-        assert_eq!(source_snapshot.raw(), Some(sources.as_slice()));
-        drop(source_guard);
 
         let mut rebase_guard = lock_domain_pack_rebase_plan(&root).unwrap();
         let rebase_snapshot = snapshot_domain_pack_rebase_plan(&mut rebase_guard).unwrap();
@@ -4592,69 +4684,6 @@ mod backup_seam_tests {
         );
         assert_eq!(rebase_snapshot.raw(), Some(rebase.as_slice()));
         drop(rebase_guard);
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn retained_domain_pack_state_fails_closed_after_parent_swap() {
-        let root = state_root();
-        std::fs::write(
-            root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH),
-            b"trusted: true\n",
-        )
-        .unwrap();
-        let mut retained = lock_domain_pack_operator_sources(&root).unwrap();
-        let moved = root.with_extension("retained");
-        std::fs::rename(&root, &moved).unwrap();
-        std::fs::create_dir_all(root.join("domain-packs")).unwrap();
-        std::fs::write(
-            root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH),
-            b"attacker: true\n",
-        )
-        .unwrap();
-        assert!(lock_domain_pack_operator_sources(&root).is_err());
-
-        assert!(snapshot_domain_pack_operator_sources(&mut retained).is_err());
-        drop(retained);
-        let _ = std::fs::remove_dir_all(root);
-        let _ = std::fs::remove_dir_all(moved);
-    }
-
-    #[test]
-    fn retained_domain_pack_state_rejects_byte_identical_post_recovery_replacement() {
-        let root = state_root();
-        let target = root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH);
-        std::fs::write(&target, b"trusted: true\n").unwrap();
-        let mut retained = lock_domain_pack_operator_sources(&root).unwrap();
-        let replacement = target.with_extension("replacement");
-        std::fs::write(&replacement, b"trusted: true\n").unwrap();
-        std::fs::remove_file(&target).unwrap();
-        std::fs::rename(&replacement, &target).unwrap();
-
-        assert!(snapshot_domain_pack_operator_sources(&mut retained).is_err());
-        drop(retained);
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn operator_source_persistence_rejects_byte_identical_session_substitution() {
-        let root = state_root();
-        let target = root.join(DOMAIN_PACK_OPERATOR_SOURCE_RELATIVE_PATH);
-        std::fs::write(&target, b"trusted: true\n").unwrap();
-        let retained = lock_domain_pack_operator_sources(&root).unwrap();
-        let replacement = target.with_extension("replacement");
-        std::fs::write(&replacement, b"trusted: true\n").unwrap();
-        std::fs::remove_file(&target).unwrap();
-        std::fs::rename(&replacement, &target).unwrap();
-
-        let reconciliation = retained.reconciliation.unwrap();
-        assert!(replace_domain_pack_file_exact(
-            reconciliation,
-            b"trusted: updated\n",
-            "operator-source binding",
-        )
-        .is_err());
-        assert_eq!(std::fs::read(&target).unwrap(), b"trusted: true\n");
         let _ = std::fs::remove_dir_all(root);
     }
 

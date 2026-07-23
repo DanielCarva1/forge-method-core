@@ -53,9 +53,7 @@
       },
       "memory_store": "before_initialization",
       "domain_pack_store": {
-        "status": "no_active_generation",
-        "operator_sources_present": false,
-        "rebase_plan_present": false
+        "status": "no_active_generation"
       },
       "workflow_principal_registry": "not_provisioned",
       "workflow_broker_registry": "not_provisioned",
@@ -76,7 +74,6 @@
       },
       "research_store": "before_initialization",
       "governance_conflict_store": "before_initialization",
-      "domain_pack_operator_sources": null,
       "domain_pack_learning_store": {
         "status": "before_first_capture"
       },
@@ -85,14 +82,14 @@
       },
       "domain_pack_supply_chain_anchor": "not_provisioned",
       "domain_pack_reviewed_learning_anchor": "not_provisioned",
-      "declared_effect_outputs": []
+      "declared_effect_outputs": [],
+      "active_domain_pack_source_binding": null
     },
     "snapshot_protocol": {
       "mode": "cooperative_locks_with_producer_quiescence_and_stable_enumeration",
       "lock_order": [
         "external_domain_pack_supply_chain_anchor",
         "external_domain_pack_reviewed_learning_anchor",
-        "domain_pack_operator_sources",
         "domain_pack_rebase_plan",
         "domain_pack_lifecycle",
         "domain_pack_learning_capture",
@@ -171,6 +168,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:3663437109f2e48f70cf0a0bdb01984498d5607b898ab0ee79f773056f3aefe1"
+    "manifest_set_digest": "sha256:bf9c6a0efc06702cd96e9dfbecd584248db401a5b3165cc60851425ecd39acec"
   }
 }

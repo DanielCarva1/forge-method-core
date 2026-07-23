@@ -24,14 +24,15 @@ use forge_core_contracts::{
     DomainPackInitializedProjectDerivationOutcome, DomainPackInitializedProjectDerivedInputs,
     DomainPackInitializedProjectGenerationMaterial, DomainPackInitializedProjectIntent,
     DomainPackInitializedProjectOperation, DomainPackLifecycleOperation,
-    DomainPackLifecycleRequest, DomainPackLifecycleRequestDocument, DomainPackPrereleasePolicy,
+    DomainPackLifecycleRequest, DomainPackLifecycleRequestDocument,
+    DomainPackOperatorSourceBinding, DomainPackPrereleasePolicy,
     DomainPackProjectRequirementsDocument, DomainPackResolutionCandidate,
     DomainPackResolutionPolicy, DomainPackResolutionRequest, DomainPackResolutionRequestDocument,
     DomainPackResolutionRoot, DomainPackResolutionRootReason, DomainPackResolutionStatus,
     DomainPackSemanticAssurance, DomainPackSourceAssurance, DomainPackUnrelatedUpdatePolicy,
     DomainPackVersionSelectionPolicy, DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION,
     DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
-    DOMAIN_PACK_SCHEMA_VERSION,
+    DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION, DOMAIN_PACK_SCHEMA_VERSION,
 };
 use semver::{Version, VersionReq};
 use serde::Serialize;
@@ -307,6 +308,24 @@ pub fn derive_domain_pack_initialized_project_lifecycle(
         &input.active_lock,
         "active_generation",
     )?;
+    let active_source_digest = canonical_digest(&input.active_generation.operator_source_binding)
+        .map_err(|message| {
+        single_issue(
+            DomainPackAcquisitionIssueCode::InvalidDigest,
+            "active_generation.operator_source_binding",
+            message,
+        )
+    })?;
+    if input.active_generation.operator_source_binding.generation
+        != intent.expected_state.generation
+        || active_source_digest != intent.expected_state.operator_source_binding_digest
+    {
+        return Err(single_issue(
+            DomainPackAcquisitionIssueCode::StaleInitializedState,
+            "active_generation.operator_source_binding",
+            "active operator-source binding does not match initialized state",
+        ));
+    }
 
     let expected_state = initialized_expected_state(&intent.expected_state);
     let mut gaps = Vec::new();
@@ -1143,6 +1162,7 @@ fn derive_initialized_candidate(
     let lifecycle_request = lifecycle_request(
         &initialized.intent.domain_pack_initialized_project_intent,
         expected_state,
+        &initialized.active_generation.operator_source_binding,
         lifecycle_operation,
         canonical_digest(&derived.resolution_request).map_err(|message| {
             single_issue(
@@ -1151,7 +1171,7 @@ fn derive_initialized_candidate(
                 message,
             )
         })?,
-    );
+    )?;
     Ok(
         DomainPackInitializedProjectDerivationOutcome::TrustCeremonyRequired {
             acquisition_plan: acquisition.plan.clone(),
@@ -1169,6 +1189,7 @@ fn derive_initialized_candidate(
 fn lifecycle_only_outcome(
     intent: &DomainPackInitializedProjectIntent,
     expected_state: &DomainPackExpectedLifecycleState,
+    active_operator_source_binding: &DomainPackOperatorSourceBinding,
     operation: DomainPackLifecycleOperation,
     derived_inputs: DomainPackInitializedProjectDerivedInputs,
 ) -> Result<DomainPackInitializedProjectDerivationOutcome, DomainPackAcquisitionRejection> {
@@ -1185,9 +1206,10 @@ fn lifecycle_only_outcome(
             lifecycle_request: lifecycle_request(
                 intent,
                 expected_state,
+                active_operator_source_binding,
                 operation,
                 resolution_request_digest,
-            ),
+            )?,
             derived_inputs,
         },
     )
@@ -1239,6 +1261,7 @@ fn derive_generation_operation(
     lifecycle_only_outcome(
         &initialized.intent.domain_pack_initialized_project_intent,
         expected_state,
+        &initialized.active_generation.operator_source_binding,
         operation,
         derived_inputs,
     )
@@ -1283,6 +1306,7 @@ fn derive_rebase_operation(
     lifecycle_only_outcome(
         &initialized.intent.domain_pack_initialized_project_intent,
         expected_state,
+        &initialized.active_generation.operator_source_binding,
         operation,
         derived_inputs,
     )
@@ -1430,7 +1454,21 @@ fn validate_generation(
     let composition = &generation
         .composition_projection
         .domain_pack_composition_projection;
-    if generation.requirements.schema_version != DOMAIN_PACK_SCHEMA_VERSION
+    let operator_sources = &generation.operator_source_binding;
+    if operator_sources.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION
+        || [
+            operator_sources.operator_root.as_str(),
+            operator_sources.trust_policy_file.as_str(),
+            operator_sources.registry_file.as_str(),
+            operator_sources.reviewer_registry_file.as_str(),
+            operator_sources.reviewed_registry_file.as_str(),
+            operator_sources.capability_registry_file.as_str(),
+            operator_sources.sandbox_policy_file.as_str(),
+            operator_sources.artifact_root.as_str(),
+        ]
+        .iter()
+        .any(|value| value.is_empty())
+        || generation.requirements.schema_version != DOMAIN_PACK_SCHEMA_VERSION
         || generation.catalog.schema_version != DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION
         || generation.catalog.forge_core_version
             != generation
@@ -1508,6 +1546,7 @@ fn initialized_expected_state(
         generation: state.generation,
         active_lock_digest: state.active_lock_digest.clone(),
         lifecycle_head_digest: state.lifecycle_head_digest.clone(),
+        operator_source_binding_digest: state.operator_source_binding_digest.clone(),
         project_snapshot_digest: state.project_snapshot_digest.clone(),
     }
 }
@@ -1515,10 +1554,23 @@ fn initialized_expected_state(
 fn lifecycle_request(
     intent: &DomainPackInitializedProjectIntent,
     expected_state: &DomainPackExpectedLifecycleState,
+    active_operator_source_binding: &DomainPackOperatorSourceBinding,
     operation: DomainPackLifecycleOperation,
     resolution_request_digest: String,
-) -> DomainPackLifecycleRequestDocument {
-    DomainPackLifecycleRequestDocument {
+) -> Result<DomainPackLifecycleRequestDocument, DomainPackAcquisitionRejection> {
+    let generation = active_operator_source_binding
+        .generation
+        .checked_add(1)
+        .ok_or_else(|| {
+            single_issue(
+                DomainPackAcquisitionIssueCode::OperationMaterialMismatch,
+                "operator_source_binding.generation",
+                "operator-source binding generation is exhausted",
+            )
+        })?;
+    let mut operator_source_binding = active_operator_source_binding.clone();
+    operator_source_binding.generation = generation;
+    Ok(DomainPackLifecycleRequestDocument {
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
         domain_pack_lifecycle_request: DomainPackLifecycleRequest {
             request_id: derived_id("lifecycle", &intent.intent_id.0),
@@ -1527,10 +1579,11 @@ fn lifecycle_request(
             principal_id: intent.principal_id.clone(),
             operation,
             expected_state: expected_state.clone(),
+            operator_source_binding,
             resolution_request_digest,
             project_snapshot_digest: intent.expected_state.project_snapshot_digest.clone(),
         },
-    }
+    })
 }
 
 fn selected_coordinate(

@@ -1031,6 +1031,7 @@ fn initialized_install_intent() -> DomainPackInitializedProjectIntentDocument {
                 generation: 7,
                 active_lock_digest: "sha256:active-lock".to_owned(),
                 lifecycle_head_digest: "sha256:lifecycle-head".to_owned(),
+                operator_source_binding_digest: "sha256:operator-source-binding".to_owned(),
                 project_snapshot_digest: "sha256:project-snapshot".to_owned(),
             },
             operation: DomainPackInitializedProjectOperation::Install { selection },

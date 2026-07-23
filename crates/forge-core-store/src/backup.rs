@@ -19,7 +19,7 @@ use forge_core_contracts::{
     BackupArchiveLayout, BackupArchiveVerificationError, BackupClaimStoreState,
     BackupDeclaredEffectOutput, BackupDomainPackGeneration, BackupDomainPackLearningAuthority,
     BackupDomainPackLearningRecord, BackupDomainPackLearningStoreState,
-    BackupDomainPackOperatorSourcesProjection, BackupDomainPackStoreState,
+    BackupDomainPackOperatorSourceBindingProjection, BackupDomainPackStoreState,
     BackupDomainPackSupplyChainAuthority, BackupEffectStoreState, BackupEffectiveEpochBinding,
     BackupEntry, BackupEntryKind, BackupExternalAuthorityObservations,
     BackupForbiddenPrivateMaterial, BackupInitializationState, BackupIsolationContractProjection,
@@ -28,9 +28,10 @@ use forge_core_contracts::{
     BackupPublicRegistryMaterial, BackupPublicSidecarCounts, BackupReceipt, BackupReceiptDocument,
     BackupReceiptValidationError, BackupReplayRollbackAnchor, BackupSnapshotMode,
     BackupSnapshotProtocol, BackupSourceFileMetadata, BackupSourceState,
-    BackupUnlockedProducerBoundary, ProjectLinkDocument, WorkflowEffectiveBundleIdentity,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernanceReleaseIdentity, BACKUP_LOCK_ORDER,
-    BACKUP_MANIFEST_SCHEMA_VERSION, BACKUP_RECEIPT_SCHEMA_VERSION,
+    BackupUnlockedProducerBoundary, DomainPackOperatorSourceBinding, ProjectLinkDocument,
+    WorkflowEffectiveBundleIdentity, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernanceReleaseIdentity, BACKUP_LOCK_ORDER, BACKUP_MANIFEST_SCHEMA_VERSION,
+    BACKUP_RECEIPT_SCHEMA_VERSION, DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -2376,8 +2377,8 @@ fn classify_authoritative_member(
         Some(BackupEntryKind::ResearchEventLog)
     } else if exact("governance/conflicts.ndjson") {
         Some(BackupEntryKind::GovernanceConflictEventLog)
-    } else if exact("domain-packs/operator-sources.yaml") {
-        Some(BackupEntryKind::DomainPackOperatorSources)
+    } else if below("domain-packs/generations") && path.ends_with("/operator-source-binding.yaml") {
+        Some(BackupEntryKind::DomainPackGenerationOperatorSourceBinding)
     } else if exact("domain-packs/rebase-plan.yaml") {
         Some(BackupEntryKind::DomainPackRebasePlan)
     } else if exact("domain-packs/active.lock.yaml") {
@@ -2563,6 +2564,63 @@ fn validate_public_workflow_broker_registry(
     })
 }
 
+fn canonical_domain_pack_source_binding_digest(
+    binding: &DomainPackOperatorSourceBinding,
+) -> Result<String, BackupError> {
+    let canonical =
+        serde_json_canonicalizer::to_vec(binding).map_err(|error| BackupError::Manifest {
+            reason: format!("Domain Pack operator-source canonicalization failed: {error}"),
+        })?;
+    Ok(format!("sha256:{:x}", Sha256::digest(&canonical)))
+}
+
+fn active_domain_pack_source_binding_member(
+    members: &[CapturedBackupMember],
+) -> Result<Option<&CapturedBackupMember>, BackupError> {
+    let Some(active_raw) = member_bytes(members, BackupEntryKind::DomainPackActivePointer) else {
+        if members_of_kind(
+            members,
+            BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
+        )
+        .next()
+        .is_some()
+        {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack source binding exists without an active generation".to_owned(),
+            });
+        }
+        return Ok(None);
+    };
+    let active = parse_yaml_value(active_raw, "Domain Pack active pointer")?;
+    let generation = value_u64(&active, &["domain_pack_active_pointer", "generation"])?;
+    let head = normalize_digest(value_string(
+        &active,
+        &["domain_pack_active_pointer", "lifecycle_head_digest"],
+    )?)?;
+    let token = head
+        .strip_prefix("sha256:")
+        .ok_or_else(|| BackupError::Manifest {
+            reason: "Domain Pack lifecycle head is not a canonical digest".to_owned(),
+        })?;
+    let suffix =
+        format!("/domain-packs/generations/{generation:020}-{token}/operator-source-binding.yaml");
+    let mut selected = members_of_kind(
+        members,
+        BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
+    )
+    .filter(|member| member.entry.logical_path.ends_with(&suffix));
+    let source = selected.next().ok_or_else(|| BackupError::Manifest {
+        reason: "active Domain Pack generation has no exact operator-source binding".to_owned(),
+    })?;
+    if selected.next().is_some() {
+        return Err(BackupError::Manifest {
+            reason: "active Domain Pack generation has duplicate operator-source bindings"
+                .to_owned(),
+        });
+    }
+    Ok(Some(source))
+}
+
 fn capture_domain_pack_authorities(
     members: &[CapturedBackupMember],
     operator: Option<&ConfiguredDomainPackOperator>,
@@ -2573,40 +2631,36 @@ fn capture_domain_pack_authorities(
     ),
     BackupError,
 > {
-    let Some(raw_sources) = member_bytes(members, BackupEntryKind::DomainPackOperatorSources)
-    else {
+    let Some(source_member) = active_domain_pack_source_binding_member(members)? else {
         return Ok((None, None));
     };
     let operator = operator.ok_or_else(|| BackupError::Receipt {
-        reason: "project has Domain Pack operator sources but no configured operator authority"
-            .to_owned(),
+        reason: "active Domain Pack source binding has no configured operator authority".to_owned(),
     })?;
-    let sources = parse_yaml_value(raw_sources, "Domain Pack operator sources")?;
-    let configured_root = fs::canonicalize(value_string(&sources, &["operator_root"])?)
+    let sources: DomainPackOperatorSourceBinding = yaml_serde::from_slice(&source_member.bytes)
+        .map_err(|error| BackupError::Manifest {
+            reason: format!("Domain Pack operator-source binding parse failed: {error}"),
+        })?;
+    if sources.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION {
+        return Err(BackupError::Manifest {
+            reason: "Domain Pack operator-source binding has unsupported schema".to_owned(),
+        });
+    }
+    let configured_root = fs::canonicalize(&sources.operator_root)
         .map_err(|source| io_error(&operator.root, source))?;
     if configured_root != operator.root {
         return Err(BackupError::Receipt {
             reason: "Domain Pack operator-source root differs from configured authority".to_owned(),
         });
     }
-    let trust_policy =
-        read_operator_source_file(operator, &value_string(&sources, &["trust_policy_file"])?)?;
-    let registry =
-        read_operator_source_file(operator, &value_string(&sources, &["registry_file"])?)?;
-    let reviewer_registry_bytes = read_operator_source_file(
-        operator,
-        &value_string(&sources, &["reviewer_registry_file"])?,
-    )?;
-    let accepted_registry_bytes = read_operator_source_file(
-        operator,
-        &value_string(&sources, &["reviewed_registry_file"])?,
-    )?;
-    let capability = read_operator_source_file(
-        operator,
-        &value_string(&sources, &["capability_registry_file"])?,
-    )?;
-    let sandbox =
-        read_operator_source_file(operator, &value_string(&sources, &["sandbox_policy_file"])?)?;
+    let trust_policy = read_operator_source_file(operator, &sources.trust_policy_file)?;
+    let registry = read_operator_source_file(operator, &sources.registry_file)?;
+    let reviewer_registry_bytes =
+        read_operator_source_file(operator, &sources.reviewer_registry_file)?;
+    let accepted_registry_bytes =
+        read_operator_source_file(operator, &sources.reviewed_registry_file)?;
+    let capability = read_operator_source_file(operator, &sources.capability_registry_file)?;
+    let sandbox = read_operator_source_file(operator, &sources.sandbox_policy_file)?;
     let supply_anchor_path = operator
         .root
         .join(".forge-domain-pack-registry-anchor.yaml");
@@ -2705,7 +2759,7 @@ fn derive_source_state(
             compaction_manifest_present: count(BackupEntryKind::EffectWalCompactionManifest) == 1,
         }
     };
-    let domain_pack_operator_sources = derive_operator_sources_projection(members, authority)?;
+    let active_domain_pack_source_binding = derive_operator_sources_projection(members, authority)?;
     let domain_pack_store = derive_domain_pack_store(members)?;
     let domain_pack_learning_store = derive_learning_store(members)?;
     let isolation_store = derive_isolation_store(members)?;
@@ -2723,7 +2777,7 @@ fn derive_source_state(
         research_store: initialized(count(BackupEntryKind::ResearchEventLog)),
         governance_conflict_store: initialized(count(BackupEntryKind::GovernanceConflictEventLog)),
         domain_pack_store,
-        domain_pack_operator_sources,
+        active_domain_pack_source_binding,
         domain_pack_learning_store,
         isolation_store,
         domain_pack_supply_chain_anchor: provisioned(
@@ -2774,36 +2828,140 @@ fn provisioned(present: bool) -> BackupProvisioningState {
 fn derive_domain_pack_store(
     members: &[CapturedBackupMember],
 ) -> Result<BackupDomainPackStoreState, BackupError> {
-    let operator_sources_present =
-        member_bytes(members, BackupEntryKind::DomainPackOperatorSources).is_some();
     let rebase_plan_present =
         member_bytes(members, BackupEntryKind::DomainPackRebasePlan).is_some();
+    let source_binding_count = members_of_kind(
+        members,
+        BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
+    )
+    .count();
+    let generation_manifest_count =
+        members_of_kind(members, BackupEntryKind::DomainPackGenerationManifest).count();
     let Some(active_raw) = member_bytes(members, BackupEntryKind::DomainPackActivePointer) else {
-        return Ok(BackupDomainPackStoreState::NoActiveGeneration {
-            operator_sources_present,
-            rebase_plan_present,
-        });
+        if rebase_plan_present || source_binding_count != 0 || generation_manifest_count != 0 {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack generation material exists without an active pointer"
+                    .to_owned(),
+            });
+        }
+        return Ok(BackupDomainPackStoreState::NoActiveGeneration);
     };
     let active = parse_yaml_value(active_raw, "Domain Pack active pointer")?;
     let active_generation = value_u64(&active, &["domain_pack_active_pointer", "generation"])?;
+    let active_head = normalize_digest(value_string(
+        &active,
+        &["domain_pack_active_pointer", "lifecycle_head_digest"],
+    )?)?;
+    let active_source_digest = normalize_digest(value_string(
+        &active,
+        &[
+            "domain_pack_active_pointer",
+            "operator_source_binding_digest",
+        ],
+    )?)?;
+
     let mut generations = Vec::new();
     for member in members_of_kind(members, BackupEntryKind::DomainPackGenerationManifest) {
         let value = parse_yaml_value(&member.bytes, "Domain Pack generation manifest")?;
+        let generation = value_u64(&value, &["generation"])?;
+        let record_digest = normalize_digest(value_string(&value, &["record_digest"])?)?;
+        let receipt_digest = normalize_digest(value_string(&value, &["receipt_digest"])?)?;
+        let operator_source_binding_digest =
+            normalize_digest(value_string(&value, &["operator_source_binding_digest"])?)?;
+        let token = record_digest
+            .strip_prefix("sha256:")
+            .ok_or_else(|| BackupError::Manifest {
+                reason: "Domain Pack generation record digest is not canonical".to_owned(),
+            })?;
+        let root_suffix = format!("/domain-packs/generations/{generation:020}-{token}");
+        if !member
+            .entry
+            .logical_path
+            .ends_with(&format!("{root_suffix}/generation.yaml"))
+        {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack generation manifest path differs from its identity".to_owned(),
+            });
+        }
+        let source_suffix = format!("{root_suffix}/operator-source-binding.yaml");
+        let mut source_members = members_of_kind(
+            members,
+            BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
+        )
+        .filter(|candidate| candidate.entry.logical_path.ends_with(&source_suffix));
+        let source_member = source_members.next().ok_or_else(|| BackupError::Manifest {
+            reason: "Domain Pack generation has no exact operator-source binding".to_owned(),
+        })?;
+        if source_members.next().is_some() {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack generation has duplicate operator-source bindings".to_owned(),
+            });
+        }
+        let binding: DomainPackOperatorSourceBinding = yaml_serde::from_slice(&source_member.bytes)
+            .map_err(|error| BackupError::Manifest {
+                reason: format!("Domain Pack operator-source binding parse failed: {error}"),
+            })?;
+        if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION
+            || binding.generation != generation
+            || canonical_domain_pack_source_binding_digest(&binding)?
+                != operator_source_binding_digest
+        {
+            return Err(BackupError::Manifest {
+                reason:
+                    "Domain Pack generation operator-source binding is not closed by its manifest"
+                        .to_owned(),
+            });
+        }
+
+        let ledger_suffix = format!("/domain-packs/ledger/{token}.yaml");
+        let mut ledger_members = members_of_kind(members, BackupEntryKind::DomainPackLedgerRecord)
+            .filter(|candidate| candidate.entry.logical_path.ends_with(&ledger_suffix));
+        let ledger_member = ledger_members.next().ok_or_else(|| BackupError::Manifest {
+            reason: "Domain Pack generation has no exact lifecycle ledger record".to_owned(),
+        })?;
+        if ledger_members.next().is_some() {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack generation has duplicate lifecycle ledger records".to_owned(),
+            });
+        }
+        let ledger = parse_yaml_value(&ledger_member.bytes, "Domain Pack lifecycle ledger record")?;
+        if value_u64(&ledger, &["sequence"])? != generation
+            || value_u64(&ledger, &["to_generation"])? != generation
+            || normalize_digest(value_string(&ledger, &["record_digest"])?)? != record_digest
+            || normalize_digest(value_string(&ledger, &["operator_source_binding_digest"])?)?
+                != operator_source_binding_digest
+        {
+            return Err(BackupError::Manifest {
+                reason: "Domain Pack lifecycle ledger record differs from generation material"
+                    .to_owned(),
+            });
+        }
+
         generations.push(BackupDomainPackGeneration {
-            generation: value_u64(&value, &["generation"])?,
-            record_digest: value_string(&value, &["record_digest"])?,
-            receipt_digest: value_string(&value, &["receipt_digest"])?,
+            generation,
+            record_digest,
+            receipt_digest,
+            operator_source_binding_digest,
             object_raw_digests: value_string_array(&value, &["object_raw_digests"])?,
         });
     }
     generations.sort_by_key(|generation| generation.generation);
-    if generations.last().map(|generation| generation.generation) != Some(active_generation) {
+    if generations.first().map(|generation| generation.generation) != Some(0)
+        || generations.last().map(|generation| generation.generation) != Some(active_generation)
+        || generations.len() != source_binding_count
+        || !generations
+            .windows(2)
+            .all(|pair| pair[0].generation.checked_add(1) == Some(pair[1].generation))
+        || generations.last().is_none_or(|generation| {
+            generation.record_digest != active_head
+                || generation.operator_source_binding_digest != active_source_digest
+        })
+    {
         return Err(BackupError::Manifest {
             reason: "Domain Pack active pointer and generation closure differ".to_owned(),
         });
     }
     Ok(BackupDomainPackStoreState::Active {
-        operator_sources_present,
         rebase_plan_present,
         active_generation,
         generations,
@@ -2813,52 +2971,76 @@ fn derive_domain_pack_store(
 fn derive_operator_sources_projection(
     members: &[CapturedBackupMember],
     authority: &TrustedBackupAuthority,
-) -> Result<Option<BackupDomainPackOperatorSourcesProjection>, BackupError> {
-    let Some(raw) = member_bytes(members, BackupEntryKind::DomainPackOperatorSources) else {
+) -> Result<Option<BackupDomainPackOperatorSourceBindingProjection>, BackupError> {
+    let Some(source_member) = active_domain_pack_source_binding_member(members)? else {
         return Ok(None);
     };
     let operator = authority
         .domain_pack_operator
         .as_ref()
         .ok_or_else(|| BackupError::Receipt {
-            reason: "Domain Pack operator sources have no configured authority".to_owned(),
+            reason: "active Domain Pack source binding has no configured authority".to_owned(),
         })?;
-    let value = parse_yaml_value(raw, "Domain Pack operator sources")?;
-    let trust_policy_file = value_string(&value, &["trust_policy_file"])?;
-    let registry_file = value_string(&value, &["registry_file"])?;
-    let reviewer_source = value_string(&value, &["reviewer_registry_file"])?;
-    let accepted_source = value_string(&value, &["reviewed_registry_file"])?;
-    let capability_registry_file = value_string(&value, &["capability_registry_file"])?;
-    let sandbox_policy_file = value_string(&value, &["sandbox_policy_file"])?;
-    Ok(Some(BackupDomainPackOperatorSourcesProjection {
-        schema_version: value_string(&value, &["schema_version"])?,
-        file_sha256: sha256(raw),
+    let binding: DomainPackOperatorSourceBinding = yaml_serde::from_slice(&source_member.bytes)
+        .map_err(|error| BackupError::Manifest {
+            reason: format!("Domain Pack operator-source binding parse failed: {error}"),
+        })?;
+    if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION {
+        return Err(BackupError::Manifest {
+            reason: "Domain Pack operator-source binding has unsupported schema".to_owned(),
+        });
+    }
+    let configured_root = fs::canonicalize(&binding.operator_root)
+        .map_err(|source| io_error(&operator.root, source))?;
+    if configured_root != operator.root {
+        return Err(BackupError::Receipt {
+            reason: "Domain Pack operator-source root differs from configured authority".to_owned(),
+        });
+    }
+    let binding_digest = canonical_domain_pack_source_binding_digest(&binding)?;
+    let trust_policy_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.trust_policy_file,
+    )?);
+    let registry_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.registry_file,
+    )?);
+    let reviewer_registry_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.reviewer_registry_file,
+    )?);
+    let reviewed_registry_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.reviewed_registry_file,
+    )?);
+    let capability_registry_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.capability_registry_file,
+    )?);
+    let sandbox_policy_file_sha256 = sha256(&read_operator_source_file(
+        operator,
+        &binding.sandbox_policy_file,
+    )?);
+    Ok(Some(BackupDomainPackOperatorSourceBindingProjection {
+        schema_version: binding.schema_version,
+        generation: binding.generation,
+        binding_digest,
+        binding_file_sha256: sha256(&source_member.bytes),
         operator_root_identity: operator.root_identity.clone(),
-        trust_policy_file: trust_policy_file.clone(),
-        trust_policy_file_sha256: sha256(&read_operator_source_file(operator, &trust_policy_file)?),
-        registry_file: registry_file.clone(),
-        registry_file_sha256: sha256(&read_operator_source_file(operator, &registry_file)?),
-        reviewer_registry_file: reviewer_source.clone(),
-        reviewer_registry_file_sha256: sha256(&read_operator_source_file(
-            operator,
-            &reviewer_source,
-        )?),
-        reviewed_registry_file: accepted_source.clone(),
-        reviewed_registry_file_sha256: sha256(&read_operator_source_file(
-            operator,
-            &accepted_source,
-        )?),
-        capability_registry_file: capability_registry_file.clone(),
-        capability_registry_file_sha256: sha256(&read_operator_source_file(
-            operator,
-            &capability_registry_file,
-        )?),
-        sandbox_policy_file: sandbox_policy_file.clone(),
-        sandbox_policy_file_sha256: sha256(&read_operator_source_file(
-            operator,
-            &sandbox_policy_file,
-        )?),
-        artifact_root: value_string(&value, &["artifact_root"])?,
+        trust_policy_file: binding.trust_policy_file,
+        trust_policy_file_sha256,
+        registry_file: binding.registry_file,
+        registry_file_sha256,
+        reviewer_registry_file: binding.reviewer_registry_file,
+        reviewer_registry_file_sha256,
+        reviewed_registry_file: binding.reviewed_registry_file,
+        reviewed_registry_file_sha256,
+        capability_registry_file: binding.capability_registry_file,
+        capability_registry_file_sha256,
+        sandbox_policy_file: binding.sandbox_policy_file,
+        sandbox_policy_file_sha256,
+        artifact_root: binding.artifact_root,
     }))
 }
 
@@ -3401,7 +3583,7 @@ fn verify_domain_pack_authorities(
         .manifest
         .backup_manifest
         .source_state
-        .domain_pack_operator_sources
+        .active_domain_pack_source_binding
     {
         if sources.operator_root_identity != operator.root_identity {
             return Err(BackupError::Receipt {

@@ -40,6 +40,32 @@ fn digest(byte: char) -> String {
     format!("sha256:{}", byte.to_string().repeat(64))
 }
 
+fn test_operator_source_binding(
+    expected: &DomainPackExpectedLifecycleState,
+) -> DomainPackOperatorSourceBinding {
+    let generation = match expected {
+        DomainPackExpectedLifecycleState::Uninitialized { .. } => 0,
+        DomainPackExpectedLifecycleState::Initialized { generation, .. } => generation + 1,
+    };
+    let operator_root = std::env::temp_dir().join("forge-domain-pack-test-operator");
+    let path = |name: &str| operator_root.join(name).display().to_string();
+    DomainPackOperatorSourceBinding {
+        schema_version: DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION.to_owned(),
+        generation,
+        operator_root: operator_root.display().to_string(),
+        trust_policy_file: path("trust-policy.yaml"),
+        registry_file: path("registry.yaml"),
+        reviewer_registry_file: path("reviewers.yaml"),
+        reviewed_registry_file: path("reviewed.yaml"),
+        capability_registry_file: path("capabilities.yaml"),
+        sandbox_policy_file: path("sandbox.yaml"),
+        artifact_root: std::env::temp_dir()
+            .join("forge-domain-pack-test-artifacts")
+            .display()
+            .to_string(),
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     bytes.iter().fold(String::new(), |mut output, byte| {
@@ -653,6 +679,7 @@ fn expected_from_projection(
                 generation: pointer.generation,
                 active_lock_digest: pointer.active_lock_digest.clone(),
                 lifecycle_head_digest: pointer.lifecycle_head_digest.clone(),
+                operator_source_binding_digest: pointer.operator_source_binding_digest.clone(),
                 project_snapshot_digest: project_snapshot_digest.to_owned(),
             }
         }
@@ -1024,6 +1051,7 @@ fn integrated_install_preflight(
             principal_id: id("principal.integrated"),
             operation,
             expected_state: expected.clone(),
+            operator_source_binding: test_operator_source_binding(&expected),
             resolution_request_digest: canonical_digest(&resolution_request),
             project_snapshot_digest: match &expected {
                 DomainPackExpectedLifecycleState::Uninitialized {
@@ -1345,6 +1373,7 @@ fn integrated_remove_preflight(
             principal_id: id("principal.integrated"),
             operation,
             expected_state: expected.clone(),
+            operator_source_binding: test_operator_source_binding(&expected),
             resolution_request_digest: canonical_digest(&resolution_request),
             project_snapshot_digest: match &expected {
                 DomainPackExpectedLifecycleState::Uninitialized {
@@ -3962,6 +3991,7 @@ fn initialized_candidate_rejects_stale_generation_active_lock_and_lifecycle_head
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     } = current
     else {
@@ -3971,6 +4001,7 @@ fn initialized_candidate_rejects_stale_generation_active_lock_and_lifecycle_head
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     };
     let exact_intent = |expected_state| DomainPackInitializedProjectIntentDocument {
@@ -4012,6 +4043,13 @@ fn initialized_candidate_rejects_stale_generation_active_lock_and_lifecycle_head
                 ..current.clone()
             },
         ),
+        (
+            "operator-source-binding",
+            DomainPackInitializedProjectStateBinding {
+                operator_source_binding_digest: digest('f'),
+                ..current.clone()
+            },
+        ),
     ];
 
     for (label, stale) in stale_cases {
@@ -4045,6 +4083,7 @@ fn initialized_candidate_source_rejects_tampered_retained_acquisition_catalog() 
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     } = expected
     else {
@@ -4061,6 +4100,7 @@ fn initialized_candidate_source_rejects_tampered_retained_acquisition_catalog() 
                 generation,
                 active_lock_digest,
                 lifecycle_head_digest,
+                operator_source_binding_digest,
                 project_snapshot_digest,
             },
             operation: DomainPackInitializedProjectOperation::Remove {
@@ -4109,6 +4149,7 @@ fn initialized_candidate_source_rejects_project_snapshot_drift() {
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     } = expected
     else {
@@ -4125,6 +4166,7 @@ fn initialized_candidate_source_rejects_project_snapshot_drift() {
                 generation,
                 active_lock_digest,
                 lifecycle_head_digest,
+                operator_source_binding_digest,
                 project_snapshot_digest,
             },
             operation: DomainPackInitializedProjectOperation::Remove {
@@ -4169,6 +4211,7 @@ fn initialized_project_source_exposes_all_five_operations_without_granting_autho
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     } = expected
     else {
@@ -4178,6 +4221,7 @@ fn initialized_project_source_exposes_all_five_operations_without_granting_autho
         generation,
         active_lock_digest,
         lifecycle_head_digest,
+        operator_source_binding_digest,
         project_snapshot_digest,
     };
     let selection = DomainPackInitializedProjectCandidateSelection {
@@ -4274,7 +4318,8 @@ fn initialized_project_intent_wire_preserves_all_operations_exact_cas_and_explic
         generation: 7,
         active_lock_digest: digest('a'),
         lifecycle_head_digest: digest('b'),
-        project_snapshot_digest: digest('c'),
+        operator_source_binding_digest: digest('c'),
+        project_snapshot_digest: digest('d'),
     };
     let selection = DomainPackInitializedProjectCandidateSelection {
         acquisition_id: id("acquisition.initialized"),
@@ -4368,7 +4413,8 @@ fn initialized_project_state_wire_keeps_each_stale_binding_distinct() {
         generation: 12,
         active_lock_digest: digest('a'),
         lifecycle_head_digest: digest('b'),
-        project_snapshot_digest: digest('c'),
+        operator_source_binding_digest: digest('c'),
+        project_snapshot_digest: digest('d'),
     };
     let stale = [
         DomainPackInitializedProjectStateBinding {
@@ -4384,7 +4430,11 @@ fn initialized_project_state_wire_keeps_each_stale_binding_distinct() {
             ..current.clone()
         },
         DomainPackInitializedProjectStateBinding {
-            project_snapshot_digest: digest('f'),
+            operator_source_binding_digest: digest('f'),
+            ..current.clone()
+        },
+        DomainPackInitializedProjectStateBinding {
+            project_snapshot_digest: digest('0'),
             ..current.clone()
         },
     ];

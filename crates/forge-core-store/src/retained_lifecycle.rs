@@ -29,7 +29,7 @@ use std::path::{Component, Path, PathBuf};
 const DOMAIN_PACK_LIFECYCLE_ROOT: &str = "domain-packs";
 const DOMAIN_PACK_LIFECYCLE_LOCK: &str = "locks/domain-packs.lifecycle.lock";
 const DOMAIN_PACK_ACTIVE_POINTER: &str = "domain-packs/active.lock.yaml";
-const DOMAIN_PACK_COMPLETION_SCHEMA_VERSION: &str = "forge-domain-pack-lifecycle-completion-v3";
+const DOMAIN_PACK_COMPLETION_SCHEMA_VERSION: &str = "forge-domain-pack-lifecycle-completion-v4";
 const DOMAIN_PACK_COMPLETION_SELECTOR_SCHEMA_VERSION: &str =
     "forge-domain-pack-lifecycle-completion-selector-v1";
 const DOMAIN_PACK_COMPLETION_MAX_BYTES: u64 = 512 * 1024 * 1024;
@@ -147,6 +147,7 @@ pub struct DomainPackLifecycleCompletionInput<'a> {
     pub preflight_digest: &'a str,
     pub compatibility_report_digest: &'a str,
     pub receipt_digest: &'a str,
+    pub operator_source_binding_digest: &'a str,
     pub object_raw_digests: &'a [String],
 }
 
@@ -239,6 +240,7 @@ struct DomainPackLifecycleGenerationBinding {
     preflight_digest: String,
     compatibility_report_digest: String,
     receipt_digest: String,
+    operator_source_binding_digest: String,
     object_raw_digests: Vec<String>,
 }
 
@@ -2288,6 +2290,10 @@ fn validate_completion_input(input: &DomainPackLifecycleCompletionInput<'_>) -> 
         ("preflight", input.preflight_digest),
         ("compatibility report", input.compatibility_report_digest),
         ("receipt", input.receipt_digest),
+        (
+            "operator source binding",
+            input.operator_source_binding_digest,
+        ),
     ] {
         if completion_digest_token(digest).is_err() {
             return Err(format!("lifecycle completion {field} digest is invalid"));
@@ -2319,6 +2325,7 @@ fn completion_generation_binding(
         preflight_digest: input.preflight_digest.to_owned(),
         compatibility_report_digest: input.compatibility_report_digest.to_owned(),
         receipt_digest: input.receipt_digest.to_owned(),
+        operator_source_binding_digest: input.operator_source_binding_digest.to_owned(),
         object_raw_digests,
     }
 }
@@ -2333,6 +2340,7 @@ fn completion_material_paths(
         "preflight.yaml",
         "compatibility.yaml",
         "receipt.yaml",
+        "operator-source-binding.yaml",
         "catalog.yaml",
         "resolution-request.yaml",
         "composition-request.yaml",
@@ -2675,6 +2683,7 @@ fn permitted_lifecycle_path(path: &Path) -> bool {
                         | "preflight.yaml"
                         | "compatibility.yaml"
                         | "receipt.yaml"
+                        | "operator-source-binding.yaml"
                         | "catalog.yaml"
                         | "resolution-request.yaml"
                         | "composition-request.yaml"

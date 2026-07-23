@@ -1,8 +1,9 @@
-schema_version: '0.3'
+schema_version: '0.4'
 domain_pack_recovery_report:
   authority: active
   status: recovered_target
   active_state: null
   lifecycle_head_digest: null
+  operator_source_binding_digest: null
   repaired_artifact_refs: []
   issues: []

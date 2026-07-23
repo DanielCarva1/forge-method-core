@@ -65,7 +65,7 @@ backup_manifest_contract:
       - project state and claim WAL rotation closure
       - workflow governance and workflow action replay WALs
       - effect WAL/compaction, memory events, research/sources.ndjson, governance/conflicts.ndjson
-      - Domain Pack lifecycle generations, ledger records, receipts, and exact object union
+      - Domain Pack lifecycle generations, one immutable operator-source binding per generation, ledger records, receipts, and exact object union
       - Domain Pack local learning index plus exact content-addressed object closure
       - isolation contract identities/agents/raw digests under contracts/isolations
       - workflow principal and broker archived public registry raw bytes
@@ -112,16 +112,19 @@ backup_manifest_contract:
         - map reserved descendants to exact typed material before occupants; otherwise inherit only an independently typed exact non-Declared occupant, or admit DeclaredEffectOutput solely for canonical custom/** descendants and textual family-root files; exclusions remain exact and exclusion-first
         - compare the complete derived projection, including physical_ref and raw frame digest, with declared_effect_outputs; cross-bind target kind, logical/physical identity, access mode, hash, length, material, and exact entry bytes
         - archive the already-hashed index bytes and derived live output files under the retained boundary; never accept caller-supplied effect claims or a metadata-record digest that was not found by this parser
-  domain_pack_external_provisioning:
-    lifecycle_independent: true
-    operator_sources_before_activation_or_interrupted_acquisition: supported
-    supply_chain_anchor_state: [not_provisioned, provisioned]
-    operator_sources_anchor_implication: operator_sources_present requires both supply-chain and reviewed-learning anchors plus both observations, including no-active/interrupted acquisition state
-    reviewed_learning_anchor_state: [not_provisioned, provisioned]
-    binding_when_provisioned:
-      - exact operator-sources raw SHA-256, operator root identity, public input paths, and public input SHA-256 values
+  domain_pack_source_transaction:
+    lifecycle_independent: false
+    no_active_generation: no operator-source binding, Domain Pack anchor observation, or rebase plan may be archived
+    generation_sequence: contiguous from zero through the active generation
+    generation_local_member: domain-packs/generations/<generation>-<record-digest>/operator-source-binding.yaml
+    ambient_operator_source_file: forbidden
+    active_selection: exact active-pointer generation plus lifecycle-head digest selects the only current external source observation
+    active_projection:
+      - source schema version, lifecycle generation, canonical binding digest, and raw binding-file SHA-256
+      - configured operator-root identity and every public source path
+      - exact raw SHA-256 of every externally read public source file plus artifact root
       - supply-chain/reviewer/reviewed monotonic head identities, generations, and digests
-      - active lifecycle generation digests when active
+    custody: external private keys remain in owner-specific backup procedures and never enter Forge state or Forge backups
   public_workflow_registries:
     archived_material_identity: exact raw registry SHA-256
     undefined_identity_set_digest: removed
@@ -130,7 +133,7 @@ backup_manifest_contract:
   snapshot_protocol:
     mode: cooperative_locks_with_producer_quiescence_and_stable_enumeration
     real_producer_locks_include:
-      - Domain Pack external anchors, operator sources, rebase, lifecycle, and learning capture
+      - Domain Pack external anchors, rebase, lifecycle, and learning capture
       - workflow credential/broker registries, workflow governance, claims-active cache mutation, claim WAL, action replay, memory, research, governance conflicts, and isolations
       - command evidence, effect index, effect WAL, replay WAL, trace, and protected replay anchor
     claim_mutation_order: acquire and retain claims-active/.forge-claim.lock -> load authoritative claim WAL -> acquire locks/claims.wal.lock for WAL recovery/append/rotation -> release claim-WAL lock -> atomically write claims-active YAML cache while the outer claims-active lock remains retained -> release outer lock

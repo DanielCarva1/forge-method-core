@@ -37,7 +37,7 @@
           "policy_set_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
         },
         "domain_pack_generation": {
-          "generation": 2,
+          "generation": 1,
           "active_lock_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
           "composition_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
           "base_core_bundle_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
@@ -64,26 +64,27 @@
       "memory_store": "initialized",
       "domain_pack_store": {
         "status": "active",
-        "operator_sources_present": true,
         "rebase_plan_present": true,
-        "active_generation": 2,
+        "active_generation": 1,
         "generations": [
           {
-            "generation": 1,
+            "generation": 0,
             "record_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "receipt_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "object_raw_digests": [
               "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-            ]
+            ],
+            "operator_source_binding_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212"
           },
           {
-            "generation": 2,
+            "generation": 1,
             "record_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             "receipt_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
             "object_raw_digests": [
               "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
               "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-            ]
+            ],
+            "operator_source_binding_digest": "sha256:1313131313131313131313131313131313131313131313131313131313131313"
           }
         ]
       },
@@ -106,24 +107,6 @@
       },
       "research_store": "initialized",
       "governance_conflict_store": "initialized",
-      "domain_pack_operator_sources": {
-        "schema_version": "forge-domain-pack-operator-sources-v1",
-        "file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "operator_root_identity": "operator://domain-pack/app",
-        "trust_policy_file": "operator/trust-policy.yaml",
-        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
-        "registry_file": "operator/registry.yaml",
-        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
-        "reviewer_registry_file": "operator/reviewers.yaml",
-        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "reviewed_registry_file": "operator/reviewed.yaml",
-        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        "capability_registry_file": "operator/capabilities.yaml",
-        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
-        "sandbox_policy_file": "operator/sandbox.yaml",
-        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "artifact_root": "operator/artifacts"
-      },
       "domain_pack_learning_store": {
         "status": "captured",
         "records": [
@@ -161,14 +144,33 @@
           "access_mode": "create",
           "byte_length": 55
         }
-      ]
+      ],
+      "active_domain_pack_source_binding": {
+        "schema_version": "forge-domain-pack-operator-source-binding-v2",
+        "generation": 1,
+        "binding_digest": "sha256:1313131313131313131313131313131313131313131313131313131313131313",
+        "binding_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "operator_root_identity": "operator://domain-pack/app",
+        "trust_policy_file": "operator/trust-policy.yaml",
+        "trust_policy_file_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "registry_file": "operator/registry.yaml",
+        "registry_file_sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "reviewer_registry_file": "operator/reviewers.yaml",
+        "reviewer_registry_file_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reviewed_registry_file": "operator/reviewed.yaml",
+        "reviewed_registry_file_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "capability_registry_file": "operator/capabilities.yaml",
+        "capability_registry_file_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "sandbox_policy_file": "operator/sandbox.yaml",
+        "sandbox_policy_file_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "operator/artifacts"
+      }
     },
     "snapshot_protocol": {
       "mode": "cooperative_locks_with_producer_quiescence_and_stable_enumeration",
       "lock_order": [
         "external_domain_pack_supply_chain_anchor",
         "external_domain_pack_reviewed_learning_anchor",
-        "domain_pack_operator_sources",
         "domain_pack_rebase_plan",
         "domain_pack_lifecycle",
         "domain_pack_learning_capture",
@@ -326,8 +328,15 @@
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
-        "material": "domain_pack_operator_sources",
-        "logical_path": "sidecar/.forge-method/domain-packs/operator-sources.yaml",
+        "material": "domain_pack_generation_operator_source_binding",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/operator-source-binding.yaml",
+        "entry_type": "regular_file",
+        "byte_length": 18,
+        "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "material": "domain_pack_generation_operator_source_binding",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/operator-source-binding.yaml",
         "entry_type": "regular_file",
         "byte_length": 18,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -362,126 +371,126 @@
       },
       {
         "material": "domain_pack_generation_manifest",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/generation.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/generation.yaml",
         "entry_type": "regular_file",
         "byte_length": 22,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_manifest",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/generation.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/generation.yaml",
         "entry_type": "regular_file",
         "byte_length": 32,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_catalog",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml",
         "entry_type": "regular_file",
         "byte_length": 41,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_catalog",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/catalog.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/catalog.yaml",
         "entry_type": "regular_file",
         "byte_length": 42,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_lock",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/lock.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/lock.yaml",
         "entry_type": "regular_file",
         "byte_length": 23,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_lock",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/lock.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/lock.yaml",
         "entry_type": "regular_file",
         "byte_length": 33,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_preflight",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preflight.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preflight.yaml",
         "entry_type": "regular_file",
         "byte_length": 24,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_preflight",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/preflight.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/preflight.yaml",
         "entry_type": "regular_file",
         "byte_length": 34,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_compatibility",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/compatibility.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/compatibility.yaml",
         "entry_type": "regular_file",
         "byte_length": 25,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_compatibility",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/compatibility.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/compatibility.yaml",
         "entry_type": "regular_file",
         "byte_length": 35,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_receipt",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/receipt.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/receipt.yaml",
         "entry_type": "regular_file",
         "byte_length": 26,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_receipt",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/receipt.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/receipt.yaml",
         "entry_type": "regular_file",
         "byte_length": 36,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_resolution_request",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/resolution-request.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/resolution-request.yaml",
         "entry_type": "regular_file",
         "byte_length": 27,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_resolution_request",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/resolution-request.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/resolution-request.yaml",
         "entry_type": "regular_file",
         "byte_length": 37,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_composition_request",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/composition-request.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/composition-request.yaml",
         "entry_type": "regular_file",
         "byte_length": 28,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_composition_request",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/composition-request.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/composition-request.yaml",
         "entry_type": "regular_file",
         "byte_length": 38,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_trust_input",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/trust-input.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/trust-input.yaml",
         "entry_type": "regular_file",
         "byte_length": 29,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       {
         "material": "domain_pack_generation_trust_input",
-        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000002-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/trust-input.yaml",
+        "logical_path": "sidecar/.forge-method/domain-packs/generations/00000000000000000001-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/trust-input.yaml",
         "entry_type": "regular_file",
         "byte_length": 39,
         "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -709,6 +718,6 @@
       "operator_secret_roots",
       "mcp_private_keys"
     ],
-    "manifest_set_digest": "sha256:446d23aa82926b74f9d5e4bd973895c99ab755bb945f3346221bbcfd65a837d5"
+    "manifest_set_digest": "sha256:4cc8daa63ce62b5bbc06ed504a9782e14073f4ff1e06e1a041d965d906ed95ae"
   }
 }

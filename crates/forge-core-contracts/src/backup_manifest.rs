@@ -9,7 +9,7 @@
 
 use crate::{
     ProjectLinkDocument, StableId, WorkflowEffectiveBundleIdentity,
-    WorkflowGovernanceReleaseIdentity,
+    WorkflowGovernanceReleaseIdentity, DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -104,7 +104,7 @@ pub struct BackupSourceState {
     pub research_store: BackupInitializationState,
     pub governance_conflict_store: BackupInitializationState,
     pub domain_pack_store: BackupDomainPackStoreState,
-    pub domain_pack_operator_sources: Option<BackupDomainPackOperatorSourcesProjection>,
+    pub active_domain_pack_source_binding: Option<BackupDomainPackOperatorSourceBindingProjection>,
     pub domain_pack_learning_store: BackupDomainPackLearningStoreState,
     pub isolation_store: BackupIsolationStoreState,
     pub domain_pack_supply_chain_anchor: BackupProvisioningState,
@@ -154,12 +154,8 @@ pub enum BackupEffectStoreState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BackupDomainPackStoreState {
-    NoActiveGeneration {
-        operator_sources_present: bool,
-        rebase_plan_present: bool,
-    },
+    NoActiveGeneration,
     Active {
-        operator_sources_present: bool,
         rebase_plan_present: bool,
         active_generation: u64,
         generations: Vec<BackupDomainPackGeneration>,
@@ -172,14 +168,17 @@ pub struct BackupDomainPackGeneration {
     pub generation: u64,
     pub record_digest: String,
     pub receipt_digest: String,
+    pub operator_source_binding_digest: String,
     pub object_raw_digests: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct BackupDomainPackOperatorSourcesProjection {
+pub struct BackupDomainPackOperatorSourceBindingProjection {
     pub schema_version: String,
-    pub file_sha256: String,
+    pub generation: u64,
+    pub binding_digest: String,
+    pub binding_file_sha256: String,
     pub operator_root_identity: String,
     pub trust_policy_file: String,
     pub trust_policy_file_sha256: String,
@@ -328,7 +327,6 @@ pub enum BackupUnlockedProducerBoundary {
 pub enum BackupLockScope {
     ExternalDomainPackSupplyChainAnchor,
     ExternalDomainPackReviewedLearningAnchor,
-    DomainPackOperatorSources,
     DomainPackRebasePlan,
     DomainPackLifecycle,
     DomainPackLearningCapture,
@@ -360,7 +358,6 @@ impl BackupLockScope {
             Self::ExternalDomainPackReviewedLearningAnchor => {
                 "<operator-root>/.forge-domain-pack-learning-anchor.lock"
             }
-            Self::DomainPackOperatorSources => "locks/domain-packs.operator-sources.lock",
             Self::DomainPackRebasePlan => "locks/domain-packs.rebase-plan.lock",
             Self::DomainPackLifecycle => "locks/domain-packs.lifecycle.lock",
             Self::DomainPackLearningCapture => "domain-pack-learning/capture.lock",
@@ -384,13 +381,12 @@ impl BackupLockScope {
     }
 }
 
-/// Compatible with shipped nested acquisitions: supply -> reviewed ->
-/// operator-source/rebase -> lifecycle -> workflow, claim-cache -> claim-WAL ->
+/// Compatible with shipped nested acquisitions: supply -> reviewed -> rebase ->
+/// lifecycle -> workflow, claim-cache -> claim-WAL ->
 /// claim-cache atomic mutation, and effect -> replay.
 pub const BACKUP_LOCK_ORDER: &[BackupLockScope] = &[
     BackupLockScope::ExternalDomainPackSupplyChainAnchor,
     BackupLockScope::ExternalDomainPackReviewedLearningAnchor,
-    BackupLockScope::DomainPackOperatorSources,
     BackupLockScope::DomainPackRebasePlan,
     BackupLockScope::DomainPackLifecycle,
     BackupLockScope::DomainPackLearningCapture,
@@ -434,7 +430,7 @@ pub enum BackupEntryKind {
     MemoryEventLog,
     ResearchEventLog,
     GovernanceConflictEventLog,
-    DomainPackOperatorSources,
+    DomainPackGenerationOperatorSourceBinding,
     DomainPackRebasePlan,
     DomainPackActivePointer,
     DomainPackLedgerRecord,
@@ -1302,9 +1298,6 @@ fn validate_effective_epoch(
         digest(field, value)?;
     }
     if let Some(pack) = &bundle.domain_pack_generation {
-        if pack.generation == 0 {
-            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
-        }
         for value in [
             &pack.active_lock_digest,
             &pack.composition_digest,
@@ -1484,24 +1477,23 @@ fn validate_domain_pack_inventory(
     manifest: &BackupManifest,
     expected: &mut BTreeMap<BackupEntryKind, u64>,
 ) -> Result<(), BackupManifestValidationError> {
-    let (operator, rebase, active, generations) = match &manifest.source_state.domain_pack_store {
-        BackupDomainPackStoreState::NoActiveGeneration {
-            operator_sources_present,
-            rebase_plan_present,
-        } => {
-            if *rebase_plan_present
+    let (rebase, generations) = match &manifest.source_state.domain_pack_store {
+        BackupDomainPackStoreState::NoActiveGeneration => {
+            if manifest
+                .effective_epoch
+                .effective_bundle
+                .domain_pack_generation
+                .is_some()
                 || manifest
-                    .effective_epoch
-                    .effective_bundle
-                    .domain_pack_generation
+                    .source_state
+                    .active_domain_pack_source_binding
                     .is_some()
             {
                 return Err(BackupManifestValidationError::InvalidDomainPackProjection);
             }
-            (*operator_sources_present, false, false, &[][..])
+            (false, &[][..])
         }
         BackupDomainPackStoreState::Active {
-            operator_sources_present,
             rebase_plan_present,
             active_generation,
             generations,
@@ -1512,7 +1504,7 @@ fn validate_domain_pack_inventory(
                 .domain_pack_generation
                 .as_ref()
                 .map(|generation| generation.generation);
-            if generations.first().map(|generation| generation.generation) != Some(1)
+            if generations.first().map(|generation| generation.generation) != Some(0)
                 || generations.last().map(|generation| generation.generation)
                     != Some(*active_generation)
                 || effective_generation != Some(*active_generation)
@@ -1522,19 +1514,26 @@ fn validate_domain_pack_inventory(
             {
                 return Err(BackupManifestValidationError::InvalidDomainPackProjection);
             }
-            (
-                *operator_sources_present,
-                *rebase_plan_present,
-                true,
-                generations.as_slice(),
-            )
+            (*rebase_plan_present, generations.as_slice())
         }
     };
-    if operator != manifest.source_state.domain_pack_operator_sources.is_some() {
+    let active = !generations.is_empty();
+    if active
+        != manifest
+            .source_state
+            .active_domain_pack_source_binding
+            .is_some()
+    {
         return Err(BackupManifestValidationError::InvalidDomainPackProjection);
     }
-    if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
-        if sources.schema_version != "forge-domain-pack-operator-sources-v1" {
+    if let Some(sources) = &manifest.source_state.active_domain_pack_source_binding {
+        let Some(active_generation) = generations.last() else {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        };
+        if sources.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION
+            || sources.generation != active_generation.generation
+            || sources.binding_digest != active_generation.operator_source_binding_digest
+        {
             return Err(BackupManifestValidationError::InvalidDomainPackProjection);
         }
         for value in [
@@ -1547,10 +1546,11 @@ fn validate_domain_pack_inventory(
             &sources.sandbox_policy_file,
             &sources.artifact_root,
         ] {
-            required("domain_pack.operator_sources", value)?;
+            required("domain_pack.operator_source_binding", value)?;
         }
         validate_digest_fields([
-            &sources.file_sha256,
+            &sources.binding_digest,
+            &sources.binding_file_sha256,
             &sources.trust_policy_file_sha256,
             &sources.registry_file_sha256,
             &sources.reviewer_registry_file_sha256,
@@ -1558,27 +1558,29 @@ fn validate_domain_pack_inventory(
             &sources.capability_registry_file_sha256,
             &sources.sandbox_policy_file_sha256,
         ])?;
+        let record = digest_token(&active_generation.record_digest)?;
         let path = format!(
-            "{}/domain-packs/operator-sources.yaml",
-            state_prefix(&manifest.project.archive_layout)
+            "{}/domain-packs/generations/{:020}-{record}/operator-source-binding.yaml",
+            state_prefix(&manifest.project.archive_layout),
+            active_generation.generation
         );
-        if !has_entry(manifest, BackupEntryKind::DomainPackOperatorSources, &path)
-            || entry(manifest, BackupEntryKind::DomainPackOperatorSources)?.sha256
-                != sources.file_sha256
-        {
+        let Some(source_entry) = manifest.entries.iter().find(|entry| {
+            entry.material == BackupEntryKind::DomainPackGenerationOperatorSourceBinding
+                && entry.logical_path == path
+        }) else {
+            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
+        };
+        if source_entry.sha256 != sources.binding_file_sha256 {
             return Err(BackupManifestValidationError::InvalidDomainPackProjection);
         }
     }
-    expected.insert(
-        BackupEntryKind::DomainPackOperatorSources,
-        u64::from(operator),
-    );
     expected.insert(BackupEntryKind::DomainPackRebasePlan, u64::from(rebase));
     expected.insert(BackupEntryKind::DomainPackActivePointer, u64::from(active));
     let count = generations.len() as u64;
     for kind in [
         BackupEntryKind::DomainPackLedgerRecord,
         BackupEntryKind::DomainPackGenerationManifest,
+        BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
         BackupEntryKind::DomainPackGenerationCatalog,
         BackupEntryKind::DomainPackGenerationLock,
         BackupEntryKind::DomainPackGenerationPreflight,
@@ -1594,11 +1596,12 @@ fn validate_domain_pack_inventory(
     let mut objects = BTreeSet::new();
     let state = state_prefix(&manifest.project.archive_layout);
     for generation in generations {
-        if generation.generation == 0 {
-            return Err(BackupManifestValidationError::InvalidDomainPackProjection);
-        }
         digest("domain_pack.record_digest", &generation.record_digest)?;
         digest("domain_pack.receipt_digest", &generation.receipt_digest)?;
+        digest(
+            "domain_pack.operator_source_binding_digest",
+            &generation.operator_source_binding_digest,
+        )?;
         let record = digest_token(&generation.record_digest)?;
         let receipt = digest_token(&generation.receipt_digest)?;
         let root = format!(
@@ -1613,6 +1616,10 @@ fn validate_domain_pack_inventory(
             (
                 BackupEntryKind::DomainPackGenerationManifest,
                 format!("{root}/generation.yaml"),
+            ),
+            (
+                BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
+                format!("{root}/operator-source-binding.yaml"),
             ),
             (
                 BackupEntryKind::DomainPackGenerationCatalog,
@@ -2338,20 +2345,15 @@ fn validate_external_authorities(
         manifest.source_state.domain_pack_store,
         BackupDomainPackStoreState::Active { .. }
     );
-    let operator_sources_present = match manifest.source_state.domain_pack_store {
-        BackupDomainPackStoreState::NoActiveGeneration {
-            operator_sources_present,
-            ..
-        }
-        | BackupDomainPackStoreState::Active {
-            operator_sources_present,
-            ..
-        } => operator_sources_present,
-    };
+    let active_source_binding_present = manifest
+        .source_state
+        .active_domain_pack_source_binding
+        .is_some();
     if observations.domain_pack_supply_chain.is_some() != supply_provisioned
         || observations.domain_pack_reviewed_learning.is_some() != learning_provisioned
-        || (domain_active && (!supply_provisioned || !learning_provisioned))
-        || (operator_sources_present && (!supply_provisioned || !learning_provisioned))
+        || supply_provisioned != domain_active
+        || learning_provisioned != domain_active
+        || active_source_binding_present != domain_active
     {
         return Err(BackupManifestValidationError::InvalidExternalAuthorities);
     }
@@ -2378,7 +2380,7 @@ fn validate_external_authorities(
             &value.capability_registry_file_sha256,
             &value.sandbox_policy_file_sha256,
         ])?;
-        if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
+        if let Some(sources) = &manifest.source_state.active_domain_pack_source_binding {
             if value.operator_root_identity != sources.operator_root_identity
                 || value.registry_file_sha256 != sources.registry_file_sha256
                 || value.trust_policy_file_sha256 != sources.trust_policy_file_sha256
@@ -2412,7 +2414,7 @@ fn validate_external_authorities(
             &value.reviewer_registry_file_sha256,
             &value.reviewed_registry_file_sha256,
         ])?;
-        if let Some(sources) = &manifest.source_state.domain_pack_operator_sources {
+        if let Some(sources) = &manifest.source_state.active_domain_pack_source_binding {
             if value.operator_root_identity != sources.operator_root_identity
                 || value.reviewer_registry_file_sha256 != sources.reviewer_registry_file_sha256
                 || value.reviewed_registry_file_sha256 != sources.reviewed_registry_file_sha256
@@ -2509,7 +2511,12 @@ fn validate_entry_path(
         BackupEntryKind::GovernanceConflictEventLog => {
             exact(GOVERNANCE_CONFLICT_EVENT_LOG_RELATIVE_PATH)
         }
-        BackupEntryKind::DomainPackOperatorSources => exact("domain-packs/operator-sources.yaml"),
+        BackupEntryKind::DomainPackGenerationOperatorSourceBinding => {
+            below("domain-packs/generations")
+                && entry
+                    .logical_path
+                    .ends_with("/operator-source-binding.yaml")
+        }
         BackupEntryKind::DomainPackRebasePlan => exact("domain-packs/rebase-plan.yaml"),
         BackupEntryKind::DomainPackActivePointer => exact("domain-packs/active.lock.yaml"),
         BackupEntryKind::DomainPackLedgerRecord => {
@@ -2613,7 +2620,7 @@ fn all_entry_kinds() -> impl Iterator<Item = BackupEntryKind> {
         BackupEntryKind::MemoryEventLog,
         BackupEntryKind::ResearchEventLog,
         BackupEntryKind::GovernanceConflictEventLog,
-        BackupEntryKind::DomainPackOperatorSources,
+        BackupEntryKind::DomainPackGenerationOperatorSourceBinding,
         BackupEntryKind::DomainPackRebasePlan,
         BackupEntryKind::DomainPackActivePointer,
         BackupEntryKind::DomainPackLedgerRecord,
@@ -3281,8 +3288,8 @@ mod tests {
     }
 
     #[test]
-    fn operator_sources_require_both_acquisition_anchors_even_without_active_generation() {
-        let mut document = parse_manifest("valid/no-active-provisioned-v1.yaml");
+    fn active_source_binding_requires_both_acquisition_anchors() {
+        let mut document = parse_manifest("valid/replacement-machine-public-material-v1.yaml");
         document
             .backup_manifest
             .source_state
@@ -3348,7 +3355,7 @@ mod tests {
         assert_eq!(
             document
                 .classify_source_file(
-                    "sidecar/.forge-method/domain-packs/generations/00000000000000000001-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml"
+                    "sidecar/.forge-method/domain-packs/generations/00000000000000000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/catalog.yaml"
                 )
                 .unwrap(),
             BackupSourceFileClassification::Archive(

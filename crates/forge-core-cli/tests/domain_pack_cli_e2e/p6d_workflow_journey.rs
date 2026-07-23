@@ -694,6 +694,28 @@ fn reference_capability_demands(
     demands
 }
 
+fn reference_operator_source_binding(
+    project: &ReferenceProject,
+    supply: &ReferenceSupply,
+    reviewed_path: &Path,
+    generation: u64,
+) -> DomainPackOperatorSourceBinding {
+    DomainPackOperatorSourceBinding {
+        schema_version: DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION.to_owned(),
+        generation,
+        operator_root: path_arg(&project.operator),
+        trust_policy_file: path_arg(&supply.trust_policy),
+        registry_file: path_arg(&supply.registry),
+        reviewer_registry_file: path_arg(&project.operator.join("reviewers.yaml")),
+        reviewed_registry_file: path_arg(reviewed_path),
+        capability_registry_file: path_arg(
+            &project.operator.join("runtime-capability-registry.yaml"),
+        ),
+        sandbox_policy_file: path_arg(&project.operator.join("capability-sandbox-policy.yaml")),
+        artifact_root: path_arg(&project.artifacts),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn write_reference_lifecycle(
     project: &ReferenceProject,
@@ -977,6 +999,12 @@ fn write_reference_lifecycle(
             principal_id: StableId("principal.reference-pack-installer".to_owned()),
             operation,
             expected_state: expected.clone(),
+            operator_source_binding: reference_operator_source_binding(
+                project,
+                supply,
+                reviewed_path,
+                0,
+            ),
             resolution_request_digest: canonical_digest(&resolution_request),
             project_snapshot_digest: snapshot_digest.clone(),
         },
@@ -1297,10 +1325,22 @@ fn write_reference_remove_lifecycle(
         "removing the last required pack must preserve an explicit degraded compatibility result"
     );
     let committed = &install_receipt.domain_pack_lifecycle_receipt;
+    let mut operator_source_binding = install_preflight
+        .domain_pack_lifecycle_preflight
+        .request
+        .domain_pack_lifecycle_request
+        .operator_source_binding
+        .clone();
+    operator_source_binding.generation = committed
+        .to_state
+        .generation
+        .checked_add(1)
+        .expect("reference lifecycle generation remains representable");
     let expected = DomainPackExpectedLifecycleState::Initialized {
         generation: committed.to_state.generation,
         active_lock_digest: committed.to_state.active_lock_digest.clone(),
         lifecycle_head_digest: committed.new_ledger_head_digest.clone(),
+        operator_source_binding_digest: committed.to_state.operator_source_binding_digest.clone(),
         project_snapshot_digest: project_snapshot_digest.clone(),
     };
     let lifecycle_request = DomainPackLifecycleRequestDocument {
@@ -1316,6 +1356,7 @@ fn write_reference_remove_lifecycle(
             principal_id: StableId("principal.reference-pack-installer".to_owned()),
             operation,
             expected_state: expected.clone(),
+            operator_source_binding,
             resolution_request_digest: canonical_digest(&resolution_request),
             project_snapshot_digest,
         },

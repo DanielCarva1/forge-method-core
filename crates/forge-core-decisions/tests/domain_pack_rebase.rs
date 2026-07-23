@@ -80,6 +80,7 @@ fn input() -> DomainPackRebasePlanInput {
         lifecycle_pointer_digest: A.to_owned(),
         lifecycle_head_digest: B.to_owned(),
         active_lock_digest: C.to_owned(),
+        operator_source_binding_digest: D.to_owned(),
         composition_digest: D.to_owned(),
         supply_chain_registry_digest: A.to_owned(),
         reviewer_registry_digest: RAW_B.to_owned(),

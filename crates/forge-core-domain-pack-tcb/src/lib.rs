@@ -24,13 +24,14 @@ use forge_core_contracts::{
     DomainPackInitializedProjectStateBinding, DomainPackLifecycleLedgerRecord,
     DomainPackLifecycleOperation, DomainPackLifecyclePreflightDocument,
     DomainPackLifecyclePreflightStatus, DomainPackLifecycleReceipt,
-    DomainPackLifecycleReceiptDocument, DomainPackLockedPackage, DomainPackRecoveryReport,
-    DomainPackRecoveryReportDocument, DomainPackRecoveryStatus, DomainPackRemoteArtifactMediaType,
-    DomainPackResolutionRequestDocument, DomainPackResolutionStatus,
-    DomainPackRuntimeCapabilityRegistryDocument, DomainPackSourceAssurance,
-    DomainPackSupplyChainRegistryDocument, DomainPackTrustPolicyDocument, StableId,
-    WorkflowGovernanceBundle, DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION,
-    DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION, DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION,
+    DomainPackLifecycleReceiptDocument, DomainPackLockedPackage, DomainPackOperatorSourceBinding,
+    DomainPackRecoveryReport, DomainPackRecoveryReportDocument, DomainPackRecoveryStatus,
+    DomainPackRemoteArtifactMediaType, DomainPackResolutionRequestDocument,
+    DomainPackResolutionStatus, DomainPackRuntimeCapabilityRegistryDocument,
+    DomainPackSourceAssurance, DomainPackSupplyChainRegistryDocument,
+    DomainPackTrustPolicyDocument, StableId, WorkflowGovernanceBundle,
+    DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION, DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION,
+    DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION, DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION,
     DOMAIN_PACK_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
@@ -123,6 +124,8 @@ impl DomainPackRawLifecycleInventory {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainPackActiveRebaseSource {
     pub pointer: DomainPackActivePointerDocument,
+    pub operator_source_binding: DomainPackOperatorSourceBinding,
+    pub from_operator_source_binding_digest: Option<String>,
     pub exact_lock: DomainPackExactLockDocument,
     pub resolution_request: DomainPackResolutionRequestDocument,
     pub composition_request: DomainPackCompositionRequestDocument,
@@ -256,6 +259,7 @@ struct DomainPackGenerationManifest {
     preflight_digest: String,
     compatibility_report_digest: String,
     receipt_digest: String,
+    operator_source_binding_digest: String,
     object_raw_digests: Vec<String>,
 }
 
@@ -324,12 +328,15 @@ pub struct LockedDomainPackLifecycle {
 struct ActiveDomainPackGenerationMaterial {
     pointer: DomainPackActivePointerDocument,
     lock: DomainPackExactLockDocument,
+    operator_source_binding: DomainPackOperatorSourceBinding,
+    from_operator_source_binding_digest: Option<String>,
     composition: DomainPackCompositionProjectionDocument,
     lifecycle_operation: DomainPackLifecycleOperation,
     effective_bundle: WorkflowGovernanceBundle,
     pointer_raw_digest: String,
     generation_manifest_raw_digest: String,
     lock_raw_digest: String,
+    operator_source_binding_raw_digest: String,
     preflight_raw_digest: String,
     initialized_generation: Option<DomainPackInitializedProjectGenerationMaterial>,
     rebase_inputs: Option<ActiveDomainPackRebaseInputs>,
@@ -566,6 +573,22 @@ impl AdmittedActiveDomainPackGenerationView<'_> {
             .pointer
             .domain_pack_active_pointer
             .lifecycle_head_digest
+    }
+
+    /// Canonical digest of the generation-local operator-source binding.
+    #[must_use]
+    pub fn operator_source_binding_digest(&self) -> &str {
+        &self
+            .material()
+            .pointer
+            .domain_pack_active_pointer
+            .operator_source_binding_digest
+    }
+
+    /// Exact operator-controlled public source paths selected with this generation.
+    #[must_use]
+    pub fn operator_source_binding(&self) -> &DomainPackOperatorSourceBinding {
+        &self.material().operator_source_binding
     }
 
     /// Lifecycle operation that produced this immutable generation.
@@ -1045,6 +1068,12 @@ impl LockedDomainPackLifecycle {
                         .lifecycle_head_digest
                         .clone()
                 }),
+                operator_source_binding_digest: self.state.active_pointer.as_ref().map(|pointer| {
+                    pointer
+                        .domain_pack_active_pointer
+                        .operator_source_binding_digest
+                        .clone()
+                }),
                 repaired_artifact_refs,
                 issues: Vec::new(),
             },
@@ -1137,6 +1166,7 @@ impl LockedDomainPackLifecycle {
             generation: pointer.generation,
             active_lock_digest: pointer.active_lock_digest.clone(),
             lifecycle_head_digest: pointer.lifecycle_head_digest.clone(),
+            operator_source_binding_digest: pointer.operator_source_binding_digest.clone(),
             project_snapshot_digest: self.project_snapshot.snapshot_digest().to_owned(),
         };
         if intent.project_id != pointer.project_id
@@ -1223,6 +1253,8 @@ impl LockedDomainPackLifecycle {
             .ok_or_else(|| blocked("active generation predates persisted Core-rebase inputs"))?;
         Ok(DomainPackActiveRebaseSource {
             pointer: material.pointer,
+            operator_source_binding: material.operator_source_binding,
+            from_operator_source_binding_digest: material.from_operator_source_binding_digest,
             exact_lock: material.lock,
             resolution_request: inputs.resolution_request,
             composition_request: inputs.composition_request,
@@ -1291,9 +1323,29 @@ impl LockedDomainPackLifecycle {
                 ));
             }
         }
-        let generation = previous_pointer.as_ref().map_or(0, |pointer| {
-            pointer.domain_pack_active_pointer.generation + 1
-        });
+        let generation = match previous_pointer.as_ref() {
+            Some(pointer) => pointer
+                .domain_pack_active_pointer
+                .generation
+                .checked_add(1)
+                .ok_or_else(|| blocked("lifecycle generation is exhausted"))?,
+            None => 0,
+        };
+        validate_operator_source_binding(&request.operator_source_binding, generation)?;
+        if let Some(pointer) = previous_pointer.as_ref() {
+            let mut expected_binding = load_selected_operator_source_binding(
+                &self.store,
+                pointer,
+                &self.state.ledger_records,
+            )?;
+            expected_binding.generation = generation;
+            if request.operator_source_binding != expected_binding {
+                return Err(blocked(
+                    "successor lifecycle generation must retain the current operator-source paths",
+                ));
+            }
+        }
+        let operator_source_binding_digest = canonical_digest(&request.operator_source_binding)?;
         let prior_head = previous_pointer.as_ref().map(|pointer| {
             pointer
                 .domain_pack_active_pointer
@@ -1316,6 +1368,7 @@ impl LockedDomainPackLifecycle {
                 .domain_pack_exact_lock
                 .lock_digest
                 .clone(),
+            operator_source_binding_digest: operator_source_binding_digest.clone(),
             compatibility_report_digest: body
                 .compatibility_report
                 .domain_pack_compatibility_report
@@ -1331,6 +1384,7 @@ impl LockedDomainPackLifecycle {
             generation,
             active_lock_digest: record.active_lock_digest.clone(),
             lifecycle_head_digest: record.record_digest.clone(),
+            operator_source_binding_digest: operator_source_binding_digest.clone(),
             pointer_digest: String::new(),
         };
         pointer.pointer_digest = digest_pointer(&pointer)?;
@@ -1353,6 +1407,13 @@ impl LockedDomainPackLifecycle {
             reviewed_registry_digest: lock.reviewed_registry_digest.clone(),
             capability_registry_digest: lock.capability_registry_digest.clone(),
             sandbox_policy_digest: lock.sandbox_policy_digest.clone(),
+            from_operator_source_binding_digest: previous_pointer.as_ref().map(|pointer| {
+                pointer
+                    .domain_pack_active_pointer
+                    .operator_source_binding_digest
+                    .clone()
+            }),
+            to_operator_source_binding_digest: operator_source_binding_digest,
             from_state: previous_pointer
                 .as_ref()
                 .map(|value| value.domain_pack_active_pointer.clone()),
@@ -1492,6 +1553,7 @@ impl LockedDomainPackLifecycle {
                 .receipt
                 .domain_pack_lifecycle_receipt
                 .receipt_digest,
+            operator_source_binding_digest: &manifest.operator_source_binding_digest,
             object_raw_digests: &manifest.object_raw_digests,
         };
         let pointer_bytes = yaml_bytes(&prepared.next_pointer)?;
@@ -2179,6 +2241,15 @@ fn materialize_generation(
             yaml_bytes(&body.compatibility_report)?,
         ),
         ("receipt.yaml", yaml_bytes(&prepared.receipt)?),
+        (
+            "operator-source-binding.yaml",
+            yaml_bytes(
+                &body
+                    .request
+                    .domain_pack_lifecycle_request
+                    .operator_source_binding,
+            )?,
+        ),
         ("catalog.yaml", yaml_bytes(acquisition_catalog)?),
         ("resolution-request.yaml", yaml_bytes(resolution_request)?),
         ("composition-request.yaml", yaml_bytes(composition_request)?),
@@ -2213,6 +2284,7 @@ fn materialize_generation(
             .domain_pack_lifecycle_receipt
             .receipt_digest
             .clone(),
+        operator_source_binding_digest: prepared.record.operator_source_binding_digest.clone(),
         object_raw_digests,
     };
     write_immutable_under_root(
@@ -2318,6 +2390,15 @@ fn validate_prepared_generation(
             yaml_bytes(&body.compatibility_report)?,
         ),
         ("receipt.yaml", yaml_bytes(&prepared.receipt)?),
+        (
+            "operator-source-binding.yaml",
+            yaml_bytes(
+                &body
+                    .request
+                    .domain_pack_lifecycle_request
+                    .operator_source_binding,
+            )?,
+        ),
         ("catalog.yaml", yaml_bytes(acquisition_catalog)?),
         ("resolution-request.yaml", yaml_bytes(resolution_request)?),
         ("composition-request.yaml", yaml_bytes(composition_request)?),
@@ -2357,6 +2438,35 @@ fn generation_root(
     Ok(Path::new(DOMAIN_PACK_STATE_RELATIVE_ROOT)
         .join("generations")
         .join(format!("{generation:020}-{token}")))
+}
+
+fn load_selected_operator_source_binding(
+    store: &RetainedDomainPackLifecycleStore,
+    pointer: &DomainPackActivePointerDocument,
+    records: &[DomainPackLifecycleLedgerRecord],
+) -> Result<DomainPackOperatorSourceBinding, DomainPackLifecycleStoreError> {
+    let pointer = &pointer.domain_pack_active_pointer;
+    let record = records
+        .last()
+        .filter(|record| {
+            record.record_digest == pointer.lifecycle_head_digest
+                && record.to_generation == pointer.generation
+                && record.operator_source_binding_digest == pointer.operator_source_binding_digest
+        })
+        .ok_or_else(|| blocked("active operator-source binding has no exact ledger head"))?;
+    let root = generation_root(record.to_generation, &record.record_digest)?;
+    let path = root.join("operator-source-binding.yaml");
+    let binding: DomainPackOperatorSourceBinding = parse_yaml(
+        &store.display_path(&path),
+        &read_required_state_bytes(store, &path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?,
+    )?;
+    validate_operator_source_binding(&binding, pointer.generation)?;
+    if canonical_digest(&binding)? != pointer.operator_source_binding_digest {
+        return Err(blocked(
+            "active operator-source binding differs from pointer and ledger",
+        ));
+    }
+    Ok(binding)
 }
 
 fn validate_generation_directory(
@@ -2473,6 +2583,7 @@ fn load_state_under_lock(
         .ok_or_else(|| invalid("ledger.head", "active pointer has no ledger head"))?;
     if head.record_digest != pointer_value.lifecycle_head_digest
         || head.active_lock_digest != pointer_value.active_lock_digest
+        || head.operator_source_binding_digest != pointer_value.operator_source_binding_digest
         || head.to_generation != pointer_value.generation
     {
         return Err(invalid(
@@ -2493,10 +2604,24 @@ fn load_state_under_lock(
         || manifest.lock_digest != pointer_value.active_lock_digest
         || manifest.preflight_digest != head.preflight_digest
         || manifest.compatibility_report_digest != head.compatibility_report_digest
+        || manifest.operator_source_binding_digest != head.operator_source_binding_digest
     {
         return Err(invalid(
             "generation_manifest",
             "manifest does not bind pointer and ledger head",
+        ));
+    }
+
+    let operator_source_path = root.join("operator-source-binding.yaml");
+    let operator_source_binding: DomainPackOperatorSourceBinding = parse_yaml(
+        &operator_source_path,
+        &read_required_state_bytes(store, &operator_source_path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?,
+    )?;
+    validate_operator_source_binding(&operator_source_binding, pointer_value.generation)?;
+    if canonical_digest(&operator_source_binding)? != manifest.operator_source_binding_digest {
+        return Err(invalid(
+            "generation.operator_source_binding",
+            "operator-source binding does not bind pointer, ledger, manifest, and request",
         ));
     }
 
@@ -2530,6 +2655,11 @@ fn load_state_under_lock(
             .domain_pack_lifecycle_request
             .operation
             != head.operation
+        || preflight_value
+            .request
+            .domain_pack_lifecycle_request
+            .operator_source_binding
+            != operator_source_binding
     {
         return Err(invalid(
             "generation.preflight",
@@ -2563,6 +2693,13 @@ fn load_state_under_lock(
         || digest_receipt(receipt_value)? != manifest.receipt_digest
         || receipt_value.new_ledger_head_digest != head.record_digest
         || receipt_value.to_state != *pointer_value
+        || receipt_value.to_operator_source_binding_digest
+            != manifest.operator_source_binding_digest
+        || receipt_value.from_operator_source_binding_digest
+            != receipt_value
+                .from_state
+                .as_ref()
+                .map(|state| state.operator_source_binding_digest.clone())
         || receipt_value.operation != head.operation
         || receipt_value.preflight_digest != head.preflight_digest
         || receipt_value.trust_policy_digest
@@ -2621,6 +2758,7 @@ fn load_state_under_lock(
         preflight_digest: &manifest.preflight_digest,
         compatibility_report_digest: &manifest.compatibility_report_digest,
         receipt_digest: &manifest.receipt_digest,
+        operator_source_binding_digest: &manifest.operator_source_binding_digest,
         object_raw_digests: &manifest.object_raw_digests,
     };
     let completion = store.validate_selected_lifecycle_completion(
@@ -2713,6 +2851,7 @@ fn load_raw_lifecycle_inventory(
             || manifest.lock_digest != record.active_lock_digest
             || manifest.preflight_digest != record.preflight_digest
             || manifest.compatibility_report_digest != record.compatibility_report_digest
+            || manifest.operator_source_binding_digest != record.operator_source_binding_digest
         {
             return Err(invalid(
                 "raw_inventory.generation_manifest",
@@ -2726,6 +2865,25 @@ fn load_raw_lifecycle_inventory(
                 DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_BYTES,
                 &mut files,
             )?;
+        }
+
+        let operator_source_path = generation_root.join("operator-source-binding.yaml");
+        let operator_source_raw = inventory_read(
+            store,
+            &operator_source_path,
+            DOMAIN_PACK_MAX_DOCUMENT_BYTES,
+            &mut files,
+        )?;
+        let operator_source_binding: DomainPackOperatorSourceBinding = parse_yaml(
+            &store.display_path(&operator_source_path),
+            &operator_source_raw,
+        )?;
+        validate_operator_source_binding(&operator_source_binding, record.to_generation)?;
+        if canonical_digest(&operator_source_binding)? != manifest.operator_source_binding_digest {
+            return Err(invalid(
+                "raw_inventory.operator_source_binding",
+                "historical operator-source binding differs from its manifest",
+            ));
         }
 
         let lock_path = generation_root.join("lock.yaml");
@@ -2759,6 +2917,11 @@ fn load_raw_lifecycle_inventory(
                 .domain_pack_lifecycle_request
                 .operation
                 != record.operation
+            || preflight_value
+                .request
+                .domain_pack_lifecycle_request
+                .operator_source_binding
+                != operator_source_binding
         {
             return Err(invalid(
                 "raw_inventory.preflight",
@@ -2802,15 +2965,24 @@ fn load_raw_lifecycle_inventory(
         let expected_prior_pointer = prior_state
             .as_ref()
             .map(|pointer| pointer.pointer_digest.clone());
+        let expected_prior_operator_source = prior_state
+            .as_ref()
+            .map(|pointer| pointer.operator_source_binding_digest.clone());
         if receipt_value.receipt_digest != manifest.receipt_digest
             || digest_receipt(receipt_value)? != manifest.receipt_digest
             || receipt_value.from_state.as_ref() != prior_state.as_ref()
+            || receipt_value.from_operator_source_binding_digest.as_ref()
+                != expected_prior_operator_source.as_ref()
+            || receipt_value.to_operator_source_binding_digest
+                != record.operator_source_binding_digest
             || receipt_value.prior_ledger_head_digest.as_ref() != expected_prior_head.as_ref()
             || record.from_pointer_digest.as_ref() != expected_prior_pointer.as_ref()
             || receipt_value.to_state.project_id != lock.domain_pack_exact_lock.payload.project_id
             || receipt_value.to_state.generation != record.to_generation
             || receipt_value.to_state.active_lock_digest != record.active_lock_digest
             || receipt_value.to_state.lifecycle_head_digest != record.record_digest
+            || receipt_value.to_state.operator_source_binding_digest
+                != record.operator_source_binding_digest
             || digest_pointer(&receipt_value.to_state)? != receipt_value.to_state.pointer_digest
             || receipt_value.new_ledger_head_digest != record.record_digest
             || receipt_value.receipt_id
@@ -3266,12 +3438,45 @@ fn load_active_generation_material(
     let pointer_raw = raw_inventory_required(&inventory, &pointer_path)?;
     let generation_manifest_path = generation_root.join("generation.yaml");
     let generation_manifest_raw = raw_inventory_required(&inventory, &generation_manifest_path)?;
+    let generation_manifest: DomainPackGenerationManifest =
+        parse_yaml(&generation_manifest_path, generation_manifest_raw)?;
+    let operator_source_path = generation_root.join("operator-source-binding.yaml");
+    let operator_source_binding_raw = raw_inventory_required(&inventory, &operator_source_path)?;
+    let operator_source_binding: DomainPackOperatorSourceBinding =
+        parse_yaml(&operator_source_path, operator_source_binding_raw)?;
+    validate_operator_source_binding(
+        &operator_source_binding,
+        pointer.domain_pack_active_pointer.generation,
+    )?;
+    if canonical_digest(&operator_source_binding)?
+        != generation_manifest.operator_source_binding_digest
+        || generation_manifest.operator_source_binding_digest
+            != pointer
+                .domain_pack_active_pointer
+                .operator_source_binding_digest
+        || generation_manifest.operator_source_binding_digest != head.operator_source_binding_digest
+    {
+        return Err(blocked(
+            "active operator-source binding differs from pointer, ledger, or generation manifest",
+        ));
+    }
     let lock_path = generation_root.join("lock.yaml");
     let lock_raw = raw_inventory_required(&inventory, &lock_path)?;
     let preflight_path = generation_root.join("preflight.yaml");
     let preflight_raw = raw_inventory_required(&inventory, &preflight_path)?;
     let preflight: DomainPackLifecyclePreflightDocument =
         parse_yaml(&preflight_path, preflight_raw)?;
+    if preflight
+        .domain_pack_lifecycle_preflight
+        .request
+        .domain_pack_lifecycle_request
+        .operator_source_binding
+        != operator_source_binding
+    {
+        return Err(blocked(
+            "active operator-source binding differs from lifecycle request",
+        ));
+    }
     let rebase_input_paths = [
         generation_root.join("resolution-request.yaml"),
         generation_root.join("composition-request.yaml"),
@@ -3334,6 +3539,7 @@ fn load_active_generation_material(
             let resolution_projection =
                 preflight.domain_pack_lifecycle_preflight.resolution.clone();
             let generation = DomainPackInitializedProjectGenerationMaterial {
+                operator_source_binding: operator_source_binding.clone(),
                 requirements: inputs
                     .resolution_request
                     .domain_pack_resolution_request
@@ -3394,12 +3600,26 @@ fn load_active_generation_material(
     Ok(ActiveDomainPackGenerationMaterial {
         pointer,
         lock,
+        operator_source_binding,
+        from_operator_source_binding_digest: match &preflight
+            .domain_pack_lifecycle_preflight
+            .request
+            .domain_pack_lifecycle_request
+            .expected_state
+        {
+            DomainPackExpectedLifecycleState::Uninitialized { .. } => None,
+            DomainPackExpectedLifecycleState::Initialized {
+                operator_source_binding_digest,
+                ..
+            } => Some(operator_source_binding_digest.clone()),
+        },
         lifecycle_operation: operation.clone(),
         composition,
         effective_bundle,
         pointer_raw_digest: sha256_content_hash(pointer_raw),
         generation_manifest_raw_digest: sha256_content_hash(generation_manifest_raw),
         lock_raw_digest: sha256_content_hash(lock_raw),
+        operator_source_binding_raw_digest: sha256_content_hash(operator_source_binding_raw),
         preflight_raw_digest: sha256_content_hash(preflight_raw),
         initialized_generation,
         rebase_inputs,
@@ -3437,6 +3657,18 @@ fn load_initialized_project_rollback_source(
             "rollback target lock differs from immutable lifecycle history",
         ));
     }
+    let operator_source_path = generation_root.join("operator-source-binding.yaml");
+    let operator_source_raw = raw_inventory_required(&inventory, &operator_source_path)?;
+    let operator_source_binding: DomainPackOperatorSourceBinding =
+        parse_yaml(&operator_source_path, operator_source_raw)?;
+    validate_operator_source_binding(&operator_source_binding, record.to_generation)?;
+    if canonical_digest(&operator_source_binding)? != record.operator_source_binding_digest
+        || receipt_value.to_operator_source_binding_digest != record.operator_source_binding_digest
+    {
+        return Err(blocked(
+            "rollback target operator-source binding differs from immutable lifecycle history",
+        ));
+    }
     let catalog_path = generation_root.join("catalog.yaml");
     let catalog_raw = raw_inventory_required(&inventory, &catalog_path)?;
     let catalog: DomainPackAcquisitionCatalogDocument = parse_yaml(&catalog_path, catalog_raw)?;
@@ -3453,6 +3685,7 @@ fn load_initialized_project_rollback_source(
     let preflight: DomainPackLifecyclePreflightDocument =
         parse_yaml(&preflight_path, preflight_raw)?;
     let generation = DomainPackInitializedProjectGenerationMaterial {
+        operator_source_binding,
         requirements: resolution_request
             .domain_pack_resolution_request
             .requirements
@@ -3484,6 +3717,10 @@ fn validate_initialized_generation_material(
     let composition = &generation
         .composition_projection
         .domain_pack_composition_projection;
+    validate_operator_source_binding(
+        &generation.operator_source_binding,
+        generation.operator_source_binding.generation,
+    )?;
     let catalog_registry_digest =
         domain_pack_registry_snapshot_digest(&generation.catalog.registry).map_err(|error| {
             blocked(&format!(
@@ -3654,11 +3891,71 @@ fn load_ledger_chain(
     Ok(reverse)
 }
 
+fn validate_operator_source_binding(
+    binding: &DomainPackOperatorSourceBinding,
+    expected_generation: u64,
+) -> Result<(), DomainPackLifecycleStoreError> {
+    if binding.schema_version != DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION {
+        return Err(invalid(
+            "operator_source_binding.schema_version",
+            "unsupported operator-source binding schema version",
+        ));
+    }
+    if binding.generation != expected_generation {
+        return Err(invalid(
+            "operator_source_binding.generation",
+            "operator-source binding generation differs from lifecycle target",
+        ));
+    }
+    for (field, value) in [
+        ("operator_root", binding.operator_root.as_str()),
+        ("trust_policy_file", binding.trust_policy_file.as_str()),
+        ("registry_file", binding.registry_file.as_str()),
+        (
+            "reviewer_registry_file",
+            binding.reviewer_registry_file.as_str(),
+        ),
+        (
+            "reviewed_registry_file",
+            binding.reviewed_registry_file.as_str(),
+        ),
+        (
+            "capability_registry_file",
+            binding.capability_registry_file.as_str(),
+        ),
+        ("sandbox_policy_file", binding.sandbox_policy_file.as_str()),
+        ("artifact_root", binding.artifact_root.as_str()),
+    ] {
+        let path = Path::new(value);
+        if value.is_empty()
+            || value.contains('\0')
+            || !path.is_absolute()
+            || path
+                .components()
+                .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            return Err(invalid(
+                "operator_source_binding",
+                &format!("{field} is not an absolute normalized path"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_preflight(
     document: &DomainPackLifecyclePreflightDocument,
 ) -> Result<(), DomainPackLifecycleStoreError> {
     validate_schema(&document.schema_version, "preflight.schema_version")?;
     let body = &document.domain_pack_lifecycle_preflight;
+    let request = &body.request.domain_pack_lifecycle_request;
+    let target_generation = match &request.expected_state {
+        DomainPackExpectedLifecycleState::Uninitialized { .. } => 0,
+        DomainPackExpectedLifecycleState::Initialized { generation, .. } => generation
+            .checked_add(1)
+            .ok_or_else(|| blocked("lifecycle generation is exhausted"))?,
+    };
+    validate_operator_source_binding(&request.operator_source_binding, target_generation)?;
     if body.status != DomainPackLifecyclePreflightStatus::Ready || !body.issues.is_empty() {
         return Err(DomainPackLifecycleStoreError::PreflightBlocked {
             reason: "status must be ready with zero issues".to_owned(),
@@ -4088,6 +4385,12 @@ fn load_committed_receipt(
         || digest_pointer(&value.to_state)? != value.to_state.pointer_digest
         || value.to_state.lifecycle_head_digest != value.new_ledger_head_digest
         || value.to_state.active_lock_digest != target_lock_digest
+        || value.to_state.operator_source_binding_digest != value.to_operator_source_binding_digest
+        || value.from_operator_source_binding_digest
+            != value
+                .from_state
+                .as_ref()
+                .map(|state| state.operator_source_binding_digest.clone())
         || historical_record.is_none()
         || state.active_pointer.as_ref().is_some_and(|active| {
             active.domain_pack_active_pointer.pointer_digest == value.to_state.pointer_digest
@@ -4102,6 +4405,8 @@ fn load_committed_receipt(
         || historical_record.preflight_digest != value.preflight_digest
         || historical_record.request_digest != value.request_digest
         || historical_record.compatibility_report_digest != value.compatibility_report_digest
+        || historical_record.operator_source_binding_digest
+            != value.to_operator_source_binding_digest
     {
         return Err(blocked(
             "rollback receipt fields differ from their reachable ledger record",
@@ -4111,6 +4416,19 @@ fn load_committed_receipt(
         historical_record.to_generation,
         &historical_record.record_digest,
     )?;
+    let operator_source_path = generation.join("operator-source-binding.yaml");
+    let operator_source_binding: DomainPackOperatorSourceBinding = parse_yaml(
+        &operator_source_path,
+        &read_required_state_bytes(store, &operator_source_path, DOMAIN_PACK_MAX_DOCUMENT_BYTES)?,
+    )?;
+    validate_operator_source_binding(&operator_source_binding, historical_record.to_generation)?;
+    if canonical_digest(&operator_source_binding)?
+        != historical_record.operator_source_binding_digest
+    {
+        return Err(blocked(
+            "rollback operator-source binding differs from committed history",
+        ));
+    }
     let canonical_path = generation.join("receipt.yaml");
     let canonical: DomainPackLifecycleReceiptDocument = parse_yaml(
         &canonical_path,
@@ -4135,6 +4453,7 @@ fn verify_expected_state(
                 generation,
                 active_lock_digest,
                 lifecycle_head_digest,
+                operator_source_binding_digest,
                 ..
             },
             Some(pointer),
@@ -4143,6 +4462,7 @@ fn verify_expected_state(
             value.generation == *generation
                 && value.active_lock_digest == *active_lock_digest
                 && value.lifecycle_head_digest == *lifecycle_head_digest
+                && value.operator_source_binding_digest == *operator_source_binding_digest
         }
         _ => false,
     };

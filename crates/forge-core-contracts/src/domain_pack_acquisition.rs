@@ -16,7 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const DOMAIN_PACK_ACQUISITION_SCHEMA_VERSION: &str = "0.1";
-pub const DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION: &str = "0.1";
+pub const DOMAIN_PACK_INITIALIZED_PROJECT_SCHEMA_VERSION: &str = "0.2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +81,7 @@ pub struct DomainPackInitializedProjectStateBinding {
     pub generation: u64,
     pub active_lock_digest: String,
     pub lifecycle_head_digest: String,
+    pub operator_source_binding_digest: String,
     pub project_snapshot_digest: String,
 }
 
