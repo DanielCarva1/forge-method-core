@@ -10,6 +10,8 @@ README.md
 CONTEXT.md
 CHANGELOG.md
 LICENSE
+.github/workflows/ci.yml
+.github/workflows/msrv-policy.yml
 contracts/plan/agent-native-guidance-plan.yaml
 contracts/spec/C1.1-codex-host-capability-decision.yaml
 contracts/spec/C1.1-pi-host-capability-decision.yaml

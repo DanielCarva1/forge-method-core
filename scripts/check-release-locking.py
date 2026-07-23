@@ -88,7 +88,7 @@ RELEASE_SET_ARCHIVE_ARGV = (
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
     "scripts/test-release-locking.py": "00c29eecc6f39f72735829ba562fb5f7455a244f7500aed4f064199d4b96b24f",
-    "scripts/test-release-archive.py": "bf8b2ff42e91664e55dda3b623b26fe8b47f1ee524b9ca793899881081975ab2",
+    "scripts/test-release-archive.py": "9fa807099e2dd32181d84a8917fe8739ac6c652ed8fbe92cca22d420c00b3286",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
     "scripts/smoke-release-install.py": "a8ef321a1e9289e93d187d5d4fa1a390dfcdcf9a426da5db7b5ecc6891a31be1",

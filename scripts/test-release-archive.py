@@ -169,6 +169,29 @@ class ReleaseArchiveTests(unittest.TestCase):
             ):
                 self.verify(args)
 
+    def test_production_payload_is_exact_and_markdown_link_closed(self) -> None:
+        repo_root = SCRIPTS.parent
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            binary = output / "forge-core"
+            binary.write_bytes(b"focused release payload fixture\n")
+            binary.chmod(0o755)
+
+            args = Args()
+            args.repo_root = repo_root
+            args.payload_manifest = Path("distribution/release-payload.txt")
+            args.binary = binary
+            args.binary_name = "forge-core"
+            args.wrapper = repo_root / "distribution/forge"
+            args.wrapper_name = "forge"
+            args.archive = output / "forge-core-production-payload.tar.gz"
+            args.version = "0.12.0"
+            args.release_tag = "v0.12.0"
+            args.source_commit = "0123456789abcdef0123456789abcdef01234567"
+            args.source_date_epoch = 1_700_000_000
+
+            builder.build(args)
+            checker.check(self.checker_args(args))
 
     def wrapper_fixture(self, root: Path) -> tuple[Path, Path]:
         package = root / "relocated package\nwith spaces\n"
