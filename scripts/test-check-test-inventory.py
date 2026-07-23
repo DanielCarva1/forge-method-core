@@ -46,6 +46,27 @@ class InventoryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 3)
             self.assertIn("removed", result.stderr)
 
+    def test_ansi_colored_cargo_harnesses_are_normalized(self) -> None:
+        colored = (
+            "\x1b[1m\x1b[92m     Running\x1b[0m tests/a.rs (target/a)\n"
+            "alpha: test\n"
+            "\x1b[1m\x1b[92m   Doc-tests\x1b[0m fixture_crate\n"
+            "src/lib.rs - example (line 1): test\n"
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            result = self.run_tool(root, True, colored)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            baseline = json.loads((root / "baseline.json").read_text())
+            self.assertEqual(
+                baseline["tests"],
+                [
+                    "doc:fixture_crate::src/lib.rs - example (line 1)",
+                    "tests/a.rs::alpha",
+                ],
+            )
+            self.assertEqual(self.run_tool(root, False, colored).returncode, 0)
+
     def test_command_failure_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             result = subprocess.run(

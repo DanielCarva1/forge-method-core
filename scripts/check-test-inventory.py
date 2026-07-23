@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 TEST_LINE = re.compile(r"^(.+): test$")
 HARNESS_LINE = re.compile(r"^\s*Running (.+?)(?: \([^)]*\))?$")
 DOC_LINE = re.compile(r"^\s*Doc-tests (.+)$")
@@ -34,6 +35,7 @@ def inventory(output: str) -> list[str]:
     harness = "unknown"
     tests: list[str] = []
     for line in output.splitlines():
+        line = ANSI_CSI.sub("", line)
         if match := HARNESS_LINE.match(line):
             harness = match.group(1)
             continue

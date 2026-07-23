@@ -943,51 +943,15 @@ impl WorkflowGovernanceProjectAdapter {
             &projection,
             current_now,
         )?;
-        let principal_registry_digest = self.current_trusted_registry_digest()?;
-        let derived = derive_receipts(
-            effective.document(),
-            &projection,
-            &self.binding.project_root,
-            &guidance.snapshot_digest,
-            current_now,
-            principal_registry_digest.as_deref(),
-            Some(&broker_registry_digest),
-        )?;
-        let base_assurance_projection = project_durable_assurance(&projection.records)?;
-        let assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
-            derive_governed_assurance_facts(
-                effective.document(),
-                effective.identity(),
-                &projection,
-                base,
-                &self.binding.project_root,
-                &guidance.snapshot_digest,
-                guidance.target,
-                current_now,
-                principal_registry_digest.as_deref(),
-                Some(&broker_registry_digest),
-            )?
-        } else {
-            GovernedAssuranceFacts {
-                target: guidance.target,
-                evidence: Vec::new(),
-                capabilities: Vec::new(),
-                decisions: Vec::new(),
-                waivers: Vec::new(),
-                action_packets: Vec::new(),
-            }
-        };
-        let packet = authorization_action_packets(
-            effective.document(),
-            &guidance,
-            &derived,
-            Some(&assurance_facts),
-            principal_registry_digest,
-            Some(broker_registry_digest.clone()),
-        )?
-        .into_iter()
-        .find(|packet| packet.packet_digest == audit.action_packet_digest)
-        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+        // Guidance already derived the canonical packets from this exact
+        // projection and snapshot. Later pre-commit checks still reject any
+        // project, registry, or ledger drift before the packet can be recorded.
+        let packet = guidance
+            .authorization
+            .action_packets
+            .into_iter()
+            .find(|packet| packet.packet_digest == audit.action_packet_digest)
+            .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
         validate_broker_packet_audit(&packet, &semantic_input, &audit, &broker_registry_digest)?;
         let (packet, action_event, phase_may_advance) = if matches!(
             &semantic_input,
