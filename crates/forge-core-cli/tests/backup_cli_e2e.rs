@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use serde_json::Value;
 
 fn bin() -> Command {
     Command::cargo_bin("forge-core").expect("forge-core binary must exist")
@@ -308,7 +307,7 @@ fn cli_rejects_wal_append_without_anchor_advance() {
         String::from_utf8_lossy(&current.stdout),
         String::from_utf8_lossy(&current.stderr)
     );
-    let current_envelope: Value = serde_json::from_slice(&current.stdout).expect("success JSON");
+    let current_envelope = serde_json::from_slice::<serde_json::Value>(&current.stdout).expect("success JSON");
     assert_eq!(current_envelope["ok"], true);
 
     reserve_replay_nonce(
@@ -322,7 +321,7 @@ fn cli_rejects_wal_append_without_anchor_advance() {
     .expect("append WAL without anchor advance");
     let stale = run_with_machine_catalog(&fake_etc, &args);
     assert!(!stale.status.success());
-    let stale_envelope: Value = serde_json::from_slice(&stale.stdout).expect("rejection JSON");
+    let stale_envelope = serde_json::from_slice::<serde_json::Value>(&stale.stdout).expect("rejection JSON");
     assert_eq!(stale_envelope["ok"], false);
     assert!(stale_envelope["error"]["message"]
         .as_str()

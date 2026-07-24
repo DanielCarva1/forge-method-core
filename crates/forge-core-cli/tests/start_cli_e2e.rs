@@ -96,6 +96,7 @@ fn run_start_text(app: &Path) -> std::process::Output {
         .expect("run forge-core start in text mode")
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn run_reinitialize(
     subcommand: &str,
     app: &Path,
@@ -130,6 +131,7 @@ fn run_reinitialize(
         .expect("run forge-core project reinitialize")
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn output_envelope(output: &std::process::Output, label: &str) -> Value {
     serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
         panic!(
