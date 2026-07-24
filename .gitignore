@@ -9,6 +9,18 @@ venv/
 .ruff_cache/
 target/
 target-test/
+# Agent tooling working dirs (local only, never committed).
+.claude/
+.pi/
+.zcode/
+# Audit/campaign scratch output from finding/audit/c2-verifier runs. Each
+# produces its own `target-*` dir; the globs cover all variants.
+target-audit*/
+target-finding*/
+target-c2-verifier/
+target-windows-native/
+# Stray debug log from agent sessions.
+debug.log
 darkest-roguelite/
 # Stray Forge project workspaces left by agents working in the wrong cwd.
 # Real Forge projects live under D:\GameFactory, not inside this Rust workspace.
