@@ -959,6 +959,7 @@ fn direct_directory_entries(directory: &std::fs::File) -> std::io::Result<Vec<Pa
 }
 
 #[cfg(windows)]
+#[allow(clippy::cast_possible_wrap)] // STATUS_NO_MORE_FILES (0x8000_0006) is an NTSTATUS constant that is negative by Win32 design.
 fn direct_directory_entries(directory: &std::fs::File) -> std::io::Result<Vec<PathBuf>> {
     use std::os::windows::io::AsRawHandle;
     use std::{ffi::c_void, os::windows::ffi::OsStringExt};
@@ -1796,7 +1797,9 @@ mod tests {
         let file_link = dir.join("link.yaml");
         std::fs::write(&target, b"trusted: true\n").unwrap();
         if let Err(error) = symlink_file(&target, &file_link) {
-            if error.kind() == std::io::ErrorKind::PermissionDenied {
+            if error.raw_os_error() == Some(1314)
+                || error.kind() == std::io::ErrorKind::PermissionDenied
+            {
                 let _ = std::fs::remove_dir_all(dir);
                 return;
             }
@@ -1807,7 +1810,15 @@ mod tests {
         let real_directory = dir.join("real-directory");
         let directory_link = dir.join("directory-link");
         std::fs::create_dir_all(&real_directory).unwrap();
-        symlink_dir(&real_directory, &directory_link).unwrap();
+        if let Err(error) = symlink_dir(&real_directory, &directory_link) {
+            if error.raw_os_error() == Some(1314)
+                || error.kind() == std::io::ErrorKind::PermissionDenied
+            {
+                let _ = std::fs::remove_dir_all(dir);
+                return;
+            }
+            panic!("create directory reparse point: {error}");
+        }
         assert!(RetainedDirectoryIdentity::capture(&directory_link).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }

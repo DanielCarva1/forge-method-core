@@ -3038,7 +3038,7 @@ fn restore_open_relative(
         length: u32::try_from(std::mem::size_of::<ObjectAttributes>())
             .expect("OBJECT_ATTRIBUTES size fits u32"),
         root_directory: directory.as_raw_handle().cast(),
-        object_name: &mut name,
+        object_name: std::ptr::from_mut(&mut name),
         attributes: OBJ_CASE_INSENSITIVE,
         security_descriptor: std::ptr::null_mut(),
         security_quality_of_service: std::ptr::null_mut(),
@@ -3105,10 +3105,10 @@ fn restore_open_relative(
     // SAFETY: every pointer references initialized storage for this synchronous call.
     let result = unsafe {
         NtCreateFile(
-            &mut handle,
+            std::ptr::from_mut(&mut handle),
             access | SYNCHRONIZE,
-            &mut attributes,
-            &mut status,
+            std::ptr::from_mut(&mut attributes),
+            std::ptr::from_mut(&mut status),
             std::ptr::null_mut(),
             0,
             share_access,
@@ -3172,6 +3172,7 @@ fn restore_direct_directory_entries(directory: &File) -> io::Result<Vec<PathBuf>
 }
 
 #[cfg(windows)]
+#[allow(clippy::cast_possible_wrap)] // STATUS_NO_MORE_FILES (0x8000_0006) is an NTSTATUS constant that is negative by Win32 design.
 fn restore_direct_directory_entries(directory: &File) -> io::Result<Vec<PathBuf>> {
     use std::ffi::c_void;
     use std::os::windows::ffi::OsStringExt as _;
@@ -3214,7 +3215,7 @@ fn restore_direct_directory_entries(directory: &File) -> io::Result<Vec<PathBuf>
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
-                &mut io_status,
+                std::ptr::from_mut(&mut io_status),
                 buffer.as_mut_ptr().cast(),
                 u32::try_from(buffer.len()).expect("directory buffer fits u32"),
                 12,
@@ -4509,39 +4510,36 @@ fn restore_isolate_unquiesced_publication(
     let nonce = restore_quarantine_nonce()?;
     let mut exact_recovery = None;
     for attempt in 0..32 {
-        let current = match parent.open_optional_directory(destination_leaf)? {
-            Some(current) => current,
-            None => {
-                match restore_rename_directory_noreplace(
-                    &parent.handle,
-                    &placeholder_leaf,
-                    destination_leaf,
-                    &placeholder.handle,
-                ) {
-                    Ok(()) => {
-                        let authoritative_placeholder = parent.open_directory(destination_leaf)?;
-                        parent.sync_self()?;
-                        parent.verify_direct_directory_identity(
-                            destination_leaf,
-                            &placeholder.identity,
-                        )?;
-                        if let Some((recovery_leaf, recovery_root)) = exact_recovery.take() {
-                            let isolation = RestorePublicationIsolation {
-                                recovery_leaf,
-                                recovery_root,
-                                authoritative_placeholder,
-                            };
-                            isolation.revalidate(parent, destination_leaf, &staging.identity)?;
-                            return Ok(isolation);
-                        }
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "exact unquiesced publication disappeared; authoritative Store placeholder installed",
-                        ));
+        let Some(current) = parent.open_optional_directory(destination_leaf)? else {
+            match restore_rename_directory_noreplace(
+                &parent.handle,
+                &placeholder_leaf,
+                destination_leaf,
+                &placeholder.handle,
+            ) {
+                Ok(()) => {
+                    let authoritative_placeholder = parent.open_directory(destination_leaf)?;
+                    parent.sync_self()?;
+                    parent.verify_direct_directory_identity(
+                        destination_leaf,
+                        &placeholder.identity,
+                    )?;
+                    if let Some((recovery_leaf, recovery_root)) = exact_recovery.take() {
+                        let isolation = RestorePublicationIsolation {
+                            recovery_leaf,
+                            recovery_root,
+                            authoritative_placeholder,
+                        };
+                        isolation.revalidate(parent, destination_leaf, &staging.identity)?;
+                        return Ok(isolation);
                     }
-                    Err(source) if source.kind() == io::ErrorKind::AlreadyExists => continue,
-                    Err(source) => return Err(source),
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "exact unquiesced publication disappeared; authoritative Store placeholder installed",
+                    ));
                 }
+                Err(source) if source.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(source) => return Err(source),
             }
         };
         let recovery_leaf = restore_quarantine_leaf("unquiesced-publication", nonce, attempt);
@@ -5162,6 +5160,7 @@ fn restore_rename_file_noreplace(
 }
 
 #[cfg(windows)]
+#[allow(clippy::cast_ptr_alignment)] // the rename buffer is a freshly-allocated u8 vector that is intentionally unaligned; the header is written field-by-field before the call.
 fn restore_rename_entry_noreplace(
     parent: &File,
     source: &Path,

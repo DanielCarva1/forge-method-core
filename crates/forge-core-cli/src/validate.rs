@@ -1186,7 +1186,7 @@ fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut Validate
             Ok(_) => report.push(Diagnostic::error(
                 DiagnosticCode::ParseYamlFailed,
                 *reference,
-                "P6 lifecycle fixture must be a closed schema 0.3 document",
+                "P6 lifecycle fixture must be a closed schema 0.4 document",
             )),
             Err(error) => report.push(Diagnostic::error(
                 DiagnosticCode::ReadFileFailed,
@@ -1214,11 +1214,11 @@ fn validate_domain_pack_lifecycle_foundation(root: &Path, summary: &mut Validate
 }
 
 fn parses_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {
-    let schema_is_v03 = yaml_serde::from_str::<serde_json::Value>(text)
+    let schema_is_v04 = yaml_serde::from_str::<serde_json::Value>(text)
         .ok()
         .and_then(|value| value.get("schema_version").cloned())
-        .is_some_and(|value| value == "0.3");
-    schema_is_v03 && yaml_serde::from_str::<T>(text).is_ok()
+        .is_some_and(|value| value == "0.4");
+    schema_is_v04 && yaml_serde::from_str::<T>(text).is_ok()
 }
 
 fn rejects_p6b<T: serde::de::DeserializeOwned>(text: &str) -> bool {

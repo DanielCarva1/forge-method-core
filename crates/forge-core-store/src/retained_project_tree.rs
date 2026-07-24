@@ -1947,6 +1947,7 @@ mod platform {
         }
     }
 
+    #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
     pub(super) fn open_child(parent: &File, name: &OsStr) -> io::Result<File> {
         let mut wide = name.encode_wide().collect::<Vec<_>>();
         let byte_len = wide
@@ -1963,7 +1964,7 @@ mod platform {
             length: u32::try_from(std::mem::size_of::<ObjectAttributes>())
                 .expect("OBJECT_ATTRIBUTES size"),
             root_directory: parent.as_raw_handle().cast(),
-            object_name: &mut name,
+            object_name: std::ptr::from_mut(&mut name),
             attributes: OBJ_CASE_INSENSITIVE,
             security_descriptor: std::ptr::null_mut(),
             security_quality_of_service: std::ptr::null_mut(),
@@ -1976,10 +1977,10 @@ mod platform {
         // SAFETY: all pointers reference initialized storage for the call.
         let status = unsafe {
             NtCreateFile(
-                &mut handle,
+                std::ptr::from_mut(&mut handle),
                 GENERIC_READ | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
-                &mut attributes,
-                &mut io_status,
+                std::ptr::from_mut(&mut attributes),
+                std::ptr::from_mut(&mut io_status),
                 std::ptr::null_mut(),
                 0,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -2000,6 +2001,9 @@ mod platform {
         }
     }
 
+    #[allow(clippy::cast_ptr_alignment)]
+    // the directory-query buffer is file-read and intentionally unaligned; the cast is paired with read_unaligned.
+    #[allow(clippy::cast_sign_loss)] // FILE_ID_BOTH_DIR_INFO.FileId is an i64 whose bit pattern is treated as an opaque Windows FILE_ID (unsigned semantics).
     pub(super) fn read_entries(directory: &File) -> io::Result<Vec<DirectoryEntry>> {
         use windows_sys::Win32::Storage::FileSystem::{
             FileIdBothDirectoryInfo, FileIdBothDirectoryRestartInfo, GetFileInformationByHandleEx,

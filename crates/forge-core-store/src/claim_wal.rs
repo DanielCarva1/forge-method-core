@@ -2151,6 +2151,97 @@ impl RetainedClaimWalLeaf {
     }
 }
 
+/// Identity-only retention of the claim WAL lock leaf.
+///
+/// The lock file at `locks/claims.wal.lock` is a lock primitive, not a data
+/// authority: it is created with create-if-absent semantics and is never
+/// written. Its content is therefore always empty bytes, so comparing its
+/// bytes proves nothing. Its real anti-ABA anchor is its file identity
+/// (`volume_serial:file_index` on Windows, `device:inode` on Unix).
+///
+/// Reading the bytes of this file is actively harmful on Windows: the file is
+/// held under an exclusive mandatory `fs4::FileExt::lock` (`LockFileEx`,
+/// range 0..2^64) for the guard's lifetime, and Windows enforces mandatory
+/// byte-range locks against ALL handles of the locking process, not just the
+/// locking handle. So `try_clone()` + `read_to_end` on the lock file fails
+/// with `os error 33` (`ERROR_LOCK_VIOLATION`) even though it is the same
+/// process holding the lock. Unix advisory locks do not exhibit this, but
+/// identity-only validation is equally valid on Unix because the file is
+/// never written there either.
+///
+/// Validation here is therefore identity-only: the exclusive fs4 lock already
+/// proves sole ownership, and the retained identity proves anti-ABA.
+struct RetainedClaimWalLockLeaf {
+    relative_path: PathBuf,
+    file: File,
+    identity: crate::retained_dir::RetainedFileIdentity,
+}
+
+impl RetainedClaimWalLockLeaf {
+    fn validate(&self, root: &crate::retained_dir::RetainedDirectory) -> io::Result<()> {
+        // Identity of the retained handle proves the locked object has not been
+        // replaced (anti-ABA). No byte read.
+        if crate::retained_dir::RetainedDirectory::identity_of(&self.file)? != self.identity {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "claim WAL lock leaf handle changed identity",
+            ));
+        }
+        // Re-open by name to confirm the namespace still binds to the same
+        // object. `open_leaf_read` opens a fresh read handle and queries identity
+        // via metadata only (GetFileInformationByHandle / fstat); it does NOT
+        // issue a ReadFile/read syscall against the locked bytes, so it is safe
+        // on Windows. This mirrors the pattern already used by
+        // `ClaimWalRetainedLock::validate`.
+        let current = root.open_leaf_read(
+            &self.relative_path,
+            crate::retained_dir::RetainedLeafPolicy::MutableAuthority,
+        )?;
+        if crate::retained_dir::RetainedDirectory::identity_of(&current)? != self.identity {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "claim WAL lock leaf namespace changed identity",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_handle(&self) -> io::Result<()> {
+        if crate::retained_dir::RetainedDirectory::identity_of(&self.file)? != self.identity {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "claim WAL lock leaf handle changed identity",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Retains the claim WAL lock leaf by identity only, without reading its bytes.
+///
+/// The caller supplies a cloned handle to the already-locked lock file
+/// (the same kernel object held under the exclusive fs4 lock). Reading its
+/// bytes would fail on Windows with `ERROR_LOCK_VIOLATION` and proves nothing
+/// for a never-written lock primitive, so retention is identity-only.
+fn retain_open_claim_wal_lock_leaf(
+    relative_path: &Path,
+    file: File,
+    expected_identity: crate::retained_dir::RetainedFileIdentity,
+) -> io::Result<RetainedClaimWalLockLeaf> {
+    let identity = crate::retained_dir::RetainedDirectory::identity_of(&file)?;
+    if identity != expected_identity {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "claim WAL lock leaf changed identity during retention",
+        ));
+    }
+    Ok(RetainedClaimWalLockLeaf {
+        relative_path: relative_path.to_path_buf(),
+        file,
+        identity,
+    })
+}
+
 struct RetainedClaimWalSnapshot {
     relative_path: PathBuf,
     absolute_path: PathBuf,
@@ -2264,7 +2355,7 @@ impl RetainedClaimCheckpointGeneration {
 struct RetainedCheckpointWitnessBundle {
     root: crate::retained_dir::RetainedDirectory,
     root_identity: crate::retained_dir::RetainedFileIdentity,
-    lock: RetainedClaimWalLeaf,
+    lock: RetainedClaimWalLockLeaf,
     active_wal: RetainedClaimWalLeaf,
     generation: RetainedClaimWalLeaf,
     generation_anchor: crate::retained_dir::RetainedFileLifetimeAnchor,
@@ -2354,7 +2445,7 @@ impl RetainedCheckpointWitnessBundle {
 struct RetainedPristineClaimAuthority {
     root: crate::retained_dir::RetainedDirectory,
     root_identity: crate::retained_dir::RetainedFileIdentity,
-    lock: RetainedClaimWalLeaf,
+    lock: RetainedClaimWalLockLeaf,
 }
 
 impl RetainedPristineClaimAuthority {
@@ -2955,16 +3046,12 @@ fn retain_checkpoint_witness_bundle(
         .file
         .try_clone()
         .map_err(|_| ClaimWalStopReason::CheckpointGenerationInvalid)?;
-    let lock = retain_open_claim_wal_leaf(
-        &root,
+    let lock = retain_open_claim_wal_lock_leaf(
         Path::new(CLAIM_WAL_LOCK_RELATIVE_PATH),
         lock_file,
-        u64::from(DEFAULT_MAX_PAYLOAD_LEN),
+        authority.guard.lock_identity.clone(),
     )
     .map_err(|_| ClaimWalStopReason::CheckpointGenerationInvalid)?;
-    if lock.identity != authority.guard.lock_identity {
-        return Err(ClaimWalStopReason::CheckpointGenerationInvalid);
-    }
     let active_wal = clone_retained_claim_leaf(&root, authority.active_wal)
         .map_err(|_| ClaimWalStopReason::CheckpointGenerationInvalid)?;
     let generation_binding = checkpoint
@@ -3360,18 +3447,11 @@ fn retain_pristine_claim_authority(
         ));
     }
     let lock_file = guard.lock.file.try_clone()?;
-    let lock = retain_open_claim_wal_leaf(
-        &root,
+    let lock = retain_open_claim_wal_lock_leaf(
         Path::new(CLAIM_WAL_LOCK_RELATIVE_PATH),
         lock_file,
-        u64::from(DEFAULT_MAX_PAYLOAD_LEN),
+        guard.lock_identity.clone(),
     )?;
-    if lock.identity != guard.lock_identity {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "claim pristine authority lock identity changed",
-        ));
-    }
     let authority = RetainedPristineClaimAuthority {
         root,
         root_identity,

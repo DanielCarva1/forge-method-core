@@ -3806,6 +3806,7 @@ fn sync_parent_dir(parent: &Path) -> io::Result<()> {
 
 #[cfg(windows)]
 fn sync_parent_dir(parent: &Path) -> io::Result<()> {
+    use std::os::windows::fs::MetadataExt as _;
     use std::os::windows::fs::OpenOptionsExt as _;
 
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
@@ -3823,7 +3824,6 @@ fn sync_parent_dir(parent: &Path) -> io::Result<()> {
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(parent)?;
     let metadata = directory.metadata()?;
-    use std::os::windows::fs::MetadataExt as _;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 == 0x400 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

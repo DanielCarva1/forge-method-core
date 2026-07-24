@@ -3052,6 +3052,7 @@ mod platform {
         ReadWriteNewDelete,
     }
 
+    #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
     fn relative_open_with_share(
         parent: &File,
         value: &OsStr,
@@ -3077,7 +3078,7 @@ mod platform {
             length: u32::try_from(std::mem::size_of::<ObjectAttributes>())
                 .expect("OBJECT_ATTRIBUTES size"),
             root_directory: parent.as_raw_handle().cast(),
-            object_name: &mut name,
+            object_name: std::ptr::from_mut(&mut name),
             attributes: OBJ_CASE_INSENSITIVE,
             security_descriptor: std::ptr::null_mut(),
             security_quality_of_service: std::ptr::null_mut(),
@@ -3090,10 +3091,10 @@ mod platform {
         // SAFETY: all pointers reference initialized storage for the duration of the call.
         let status = unsafe {
             NtCreateFile(
-                &mut handle,
+                std::ptr::from_mut(&mut handle),
                 access | SYNCHRONIZE,
-                &mut attributes,
-                &mut io_status,
+                std::ptr::from_mut(&mut attributes),
+                std::ptr::from_mut(&mut io_status),
                 std::ptr::null_mut(),
                 0,
                 share_access,
@@ -3167,6 +3168,9 @@ mod platform {
         )
     }
 
+    #[allow(clippy::cast_ptr_alignment)]
+    // the lifetime-anchor buffer is a freshly-allocated u8 vector that is intentionally unaligned; the header is written field-by-field before the call.
+    #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
     pub fn link_lifetime_anchor_noreplace(
         retained_source: &File,
         to_parent: &File,
@@ -3228,7 +3232,7 @@ mod platform {
         let status = unsafe {
             NtSetInformationFile(
                 retained_source.as_raw_handle().cast(),
-                &mut io_status,
+                std::ptr::from_mut(&mut io_status),
                 info.cast(),
                 u32::try_from(size).map_err(|_| {
                     io::Error::new(
@@ -3249,6 +3253,9 @@ mod platform {
         }
     }
 
+    #[allow(clippy::cast_ptr_alignment)]
+    // the rename buffer is a freshly-allocated u8 vector that is intentionally unaligned; the header is written field-by-field before the call.
+    #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
     pub fn rename_noreplace(
         _from_parent: &File,
         _from: &OsStr,
@@ -3296,7 +3303,7 @@ mod platform {
         let status = unsafe {
             NtSetInformationFile(
                 retained_source.as_raw_handle().cast(),
-                &mut io_status,
+                std::ptr::from_mut(&mut io_status),
                 info.cast(),
                 u32::try_from(size).map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidInput, "rename buffer too long")

@@ -1769,10 +1769,8 @@ pub(crate) fn apply_domain_pack_core_rebase(
     }
 
     let mut resolution_request = source.resolution_request.clone();
-    resolution_request.domain_pack_resolution_request.request_id = StableId(format!(
-        "domain-pack.rebase.resolution.{}",
-        target_generation
-    ));
+    resolution_request.domain_pack_resolution_request.request_id =
+        StableId(format!("domain-pack.rebase.resolution.{target_generation}"));
     resolution_request.domain_pack_resolution_request.core = target_core.clone();
     resolution_request
         .domain_pack_resolution_request
@@ -1863,8 +1861,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     composition_request
         .domain_pack_composition_request
         .request_id = StableId(format!(
-        "domain-pack.rebase.composition.{}",
-        target_generation
+        "domain-pack.rebase.composition.{target_generation}"
     ));
     composition_request.domain_pack_composition_request.core = target_core.clone();
     let owned_materials = load_composition_materials(&composition_request, &artifact_root)?;
@@ -1997,10 +1994,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     let lifecycle_request = DomainPackLifecycleRequestDocument {
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
         domain_pack_lifecycle_request: DomainPackLifecycleRequest {
-            request_id: StableId(format!(
-                "domain-pack.rebase.lifecycle.{}",
-                target_generation
-            )),
+            request_id: StableId(format!("domain-pack.rebase.lifecycle.{target_generation}")),
             authority: DomainPackCandidateAuthority::CandidateOnly,
             project_id: source_lock.project_id.clone(),
             principal_id,
@@ -2013,8 +2007,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     };
     let compatibility = evaluate_domain_pack_compatibility(&DomainPackCompatibilityInput {
         report_id: StableId(format!(
-            "domain-pack.rebase.compatibility.{}",
-            target_generation
+            "domain-pack.rebase.compatibility.{target_generation}"
         )),
         operation,
         sealed_core: target_core.clone(),
@@ -2051,10 +2044,7 @@ pub(crate) fn apply_domain_pack_core_rebase(
     let mut preflight = DomainPackLifecyclePreflightDocument {
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
         domain_pack_lifecycle_preflight: DomainPackLifecyclePreflight {
-            preflight_id: StableId(format!(
-                "domain-pack.rebase.preflight.{}",
-                target_generation
-            )),
+            preflight_id: StableId(format!("domain-pack.rebase.preflight.{target_generation}")),
             authority: DomainPackCandidateAuthority::CandidateOnly,
             request_digest: canonical_digest(&lifecycle_request)?,
             request: lifecycle_request,
@@ -3322,7 +3312,7 @@ fn resolve_domain_pack_operator_sources(
         "signed reviewer registry",
         roots,
     )?;
-    let reviewed_registry_file = trusted_external_file(
+    let reviewed_registry = trusted_external_file(
         Path::new(&binding.reviewed_registry_file),
         "dual-signed reviewed registry",
         roots,
@@ -3354,7 +3344,7 @@ fn resolve_domain_pack_operator_sources(
             "signed reviewer registry",
         ),
         (
-            &reviewed_registry_file,
+            &reviewed_registry,
             binding.reviewed_registry_file.as_str(),
             "dual-signed reviewed registry",
         ),
@@ -3391,7 +3381,7 @@ fn resolve_domain_pack_operator_sources(
         trust_policy_file,
         registry_file,
         reviewer_registry_file,
-        reviewed_registry_file,
+        reviewed_registry_file: reviewed_registry,
         capability_registry_file,
         sandbox_policy_file,
         artifact_root,

@@ -1798,14 +1798,47 @@ fn internal_anchor_binding(binding: &ReinitializeFileAnchorBinding) -> RetainedF
 mod tests {
     use super::*;
 
+    /// Build portable absolute paths so the request fixtures satisfy
+    /// `normalized_absolute_path` on every platform. Hardcoded `/tmp/...`
+    /// values are not absolute on Windows (no drive letter), which would
+    /// trip the same validation the product enforces. These are pure
+    /// path-shape fixtures; no test in this module performs I/O at them.
+    fn portable_request_paths() -> (PathBuf, PathBuf, PathBuf, PathBuf, String) {
+        let root = std::env::temp_dir().join(format!(
+            "forge-reinitialize-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let project_root = root.join("forge-project");
+        let destination = root.join("forge-new-sidecar");
+        let destination_state_root = destination.join(STATE_ROOT_NAME);
+        let diagnosis_path = root.join("state-loss.json");
+        let project_root_text = project_root.to_str().expect("UTF-8 temp dir").to_owned();
+        (
+            project_root,
+            destination,
+            destination_state_root,
+            diagnosis_path,
+            project_root_text,
+        )
+    }
+
     fn request() -> ReinitializePlanRequest {
+        let (project_root, destination, destination_state_root, diagnosis_path, project_root_text) =
+            portable_request_paths();
+        let destination_text = destination.to_str().expect("UTF-8 temp dir").to_owned();
+        let destination_state_root_text = destination_state_root
+            .to_str()
+            .expect("UTF-8 temp dir")
+            .to_owned();
+        let diagnosis_path_text = diagnosis_path.to_str().expect("UTF-8 temp dir").to_owned();
         ReinitializePlanRequest {
             operation_id: "r-1".into(),
-            project_root: PathBuf::from("/tmp/forge-project"),
-            destination: PathBuf::from("/tmp/forge-new-sidecar"),
-            destination_state_root: PathBuf::from("/tmp/forge-new-sidecar/.forge-method"),
+            project_root,
+            destination,
+            destination_state_root,
             diagnosis: ReinitializeDiagnosis {
-                diagnosis_path: "/tmp/state-loss.json".into(),
+                diagnosis_path: diagnosis_path_text,
                 diagnosis_sha256: format!("sha256:{}", "a".repeat(64)),
                 diagnostic: BootstrapStateLossDiagnostic {
                     schema_version: forge_core_contracts::BOOTSTRAP_STATE_LOSS_SCHEMA_VERSION
@@ -1820,7 +1853,7 @@ mod tests {
                     workflow_release_status:
                         forge_core_contracts::StateLossReleaseStatus::UnavailableUntrustedState,
                     choices: forge_core_contracts::BootstrapRecoveryChoices::for_project_root(
-                        "/tmp/forge-project",
+                        &project_root_text,
                     ),
                 },
             },
@@ -1831,7 +1864,7 @@ mod tests {
                 anchor_nonce: "r-1".into(),
             },
             successor_project_link: format!(
-                "schema_version: {PROJECT_LINK_SCHEMA_VERSION}\nproject_id: successor-project\nsidecar_root: /tmp/forge-new-sidecar\nstate_root: /tmp/forge-new-sidecar/.forge-method\n"
+                "schema_version: {PROJECT_LINK_SCHEMA_VERSION}\nproject_id: successor-project\nsidecar_root: {destination_text}\nstate_root: {destination_state_root_text}\n"
             )
             .into_bytes(),
             predecessor_identity: "old".into(),
@@ -1886,7 +1919,13 @@ mod tests {
 
     #[test]
     fn receipt_binds_both_identities_and_destination() {
-        let plan = plan(request()).expect("plan");
+        let request = request();
+        let expected_destination = request
+            .destination
+            .to_str()
+            .expect("UTF-8 temp dir")
+            .to_owned();
+        let plan = plan(request).expect("plan");
         let receipt = receipt_for(
             &plan,
             &plan.expected_project_link,
@@ -1902,7 +1941,7 @@ mod tests {
         .expect("receipt");
         assert_eq!(receipt.predecessor_identity, "old");
         assert_eq!(receipt.successor_identity, "new");
-        assert_eq!(receipt.destination, "/tmp/forge-new-sidecar");
+        assert_eq!(receipt.destination, expected_destination);
         assert_eq!(receipt.selected_host, None);
     }
 
