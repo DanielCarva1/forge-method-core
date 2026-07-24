@@ -345,9 +345,16 @@ fn is_excluded_scan_path(root: &Path, path: &Path) -> bool {
             relative.file_name().and_then(|value| value.to_str()),
             Some(".git" | "target" | "target-test")
         ))
-        // Claude's isolated worktrees contain duplicate repository snapshots,
-        // not additional Markdown governed by the current repository root.
-        || relative == Path::new(".claude/worktrees")
+        // Top-level scratch dirs produced by audit/finding/c2-verifier/
+        // windows-native campaigns. These are local build output, not
+        // repository Markdown. The `target-` prefix covers current and
+        // future campaign dirs (target-audit*, target-finding*, etc.).
+        // Top-level only: a nested `docs/target-audit/` is still scanned.
+        || (relative.components().count() == 1
+            && relative
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|name| name.starts_with("target-")))
 }
 
 #[cfg(test)]
@@ -451,22 +458,60 @@ mod tests {
     }
 
     #[test]
-    fn claude_worktrees_are_excluded_without_weakening_repository_scan() {
-        let root = temp_root("claude-worktrees");
+    fn top_level_target_scratch_dirs_are_excluded_without_weakening_repository_scan() {
+        let root = temp_root("target-scratch");
         write_allowed(&root);
-        let copied_docs = root.join(".claude/worktrees/agent/docs");
-        fs::create_dir_all(&copied_docs).expect("create copied worktree docs");
-        fs::write(copied_docs.join("copied.md"), "copied").expect("write copied Markdown");
+        // Representative scratch dirs produced by audit/finding/c2-verifier
+        // campaigns. Each must be pruned at the top level, not scanned.
+        for scratch in [
+            "target-audit",
+            "target-audit-decisions",
+            "target-finding12",
+            "target-finding16-campaign",
+            "target-c2-verifier",
+            "target-windows-native",
+        ] {
+            let docs = root.join(format!("{scratch}/docs"));
+            fs::create_dir_all(&docs).expect("create scratch docs");
+            fs::write(docs.join("scratch.md"), "scratch").expect("write scratch Markdown");
+        }
+        // A genuine unknown under docs/ must still be reported, proving the
+        // exclusion did not weaken the repository-wide scan.
         fs::write(root.join("docs/new-authority.md"), "new").expect("write unknown");
 
         let report = validate_markdown_retirement(&root, &document());
-        assert!(!report
-            .diagnostics()
-            .iter()
-            .any(|diagnostic| diagnostic.path.starts_with(".claude/worktrees/")));
+        assert!(
+            !report
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic
+                    .path
+                    .starts_with("target-audit")
+                    || diagnostic.path.starts_with("target-finding")
+                    || diagnostic.path.starts_with("target-c2-verifier")
+                    || diagnostic.path.starts_with("target-windows-native")),
+            "target-* scratch dirs must be excluded from the markdown scan"
+        );
         assert!(report.diagnostics().iter().any(|diagnostic| {
             diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
                 && diagnostic.path == "docs/new-authority.md"
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn nested_target_scratch_directory_is_still_scanned() {
+        // The target-* exclusion is top-level only: a nested directory that
+        // happens to be named like a scratch dir must still be governed,
+        // mirroring the existing nested_target_directory_is_scanned contract.
+        let root = temp_root("nested-target-scratch");
+        write_allowed(&root);
+        fs::create_dir_all(root.join("docs/target-audit")).expect("create nested scratch");
+        fs::write(root.join("docs/target-audit/new-authority.md"), "new").expect("write unknown");
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
+                && diagnostic.path == "docs/target-audit/new-authority.md"
         }));
         fs::remove_dir_all(root).expect("cleanup");
     }
