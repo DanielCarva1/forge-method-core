@@ -59,6 +59,34 @@ The P7F evidence checker validates bounded structure, safe paths, sizes, and
 digests only. It cannot establish semantic truth, production-host execution,
 chat-only interaction, actor/reviewer independence, publication, or P7F passage.
 
+## Platform support
+
+Durability guarantees depend on the kernel and filesystem the process runs on,
+not on Forge alone. The platforms Forge treats as production-grade are:
+
+- **Linux** — reference platform. Directory `fsync`, `renameat2(NOREPLACE)`, and
+  `linkat` provide the ordering and collision semantics the WAL, retained
+  lifetime anchors, and crash-replace paths rely on.
+- **macOS** — production-grade. APFS provides the equivalent ordering guarantees
+  Forge relies on.
+- **WSL2 on Windows** — production-grade, and the recommended path for Windows
+  users. WSL2 runs a real Linux kernel on an ext4 VHDX, so Linux durability
+  semantics apply inside the guest. Forge is supported inside WSL2, not against
+  the host NTFS tree from the guest.
+- **Windows native** — best-effort durability only, not a supported production
+  platform. NTFS does not provide directory `fsync` equivalent to Linux, and
+  `NtSetInformationFile` no-replace rename/link returns `STATUS_ACCESS_DENIED`
+  or `STATUS_INVALID_PARAMETER` on destination collision rather than a clean
+  "already exists" result. Forge retains defensive code paths for Windows native
+  (identity-locked WAL, collision probing, symlink privilege guards) so the same
+  source compiles and degrades gracefully, but it does not promise
+  crash-consistent production-grade durability there. Operators who need that
+  guarantee on a Windows host should run Forge under WSL2.
+
+This is a platform statement, not a host-boundary statement. Host-owned
+authenticator/signer authority (see GAP-001) is a separate concern from
+filesystem durability.
+
 ## Secret handling
 
 - Keep external broker private keys, Domain Pack trust roots, and replay anchors
