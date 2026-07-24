@@ -651,6 +651,10 @@ jobs:
           name: ${{ needs.metadata.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # Pre-release channels (-alpha/-beta/-rc) publish as GitHub pre-release
+          # so they never appear as the latest stable release. Plain semver tags
+          # (vX.Y.Z) evaluate to false and remain latest.
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             release-assets/*.tar.gz
             release-assets/*.zip
