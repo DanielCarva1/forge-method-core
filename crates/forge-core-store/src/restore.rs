@@ -5251,11 +5251,169 @@ fn restore_rename_entry_noreplace(
             u32::try_from(size).expect("rename buffer fits u32"),
         )
     };
-    if result == 0 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
+    if result != 0 {
+        return Ok(());
     }
+    let original = io::Error::last_os_error();
+    // Windows parity: `SetFileInformationByHandle(FileRenameInformation)` with
+    // `replace_if_exists = 0` surfaces a destination collision as one of two
+    // errors that Unix `renameat_with(NOREPLACE)` reports as `EEXIST`
+    // (`AlreadyExists`): `ERROR_ACCESS_DENIED` (os error 5) for file→file
+    // collisions, and `ERROR_INVALID_PARAMETER` (os error 87) when the
+    // destination exists with an incompatible type (e.g. dir→file). The restore
+    // publication helpers map `AlreadyExists` to `RestoreError::Collision`;
+    // without this translation a collision would surface as a hard IO failure.
+    // Re-probe the destination: if it exists, the error was a collision —
+    // translate to `AlreadyExists` (chaining the original error). If the probe
+    // cannot confirm the destination exists, propagate the original error so
+    // genuine permission/parameter errors are never masked.
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    const ERROR_INVALID_PARAMETER: i32 = 87;
+    let original_raw = original.raw_os_error();
+    let collision_error = matches!(
+        original_raw,
+        Some(ERROR_ACCESS_DENIED | ERROR_INVALID_PARAMETER)
+    );
+    if collision_error && restore_destination_exists(parent, destination) {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "restore rename destination exists (Windows no-replace parity); \
+                 original error: {original}"
+            ),
+        ));
+    }
+    Err(original)
+}
+
+/// Windows parity probe: open the destination leaf under `parent` for read with
+/// full sharing and no file-type restriction, returning `true` only when the
+/// destination currently exists. The destination of a no-replace rename may be
+/// either a file or a directory, so the probe uses neither
+/// `FILE_NONDIRECTORY_FILE` nor `FILE_DIRECTORY_FILE`. Any ambiguous probe
+/// error returns `false` so callers propagate the original failure instead of
+/// masking a genuine permission error as a collision.
+#[cfg(windows)]
+fn restore_destination_exists(parent: &File, destination: &Path) -> bool {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt as _;
+    use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, RawHandle};
+
+    type Handle = *mut c_void;
+    const OBJ_CASE_INSENSITIVE: u32 = 0x40;
+    const GENERIC_READ: u32 = 0x8000_0000;
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const FILE_SHARE_READ: u32 = 0x1;
+    const FILE_SHARE_WRITE: u32 = 0x2;
+    const FILE_SHARE_DELETE: u32 = 0x4;
+    const FILE_SHARE_ALL: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    const FILE_OPEN: u32 = 1;
+    const FILE_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x20;
+
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *mut u16,
+    }
+    #[repr(C)]
+    struct ObjectAttributes {
+        length: u32,
+        root_directory: Handle,
+        object_name: *mut UnicodeString,
+        attributes: u32,
+        security_descriptor: *mut c_void,
+        security_quality_of_service: *mut c_void,
+    }
+    #[repr(C)]
+    union IoStatusValue {
+        status: i32,
+        pointer: *mut c_void,
+    }
+    #[repr(C)]
+    struct IoStatusBlock {
+        value: IoStatusValue,
+        information: usize,
+    }
+    #[link(name = "ntdll")]
+    unsafe extern "system" {
+        fn NtCreateFile(
+            file_handle: *mut Handle,
+            desired_access: u32,
+            object_attributes: *mut ObjectAttributes,
+            io_status_block: *mut IoStatusBlock,
+            allocation_size: *mut i64,
+            file_attributes: u32,
+            share_access: u32,
+            create_disposition: u32,
+            create_options: u32,
+            ea_buffer: *mut c_void,
+            ea_length: u32,
+        ) -> i32;
+        fn RtlNtStatusToDosError(status: i32) -> u32;
+    }
+
+    let Ok(leaf) = restore_direct_component(destination) else {
+        return false;
+    };
+    let mut wide = leaf.encode_wide().collect::<Vec<_>>();
+    let Some(byte_len) = wide
+        .len()
+        .checked_mul(2)
+        .and_then(|value| u16::try_from(value).ok())
+    else {
+        return false;
+    };
+    let mut name = UnicodeString {
+        length: byte_len,
+        maximum_length: byte_len,
+        buffer: wide.as_mut_ptr(),
+    };
+    let mut attributes = ObjectAttributes {
+        length: u32::try_from(std::mem::size_of::<ObjectAttributes>())
+            .expect("OBJECT_ATTRIBUTES size fits u32"),
+        root_directory: parent.as_raw_handle().cast(),
+        object_name: std::ptr::from_mut(&mut name),
+        attributes: OBJ_CASE_INSENSITIVE,
+        security_descriptor: std::ptr::null_mut(),
+        security_quality_of_service: std::ptr::null_mut(),
+    };
+    let mut status = IoStatusBlock {
+        value: IoStatusValue { status: 0 },
+        information: 0,
+    };
+    let mut handle: Handle = std::ptr::null_mut();
+    // SAFETY: every pointer references initialized storage for this synchronous
+    // probe; no file type restriction is set so either a file or directory at
+    // the destination satisfies the open.
+    let nt_status = unsafe {
+        NtCreateFile(
+            std::ptr::from_mut(&mut handle),
+            GENERIC_READ | SYNCHRONIZE,
+            std::ptr::from_mut(&mut attributes),
+            std::ptr::from_mut(&mut status),
+            std::ptr::null_mut(),
+            0,
+            FILE_SHARE_ALL,
+            FILE_OPEN,
+            FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if nt_status >= 0 && !handle.is_null() {
+        // Destination exists. Take ownership of the probe handle so it is
+        // closed immediately on drop.
+        // SAFETY: NtCreateFile returned one newly-owned handle on success.
+        drop(unsafe { File::from_raw_handle(handle as RawHandle) });
+        return true;
+    }
+    // The destination could not be confirmed present. This includes NotFound
+    // (absent) and any ambiguous probe error; in both cases the caller must
+    // propagate the original error rather than mask a genuine failure as a
+    // collision.
+    false
 }
 
 #[cfg(all(

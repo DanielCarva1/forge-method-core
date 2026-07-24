@@ -3243,14 +3243,59 @@ mod platform {
                 FILE_LINK_INFORMATION_CLASS,
             )
         };
-        if status < 0 {
-            // SAFETY: pure NTSTATUS conversion.
-            Err(io::Error::from_raw_os_error(
-                unsafe { RtlNtStatusToDosError(status) } as i32,
-            ))
-        } else {
-            Ok(())
+        if status >= 0 {
+            return Ok(());
         }
+        // SAFETY: pure NTSTATUS conversion.
+        let raw = unsafe { RtlNtStatusToDosError(status) } as i32;
+        // Windows parity: `NtSetInformationFile(FileLinkInformation)` with
+        // `replace_if_exists = 0` surfaces a destination collision as one of
+        // two errors that Unix `linkat` over an existing leaf reports as
+        // `EEXIST` (`AlreadyExists`): `STATUS_ACCESS_DENIED` (raw os error 5)
+        // for file→file collisions, and `STATUS_INVALID_PARAMETER` (raw os
+        // error 87) when the destination exists with an incompatible type.
+        // The lifetime-anchor publication helpers only treat `AlreadyExists`
+        // as a collision/retry condition, so a Windows collision would
+        // otherwise propagate as a hard failure. Re-probe the destination: if
+        // it now exists, the error was a collision — translate to
+        // `AlreadyExists` (chaining the original error). If the probe cannot
+        // confirm the destination exists, propagate the original error
+        // unchanged so genuine permission/parameter errors are never masked.
+        const ERROR_ACCESS_DENIED: i32 = 5;
+        const ERROR_INVALID_PARAMETER: i32 = 87;
+        if matches!(raw, ERROR_ACCESS_DENIED | ERROR_INVALID_PARAMETER) {
+            // The destination may be either a file or a directory, so the probe
+            // sets neither FILE_NONDIRECTORY_FILE nor FILE_DIRECTORY_FILE.
+            match relative_open_with_share(
+                to_parent,
+                to,
+                GENERIC_READ,
+                FILE_OPEN,
+                0,
+                FILE_SHARE_ALL,
+            ) {
+                Ok(_handle) => {
+                    // The destination file exists; the access denial was a
+                    // collision. Drop the probe handle and report AlreadyExists.
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        format!(
+                            "link_lifetime_anchor_noreplace destination exists \
+                             (Windows no-replace parity); original error: {}",
+                            io::Error::from_raw_os_error(raw)
+                        ),
+                    ));
+                }
+                Err(probe_error) if probe_error.kind() == io::ErrorKind::NotFound => {
+                    // Destination absent — the access denial was genuine.
+                }
+                Err(_) => {
+                    // Probe was ambiguous — never mask a genuine permission
+                    // error. Fall through to report the original ACCESS_DENIED.
+                }
+            }
+        }
+        Err(io::Error::from_raw_os_error(raw))
     }
 
     #[allow(clippy::cast_ptr_alignment)]
@@ -3311,14 +3356,59 @@ mod platform {
                 FILE_RENAME_INFORMATION_CLASS,
             )
         };
-        if status < 0 {
-            // SAFETY: pure NTSTATUS conversion.
-            Err(io::Error::from_raw_os_error(
-                unsafe { RtlNtStatusToDosError(status) } as i32,
-            ))
-        } else {
-            Ok(())
+        if status >= 0 {
+            return Ok(());
         }
+        // SAFETY: pure NTSTATUS conversion.
+        let raw = unsafe { RtlNtStatusToDosError(status) } as i32;
+        // Windows parity: `NtSetInformationFile(FileRenameInformation)` with
+        // `replace_if_exists = 0` surfaces a destination collision as one of
+        // two errors that Unix `renameat_with(NOREPLACE)` reports as `EEXIST`
+        // (`AlreadyExists`): `STATUS_ACCESS_DENIED` (raw os error 5) for
+        // file→file collisions, and `STATUS_INVALID_PARAMETER` (raw os error
+        // 87) when the destination exists with an incompatible type. The
+        // crash-replace and restore protocols only treat `AlreadyExists` as a
+        // collision/retry condition, so a Windows collision would otherwise
+        // propagate as a hard failure. Re-probe the destination: if it now
+        // exists, the error was a collision — translate to `AlreadyExists`
+        // (chaining the original error). If the probe cannot confirm the
+        // destination exists, propagate the original error unchanged so genuine
+        // permission/parameter errors are never masked.
+        const ERROR_ACCESS_DENIED: i32 = 5;
+        const ERROR_INVALID_PARAMETER: i32 = 87;
+        if matches!(raw, ERROR_ACCESS_DENIED | ERROR_INVALID_PARAMETER) {
+            // The destination may be either a file or a directory, so the probe
+            // sets neither FILE_NON_DIRECTORY_FILE nor FILE_DIRECTORY_FILE.
+            match relative_open_with_share(
+                to_parent,
+                to,
+                GENERIC_READ,
+                FILE_OPEN,
+                0,
+                FILE_SHARE_ALL,
+            ) {
+                Ok(_handle) => {
+                    // The destination file exists; the access denial was a
+                    // collision. Drop the probe handle and report AlreadyExists.
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        format!(
+                            "rename_noreplace destination exists (Windows no-replace parity); \
+                             original error: {}",
+                            io::Error::from_raw_os_error(raw)
+                        ),
+                    ));
+                }
+                Err(probe_error) if probe_error.kind() == io::ErrorKind::NotFound => {
+                    // Destination absent — the access denial was genuine.
+                }
+                Err(_) => {
+                    // Probe was ambiguous — never mask a genuine permission
+                    // error. Fall through to report the original ACCESS_DENIED.
+                }
+            }
+        }
+        Err(io::Error::from_raw_os_error(raw))
     }
 
     pub fn exchange(_: &File, _: &OsStr, _: &File, _: &OsStr) -> io::Result<()> {
