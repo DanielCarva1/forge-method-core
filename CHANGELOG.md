@@ -477,6 +477,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0-alpha.1] — 2026-07-24
+
+### Notes
+
+This is a **source-only pre-release checkpoint**, not a stable release. It
+exists to break the publication deadlock that built up during the Python → Rust
+migration and to let the owner resume dogfooding Forge Method in WSL on real
+work. Bugs found in dogfooding will drive the roadmap by felt pain, not by plan.
+
+**What this is.** A source-only checkpoint of the clean Rust core (≈268K LOC,
+zero stubs) at the current branch state. It sits on top of the accumulated
+`[Unreleased]` work since `v0.4.0`; that work is not restated here.
+
+**What this is not.** Not stable. No proven host integration, no complete
+operated production journey, no production-host P7F evidence. The first-use
+human-origin authority gap (GAP-001) remains P0 and open.
+
+**Supported platforms.** Linux and macOS are production-grade (reference).
+WSL2 on Windows is production-grade and the **recommended** path for Windows
+users (real Linux kernel, ext4 via VHDX). Windows native is **best-effort
+durability only**, not a supported production platform — see
+`docs/security-model.md` `## Platform support`.
+
+**Excellence-first user.** Solo developer on WSL running multiple local agents.
+The product stays robust and universal, but when priorities conflict, this user
+wins. Mega-corp, orgs, and federation remain explicitly Phase 2.
+
+### Changed
+
+- **Workspace version** advanced to `0.12.0-alpha.1` so the release identity
+  gate accepts a matching `v0.12.0-alpha.1` tag.
+- **Windows native reclassified** from a production target to best-effort. The
+  `windows-native` stabilization campaign is formally closed **as a production
+  promise**; the defensive code it produced stays as graceful degradation. WSL2
+  is now the documented recommendation for Windows users.
+- **Pre-release channel.** `release.yml` now marks tags containing `-alpha`,
+  `-beta`, or `-rc` as GitHub pre-releases, so they never appear as the latest
+  stable release. Plain `vX.Y.Z` tags remain latest.
+
+### Fixed
+
+- **Repo hygiene.** `.gitignore` now covers agent tooling dirs (`.claude/`,
+  `.pi/`, `.zcode/`) and audit campaign scratch output (`target-audit*/`,
+  `target-finding*/`, `target-c2-verifier/`, `target-windows-native/`), plus
+  `debug.log`. These were polluting `git status` and misleading
+  `forge-core validate --root .` into false positives.
+- **CLI test warnings.** `run_reinitialize` and `output_envelope` in
+  `start_cli_e2e.rs` are now `#[cfg]`-gated to posix, matching their only
+  caller, so they no longer compile as dead code on Windows. A genuinely unused
+  `serde_json::Value` import in `backup_cli_e2e.rs` was removed.
+- **Windows-native locking and parity (carried over from this branch).**
+  Identity-locked claim WAL (fs4 mandatory locks block same-process reads on
+  Windows), portable temp dirs, symlink privilege guards, and no-replace
+  rename/link collision translation (`ACCESS_DENIED`/`INVALID_PARAMETER` →
+  `AlreadyExists`) from commits `a0d9875d` and `e915ee9e`. Retained as defense;
+  the production promise is now best-effort (see above).
+
+---
+
 ## [0.4.0] — 2026-07-09
 
 ### Added
