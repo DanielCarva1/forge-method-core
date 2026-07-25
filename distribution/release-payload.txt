@@ -35,8 +35,6 @@ docs/README.md
 docs/getting-started.md
 docs/agent-integration.md
 docs/operator-guide.md
-docs/product-status.md
-docs/product-gap-register.md
 docs/security-model.md
 docs/domain-packs.md
 docs/verification.md
@@ -44,7 +42,6 @@ docs/architecture.md
 docs/forking.md
 docs/contributing.md
 docs/real-host-proof.md
-docs/product-compliance-audit.md
 docs/fixtures/domain-pack-reference-v0/README.md
 docs/fixtures/domain-pack-reference-v0/artifacts/ablation-no-first-use.yaml
 docs/fixtures/domain-pack-reference-v0/artifacts/adversarial-false-progress.yaml

@@ -17,9 +17,9 @@ host agents operate `forge-core`; operators own installation and trust.
 
 ## Reference index
 
-- [Product status](product-status.md), [promise audit](product-compliance-audit.md),
-  and the [canonical gap register](product-gap-register.md) separate delivered
-  primitives, open implementation, and external evidence.
+- [Security model](security-model.md) states protected properties, the trust
+  domains, the cooperative filesystem boundary, and platform support
+  (Linux/macOS/WSL2 production; Windows native best-effort).
 - [Architecture](architecture.md) explains layers and authority flow.
 - [Verification](verification.md) defines Tier 0, focused, platform, and
   cumulative evidence with budgets, triggers, and timing artifacts.

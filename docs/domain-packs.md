@@ -202,6 +202,4 @@ flags and the [operator guide](operator-guide.md) for state/trust ownership.
 The reference fixture deliberately contains no deployable private keys, signed
 public registry, or globally trusted reviewer root. Production pack
 authoring/signing/publishing is not yet a polished public SDK journey; do not
-manufacture authority by copying test-generated material. The
-[product compliance audit](product-compliance-audit.md) tracks that remaining
-productization gap.
+manufacture authority by copying test-generated material.

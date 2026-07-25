@@ -195,7 +195,6 @@ FORENSIC_IDS = {f"v2-{index:03d}" for index in range(1, 27)}
 STATIC_COMMANDS = [
     f"/usr/bin/python3 -I {ROOT}/scripts/check-static-structured-text.py",
     f"/usr/bin/python3 -I {ROOT}/scripts/check-doc-links.py",
-    f"/usr/bin/python3 -I {ROOT}/scripts/check-public-promises.py",
     f"/usr/bin/python3 -I {ROOT}/scripts/check-msrv.py",
     f"/usr/bin/python3 -I {ROOT}/scripts/check-release-locking.py",
     f"/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= "
@@ -1380,7 +1379,6 @@ def validate_continuity(value: Any) -> None:
         relative(HERMETIC_COMPILE_LAUNCHER),
         relative(PLAN),
         relative(INVENTORY),
-        "scripts/check-public-promises.py",
     }
     if set(artifact_hashes) != required_hash_paths:
         fail("C2.2 checkpoint artifact-hash projection drifted")

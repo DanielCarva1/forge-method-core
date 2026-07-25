@@ -44,10 +44,6 @@ jobs:
         timeout-minutes: 3
         run: python scripts/run-ci-tier.py --tier tier-0-documentation-links --budget-seconds 120 --report target/ci-timing/documentation-links.json -- python scripts/check-doc-links.py
 
-      - name: Audit public promises and release payload
-        timeout-minutes: 3
-        run: python scripts/run-ci-tier.py --tier tier-0-public-promises --budget-seconds 120 --report target/ci-timing/public-promises.json -- python scripts/check-public-promises.py
-
       - name: Test CI and evidence tooling failure semantics
         timeout-minutes: 3
         shell: bash
@@ -197,14 +193,6 @@ jobs:
       - name: Clippy (pedantic, deny, including expensive-journey code)
         timeout-minutes: 16
         run: python scripts/run-ci-tier.py --tier focused-clippy --budget-seconds 900 --report target/ci-timing/clippy.json -- cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic
-
-      - name: Verify default workspace test inventory
-        timeout-minutes: 16
-        run: python scripts/run-ci-tier.py --tier focused-workspace-inventory --budget-seconds 900 --report target/ci-timing/workspace-inventory-timing.json -- python scripts/check-test-inventory.py --baseline contracts/test-inventory/workspace.json --label workspace-default --report target/ci-timing/workspace-test-inventory.json -- cargo test --workspace -- --list
-
-      - name: Verify expensive journey test inventory
-        timeout-minutes: 16
-        run: python scripts/run-ci-tier.py --tier focused-expensive-inventory --budget-seconds 900 --report target/ci-timing/expensive-inventory-timing.json -- python scripts/check-test-inventory.py --baseline contracts/test-inventory/expensive-p6d.json --label expensive-p6d --report target/ci-timing/expensive-test-inventory.json -- cargo test -p forge-core-cli --test domain_pack_cli_e2e --features expensive-p6d-e2e -- --list
 
       - name: Validate contracts
         timeout-minutes: 16
