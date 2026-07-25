@@ -50,7 +50,7 @@ class Job(NamedTuple):
 # graph edges. Authorizing candidate byte/graph digests cannot bypass the fixed
 # manifest governed below.
 EXPECTED_WORKFLOW_SHA256 = "d18583453b266da1a095aecf65111af84be183d07c0b67ed3cda58b40804b6bf"
-EXPECTED_GRAPH_SHA256 = "c849b8693d6a5a6e3e93148975802c9189696a17e2925080c9cb2b99c46271c2"
+EXPECTED_GRAPH_SHA256 = "e59c9000387bf327230ce4d5f256450ca0e7ffaff82ba0428fd6bba861c3083d"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
