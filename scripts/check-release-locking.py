@@ -90,7 +90,7 @@ GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
     "scripts/test-release-locking.py": "00c29eecc6f39f72735829ba562fb5f7455a244f7500aed4f064199d4b96b24f",
     "scripts/test-release-archive.py": "9fa807099e2dd32181d84a8917fe8739ac6c652ed8fbe92cca22d420c00b3286",
-    "distribution/release-payload.txt": "0e90e1509e0ce21cb4c5c8ba84b4dadf670bf040bc2c541fc32cd82bea328378",
+    "distribution/release-payload.txt": "ed0febbcd2cae3321b71af623bbd0df60af89643b5f90100f9c98032a343d28f",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
     "scripts/smoke-release-install.py": "a8ef321a1e9289e93d187d5d4fa1a390dfcdcf9a426da5db7b5ecc6891a31be1",
@@ -101,7 +101,7 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
-    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "de35d329e497b40bbe0071983a51d16f00760429bef9b7058580a4d773312c5d",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "74238299cd12bd48d49ce6e0797e9a31ac7ed3d24228a7384caad6a578b273c7",
 }
 
 # Only these reviewed release payloads use Git's `text:auto` checkout policy.
