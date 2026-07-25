@@ -477,6 +477,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0-alpha.2] — 2026-07-25
+
+### Added
+
+- **ZCode host recognition.** Adds `ZCode` to `HostKind` (enum + ALL array +
+  testkit identifier + `host-conformance.yaml` fixture). ZCode is now accepted
+  as a `selected_host` value, alongside Codex, Cursor, Opencode, Claude, Pidev,
+  and ForgeApp. ZCode does NOT yet have a shipping host adapter (GAP-003 /
+  GAP-010 still open); this only makes the runtime accept the value so the
+  owner's primary agent tool for this dogfooding cycle is not rejected at the
+  host-kind boundary.
+
 ## [0.12.0-alpha.1] — 2026-07-24
 
 ### Notes
