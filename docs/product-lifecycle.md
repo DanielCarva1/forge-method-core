@@ -120,11 +120,3 @@ backups, restore receipts, public broker registries, and all external private
 keys are outside lifecycle custody. Private external broker keys remain in their
 owner-specific backup procedure and are never copied into Forge state or Forge
 backups.
-
-## Evidence status
-
-The contracts, command surface, CLI implementation, and source-test targets
-compile with targeted locked all-target checks. Rust test execution, interrupted
-and mixed-version scenarios, failure injection, stress/fuzz/benchmarks, MSRV and
-platform matrices, hosted CI, publication, downloaded-asset verification,
-real-host execution, and field review remain deferred to their owning campaigns.

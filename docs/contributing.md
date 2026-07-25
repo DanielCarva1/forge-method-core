@@ -131,6 +131,45 @@ Before a tag:
 
 Passing source checks does not mean the tag/assets were published.
 
+## Agent skills
+
+This section orients contributor agents (Claude Code, OpenCode, Codex, etc.)
+working in this repo. Personal agent contracts and preferences live in each
+contributor's global config, not here.
+
+### Issue tracker
+
+GitHub Issues at `DanielCarva1/forge-method-core`. Skills and scripts use the
+`gh` CLI.
+
+### Triage labels
+
+Canonical defaults: `needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`. Apply `ready-for-agent` to any ticket that is
+unblocked and sized for a single agent session.
+
+### Domain docs
+
+- Single-context: [`CONTEXT.md`](../CONTEXT.md) at the repository root is the
+  authoritative ubiquitous language.
+- Architectural decisions are recorded as ADRs under `docs/adr/` when a
+  decision is non-obvious and durable.
+
+### Build and gates cheat sheet
+
+- MSRV check:
+  `cargo +1.85.1 check --locked --workspace --all-targets --all-features`.
+- Clippy (pedantic, deny):
+  `cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic`.
+- Validate repo contracts:
+  `cargo run -p forge-core-cli -- validate --root .`. Local agent-tool dirs
+  (`.claude/`, `.zcode/`, `.pi/`) must be moved aside first if they contain
+  Markdown, since the validator scans the filesystem, not `.gitignore`.
+- Workspace tests: `cargo test --workspace`. (Do not combine `--locked` and
+  `--quiet`; that variant is not a real cargo flag combination.)
+- Windows native has known failures in crash-replace (os error 5) and
+  path-normalization paths; WSL2 is the supported Windows environment.
+
 ## Security-sensitive reports
 
 Do not place exploit details, private keys, anchors, credentials, or unredacted

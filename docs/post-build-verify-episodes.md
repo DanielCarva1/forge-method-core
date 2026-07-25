@@ -176,8 +176,3 @@ Focused source tests cover complete repeated snapshots, historical `0.7` compati
 dedicated append ownership, request transitions and evidence, typed references, exact
 stable IDs, completion proof and conflicts, recovery joins, deterministic retries, claim
 liveness, replacement reconstruction, and authority-free serialization.
-
-Targeted compile-only `--all-targets` checks are green for the workflow-governance TCB
-and kernel after the C5.3 source changes. Rust tests, runtime fresh-process integration,
-failure injection, stress, fuzzing, MSRV/platform matrices, hosted CI, publication,
-release, real-host, and field evidence remain deferred until every source story compiles.
