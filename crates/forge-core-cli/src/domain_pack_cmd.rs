@@ -4678,7 +4678,6 @@ mod backup_seam_tests {
     }
 
     #[test]
-
     #[ignore = "pre-existing macOS failure (pre-alpha): tempdir resolves under /var which is a symlink to /private/var on macOS; Forge lifecycle I/O rejects symlink path components. Tracked in issue #24. Passes on Linux/WSL."]
 
     fn rebase_plan_persistence_rejects_late_creation_after_recovered_absence() {
