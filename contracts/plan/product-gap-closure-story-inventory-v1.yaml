@@ -14,8 +14,6 @@ authority:
   c2_2_continuity_ref: contracts/plan/c2.2-campaign-continuity-v1.yaml
   source_precedence_refs:
   - contracts/plan/product-gap-closure-plan.yaml
-  - docs/product-status.md
-  - docs/product-gap-register.md
   - contracts/backlog/rust-only-core-backlog.yaml
   authority_rule: Repository paths and line or YAML anchors in this file are authority references. Workflow IDs
     and result digests below are provenance only and never authorize resume, mutation, or evidence claims.
@@ -1853,8 +1851,8 @@ current_records:
   dependencies:
   - C2.1
   - C2.2
-  source_ref: docs/product-gap-register.md
-  source_anchor: confirmed gaps table, GAP-002, line 33
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: C2.2 closure plan entry
   checkpoint:
     kind: inventory-source-checkpoint
     state: source_complete
@@ -1898,8 +1896,8 @@ current_records:
   - C1.4
   - FRUST-011
   - FRUST-060
-  source_ref: docs/product-gap-register.md
-  source_anchor: confirmed gaps table, GAP-010, line 41
+  source_ref: contracts/plan/product-gap-closure-plan.yaml
+  source_anchor: host-capability-dependency entry
   checkpoint:
     kind: host-capability-dependency-checkpoint
     state: blocked_on_exact_host_execution
