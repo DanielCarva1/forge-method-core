@@ -101,7 +101,7 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
-    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "2939fcdf8d7e63314bc3a32e6e8fe6084a1a2fb6dd258626741da4b0f6f22201",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "b2bc877f2f30691b3641042016639208c62b54bc899c55a3c06089ec729ddf34",
 }
 
 # Only these reviewed release payloads use Git's `text:auto` checkout policy.
