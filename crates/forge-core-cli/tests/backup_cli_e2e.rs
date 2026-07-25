@@ -117,6 +117,7 @@ fn run_with_machine_catalog(fake_etc: &std::path::Path, args: &[&str]) -> std::p
 
 #[cfg(target_os = "linux")]
 #[test]
+#[ignore = "uses unshare(1) for user-namespace isolation; GitHub Actions Linux runners deny /proc/self/uid_map writes (Operation not permitted). Re-enable once the runner grants CAP_SYS_ADMIN or the harness uses a different isolation primitive. Tracked in the issue referenced from the dev diary."]
 #[allow(clippy::too_many_lines)]
 fn cli_rejects_wal_append_without_anchor_advance() {
     use forge_core_contracts::{
