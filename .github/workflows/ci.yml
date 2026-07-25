@@ -351,6 +351,10 @@ jobs:
       needs.platform.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    # ALPHA-ONLY (0.12.0-alpha.1): see platform job. P6d cumulative evidence
+    # is P7F-grade and not claimed by the source-only alpha; do not block the
+    # alpha tag on it. Re-enable hard-fail post-dogfooding.
+    continue-on-error: true
     env:
       FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
     steps:
