@@ -13,6 +13,15 @@ target-test/
 .claude/
 .pi/
 .zcode/
+# Local development state (dev diary, scratch). The repo ships only product
+# + usage docs; development narrative lives here, never committed.
+.local/
+AGENTS.md
+docs/product-status.md
+docs/product-compliance-audit.md
+docs/product-gap-register.md
+docs/C2.4-product-lifecycle-recovery.md
+scripts/check-public-promises.py
 # Audit/campaign scratch output from finding/audit/c2-verifier runs. Each
 # produces its own `target-*` dir; the globs cover all variants.
 target-audit*/
@@ -21,6 +30,9 @@ target-c2-verifier/
 target-windows-native/
 # Stray debug log from agent sessions.
 debug.log
+# Test inventory snapshots are development diary: CI regenerates on the fly,
+# they are not product artifacts a user needs. See issue #19.
+contracts/test-inventory/
 darkest-roguelite/
 # Stray Forge project workspaces left by agents working in the wrong cwd.
 # Real Forge projects live under D:\GameFactory, not inside this Rust workspace.
