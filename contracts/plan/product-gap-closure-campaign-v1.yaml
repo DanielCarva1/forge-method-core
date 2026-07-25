@@ -17,15 +17,9 @@ authority:
       source: "contracts/plan/product-gap-closure-plan.yaml"
       owns: "item identities, product outcomes, sequencing policy, and exit intent"
     - rank: 2
-      source: "docs/product-status.md"
-      owns: "current source and evidence facts"
-    - rank: 3
-      source: "docs/product-gap-register.md"
-      owns: "accepted gaps, priority, classification, and closure semantics"
-    - rank: 4
       source: "contracts/plan/agent-native-guidance-plan.yaml"
       owns: "inherited authority boundaries and historical implementation lineage"
-    - rank: 5
+    - rank: 3
       source: "contracts/backlog/rust-only-core-backlog.yaml"
       owns: "Rust-only, typed-authority, and legacy-forensic constraints"
   conflict_rule: >-

@@ -12,7 +12,6 @@ objective: >-
 
 scope:
   implementation_authority: "current Rust crates and closed typed YAML contracts"
-  gap_register: "docs/product-gap-register.md"
   existing_program: "contracts/plan/agent-native-guidance-plan.yaml"
   legacy_boundary: >-
     The unrelated Python/plugin lineage is forensic design input only. No Python
@@ -116,7 +115,6 @@ phases:
     gap_refs: []
     outcome: "Real gaps are separated from existing primitives, deliberate boundaries, and legacy-only behavior."
     deliverables:
-      - "docs/product-gap-register.md"
       - "contracts/plan/product-gap-closure-plan.yaml"
       - "machine-checked gap-to-plan coverage and documentation links"
     exit:

@@ -17,7 +17,6 @@ decision_sources:
 owned_files:
   - "contracts/spec/C2.4-product-lifecycle-recovery-v0.yaml"
   - "contracts/stories/C2.4-product-lifecycle-recovery-corpus.yaml"
-  - "docs/C2.4-product-lifecycle-recovery.md"
   - "docs/fixtures/product-lifecycle-recovery-v0/C2.4-product-lifecycle-recovery-corpus.yaml"
   - "crates/forge-core-cli/tests/product_lifecycle_recovery_corpus_e2e.rs"
 

@@ -62,7 +62,6 @@ checks:
     - "cargo check --locked -p forge-core-kernel --all-targets"
     - "cargo check --locked -p forge-core-cli --all-targets"
     - "python3 scripts/check-static-structured-text.py"
-    - "python3 scripts/check-public-promises.py"
   deferred:
     - "Rust test execution"
     - "runtime integration and end-to-end execution"

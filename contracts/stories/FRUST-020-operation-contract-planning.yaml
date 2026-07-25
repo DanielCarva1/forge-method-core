@@ -21,8 +21,6 @@ owned_files:
   - "contracts/stories/FRUST-020-operation-contract-planning.yaml"
   - "contracts/backlog/rust-only-core-backlog.yaml"
   - "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
-  - "docs/product-status.md"
-  - "docs/product-gap-register.md"
   - "crates/forge-core-kernel/src/wal_orchestration.rs"
   - "crates/forge-core-kernel/tests/operation_plan.rs"
 

@@ -20,8 +20,6 @@ owned_files:
   - "contracts/spec/domain-pack-remote-acquisition-v0.yaml"
   - "contracts/stories/C6.2-immutable-remote-domain-pack-acquisition.yaml"
   - "docs/domain-packs.md"
-  - "docs/product-status.md"
-  - "docs/product-gap-register.md"
   - "crates/forge-core-contracts/src/domain_pack_remote_acquisition.rs"
   - "crates/forge-core-contracts/src/domain_pack_resolution.rs"
   - "crates/forge-core-contracts/src/domain_pack_policy.rs"

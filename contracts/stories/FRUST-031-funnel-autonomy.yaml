@@ -28,8 +28,6 @@ owned_files:
   - "contracts/gates/gate-contract-v0.yaml"
   - "contracts/gates/destructive-review-pass-gate.yaml"
   - "contracts/gates/authority-transition-pass-gate.yaml"
-  - "docs/product-status.md"
-  - "docs/product-gap-register.md"
   - "docs/fixtures/operation-contract-v0/authority-transition-gate-required.yaml"
   - "docs/fixtures/operation-contract-v0/destructive-effect-with-inverse.yaml"
   - "docs/fixtures/operation-contract-v0/read-write-conflict-notify.yaml"
@@ -76,7 +74,6 @@ checks:
     - "cargo check --locked -p forge-core-kernel --all-targets"
     - "cargo check --locked -p forge-core-cli --all-targets"
     - "python3 scripts/check-static-structured-text.py"
-    - "python3 scripts/check-public-promises.py"
     - "git diff --check"
   deferred:
     - "Rust test execution"

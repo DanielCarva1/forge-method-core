@@ -22,8 +22,6 @@ owned_files:
   - "contracts/stories/FRUST-030-guide-protocol.yaml"
   - "contracts/backlog/rust-only-core-backlog.yaml"
   - "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
-  - "docs/product-status.md"
-  - "docs/product-gap-register.md"
   - "docs/generated/command-surface.md"
   - "docs/fixtures/guide-protocol-v0/facilitation.yaml"
   - "crates/forge-core-contracts/src/guide_protocol.rs"
@@ -65,7 +63,6 @@ checks:
     - "cargo check --locked -p forge-core-kernel --all-targets"
     - "cargo check --locked -p forge-core-cli --all-targets"
     - "python3 scripts/check-static-structured-text.py"
-    - "python3 scripts/check-public-promises.py"
     - "git diff --check"
   deferred:
     - "Rust test execution"

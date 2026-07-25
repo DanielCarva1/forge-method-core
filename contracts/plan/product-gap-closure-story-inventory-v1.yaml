@@ -1909,7 +1909,6 @@ current_records:
   - C1.1
   - C4.2
   notes:
-  - 'Codex is an intended GAP-010 target at docs/product-gap-register.md:41 and is not the C1 reference host: contracts/spec/C1.1-codex-host-capability-decision.yaml:92-123
     rejects Codex CLI 0.143.0 for human-origin assurance, while contracts/plan/product-gap-closure-plan.yaml:84-92
     still records selected_host=none. C4.1 therefore owns Codex deterministically as a named-host breadth result.
     The host-neutral FRUST-011/FRUST-060 contracts and testkit now exist, but the negative spike is not yet an executed

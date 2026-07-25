@@ -509,7 +509,6 @@ compiler_feedback_policy:
 static_checks:
 - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-static-structured-text.py
 - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-doc-links.py
-- /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-public-promises.py
 - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-msrv.py
 - /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-release-locking.py
 - /usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check 137b3cf43b123d4b15c45b544a3e3060e714ffb9
@@ -543,10 +542,7 @@ checkpoint:
   - contracts/plan/c2.2-campaign-continuity-v1.yaml
   - contracts/backlog/rust-only-core-backlog.yaml
   - contracts/stories/C2.3-owned-product-lifecycle.yaml
-  - docs/product-gap-register.md
-  - docs/product-status.md
   - scripts/check-static-structured-text.py
-  - scripts/check-public-promises.py
   - pi-green-loop.json
   - scripts/block-deferred-build-command.py
   - scripts/hermetic-compile-feedback.py
@@ -557,7 +553,6 @@ checkpoint:
     scripts/hermetic-compile-feedback.py: sha256:b1db9da2caa783ef904588c6b4608d2e7e9c8d0c75f1175c9059a59a35855e7b
     contracts/plan/product-gap-closure-plan.yaml: sha256:edcd7ccc38547844725df31cf46497699967af696391181d71c991eded563174
     contracts/plan/product-gap-closure-story-inventory-v1.yaml: sha256:210925eaa26c4826a841802821d2e04a133bad88c75fb7405bf88deafc2ea2fb
-    scripts/check-public-promises.py: sha256:df271304d5e1cd7b9e46ec8d09ad60330ec670504eb00dbcb088027af2397ccd
   static_check_results:
   - 'cargo check --locked -p forge-core-store --all-targets: passed with the available toolchain'
   - 'cargo check --locked -p forge-core-eventlog --all-targets: passed with the available toolchain'

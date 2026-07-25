@@ -12,7 +12,6 @@ intent: >-
 
 decision_sources:
   - "contracts/plan/agent-native-guidance-plan.yaml#P7h-promise-hardening-docs-and-forks"
-  - "docs/product-compliance-audit.md"
   - "docs/security-model.md"
 
 acceptance_criteria:

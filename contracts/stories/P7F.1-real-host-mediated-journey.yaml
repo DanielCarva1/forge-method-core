@@ -13,7 +13,6 @@ intent: >-
 
 decision_sources:
   - "contracts/plan/agent-native-guidance-plan.yaml#P7f-real-host-and-mediated-mutation-proof"
-  - "docs/product-compliance-audit.md"
 
 constraints:
   - "No private Rust helpers, fixture keys, hand-authored authority requests, or hidden test state."

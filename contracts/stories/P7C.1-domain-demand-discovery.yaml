@@ -14,7 +14,6 @@ intent: >-
 decision_sources:
   - "contracts/plan/agent-native-guidance-plan.yaml#P7c-domain-demand-and-pack-acquisition"
   - "contracts/policies/agent-native-product-constitution.yaml"
-  - "docs/product-compliance-audit.md"
 
 owned_files:
   - "crates/forge-core-contracts/src/domain_pack_discovery.rs"
