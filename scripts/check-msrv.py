@@ -343,10 +343,6 @@ def _check_static_docs_job(value: Any) -> None:
             {"name", "timeout-minutes", "run"},
         ),
         (
-            "Audit public promises and release payload",
-            {"name", "timeout-minutes", "run"},
-        ),
-        (
             "Test CI and evidence tooling failure semantics",
             {"name", "timeout-minutes", "shell", "run"},
         ),
@@ -464,7 +460,7 @@ def check_workflow_source(source: str) -> None:
     _exact_value(root["name"], "CI", "CI workflow name")
     _exact_value(
         root["on"],
-        {"push": {"branches": ["master", "main"]}, "pull_request": ""},
+        {"push": {"branches": ["master", "main"]}, "pull_request": "", "workflow_dispatch": ""},
         "CI workflow triggers",
     )
     _exact_value(
