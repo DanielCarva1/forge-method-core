@@ -481,15 +481,12 @@ mod tests {
 
         let report = validate_markdown_retirement(&root, &document());
         assert!(
-            !report
-                .diagnostics()
-                .iter()
-                .any(|diagnostic| diagnostic
-                    .path
-                    .starts_with("target-audit")
-                    || diagnostic.path.starts_with("target-finding")
-                    || diagnostic.path.starts_with("target-c2-verifier")
-                    || diagnostic.path.starts_with("target-windows-native")),
+            !report.diagnostics().iter().any(|diagnostic| diagnostic
+                .path
+                .starts_with("target-audit")
+                || diagnostic.path.starts_with("target-finding")
+                || diagnostic.path.starts_with("target-c2-verifier")
+                || diagnostic.path.starts_with("target-windows-native")),
             "target-* scratch dirs must be excluded from the markdown scan"
         );
         assert!(report.diagnostics().iter().any(|diagnostic| {
