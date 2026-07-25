@@ -343,7 +343,7 @@ fn is_excluded_scan_path(root: &Path, path: &Path) -> bool {
     (relative.components().count() == 1
         && matches!(
             relative.file_name().and_then(|value| value.to_str()),
-            Some(".git" | "target" | "target-test")
+            Some(".git" | ".local" | "target" | "target-test")
         ))
         // Top-level scratch dirs produced by audit/finding/c2-verifier/
         // windows-native campaigns. These are local build output, not
@@ -512,6 +512,29 @@ mod tests {
         assert!(report.diagnostics().iter().any(|diagnostic| {
             diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
                 && diagnostic.path == "docs/target-audit/new-authority.md"
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn local_project_state_dir_is_excluded_without_weakening_repository_scan() {
+        // `.local/` is the canonical project-local state directory (dev diary,
+        // scratch). It is local development state, never product Markdown.
+        let root = temp_root("local-state");
+        write_allowed(&root);
+        let diary = root.join(".local");
+        fs::create_dir_all(&diary).expect("create local dir");
+        fs::write(diary.join("DEV-DIARY.md"), "diary").expect("write diary Markdown");
+        fs::write(root.join("docs/new-authority.md"), "new").expect("write unknown");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(!report
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.path.starts_with(".local/")));
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
+                && diagnostic.path == "docs/new-authority.md"
         }));
         fs::remove_dir_all(root).expect("cleanup");
     }
