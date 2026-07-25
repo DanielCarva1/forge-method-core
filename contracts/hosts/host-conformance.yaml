@@ -89,6 +89,19 @@ host_conformance:
         - { claim: human_origin_assurance, outcome: unknown }
         - { claim: governed_mutation, outcome: unsupported }
         - { claim: support, outcome: unsupported }
+    - host: zcode
+      disposition: candidate
+      selected: false
+      supported: false
+      released: false
+      field_verified: false
+      claims:
+        - { claim: runtime_recognition, outcome: candidate }
+        - { claim: read_only_mcp, outcome: candidate }
+        - { claim: installability, outcome: unknown }
+        - { claim: human_origin_assurance, outcome: unknown }
+        - { claim: governed_mutation, outcome: unsupported }
+        - { claim: support, outcome: unsupported }
     - host: forge_app
       disposition: candidate
       selected: false

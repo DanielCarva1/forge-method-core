@@ -50,16 +50,18 @@ pub enum HostKind {
     Opencode,
     Claude,
     Pidev,
+    Zcode,
     ForgeApp,
 }
 
 impl HostKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Codex,
         Self::Cursor,
         Self::Opencode,
         Self::Claude,
         Self::Pidev,
+        Self::Zcode,
         Self::ForgeApp,
     ];
 }

@@ -91,6 +91,7 @@ const fn host_kind_identifier(host: HostKind) -> &'static str {
         HostKind::Opencode => "opencode",
         HostKind::Claude => "claude",
         HostKind::Pidev => "pidev",
+        HostKind::Zcode => "zcode",
         HostKind::ForgeApp => "forge_app",
     }
 }
