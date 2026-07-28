@@ -1,8 +1,6 @@
 //! Agent-facing lifecycle for operator-owned workflow authorization keys.
 
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -25,6 +23,7 @@ use sha2::{Digest, Sha256};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::emit_envelope;
+use crate::credential_custody;
 
 const COMMAND: &str = "workflow credential";
 
@@ -307,15 +306,15 @@ fn provision(
         &document,
         &format!("forge-core:workflow:{}", paths.project_id),
     )?;
-    create_private_dir(&paths.secrets)?;
-    let new_secret = secret_path(&paths.secrets, &credential_id);
-    write_secret_new(&new_secret, key.as_bytes())?;
+    credential_custody::create_private_dir(&paths.secrets)?;
+    let new_secret = credential_custody::secret_path(&paths.secrets, &credential_id);
+    credential_custody::write_secret_new(&new_secret, key.as_bytes())?;
     if let Err(error) = write_registry(&paths.registry, &document) {
         let _ = std::fs::remove_file(&new_secret);
         return Err(error);
     }
     let deleted = replaces.as_ref().map(|old| {
-        let old_secret = secret_path(&paths.secrets, old);
+        let old_secret = credential_custody::secret_path(&paths.secrets, old);
         old_secret.exists() && std::fs::remove_file(old_secret).is_ok()
     });
     emit_result(
@@ -355,7 +354,7 @@ fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
         &format!("forge-core:workflow:{}", paths.project_id),
     )?;
     write_registry(&paths.registry, &document)?;
-    let secret = secret_path(&paths.secrets, credential_id);
+    let secret = credential_custody::secret_path(&paths.secrets, credential_id);
     let deleted = if secret.exists() {
         std::fs::remove_file(&secret).map_err(|error| {
             ExitError::env_config(format!(
@@ -462,7 +461,10 @@ fn sign_normalized_request(
         .find(|entry| entry.credential_id == credential_id)
         .filter(|entry| entry.status == PrincipalCredentialStatus::Active)
         .ok_or_else(|| ExitError::env_config("credential is unknown or revoked".to_owned()))?;
-    let key = read_signing_key(&secret_path(&paths.secrets, credential_id))?;
+    let key = credential_custody::read_signing_key(&credential_custody::secret_path(
+        &paths.secrets,
+        credential_id,
+    ))?;
     if hex(key.verifying_key().as_bytes()) != entry.public_key_hex {
         return Err(ExitError::env_config(
             "private key does not match workflow registry public key".to_owned(),
@@ -770,49 +772,6 @@ fn write_registry(path: &Path, document: &PrincipalRegistryDocument) -> Result<(
         .map_err(|error| ExitError::env_config(format!("serialize registry: {error}")))?;
     crate::io_util::atomic_write(path, &yaml)
         .map_err(|error| ExitError::env_config(format!("write registry: {error}")))
-}
-
-fn write_secret_new(path: &Path, bytes: &[u8; 32]) -> Result<(), ExitError> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|error| ExitError::env_config(format!("create private key: {error}")))?;
-    file.write_all(bytes)
-        .and_then(|()| file.sync_all())
-        .map_err(|error| ExitError::env_config(format!("persist private key: {error}")))
-}
-
-fn read_signing_key(path: &Path) -> Result<SigningKey, ExitError> {
-    let mut bytes = [0_u8; 32];
-    let mut file = File::open(path)
-        .map_err(|error| ExitError::env_config(format!("open private key: {error}")))?;
-    file.read_exact(&mut bytes)
-        .map_err(|error| ExitError::env_config(format!("read private key: {error}")))?;
-    let key = SigningKey::from_bytes(&bytes);
-    bytes.fill(0);
-    Ok(key)
-}
-
-fn create_private_dir(path: &Path) -> Result<(), ExitError> {
-    std::fs::create_dir_all(path)
-        .map_err(|error| ExitError::env_config(format!("create secret directory: {error}")))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| ExitError::env_config(format!("protect secret directory: {error}")))?;
-    }
-    Ok(())
-}
-
-fn secret_path(directory: &Path, credential_id: &str) -> PathBuf {
-    directory.join(format!("{}.ed25519", hex(&Sha256::digest(credential_id))))
 }
 
 fn parse_flags(action: &str, args: &[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError> {

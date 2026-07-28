@@ -25,7 +25,8 @@ use forge_core_contracts::{ProjectionProhibition, RuntimeKind};
 use serde_json::{json, Value};
 
 use crate::host_adapter_manifest::run_host_adapter_manifest;
-use crate::host_adapter_types::{
+use crate::host_command::{argv_has_shell_control, env_key_is_forbidden};
+use forge_core_crypto::host_adapter_types::{
     HostAdapterAppUiProjection, HostAdapterArgvPolicy, HostAdapterBorrowedShellProjection,
     HostAdapterCommand, HostAdapterCommandKind, HostAdapterCommandProcessAdmission,
     HostAdapterCwdPolicy, HostAdapterDistributionAdmission, HostAdapterDistributionAdmissionStatus,
@@ -38,10 +39,8 @@ use crate::host_adapter_types::{
     HostAdapterProjection, HostAdapterProjectionAuthorityBoundary, HostAdapterProjectionTarget,
     HostAdapterStdioPolicy, HostAdapterUpdateChannel, HostAdapterUpdaterPolicy,
 };
-use crate::host_command::{
-    argv_has_shell_control, env_key_is_forbidden, source_ref_is_immutable, version_like,
-};
-use crate::valid_sha256_digest;
+use forge_core_crypto::host_command::{source_ref_is_immutable, version_like};
+use forge_core_crypto::valid_sha256_digest;
 
 /// Build a host adapter projection for the requested target surface.
 ///

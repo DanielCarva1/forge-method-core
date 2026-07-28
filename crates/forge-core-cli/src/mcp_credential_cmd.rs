@@ -2,8 +2,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use ed25519_dalek::{Signer, SigningKey};
@@ -21,6 +19,7 @@ use sha2::{Digest, Sha256};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::emit_envelope;
+use crate::credential_custody;
 
 const COMMAND: &str = "mcp credential";
 
@@ -116,18 +115,16 @@ fn provision(
             status: PrincipalCredentialStatus::Active,
         });
     validate_registry(&document)?;
-    fs_create_private_dir(&secret_dir)?;
-    let secret_path = secret_path(&secret_dir, &credential_id);
-    write_secret_new(&secret_path, signing_key.as_bytes())?;
+    credential_custody::create_private_dir(&secret_dir)?;
+    let secret_path = credential_custody::secret_path(&secret_dir, &credential_id);
+    credential_custody::write_secret_new(&secret_path, signing_key.as_bytes())?;
     if let Err(error) = write_registry(&registry_path, &document) {
         let _ = std::fs::remove_file(&secret_path);
         return Err(error);
     }
     let replaced_secret_deleted = replaces.as_ref().map(|old| {
-        let old_path = secret_path
-            .parent()
-            .expect("secret parent")
-            .join(format!("{}.ed25519", hex(Sha256::digest(old))));
+        let old_path =
+            credential_custody::secret_path(secret_path.parent().expect("secret parent"), old);
         old_path.exists() && std::fs::remove_file(old_path).is_ok()
     });
     let result = CredentialResult {
@@ -163,7 +160,7 @@ fn revoke(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), 
     let public_key_hex = entry.public_key_hex.clone();
     validate_registry(&document)?;
     write_registry(&registry_path, &document)?;
-    let path = secret_path(&secret_dir, credential_id);
+    let path = credential_custody::secret_path(&secret_dir, credential_id);
     let deleted = if path.exists() {
         std::fs::remove_file(&path).map_err(|error| {
             ExitError::env_config(format!(
@@ -243,8 +240,8 @@ fn sign(flags: &BTreeMap<String, Vec<String>>, want_json: bool) -> Result<(), Ex
         nonce: request.nonce.clone(),
         ts: request.issued_at_unix,
     };
-    let secret_path = secret_path(&secret_dir, credential_id);
-    let key = read_signing_key(&secret_path)?;
+    let secret_path = credential_custody::secret_path(&secret_dir, credential_id);
+    let key = credential_custody::read_signing_key(&secret_path)?;
     if hex(key.verifying_key().as_bytes()) != entry.public_key_hex {
         return Err(ExitError::env_config(
             "private key does not match registry public key".to_owned(),
@@ -335,33 +332,6 @@ fn write_registry(path: &Path, document: &PrincipalRegistryDocument) -> Result<(
         .map_err(|error| ExitError::env_config(format!("cannot write registry: {error}")))
 }
 
-fn write_secret_new(path: &Path, bytes: &[u8; 32]) -> Result<(), ExitError> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .map_err(|error| ExitError::env_config(format!("cannot create private key: {error}")))?;
-    file.write_all(bytes)
-        .and_then(|()| file.sync_all())
-        .map_err(|error| ExitError::env_config(format!("cannot persist private key: {error}")))
-}
-
-pub(crate) fn read_signing_key(path: &Path) -> Result<SigningKey, ExitError> {
-    let mut bytes = [0_u8; 32];
-    let mut file = File::open(path)
-        .map_err(|error| ExitError::env_config(format!("cannot open private key: {error}")))?;
-    file.read_exact(&mut bytes)
-        .map_err(|error| ExitError::env_config(format!("cannot read private key: {error}")))?;
-    let key = SigningKey::from_bytes(&bytes);
-    bytes.fill(0);
-    Ok(key)
-}
-
 fn read_state_relative(state_root: &Path, reference: &Path) -> Result<String, ExitError> {
     if reference.is_absolute()
         || reference
@@ -393,24 +363,6 @@ pub(crate) fn ensure_operator_owned_location(
             "operator-owned authority paths must remain outside both project and Forge state roots"
                 .to_owned(),
         ));
-    }
-    Ok(())
-}
-
-pub(crate) fn secret_path(secret_dir: &Path, credential_id: &str) -> PathBuf {
-    secret_dir.join(format!("{}.ed25519", hex(Sha256::digest(credential_id))))
-}
-
-fn fs_create_private_dir(path: &Path) -> Result<(), ExitError> {
-    std::fs::create_dir_all(path).map_err(|error| {
-        ExitError::env_config(format!("cannot create secret directory: {error}"))
-    })?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).map_err(
-            |error| ExitError::env_config(format!("cannot protect secret directory: {error}")),
-        )?;
     }
     Ok(())
 }

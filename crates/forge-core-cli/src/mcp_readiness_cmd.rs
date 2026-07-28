@@ -123,8 +123,8 @@ fn evaluate(flags: &BTreeMap<String, String>) -> Result<ReadinessReport, ExitErr
                 .to_owned(),
         ));
     }
-    let key = crate::mcp_credential_cmd::read_signing_key(
-        &crate::mcp_credential_cmd::secret_path(&secret_dir, &credential_id),
+    let key = crate::credential_custody::read_signing_key(
+        &crate::credential_custody::secret_path(&secret_dir, &credential_id),
     )?;
     if hex(key.verifying_key().as_bytes()) != entry.public_key_hex {
         return Err(ExitError::env_config(

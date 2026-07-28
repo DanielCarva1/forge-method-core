@@ -11,24 +11,34 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ed25519_dalek::{Signer as _, SigningKey};
 use forge_core_cli::{
-    load_authorized_markdown, run_execute_operation, run_host_adapter_artifact_verification,
-    run_host_adapter_certificate_crl_status_verification,
+    load_authorized_markdown, run_execute_operation, run_host_adapter_distribution_admission,
+    run_host_adapter_distribution_policy, run_host_adapter_invocation_admission,
+    run_host_adapter_manifest, run_host_adapter_process_security_policy,
+    run_host_adapter_projection, run_query_effect_index, run_rebuild_effect_index, run_validate,
+    ExecuteOperationInput, MarkdownFileLoadError, PayloadFileSpec, PayloadLoadPolicy,
+    QueryEffectIndexInput, RebuildEffectIndexInput, ValidationStatus,
+};
+use forge_core_command_surface as command_surface;
+use forge_core_contracts::claim::ActorRole;
+use forge_core_contracts::runtime::RuntimeKind;
+use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind};
+use forge_core_contracts::{
+    MarkdownLoadAudience, MarkdownLoadError, MarkdownRetirementDocument, StableId,
+    WorkflowMigrationBatchDocument,
+};
+use forge_core_crypto::{
+    run_host_adapter_artifact_verification, run_host_adapter_certificate_crl_status_verification,
     run_host_adapter_certificate_ocsp_status_verification,
     run_host_adapter_certificate_ocsp_status_verification_with_responder_material,
     run_host_adapter_certificate_revocation_policy_verification,
     run_host_adapter_certificate_transparency_sct_verification,
-    run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
     run_host_adapter_fulcio_certificate_identity_verification,
-    run_host_adapter_invocation_admission, run_host_adapter_manifest,
-    run_host_adapter_process_security_policy, run_host_adapter_projection,
     run_host_adapter_provenance_verification, run_host_adapter_rekor_verification,
     run_host_adapter_sigstore_bundle_subject_verification,
     run_host_adapter_sigstore_dsse_in_toto_subject_verification,
     run_host_adapter_sigstore_timestamp_authority_verification,
-    run_host_adapter_tuf_trusted_root_freshness_verification, run_query_effect_index,
-    run_rebuild_effect_index, run_validate, ExecuteOperationInput,
-    HostAdapterArtifactVerificationInput, HostAdapterArtifactVerificationStatus,
-    HostAdapterAuthorityClass, HostAdapterAutoTrigger,
+    run_host_adapter_tuf_trusted_root_freshness_verification, HostAdapterArtifactVerificationInput,
+    HostAdapterArtifactVerificationStatus, HostAdapterAuthorityClass, HostAdapterAutoTrigger,
     HostAdapterCertificateCrlStatusVerificationInput,
     HostAdapterCertificateCrlStatusVerificationStatus,
     HostAdapterCertificateOcspStatusVerificationInput,
@@ -54,17 +64,7 @@ use forge_core_cli::{
     HostAdapterSigstoreTrustPolicyVerificationInput,
     HostAdapterSigstoreTrustPolicyVerificationStatus,
     HostAdapterTufTrustedRootFreshnessVerificationInput,
-    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel,
-    MarkdownFileLoadError, OcspNonceHex, PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput,
-    RebuildEffectIndexInput, ValidationStatus,
-};
-use forge_core_command_surface as command_surface;
-use forge_core_contracts::claim::ActorRole;
-use forge_core_contracts::runtime::RuntimeKind;
-use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind};
-use forge_core_contracts::{
-    MarkdownLoadAudience, MarkdownLoadError, MarkdownRetirementDocument, StableId,
-    WorkflowMigrationBatchDocument,
+    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel, OcspNonceHex,
 };
 use forge_core_store::{
     append_json_line, sha256_content_hash, EffectMetadataConsumerUse,
@@ -3767,7 +3767,7 @@ fn host_adapter_verify_rekor_entry_binary_blocks_wrong_key() {
 fn host_adapter_sigstore_trust_policy_verification_passes_complete_policy() {
     let fixture =
         sigstore_trust_policy_fixture("verify-sigstore-trust-policy", &["fulcio-root.pem"]);
-    let verification = forge_core_cli::run_host_adapter_sigstore_trust_policy_verification(
+    let verification = forge_core_crypto::run_host_adapter_sigstore_trust_policy_verification(
         HostAdapterSigstoreTrustPolicyVerificationInput {
             policy_path: fixture.policy_path,
         },
@@ -3791,7 +3791,7 @@ fn host_adapter_sigstore_trust_policy_verification_passes_complete_policy() {
 #[test]
 fn host_adapter_sigstore_trust_policy_verification_fails_missing_fulcio_refs() {
     let fixture = sigstore_trust_policy_fixture("verify-sigstore-trust-policy-fail", &[]);
-    let verification = forge_core_cli::run_host_adapter_sigstore_trust_policy_verification(
+    let verification = forge_core_crypto::run_host_adapter_sigstore_trust_policy_verification(
         HostAdapterSigstoreTrustPolicyVerificationInput {
             policy_path: fixture.policy_path,
         },

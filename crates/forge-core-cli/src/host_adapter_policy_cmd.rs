@@ -19,9 +19,6 @@ use crate::{
     run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
     run_host_adapter_invocation_admission, run_host_adapter_manifest,
     run_host_adapter_process_security_policy, run_host_adapter_projection,
-    HostAdapterDistributionAdmissionStatus, HostAdapterDistributionEvidence,
-    HostAdapterInvocationAdmissionStatus, HostAdapterInvocationRequest, HostAdapterProcessTarget,
-    HostAdapterProjectionTarget, HostAdapterUpdateChannel,
 };
 use forge_core_command_surface::{
     CommandSpec, COMMAND_HOST_ADAPTER_ADMIT_DISTRIBUTION, COMMAND_HOST_ADAPTER_ADMIT_INVOCATION,
@@ -29,6 +26,11 @@ use forge_core_command_surface::{
     COMMAND_HOST_ADAPTER_PROCESS_POLICY, COMMAND_HOST_ADAPTER_PROJECTION,
 };
 use forge_core_contracts::runtime::RuntimeKind;
+use forge_core_crypto::{
+    HostAdapterDistributionAdmissionStatus, HostAdapterDistributionEvidence,
+    HostAdapterInvocationAdmissionStatus, HostAdapterInvocationRequest, HostAdapterProcessTarget,
+    HostAdapterProjectionTarget, HostAdapterUpdateChannel,
+};
 
 fn host_adapter_command_usage(command: &CommandSpec) -> String {
     command_surface_usage(command)

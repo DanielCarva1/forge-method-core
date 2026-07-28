@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{command_surface_usage, resolve_stateful_roots_or_err};
+use crate::effect_vocabulary;
 use forge_core_command_surface::{
     CommandSpec, COMMAND_QUERY_EFFECT_INDEX, COMMAND_REBUILD_EFFECT_INDEX,
 };
@@ -353,59 +354,32 @@ fn parse_effect_target_kind_or_err(
     value: &str,
     command: &CommandSpec,
 ) -> Result<EffectTargetKind, ExitError> {
-    match value {
-        "file_path" => Ok(EffectTargetKind::FilePath),
-        "glob" => Ok(EffectTargetKind::Glob),
-        "state_key" => Ok(EffectTargetKind::StateKey),
-        "artifact_id" => Ok(EffectTargetKind::ArtifactId),
-        "evidence_id" => Ok(EffectTargetKind::EvidenceId),
-        "ledger_stream" => Ok(EffectTargetKind::LedgerStream),
-        "request_stream" => Ok(EffectTargetKind::RequestStream),
-        "completion_id" => Ok(EffectTargetKind::CompletionId),
-        _ => Err(ExitError::usage(effect_index_usage(command))),
-    }
+    effect_vocabulary::parse_target_kind(value)
+        .ok_or_else(|| ExitError::usage(effect_index_usage(command)))
 }
 
 fn parse_effect_index_runtime_kind_or_err(
     value: &str,
     command: &CommandSpec,
 ) -> Result<RuntimeKind, ExitError> {
-    match value {
-        "codex" => Ok(RuntimeKind::Codex),
-        "cursor" => Ok(RuntimeKind::Cursor),
-        "claude" => Ok(RuntimeKind::Claude),
-        "opencode" => Ok(RuntimeKind::Opencode),
-        "vscode" => Ok(RuntimeKind::Vscode),
-        "pidev" => Ok(RuntimeKind::Pidev),
-        "forge_standalone" => Ok(RuntimeKind::ForgeStandalone),
-        "custom" => Ok(RuntimeKind::Custom),
-        _ => Err(ExitError::usage(effect_index_usage(command))),
-    }
+    effect_vocabulary::parse_runtime_kind(value)
+        .ok_or_else(|| ExitError::usage(effect_index_usage(command)))
 }
 
 fn parse_effect_metadata_consumer_use_or_err(
     value: &str,
     command: &CommandSpec,
 ) -> Result<EffectMetadataConsumerUse, ExitError> {
-    match value {
-        "discovery" => Ok(EffectMetadataConsumerUse::Discovery),
-        "diagnostics" => Ok(EffectMetadataConsumerUse::Diagnostics),
-        "handoff_context" => Ok(EffectMetadataConsumerUse::HandoffContext),
-        _ => Err(ExitError::usage(effect_index_usage(command))),
-    }
+    effect_vocabulary::parse_metadata_consumer_use(value)
+        .ok_or_else(|| ExitError::usage(effect_index_usage(command)))
 }
 
 fn parse_effect_metadata_adapter_trigger_or_err(
     value: &str,
     command: &CommandSpec,
 ) -> Result<EffectMetadataAdapterTrigger, ExitError> {
-    match value {
-        "evidence_discovery" => Ok(EffectMetadataAdapterTrigger::EvidenceDiscovery),
-        "diagnostics" => Ok(EffectMetadataAdapterTrigger::Diagnostics),
-        "handoff_preparation" => Ok(EffectMetadataAdapterTrigger::HandoffPreparation),
-        "manual_inspection" => Ok(EffectMetadataAdapterTrigger::ManualInspection),
-        _ => Err(ExitError::usage(effect_index_usage(command))),
-    }
+    effect_vocabulary::parse_metadata_adapter_trigger(value)
+        .ok_or_else(|| ExitError::usage(effect_index_usage(command)))
 }
 
 /// Executes the resolved query (plain or context mode) and prints the

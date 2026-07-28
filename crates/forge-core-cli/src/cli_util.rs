@@ -13,10 +13,8 @@
 //! remaining `std::process::exit` lives at the top of `main.rs`.
 
 use crate::cli_error::ExitError;
-use crate::{
-    HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
-    PayloadFileSpec,
-};
+use crate::effect_vocabulary;
+use crate::PayloadFileSpec;
 use forge_core_command_surface::{
     CommandSpec, COMMAND_COST, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_EVAL_HARNESS,
     COMMAND_GRAPH, COMMAND_RISK_AUDIT, COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
@@ -24,6 +22,9 @@ use forge_core_command_surface::{
 };
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::EffectTargetKind;
+use forge_core_crypto::host_adapter_types::{
+    HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
+};
 use forge_core_store::{EffectMetadataAdapterTrigger, EffectMetadataConsumerUse};
 use std::path::{Path, PathBuf};
 
@@ -283,17 +284,7 @@ pub fn parse_usize_or_err(value: &str) -> Result<usize, ExitError> {
 /// Returns `ExitError::usage` when `value` is not one of the recognised
 /// `EffectTargetKind` aliases.
 pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitError> {
-    match value {
-        "file_path" => Ok(EffectTargetKind::FilePath),
-        "glob" => Ok(EffectTargetKind::Glob),
-        "state_key" => Ok(EffectTargetKind::StateKey),
-        "artifact_id" => Ok(EffectTargetKind::ArtifactId),
-        "evidence_id" => Ok(EffectTargetKind::EvidenceId),
-        "ledger_stream" => Ok(EffectTargetKind::LedgerStream),
-        "request_stream" => Ok(EffectTargetKind::RequestStream),
-        "completion_id" => Ok(EffectTargetKind::CompletionId),
-        _ => Err(ExitError::usage(usage())),
-    }
+    effect_vocabulary::parse_target_kind(value).ok_or_else(|| ExitError::usage(usage()))
 }
 
 /// Result variant of `parse_runtime_kind`.
@@ -303,17 +294,7 @@ pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitErr
 /// Returns `ExitError::usage` when `value` is not one of the recognised
 /// `RuntimeKind` aliases.
 pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> {
-    match value {
-        "codex" => Ok(RuntimeKind::Codex),
-        "cursor" => Ok(RuntimeKind::Cursor),
-        "claude" => Ok(RuntimeKind::Claude),
-        "opencode" => Ok(RuntimeKind::Opencode),
-        "vscode" => Ok(RuntimeKind::Vscode),
-        "pidev" => Ok(RuntimeKind::Pidev),
-        "forge_standalone" => Ok(RuntimeKind::ForgeStandalone),
-        "custom" => Ok(RuntimeKind::Custom),
-        _ => Err(ExitError::usage(usage())),
-    }
+    effect_vocabulary::parse_runtime_kind(value).ok_or_else(|| ExitError::usage(usage()))
 }
 
 /// Result variant of `parse_metadata_consumer_use`.
@@ -325,12 +306,7 @@ pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> 
 pub fn parse_metadata_consumer_use_or_err(
     value: &str,
 ) -> Result<EffectMetadataConsumerUse, ExitError> {
-    match value {
-        "discovery" => Ok(EffectMetadataConsumerUse::Discovery),
-        "diagnostics" => Ok(EffectMetadataConsumerUse::Diagnostics),
-        "handoff_context" => Ok(EffectMetadataConsumerUse::HandoffContext),
-        _ => Err(ExitError::usage(usage())),
-    }
+    effect_vocabulary::parse_metadata_consumer_use(value).ok_or_else(|| ExitError::usage(usage()))
 }
 
 /// Result variant of `parse_metadata_adapter_trigger`.
@@ -342,13 +318,8 @@ pub fn parse_metadata_consumer_use_or_err(
 pub fn parse_metadata_adapter_trigger_or_err(
     value: &str,
 ) -> Result<EffectMetadataAdapterTrigger, ExitError> {
-    match value {
-        "evidence_discovery" => Ok(EffectMetadataAdapterTrigger::EvidenceDiscovery),
-        "diagnostics" => Ok(EffectMetadataAdapterTrigger::Diagnostics),
-        "handoff_preparation" => Ok(EffectMetadataAdapterTrigger::HandoffPreparation),
-        "manual_inspection" => Ok(EffectMetadataAdapterTrigger::ManualInspection),
-        _ => Err(ExitError::usage(usage())),
-    }
+    effect_vocabulary::parse_metadata_adapter_trigger(value)
+        .ok_or_else(|| ExitError::usage(usage()))
 }
 
 /// Result variant of `parse_host_adapter_projection_target`.

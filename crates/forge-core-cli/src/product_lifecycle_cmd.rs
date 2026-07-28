@@ -8,21 +8,21 @@
 
 use crate::cli_error::ExitError;
 use crate::io_util::{atomic_write, read_regular_file_no_follow_bounded};
-use crate::{
-    run_host_adapter_artifact_verification, run_host_adapter_distribution_admission,
-    run_host_adapter_provenance_verification,
+use crate::run_host_adapter_distribution_admission;
+use forge_core_command_surface::COMMAND_LIFECYCLE;
+use forge_core_contracts::{
+    CliEnvelope, ExitReason, ProductLifecycleAssetKind, ProductLifecycleChange,
+    ProductLifecycleChannel, ProductLifecycleReleaseDocument,
+    ProductLifecycleTrustedVerificationInputDocument, RuntimeKind,
+};
+use forge_core_crypto::{
+    run_host_adapter_artifact_verification, run_host_adapter_provenance_verification,
     run_host_adapter_sigstore_dsse_in_toto_subject_verification,
     HostAdapterArtifactVerificationInput, HostAdapterArtifactVerificationStatus,
     HostAdapterDistributionAdmissionStatus, HostAdapterDistributionEvidence,
     HostAdapterProvenanceVerificationInput, HostAdapterProvenanceVerificationStatus,
     HostAdapterSigstoreDsseInTotoSubjectVerificationInput,
     HostAdapterSigstoreDsseInTotoSubjectVerificationStatus, HostAdapterUpdateChannel,
-};
-use forge_core_command_surface::COMMAND_LIFECYCLE;
-use forge_core_contracts::{
-    CliEnvelope, ExitReason, ProductLifecycleAssetKind, ProductLifecycleChange,
-    ProductLifecycleChannel, ProductLifecycleReleaseDocument,
-    ProductLifecycleTrustedVerificationInputDocument, RuntimeKind,
 };
 use forge_core_store::{
     acquire_effect_store_lock,
@@ -1447,7 +1447,7 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), LifecycleError
 }
 
 fn digest(bytes: &[u8]) -> String {
-    format!("sha256:{}", crate::hex_sha256(bytes))
+    format!("sha256:{}", forge_core_crypto::hex_sha256(bytes))
 }
 
 fn reject_symlink_ancestors(path: &Path) -> Result<(), LifecycleError> {

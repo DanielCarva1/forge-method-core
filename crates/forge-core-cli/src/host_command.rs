@@ -1,9 +1,9 @@
 //! Host command builder and admission safety helpers.
 //!
 //! Small private helpers that build a [`HostAdapterCommand`] from a compact
-//! metadata struct and the four safety predicates used by the host-adapter
-//! invocation/distribution admission gates (`argv_has_shell_control`,
-//! `env_key_is_forbidden`, `source_ref_is_immutable`, `version_like`).
+//! metadata struct and the CLI-owned safety predicates used by the
+//! host-adapter invocation gate (`argv_has_shell_control`,
+//! `env_key_is_forbidden`).
 //!
 //! The manifest keeps host-specific security metadata here, but top-level
 //! command identity and JSON capability are anchored in
@@ -13,7 +13,7 @@
 
 use forge_core_command_surface::{self as command_surface, JsonMode};
 
-use crate::host_adapter_types::{
+use forge_core_crypto::host_adapter_types::{
     HostAdapterAuthorityClass, HostAdapterAutoTrigger, HostAdapterCommand, HostAdapterCommandKind,
     HostAdapterMutationClass, HostAdapterOutputTreatment, HostAdapterSetupGap,
 };
@@ -92,27 +92,6 @@ pub(crate) fn env_key_is_forbidden(key: &str) -> bool {
     ["TOKEN", "SECRET", "KEY", "PASSWORD"]
         .iter()
         .any(|pattern| upper.contains(pattern))
-}
-
-/// Returns `true` when `source_ref` contains a 40-character ASCII hex segment,
-/// treating it as a git SHA-1-style immutable commit reference. Used by the
-/// distribution admission and artifact-verification gates to require an
-/// immutable source anchor.
-pub(crate) fn source_ref_is_immutable(source_ref: &str) -> bool {
-    source_ref
-        .split(|character: char| !character.is_ascii_hexdigit())
-        .any(|segment| segment.len() == 40 && segment.chars().all(|item| item.is_ascii_hexdigit()))
-}
-
-/// Returns `true` when `value` looks like a version string: non-empty after
-/// trimming and composed only of `[A-Za-z0-9.\-+_]+`. Used by the distribution
-/// admission and artifact-verification gates to validate version evidence.
-pub(crate) fn version_like(value: &str) -> bool {
-    let trimmed = value.trim();
-    !trimmed.is_empty()
-        && trimmed
-            .chars()
-            .all(|item| item.is_ascii_alphanumeric() || matches!(item, '.' | '-' | '_' | '+'))
 }
 
 #[cfg(test)]

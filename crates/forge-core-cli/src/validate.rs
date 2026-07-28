@@ -19,10 +19,7 @@ use sha2::{Digest, Sha256};
 
 use tracing::instrument;
 
-use crate::{
-    run_host_adapter_manifest, run_host_adapter_projection, HostAdapterEvidenceProjection,
-    HostAdapterMutationClass, HostAdapterProjectionTarget, HostAdapterSetupGap,
-};
+use crate::{run_host_adapter_manifest, run_host_adapter_projection};
 use forge_core_authority::{
     verify_workflow_retirement_authorization_v2, WorkflowRetirementExpectedContextV2,
 };
@@ -60,6 +57,10 @@ use forge_core_contracts::{
     WorkflowReleaseReviewerRegistryDocument, WorkflowRetirementArtifactBinding,
     WorkflowRetirementAuthorizationV2Document, WorkflowRetirementEvidenceIndexDocument,
     WorkflowRetirementSnapshotManifestDocument, WorkflowRetirementTombstoneCatalogDocument,
+};
+use forge_core_crypto::{
+    HostAdapterEvidenceProjection, HostAdapterMutationClass, HostAdapterProjectionTarget,
+    HostAdapterSetupGap,
 };
 use forge_core_decisions::{
     compose_domain_packs, evaluate_workflow_behavior, evaluate_workflow_migration,

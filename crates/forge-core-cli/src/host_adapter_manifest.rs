@@ -14,12 +14,12 @@
 
 use forge_core_contracts::RuntimeKind;
 
-use crate::host_adapter_types::{
+use crate::host_command::{host_command, HostCommandMetadata};
+use forge_core_crypto::host_adapter_types::{
     HostAdapterAuthorityBoundary, HostAdapterAuthorityClass, HostAdapterAutoTrigger,
     HostAdapterCommandKind, HostAdapterManifest, HostAdapterMutationClass,
     HostAdapterOutputTreatment, HostAdapterSetupGap,
 };
-use crate::host_command::{host_command, HostCommandMetadata};
 
 /// Build the authoritative Forge Core host adapter manifest.
 ///

@@ -29,6 +29,7 @@ use forge_core_contracts::{
     OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
 };
 use forge_core_contracts::{Phase, StableId};
+use forge_core_crypto::hex_sha256;
 use forge_core_kernel::{
     execute_operation, CitationGate, ClaimCoverageGate, FunnelAutonomyGate, GateRejection,
     OperationGate, PhaseGate, RiskAuditGate, RuntimeEffectPayloadKind,
@@ -40,7 +41,6 @@ use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRul
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{command_surface_usage, resolve_stateful_roots_or_err};
-use crate::hex_sha256;
 use crate::project_cmd::resolve_project;
 
 /// All inputs required to drive one operation execution.
