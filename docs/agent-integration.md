@@ -81,6 +81,29 @@ Exact accepted-input retries return the same durable receipt without appending.
 Changed payloads, strict-profile use, consumed or stale packets, and changed
 project snapshots fail closed.
 
+After an objective exists, `workflow next` keeps its governed ranked action
+unchanged and exposes a separate `authorization.objective_management_packet`.
+Use it only when later chat actually corrects or clarifies the objective:
+
+- `material_supersession` supplies a complete corrected proposal and a bounded
+  reason. Forge creates the adjacent revision and Assurance epoch, binds its
+  `previous_objective_digest` to the formerly active immutable record, and
+  rejects a materially identical proposal.
+- `non_material_clarification` supplies additions only. Forge preserves the
+  outcome and every prior constraint, unacceptable outcome, and uncertainty,
+  then appends only new bounded details. It cannot delete or replace direction.
+- `decision_required` remains read-only when the correction itself contains one
+  irreducible value choice.
+
+Each accepted revision advances the ledger head, objective digest, and
+Assurance epoch. Consequently objective-management packets and prepared
+objective authority bound to the prior head/objective/epoch fail stale;
+historical observations remain auditable. An exact retry is idempotent only
+while that accepted revision is still the ledger head. Replacement-agent
+readback uses the latest `active_cooperative_objective`, whose `revision_kind`,
+`revision_reason`, and `previous_objective_digest` explain why it superseded or
+clarified the prior objective.
+
 `workflow action authorize` is a cooperative local one-call lane only for a
 packet marked `operator_credential_broker`. Forge rejects that lane before
 signing for human, independent-reviewer, and trusted-runtime broker packets.

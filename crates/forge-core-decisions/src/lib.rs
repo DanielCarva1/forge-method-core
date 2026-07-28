@@ -67,8 +67,9 @@ pub use catalog::{
 pub use durable_assurance::{
     project_cooperative_durable_assurance, project_durable_assurance,
     project_governed_durable_assurance, validate_representative_slice_definition,
-    workflow_cooperative_objective_digest, workflow_human_intent_digest, AssuranceProjectionError,
-    AssuranceProjectionIssue, GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
+    workflow_cooperative_objective_digest, workflow_cooperative_revision_input_digest,
+    workflow_human_intent_digest, AssuranceProjectionError, AssuranceProjectionIssue,
+    GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
     GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
     GovernedAssuranceWaiverFact,
 };

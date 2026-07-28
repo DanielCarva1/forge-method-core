@@ -71,6 +71,12 @@ pub const WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION: &str = "0
 /// bytes; a cooperative objective requires `0.10` and every successor record
 /// remains on that epoch.
 pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION: &str = "0.10";
+/// Ledger records written from the first cooperative objective revision.
+///
+/// Initial objective records remain byte-identical on frozen `0.10`. A
+/// material supersession or additive clarification requires `0.11`, and every
+/// successor record permanently remains on that wire epoch.
+pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION: &str = "0.11";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs
@@ -445,6 +451,23 @@ pub enum WorkflowCooperativeAuthorityBasis {
     CooperativeSameOwner,
 }
 
+/// Why a cooperative objective record exists in its immutable revision chain.
+///
+/// `Initial` is omitted from frozen 0.10 JSON so existing bytes and record
+/// hashes remain unchanged. Every successor record carries an explicit kind.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCooperativeObjectiveRevisionKind {
+    #[default]
+    Initial,
+    MaterialSupersession,
+    NonMaterialClarification,
+}
+
+fn cooperative_revision_kind_is_initial(value: &WorkflowCooperativeObjectiveRevisionKind) -> bool {
+    *value == WorkflowCooperativeObjectiveRevisionKind::Initial
+}
+
 /// Bounded semantic proposal materialized by a host from ordinary chat.
 ///
 /// No readiness, evidence, evaluator, issuer, signature, or identity-
@@ -483,8 +506,30 @@ pub struct WorkflowCooperativeHostProvenance {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkflowCooperativeObjectiveInput {
+    /// Initial chat-derived objective for a project with no cooperative history.
     Unambiguous {
         proposal: WorkflowCooperativeObjectiveProposal,
+        carrying_principal: PrincipalId,
+        host_provenance: WorkflowCooperativeHostProvenance,
+    },
+    /// A material correction that replaces the active product direction while
+    /// preserving the previous objective as immutable history.
+    MaterialSupersession {
+        proposal: WorkflowCooperativeObjectiveProposal,
+        supersession_reason: String,
+        carrying_principal: PrincipalId,
+        host_provenance: WorkflowCooperativeHostProvenance,
+    },
+    /// Additive-only detail. The kernel retains the outcome and every existing
+    /// list entry, then appends these bounded values without duplication.
+    NonMaterialClarification {
+        #[serde(default)]
+        added_constraints: Vec<String>,
+        #[serde(default)]
+        added_unacceptable_outcomes: Vec<String>,
+        #[serde(default)]
+        added_open_uncertainties: Vec<String>,
+        clarification_reason: String,
         carrying_principal: PrincipalId,
         host_provenance: WorkflowCooperativeHostProvenance,
     },
@@ -493,7 +538,7 @@ pub enum WorkflowCooperativeObjectiveInput {
     },
 }
 
-/// One initial objective durably admitted for a Solo Cooperative workflow.
+/// One immutable objective revision durably admitted for a Solo Cooperative workflow.
 ///
 /// The kernel derives identity, revision, epoch, digest, predecessor, packet,
 /// snapshot, head, and commit time. The carrying principal and generic host
@@ -509,6 +554,14 @@ pub struct CooperativeObjectiveAcceptedEvent {
     pub objective_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_objective_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "cooperative_revision_kind_is_initial")]
+    pub revision_kind: WorkflowCooperativeObjectiveRevisionKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_reason: Option<String>,
+    /// Canonical digest of the exact typed successor input accepted by the
+    /// kernel. Frozen 0.10 initial records omit this field entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_input_digest: Option<String>,
     pub snapshot_digest: String,
     pub ledger_head_digest: String,
     pub acceptance_action_packet_digest: String,

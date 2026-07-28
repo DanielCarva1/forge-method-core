@@ -11,9 +11,10 @@
 use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::request::RequestStatus;
 use forge_core_contracts::workflow_governance::{
-    WorkflowCooperativeAuthorityBasis, WorkflowReadinessProfile,
-    MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+    WorkflowCooperativeAuthorityBasis, WorkflowCooperativeObjectiveRevisionKind,
+    WorkflowReadinessProfile, MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION,
@@ -22,12 +23,12 @@ use forge_core_contracts::{
     CoordinationRequestState, CoordinationStateAppliedEvent, CoordinationStateRecord,
     CoreDomainPackRebasedEvent, DomainPackGenerationTransitionedEvent, Phase, PhaseAdvancedEvent,
     PostBuildVerifyEpisodeAppliedEvent, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
-    ReleaseUpgradedEvent, StableId, WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
-    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
-    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
-    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
-    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    ReleaseUpgradedEvent, StableId, WorkflowCooperativeObjectiveInput,
+    WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
+    WorkflowRuntimeBundleIdentity, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+    MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
+    MAX_WORKFLOW_INTENT_TOTAL_BYTES, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION,
@@ -195,6 +196,27 @@ impl WorkflowGovernanceLedgerProjection {
                 WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
             )
         })
+    }
+
+    fn contains_cooperative_objective_revision(&self) -> bool {
+        self.records.iter().any(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) if event.revision > 1
+            )
+        })
+    }
+
+    fn latest_cooperative_objective(
+        &self,
+    ) -> Option<&forge_core_contracts::CooperativeObjectiveAcceptedEvent> {
+        self.records
+            .iter()
+            .rev()
+            .find_map(|record| match &record.event {
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) => Some(event),
+                _ => None,
+            })
     }
     fn contains_native_host_provenance(&self) -> bool {
         self.records.iter().any(|record| {
@@ -391,10 +413,10 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         Ok(record)
     }
 
-    /// Prepare one initial same-owner cooperative objective. Semantic proposal
-    /// validation and packet reconstruction remain kernel-owned; this boundary
-    /// enforces the solo profile, exact head/clock/digest shape, and single-use
-    /// initial epoch.
+    /// Prepare one same-owner cooperative objective revision. Semantic input
+    /// and packet reconstruction remain kernel-owned; this boundary enforces
+    /// the solo profile, exact head/clock/digest shape, adjacent immutable
+    /// history, and additive-only clarification semantics.
     #[doc(hidden)]
     pub fn push_cooperative_objective_unchecked_tcb(
         &mut self,
@@ -999,7 +1021,7 @@ impl LockedWorkflowGovernanceLedger {
         Ok(record)
     }
 
-    /// Append one initial Solo Cooperative objective under an exact head CAS.
+    /// Append one Solo Cooperative objective revision under an exact head CAS.
     #[doc(hidden)]
     pub fn accept_cooperative_objective_unchecked_tcb(
         &mut self,
@@ -1662,6 +1684,19 @@ fn recover_from_reader(
                     source: error.to_string(),
                 }
             })?;
+        if raw_document
+            .get("schema_version")
+            .and_then(serde_json::Value::as_str)
+            == Some(WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION)
+            && raw_cooperative_objective_revision_metadata_present(&raw_document)
+        {
+            return Err(WorkflowGovernanceLedgerError::MalformedRecord {
+                line: line_number,
+                source:
+                    "frozen 0.10 cooperative objective records must omit revision metadata entirely"
+                        .to_owned(),
+            });
+        }
         let readiness_profile_field_present =
             raw_project_import_readiness_profile_field_present(&raw_document);
         let document: WorkflowGovernanceReceiptDocument = serde_json::from_value(raw_document)
@@ -1683,6 +1718,8 @@ fn recover_from_reader(
                 != WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION
+            && document.schema_version
+                != WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1715,6 +1752,10 @@ fn recover_from_reader(
             &record.event,
             WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
         );
+        let is_cooperative_objective_revision = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) if event.revision > 1
+        );
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -1743,9 +1784,11 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_cooperative_objective
-            || identity_state.cooperative_objective_seen
+        let expected_schema = if is_cooperative_objective_revision
+            || identity_state.cooperative_objective_revision_seen
         {
+            WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
+        } else if is_cooperative_objective || identity_state.cooperative_objective_seen {
             WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION
         } else if is_readiness_profile_genesis || identity_state.readiness_profile_epoch_seen {
             WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
@@ -1857,6 +1900,8 @@ struct RecoveredIdentityState {
     readiness_profile_epoch_seen: bool,
     readiness_profile: Option<WorkflowReadinessProfile>,
     cooperative_objective_seen: bool,
+    cooperative_objective_revision_seen: bool,
+    latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     current_phase: Option<StableId>,
     last_post_build_verify_episode_by_id: BTreeMap<String, (u64, String)>,
     latest_coordination_request_by_id: BTreeMap<String, CoordinationRequestState>,
@@ -1915,12 +1960,17 @@ fn validate_recovered_semantics(
                 reason: "same-owner objective requires the solo_cooperative readiness profile",
             });
         }
-        if identity.cooperative_objective_seen || identity.intent_revision_seen {
+        if identity.intent_revision_seen {
             return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
                 line: Some(line),
-                reason: "initial objective authority already exists",
+                reason: "cooperative objective cannot follow strict human intent authority",
             });
         }
+        validate_cooperative_objective_transition(
+            identity.latest_cooperative_objective.as_ref(),
+            event,
+            Some(line),
+        )?;
         if record.previous_record_digest.as_deref() != Some(event.ledger_head_digest.as_str()) {
             return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
                 line: Some(line),
@@ -1940,11 +1990,10 @@ fn validate_recovered_semantics(
     ) {
         identity.intent_revision_seen = true;
     }
-    if matches!(
-        &record.event,
-        WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
-    ) {
+    if let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event {
         identity.cooperative_objective_seen = true;
+        identity.cooperative_objective_revision_seen |= event.revision > 1;
+        identity.latest_cooperative_objective = Some(event.clone());
     }
     if matches!(
         &record.event,
@@ -2269,6 +2318,25 @@ fn raw_project_import_readiness_profile_field_present(document: &serde_json::Val
         })
 }
 
+fn raw_cooperative_objective_revision_metadata_present(document: &serde_json::Value) -> bool {
+    document
+        .get("workflow_governance_receipt")
+        .and_then(|receipt| receipt.get("event"))
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|event| {
+            event.get("type").and_then(serde_json::Value::as_str)
+                == Some("cooperative_objective_accepted")
+                && event
+                    .get("payload")
+                    .and_then(serde_json::Value::as_object)
+                    .is_some_and(|payload| {
+                        ["revision_kind", "revision_reason", "revision_input_digest"]
+                            .iter()
+                            .any(|field| payload.contains_key(*field))
+                    })
+        })
+}
+
 struct DeterministicBrokerRecordBinding<'a> {
     action_packet_digest: &'a str,
     broker_event_digest: &'a str,
@@ -2329,6 +2397,12 @@ fn ledger_wire_schema(
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
     if matches!(
+        event,
+        WorkflowGovernanceEvent::CooperativeObjectiveAccepted(objective) if objective.revision > 1
+    ) || projection.contains_cooperative_objective_revision()
+    {
+        WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
+    } else if matches!(
         event,
         WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
     ) || projection.contains_cooperative_objective()
@@ -3359,10 +3433,10 @@ fn validate_cooperative_objective_event(
             reason: "same-owner objective requires the solo_cooperative readiness profile",
         });
     }
-    if projection.contains_cooperative_objective() || projection.contains_human_intent_revision() {
+    if projection.contains_human_intent_revision() {
         return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
             line: Some(line),
-            reason: "initial objective authority already exists",
+            reason: "cooperative objective cannot follow strict human intent authority",
         });
     }
     if projection.head_digest.as_deref() != Some(event.ledger_head_digest.as_str()) {
@@ -3371,21 +3445,175 @@ fn validate_cooperative_objective_event(
             reason: "objective ledger-head binding is stale",
         });
     }
-    validate_cooperative_objective_shape(event, Some(line))
+    validate_cooperative_objective_transition(
+        projection.latest_cooperative_objective(),
+        event,
+        Some(line),
+    )
+}
+
+fn validate_cooperative_objective_transition(
+    previous: Option<&forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
+    event: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    validate_cooperative_objective_shape(event, line)?;
+    let Some(previous) = previous else {
+        if event.revision != 1
+            || event.assurance_epoch != 1
+            || event.previous_objective_digest.is_some()
+            || event.revision_kind != WorkflowCooperativeObjectiveRevisionKind::Initial
+            || event.revision_reason.is_some()
+            || event.revision_input_digest.is_some()
+        {
+            return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                line,
+                reason: "initial cooperative objective must use revision and epoch one with no predecessor or revision metadata",
+            });
+        }
+        return Ok(());
+    };
+
+    let expected_revision = previous.revision.checked_add(1).ok_or(
+        WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "cooperative objective revision overflow",
+        },
+    )?;
+    let expected_epoch = previous.assurance_epoch.checked_add(1).ok_or(
+        WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "cooperative objective assurance epoch overflow",
+        },
+    )?;
+    if event.objective_id != previous.objective_id
+        || event.revision != expected_revision
+        || event.assurance_epoch != expected_epoch
+        || event.previous_objective_digest.as_deref() != Some(previous.objective_digest.as_str())
+    {
+        return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "cooperative objective revision must be adjacent and bind the active objective digest",
+        });
+    }
+    let reason = event.revision_reason.as_deref().unwrap_or_default();
+    if reason.trim().is_empty() || reason.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES {
+        return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "cooperative objective revision reason is missing or exceeds its bound",
+        });
+    }
+    let revision_input = match event.revision_kind {
+        WorkflowCooperativeObjectiveRevisionKind::Initial => {
+            return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                line,
+                reason: "a successor objective cannot claim initial revision kind",
+            });
+        }
+        WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession => {
+            if event.proposal == previous.proposal {
+                return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                    line,
+                    reason: "material supersession must change the objective proposal",
+                });
+            }
+            WorkflowCooperativeObjectiveInput::MaterialSupersession {
+                proposal: event.proposal.clone(),
+                supersession_reason: reason.to_owned(),
+                carrying_principal: event.carrying_principal.clone(),
+                host_provenance: event.host_provenance.clone(),
+            }
+        }
+        WorkflowCooperativeObjectiveRevisionKind::NonMaterialClarification => {
+            if event.proposal.outcome != previous.proposal.outcome
+                || event.proposal == previous.proposal
+            {
+                return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                    line,
+                    reason: "non-material clarification must be additive-only and preserve outcome",
+                });
+            }
+            let added_constraints = cooperative_unique_additive_suffix(
+                &previous.proposal.constraints,
+                &event.proposal.constraints,
+            )
+            .ok_or(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                line,
+                reason:
+                    "non-material clarification cannot repeat prior or duplicate appended details",
+            })?;
+            let added_unacceptable_outcomes = cooperative_unique_additive_suffix(
+                &previous.proposal.unacceptable_outcomes,
+                &event.proposal.unacceptable_outcomes,
+            )
+            .ok_or(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                line,
+                reason:
+                    "non-material clarification cannot repeat prior or duplicate appended details",
+            })?;
+            let added_open_uncertainties = cooperative_unique_additive_suffix(
+                &previous.proposal.open_uncertainties,
+                &event.proposal.open_uncertainties,
+            )
+            .ok_or(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+                line,
+                reason:
+                    "non-material clarification cannot repeat prior or duplicate appended details",
+            })?;
+            WorkflowCooperativeObjectiveInput::NonMaterialClarification {
+                added_constraints,
+                added_unacceptable_outcomes,
+                added_open_uncertainties,
+                clarification_reason: reason.to_owned(),
+                carrying_principal: event.carrying_principal.clone(),
+                host_provenance: event.host_provenance.clone(),
+            }
+        }
+    };
+    let expected_input_digest = cooperative_revision_input_digest(&revision_input)?;
+    if event.revision_input_digest.as_deref() != Some(expected_input_digest.as_str()) {
+        return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "cooperative objective revision input digest does not match the exact accepted input",
+        });
+    }
+    Ok(())
+}
+
+fn cooperative_unique_additive_suffix(
+    previous: &[String],
+    current: &[String],
+) -> Option<Vec<String>> {
+    let suffix = current.strip_prefix(previous)?;
+    let mut seen = HashSet::new();
+    if suffix
+        .iter()
+        .any(|value| previous.contains(value) || !seen.insert(value))
+    {
+        return None;
+    }
+    Some(suffix.to_vec())
+}
+
+fn cooperative_revision_input_digest(
+    input: &WorkflowCooperativeObjectiveInput,
+) -> Result<String, WorkflowGovernanceLedgerError> {
+    let canonical = to_canonical_json(input).map_err(|error| {
+        WorkflowGovernanceLedgerError::Canonicalization {
+            source: error.to_string(),
+        }
+    })?;
+    Ok(format_sha256(Sha256::digest(canonical)))
 }
 
 fn validate_cooperative_objective_shape(
     event: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
     line: Option<usize>,
 ) -> Result<(), WorkflowGovernanceLedgerError> {
-    if event.revision != 1
-        || event.assurance_epoch != 1
-        || event.previous_objective_digest.is_some()
-    {
+    if event.revision == 0 || event.assurance_epoch == 0 {
         return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
             line,
-            reason:
-                "initial cooperative objective must use revision and epoch one with no predecessor",
+            reason: "cooperative objective revision and assurance epoch must be nonzero",
         });
     }
     if event.authority_basis != WorkflowCooperativeAuthorityBasis::CooperativeSameOwner {
@@ -3408,6 +3636,23 @@ fn validate_cooperative_objective_shape(
             });
         }
     }
+    if event
+        .revision_input_digest
+        .as_deref()
+        .is_some_and(|digest| !is_lower_sha256(digest))
+    {
+        return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "objective revision input digest is non-canonical",
+        });
+    }
+    let semantic_digest = cooperative_objective_digest(event)?;
+    if event.objective_digest != semantic_digest {
+        return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
+            line,
+            reason: "objective digest does not match the canonical objective semantics",
+        });
+    }
     if event.objective_id.0.trim().is_empty()
         || event.objective_id.0.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
         || event.carrying_principal.0.trim().is_empty()
@@ -3423,8 +3668,7 @@ fn validate_cooperative_objective_shape(
     {
         return Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid {
             line,
-            reason:
-                "objective identity, principal, proposal, host coordinates, and ordered clocks must satisfy the bounded wire shape",
+            reason: "objective identity, principal, proposal, host coordinates, and ordered clocks must satisfy the bounded wire shape",
         });
     }
     for value in [
@@ -3472,6 +3716,23 @@ fn validate_cooperative_objective_shape(
         });
     }
     Ok(())
+}
+
+fn cooperative_objective_digest(
+    event: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
+) -> Result<String, WorkflowGovernanceLedgerError> {
+    let subject = serde_json::json!({
+        "objective_id": event.objective_id,
+        "revision": event.revision,
+        "assurance_epoch": event.assurance_epoch,
+        "proposal": event.proposal,
+    });
+    let canonical = to_canonical_json(&subject).map_err(|error| {
+        WorkflowGovernanceLedgerError::Canonicalization {
+            source: error.to_string(),
+        }
+    })?;
+    Ok(format_sha256(Sha256::digest(canonical)))
 }
 
 fn validate_broker_origin_replay_digest(
@@ -4712,7 +4973,7 @@ mod replacement_protocol_tests {
         observed_at_unix: u64,
         accepted_at_unix: u64,
     ) -> CooperativeObjectiveAcceptedEvent {
-        CooperativeObjectiveAcceptedEvent {
+        let mut event = CooperativeObjectiveAcceptedEvent {
             objective_id: StableId(objective_id),
             revision: 1,
             assurance_epoch: 1,
@@ -4722,8 +4983,11 @@ mod replacement_protocol_tests {
                 unacceptable_outcomes: vec!["Claim verified human origin".to_owned()],
                 open_uncertainties: vec!["Future team authority".to_owned()],
             },
-            objective_digest: sha256_digest(b"cooperative-objective"),
+            objective_digest: String::new(),
             previous_objective_digest: None,
+            revision_kind: WorkflowCooperativeObjectiveRevisionKind::Initial,
+            revision_reason: None,
+            revision_input_digest: None,
             snapshot_digest: sha256_digest(b"cooperative-snapshot"),
             ledger_head_digest: head.to_owned(),
             acceptance_action_packet_digest: sha256_digest(b"cooperative-packet"),
@@ -4738,7 +5002,10 @@ mod replacement_protocol_tests {
             },
             authority_basis: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
             accepted_at_unix,
-        }
+        };
+        event.objective_digest =
+            cooperative_objective_digest(&event).expect("canonical cooperative objective");
+        event
     }
 
     #[test]
@@ -5321,6 +5588,254 @@ mod replacement_protocol_tests {
             Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 1, .. })
         ));
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn cooperative_objective_revision_advances_to_0_11_and_recovers_the_full_chain() {
+        let root = test_root("cooperative-objective-revision-wire");
+        let (projection, genesis, _) = initialize_solo_profile(&root);
+        let initial = cooperative_objective_event(
+            &genesis.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        let initial_digest = initial.objective_digest.clone();
+        let initial_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("initial ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &genesis.record_digest,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                initial,
+            )
+            .expect("accept initial objective");
+        let after_initial = recover_under_lock(&root).expect("recover initial objective");
+        let mut revision = cooperative_objective_event(
+            &initial_record.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            101,
+            102,
+        );
+        revision.revision = 2;
+        revision.assurance_epoch = 2;
+        revision.proposal.outcome = "Dogfood Forge excellently before expanding teams".to_owned();
+        revision.previous_objective_digest = Some(initial_digest);
+        revision.revision_kind = WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession;
+        revision.revision_reason =
+            Some("The owner narrowed the immediate product direction".to_owned());
+        revision.objective_digest =
+            cooperative_objective_digest(&revision).expect("canonical revised objective");
+        revision.revision_input_digest = Some(
+            cooperative_revision_input_digest(
+                &WorkflowCooperativeObjectiveInput::MaterialSupersession {
+                    proposal: revision.proposal.clone(),
+                    supersession_reason: revision.revision_reason.clone().expect("revision reason"),
+                    carrying_principal: revision.carrying_principal.clone(),
+                    host_provenance: revision.host_provenance.clone(),
+                },
+            )
+            .expect("canonical revision input"),
+        );
+        let revised = lock_workflow_governance_ledger_tcb(&root)
+            .expect("revision ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &initial_record.record_digest,
+                &test_identity(),
+                after_initial.current_state_version().unwrap_or_default(),
+                revision,
+            )
+            .expect("accept objective revision");
+
+        let wal = fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("revision WAL");
+        let lines = wal
+            .split_inclusive(|byte| *byte == b'\n')
+            .collect::<Vec<_>>();
+        assert_eq!(
+            schema_from_line(lines[1]),
+            WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION
+        );
+        assert!(
+            !String::from_utf8_lossy(lines[1]).contains("revision_kind"),
+            "frozen 0.10 initial record must not gain revision metadata"
+        );
+        assert_eq!(
+            schema_from_line(lines[2]),
+            WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
+        );
+        let recovered = recover_under_lock(&root).expect("recover 0.11 history");
+        assert_eq!(recovered.records.len(), 3);
+        assert_eq!(recovered.head_digest, Some(revised.record_digest));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn cooperative_objective_adversarial_metadata_digests_and_clarifications_fail_closed() {
+        for (field, value) in [
+            ("revision_kind", serde_json::json!("initial")),
+            ("revision_reason", serde_json::Value::Null),
+            ("revision_input_digest", serde_json::Value::Null),
+        ] {
+            let root = test_root(&format!("cooperative-frozen-metadata-{field}"));
+            let (projection, genesis, mut wal) = initialize_solo_profile(&root);
+            let event = cooperative_objective_event(
+                &genesis.record_digest,
+                "objective.workflow.project-protocol-test".to_owned(),
+                "principal.same-owner".to_owned(),
+                90,
+                100,
+            );
+            let (_, line) = build_record_line_at(
+                &projection,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event),
+                100,
+            )
+            .expect("valid frozen objective line");
+            let mut document: serde_json::Value =
+                serde_json::from_slice(&line).expect("objective JSON");
+            document["workflow_governance_receipt"]["event"]["payload"]
+                .as_object_mut()
+                .expect("objective payload")
+                .insert(field.to_owned(), value);
+            let mut tampered = serde_json::to_vec(&document).expect("tampered objective JSON");
+            tampered.push(b'\n');
+            wal.extend_from_slice(&tampered);
+            fs::write(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH), wal)
+                .expect("install explicit frozen metadata");
+            assert!(matches!(
+                recover_under_lock(&root),
+                Err(WorkflowGovernanceLedgerError::MalformedRecord { line: 2, .. })
+            ));
+            fs::remove_dir_all(root).expect("cleanup frozen metadata");
+        }
+
+        let root = test_root("cooperative-false-objective-digest");
+        let (projection, genesis, prefix) = initialize_solo_profile(&root);
+        let mut false_digest = cooperative_objective_event(
+            &genesis.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        false_digest.objective_digest = sha256_digest(b"semantically-false-objective");
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("false-digest append ledger")
+                .accept_cooperative_objective_unchecked_tcb(
+                    &genesis.record_digest,
+                    &test_identity(),
+                    projection.current_state_version().unwrap_or_default(),
+                    false_digest.clone(),
+                ),
+            Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid { .. })
+        ));
+        let (_, false_line) = build_record_line_at(
+            &projection,
+            &test_identity(),
+            projection.current_state_version().unwrap_or_default(),
+            WorkflowGovernanceEvent::CooperativeObjectiveAccepted(false_digest),
+            100,
+        )
+        .expect("build false-digest recovery record");
+        let mut wal = prefix;
+        wal.extend_from_slice(&false_line);
+        fs::write(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH), wal)
+            .expect("install false objective digest");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid { line: Some(2), .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup false objective digest");
+
+        let root = test_root("cooperative-duplicate-clarification");
+        let (projection, genesis, _) = initialize_solo_profile(&root);
+        let initial = cooperative_objective_event(
+            &genesis.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        let initial_digest = initial.objective_digest.clone();
+        let initial_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("initial duplicate-clarification ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &genesis.record_digest,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                initial,
+            )
+            .expect("accept initial objective");
+        let after_initial = recover_under_lock(&root).expect("recover initial objective");
+        let mut clarification = cooperative_objective_event(
+            &initial_record.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            101,
+            102,
+        );
+        clarification.revision = 2;
+        clarification.assurance_epoch = 2;
+        clarification.previous_objective_digest = Some(initial_digest);
+        clarification.revision_kind =
+            WorkflowCooperativeObjectiveRevisionKind::NonMaterialClarification;
+        clarification.revision_reason = Some("Repeat an existing detail".to_owned());
+        clarification
+            .proposal
+            .constraints
+            .push("Remain host neutral".to_owned());
+        clarification.objective_digest =
+            cooperative_objective_digest(&clarification).expect("clarification objective digest");
+        clarification.revision_input_digest = Some(
+            cooperative_revision_input_digest(
+                &WorkflowCooperativeObjectiveInput::NonMaterialClarification {
+                    added_constraints: vec!["Remain host neutral".to_owned()],
+                    added_unacceptable_outcomes: Vec::new(),
+                    added_open_uncertainties: Vec::new(),
+                    clarification_reason: clarification
+                        .revision_reason
+                        .clone()
+                        .expect("clarification reason"),
+                    carrying_principal: clarification.carrying_principal.clone(),
+                    host_provenance: clarification.host_provenance.clone(),
+                },
+            )
+            .expect("clarification input digest"),
+        );
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("duplicate clarification append ledger")
+                .accept_cooperative_objective_unchecked_tcb(
+                    &initial_record.record_digest,
+                    &test_identity(),
+                    after_initial.current_state_version().unwrap_or_default(),
+                    clarification.clone(),
+                ),
+            Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid { .. })
+        ));
+        let (_, invalid_line) = build_record_line_at(
+            &after_initial,
+            &test_identity(),
+            after_initial.current_state_version().unwrap_or_default(),
+            WorkflowGovernanceEvent::CooperativeObjectiveAccepted(clarification),
+            102,
+        )
+        .expect("build duplicate clarification recovery record");
+        let mut wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("objective WAL");
+        wal.extend_from_slice(&invalid_line);
+        fs::write(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH), wal)
+            .expect("install duplicate clarification");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::CooperativeObjectiveInvalid { line: Some(3), .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup duplicate clarification");
     }
 
     #[test]

@@ -137,6 +137,18 @@ or routes a healthy project into agent-native workflow governance.
    presence, a signature, external origin, reviewer independence, or
    `strict_external` satisfaction.
 
+   Once an objective is active, do not treat routine task changes as objective
+   changes. A later material correction from chat uses the separate
+   `authorization.objective_management_packet` and its `material_supersession`
+   template, including the bounded reason and complete corrected proposal. A
+   detail-only clarification uses `non_material_clarification`; provide only
+   additions, because Forge preserves the outcome and all prior lists. Neither
+   packet replaces the governed ranked next action. After acceptance refresh
+   `workflow next`: prior head/digest-bound authority is stale, while immutable
+   historical records remain auditable. On replacement, report the active
+   objective's revision, `revision_kind`, `revision_reason`, and predecessor
+   digest before continuing.
+
    A packet whose approval boundary is exactly `operator_credential_broker`
    may use the cooperative local one-call lane. The host materializes the
    packet's closed input without asking the human to edit JSON, then runs:

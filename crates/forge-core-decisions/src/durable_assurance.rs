@@ -11,17 +11,18 @@ use forge_core_contracts::{
     DurableAssuranceNextAction, DurableAssuranceProjection, DurableAssuranceReadinessState,
     DurableAssuranceWaiverBinding, HumanIntentRevisionAcceptedEvent, NextActionKind,
     ObligationCriticality, PrincipalId, ReadinessTarget, StableId, UniversalAssuranceLens,
-    WorkflowAssuranceClaimRole, WorkflowBrokerOriginProfile, WorkflowCooperativeObjectiveProposal,
+    WorkflowAssuranceClaimRole, WorkflowBrokerOriginProfile, WorkflowCooperativeObjectiveInput,
+    WorkflowCooperativeObjectiveProposal, WorkflowCooperativeObjectiveRevisionKind,
     WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceOutcome,
     WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument,
     WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord, WorkflowHumanIntentRevision,
     WorkflowObjectiveRevision, WorkflowRepresentativeSliceDefinitionDocument,
     MAX_DURABLE_ASSURANCE_NEXT_ACTIONS, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
-    MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
-    MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
-    MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
-    WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
+    MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
+    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
+    MAX_WORKFLOW_INTENT_TOTAL_BYTES, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -113,6 +114,29 @@ pub fn workflow_cooperative_objective_digest(
         assurance_epoch,
         proposal,
     })
+}
+
+/// Canonically digest the exact typed input for a cooperative objective
+/// successor. Initial objectives remain reconstructible from frozen 0.10
+/// records and therefore do not persist this additional binding.
+///
+/// # Errors
+///
+/// Returns an assurance projection error for a non-successor input or when
+/// canonical JSON encoding fails.
+pub fn workflow_cooperative_revision_input_digest(
+    input: &WorkflowCooperativeObjectiveInput,
+) -> Result<String, AssuranceProjectionError> {
+    if !matches!(
+        input,
+        WorkflowCooperativeObjectiveInput::MaterialSupersession { .. }
+            | WorkflowCooperativeObjectiveInput::NonMaterialClarification { .. }
+    ) {
+        return Err(AssuranceProjectionError {
+            issues: vec![AssuranceProjectionIssue::CooperativeObjectiveBindingMismatch],
+        });
+    }
+    canonical_digest(input)
 }
 
 #[derive(Serialize)]
@@ -312,15 +336,16 @@ struct DurableAssuranceProjectionDigestSubject<'a> {
     next_actions: &'a [DurableAssuranceNextAction],
 }
 
-/// Reconstruct the initial same-owner cooperative objective as an Assurance
-/// epoch without upgrading it to verified human or broker origin.
+/// Reconstruct the latest valid same-owner cooperative objective revision as
+/// an Assurance epoch without upgrading it to verified human or broker origin.
 ///
-/// This projector accepts only the dedicated event, only revision/epoch one,
-/// and never consumes `HumanIntentRevisionAccepted` as cooperative authority.
+/// The complete immutable predecessor chain is validated; only its latest
+/// record becomes active. `HumanIntentRevisionAccepted` is never consumed as
+/// cooperative authority.
 pub fn project_cooperative_durable_assurance(
     records: &[WorkflowGovernanceLedgerRecord],
 ) -> Result<Option<DurableAssuranceProjection>, AssuranceProjectionError> {
-    let mut accepted: Option<(
+    let mut previous: Option<(
         &CooperativeObjectiveAcceptedEvent,
         &WorkflowGovernanceLedgerRecord,
     )> = None;
@@ -329,26 +354,37 @@ pub fn project_cooperative_durable_assurance(
         let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
             continue;
         };
-        if accepted.is_some() {
-            issues.push(AssuranceProjectionIssue::DuplicateInitialCooperativeObjective);
-            continue;
-        }
         issues.extend(validate_cooperative_proposal(
             &event.objective_id,
             event.revision,
             event.assurance_epoch,
             &event.proposal,
         ));
-        if event.revision != 1
-            || event.assurance_epoch != 1
-            || event.previous_objective_digest.is_some()
-            || record.previous_record_digest.as_deref() != Some(event.ledger_head_digest.as_str())
-            || record.recorded_at_unix != event.accepted_at_unix
-            || !is_sha256_digest(&event.snapshot_digest)
-            || !is_sha256_digest(&event.acceptance_action_packet_digest)
-            || event.carrying_principal.0.trim().is_empty()
-        {
-            issues.push(AssuranceProjectionIssue::CooperativeObjectiveBindingMismatch);
+        for (field, digest) in [
+            ("objective_digest", event.objective_digest.as_str()),
+            ("snapshot_digest", event.snapshot_digest.as_str()),
+            (
+                "acceptance_action_packet_digest",
+                event.acceptance_action_packet_digest.as_str(),
+            ),
+            ("record_digest", record.record_digest.as_str()),
+        ] {
+            if !is_sha256_digest(digest) {
+                issues.push(AssuranceProjectionIssue::InvalidDigest {
+                    field: field.to_owned(),
+                });
+            }
+        }
+        if record.previous_record_digest.as_deref() != Some(event.ledger_head_digest.as_str()) {
+            issues.push(AssuranceProjectionIssue::LedgerHeadBindingMismatch);
+        }
+        if record.recorded_at_unix != event.accepted_at_unix {
+            issues.push(AssuranceProjectionIssue::AcceptanceTimeMismatch);
+        }
+        if event.carrying_principal.0.trim().is_empty() {
+            issues.push(AssuranceProjectionIssue::EmptyField {
+                field: "carrying_principal".to_owned(),
+            });
         }
         match workflow_cooperative_objective_digest(
             &event.objective_id,
@@ -360,12 +396,66 @@ pub fn project_cooperative_durable_assurance(
             Ok(_) => issues.push(AssuranceProjectionIssue::IntentDigestMismatch),
             Err(_) => {}
         }
-        accepted = Some((event, record));
+
+        match previous {
+            None => {
+                if event.revision != 1 {
+                    issues.push(AssuranceProjectionIssue::InvalidInitialRevision {
+                        found: event.revision,
+                    });
+                }
+                if event.assurance_epoch != 1 {
+                    issues.push(AssuranceProjectionIssue::InvalidInitialEpoch {
+                        found: event.assurance_epoch,
+                    });
+                }
+                if event.previous_objective_digest.is_some()
+                    || event.revision_kind != WorkflowCooperativeObjectiveRevisionKind::Initial
+                    || event.revision_reason.is_some()
+                    || event.revision_input_digest.is_some()
+                {
+                    issues.push(AssuranceProjectionIssue::CooperativeObjectiveBindingMismatch);
+                }
+            }
+            Some((prior_event, prior_record)) => {
+                if prior_record.project_id != record.project_id {
+                    issues.push(AssuranceProjectionIssue::ProjectIdentityChanged);
+                }
+                if event.objective_id != prior_event.objective_id {
+                    issues.push(AssuranceProjectionIssue::IntentIdentityChanged);
+                }
+                match prior_event.revision.checked_add(1) {
+                    Some(expected) if event.revision == expected => {}
+                    Some(expected) => issues.push(AssuranceProjectionIssue::NonMonotonicRevision {
+                        expected,
+                        found: event.revision,
+                    }),
+                    None => issues.push(AssuranceProjectionIssue::CounterOverflow),
+                }
+                match prior_event.assurance_epoch.checked_add(1) {
+                    Some(expected) if event.assurance_epoch == expected => {}
+                    Some(expected) => issues.push(AssuranceProjectionIssue::NonMonotonicEpoch {
+                        expected,
+                        found: event.assurance_epoch,
+                    }),
+                    None => issues.push(AssuranceProjectionIssue::CounterOverflow),
+                }
+                if event.previous_objective_digest.as_deref()
+                    != Some(prior_event.objective_digest.as_str())
+                {
+                    issues.push(AssuranceProjectionIssue::PreviousIntentDigestMismatch);
+                }
+                if !cooperative_revision_semantics_are_valid(prior_event, event) {
+                    issues.push(AssuranceProjectionIssue::CooperativeObjectiveBindingMismatch);
+                }
+            }
+        }
+        previous = Some((event, record));
     }
     if !issues.is_empty() {
         return Err(AssuranceProjectionError { issues });
     }
-    let Some((event, record)) = accepted else {
+    let Some((event, record)) = previous else {
         return Ok(None);
     };
     let intent = WorkflowObjectiveRevision {
@@ -422,6 +512,83 @@ pub fn project_cooperative_durable_assurance(
         next_actions: &projection.next_actions,
     })?;
     Ok(Some(projection))
+}
+
+fn cooperative_revision_semantics_are_valid(
+    prior: &CooperativeObjectiveAcceptedEvent,
+    current: &CooperativeObjectiveAcceptedEvent,
+) -> bool {
+    let reason_is_bounded = current.revision_reason.as_ref().is_some_and(|reason| {
+        !reason.trim().is_empty() && reason.len() <= MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
+    });
+    if !reason_is_bounded {
+        return false;
+    }
+    let Some(input) = (match current.revision_kind {
+        WorkflowCooperativeObjectiveRevisionKind::Initial => None,
+        WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession => (current.proposal
+            != prior.proposal)
+            .then(|| WorkflowCooperativeObjectiveInput::MaterialSupersession {
+                proposal: current.proposal.clone(),
+                supersession_reason: current.revision_reason.clone().unwrap_or_default(),
+                carrying_principal: current.carrying_principal.clone(),
+                host_provenance: current.host_provenance.clone(),
+            }),
+        WorkflowCooperativeObjectiveRevisionKind::NonMaterialClarification => {
+            if current.proposal.outcome != prior.proposal.outcome
+                || current.proposal == prior.proposal
+            {
+                None
+            } else {
+                (|| {
+                    Some(
+                        WorkflowCooperativeObjectiveInput::NonMaterialClarification {
+                            added_constraints: unique_additive_suffix(
+                                &prior.proposal.constraints,
+                                &current.proposal.constraints,
+                            )?,
+                            added_unacceptable_outcomes: unique_additive_suffix(
+                                &prior.proposal.unacceptable_outcomes,
+                                &current.proposal.unacceptable_outcomes,
+                            )?,
+                            added_open_uncertainties: unique_additive_suffix(
+                                &prior.proposal.open_uncertainties,
+                                &current.proposal.open_uncertainties,
+                            )?,
+                            clarification_reason: current
+                                .revision_reason
+                                .clone()
+                                .unwrap_or_default(),
+                            carrying_principal: current.carrying_principal.clone(),
+                            host_provenance: current.host_provenance.clone(),
+                        },
+                    )
+                })()
+            }
+        }
+    }) else {
+        return false;
+    };
+    current
+        .revision_input_digest
+        .as_deref()
+        .filter(|digest| is_sha256_digest(digest))
+        .is_some_and(|digest| {
+            workflow_cooperative_revision_input_digest(&input)
+                .is_ok_and(|expected| expected == digest)
+        })
+}
+
+fn unique_additive_suffix(previous: &[String], current: &[String]) -> Option<Vec<String>> {
+    let suffix = current.strip_prefix(previous)?;
+    let mut seen = std::collections::HashSet::new();
+    if suffix
+        .iter()
+        .any(|value| previous.contains(value) || !seen.insert(value))
+    {
+        return None;
+    }
+    Some(suffix.to_vec())
 }
 
 /// Evidence fact already authenticated and freshness-checked by the kernel.
@@ -1523,6 +1690,88 @@ mod tests {
         }
     }
 
+    fn cooperative_record(
+        sequence: u64,
+        state_version: u64,
+        prior_head: &str,
+        revision: u64,
+        assurance_epoch: u64,
+        outcome: &str,
+        previous_objective_digest: Option<String>,
+    ) -> WorkflowGovernanceLedgerRecord {
+        let proposal = WorkflowCooperativeObjectiveProposal {
+            outcome: outcome.to_owned(),
+            constraints: vec!["Remain host neutral".to_owned()],
+            unacceptable_outcomes: vec!["Claim verified human origin".to_owned()],
+            open_uncertainties: vec!["Future team authority".to_owned()],
+        };
+        let objective_id = StableId("objective.workflow.project.example".to_owned());
+        let objective_digest = workflow_cooperative_objective_digest(
+            &objective_id,
+            revision,
+            assurance_epoch,
+            &proposal,
+        )
+        .expect("valid cooperative objective");
+        let carrying_principal = PrincipalId("principal.agent".to_owned());
+        let host_provenance = forge_core_contracts::WorkflowCooperativeHostProvenance {
+            host_id: StableId("host.test".to_owned()),
+            host_version: "test".to_owned(),
+            session_ref: "session.test".to_owned(),
+            interaction_ref: format!("turn.{revision}"),
+            conversation_digest: hash('c'),
+            observed_at_unix: 100,
+        };
+        let revision_reason = (revision > 1).then(|| "Correct the objective".to_owned());
+        let revision_input_digest = revision_reason.as_ref().map(|reason| {
+            workflow_cooperative_revision_input_digest(
+                &WorkflowCooperativeObjectiveInput::MaterialSupersession {
+                    proposal: proposal.clone(),
+                    supersession_reason: reason.clone(),
+                    carrying_principal: carrying_principal.clone(),
+                    host_provenance: host_provenance.clone(),
+                },
+            )
+            .expect("valid revision input")
+        });
+        WorkflowGovernanceLedgerRecord {
+            record_id: StableId(format!("record.objective.{sequence}")),
+            sequence,
+            project_id: StableId("project.example".to_owned()),
+            bundle_id: StableId("bundle.example".to_owned()),
+            bundle_digest: hash('b'),
+            state_version,
+            previous_record_digest: Some(prior_head.to_owned()),
+            record_digest: hash(char::from_digit((sequence % 10) as u32, 10).unwrap_or('a')),
+            recorded_at_unix: 100 + sequence,
+            event: WorkflowGovernanceEvent::CooperativeObjectiveAccepted(
+                CooperativeObjectiveAcceptedEvent {
+                    objective_id,
+                    revision,
+                    assurance_epoch,
+                    proposal,
+                    objective_digest,
+                    previous_objective_digest,
+                    revision_kind: if revision == 1 {
+                        WorkflowCooperativeObjectiveRevisionKind::Initial
+                    } else {
+                        WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession
+                    },
+                    revision_reason,
+                    revision_input_digest,
+                    snapshot_digest: hash('d'),
+                    ledger_head_digest: prior_head.to_owned(),
+                    acceptance_action_packet_digest: hash('a'),
+                    carrying_principal,
+                    host_provenance,
+                    authority_basis:
+                        forge_core_contracts::WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+                    accepted_at_unix: 100 + sequence,
+                },
+            ),
+        }
+    }
+
     fn origin_companion(
         action_record: &WorkflowGovernanceLedgerRecord,
         sequence: u64,
@@ -1560,6 +1809,37 @@ mod tests {
                 native_host_provenance: None,
             }),
         }
+    }
+
+    #[test]
+    fn cooperative_objective_revision_projects_latest_and_preserves_predecessor_binding() {
+        let first = cooperative_record(2, 4, &hash('1'), 1, 1, "Ship solo dogfood", None);
+        let first_digest = match &first.event {
+            WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) => {
+                event.objective_digest.clone()
+            }
+            _ => unreachable!(),
+        };
+        let second = cooperative_record(
+            3,
+            5,
+            &first.record_digest,
+            2,
+            2,
+            "Ship corrected solo dogfood",
+            Some(first_digest),
+        );
+
+        let projection = project_cooperative_durable_assurance(&[first, second])
+            .expect("valid revision chain")
+            .expect("active objective");
+
+        assert_eq!(projection.binding.intent_revision, 2);
+        assert_eq!(projection.binding.assurance_epoch, 2);
+        assert_eq!(
+            projection.intent.desired_outcome,
+            "Ship corrected solo dogfood"
+        );
     }
 
     #[test]

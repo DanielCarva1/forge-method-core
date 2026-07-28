@@ -765,6 +765,7 @@ pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReas
         | WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration { .. }
         | WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted
         | WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict
+        | WorkflowGovernanceAdapterError::StaleCooperativeObjectiveManagementPacket
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate

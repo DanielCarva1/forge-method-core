@@ -1,4 +1,4 @@
-//! High-level admission of strict human intent or a same-owner objective.
+//! High-level admission of strict human intent or same-owner objective history.
 //!
 //! The chat host persists neither transcripts nor caller-authored readiness.
 //! It forwards one signed, bounded human-broker envelope to the generic broker

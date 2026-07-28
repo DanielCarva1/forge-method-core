@@ -710,6 +710,174 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
 }
 
 #[test]
+fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let initial_next = assert_ok(&consumer.run(&["next"]));
+    let initial_packet = initial_next["data"]["authorization"]["action_packets"][0]
+        ["packet_digest"]
+        .as_str()
+        .expect("initial packet")
+        .to_owned();
+    let initial_input = consumer.write_json(
+        "initial objective history.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Use Forge for solo developer agent dogfooding",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["claim verified human origin"],
+                "open_uncertainties": ["future team authority"]
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.initial",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let initial = assert_ok(&run_cooperative_input(
+        &consumer,
+        &initial_packet,
+        &initial_input,
+    ));
+    let initial_digest = initial["data"]["active_objective"]["objective_digest"]
+        .as_str()
+        .expect("initial digest")
+        .to_owned();
+    let material_packet = initial["data"]["next"]["authorization"]["objective_management_packet"]
+        ["packet_digest"]
+        .as_str()
+        .expect("material packet")
+        .to_owned();
+    let material_input = consumer.write_json(
+        "material objective correction.json",
+        &serde_json::json!({
+            "kind": "material_supersession",
+            "proposal": {
+                "outcome": "Make Forge excellent for solo developer dogfooding before teams",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["claim verified human origin"],
+                "open_uncertainties": ["future team authority"]
+            },
+            "supersession_reason": "The owner narrowed the immediate product direction",
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.material",
+                "conversation_digest": format!("sha256:{}", "b".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let material = assert_ok(&run_cooperative_input(
+        &consumer,
+        &material_packet,
+        &material_input,
+    ));
+    assert_eq!(material["data"]["active_objective"]["revision"], 2);
+    assert_eq!(
+        material["data"]["active_objective"]["revision_kind"],
+        "material_supersession"
+    );
+    assert_eq!(
+        material["data"]["active_objective"]["previous_objective_digest"],
+        initial_digest
+    );
+    assert_eq!(
+        material["data"]["active_objective"]["revision_reason"],
+        "The owner narrowed the immediate product direction"
+    );
+
+    let clarification_packet = material["data"]["next"]["authorization"]
+        ["objective_management_packet"]["packet_digest"]
+        .as_str()
+        .expect("clarification packet")
+        .to_owned();
+    let clarification_input = consumer.write_json(
+        "non material objective clarification.json",
+        &serde_json::json!({
+            "kind": "non_material_clarification",
+            "added_constraints": ["use focused verification per ticket"],
+            "added_unacceptable_outcomes": [],
+            "added_open_uncertainties": ["batch cadence remains adjustable"],
+            "clarification_reason": "The owner added execution detail without changing direction",
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.clarification",
+                "conversation_digest": format!("sha256:{}", "c".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let clarified = assert_ok(&run_cooperative_input(
+        &consumer,
+        &clarification_packet,
+        &clarification_input,
+    ));
+    assert_eq!(clarified["data"]["active_objective"]["revision"], 3);
+    assert_eq!(
+        clarified["data"]["active_objective"]["revision_kind"],
+        "non_material_clarification"
+    );
+    assert_eq!(
+        clarified["data"]["active_objective"]["proposal"]["outcome"],
+        material["data"]["active_objective"]["proposal"]["outcome"]
+    );
+    assert!(
+        clarified["data"]["active_objective"]["proposal"]["constraints"]
+            .as_array()
+            .expect("constraints")
+            .iter()
+            .any(|value| value == "use focused verification per ticket")
+    );
+
+    let before_stale = state_tree_snapshot(&consumer.state);
+    let stale = run_cooperative_input(&consumer, &material_packet, &material_input);
+    assert_eq!(stale.status.code(), Some(4));
+    let stale_envelopes = serde_json::Deserializer::from_slice(&stale.stdout)
+        .into_iter::<Value>()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("stale output must contain JSON envelopes only");
+    assert_eq!(
+        stale_envelopes.len(),
+        1,
+        "stale management failure must emit one envelope"
+    );
+    let stale_envelope = &stale_envelopes[0];
+    assert_eq!(stale_envelope["exit_reason"], "conflict");
+    let message = stale_envelope["error"]["message"]
+        .as_str()
+        .expect("stale actionable message");
+    assert!(message.contains("stale"));
+    assert!(message.contains("run workflow next"));
+    assert!(!message.to_ascii_lowercase().contains("human"));
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        before_stale,
+        "stale objective-management packets must not alter WAL or state"
+    );
+    let replacement = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        replacement["data"]["active_cooperative_objective"]["revision"],
+        3
+    );
+    assert_eq!(
+        replacement["data"]["active_cooperative_objective"]["revision_reason"],
+        "The owner added execution detail without changing direction"
+    );
+}
+
+#[test]
 fn cooperative_decision_validates_live_packet_and_keeps_the_entire_state_tree_byte_exact() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
