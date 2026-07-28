@@ -19,6 +19,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SPEC = ROOT / "contracts/spec/solo-dogfood-readiness-v0.yaml"
 CAMPAIGN = ROOT / "contracts/plan/product-gap-closure-campaign-v1.yaml"
 INVENTORY = ROOT / "contracts/plan/product-gap-closure-story-inventory-v1.yaml"
 PLAN = ROOT / "contracts/plan/product-gap-closure-plan.yaml"
@@ -33,6 +34,278 @@ SOURCE_ITEM_IDS = {
     "C7.1", "C7.2",
 }
 ITEM_IDS = SOURCE_ITEM_IDS | {"C3.2", "C3.3", "C3.4"}
+SOLO_ITEM_IDS = [f"SD-{index:02d}" for index in range(9)]
+CURRENT_PRODUCT_PROJECTION = {
+    "authority_ref": "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority",
+    "authority_revision": 2,
+    "milestone_id": "solo-dogfood-ready",
+    "milestone": "Solo Dogfood Ready",
+    "milestone_state": "active_implementation",
+    "milestone_qualified": False,
+    "readiness_profile": "solo_cooperative",
+    "executable_item_ids": SOLO_ITEM_IDS,
+    "strict_external_state": "later_stage_closed",
+}
+SOLO_SPEC_KEYS = {
+    "schema_version",
+    "artifact_kind",
+    "spec_id",
+    "status",
+    "created_at",
+    "project",
+    "current_product_authority",
+    "problem_statement",
+    "solution",
+    "success_definition",
+    "user_stories",
+    "delivery_backlog",
+    "implementation_decisions",
+    "testing_decisions",
+    "out_of_scope",
+    "further_notes",
+}
+SOLO_SPEC_TOP_LEVEL_IDENTITY = {
+    "schema_version": "0.2",
+    "artifact_kind": "product-readiness-specification",
+    "spec_id": "solo-dogfood-readiness-v0",
+    "status": "implementation_active",
+    "created_at": "2026-07-27",
+    "project": "forge-method-core",
+}
+PLAN_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "artifact_kind",
+    "plan_id",
+    "status",
+    "created_at",
+    "source_checkpoint",
+    "current_product_authority",
+    "objective",
+    "scope",
+    "priority_policy",
+    "sequencing_policy",
+    "verification_strategy",
+    "status_vocabulary",
+    "phases",
+    "first_executable_slice",
+    "preserved_strict_external_first_executable_slice",
+}
+CAMPAIGN_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "artifact_kind",
+    "campaign_id",
+    "status",
+    "created_at",
+    "project",
+    "base_commit",
+    "source_checkpoint",
+    "current_product_authority",
+    "objective",
+    "authority",
+    "story_inventory",
+    "constraints",
+    "campaign_scope",
+    "status_vocabulary",
+    "category_vocabulary",
+    "scheduling_vocabulary",
+    "execution_policy",
+    "stabilization",
+    "items",
+    "resume_authority",
+}
+INVENTORY_TOP_LEVEL_KEYS = {
+    "schema_version",
+    "artifact_kind",
+    "inventory_id",
+    "status",
+    "current_product_authority",
+    "authority",
+    "provenance",
+    "counts",
+    "preserved_strict_external_record_projection",
+    "record_contract",
+    "scheduling_invariants",
+    "current_records",
+    "forensic_exclusions",
+}
+PLAN_TOP_LEVEL_IDENTITY = {
+    "schema_version": "0.1",
+    "artifact_kind": "product-gap-closure-plan",
+    "plan_id": "forge-rust-product-gap-closure-v0",
+    "status": "active",
+    "created_at": "2026-07-15",
+    "source_checkpoint": "0.12.0",
+}
+CAMPAIGN_TOP_LEVEL_IDENTITY = {
+    "schema_version": "0.1",
+    "artifact_kind": "canonical-campaign-manifest",
+    "campaign_id": "forge-product-gap-closure-p0-v1",
+    "status": "active",
+    "created_at": "2026-07-18",
+    "project": "forge-method-core",
+    "base_commit": "137b3cf43b123d4b15c45b544a3e3060e714ffb9",
+    "source_checkpoint": "0.12.0",
+}
+INVENTORY_TOP_LEVEL_IDENTITY = {
+    "schema_version": "1.0",
+    "artifact_kind": "product-gap-closure-story-inventory",
+    "inventory_id": "forge-product-gap-closure-story-inventory-v1",
+    "status": "active",
+}
+SOLO_CLAIM_SCOPE = (
+    "same-owner cooperative development with honest conversation provenance "
+    "and governed local promotion"
+)
+SOLO_EVIDENCE_REQUIREMENTS = [
+    "claim-bound cooperative provenance",
+    "subject and freshness binding",
+    "authoritative runtime or business readback",
+    "negative cases and rollback or cleanup verification",
+    "package and installation proof when claimed",
+]
+SOLO_EVIDENCE_BOUNDARY = (
+    "cooperative_same_owner evidence may satisfy only solo-scoped claims and "
+    "never proves human origin, reviewer independence, trusted-runtime "
+    "separation, publication, or field use"
+)
+STRICT_CLAIM_SCOPE = (
+    "external human origin, independent review, separated custody and "
+    "administration, and trusted-runtime assurance"
+)
+STRICT_EVIDENCE_REQUIREMENTS = [
+    "external human-origin proof",
+    "independent semantic reviewer",
+    "trusted-runtime execution",
+    "separated custody and administration",
+]
+STRICT_EVIDENCE_BOUNDARY = (
+    "requires new strict_external evidence; existing source, identities, "
+    "checkpoints, and history are retained but are not relabeled as solo proof"
+)
+SOLO_ITEM_EVIDENCE_BOUNDARY = (
+    "each SD item may admit only claim-bound solo_cooperative evidence and "
+    "cannot qualify strict_external, publication, independent-review, or field claims"
+)
+STRICT_ITEM_EVIDENCE_BOUNDARY = (
+    "retained source and checkpoint history remains valid only for its original "
+    "strict_external claims and is never solo completion evidence"
+)
+SPEC_AUTHORITY_CHAIN = [
+    {
+        "rank": 1,
+        "artifact": "contracts/spec/solo-dogfood-readiness-v0.yaml",
+        "owns": "milestone, readiness profiles, claims, and evidence boundaries",
+    },
+    {
+        "rank": 2,
+        "artifact": "contracts/plan/product-gap-closure-plan.yaml",
+        "owns": "program sequencing and phase disposition",
+    },
+    {
+        "rank": 3,
+        "artifact": "contracts/plan/product-gap-closure-campaign-v1.yaml",
+        "owns": "execution state and checkpoints",
+    },
+    {
+        "rank": 4,
+        "artifact": "contracts/plan/product-gap-closure-story-inventory-v1.yaml",
+        "owns": "story identity, disposition, and evidence-boundary projection",
+    },
+]
+LATER_CLOSED_BOUNDARIES = {
+    "strict_external_readiness": "closed",
+    "publication": "closed",
+    "field_evidence": "closed",
+    "independent_review": "closed",
+}
+SPEC_CLOSURE_RULE = (
+    "Close Solo Dogfood Ready only through SD-00 through SD-08 under "
+    "solo_cooperative evidence. Selected-host, external human-origin, "
+    "independent-reviewer, and trusted-runtime brokers do not block that closure; "
+    "they remain mandatory and closed for strict_external claims."
+)
+PLAN_ACTIVE_EVIDENCE_BOUNDARY = (
+    "solo_cooperative only; never strict_external, publication, independent-review, "
+    "or field proof"
+)
+PLAN_STRICT_EVIDENCE_BOUNDARY = (
+    "retained source and checkpoint history remains valid only for original "
+    "strict_external claims and is never solo proof"
+)
+CAMPAIGN_ACTIVE_EVIDENCE_BOUNDARY = (
+    "each active SD identity admits only solo_cooperative evidence and cannot "
+    "prove strict_external, publication, independent-review, or field claims"
+)
+CAMPAIGN_STRICT_EVIDENCE_BOUNDARY = (
+    "C1-C7 source identities, statuses, owners, dependencies, checkpoints, and "
+    "evidence references remain authoritative for strict_external history, but "
+    "none is evidence that Solo Dogfood Ready is qualified."
+)
+CAMPAIGN_AUTHORITY = {
+    "canonical_execution_authority": (
+        "contracts/plan/product-gap-closure-campaign-v1.yaml"
+    ),
+    "precedence": [
+        {
+            "rank": 1,
+            "source": "contracts/spec/solo-dogfood-readiness-v0.yaml",
+            "owns": "current milestone, readiness profiles, claims, and evidence boundaries",
+        },
+        {
+            "rank": 2,
+            "source": "contracts/plan/product-gap-closure-plan.yaml",
+            "owns": "program sequencing, phase disposition, and exit intent",
+        },
+        {
+            "rank": 3,
+            "source": "contracts/plan/agent-native-guidance-plan.yaml",
+            "owns": "inherited authority boundaries and historical implementation lineage",
+        },
+        {
+            "rank": 4,
+            "source": "contracts/backlog/rust-only-core-backlog.yaml",
+            "owns": "Rust-only, typed-authority, and legacy-forensic constraints",
+        },
+    ],
+    "conflict_rule": (
+        "Apply each source only inside its owned domain. The higher-ranked source "
+        "wins on overlap, but no source, checkpoint, or transcript may convert "
+        "source implementation into release, hosted, independent-review, or field evidence."
+    ),
+}
+INVENTORY_AUTHORITY_OWNS = [
+    "the Solo Dogfood Ready milestone projection for SD-00 through SD-08",
+    (
+        "the preserved C1-C7 strict_external story identities, dispositions, "
+        "checkpoints, and evidence boundaries"
+    ),
+    (
+        "story-to-campaign mapping, source schedule class, conservative source "
+        "status, and forensic exclusions"
+    ),
+]
+INVENTORY_RECORD_EVIDENCE_BOUNDARY = (
+    "each record retains its original checkpoint and evidence references for "
+    "strict_external history and is never Solo Dogfood Ready completion proof"
+)
+AUTHORITY_CHAIN_KEYS = {
+    "authority_ref",
+    "authority_revision",
+    "authority_chain_id",
+    "milestone_id",
+    "milestone",
+    "milestone_state",
+    "milestone_qualified",
+    "readiness_profile",
+    "strict_external_state",
+    "executable_item_ids",
+    "executable_item_authority",
+    "executable_item_projection",
+    "authority_chain",
+    "profiles",
+    "later_closed_boundaries",
+    "closure_rule",
+}
 SOURCE_ITEM_SCHEDULE = "pre_stabilization_implementation"
 SOURCE_STORY_SCHEDULE = "pre_stabilization_source"
 SOURCE_CLOSED_STATUSES = {"implemented_pending_evidence", "completed"}
@@ -140,6 +413,8 @@ COMPILER_FEEDBACK_POLICY = {
     ],
 }
 DEFERRED_HEAVY_POLICY = {
+    "applies_to_profile": "strict_external",
+    "blocks_current_milestone": False,
     "active": True,
     "authority_item": "C3.2",
     "opens_after_typed_source_closure": True,
@@ -186,6 +461,37 @@ TRUSTED_NPM = "/usr/bin/npm"
 TRUSTED_PNPM = "/usr/bin/pnpm"
 TRUSTED_TWINE = "/usr/bin/twine"
 TRUSTED_RUSTUP = "/home/user/.cargo/bin/rustup"
+ROOT_MANIFEST = str(ROOT / "Cargo.toml")
+SOLO_CARGO_SUBCOMMANDS = {"test", "build", "clippy"}
+SOLO_CARGO_SWITCHES = {
+    "--locked",
+    "--frozen",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--no-default-features",
+    "--release",
+    "--lib",
+    "--bins",
+    "--examples",
+    "--tests",
+    "--benches",
+    "--quiet",
+    "--verbose",
+}
+SOLO_CARGO_VALUE_FLAGS = {
+    "-p",
+    "--package",
+    "--features",
+    "--bin",
+    "--example",
+    "--test",
+    "--bench",
+    "--manifest-path",
+    "--jobs",
+}
+SOLO_WORKFLOW_REPOSITORY = "DanielCarva1/forge-method-core"
+SOLO_WORKFLOWS = {"ci.yml"}
 TRUSTED_HEAVY_EXECUTABLES = {
     "/home/user/.cargo/bin/rustc",
     "/home/user/.cargo/bin/rustfmt",
@@ -380,6 +686,209 @@ def indexed(values: Any) -> dict[str, dict[str, Any]] | None:
     return result
 
 
+def solo_spec_authority_valid(spec: dict[str, Any]) -> bool:
+    if (
+        set(spec) != SOLO_SPEC_KEYS
+        or {key: spec.get(key) for key in SOLO_SPEC_TOP_LEVEL_IDENTITY}
+        != SOLO_SPEC_TOP_LEVEL_IDENTITY
+    ):
+        return False
+    authority = mapping(spec.get("current_product_authority"))
+    if authority is None or set(authority) != AUTHORITY_CHAIN_KEYS:
+        return False
+    projection = {
+        key: authority.get(key) for key in CURRENT_PRODUCT_PROJECTION
+    }
+    if projection != CURRENT_PRODUCT_PROJECTION:
+        return False
+    if (
+        authority.get("authority_chain_id") != "solo-dogfood-readiness-v0"
+        or authority.get("executable_item_authority")
+        != (
+            "contracts/spec/solo-dogfood-readiness-v0.yaml"
+            "#implementation_decisions.delivery_sequence"
+        )
+        or authority.get("authority_chain") != SPEC_AUTHORITY_CHAIN
+        or authority.get("later_closed_boundaries") != LATER_CLOSED_BOUNDARIES
+        or authority.get("closure_rule") != SPEC_CLOSURE_RULE
+    ):
+        return False
+    item_projection = mapping(authority.get("executable_item_projection"))
+    if item_projection != {
+        "applies_to_each_item": True,
+        "disposition": "current_milestone",
+        "evidence_boundary": SOLO_ITEM_EVIDENCE_BOUNDARY,
+    }:
+        return False
+    profiles = mapping(authority.get("profiles"))
+    if profiles is None or set(profiles) != {"solo_cooperative", "strict_external"}:
+        return False
+    solo = mapping(profiles.get("solo_cooperative"))
+    strict = mapping(profiles.get("strict_external"))
+    if (
+        solo is None
+        or set(solo)
+        != {
+            "current_executable",
+            "readiness_state",
+            "claim_scope",
+            "evidence_requirements",
+            "evidence_boundary",
+            "excluded_closure_prerequisite_ids",
+        }
+        or solo.get("current_executable") is not True
+        or solo.get("readiness_state") != "active_implementation"
+        or solo.get("claim_scope") != SOLO_CLAIM_SCOPE
+        or solo.get("evidence_requirements") != SOLO_EVIDENCE_REQUIREMENTS
+        or solo.get("evidence_boundary") != SOLO_EVIDENCE_BOUNDARY
+        or solo.get("excluded_closure_prerequisite_ids")
+        != [
+            "selected_host",
+            "external_human_origin_broker",
+            "independent_reviewer",
+            "trusted_runtime",
+        ]
+    ):
+        return False
+    retained = mapping(strict.get("retained_item_projection")) if strict else None
+    if (
+        strict is None
+        or set(strict)
+        != {
+            "current_executable",
+            "readiness_state",
+            "admission_state",
+            "claim_scope",
+            "evidence_requirements",
+            "evidence_boundary",
+            "retained_item_projection",
+            "retained_item_ids",
+        }
+        or strict.get("current_executable") is not False
+        or strict.get("readiness_state") != "later_stage_closed"
+        or strict.get("admission_state") != "closed"
+        or strict.get("claim_scope") != STRICT_CLAIM_SCOPE
+        or strict.get("evidence_requirements") != STRICT_EVIDENCE_REQUIREMENTS
+        or strict.get("evidence_boundary") != STRICT_EVIDENCE_BOUNDARY
+        or retained
+        != {
+            "applies_to_each_item": True,
+            "disposition": "preserved_later_stage",
+            "evidence_boundary": STRICT_ITEM_EVIDENCE_BOUNDARY,
+        }
+        or string_list(strict.get("retained_item_ids")) is None
+        or len(strict["retained_item_ids"]) != len(ITEM_IDS)
+        or set(strict["retained_item_ids"]) != ITEM_IDS
+    ):
+        return False
+    decisions = mapping(spec.get("implementation_decisions"))
+    delivery = decisions.get("delivery_sequence") if decisions else None
+    delivery_index = indexed(delivery)
+    readiness_profiles = indexed(decisions.get("readiness_profiles")) if decisions else None
+    if (
+        delivery_index is None
+        or list(delivery_index) != SOLO_ITEM_IDS
+        or readiness_profiles is None
+        or set(readiness_profiles) != {"solo_cooperative", "strict_external"}
+    ):
+        return False
+    solo_decision = readiness_profiles["solo_cooperative"]
+    strict_decision = readiness_profiles["strict_external"]
+    return (
+        solo_decision.get("current_executable") is True
+        and solo_decision.get("readiness_state") == "active_implementation"
+        and solo_decision.get("closure_blockers") == []
+        and solo_decision.get("evidence_boundary")
+        == (
+            "cooperative_same_owner; never independent, human-origin, "
+            "trusted-runtime, publication, or field proof"
+        )
+        and strict_decision.get("current_executable") is False
+        and strict_decision.get("readiness_state") == "later_stage_closed"
+        and strict_decision.get("admission_state") == "closed"
+        and strict_decision.get("evidence_boundary")
+        == (
+            "new separated-origin, independent-review, and trusted-runtime evidence "
+            "is required; retained strict history is not solo proof"
+        )
+    )
+
+
+def current_solo_authority_valid(
+    spec: dict[str, Any],
+    campaign: dict[str, Any],
+    inventory: dict[str, Any],
+    plan: dict[str, Any],
+) -> bool:
+    if not solo_spec_authority_valid(spec):
+        return False
+    for document, expected_keys, expected_identity in (
+        (plan, PLAN_TOP_LEVEL_KEYS, PLAN_TOP_LEVEL_IDENTITY),
+        (campaign, CAMPAIGN_TOP_LEVEL_KEYS, CAMPAIGN_TOP_LEVEL_IDENTITY),
+        (inventory, INVENTORY_TOP_LEVEL_KEYS, INVENTORY_TOP_LEVEL_IDENTITY),
+    ):
+        if (
+            set(document) != expected_keys
+            or {key: document.get(key) for key in expected_identity}
+            != expected_identity
+        ):
+            return False
+    for document in (plan, campaign, inventory):
+        projection = mapping(document.get("current_product_authority"))
+        if (
+            projection is None
+            or set(projection) != set(CURRENT_PRODUCT_PROJECTION)
+            or projection != CURRENT_PRODUCT_PROJECTION
+        ):
+            return False
+    sequencing = mapping(plan.get("sequencing_policy"))
+    scope = mapping(campaign.get("campaign_scope"))
+    inventory_authority = mapping(inventory.get("authority"))
+    record_projection = mapping(
+        inventory.get("preserved_strict_external_record_projection")
+    )
+    if (
+        sequencing is None
+        or string_list(sequencing.get("active_item_ids")) != SOLO_ITEM_IDS
+        or sequencing.get("active_item_disposition") != "current_milestone"
+        or sequencing.get("active_item_evidence_boundary")
+        != PLAN_ACTIVE_EVIDENCE_BOUNDARY
+        or string_list(sequencing.get("later_strict_external_item_ids")) is None
+        or len(sequencing["later_strict_external_item_ids"]) != len(ITEM_IDS)
+        or set(sequencing["later_strict_external_item_ids"]) != ITEM_IDS
+        or sequencing.get("later_strict_external_item_disposition")
+        != "preserved_later_stage"
+        or sequencing.get("later_strict_external_item_evidence_boundary")
+        != PLAN_STRICT_EVIDENCE_BOUNDARY
+        or campaign.get("authority") != CAMPAIGN_AUTHORITY
+        or scope is None
+        or string_list(scope.get("active_item_ids")) != SOLO_ITEM_IDS
+        or scope.get("active_item_disposition") != "current_milestone"
+        or scope.get("active_item_evidence_boundary")
+        != CAMPAIGN_ACTIVE_EVIDENCE_BOUNDARY
+        or string_list(scope.get("deferred_item_ids")) is None
+        or len(scope["deferred_item_ids"]) != len(ITEM_IDS)
+        or set(scope["deferred_item_ids"]) != ITEM_IDS
+        or scope.get("deferred_disposition")
+        != "preserved_later_strict_external_stage"
+        or scope.get("deferred_evidence_boundary")
+        != CAMPAIGN_STRICT_EVIDENCE_BOUNDARY
+        or inventory_authority is None
+        or inventory_authority.get("owns") != INVENTORY_AUTHORITY_OWNS
+        or record_projection
+        != {
+            "record_set_ref": "#current_records",
+            "applies_to_each_record": True,
+            "identity_field": "id",
+            "disposition_field": "disposition",
+            "milestone_disposition": "preserved_later_stage",
+            "evidence_boundary": INVENTORY_RECORD_EVIDENCE_BOUNDARY,
+        }
+    ):
+        return False
+    return True
+
+
 def relative_regular_ref(value: Any) -> bool:
     if not isinstance(value, str) or not value:
         return False
@@ -480,7 +989,10 @@ def inventory_counts_valid(
     exclusions = indexed(inventory.get("forensic_exclusions"))
     counts = mapping(inventory.get("counts"))
     expected_keys = {
+        "current_milestone_units",
+        "preserved_strict_external_records",
         "current",
+        "current_count_semantics",
         "source_control_test",
         "evidence_stage",
         "forensic_exclusions",
@@ -499,6 +1011,8 @@ def inventory_counts_valid(
         actual_by_status[status] += 1
     declared_by_status = mapping(counts.get("by_status"))
     actual = {
+        "current_milestone_units": len(SOLO_ITEM_IDS),
+        "preserved_strict_external_records": len(records),
         "current": len(records),
         "source_control_test": sum(
             record.get("schedule_class") == SOURCE_STORY_SCHEDULE
@@ -525,6 +1039,8 @@ def inventory_counts_valid(
         declared_by_status is not None
         and set(declared_by_status) == INVENTORY_STATUS_VALUES
         and declared_by_status == actual_by_status
+        and counts.get("current_count_semantics")
+        == "canonical preserved record count; not the current milestone unit count"
         and all(counts.get(key) == value for key, value in actual.items())
     )
 
@@ -657,12 +1173,18 @@ def load_yaml(path: Path) -> dict[str, Any] | None:
 
 
 def load_authorities() -> dict[str, dict[str, Any]] | None:
+    spec = load_yaml(SPEC)
     campaign = load_yaml(CAMPAIGN)
     inventory = load_yaml(INVENTORY)
     plan = load_yaml(PLAN)
-    if campaign is None or inventory is None or plan is None:
+    if spec is None or campaign is None or inventory is None or plan is None:
         return None
-    return {"campaign": campaign, "inventory": inventory, "plan": plan}
+    return {
+        "spec": spec,
+        "campaign": campaign,
+        "inventory": inventory,
+        "plan": plan,
+    }
 
 
 def dependency_closure(
@@ -981,12 +1503,24 @@ def implementation_compiler_feedback_open(
     authorities: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
     documents = authorities if authorities is not None else load_authorities()
-    if documents is None or set(documents) != {"campaign", "inventory", "plan"}:
+    if documents is None or set(documents) != {
+        "spec",
+        "campaign",
+        "inventory",
+        "plan",
+    }:
         return False
+    spec = mapping(documents.get("spec"))
     campaign = mapping(documents.get("campaign"))
     inventory = mapping(documents.get("inventory"))
     plan = mapping(documents.get("plan"))
-    if campaign is None or inventory is None or plan is None:
+    if (
+        spec is None
+        or campaign is None
+        or inventory is None
+        or plan is None
+        or not current_solo_authority_valid(spec, campaign, inventory, plan)
+    ):
         return False
     if not compiler_feedback_policy_valid(campaign, inventory, plan):
         return False
@@ -1036,7 +1570,7 @@ def source_authorities_ready(
     deferred = string_list(scope.get("deferred_item_ids"))
     if active is None or deferred is None or len(active) != len(set(active)):
         return False, items
-    if set(active) != ITEM_IDS or deferred:
+    if active != SOLO_ITEM_IDS or set(deferred) != ITEM_IDS:
         return False, items
 
     for item_id in SOURCE_ITEM_IDS:
@@ -1146,7 +1680,10 @@ def source_authorities_ready(
     if stabilization is None:
         return False, items
     if (
-        stabilization.get("item_id") != "C3.2"
+        stabilization.get("readiness_profile") != "strict_external"
+        or stabilization.get("blocks_current_milestone") is not False
+        or stabilization.get("admission_state") != "closed"
+        or stabilization.get("item_id") != "C3.2"
         or stabilization.get("lifts_stabilization_commands_only") is not True
         or stabilization.get("does_not_lift_publication_or_field_commands") is not True
     ):
@@ -1159,60 +1696,46 @@ def stage_permissions(
     authorities: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, bool]:
     documents = authorities if authorities is not None else load_authorities()
-    closed = {"stabilization": False, "publication": False, "field": False}
-    if documents is None or set(documents) != {"campaign", "inventory", "plan"}:
+    closed = {
+        "solo_development": False,
+        "stabilization": False,
+        "publication": False,
+        "field": False,
+    }
+    if documents is None or set(documents) != {
+        "spec",
+        "campaign",
+        "inventory",
+        "plan",
+    }:
         return closed
+    spec = mapping(documents.get("spec"))
     campaign = mapping(documents.get("campaign"))
     inventory = mapping(documents.get("inventory"))
     plan = mapping(documents.get("plan"))
-    if campaign is None or inventory is None or plan is None:
+    if spec is None or campaign is None or inventory is None or plan is None:
         return closed
 
-    ready, items = source_authorities_ready(campaign, inventory, plan)
-    if not ready or items is None:
-        return closed
-    stabilization = mapping(campaign.get("stabilization"))
-    accepted_checkpoint_kinds = accepted_campaign_checkpoint_kinds(campaign)
-    if stabilization is None or accepted_checkpoint_kinds is None:
-        return closed
+    if current_solo_authority_valid(spec, campaign, inventory, plan):
+        stabilization = mapping(campaign.get("stabilization"))
+        if (
+            not compiler_feedback_policy_valid(campaign, inventory, plan)
+            or stabilization is None
+            or stabilization.get("readiness_profile") != "strict_external"
+            or stabilization.get("blocks_current_milestone") is not False
+            or stabilization.get("admission_state") != "closed"
+        ):
+            return closed
+        return {
+            "solo_development": True,
+            "stabilization": False,
+            "publication": False,
+            "field": False,
+        }
 
-    c32 = items["C3.2"]
-    c33 = items["C3.3"]
-    c34 = items["C3.4"]
-    c32_status = c32.get("status")
-    closed["stabilization"] = (
-        c32_status == "in_progress"
-        and stabilization.get("status") == "in_progress"
-        and isinstance(c32.get("owner"), str)
-        and bool(c32["owner"])
-        and campaign_checkpoint_valid(c32.get("checkpoint"), accepted_checkpoint_kinds)
-    )
-    c32_completed = (
-        c32_status == "completed"
-        and stabilization.get("status") == "completed"
-        and c32.get("owner") is None
-        and campaign_checkpoint_valid(c32.get("checkpoint"), accepted_checkpoint_kinds)
-    )
-    closed["publication"] = (
-        c32_completed
-        and c33.get("status") == "in_progress"
-        and isinstance(c33.get("owner"), str)
-        and bool(c33["owner"])
-        and campaign_checkpoint_valid(c33.get("checkpoint"), accepted_checkpoint_kinds)
-    )
-    c33_completed = (
-        c32_completed
-        and c33.get("status") == "completed"
-        and c33.get("owner") is None
-        and campaign_checkpoint_valid(c33.get("checkpoint"), accepted_checkpoint_kinds)
-    )
-    closed["field"] = (
-        c33_completed
-        and c34.get("status") == "in_progress"
-        and isinstance(c34.get("owner"), str)
-        and bool(c34["owner"])
-        and campaign_checkpoint_valid(c34.get("checkpoint"), accepted_checkpoint_kinds)
-    )
+    # A contradictory or drifted rank-1 specification cannot fall through into
+    # a lower-ranked strict stage. A future strict profile must land a new
+    # validator revision rather than inheriting Solo permissions accidentally.
     return closed
 
 
@@ -1281,6 +1804,114 @@ def package_value_valid(value: str) -> bool:
         return False
     names = workspace_package_names()
     return names is not None and value in names
+
+
+def repository_cwd_valid() -> bool:
+    try:
+        return (
+            not ROOT.is_symlink()
+            and ROOT.is_dir()
+            and Path.cwd().resolve(strict=True) == ROOT.resolve(strict=True)
+        )
+    except OSError:
+        return False
+
+
+def solo_cargo_development_valid(argv: list[str]) -> bool:
+    if (
+        len(argv) < 2
+        or argv[0] != TRUSTED_CARGO
+        or argv[1] not in SOLO_CARGO_SUBCOMMANDS
+        or not repository_cwd_valid()
+    ):
+        return False
+    subcommand = argv[1]
+    explicit_scope = 0
+    lock_modes = 0
+    delimiter = argv.index("--") if "--" in argv else len(argv)
+    if "--" in argv and subcommand != "clippy":
+        return False
+    if subcommand == "clippy" and argv[delimiter + 1 :] not in (
+        [],
+        ["-D", "warnings"],
+        ["-W", "warnings"],
+    ):
+        return False
+    index = 2
+    while index < delimiter:
+        token = argv[index]
+        if token in {"--locked", "--frozen"}:
+            lock_modes += 1
+            index += 1
+            continue
+        if token == "--workspace":
+            explicit_scope += 1
+            index += 1
+            continue
+        if token in {"-p", "--package"}:
+            if index + 1 >= delimiter or not package_value_valid(argv[index + 1]):
+                return False
+            explicit_scope += 1
+            index += 2
+            continue
+        if token.startswith("--package="):
+            if not package_value_valid(token.split("=", 1)[1]):
+                return False
+            explicit_scope += 1
+            index += 1
+            continue
+        if token == "--manifest-path":
+            if index + 1 >= delimiter or argv[index + 1] != ROOT_MANIFEST:
+                return False
+            index += 2
+            continue
+        if token.startswith("--manifest-path="):
+            if token.split("=", 1)[1] != ROOT_MANIFEST:
+                return False
+            index += 1
+            continue
+        if token in SOLO_CARGO_SWITCHES:
+            index += 1
+            continue
+        if token in SOLO_CARGO_VALUE_FLAGS:
+            if index + 1 >= delimiter:
+                return False
+            value = argv[index + 1]
+            if not value or value.startswith("-"):
+                return False
+            if token == "--jobs" and (not value.isdigit() or int(value) < 1):
+                return False
+            index += 2
+            continue
+        if token.startswith("--features=") and token.split("=", 1)[1]:
+            index += 1
+            continue
+        return False
+    return lock_modes <= 1 and explicit_scope <= 1
+
+
+def solo_workflow_run_valid(argv: list[str]) -> bool:
+    if not repository_cwd_valid():
+        return False
+    return argv in (
+        [TRUSTED_GH, "workflow", "run", "ci.yml"],
+        [
+            TRUSTED_GH,
+            "-R",
+            SOLO_WORKFLOW_REPOSITORY,
+            "workflow",
+            "run",
+            "ci.yml",
+        ],
+        [
+            TRUSTED_GH,
+            "--repo",
+            SOLO_WORKFLOW_REPOSITORY,
+            "workflow",
+            "run",
+            "ci.yml",
+        ],
+    )
 
 
 def cargo_check_valid(argv: list[str]) -> bool:
@@ -1515,12 +2146,10 @@ def rustup_valid(argv: list[str]) -> bool:
     if subcommand == "toolchain":
         if arguments == ["list"]:
             return True
-        if len(arguments) < 2 or arguments[0] not in {"install", "uninstall"}:
+        if len(arguments) < 2 or arguments[0] != "install":
             return False
         if toolchain.fullmatch(arguments[1]) is None:
             return False
-        if arguments[0] == "uninstall":
-            return len(arguments) == 2
         index = 2
         seen_profile = False
         while index < len(arguments):
@@ -1544,7 +2173,7 @@ def rustup_valid(argv: list[str]) -> bool:
     if subcommand in {"target", "component"}:
         if arguments == ["list"]:
             return True
-        if len(arguments) not in {2, 4} or arguments[0] not in {"add", "remove"}:
+        if len(arguments) not in {2, 4} or arguments[0] != "add":
             return False
         value = arguments[1]
         if subcommand == "target" and target.fullmatch(value) is None:
@@ -1562,6 +2191,8 @@ def classify_argv(argv: list[str], command: str) -> set[str]:
     executable = argv[0]
 
     if executable == TRUSTED_CARGO:
+        if solo_cargo_development_valid(argv):
+            return {"solo_development"}
         if len(argv) < 2:
             return {"unknown"}
         subcommand_index = 1
@@ -1572,6 +2203,8 @@ def classify_argv(argv: list[str], command: str) -> set[str]:
         subcommand = argv[subcommand_index].lower()
         if subcommand in PUBLICATION_CARGO_SUBCOMMANDS:
             return {"publication"}
+        if subcommand in SOLO_CARGO_SUBCOMMANDS or subcommand == "install":
+            return {"unknown"}
         if subcommand in HEAVY_CARGO_SUBCOMMANDS:
             return {"heavy"}
         return {"unknown"}
@@ -1615,13 +2248,15 @@ def classify_argv(argv: list[str], command: str) -> set[str]:
     if executable in TRUSTED_HEAVY_EXECUTABLES:
         return {"heavy"}
     if executable == TRUSTED_ACT:
-        return {"hosted"}
+        return {"unknown"}
     if executable == TRUSTED_GH:
+        if solo_workflow_run_valid(argv):
+            return {"solo_development"}
         subcommand = gh_subcommand(argv)
         if subcommand == "release":
             return {"publication"}
         if subcommand in {"workflow", "run"}:
-            return {"hosted"}
+            return {"unknown"}
         return {"unknown"}
     if executable in {TRUSTED_NPM, TRUSTED_PNPM}:
         if len(argv) >= 2 and argv[1].lower() == "publish":
@@ -1683,9 +2318,22 @@ def blocked_reason(
         permissions = stage_permissions(authorities)
         compiler_feedback_open = implementation_compiler_feedback_open(authorities)
     except (AttributeError, KeyError, OSError, TypeError, ValueError):
-        permissions = {"stabilization": False, "publication": False, "field": False}
+        permissions = {
+            "solo_development": False,
+            "stabilization": False,
+            "publication": False,
+            "field": False,
+        }
         compiler_feedback_open = False
 
+    if "solo_development" in categories:
+        if permissions["solo_development"] or permissions["stabilization"]:
+            return None
+        return (
+            "workspace-scoped Cargo test/build/clippy and the allowlisted repository "
+            "CI workflow open only under structurally valid Solo development authority "
+            "or an explicitly admitted strict stabilization stage"
+        )
     if "compiler_feedback" in categories:
         if compiler_feedback_open or permissions["stabilization"]:
             return None

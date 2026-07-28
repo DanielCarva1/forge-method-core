@@ -251,6 +251,32 @@ fn legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum() {
     fs::remove_dir_all(&temp).expect("clean temp repo");
 }
 
+#[test]
+fn legacy_validator_and_forge_core_cli_both_reject_product_authority_divergence() {
+    let source = repo_root();
+    let temp = temp_repo_root("forge-product-authority-parity");
+    if temp.exists() {
+        fs::remove_dir_all(&temp).expect("remove old temp repo");
+    }
+    copy_validation_tree(&source, &temp);
+
+    let inventory_path = temp
+        .join("contracts")
+        .join("plan")
+        .join("product-gap-closure-story-inventory-v1.yaml");
+    let inventory = fs::read_to_string(&inventory_path).expect("read inventory");
+    let inventory = inventory.replacen(
+        "  milestone_qualified: false",
+        "  milestone_qualified: true",
+        1,
+    );
+    fs::write(&inventory_path, inventory).expect("write divergent inventory");
+
+    assert_both_reject(&temp, "current_product_authority");
+
+    fs::remove_dir_all(&temp).expect("clean temp repo");
+}
+
 fn run_legacy_validator(root: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_forge-contract-validator"))
         .arg(root)
@@ -284,10 +310,6 @@ fn assert_both_reject(root: &Path, expected_text: &str) {
 
 fn copy_validation_tree(source: &Path, target: &Path) {
     copy_dir(&source.join("contracts"), &target.join("contracts"));
-    copy_dir(
-        &source.join(".scratch").join("solo-dogfood-readiness"),
-        &target.join(".scratch").join("solo-dogfood-readiness"),
-    );
     copy_validation_source(
         source,
         target,

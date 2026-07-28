@@ -1,9 +1,61 @@
-schema_version: "0.1"
+schema_version: "0.2"
 artifact_kind: "product-readiness-specification"
 spec_id: "solo-dogfood-readiness-v0"
-status: "accepted_design"
+status: "implementation_active"
 created_at: "2026-07-27"
 project: "forge-method-core"
+
+current_product_authority:
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
+  authority_revision: 2
+  authority_chain_id: "solo-dogfood-readiness-v0"
+  milestone_id: "solo-dogfood-ready"
+  milestone: "Solo Dogfood Ready"
+  milestone_state: "active_implementation"
+  milestone_qualified: false
+  readiness_profile: "solo_cooperative"
+  strict_external_state: "later_stage_closed"
+  executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+  executable_item_authority: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence"
+  executable_item_projection:
+    applies_to_each_item: true
+    disposition: "current_milestone"
+    evidence_boundary: "each SD item may admit only claim-bound solo_cooperative evidence and cannot qualify strict_external, publication, independent-review, or field claims"
+  authority_chain:
+    - {rank: 1, artifact: "contracts/spec/solo-dogfood-readiness-v0.yaml", owns: "milestone, readiness profiles, claims, and evidence boundaries"}
+    - {rank: 2, artifact: "contracts/plan/product-gap-closure-plan.yaml", owns: "program sequencing and phase disposition"}
+    - {rank: 3, artifact: "contracts/plan/product-gap-closure-campaign-v1.yaml", owns: "execution state and checkpoints"}
+    - {rank: 4, artifact: "contracts/plan/product-gap-closure-story-inventory-v1.yaml", owns: "story identity, disposition, and evidence-boundary projection"}
+  profiles:
+    solo_cooperative:
+      current_executable: true
+      readiness_state: "active_implementation"
+      claim_scope: "same-owner cooperative development with honest conversation provenance and governed local promotion"
+      evidence_requirements: ["claim-bound cooperative provenance", "subject and freshness binding", "authoritative runtime or business readback", "negative cases and rollback or cleanup verification", "package and installation proof when claimed"]
+      evidence_boundary: "cooperative_same_owner evidence may satisfy only solo-scoped claims and never proves human origin, reviewer independence, trusted-runtime separation, publication, or field use"
+      excluded_closure_prerequisite_ids: ["selected_host", "external_human_origin_broker", "independent_reviewer", "trusted_runtime"]
+    strict_external:
+      current_executable: false
+      readiness_state: "later_stage_closed"
+      admission_state: "closed"
+      claim_scope: "external human origin, independent review, separated custody and administration, and trusted-runtime assurance"
+      evidence_requirements: ["external human-origin proof", "independent semantic reviewer", "trusted-runtime execution", "separated custody and administration"]
+      evidence_boundary: "requires new strict_external evidence; existing source, identities, checkpoints, and history are retained but are not relabeled as solo proof"
+      retained_item_projection:
+        applies_to_each_item: true
+        disposition: "preserved_later_stage"
+        evidence_boundary: "retained source and checkpoint history remains valid only for its original strict_external claims and is never solo completion evidence"
+      retained_item_ids: ["C1.1", "C1.2", "C1.3", "C1.4", "C2.1", "C2.2", "C2.3", "C2.4", "C3.1", "C3.2", "C3.3", "C3.4", "C4.1", "C4.2", "C5.1", "C5.2", "C5.3", "C6.1", "C6.2", "C7.1", "C7.2"]
+  later_closed_boundaries:
+    strict_external_readiness: "closed"
+    publication: "closed"
+    field_evidence: "closed"
+    independent_review: "closed"
+  closure_rule: >-
+    Close Solo Dogfood Ready only through SD-00 through SD-08 under
+    solo_cooperative evidence. Selected-host, external human-origin,
+    independent-reviewer, and trusted-runtime brokers do not block that closure;
+    they remain mandatory and closed for strict_external claims.
 
 problem_statement: >-
   Forge has substantial typed governance, evidence, continuity, transaction,
@@ -198,7 +250,9 @@ user_stories:
       but never silently upgraded into independent or enterprise evidence.
 
 delivery_backlog:
-  directory: ".scratch/solo-dogfood-readiness/issues"
+  directory: ".local/solo-dogfood-readiness/issues"
+  storage: "local_only_gitignored"
+  repository_authority: false
   ticket_contract:
     required_sections:
       - "What to build"
@@ -276,7 +330,11 @@ delivery_backlog:
 implementation_decisions:
   readiness_profiles:
     - id: "solo_cooperative"
-      purpose: "default profile for the first dogfood milestone"
+      purpose: "default and only current executable profile for the first dogfood milestone"
+      current_executable: true
+      readiness_state: "active_implementation"
+      evidence_boundary: "cooperative_same_owner; never independent, human-origin, trusted-runtime, publication, or field proof"
+      closure_blockers: []
       authority_model: >-
         One owner delegates work to cooperative agents and accepts
         agent-carried conversation provenance without claiming unforgeable
@@ -287,6 +345,10 @@ implementation_decisions:
         current and complete.
     - id: "strict_external"
       purpose: "later team and enterprise authority profile"
+      current_executable: false
+      readiness_state: "later_stage_closed"
+      admission_state: "closed"
+      evidence_boundary: "new separated-origin, independent-review, and trusted-runtime evidence is required; retained strict history is not solo proof"
       authority_model: >-
         Human, reviewer, or runtime origin is established outside the governed
         agent process through separated custody and administration.

@@ -2,9 +2,21 @@ schema_version: '1.0'
 artifact_kind: product-gap-closure-story-inventory
 inventory_id: forge-product-gap-closure-story-inventory-v1
 status: active
+current_product_authority:
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
+  authority_revision: 2
+  milestone_id: "solo-dogfood-ready"
+  milestone: "Solo Dogfood Ready"
+  milestone_state: "active_implementation"
+  milestone_qualified: false
+  readiness_profile: "solo_cooperative"
+  executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+  strict_external_state: "later_stage_closed"
+
 authority:
   owns:
-  - the deduplicated current story inventory for the C1-C7 product-gap closure campaign
+  - the Solo Dogfood Ready milestone projection for SD-00 through SD-08
+  - the preserved C1-C7 strict_external story identities, dispositions, checkpoints, and evidence boundaries
   - story-to-campaign mapping, source schedule class, conservative source status, and forensic exclusions
   does_not_own:
   - campaign execution resume state
@@ -29,7 +41,10 @@ provenance:
     result_digest: sha256:508715950630435bdb4c23f34bec8c200cb48e637ef00e1fad082a9acf54db8a
     authoritative_for_resume: false
 counts:
+  current_milestone_units: 9
+  preserved_strict_external_records: 81
   current: 81
+  current_count_semantics: "canonical preserved record count; not the current milestone unit count"
   source_control_test: 76
   evidence_stage: 5
   forensic_exclusions: 26
@@ -41,6 +56,14 @@ counts:
     in_progress: 0
     planned: 7
     source_complete: 61
+preserved_strict_external_record_projection:
+  record_set_ref: "#current_records"
+  applies_to_each_record: true
+  identity_field: "id"
+  disposition_field: "disposition"
+  milestone_disposition: "preserved_later_stage"
+  evidence_boundary: "each record retains its original checkpoint and evidence references for strict_external history and is never Solo Dogfood Ready completion proof"
+
 record_contract:
   required_current_fields:
   - id
@@ -86,6 +109,9 @@ record_contract:
   - current_record_id
   - campaign_item_id
 scheduling_invariants:
+- SD-00 through SD-08 are the only current milestone units and close only under solo_cooperative evidence.
+- The selected-host, external human-origin, independent-reviewer, and trusted-runtime prerequisites recorded below do not block solo closure.
+- Every current_records identity retains its existing disposition, status, dependency, checkpoint, and evidence references as strict_external history; no such record is relabeled as solo proof.
 - Every pre_stabilization_source record must be source_complete with no remaining_source_work before C3.2 opens.
 - Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through
   /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic

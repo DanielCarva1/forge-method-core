@@ -163,11 +163,16 @@ class StaticCheckInventoryTests(unittest.TestCase):
         checker.validate_pi_loop(document)
         self.assertEqual(document["checks"], checker.pi_check_inventory())
 
-    def test_real_solo_dogfood_spec_and_ticket_dag_match(self) -> None:
+    def test_real_solo_dogfood_spec_validates_without_local_ticket_mirror(self) -> None:
         document = yaml.safe_load(
             checker.SOLO_DOGFOOD_SPEC.read_text(encoding="utf-8")
         )
-        checker.validate_solo_dogfood_spec(document)
+        with mock.patch.object(
+            checker,
+            "SOLO_TICKET_DIRECTORY",
+            Path("/definitely/not/a/repository/ticket/directory"),
+        ):
+            checker.validate_solo_dogfood_spec(document)
 
     def test_solo_dogfood_global_root_claim_and_ticket_dag_fail_closed(self) -> None:
         document = yaml.safe_load(
@@ -186,6 +191,81 @@ class StaticCheckInventoryTests(unittest.TestCase):
         cyclic["delivery_backlog"]["tickets"][0]["blocked_by"] = ["21"]
         with self.assertRaisesRegex(SystemExit, "dependency cycle"):
             checker.validate_solo_dogfood_spec(cyclic)
+
+    def test_solo_current_authority_projection_drift_fails_closed(self) -> None:
+        plan = yaml.safe_load(checker.PLAN.read_text(encoding="utf-8"))
+        plan["current_product_authority"]["milestone_qualified"] = True
+        with self.assertRaisesRegex(
+            SystemExit, "plan.current_product_authority drifted"
+        ):
+            checker.validate_plan(plan)
+
+    def test_solo_profile_cannot_restore_strict_external_blockers(self) -> None:
+        document = yaml.safe_load(
+            checker.SOLO_DOGFOOD_SPEC.read_text(encoding="utf-8")
+        )
+        solo_profile = next(
+            profile
+            for profile in document["implementation_decisions"]["readiness_profiles"]
+            if profile["id"] == "solo_cooperative"
+        )
+        solo_profile["closure_blockers"] = ["selected_host"]
+        with self.assertRaisesRegex(
+            SystemExit, "solo_cooperative readiness profile drifted"
+        ):
+            checker.validate_solo_dogfood_spec(document)
+
+    def test_cooperative_evidence_cannot_be_relabelled_independent(self) -> None:
+        document = yaml.safe_load(
+            checker.SOLO_DOGFOOD_SPEC.read_text(encoding="utf-8")
+        )
+        solo = document["current_product_authority"]["profiles"]["solo_cooperative"]
+        solo["evidence_boundary"] = (
+            "independent evidence proves human origin and trusted-runtime separation"
+        )
+        with self.assertRaisesRegex(
+            SystemExit,
+            "current_product_authority.profiles.solo_cooperative drifted",
+        ):
+            checker.validate_solo_dogfood_spec(document)
+
+    def test_contradictory_authority_appends_fail_exact_boundaries(self) -> None:
+        spec = yaml.safe_load(checker.SOLO_DOGFOOD_SPEC.read_text(encoding="utf-8"))
+        spec["current_product_authority"]["profiles"]["solo_cooperative"][
+            "claim_scope"
+        ] += "; independently trusted human-origin proof"
+        with self.assertRaisesRegex(SystemExit, "solo_cooperative drifted"):
+            checker.validate_solo_dogfood_spec(spec)
+
+        plan = yaml.safe_load(checker.PLAN.read_text(encoding="utf-8"))
+        plan["sequencing_policy"][
+            "active_item_evidence_boundary"
+        ] += "; publication is also proven"
+        with self.assertRaisesRegex(SystemExit, "current Solo item projection drifted"):
+            checker.validate_plan(plan)
+
+        campaign = yaml.safe_load(checker.CAMPAIGN.read_text(encoding="utf-8"))
+        campaign["authority"]["precedence"][0][
+            "owns"
+        ] += "; publication and field qualification"
+        with self.assertRaisesRegex(SystemExit, "campaign authority"):
+            checker.validate_campaign(campaign)
+
+        inventory = yaml.safe_load(checker.INVENTORY.read_text(encoding="utf-8"))
+        inventory["preserved_strict_external_record_projection"][
+            "evidence_boundary"
+        ] += "; records also qualify Solo"
+        with self.assertRaisesRegex(SystemExit, "record projection drifted"):
+            checker.validate_inventory(inventory)
+
+    def test_c22_hashes_remain_historical_not_current_worktree_digests(self) -> None:
+        continuity = yaml.safe_load(checker.CONTINUITY.read_text(encoding="utf-8"))
+        checker.validate_continuity(continuity)
+        continuity["checkpoint"]["artifact_hashes"][
+            "scripts/check-static-structured-text.py"
+        ] = "sha256:" + ("0" * 64)
+        with self.assertRaisesRegex(SystemExit, "historical 2026-07-20"):
+            checker.validate_continuity(continuity)
 
     def test_solo_dogfood_ticket_blocker_parity_is_checked(self) -> None:
         document = yaml.safe_load(

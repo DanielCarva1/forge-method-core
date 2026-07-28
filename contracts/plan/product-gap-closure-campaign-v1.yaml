@@ -6,20 +6,35 @@ created_at: "2026-07-18"
 project: "forge-method-core"
 base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
 source_checkpoint: "0.12.0"
+current_product_authority:
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
+  authority_revision: 2
+  milestone_id: "solo-dogfood-ready"
+  milestone: "Solo Dogfood Ready"
+  milestone_state: "active_implementation"
+  milestone_qualified: false
+  readiness_profile: "solo_cooperative"
+  executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+  strict_external_state: "later_stage_closed"
+
 objective: >-
-  Implement every remaining product-gap source item without overstating evidence,
-  then run one explicit stabilization, publication, and field-evidence sequence.
+  Execute SD-00 through SD-08 as the Solo Dogfood Ready campaign under
+  solo_cooperative authority, while retaining C1-C7 as a later strict_external
+  program whose stabilization, publication, and field stages remain closed.
 
 authority:
   canonical_execution_authority: "contracts/plan/product-gap-closure-campaign-v1.yaml"
   precedence:
     - rank: 1
-      source: "contracts/plan/product-gap-closure-plan.yaml"
-      owns: "item identities, product outcomes, sequencing policy, and exit intent"
+      source: "contracts/spec/solo-dogfood-readiness-v0.yaml"
+      owns: "current milestone, readiness profiles, claims, and evidence boundaries"
     - rank: 2
+      source: "contracts/plan/product-gap-closure-plan.yaml"
+      owns: "program sequencing, phase disposition, and exit intent"
+    - rank: 3
       source: "contracts/plan/agent-native-guidance-plan.yaml"
       owns: "inherited authority boundaries and historical implementation lineage"
-    - rank: 3
+    - rank: 4
       source: "contracts/backlog/rust-only-core-backlog.yaml"
       owns: "Rust-only, typed-authority, and legacy-forensic constraints"
   conflict_rule: >-
@@ -46,6 +61,19 @@ constraints:
 
 campaign_scope:
   active_item_ids:
+    - "SD-00"
+    - "SD-01"
+    - "SD-02"
+    - "SD-03"
+    - "SD-04"
+    - "SD-05"
+    - "SD-06"
+    - "SD-07"
+    - "SD-08"
+  active_item_authority: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence"
+  active_item_disposition: "current_milestone"
+  active_item_evidence_boundary: "each active SD identity admits only solo_cooperative evidence and cannot prove strict_external, publication, independent-review, or field claims"
+  deferred_item_ids:
     - "C1.1"
     - "C1.2"
     - "C1.3"
@@ -67,11 +95,16 @@ campaign_scope:
     - "C6.2"
     - "C7.1"
     - "C7.2"
-  deferred_item_ids: []
+  deferred_disposition: "preserved_later_strict_external_stage"
+  deferred_evidence_boundary: >-
+    C1-C7 source identities, statuses, owners, dependencies, checkpoints, and
+    evidence references remain authoritative for strict_external history, but
+    none is evidence that Solo Dogfood Ready is qualified.
   unlock_rule: >-
-    Source items are assignable whenever their source dependencies are ready.
-    C3.2 opens only after all source items and source stories close; C3.3 opens
-    after C3.2, and C3.4 opens after C3.3.
+    SD-00 through SD-08 execute in specification order under solo_cooperative
+    authority. C3.2, C3.3, and C3.4 remain strict_external stabilization,
+    publication, and field gates and do not block solo progression.
+
 
 status_vocabulary:
   values:
@@ -164,6 +197,8 @@ execution_policy:
       - "inherited executable, native tool-discovery, config, proxy, shell, Python, Git, or Rust wrapper injection"
       - "non-hermetic direct Cargo, unknown launchers, shell control operators, pipes, redirects, or substitutions"
   deferred_heavy_stabilization:
+    applies_to_profile: "strict_external"
+    blocks_current_milestone: false
     active: true
     authority_item: "C3.2"
     opens_after_typed_source_closure: true
@@ -194,6 +229,9 @@ execution_policy:
       - "independent-review commands"
 
 stabilization:
+  readiness_profile: "strict_external"
+  blocks_current_milestone: false
+  admission_state: "closed"
   item_id: "C3.2"
   status: "planned"
   opens_when:

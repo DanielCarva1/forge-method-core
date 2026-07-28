@@ -5,10 +5,21 @@ status: "active"
 created_at: "2026-07-15"
 source_checkpoint: "0.12.0"
 
+current_product_authority:
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
+  authority_revision: 2
+  milestone_id: "solo-dogfood-ready"
+  milestone: "Solo Dogfood Ready"
+  milestone_state: "active_implementation"
+  milestone_qualified: false
+  readiness_profile: "solo_cooperative"
+  executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+  strict_external_state: "later_stage_closed"
+
 objective: >-
-  Close the evidence-backed gaps that prevent an ordinary human from installing
-  and using the Rust Forge through a supported host, then extend the same
-  governed continuity through operation, evolution, and Domain Pack authorship.
+  Make Solo Dogfood Ready the first executable milestone for one repository
+  owner and cooperative agents, while retaining the existing strict_external
+  program as a later closed assurance stage with unchanged history.
 
 scope:
   implementation_authority: "current Rust crates and closed typed YAML contracts"
@@ -22,11 +33,24 @@ priority_policy:
   - "Preserve the authority boundary before optimizing convenience."
   - "Close a single ordinary-user vertical slice before adding host breadth."
   - "Treat source implementation, shipped asset, hosted evidence, and field evidence as separate exits."
-  - "Complete every C1-C7 source-bearing item before C3.2; defer only stabilization, publication, independent-review, and field evidence to C3.2-C3.4."
+  - "Within the preserved strict_external stage, complete every C1-C7 source-bearing item before C3.2; C3.2-C3.4 remain closed stabilization, publication, independent-review, and field gates."
   - "Prefer additive public contracts and migrate durable state explicitly."
 
 sequencing_policy:
   active_item_ids:
+    - "SD-00"
+    - "SD-01"
+    - "SD-02"
+    - "SD-03"
+    - "SD-04"
+    - "SD-05"
+    - "SD-06"
+    - "SD-07"
+    - "SD-08"
+  active_item_authority: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence"
+  active_item_disposition: "current_milestone"
+  active_item_evidence_boundary: "solo_cooperative only; never strict_external, publication, independent-review, or field proof"
+  later_strict_external_item_ids:
     - "C1.1"
     - "C1.2"
     - "C1.3"
@@ -48,6 +72,9 @@ sequencing_policy:
     - "C6.2"
     - "C7.1"
     - "C7.2"
+  later_strict_external_item_disposition: "preserved_later_stage"
+  later_strict_external_item_evidence_boundary: "retained source and checkpoint history remains valid only for original strict_external claims and is never solo proof"
+  schedule_class_profile: "strict_external"
   schedule_classes:
     pre_stabilization_implementation:
       - "C1.1"
@@ -83,11 +110,13 @@ sequencing_policy:
     - item: "C3.4"
       depends_on: ["C1.4", "C3.3"]
   rules:
-    - "All source-bearing items are active and dependency-ready work; none waits for stabilization, publication, hosted, independent-review, or field evidence."
-    - "C3.2 is stabilization only and opens after the complete source DAG and source-story inventory satisfy their typed checkpoints."
+    - "Strict source-bearing items retain their dependency and checkpoint history as later-stage work; they are not solo closure blockers or solo proof."
+    - "C3.2 remains strict_external stabilization only and does not gate the solo_cooperative milestone."
     - "C3.3 is publication only after C3.2; C3.4 is field and independent-review evidence only after C3.3."
 
 verification_strategy:
+  readiness_profile: "strict_external"
+  blocks_current_milestone: false
   design_first:
     - "Freeze invariants, compatibility, crash model, and adversarial cases before changing persistence or authority code."
     - "Use independent asynchronous review for security, persistence, and host-boundary decisions; the primary agent remains accountable for integration."
@@ -346,6 +375,23 @@ phases:
       - "Incompatible, shadowing, tampered, and revoked packs fail closed."
 
 first_executable_slice:
+  milestone: "Solo Dogfood Ready"
+  readiness_profile: "solo_cooperative"
+  phase: "solo-dogfood-ready"
+  first_item: "SD-00"
+  status: "in_progress"
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-00]"
+  rationale: >-
+    Honest milestone/profile projection must land before product implementation.
+    Solo progression uses cooperative evidence and therefore does not wait for
+    a selected host, external human-origin broker, independent reviewer, or
+    trusted runtime.
+  stop_conditions:
+    - "Any artifact marks Solo Dogfood Ready qualified before SD-00 through SD-08 close."
+    - "Cooperative evidence is relabeled as human-origin, independent-review, trusted-runtime, publication, or field proof."
+    - "A strict_external checkpoint, identity, or evidence boundary is deleted or rewritten as solo proof."
+
+preserved_strict_external_first_executable_slice:
   phase: "C1-first-use-authority-vertical-slice"
   first_item: "C1.1"
   rationale: >-

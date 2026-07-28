@@ -18,6 +18,10 @@ const SELECTED_HOST: &str = "none";
 const RUST_CORE_PATH: &str = "contracts/architecture/rust-core.yaml";
 const BOUNDARIES_PATH: &str = "contracts/architecture/crate-boundaries.yaml";
 const POLICY_PATH: &str = "contracts/policies/workspace-crate-boundary-v0.yaml";
+const SOLO_SPEC_PATH: &str = "contracts/spec/solo-dogfood-readiness-v0.yaml";
+const PRODUCT_PLAN_PATH: &str = "contracts/plan/product-gap-closure-plan.yaml";
+const PRODUCT_CAMPAIGN_PATH: &str = "contracts/plan/product-gap-closure-campaign-v1.yaml";
+const PRODUCT_INVENTORY_PATH: &str = "contracts/plan/product-gap-closure-story-inventory-v1.yaml";
 const AUTHORITY_CRATES: [&str; 2] = ["forge-core-authority", "forge-core-kernel"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -130,6 +134,24 @@ struct AuthorityEdge {
     to: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CurrentProductAuthorityDocument {
+    current_product_authority: CurrentProductAuthorityProjection,
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+struct CurrentProductAuthorityProjection {
+    authority_ref: String,
+    authority_revision: u64,
+    milestone_id: String,
+    milestone: String,
+    milestone_state: String,
+    milestone_qualified: bool,
+    readiness_profile: String,
+    executable_item_ids: Vec<String>,
+    strict_external_state: String,
+}
+
 /// Load all canonical workspace-architecture contracts and reject partial,
 /// divergent, malformed, host-selecting, or unreviewed-authority projections.
 pub fn validate_workspace_architecture_contracts(
@@ -140,6 +162,9 @@ pub fn validate_workspace_architecture_contracts(
     let boundaries: BoundariesDocument = load(root, BOUNDARIES_PATH)?;
     let policy: PolicyDocument = load(root, POLICY_PATH)?;
     let mut issues = Vec::new();
+    if root.join(SOLO_SPEC_PATH).exists() {
+        validate_current_product_authority(root, &mut issues)?;
+    }
 
     if rust_core.schema_version != "0.1"
         || rust_core.architecture != "rust_core"
@@ -298,6 +323,29 @@ pub fn validate_workspace_architecture_contracts(
         declared_crates: candidate_names.into_iter().collect(),
         issues,
     })
+}
+
+fn validate_current_product_authority(
+    root: &Path,
+    issues: &mut Vec<WorkspaceArchitectureIssue>,
+) -> Result<(), String> {
+    let spec: CurrentProductAuthorityDocument = load(root, SOLO_SPEC_PATH)?;
+    for (label, path) in [
+        ("plan", PRODUCT_PLAN_PATH),
+        ("campaign", PRODUCT_CAMPAIGN_PATH),
+        ("inventory", PRODUCT_INVENTORY_PATH),
+    ] {
+        let document: CurrentProductAuthorityDocument = load(root, path)?;
+        if document.current_product_authority != spec.current_product_authority {
+            issues.push(issue(
+                "current_product_authority_mismatch",
+                format!(
+                    "{label}.current_product_authority diverges from the rank-1 Solo specification"
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn load<T: for<'de> Deserialize<'de>>(root: &Path, relative: &str) -> Result<T, String> {
