@@ -24,10 +24,12 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Local source candidate checkpoint: the Rust workspace package version is
-`0.12.0`; this does not establish a pullable commit, tag, or prebuilt. Guide
-The local cumulative source gate passed with formatting, full pedantic Clippy,
-default and expensive test-inventory parity, the exact P6d journey, and
-`cargo test --workspace`; hosted CI, exact tag, and prebuilt evidence remain
+`0.12.0-alpha.3`; this does not establish a pullable commit, tag, or prebuilt.
+Local formatting, static/contract validation, MSRV trust-root tests, and
+focused Rust checks pass for this checkpoint. A full `cargo test --workspace`
+run still reproduces six Domain Pack lifecycle failures identically on this
+worktree and the clean `0.12.0-alpha.2` base, so complete workspace-test
+readiness is not claimed. Hosted CI, an exact tag, and prebuilt evidence remain
 pending.
 `describe`/`status` retirement diagnostics use payload schema `0.2`, and
 consumers of that extended surface must be at least `0.5.0`. The
@@ -47,9 +49,34 @@ canonical table in `README.md`.
   and explanation.
 - **Forge**: the model-agnostic protocol and runtime that governs state,
   obligations, authority, evidence, and continuity.
+- **Solo Dogfood Ready**: the first product-readiness milestone in which one
+  owner and their host agents complete the governed development loop under
+  explicitly cooperative authority without claiming actor independence or
+  enterprise compliance.
+- **Enterprise Compliance Ready**: a later product-readiness milestone in
+  which externally separated human, reviewer, and runtime authority plus
+  independently reviewed field evidence support compliance claims.
 - **Intent Proposal**: the host agent's typed interpretation of the human's
   desired outcome, constraints, preferences, unacceptable outcomes, and open
   uncertainty.
+- **Conversation-Derived Intent**: an Intent Proposal durably accepted from
+  ordinary human-agent chat without requiring the human to operate Forge.
+- **Forge Chat Activation**: one invocation of the Forge start skill activates
+  the protocol for the entire current human-agent chat. Task changes, phase
+  changes, retries, and internal agent handoffs do not require another
+  invocation; a new chat does.
+- **Cooperative Conversation Authority**: the Solo Dogfood trust level in which
+  Forge accepts agent-carried chat provenance without claiming independent
+  proof of human presence.
+- **Agent Autonomy Boundary**: the agent owns method choice and reversible
+  execution while the human retains irreducible value and material-risk
+  decisions.
+- **Governed Promotion**: the authority boundary at which freely iterated,
+  isolated agent work is admitted into the canonical project state with bound
+  diff, evidence, effects, recovery, and receipts.
+- **Host Capability Conformance**: the open-world, versioned evidence contract
+  by which any host can prove specific Forge capabilities without a host-name
+  whitelist or host-specific policy inside the Forge core.
 - **Project Snapshot**: a derived, evidence-backed view of the project's current
   state. It is not a hand-edited status document.
 - **Obligation**: a condition that must become true or be explicitly waived by

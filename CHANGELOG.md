@@ -477,6 +477,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0-alpha.3] — 2026-07-28
+
+### Added
+
+- **Solo Dogfood Ready execution contract.** Added the host-neutral Solo
+  Cooperative profile specification and an ordered, auditable 21-ticket backlog
+  for taking one developer and their agents through the governed development
+  loop before broader team or enterprise claims.
+- **Fail-closed source CI verdict.** Added regression-checked classification of
+  mandatory versus informational jobs, plus an explicit two-phase trust-root
+  migration so the policy checker lands before the protected workflow topology
+  it authorizes.
+
+### Changed
+
+- **CLI architecture consolidation.** Centralized effect vocabulary and
+  credential-custody behavior, removed superseded command and placeholder
+  modules, and kept validator parity coverage aligned with the Solo Dogfood
+  ticket inventory.
+
+### Notes
+
+- This is a source checkpoint only. Hosted CI, an exact `v0.12.0-alpha.3` tag,
+  release assets, and real-host Solo Dogfood qualification remain separate
+  evidence and are not claimed by the version bump.
+- A full WSL `cargo test --workspace` run still reproduces six Domain Pack
+  lifecycle failures identically on this worktree and the clean alpha.2 base.
+  The checkpoint does not claim that pre-existing workspace-test debt is closed.
+
 ## [0.12.0-alpha.2] — 2026-07-25
 
 ### Added
