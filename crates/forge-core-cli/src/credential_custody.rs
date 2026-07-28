@@ -57,7 +57,13 @@ pub(crate) fn read_signing_key(path: &Path) -> Result<SigningKey, ExitError> {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write as _;
+
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    encoded
 }
 
 #[cfg(test)]
@@ -81,6 +87,11 @@ mod tests {
         let directory = Path::new("/operator/secrets");
         let first = secret_path(directory, "credential-one");
         assert_eq!(first, secret_path(directory, "credential-one"));
+        assert_eq!(
+            first,
+            directory
+                .join("020f85bc4a5074beee0ff7599adc11829ded3eaa0acf3f59f5c944e0907a0332.ed25519")
+        );
         assert_eq!(first.parent(), Some(directory));
         assert_eq!(
             first.extension().and_then(|value| value.to_str()),

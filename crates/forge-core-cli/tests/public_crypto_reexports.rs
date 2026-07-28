@@ -22,8 +22,12 @@ fn historical_crypto_items_remain_available_from_cli_root() {
         forge_core_cli::host_adapter_types::HostAdapterCommandKind::Validation
     );
 
-    // Binding the function item is a compile-time downstream API assertion.
-    let _verification_entrypoint = forge_core_cli::run_host_adapter_artifact_verification;
+    // The explicit function-pointer coercion is a compile-time downstream API
+    // assertion without invoking the verifier.
+    let _: fn(
+        forge_core_cli::HostAdapterArtifactVerificationInput,
+    ) -> forge_core_cli::HostAdapterArtifactVerification =
+        forge_core_cli::run_host_adapter_artifact_verification;
 }
 
 #[test]
