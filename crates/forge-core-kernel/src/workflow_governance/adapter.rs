@@ -96,13 +96,14 @@ use forge_core_decisions::{
     WorkflowGovernanceStatus,
 };
 use forge_core_domain_pack_tcb::{
-    lock_domain_pack_lifecycle_for_project, AdmittedActiveDomainPackGeneration,
-    DomainPackLifecycleStoreError, LockedDomainPackLifecycle,
+    lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
+    AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
+    LockedCoreOnlyDomainPackLifecycleObservation, LockedDomainPackLifecycleObservation,
 };
 use forge_core_store::claim_wal::{
     project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
 };
-use forge_core_store::retained_crash_replace::reconcile_file_crash_safe_under_owned_lock;
+use forge_core_store::retained_crash_replace::observe_file_crash_safe_under_owned_lock;
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::workflow_action_replay::{
     begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
@@ -699,7 +700,7 @@ pub struct ReplacementContinuityProjection {
 /// transaction ends. This enforces the global lifecycle -> workflow-ledger
 /// lock order even for projects that currently have no active generation.
 enum LockedWorkflowDomainPackContext {
-    CoreOnly(Box<LockedDomainPackLifecycle>),
+    CoreOnly(Box<LockedCoreOnlyDomainPackLifecycleObservation>),
     Active(Box<AdmittedActiveDomainPackGeneration>),
 }
 
@@ -732,11 +733,14 @@ impl LockedWorkflowDomainPackContext {
         project_root: &Path,
         state_root: &Path,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
-        let lifecycle = lock_domain_pack_lifecycle_for_project(project_root, state_root)?;
-        if lifecycle.projection().active_pointer.is_some() {
-            Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
-        } else {
-            Ok(Self::CoreOnly(Box::new(lifecycle)))
+        match observe_domain_pack_lifecycle_for_project(project_root, state_root)? {
+            LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) => {
+                debug_assert!(lifecycle.projection().active_pointer.is_none());
+                Ok(Self::CoreOnly(Box::new(lifecycle)))
+            }
+            LockedDomainPackLifecycleObservation::Active(lifecycle) => {
+                Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
+            }
         }
     }
 
@@ -2020,7 +2024,7 @@ impl WorkflowGovernanceProjectAdapter {
                 .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
                     source: format!("cannot lock Domain Pack rebase plan: {error}"),
                 })?;
-            let session = reconcile_file_crash_safe_under_owned_lock(
+            let observation = observe_file_crash_safe_under_owned_lock(
                 lock,
                 Path::new(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH),
                 DOMAIN_PACK_REBASE_PLAN_MAX_BYTES,
@@ -2028,6 +2032,9 @@ impl WorkflowGovernanceProjectAdapter {
             .map_err(|error| WorkflowGovernanceAdapterError::ProjectBinding {
                 source: format!("cannot recover Domain Pack rebase plan: {error}"),
             })?;
+            let Some(session) = observation.into_present_session() else {
+                return Ok(false);
+            };
             let Some(mut read) = session.read_exact().map_err(|error| {
                 WorkflowGovernanceAdapterError::ProjectBinding {
                     source: format!("cannot retain exact Domain Pack rebase plan: {error}"),
@@ -8808,6 +8815,32 @@ mod tests {
         (root, state)
     }
 
+    fn crash_replace_residue_paths(root: &Path) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in fs::read_dir(&directory).expect("walk Forge state") {
+                let entry = entry.expect("Forge state entry");
+                let file_type = entry.file_type().expect("Forge state entry type");
+                if file_type.is_dir() {
+                    pending.push(entry.path());
+                    continue;
+                }
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.contains(".forge-retained-delete-")
+                    || name.contains(".forge-crash-absence-claim-")
+                    || name.ends_with(".forge-next")
+                    || name.ends_with(".forge-previous")
+                    || name.ends_with(".forge-transaction")
+                {
+                    found.push(entry.path());
+                }
+            }
+        }
+        found
+    }
+
     fn coordination_request_document() -> RequestContractDocument {
         yaml_serde::from_str(include_str!(
             "../../../../contracts/requests/worker-state-transition-request.yaml"
@@ -10472,6 +10505,36 @@ mod tests {
     }
 
     #[test]
+    fn clean_rebase_plan_observation_leaves_no_placeholder_or_cleanup_debt() {
+        let (root, state) = temp_project("clean-rebase-plan-observation");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.clean-rebase-observation".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+
+        for _ in 0..4 {
+            assert!(
+                !adapter
+                    .recover_pending_release_rebase()
+                    .expect("observe absent rebase plan"),
+                "an absent rebase plan has nothing to recover"
+            );
+        }
+
+        assert!(
+            !state.join(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH).exists(),
+            "read-only rebase recovery must leave the plan absent"
+        );
+        assert!(
+            crash_replace_residue_paths(&state).is_empty(),
+            "read-only rebase recovery must not create placeholders or cleanup debt"
+        );
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup");
+    }
+
+    #[test]
     fn initializes_and_derives_first_policy_without_state_yaml() {
         let (root, state) = temp_project("init-next");
         fs::write(state.join("state.yaml"), "current_phase: 4-build-verify\n")
@@ -10554,6 +10617,21 @@ mod tests {
         );
         assert!(!next.domain_pack_degraded);
         assert!(next.domain_pack_gaps.is_empty());
+        for _ in 0..3 {
+            adapter.initialize().expect("repeated initialization");
+            adapter.next().expect("repeated guidance");
+            adapter.resume().expect("repeated resume");
+        }
+        assert!(
+            crash_replace_residue_paths(&state).is_empty(),
+            "read-only init/next/resume must not create crash-replace residue"
+        );
+        assert!(
+            !state
+                .join(forge_core_domain_pack_tcb::DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH)
+                .exists(),
+            "read-only workflow observation must leave absent Domain Pack pointer absent"
+        );
     }
 
     #[test]

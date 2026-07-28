@@ -219,6 +219,76 @@ fn tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
     entries
 }
 
+fn run_workflow_json(app: &Path, subcommand: &str) -> Value {
+    let output = bin()
+        .args(["workflow", subcommand, "--root"])
+        .arg(app)
+        .arg("--json")
+        .output()
+        .unwrap_or_else(|error| panic!("run workflow {subcommand}: {error}"));
+    assert!(
+        output.status.success(),
+        "workflow {subcommand} failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "parse workflow {subcommand} envelope: {error}; stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    })
+}
+
+fn resolved_state_root(app: &Path) -> PathBuf {
+    let output = bin()
+        .args(["project", "resolve", "--root"])
+        .arg(app)
+        .arg("--json")
+        .output()
+        .expect("resolve project after workflow handoff");
+    assert!(
+        output.status.success(),
+        "project resolve failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let envelope: Value =
+        serde_json::from_slice(&output.stdout).expect("parse project resolve envelope");
+    PathBuf::from(
+        envelope["data"]["state_root"]
+            .as_str()
+            .expect("project resolve exposes the actual state root"),
+    )
+}
+
+fn crash_replace_residue_paths(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).expect("walk actual Forge state root") {
+            let entry = entry.expect("Forge state entry");
+            let file_type = entry.file_type().expect("Forge state entry type");
+            if file_type.is_dir() {
+                pending.push(entry.path());
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.contains(".forge-retained-delete-")
+                || name.contains(".forge-crash-absence-claim-")
+                || name.ends_with(".forge-next")
+                || name.ends_with(".forge-previous")
+                || name.ends_with(".forge-transaction")
+            {
+                found.push(entry.path());
+            }
+        }
+    }
+    found
+}
+
 fn assert_agent_native_workflow_handoff(env: &Value, app: &Path, state: &str) {
     let root = app.display().to_string();
     assert_eq!(
@@ -344,6 +414,31 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     assert!(next["data"]["authorization"]["setup_gaps"]
         .as_array()
         .is_some_and(Vec::is_empty));
+
+    for _ in 0..3 {
+        for subcommand in ["init", "next", "resume"] {
+            let envelope = run_workflow_json(&app, subcommand);
+            assert_eq!(
+                envelope["data"]["readiness_profile"], "solo_cooperative",
+                "repeated workflow {subcommand} process must retain the solo profile"
+            );
+        }
+    }
+
+    let state_root = resolved_state_root(&app);
+    assert!(
+        crash_replace_residue_paths(&state_root).is_empty(),
+        "real init/next/resume processes must not create crash-replace residue"
+    );
+    for relative in [
+        "domain-packs/active.lock.yaml",
+        "domain-packs/rebase-plan.yaml",
+    ] {
+        assert!(
+            !state_root.join(relative).exists(),
+            "read-only solo workflow must leave {relative} absent in the actual state root"
+        );
+    }
 }
 
 #[test]

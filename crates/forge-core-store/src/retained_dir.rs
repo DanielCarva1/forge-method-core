@@ -2696,7 +2696,11 @@ mod platform {
             FileMode::WriteNew => libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
             FileMode::ReadWriteNewDelete => libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
         } | libc::O_NOFOLLOW
-            | libc::O_CLOEXEC;
+            | libc::O_CLOEXEC
+            // Opening a FIFO can block before metadata validation. Nonblocking
+            // is inert for regular files and lets every hostile special leaf
+            // fail closed at `validate_leaf` instead of hanging the observer.
+            | libc::O_NONBLOCK;
         openat(parent, value, flags, 0o600)
     }
 

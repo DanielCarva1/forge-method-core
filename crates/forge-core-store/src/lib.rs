@@ -58,7 +58,8 @@ pub mod workflow_broker_admin;
 /// claims WAL into a typed projection. See [`fn@derive_state`] for the contract.
 pub use derive_state::derive_state;
 pub use retained_crash_replace::{
-    OwnedRetainedCrashReplaceRead, OwnedRetainedCrashReplaceSession, RetainedCrashReplaceRead,
+    OwnedRetainedCrashReplaceObservation, OwnedRetainedCrashReplaceRead,
+    OwnedRetainedCrashReplaceSession, RetainedCrashReplaceObservation, RetainedCrashReplaceRead,
     RetainedCrashReplaceSession,
 };
 

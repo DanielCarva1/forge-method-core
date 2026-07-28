@@ -48,7 +48,8 @@ use forge_core_store::crash_replace::{
 use forge_core_store::retained_lifecycle::{
     DomainPackLifecycleCompletionInput, RetainedDomainPackActivePointerWitness,
     RetainedDomainPackExpectedActivePointer, RetainedDomainPackLifecycleCompletion,
-    RetainedDomainPackLifecycleStore, RetainedLifecycleIoError,
+    RetainedDomainPackLifecycleStore, RetainedDomainPackObservedActivePointerAbsence,
+    RetainedLifecycleIoError,
 };
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::{
@@ -324,6 +325,35 @@ pub struct LockedDomainPackLifecycle {
     recovery: CrashReplaceRecovery,
 }
 
+/// Read-only lifecycle acquisition used by observers that never mutate the
+/// Domain Pack active pointer.
+///
+/// Active generations reuse the existing strong retained authority. A
+/// core-only result instead retains an unclaimed absence witness, avoiding the
+/// placeholder lifecycle required by compare-and-swap mutation.
+pub enum LockedDomainPackLifecycleObservation {
+    CoreOnly(LockedCoreOnlyDomainPackLifecycleObservation),
+    Active(LockedDomainPackLifecycle),
+}
+
+impl fmt::Debug for LockedDomainPackLifecycleObservation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CoreOnly(_) => {
+                formatter.write_str("LockedDomainPackLifecycleObservation::CoreOnly")
+            }
+            Self::Active(_) => formatter.write_str("LockedDomainPackLifecycleObservation::Active"),
+        }
+    }
+}
+
+pub struct LockedCoreOnlyDomainPackLifecycleObservation {
+    store: RetainedDomainPackLifecycleStore,
+    project_snapshot: Arc<RetainedProjectTree>,
+    state: DomainPackLifecycleStateProjection,
+    active_pointer_absence: RetainedDomainPackObservedActivePointerAbsence,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct ActiveDomainPackGenerationMaterial {
     pointer: DomainPackActivePointerDocument,
@@ -442,9 +472,15 @@ impl fmt::Debug for AdmittedActiveDomainPackGenerationView<'_> {
 }
 
 /// Borrowed proof that no Domain Pack generation is active while the
-/// lifecycle OS lock remains retained by [`LockedDomainPackLifecycle`].
+/// lifecycle OS lock remains retained by its acquiring lifecycle guard.
 pub struct AdmittedCoreOnlyDomainPackLifecycleView<'a> {
-    _lifecycle: &'a LockedDomainPackLifecycle,
+    _lifecycle: CoreOnlyDomainPackLifecycleAuthority<'a>,
+}
+
+#[allow(dead_code)] // The references exist solely to bind the proof lifetime to its lock owner.
+enum CoreOnlyDomainPackLifecycleAuthority<'a> {
+    Strong(&'a LockedDomainPackLifecycle),
+    Observed(&'a LockedCoreOnlyDomainPackLifecycleObservation),
 }
 
 impl fmt::Debug for AdmittedCoreOnlyDomainPackLifecycleView<'_> {
@@ -877,6 +913,110 @@ pub fn lock_domain_pack_lifecycle_for_project(
     lock_domain_pack_lifecycle_for_canonical_project(&project_root, &state_root)
 }
 
+/// Acquire the lifecycle for a read-only observer.
+///
+/// Clean absence remains unclaimed: no placeholder is created at
+/// `active.lock.yaml`, while the retained lifecycle lock, root identity,
+/// descriptor-relative pathname checks, and repeated absence validation remain
+/// mandatory. If a pointer is present, the observation is promoted directly
+/// into the existing strong retained session so active-generation admission is
+/// unchanged.
+///
+/// # Errors
+///
+/// Returns a typed lock, recovery, confinement, integrity, or I/O error when
+/// either root or the retained lifecycle state cannot be proven complete.
+pub fn observe_domain_pack_lifecycle_for_project(
+    project_root: impl AsRef<Path>,
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root.as_ref())?;
+    let project_root = fs::canonicalize(project_root.as_ref())
+        .map_err(|error| io_error(project_root.as_ref(), error))?;
+    if !project_root.is_dir() {
+        return Err(invalid(
+            "project_root",
+            "must be an existing canonical project directory",
+        ));
+    }
+    let project_snapshot = Arc::new(
+        RetainedProjectTree::capture_allowing_store_owned_file_anchors(
+            &project_root,
+            DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_FILES,
+            DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_BYTES,
+        )?,
+    );
+    let lock = acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)?;
+    let store = lock.into_domain_pack_lifecycle_store_for_project(&project_snapshot)?;
+    let observation = store.observe_active_pointer(DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
+    if observation.raw_bytes().is_some() {
+        let recovery = observation.recovery().clone();
+        let session = observation.into_present_session().ok_or_else(|| {
+            invalid(
+                "active_pointer",
+                "present observation could not retain its exact pointer session",
+            )
+        })?;
+        let loaded = load_state_under_lock(&store, &project_snapshot, &session)?;
+        if let Some(completion) = &loaded.completion {
+            let selected = completion.active_pointer_witness().ok_or_else(|| {
+                stale(
+                    "selected completion omitted active-pointer authority",
+                    &loaded.projection,
+                )
+            })?;
+            store.revalidate_active_pointer(selected)?;
+            store.revalidate_lifecycle_completion(completion)?;
+        }
+        let active_pointer_authority = store.consume_reconciled_active_pointer(session)?;
+        match (
+            &loaded.projection.active_pointer,
+            active_pointer_authority.raw_bytes(),
+        ) {
+            (Some(expected), Some(bytes)) => {
+                let retained: DomainPackActivePointerDocument = parse_yaml(
+                    &store.display_path(Path::new(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH)),
+                    bytes,
+                )?;
+                if &retained != expected {
+                    return Err(stale(
+                        "exact observed active pointer differs after completion validation",
+                        &loaded.projection,
+                    ));
+                }
+            }
+            _ => {
+                return Err(stale(
+                    "observed active-pointer presence changed while consuming retained authority",
+                    &loaded.projection,
+                ));
+            }
+        }
+        store.validate_current()?;
+        return Ok(LockedDomainPackLifecycleObservation::Active(
+            LockedDomainPackLifecycle {
+                store,
+                project_snapshot,
+                state: loaded.projection,
+                active_pointer_authority,
+                completion_authority: loaded.completion,
+                recovery,
+            },
+        ));
+    }
+    let active_pointer_absence = store.consume_observed_active_pointer_absence(observation)?;
+    let state =
+        load_core_only_state_under_observation(&store, &project_snapshot, &active_pointer_absence)?;
+    Ok(LockedDomainPackLifecycleObservation::CoreOnly(
+        LockedCoreOnlyDomainPackLifecycleObservation {
+            store,
+            project_snapshot,
+            state,
+            active_pointer_absence,
+        },
+    ))
+}
+
 fn lock_domain_pack_lifecycle_for_canonical_project(
     project_root: &Path,
     state_root: &Path,
@@ -900,6 +1040,61 @@ fn lock_domain_pack_lifecycle_for_canonical_project(
         completion_authority: loaded.completion,
         recovery,
     })
+}
+
+fn load_core_only_state_under_observation(
+    store: &RetainedDomainPackLifecycleStore,
+    project_snapshot: &RetainedProjectTree,
+    active_pointer_absence: &RetainedDomainPackObservedActivePointerAbsence,
+) -> Result<DomainPackLifecycleStateProjection, DomainPackLifecycleStoreError> {
+    store.revalidate_observed_active_pointer_absence(active_pointer_absence)?;
+    project_snapshot.revalidate_without_store_owned_file_anchors()?;
+    for directory in ["ledger", "generations", "receipts", "objects", "staging"] {
+        let path = Path::new(DOMAIN_PACK_STATE_RELATIVE_ROOT).join(directory);
+        if store.directory_exists(&path)? {
+            return Err(DomainPackLifecycleStoreError::InvalidDocument {
+                path: store.display_path(&path),
+                reason: "lifecycle residue exists without an active pointer".to_owned(),
+            });
+        }
+    }
+    store.revalidate_observed_active_pointer_absence(active_pointer_absence)?;
+    Ok(DomainPackLifecycleStateProjection {
+        active_pointer: None,
+        active_lock: None,
+        ledger_records: Vec::new(),
+    })
+}
+
+impl LockedCoreOnlyDomainPackLifecycleObservation {
+    #[must_use]
+    pub fn projection(&self) -> &DomainPackLifecycleStateProjection {
+        &self.state
+    }
+
+    /// Revalidate core-only state while retaining the lifecycle OS lock.
+    ///
+    /// No target placeholder is created. The absence, protocol sidecars,
+    /// lifecycle namespace, project snapshot, and residue directories are
+    /// checked again before the borrowed view is returned.
+    pub fn verified_core_only_view(
+        &self,
+    ) -> Result<AdmittedCoreOnlyDomainPackLifecycleView<'_>, DomainPackLifecycleStoreError> {
+        let current = load_core_only_state_under_observation(
+            &self.store,
+            &self.project_snapshot,
+            &self.active_pointer_absence,
+        )?;
+        if current != self.state {
+            return Err(stale(
+                "Domain Pack lifecycle is not a stable observed core-only state",
+                &current,
+            ));
+        }
+        Ok(AdmittedCoreOnlyDomainPackLifecycleView {
+            _lifecycle: CoreOnlyDomainPackLifecycleAuthority::Observed(self),
+        })
+    }
 }
 
 impl LockedDomainPackLifecycle {
@@ -978,7 +1173,9 @@ impl LockedDomainPackLifecycle {
                 &current,
             ));
         }
-        Ok(AdmittedCoreOnlyDomainPackLifecycleView { _lifecycle: self })
+        Ok(AdmittedCoreOnlyDomainPackLifecycleView {
+            _lifecycle: CoreOnlyDomainPackLifecycleAuthority::Strong(self),
+        })
     }
 
     /// Consume the lifecycle handle and admit the exact durable active

@@ -8,8 +8,10 @@
 use crate::crash_replace::CrashReplaceError;
 use crate::retained_crash_replace::{
     reconcile_file_crash_safe_at_owned_retained_target,
+    reconcile_file_crash_safe_at_owned_retained_target_for_observation,
     replace_file_crash_safe_at_retained_target_with_witness, ConsumedRetainedCrashReplaceAbsence,
-    ConsumedRetainedCrashReplaceLeaf, RetainedCrashReplaceSession, RetainedCrashReplaceTarget,
+    ConsumedRetainedCrashReplaceLeaf, ConsumedRetainedCrashReplaceObservedAbsence,
+    RetainedCrashReplaceObservation, RetainedCrashReplaceSession, RetainedCrashReplaceTarget,
     RetainedExpectedTarget,
 };
 use crate::retained_dir::{
@@ -25,6 +27,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 const DOMAIN_PACK_LIFECYCLE_ROOT: &str = "domain-packs";
 const DOMAIN_PACK_LIFECYCLE_LOCK: &str = "locks/domain-packs.lifecycle.lock";
@@ -45,11 +48,18 @@ const DOMAIN_PACK_LIFECYCLE_ANCHOR_ROOT: &str = ".forge-lifecycle-anchors";
 #[derive(Debug)]
 pub struct RetainedDomainPackLifecycleStore {
     lock: EffectStoreLock,
+    instance_token: Arc<RetainedDomainPackLifecycleStoreInstance>,
     state_root_identity: RetainedFileIdentity,
     lifecycle_root: RetainedDirectory,
     lifecycle_root_identity: RetainedFileIdentity,
     project_root_binding: Option<RetainedProjectRootBinding>,
 }
+
+/// Per-acquisition identity. Platform file identities can be reused across
+/// sequential Store acquisitions, so observation witnesses additionally retain
+/// this opaque allocation and require pointer identity with their producer.
+#[derive(Debug)]
+struct RetainedDomainPackLifecycleStoreInstance;
 
 /// Opaque exact active-pointer leaf retained beneath one lifecycle Store.
 ///
@@ -74,6 +84,19 @@ pub struct RetainedDomainPackActivePointerAbsenceWitness {
     lifecycle_root_identity: RetainedFileIdentity,
     lifecycle_lock_identity: RetainedFileIdentity,
     reconciled_binding: Option<ConsumedRetainedCrashReplaceAbsence>,
+}
+
+/// Opaque unclaimed observation that the fixed active pointer was absent.
+///
+/// This witness is valid only while retained beside the Store that owns the
+/// lifecycle lock. Revalidation performs fresh descriptor-relative absence
+/// checks and never grants compare-and-swap authority.
+pub struct RetainedDomainPackObservedActivePointerAbsence {
+    producer_instance: Arc<RetainedDomainPackLifecycleStoreInstance>,
+    state_root_identity: RetainedFileIdentity,
+    lifecycle_root_identity: RetainedFileIdentity,
+    lifecycle_lock_identity: RetainedFileIdentity,
+    reconciled_binding: ConsumedRetainedCrashReplaceObservedAbsence,
 }
 
 /// Exact active-pointer state accepted by production lifecycle replacement.
@@ -388,6 +411,7 @@ impl EffectStoreLock {
         })?;
         let store = RetainedDomainPackLifecycleStore {
             lock: self,
+            instance_token: Arc::new(RetainedDomainPackLifecycleStoreInstance),
             state_root_identity,
             lifecycle_root,
             lifecycle_root_identity,
@@ -1077,6 +1101,80 @@ impl RetainedDomainPackLifecycleStore {
         )
         .map_err(|error| self.crash_io_error(Path::new(DOMAIN_PACK_ACTIVE_POINTER), error))?;
         reconcile_file_crash_safe_at_owned_retained_target(target, maximum)
+    }
+
+    /// Reconcile and observe the fixed active pointer without claiming absence.
+    ///
+    /// A present pointer retains the same exact handle and bytes as the strong
+    /// reconciliation path. Clean absence retains the lifecycle lock and
+    /// descriptor-bound directory but creates no placeholder and therefore
+    /// grants no mutation authority.
+    pub fn observe_active_pointer(
+        &self,
+        maximum: u64,
+    ) -> Result<RetainedCrashReplaceObservation<'_>, CrashReplaceError> {
+        self.validate_current()
+            .map_err(|error| self.crash_error(error))?;
+        let directory = self
+            .lifecycle_root
+            .try_clone()
+            .map_err(|error| self.crash_io_error(Path::new(DOMAIN_PACK_ACTIVE_POINTER), error))?;
+        let target = RetainedCrashReplaceTarget::new(
+            &self.lock,
+            directory,
+            PathBuf::from(DOMAIN_PACK_ACTIVE_POINTER),
+        )
+        .map_err(|error| self.crash_io_error(Path::new(DOMAIN_PACK_ACTIVE_POINTER), error))?;
+        reconcile_file_crash_safe_at_owned_retained_target_for_observation(target, maximum)
+    }
+
+    /// Consume one absent read-only observation into a Store-bound witness.
+    ///
+    /// This does not reopen or occupy `active.lock.yaml`. A present observation
+    /// is rejected and must instead be converted to the strong present session.
+    pub fn consume_observed_active_pointer_absence(
+        &self,
+        observation: RetainedCrashReplaceObservation<'_>,
+    ) -> Result<RetainedDomainPackObservedActivePointerAbsence, CrashReplaceError> {
+        let reconciled_binding = observation
+            .consume_observed_absence(&self.lock, Path::new(DOMAIN_PACK_ACTIVE_POINTER))?;
+        Ok(RetainedDomainPackObservedActivePointerAbsence {
+            producer_instance: Arc::clone(&self.instance_token),
+            state_root_identity: self.state_root_identity.clone(),
+            lifecycle_root_identity: self.lifecycle_root_identity.clone(),
+            lifecycle_lock_identity: self.lock.lock_identity.clone(),
+            reconciled_binding,
+        })
+    }
+
+    /// Revalidate an unclaimed active-pointer absence against this exact Store.
+    pub fn revalidate_observed_active_pointer_absence(
+        &self,
+        witness: &RetainedDomainPackObservedActivePointerAbsence,
+    ) -> Result<(), RetainedLifecycleIoError> {
+        self.validate_current()?;
+        if !Arc::ptr_eq(&witness.producer_instance, &self.instance_token)
+            || witness.state_root_identity != self.state_root_identity
+            || witness.lifecycle_root_identity != self.lifecycle_root_identity
+            || witness.lifecycle_lock_identity != self.lock.lock_identity
+        {
+            return Err(lifecycle_identity_error(
+                &self.lock,
+                Path::new(DOMAIN_PACK_ACTIVE_POINTER),
+                "observed active-pointer absence belongs to a different lifecycle Store".to_owned(),
+            ));
+        }
+        witness
+            .reconciled_binding
+            .revalidate_binding(&self.lock, Path::new(DOMAIN_PACK_ACTIVE_POINTER))
+            .map_err(|error| {
+                lifecycle_identity_error(
+                    &self.lock,
+                    Path::new(DOMAIN_PACK_ACTIVE_POINTER),
+                    error.to_string(),
+                )
+            })?;
+        self.validate_current()
     }
 
     /// Consume the exact active-pointer reconciliation session into long-lived

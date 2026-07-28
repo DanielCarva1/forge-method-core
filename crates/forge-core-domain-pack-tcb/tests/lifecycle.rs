@@ -18,9 +18,10 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, lock_domain_pack_lifecycle,
-    lock_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
-    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
-    DomainPackLifecycleStoreError, DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
+    lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
+    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
+    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
+    LockedDomainPackLifecycleObservation, DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -3645,6 +3646,166 @@ fn verified_core_only_view_borrows_the_retained_lifecycle_lock() {
     drop(lifecycle);
     lock_domain_pack_lifecycle(&root).expect("dropping core-only owner releases lock");
     fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn read_only_core_observation_leaves_no_absence_claim_or_delete_quarantine() {
+    let root = temp_state_root("read-only-core-observation");
+    let project_root = root.parent().expect("project root");
+
+    for _ in 0..4 {
+        let observed = observe_domain_pack_lifecycle_for_project(project_root, &root)
+            .expect("observe clean core-only lifecycle");
+        let LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) = observed else {
+            panic!("empty lifecycle must remain core-only");
+        };
+        lifecycle
+            .verified_core_only_view()
+            .expect("revalidate clean unclaimed absence");
+    }
+
+    let mut unexpected = Vec::new();
+    let mut pending = vec![root.clone()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).expect("walk state root") {
+            let entry = entry.expect("state entry");
+            let file_type = entry.file_type().expect("entry type");
+            if file_type.is_dir() {
+                pending.push(entry.path());
+            } else {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.contains(".forge-retained-delete-")
+                    || name.contains(".forge-crash-absence-claim-")
+                {
+                    unexpected.push(entry.path());
+                }
+            }
+        }
+    }
+    assert!(
+        unexpected.is_empty(),
+        "read-only absence must not create cleanup debt: {unexpected:?}"
+    );
+    assert!(
+        !root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH).exists(),
+        "read-only absence must not materialize the active pointer"
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn observed_absence_is_bound_to_one_exact_lifecycle_store_acquisition() {
+    let root = temp_state_root("read-only-store-instance-binding");
+    let lock_a =
+        forge_core_store::acquire_effect_store_lock(&root, "locks/domain-packs.lifecycle.lock")
+            .expect("first lifecycle lock");
+    let store_a = lock_a
+        .into_domain_pack_lifecycle_store()
+        .expect("first retained lifecycle Store");
+    let observation = store_a
+        .observe_active_pointer(64 * 1024)
+        .expect("observe absence through Store A");
+    let witness = store_a
+        .consume_observed_active_pointer_absence(observation)
+        .expect("retain Store A observation witness");
+    store_a
+        .revalidate_observed_active_pointer_absence(&witness)
+        .expect("producer Store accepts its exact witness");
+    drop(store_a);
+
+    let lock_b =
+        forge_core_store::acquire_effect_store_lock(&root, "locks/domain-packs.lifecycle.lock")
+            .expect("second lifecycle lock");
+    let store_b = lock_b
+        .into_domain_pack_lifecycle_store()
+        .expect("second retained lifecycle Store over the same root");
+    store_b
+        .revalidate_observed_active_pointer_absence(&witness)
+        .expect_err("Store B must reject Store A's per-acquisition witness");
+
+    drop(witness);
+    drop(store_b);
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn read_only_observation_preserves_active_generation_admission() {
+    let fixture = Fixture::new();
+    let raw = RawArtifactFixture::new(&fixture);
+    let root = temp_state_root("read-only-active-generation");
+    commit_integrated_install(&root, &fixture, &raw);
+
+    let observed =
+        observe_domain_pack_lifecycle_for_project(root.parent().expect("project root"), &root)
+            .expect("observe active lifecycle");
+    let LockedDomainPackLifecycleObservation::Active(lifecycle) = observed else {
+        panic!("installed generation must remain active");
+    };
+    assert!(lifecycle.projection().active_pointer.is_some());
+    let admitted = lifecycle
+        .admit_active_generation()
+        .expect("promote exact observed pointer");
+    admitted
+        .verified_view()
+        .expect("revalidate active generation");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn read_only_core_observation_rejects_non_file_active_pointer() {
+    let root = temp_state_root("read-only-active-pointer-directory");
+    fs::create_dir_all(root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH))
+        .expect("create hostile pointer directory");
+
+    observe_domain_pack_lifecycle_for_project(root.parent().expect("project root"), &root)
+        .expect_err("active pointer directory must fail closed");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn read_only_core_observation_rejects_active_pointer_symlink() {
+    let root = temp_state_root("read-only-active-pointer-symlink");
+    fs::create_dir_all(root.join("domain-packs")).expect("create lifecycle directory");
+    let outside = root
+        .parent()
+        .expect("project root")
+        .join("outside-active-pointer.yaml");
+    fs::write(&outside, b"hostile\n").expect("write hostile target");
+    std::os::unix::fs::symlink(&outside, root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH))
+        .expect("create hostile pointer symlink");
+
+    observe_domain_pack_lifecycle_for_project(root.parent().expect("project root"), &root)
+        .expect_err("active pointer symlink must fail closed");
+    fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
+}
+
+#[test]
+fn read_only_core_observation_rejects_namespace_replacement_after_acquire() {
+    let root = temp_state_root("read-only-core-namespace-replacement");
+    let project_root = root.parent().expect("project root");
+    let observed = observe_domain_pack_lifecycle_for_project(project_root, &root)
+        .expect("observe empty lifecycle");
+    let LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) = observed else {
+        panic!("empty lifecycle must remain core-only");
+    };
+    let authority = root.join("domain-packs");
+    let displaced = root.join("domain-packs-displaced");
+    fs::rename(&authority, &displaced).expect("displace observed namespace");
+    fs::create_dir_all(root.join("domain-packs/generations"))
+        .expect("create replacement lifecycle namespace");
+    fs::write(root.join("domain-packs/generations/residue"), b"hostile")
+        .expect("write replacement residue");
+
+    lifecycle
+        .verified_core_only_view()
+        .expect_err("replacement namespace must invalidate observed absence");
+    assert_eq!(
+        fs::read(root.join("domain-packs/generations/residue")).expect("replacement residue"),
+        b"hostile",
+        "read-only revalidation must not modify a substituted namespace"
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
 }
 
 #[test]

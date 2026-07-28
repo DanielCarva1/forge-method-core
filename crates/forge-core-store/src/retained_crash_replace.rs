@@ -284,6 +284,25 @@ pub struct RetainedCrashReplaceSession<'lock> {
     maximum: u64,
 }
 
+/// Read-only observation of one already-reconciled replacement leaf.
+///
+/// Unlike [`RetainedCrashReplaceSession`], an absent observation does not
+/// occupy the target with a Store-minted placeholder. It therefore cannot be
+/// consumed as replacement authority. The retained producer lock and
+/// descriptor-bound directory still remain live, and absence can only be used
+/// after a fresh namespace revalidation.
+#[must_use = "read-only reconciliation must remain retained through observation"]
+pub struct RetainedCrashReplaceObservation<'lock> {
+    lock: RetainedSessionLock<'lock>,
+    target: RetainedCrashReplaceBinding,
+    recovery: CrashReplaceRecovery,
+    leaf: RetainedObservedLeaf,
+    maximum: u64,
+}
+
+/// Read-only observation that owns its exact effect lock.
+pub type OwnedRetainedCrashReplaceObservation = RetainedCrashReplaceObservation<'static>;
+
 /// A reconciliation session that owns the exact effect lock rather than
 /// borrowing it. This form can be stored directly in higher-level authority
 /// objects without a self-reference.
@@ -367,6 +386,14 @@ enum RetainedReconciledLeaf {
     Absent(RetainedAbsenceClaim),
 }
 
+enum RetainedObservedLeaf {
+    Present {
+        retained: RetainedDigest,
+        bytes: Vec<u8>,
+    },
+    Absent,
+}
+
 struct RetainedAbsenceClaim {
     directory: RetainedDirectory,
     target_name: PathBuf,
@@ -409,6 +436,11 @@ pub(crate) struct ConsumedRetainedCrashReplaceAbsence {
     claim: RetainedAbsenceClaim,
 }
 
+/// Unclaimed absence observation transferred without a second target lookup.
+pub(crate) struct ConsumedRetainedCrashReplaceObservedAbsence {
+    target: RetainedCrashReplaceBinding,
+}
+
 impl ConsumedRetainedCrashReplaceAbsence {
     pub(crate) fn revalidate_binding(
         &self,
@@ -433,10 +465,45 @@ impl ConsumedRetainedCrashReplaceAbsence {
     }
 }
 
+impl ConsumedRetainedCrashReplaceObservedAbsence {
+    pub(crate) fn revalidate_binding(
+        &self,
+        expected_lock: &EffectStoreLock,
+        expected_target: &Path,
+    ) -> io::Result<()> {
+        if self.target.target_relative_path != expected_target {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "observed absence is bound to a different target",
+            ));
+        }
+        let target = self.target.bind(expected_lock)?;
+        let names = names(&target).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid retained observation binding: {error}"),
+            )
+        })?;
+        validate_observed_absence(&target, &names)
+    }
+}
+
 impl fmt::Debug for RetainedCrashReplaceSession<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("RetainedCrashReplaceSession")
+            .field("target_relative_path", &self.target.target_relative_path)
+            .field("recovery", &self.recovery)
+            .field("digest", &self.digest())
+            .field("byte_length", &self.raw_bytes().map(<[u8]>::len))
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for RetainedCrashReplaceObservation<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RetainedCrashReplaceObservation")
             .field("target_relative_path", &self.target.target_relative_path)
             .field("recovery", &self.recovery)
             .field("digest", &self.digest())
@@ -1388,6 +1455,65 @@ fn reconcile_file_crash_safe_into_parts(
     Ok((recovery, leaf))
 }
 
+fn validate_observed_absence(
+    target: &RetainedCrashReplaceTarget<'_>,
+    names: &Names,
+) -> io::Result<()> {
+    target.validate()?;
+    for name in [
+        &names.target,
+        &names.next,
+        &names.previous,
+        &names.transaction,
+    ] {
+        target.require_absent(name)?;
+    }
+    target.validate()
+}
+
+fn reconcile_file_crash_safe_into_observation_parts(
+    target: &RetainedCrashReplaceTarget<'_>,
+    maximum: u64,
+) -> Result<(CrashReplaceRecovery, RetainedObservedLeaf), CrashReplaceError> {
+    validate_common(target, maximum)?;
+    let names = names(target)?;
+    let RetainedRecoveryResult {
+        result: recovery,
+        target: recovered_target,
+    } = reconcile(target, &names, maximum)?;
+    let leaf = (|| -> io::Result<RetainedObservedLeaf> {
+        if let Some(mut retained) = recovered_target {
+            if recovery.target_digest.as_deref() != Some(retained.digest.as_str()) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "reconciled target differs from marker finalization authority",
+                ));
+            }
+            revalidate_retained_digest_handle(&mut retained, maximum)?;
+            let bytes = crate::read_retained_effect_leaf(&mut retained.file, maximum)?;
+            if sha256_content_hash(&bytes) != retained.digest {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "reconciled target bytes differ from marker finalization digest",
+                ));
+            }
+            revalidate_retained_digest_handle(&mut retained, maximum)?;
+            Ok(RetainedObservedLeaf::Present { retained, bytes })
+        } else {
+            if recovery.target_digest.is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "reconciled absence differs from marker finalization result",
+                ));
+            }
+            validate_observed_absence(target, &names)?;
+            Ok(RetainedObservedLeaf::Absent)
+        }
+    })()
+    .map_err(|error| io_error(&target.target_path, error))?;
+    Ok((recovery, leaf))
+}
+
 pub(crate) fn reconcile_file_crash_safe_at_owned_retained_target(
     target: RetainedCrashReplaceTarget<'_>,
     maximum: u64,
@@ -1401,6 +1527,134 @@ pub(crate) fn reconcile_file_crash_safe_at_owned_retained_target(
         leaf,
         maximum,
     })
+}
+
+pub(crate) fn reconcile_file_crash_safe_at_owned_retained_target_for_observation(
+    target: RetainedCrashReplaceTarget<'_>,
+    maximum: u64,
+) -> Result<RetainedCrashReplaceObservation<'_>, CrashReplaceError> {
+    let lock = target.lock;
+    let (recovery, leaf) = reconcile_file_crash_safe_into_observation_parts(&target, maximum)?;
+    Ok(RetainedCrashReplaceObservation {
+        lock: RetainedSessionLock::Borrowed(lock),
+        target: RetainedCrashReplaceBinding::from_target(target),
+        recovery,
+        leaf,
+        maximum,
+    })
+}
+
+impl<'lock> RetainedCrashReplaceObservation<'lock> {
+    /// Recovery action and exact target digest produced by reconciliation.
+    #[must_use]
+    pub fn recovery(&self) -> &CrashReplaceRecovery {
+        &self.recovery
+    }
+
+    /// Digest of the exact reconciled target, or `None` for observed absence.
+    #[must_use]
+    pub fn digest(&self) -> Option<&str> {
+        match &self.leaf {
+            RetainedObservedLeaf::Present { retained, .. } => Some(&retained.digest),
+            RetainedObservedLeaf::Absent => None,
+        }
+    }
+
+    /// Exact bytes from marker finalization's retained target handle.
+    #[must_use]
+    pub fn raw_bytes(&self) -> Option<&[u8]> {
+        match &self.leaf {
+            RetainedObservedLeaf::Present { bytes, .. } => Some(bytes),
+            RetainedObservedLeaf::Absent => None,
+        }
+    }
+
+    /// Revalidate a clean unclaimed absence without minting or deleting any
+    /// filesystem object.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the retained lock/root/directory binding changed, the target
+    /// appeared, or a crash-replacement protocol sidecar appeared.
+    pub fn revalidate_absence(&self) -> io::Result<()> {
+        if !matches!(self.leaf, RetainedObservedLeaf::Absent) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "present crash-replacement observation is not absence authority",
+            ));
+        }
+        let target = self.target.bind(self.lock.as_ref())?;
+        let names = names(&target).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid retained observation binding: {error}"),
+            )
+        })?;
+        validate_observed_absence(&target, &names)
+    }
+
+    /// Convert an exact present observation into the existing strong session.
+    ///
+    /// Observed absence is deliberately not convertible: mutation requires a
+    /// Store-minted claimed-absence session.
+    #[must_use]
+    pub fn into_present_session(self) -> Option<RetainedCrashReplaceSession<'lock>> {
+        let Self {
+            lock,
+            target,
+            recovery,
+            leaf,
+            maximum,
+        } = self;
+        match leaf {
+            RetainedObservedLeaf::Present { retained, bytes } => {
+                Some(RetainedCrashReplaceSession {
+                    lock,
+                    target,
+                    recovery,
+                    leaf: RetainedReconciledLeaf::Present { retained, bytes },
+                    maximum,
+                })
+            }
+            RetainedObservedLeaf::Absent => None,
+        }
+    }
+
+    /// Consume an unclaimed absence into a binding that a higher-level Store
+    /// can retain beside the producer lock.
+    pub(crate) fn consume_observed_absence(
+        self,
+        expected_lock: &EffectStoreLock,
+        expected_target: &Path,
+    ) -> Result<ConsumedRetainedCrashReplaceObservedAbsence, CrashReplaceError> {
+        if !std::ptr::eq(self.lock.as_ref(), expected_lock)
+            || self.target.target_relative_path != expected_target
+        {
+            return Err(CrashReplaceError::InvalidArgument {
+                field: "reconciliation_observation",
+                reason: "retained observation is bound to a different lock, root, parent, or leaf"
+                    .to_owned(),
+            });
+        }
+        let target = self
+            .target
+            .bind(expected_lock)
+            .map_err(|error| io_error(&self.target.target_path, error))?;
+        let names = names(&target)?;
+        match self.leaf {
+            RetainedObservedLeaf::Absent => {
+                validate_observed_absence(&target, &names)
+                    .map_err(|error| io_error(&self.target.target_path, error))?;
+                Ok(ConsumedRetainedCrashReplaceObservedAbsence {
+                    target: self.target,
+                })
+            }
+            RetainedObservedLeaf::Present { .. } => Err(CrashReplaceError::InvalidArgument {
+                field: "reconciliation_observation",
+                reason: "present observation cannot become an absence binding".to_owned(),
+            }),
+        }
+    }
 }
 
 impl<'lock> RetainedCrashReplaceSession<'lock> {
@@ -1732,6 +1986,29 @@ pub fn reconcile_file_crash_safe_under_owned_lock(
     let (recovery, leaf) = reconcile_file_crash_safe_into_parts(&target, maximum)?;
     let target = RetainedCrashReplaceBinding::from_target(target);
     Ok(RetainedCrashReplaceSession {
+        lock: RetainedSessionLock::Owned(lock),
+        target,
+        recovery,
+        leaf,
+        maximum,
+    })
+}
+
+/// Reconcile one descriptor-relative target for observation while moving the
+/// exact effect lock into the returned capability.
+///
+/// Clean absence is unclaimed and creates no target placeholder. A caller that
+/// observes a present leaf may convert it to the existing strong session and
+/// exact read; absence cannot be converted into mutation authority.
+pub fn observe_file_crash_safe_under_owned_lock(
+    lock: EffectStoreLock,
+    target_relative: &Path,
+    maximum: u64,
+) -> Result<OwnedRetainedCrashReplaceObservation, CrashReplaceError> {
+    let target = bind_target(&lock, target_relative)?;
+    let (recovery, leaf) = reconcile_file_crash_safe_into_observation_parts(&target, maximum)?;
+    let target = RetainedCrashReplaceBinding::from_target(target);
+    Ok(RetainedCrashReplaceObservation {
         lock: RetainedSessionLock::Owned(lock),
         target,
         recovery,
@@ -3051,5 +3328,139 @@ mod tests {
         drop(exact);
         drop(lock);
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn observed_absence_revalidation_rejects_every_late_protocol_leaf_without_mutation() {
+        let variants = [
+            ("target", "packs/active.lock.yaml"),
+            ("next", "packs/.active.lock.yaml.forge-next"),
+            ("previous", "packs/.active.lock.yaml.forge-previous"),
+            ("transaction", "packs/.active.lock.yaml.forge-transaction"),
+        ];
+        for (label, hostile_relative) in variants {
+            let root = temp_root(&format!("observed-late-{label}"));
+            let lock = acquire_effect_store_lock(&root, LOCK).expect("lifecycle lock");
+            let observation =
+                observe_file_crash_safe_under_owned_lock(lock, Path::new(TARGET), MAX_BYTES)
+                    .expect("observe clean absence");
+            assert!(observation.raw_bytes().is_none());
+
+            let hostile = root.join(hostile_relative);
+            let hostile_bytes = format!("hostile {label}\n").into_bytes();
+            fs::write(&hostile, &hostile_bytes).expect("create late hostile protocol leaf");
+            observation
+                .revalidate_absence()
+                .expect_err("late protocol leaf must invalidate observed absence");
+            assert_eq!(
+                fs::read(&hostile).expect("reread hostile protocol leaf"),
+                hostile_bytes,
+                "read-only revalidation must not mutate a late {label} leaf"
+            );
+
+            drop(observation);
+            fs::remove_dir_all(root).expect("cleanup");
+        }
+    }
+
+    #[cfg(unix)]
+    fn assert_fifo_observation_is_bounded(label: &str, hostile_relative: &str) {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt as _;
+        use std::os::unix::fs::FileTypeExt as _;
+        use std::os::unix::io::FromRawFd as _;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let root = temp_root(&format!("observed-fifo-{label}"));
+        fs::create_dir_all(root.join("packs")).expect("create target parent");
+        let fifo = root.join(hostile_relative);
+        let fifo_name = CString::new(fifo.as_os_str().as_bytes()).expect("FIFO path without NUL");
+        // SAFETY: `fifo_name` is a valid NUL-terminated pathname for this call.
+        let created = unsafe { libc::mkfifo(fifo_name.as_ptr(), 0o600) };
+        assert_eq!(
+            created,
+            0,
+            "create hostile FIFO: {}",
+            io::Error::last_os_error()
+        );
+
+        let worker_root = root.clone();
+        let (sender, receiver) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let outcome = match acquire_effect_store_lock(&worker_root, LOCK) {
+                Ok(lock) => {
+                    match observe_file_crash_safe_under_owned_lock(
+                        lock,
+                        Path::new(TARGET),
+                        MAX_BYTES,
+                    ) {
+                        Ok(_) => (false, "hostile FIFO was accepted".to_owned()),
+                        Err(error) => (true, error.to_string()),
+                    }
+                }
+                Err(error) => (false, format!("lock acquisition failed: {error}")),
+            };
+            let _ = sender.send(outcome);
+        });
+
+        let outcome = match receiver.recv_timeout(Duration::from_secs(2)) {
+            Ok(outcome) => outcome,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // A regression that opened the FIFO in blocking mode is released
+                // deterministically before failing, so the test runner cannot hang.
+                // SAFETY: `fifo_name` remains valid; a successful descriptor is
+                // immediately wrapped in `File` for deterministic close.
+                let fd = unsafe {
+                    libc::open(
+                        fifo_name.as_ptr(),
+                        libc::O_RDWR | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                    )
+                };
+                assert!(
+                    fd >= 0,
+                    "release blocked FIFO observer: {}",
+                    io::Error::last_os_error()
+                );
+                // SAFETY: `fd` is newly owned after successful `open`.
+                let release = unsafe { File::from_raw_fd(fd) };
+                let released = receiver
+                    .recv_timeout(Duration::from_secs(2))
+                    .expect("FIFO observer must exit after deterministic release");
+                drop(release);
+                worker.join().expect("join released FIFO observer");
+                fs::remove_dir_all(&root).expect("cleanup timed-out FIFO fixture");
+                panic!(
+                    "observer blocked on hostile {label} FIFO before validation: {}",
+                    released.1
+                );
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                worker.join().expect("surface FIFO observer panic");
+                panic!("FIFO observer exited without reporting a result");
+            }
+        };
+        worker.join().expect("join FIFO observer");
+        assert!(
+            outcome.0,
+            "hostile {label} FIFO must fail closed: {}",
+            outcome.1
+        );
+        assert!(
+            fs::symlink_metadata(&fifo)
+                .expect("FIFO remains present")
+                .file_type()
+                .is_fifo(),
+            "observer must not mutate hostile {label} FIFO"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn observation_rejects_target_and_sidecar_fifos_without_blocking() {
+        assert_fifo_observation_is_bounded("target", "packs/active.lock.yaml");
+        assert_fifo_observation_is_bounded("next", "packs/.active.lock.yaml.forge-next");
     }
 }
