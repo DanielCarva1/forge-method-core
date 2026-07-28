@@ -88,7 +88,7 @@ record_contract:
 scheduling_invariants:
 - Every pre_stabilization_source record must be source_complete with no remaining_source_work before C3.2 opens.
 - Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through
-  /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic
+  /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic
   compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts
   and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.
 - C3.2 is stabilization only; it may execute deferred runtime, full-suite, failure-injection, project-linked-build,
@@ -1909,10 +1909,14 @@ current_records:
   - C1.1
   - C4.2
   notes:
-    rejects Codex CLI 0.143.0 for human-origin assurance, while contracts/plan/product-gap-closure-plan.yaml:84-92
-    still records selected_host=none. C4.1 therefore owns Codex deterministically as a named-host breadth result.
-    The host-neutral FRUST-011/FRUST-060 contracts and testkit now exist, but the negative spike is not yet an executed
-    exact host_capability_result bound to the current typed case/result digests and independently reviewed field evidence.'
+  - >-
+    The negative spike rejects Codex CLI 0.143.0 for human-origin assurance,
+    while contracts/plan/product-gap-closure-plan.yaml:84-92 still records
+    selected_host=none. C4.1 therefore owns Codex deterministically as a
+    named-host breadth result. The host-neutral FRUST-011/FRUST-060 contracts
+    and testkit now exist, but the negative spike is not yet an executed exact
+    host_capability_result bound to the current typed case/result digests and
+    independently reviewed field evidence.
 - id: FRUST-001
   title: Rust-only backlog reconciliation
   campaign_item: null

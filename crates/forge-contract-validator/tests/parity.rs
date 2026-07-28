@@ -284,6 +284,10 @@ fn assert_both_reject(root: &Path, expected_text: &str) {
 
 fn copy_validation_tree(source: &Path, target: &Path) {
     copy_dir(&source.join("contracts"), &target.join("contracts"));
+    copy_dir(
+        &source.join(".scratch").join("solo-dogfood-readiness"),
+        &target.join(".scratch").join("solo-dogfood-readiness"),
+    );
     copy_validation_source(
         source,
         target,

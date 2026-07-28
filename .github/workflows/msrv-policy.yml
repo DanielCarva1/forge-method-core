@@ -2,7 +2,7 @@ name: MSRV Policy
 
 on:
   pull_request_target:
-    branches: [main]
+    branches: [master, main]
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:

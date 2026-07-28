@@ -74,8 +74,8 @@ EXPECTED_ADJUDICATED_DISPOSITIONS = {
 }
 
 PLAN_PER_PART = [
-    "Use compiler errors as the implementation work queue: every coherent source batch must pass a compile-only check through /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py with --locked or --frozen and an explicit -p/--package scope before work moves on. The launcher replaces inherited executable, native-tool, config, proxy, shell, Python, Git, and Rust injection variables, verifies a root-owned non-symlink Cargo/rustc/rustdoc chain, and exposes only /usr/bin for native child discovery. Cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, but it must not execute project tests or binaries.",
-    "Run /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets periodically across accumulated source batches; the same launcher with metadata --locked --no-deps --format-version 1 may inspect the workspace without executing project tests or binaries. Non-hermetic direct Cargo and unknown wrappers fail closed.",
+    "Use compiler errors as the implementation work queue: every coherent source batch must pass a compile-only check through /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py with --locked or --frozen and an explicit -p/--package scope before work moves on. The launcher replaces inherited executable, native-tool, config, proxy, shell, Python, Git, and Rust injection variables, verifies a root-owned non-symlink Cargo/rustc/rustdoc chain, and exposes only /usr/bin for native child discovery. Cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, but it must not execute project tests or binaries.",
+    "Run /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets periodically across accumulated source batches; the same launcher with metadata --locked --no-deps --format-version 1 may inspect the workspace without executing project tests or binaries. Non-hermetic direct Cargo and unknown wrappers fail closed.",
     "Write package, contract, adversarial, fixture, and failure-injection test source with its owning story, but defer runtime tests, full suites, E2E, stress, fuzz, bench, project linked or release builds, MSRV/platform matrices, archives, hosted CI, publication, independent review, and field evidence.",
 ]
 PLAN_CLOSURE = [
@@ -83,7 +83,7 @@ PLAN_CLOSURE = [
     "Reserve runtime and cumulative test evidence, failure injection, project linked and release builds, native-platform and MSRV matrices, release archives, and hosted timing for C3.2; publication for C3.3; and real-host plus independent-review evidence for C3.4.",
 ]
 INVENTORY_COMPILER_INVARIANTS = {
-    "Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.",
+    "Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.",
     "C3.2 is stabilization only; it may execute deferred runtime, full-suite, failure-injection, project-linked-build, platform, archive, and hosted gates but may not own missing source implementation.",
     "A source_complete value records source state and does not by itself claim compiler-feedback, runtime, full-suite, hosted, publication, independent-review, or field evidence passed.",
 }
@@ -91,7 +91,7 @@ COMPILER_FEEDBACK_POLICY = {
     "mode": "compiler_errors_as_work_queue",
     "active_before_item": "C3.2",
     "hermetic_launcher_only": True,
-    "canonical_launcher": "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py",
+    "canonical_launcher": "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py",
     "trusted_cargo_path": "/opt/forge-method/rust-1.85.1/bin/cargo",
     "trusted_rustc_path": "/opt/forge-method/rust-1.85.1/bin/rustc",
     "trusted_rustdoc_path": "/opt/forge-method/rust-1.85.1/bin/rustdoc",
@@ -109,11 +109,11 @@ COMPILER_FEEDBACK_POLICY = {
     "execution_boundary": "The canonical launcher rejects any mutable or symlinked Cargo/rustc/rustdoc chain, replaces the inherited environment, and exposes only root-owned /usr/bin for native child discovery. Compile-only cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, including building proc-macro artifacts; it must not execute project tests or binaries.",
     "requires_structurally_valid_policy": True,
     "coherent_batch_requirement": "Every coherent source batch passes a compile-only locked or frozen package-scoped check through the canonical hermetic launcher before work moves on.",
-    "periodic_workspace_requirement": "Accumulated source batches periodically pass /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets.",
+    "periodic_workspace_requirement": "Accumulated source batches periodically pass /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets.",
     "allowed_command_shapes": [
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) (-p|--package) <workspace-package> [reviewed compile-only selectors]",
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) --workspace [reviewed compile-only selectors]",
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py metadata (--locked|--frozen) --no-deps --format-version 1",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) (-p|--package) <workspace-package> [reviewed compile-only selectors]",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) --workspace [reviewed compile-only selectors]",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py metadata (--locked|--frozen) --no-deps --format-version 1",
     ],
     "allowed_check_flags": [
         "--all-targets",

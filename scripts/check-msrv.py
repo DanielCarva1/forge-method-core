@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import shlex
 import sys
 import tomllib
@@ -19,6 +21,7 @@ except ImportError:  # Fail closed rather than interpreting security topology as
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 POLICY_WORKFLOW = ROOT / ".github/workflows/msrv-policy.yml"
+ROLLOUT_CONTRACT = ROOT / "contracts/migration/msrv-policy-v2-rollout.yaml"
 DECLARED_MSRV = "1.85"
 TOOLCHAIN = "1.85.1"
 CHECKOUT_ACTION = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
@@ -50,8 +53,52 @@ CARGO_COMMAND = (
     "cargo +1.85.1 check --manifest-path candidate/Cargo.toml --locked "
     "--workspace --all-targets --all-features"
 )
+STATIC_TOOL_TEST_COMMAND = (
+    "python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests "
+    "--budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- "
+    "bash -c 'python scripts/test-run-ci-tier.py && "
+    "python -I scripts/test-check-static-structured-text.py && "
+    "python -I scripts/test-check-ci-verdict.py && "
+    "python scripts/test-check-test-inventory.py && "
+    "python scripts/test-check-real-host-evidence.py && "
+    "python scripts/test-release-policy.py && "
+    "python scripts/test-release-archive.py'"
+)
+MSRV_REGRESSION_COMMAND = (
+    "FORGE_MSRV_CANDIDATE_ROOT=candidate "
+    "python -I trusted/scripts/run-ci-tier.py --tier msrv-topology-tests "
+    "--budget-seconds 360 --report target/ci-timing/msrv-topology-tests.json -- "
+    "python -I trusted/scripts/test-msrv.py"
+)
+REQUIRED_CI_RESULT_JOBS = ("static_docs", "msrv", "focused")
+INFORMATIONAL_CHANNEL_JOBS = ("platform", "expensive-journey")
+CI_VERDICT_COMMAND = (
+    'python -I trusted/scripts/check-ci-verdict.py '
+    '--mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" '
+    '--mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" '
+    '--mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" '
+    '--informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" '
+    '--informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" '
+    '"${{ needs[\'expensive-journey\'].result }}"'
+)
 
 POLICY_COMMAND = TRUSTED_CHECK_COMMAND
+LEGACY_WORKFLOW_DIGEST = (
+    "395ed0da560d68809556406b27cb29e17a05946a285562fbb929ae02c082735c"
+)
+FINAL_WORKFLOW_DIGEST = (
+    "471aa5c6c19efdef298315054db2ab8700301d4c9bc7b6561931552a4637ebb0"
+)
+FOCUSED_JOB_DIGEST = (
+    "cfd44e3bd628c0bf848048e9012eb7ce0d59dcd310eb8254d6b79702f1ef2fa7"
+)
+PROTECTED_TRUST_FILES = (
+    "scripts/check-msrv.py",
+    "scripts/check-ci-verdict.py",
+    "scripts/test-msrv.py",
+    "scripts/check-static-structured-text.py",
+    "scripts/test-check-static-structured-text.py",
+)
 
 
 class MsrvCheckError(RuntimeError):
@@ -122,6 +169,36 @@ def parse_workflow(source: str) -> dict[str, Any]:
     return document
 
 
+def _normalized_digest(value: Any) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("ascii")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _trusted_rollout_state() -> str:
+    """Classify only the two audited protected-base workflow states."""
+    path = ROOT / ".github/workflows/ci.yml"
+    try:
+        document = parse_workflow(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise MsrvCheckError(
+            f"cannot read protected-base CI workflow for rollout state: {error}"
+        ) from error
+    digest = _normalized_digest(document)
+    if digest == LEGACY_WORKFLOW_DIGEST:
+        return "bootstrap"
+    if digest == FINAL_WORKFLOW_DIGEST:
+        return "enforced"
+    raise MsrvCheckError(
+        "protected-base CI workflow is neither the audited bootstrap state nor "
+        f"the enforced state; digest={digest}"
+    )
+
+
 def validate_unambiguous_yaml(source: str) -> None:
     """Compatibility entry point for callers that only require strict parsing."""
     parse_workflow(source)
@@ -144,20 +221,32 @@ def _require_regular_data_file(path: Path, root: Path, label: str) -> None:
 
 
 def _require_trusted_checker_parity(root: Path) -> None:
-    candidate = root / "scripts/check-msrv.py"
-    trusted = Path(__file__).resolve()
-    _require_regular_data_file(candidate, root, "candidate MSRV checker")
-    try:
-        candidate_bytes = candidate.read_bytes()
-        trusted_bytes = trusted.read_bytes()
-    except OSError as error:
-        raise MsrvCheckError(
-            f"cannot compare candidate MSRV checker with protected base: {error}"
-        ) from error
-    if candidate_bytes != trusted_bytes:
-        raise MsrvCheckError(
-            "candidate MSRV checker differs from the protected-base trust root"
+    trusted_root = Path(__file__).resolve().parents[1]
+    for relative in PROTECTED_TRUST_FILES:
+        candidate = root / relative
+        trusted = trusted_root / relative
+        label = (
+            "candidate MSRV checker"
+            if relative == "scripts/check-msrv.py"
+            else f"candidate protected trust file {relative}"
         )
+        _require_regular_data_file(candidate, root, label)
+        try:
+            candidate_bytes = candidate.read_bytes()
+            trusted_bytes = trusted.read_bytes()
+        except OSError as error:
+            raise MsrvCheckError(
+                f"cannot compare {relative} with protected base: {error}"
+            ) from error
+        if candidate_bytes != trusted_bytes:
+            if relative == "scripts/check-msrv.py":
+                raise MsrvCheckError(
+                    "candidate MSRV checker differs from the protected-base trust root"
+                )
+            raise MsrvCheckError(
+                f"candidate protected trust file {relative} differs from "
+                "the protected-base trust root"
+            )
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -343,8 +432,20 @@ def _check_static_docs_job(value: Any) -> None:
             {"name", "timeout-minutes", "run"},
         ),
         (
+            "Provision exact YAML parser for protected policy regressions",
+            {
+                "name": "Provision exact YAML parser for protected policy regressions",
+                "run": PYYAML_INSTALL_COMMAND,
+            },
+        ),
+        (
             "Test CI and evidence tooling failure semantics",
-            {"name", "timeout-minutes", "shell", "run"},
+            {
+                "name": "Test CI and evidence tooling failure semantics",
+                "timeout-minutes": "3",
+                "shell": "bash",
+                "run": STATIC_TOOL_TEST_COMMAND,
+            },
         ),
         ("Check formatting", {"name", "timeout-minutes", "run"}),
         (
@@ -381,6 +482,134 @@ def _check_static_docs_job(value: Any) -> None:
             )
 
 
+def _check_focused_job(value: Any) -> None:
+    job = _exact_mapping(
+        value,
+        "focused job",
+        {"name", "needs", "runs-on", "timeout-minutes", "env", "steps"},
+    )
+    _exact_value(
+        job["name"],
+        "Focused package and integration evidence",
+        "focused job name",
+    )
+    _exact_value(job["needs"], "static_docs", "focused job dependency")
+    _exact_value(job["runs-on"], "ubuntu-latest", "focused job runner")
+    _exact_value(job["timeout-minutes"], "45", "focused job timeout")
+    _exact_value(
+        job["env"],
+        {"FORGE_CI_CACHE_CONTEXT": "Swatinem/rust-cache@v2"},
+        "focused job environment",
+    )
+    steps = job["steps"]
+    if not isinstance(steps, list) or not steps:
+        raise MsrvCheckError("focused job steps must be a non-empty exact ordered list")
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            raise MsrvCheckError(f"focused job step {index} must be a YAML mapping")
+        run = step.get("run")
+        if "run" in step and not isinstance(run, str):
+            raise MsrvCheckError(
+                f"focused job step {index} run command must be a string"
+            )
+    digest = _normalized_digest(job)
+    if digest != FOCUSED_JOB_DIGEST:
+        raise MsrvCheckError(
+            "focused job topology, conditions, and commands must match the "
+            f"reviewed exact protected projection; digest={digest}"
+        )
+
+
+def _reject_allowed_failure(value: Any, job_id: str) -> None:
+    if not isinstance(value, dict):
+        raise MsrvCheckError(f"required CI job {job_id!r} must be a YAML mapping")
+    if "continue-on-error" in value:
+        raise MsrvCheckError(
+            f"required CI job {job_id!r} cannot use allowed-failure semantics"
+        )
+    steps = value.get("steps")
+    if not isinstance(steps, list):
+        raise MsrvCheckError(f"required CI job {job_id!r} steps must be a YAML list")
+    for step in steps:
+        if isinstance(step, dict) and "continue-on-error" in step:
+            name = step.get("name", "<unnamed>")
+            raise MsrvCheckError(
+                f"required CI job {job_id!r} step {name!r} cannot use "
+                "allowed-failure semantics"
+            )
+
+
+def _check_ci_verdict_topology(jobs: dict[str, Any]) -> None:
+    for job_id in REQUIRED_CI_RESULT_JOBS:
+        _reject_allowed_failure(jobs[job_id], job_id)
+    _check_focused_job(jobs["focused"])
+
+    expected_informational_names = {
+        "platform": "[informational prerelease] ${{ matrix.name }} platform observation",
+        "expensive-journey": (
+            "[informational prerelease] Linux P6d reference journey observation"
+        ),
+    }
+    for job_id in INFORMATIONAL_CHANNEL_JOBS:
+        value = jobs[job_id]
+        if not isinstance(value, dict):
+            raise MsrvCheckError(
+                f"informational prerelease CI job {job_id!r} must be a YAML mapping"
+            )
+        _exact_value(
+            value.get("name"),
+            expected_informational_names[job_id],
+            f"informational prerelease CI job {job_id!r} name",
+        )
+        _exact_value(
+            value.get("continue-on-error"),
+            "true",
+            f"informational prerelease CI job {job_id!r} allowed-failure marker",
+        )
+
+    verdict = _exact_mapping(
+        jobs["ci-verdict"],
+        "ci-verdict job",
+        {"name", "needs", "if", "runs-on", "timeout-minutes", "steps"},
+    )
+    _exact_value(
+        verdict["name"], "Required source-only CI verdict", "ci-verdict job name"
+    )
+    _exact_value(
+        verdict["needs"],
+        [
+            "static_docs",
+            "msrv",
+            "focused",
+            "platform",
+            "expensive-journey",
+        ],
+        "ci-verdict dependencies",
+    )
+    _exact_value(verdict["if"], "always()", "ci-verdict condition")
+    _exact_value(verdict["runs-on"], "ubuntu-latest", "ci-verdict runner")
+    _exact_value(verdict["timeout-minutes"], "5", "ci-verdict timeout")
+    expected_steps = [
+        {
+            "name": "Checkout immutable trusted verdict tool",
+            "uses": CHECKOUT_ACTION,
+            "with": {
+                "repository": "${{ github.repository }}",
+                "ref": TRUSTED_REF,
+                "path": "trusted",
+                "persist-credentials": "false",
+                "fetch-depth": "1",
+            },
+        },
+        {
+            "name": "Summarize mandatory terminal states and fail closed",
+            "run": CI_VERDICT_COMMAND,
+        },
+    ]
+    _exact_value(verdict["steps"], expected_steps, "ci-verdict steps")
+    _reject_allowed_failure(verdict, "ci-verdict")
+
+
 def check_policy_workflow_source(source: str) -> None:
     document = parse_workflow(source)
     root = _exact_mapping(
@@ -391,7 +620,7 @@ def check_policy_workflow_source(source: str) -> None:
         root["on"],
         {
             "pull_request_target": {
-                "branches": ["main"],
+                "branches": ["master", "main"],
                 "types": ["opened", "reopened", "synchronize", "ready_for_review"],
             }
         },
@@ -452,8 +681,18 @@ def check_policy_workflow_source(source: str) -> None:
         _exact_mapping(step, f"MSRV policy step {expected['name']!r}", set(expected))
 
 
-def check_workflow_source(source: str) -> None:
+def check_workflow_source(
+    source: str, *, bootstrap_legacy_allowed: bool = False
+) -> None:
     document = parse_workflow(source)
+    document_digest = _normalized_digest(document)
+    if document_digest == LEGACY_WORKFLOW_DIGEST:
+        if bootstrap_legacy_allowed:
+            return
+        raise MsrvCheckError(
+            "legacy CI topology is valid only during the audited bootstrap state; "
+            "the protected base is already enforced"
+        )
     root = _exact_mapping(
         document, "CI workflow", {"name", "on", "concurrency", "env", "jobs"}
     )
@@ -484,7 +723,14 @@ def check_workflow_source(source: str) -> None:
     jobs = _exact_mapping(
         root["jobs"],
         "CI jobs",
-        {"static_docs", "msrv", "focused", "platform", "expensive-journey"},
+        {
+            "static_docs",
+            "msrv",
+            "focused",
+            "platform",
+            "expensive-journey",
+            "ci-verdict",
+        },
     )
     _check_static_docs_job(jobs["static_docs"])
     job = _exact_mapping(
@@ -547,6 +793,14 @@ def check_workflow_source(source: str) -> None:
             },
         ),
         (
+            "Run protected MSRV topology regression suite",
+            {
+                "name": "Run protected MSRV topology regression suite",
+                "timeout-minutes": "7",
+                "run": MSRV_REGRESSION_COMMAND,
+            },
+        ),
+        (
             "Check complete candidate workspace at MSRV",
             {
                 "name": "Check complete candidate workspace at MSRV",
@@ -586,7 +840,7 @@ def check_workflow_source(source: str) -> None:
                 f"msrv step {name!r} fields must match the reviewed exact values"
             )
 
-    cargo = steps[4]
+    cargo = steps[5]
     argv = shlex.split(cargo["run"])
     required = {"--locked", "--workspace", "--all-targets", "--all-features"}
     if not required.issubset(argv) or argv.count(f"+{TOOLCHAIN}") != 1:
@@ -594,13 +848,25 @@ def check_workflow_source(source: str) -> None:
             "msrv Cargo command omits a locked workspace target/feature dimension"
         )
 
+    # This is the minimal cross-job coupling in the MSRV checker. It runs after
+    # the pre-existing exact MSRV assertions so their failure semantics stay
+    # stable while the protected-base parser also guards the final CI verdict.
+    _check_ci_verdict_topology(jobs)
+    if document_digest != FINAL_WORKFLOW_DIGEST:
+        raise MsrvCheckError(
+            "CI workflow differs from the exact protected final projection; "
+            f"digest={document_digest}"
+        )
+
 
 def check(
-    workflow: Path = WORKFLOW,
+    workflow: Path | None = None,
     root: Path = ROOT,
     policy_workflow: Path | None = None,
 ) -> list[str]:
+    workflow = workflow or root / ".github/workflows/ci.yml"
     policy_workflow = policy_workflow or root / ".github/workflows/msrv-policy.yml"
+    rollout_state = _trusted_rollout_state()
     packages = check_manifests(root)
     _require_regular_data_file(workflow, root, "CI workflow")
     _require_regular_data_file(policy_workflow, root, "MSRV policy workflow")
@@ -609,7 +875,10 @@ def check(
         policy_source = policy_workflow.read_text(encoding="utf-8")
     except OSError as error:
         raise MsrvCheckError(f"cannot read candidate policy data: {error}") from error
-    check_workflow_source(workflow_source)
+    check_workflow_source(
+        workflow_source,
+        bootstrap_legacy_allowed=rollout_state == "bootstrap",
+    )
     check_policy_workflow_source(policy_source)
     _require_trusted_checker_parity(root)
     return packages

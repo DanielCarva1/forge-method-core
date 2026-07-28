@@ -23,6 +23,8 @@ except ImportError:  # Fail closed rather than interpreting contracts as text.
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_ROOT = Path("/home/user/Forge-method-core")
+CANONICAL_ROOT_TEXT = CANONICAL_ROOT.as_posix()
 BASE_COMMIT = "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
 PLAN = ROOT / "contracts/plan/product-gap-closure-plan.yaml"
 CAMPAIGN = ROOT / "contracts/plan/product-gap-closure-campaign-v1.yaml"
@@ -31,8 +33,46 @@ CONTINUITY = ROOT / "contracts/plan/c2.2-campaign-continuity-v1.yaml"
 PI_LOOP = ROOT / "pi-green-loop.json"
 COMMAND_GATE = ROOT / "scripts/block-deferred-build-command.py"
 HERMETIC_COMPILE_LAUNCHER = ROOT / "scripts/hermetic-compile-feedback.py"
-HERMETIC_COMPILE_PREFIX = f"/usr/bin/python3 -I {HERMETIC_COMPILE_LAUNCHER}"
+HERMETIC_COMPILE_PREFIX = (
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/hermetic-compile-feedback.py"
+)
 SETTINGS_LOCAL = ROOT / ".claude/settings.local.json"
+SOLO_DOGFOOD_SPEC = ROOT / "contracts/spec/solo-dogfood-readiness-v0.yaml"
+SOLO_TICKET_DIRECTORY = ROOT / ".scratch/solo-dogfood-readiness/issues"
+
+SOLO_SPEC_KEYS = {
+    "schema_version",
+    "artifact_kind",
+    "spec_id",
+    "status",
+    "created_at",
+    "project",
+    "problem_statement",
+    "solution",
+    "success_definition",
+    "user_stories",
+    "delivery_backlog",
+    "implementation_decisions",
+    "testing_decisions",
+    "out_of_scope",
+    "further_notes",
+}
+SOLO_REQUIRED_CLAIMS = [
+    "skill activation",
+    "canonical project root resolution",
+    "read-only guidance",
+    "conversation-derived intent binding",
+    "cooperative evidence admission",
+    "isolated work ownership",
+    "governed canonical promotion",
+    "replacement-agent recovery",
+]
+SOLO_OUTCOMES = ["supported", "partially_supported", "unsupported"]
+SOLO_TICKET_STATUSES = {
+    "ready-for-agent",
+    "implemented-local-verified",
+    "implemented-pending-two-phase-rollout",
+}
 
 PLAN_KEYS = {
     "schema_version",
@@ -192,30 +232,205 @@ ADJUDICATED_DISPOSITIONS = {
     "FRUST-052": "assign",
 }
 FORENSIC_IDS = {f"v2-{index:03d}" for index in range(1, 27)}
-STATIC_COMMANDS = [
-    f"/usr/bin/python3 -I {ROOT}/scripts/check-static-structured-text.py",
-    f"/usr/bin/python3 -I {ROOT}/scripts/check-doc-links.py",
-    f"/usr/bin/python3 -I {ROOT}/scripts/check-msrv.py",
-    f"/usr/bin/python3 -I {ROOT}/scripts/check-release-locking.py",
-    f"/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= "
-    f"-c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check {BASE_COMMIT}",
-]
-PI_CHECKS = [
-    {"name": "structured-text", "kind": "lint", "command": STATIC_COMMANDS[0]},
-    {"name": "doc-links", "kind": "lint", "command": STATIC_COMMANDS[1]},
-    {"name": "public-promises", "kind": "lint", "command": STATIC_COMMANDS[2]},
-    {"name": "msrv-policy", "kind": "lint", "command": STATIC_COMMANDS[3]},
-    {"name": "release-locking", "kind": "lint", "command": STATIC_COMMANDS[4]},
-    {"name": "diff-check", "kind": "lint", "command": STATIC_COMMANDS[5]},
+
+
+class StaticCheckInventoryError(ValueError):
+    """The declared static-check inventory cannot be resolved exactly once."""
+
+
+def resolve_check_inventory(
+    commands: list[str],
+    references: list[dict[str, Any]],
+    required_descriptors: tuple[dict[str, str], ...] | None = None,
+) -> list[dict[str, str]]:
+    """Resolve reviewed commands against independent descriptor authority."""
+    if not isinstance(commands, list) or not all(
+        isinstance(command, str) and command for command in commands
+    ):
+        raise StaticCheckInventoryError("commands must be a list of non-empty strings")
+    duplicate_commands = sorted(
+        command for command, count in Counter(commands).items() if count > 1
+    )
+    if duplicate_commands:
+        raise StaticCheckInventoryError(
+            f"duplicate command declarations: {duplicate_commands}"
+        )
+    if not isinstance(references, list):
+        raise StaticCheckInventoryError("check references must be a list")
+
+    resolved: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+    seen_indices: set[int] = set()
+    indices: list[int] = []
+    expected_reference_keys = {"name", "kind", "command_index"}
+    for position, raw in enumerate(references):
+        if not isinstance(raw, dict) or set(raw) != expected_reference_keys:
+            raise StaticCheckInventoryError(
+                f"check reference {position} must contain exactly "
+                f"{sorted(expected_reference_keys)}"
+            )
+        name = raw["name"]
+        kind = raw["kind"]
+        command_index = raw["command_index"]
+        if not isinstance(name, str) or not name:
+            raise StaticCheckInventoryError(
+                f"check reference {position} has an invalid name"
+            )
+        if name in seen_names:
+            raise StaticCheckInventoryError(f"duplicate check name: {name!r}")
+        if not isinstance(kind, str) or not kind:
+            raise StaticCheckInventoryError(
+                f"check reference {position} has an invalid kind"
+            )
+        if isinstance(command_index, bool) or not isinstance(command_index, int):
+            raise StaticCheckInventoryError(
+                f"check reference {position} has a non-integer command index"
+            )
+        if command_index < 0 or command_index >= len(commands):
+            raise StaticCheckInventoryError(
+                f"check reference {position} points out of bounds to command "
+                f"index {command_index}; command_count={len(commands)}"
+            )
+        if command_index in seen_indices:
+            raise StaticCheckInventoryError(
+                f"duplicate command reference: index {command_index}"
+            )
+        seen_names.add(name)
+        seen_indices.add(command_index)
+        indices.append(command_index)
+        resolved.append({"name": name, "kind": kind, "command": commands[command_index]})
+
+    missing_indices = sorted(set(range(len(commands))) - seen_indices)
+    if missing_indices:
+        raise StaticCheckInventoryError(
+            f"missing command references: indices {missing_indices}"
+        )
+    expected_indices = list(range(len(commands)))
+    if indices != expected_indices:
+        raise StaticCheckInventoryError(
+            "check references must follow deterministic command order; "
+            f"expected={expected_indices}, actual={indices}"
+        )
+    if required_descriptors is not None:
+        expected_keys = {"name", "kind", "command"}
+        for position, descriptor in enumerate(required_descriptors):
+            if not isinstance(descriptor, dict) or set(descriptor) != expected_keys:
+                raise StaticCheckInventoryError(
+                    f"required descriptor {position} must contain exactly "
+                    f"{sorted(expected_keys)}"
+                )
+            if not all(
+                isinstance(descriptor[key], str) and descriptor[key]
+                for key in expected_keys
+            ):
+                raise StaticCheckInventoryError(
+                    f"required descriptor {position} contains an invalid value"
+                )
+        expected = [dict(descriptor) for descriptor in required_descriptors]
+        if resolved != expected:
+            expected_names = [descriptor["name"] for descriptor in expected]
+            actual_names = [descriptor["name"] for descriptor in resolved]
+            raise StaticCheckInventoryError(
+                "resolved inventory differs from independent required descriptor "
+                f"authority; expected={expected_names}, actual={actual_names}"
+            )
+    return resolved
+
+
+REQUIRED_PI_CHECK_DESCRIPTORS = (
+    {
+        "name": "structured-text",
+        "kind": "lint",
+        "command": (
+            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/"
+            "scripts/check-static-structured-text.py"
+        ),
+    },
+    {
+        "name": "doc-links",
+        "kind": "lint",
+        "command": (
+            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-doc-links.py"
+        ),
+    },
+    {
+        "name": "msrv-policy",
+        "kind": "lint",
+        "command": (
+            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-msrv.py"
+        ),
+    },
+    {
+        "name": "release-locking",
+        "kind": "lint",
+        "command": (
+            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/"
+            "scripts/check-release-locking.py"
+        ),
+    },
+    {
+        "name": "diff-check",
+        "kind": "lint",
+        "command": (
+            "/usr/bin/git --no-pager -c core.fsmonitor=false "
+            "-c core.untrackedCache=false -c diff.external= "
+            "-c core.attributesFile=/dev/null diff --no-ext-diff "
+            f"--no-textconv --check {BASE_COMMIT}"
+        ),
+    },
     {
         "name": "workspace-compile-feedback",
         "kind": "compile",
-        "command": f"{HERMETIC_COMPILE_PREFIX} check --locked --workspace --all-targets",
+        "command": (
+            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/"
+            "scripts/hermetic-compile-feedback.py check --locked "
+            "--workspace --all-targets"
+        ),
+    },
+)
+PI_COMMANDS = [
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-static-structured-text.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-doc-links.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-msrv.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-release-locking.py",
+    f"/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= "
+    f"-c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check {BASE_COMMIT}",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/hermetic-compile-feedback.py "
+    "check --locked --workspace --all-targets",
+]
+PI_CHECK_REFERENCES = [
+    {"name": "structured-text", "kind": "lint", "command_index": 0},
+    {"name": "doc-links", "kind": "lint", "command_index": 1},
+    {"name": "msrv-policy", "kind": "lint", "command_index": 2},
+    {"name": "release-locking", "kind": "lint", "command_index": 3},
+    {"name": "diff-check", "kind": "lint", "command_index": 4},
+    {
+        "name": "workspace-compile-feedback",
+        "kind": "compile",
+        "command_index": 5,
     },
 ]
+STATIC_COMMANDS = PI_COMMANDS[:-1]
+
+
+def pi_check_inventory() -> list[dict[str, str]]:
+    return resolve_check_inventory(
+        PI_COMMANDS,
+        PI_CHECK_REFERENCES,
+        REQUIRED_PI_CHECK_DESCRIPTORS,
+    )
+
+
+def authoritative_pi_checks() -> list[dict[str, str]]:
+    try:
+        return pi_check_inventory()
+    except StaticCheckInventoryError as error:
+        fail(f"authoritative static check inventory is invalid: {error}")
+
+
 PLAN_PER_PART = [
-    "Use compiler errors as the implementation work queue: every coherent source batch must pass a compile-only check through /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py with --locked or --frozen and an explicit -p/--package scope before work moves on. The launcher replaces inherited executable, native-tool, config, proxy, shell, Python, Git, and Rust injection variables, verifies a root-owned non-symlink Cargo/rustc/rustdoc chain, and exposes only /usr/bin for native child discovery. Cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, but it must not execute project tests or binaries.",
-    "Run /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets periodically across accumulated source batches; the same launcher with metadata --locked --no-deps --format-version 1 may inspect the workspace without executing project tests or binaries. Non-hermetic direct Cargo and unknown wrappers fail closed.",
+    "Use compiler errors as the implementation work queue: every coherent source batch must pass a compile-only check through /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py with --locked or --frozen and an explicit -p/--package scope before work moves on. The launcher replaces inherited executable, native-tool, config, proxy, shell, Python, Git, and Rust injection variables, verifies a root-owned non-symlink Cargo/rustc/rustdoc chain, and exposes only /usr/bin for native child discovery. Cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, but it must not execute project tests or binaries.",
+    "Run /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets periodically across accumulated source batches; the same launcher with metadata --locked --no-deps --format-version 1 may inspect the workspace without executing project tests or binaries. Non-hermetic direct Cargo and unknown wrappers fail closed.",
     "Write package, contract, adversarial, fixture, and failure-injection test source with its owning story, but defer runtime tests, full suites, E2E, stress, fuzz, bench, project linked or release builds, MSRV/platform matrices, archives, hosted CI, publication, independent review, and field evidence.",
 ]
 PLAN_CLOSURE = [
@@ -371,6 +586,22 @@ def relative(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def read_strict_utf8_text(path: Path, label: str, *, reject_controls: bool = False) -> str:
+    try:
+        source = path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeError) as error:
+        fail(f"cannot read strict UTF-8 file {label}: {error}")
+    if reject_controls:
+        for offset, character in enumerate(source):
+            codepoint = ord(character)
+            if (codepoint < 0x20 and character not in "\t\n\r") or codepoint == 0x7F:
+                fail(
+                    f"{label} contains forbidden control U+{codepoint:04X} "
+                    f"at character offset {offset}"
+                )
+    return source
+
+
 def repository_structured_files() -> list[Path]:
     result = subprocess.run(
         [
@@ -464,10 +695,7 @@ def parse_all() -> dict[Path, Any]:
     parsed: dict[Path, Any] = {}
     for path in repository_structured_files():
         label = relative(path)
-        try:
-            source = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            fail(f"cannot read strict UTF-8 structured file {label}: {error}")
+        source = read_strict_utf8_text(path, label, reject_controls=True)
         suffix = path.suffix.lower()
         if suffix == ".json":
             value = parse_json(source, label)
@@ -569,6 +797,250 @@ def validate_dag(
 
     for item_id in sorted(by_id):
         visit(item_id)
+
+
+def validate_solo_dogfood_spec(
+    value: Any,
+    *,
+    ticket_directory: Path | None = None,
+) -> None:
+    """Validate the Solo Dogfood typed authority and its Markdown ticket DAG."""
+    document = exact_keys(value, SOLO_SPEC_KEYS, "solo dogfood specification")
+    expected_scalars = {
+        "schema_version": "0.1",
+        "artifact_kind": "product-readiness-specification",
+        "spec_id": "solo-dogfood-readiness-v0",
+        "status": "accepted_design",
+        "project": "forge-method-core",
+    }
+    for field, expected in expected_scalars.items():
+        if document.get(field) != expected:
+            fail(f"solo dogfood specification.{field} must equal {expected!r}")
+
+    success = mapping(
+        document.get("success_definition"), "solo dogfood specification.success_definition"
+    )
+    if success.get("milestone") != "Solo Dogfood Ready":
+        fail("solo dogfood specification milestone drifted")
+    if success.get("human_forge_commands") != 0:
+        fail("solo dogfood specification must preserve zero human Forge commands")
+    host_model = success.get("host_model")
+    if not isinstance(host_model, str) or "Open-world" not in host_model:
+        fail("solo dogfood specification host model must remain open-world")
+
+    stories = document.get("user_stories")
+    if not isinstance(stories, list) or len(stories) != 28:
+        fail("solo dogfood specification must contain exactly US-001 through US-028")
+    for index, story_value in enumerate(stories, start=1):
+        story = exact_keys(
+            story_value,
+            {"id", "story"},
+            f"solo dogfood specification.user_stories[{index - 1}]",
+        )
+        expected_id = f"US-{index:03d}"
+        if story.get("id") != expected_id:
+            fail(
+                "solo dogfood specification user-story order/id drifted; "
+                f"expected={expected_id!r}, actual={story.get('id')!r}"
+            )
+        if not isinstance(story.get("story"), str) or not story["story"].strip():
+            fail(f"solo dogfood specification {expected_id}.story must be non-empty")
+
+    decisions = exact_keys(
+        document.get("implementation_decisions"),
+        {
+            "readiness_profiles",
+            "activation",
+            "conversation_derived_intent",
+            "human_decision_boundary",
+            "evidence_admission",
+            "mutation_boundary",
+            "continuity",
+            "host_support",
+            "delivery_sequence",
+        },
+        "solo dogfood specification.implementation_decisions",
+    )
+    host_support = exact_keys(
+        decisions.get("host_support"),
+        {
+            "principle",
+            "open_world_rule",
+            "project_root_resolution",
+            "initial_candidates",
+            "outcome_vocabulary",
+            "honesty_rule",
+            "required_claims",
+        },
+        "solo dogfood specification.host_support",
+    )
+    if string_list(
+        host_support.get("outcome_vocabulary"),
+        "solo dogfood specification.host_support.outcome_vocabulary",
+    ) != SOLO_OUTCOMES:
+        fail("solo dogfood host outcome vocabulary drifted")
+    if string_list(
+        host_support.get("required_claims"),
+        "solo dogfood specification.host_support.required_claims",
+    ) != SOLO_REQUIRED_CLAIMS:
+        fail("solo dogfood host required claims drifted")
+    root_resolution = exact_keys(
+        host_support.get("project_root_resolution"),
+        {"global_claim", "windows_to_wsl_bridge"},
+        "solo dogfood specification.host_support.project_root_resolution",
+    )
+    if root_resolution.get("global_claim") != "canonical project root resolution":
+        fail("canonical project root resolution must remain the global host claim")
+    bridge = root_resolution.get("windows_to_wsl_bridge")
+    if (
+        not isinstance(bridge, str)
+        or "only when" not in bridge
+        or "Native and other" not in bridge
+    ):
+        fail("Windows-to-WSL bridge must remain an explicitly conditional seam")
+
+    delivery = decisions.get("delivery_sequence")
+    if not isinstance(delivery, list) or len(delivery) != 9:
+        fail("solo dogfood delivery sequence must contain exactly SD-00 through SD-08")
+    for index, item_value in enumerate(delivery):
+        item = exact_keys(
+            item_value,
+            {"id", "title", "outcome"},
+            f"solo dogfood specification.delivery_sequence[{index}]",
+        )
+        expected_id = f"SD-{index:02d}"
+        if item.get("id") != expected_id:
+            fail(
+                "solo dogfood delivery sequence drifted; "
+                f"expected={expected_id!r}, actual={item.get('id')!r}"
+            )
+
+    testing = exact_keys(
+        document.get("testing_decisions"),
+        {
+            "quality_rule",
+            "highest_end_to_end_seam",
+            "focused_seams",
+            "required_scenarios",
+            "prior_art",
+            "release_evidence",
+        },
+        "solo dogfood specification.testing_decisions",
+    )
+    scenarios = unique_string_list(
+        testing.get("required_scenarios"),
+        "solo dogfood specification.testing_decisions.required_scenarios",
+    )
+    required_scenarios = {
+        "canonical project root resolution on every advertised host/platform combination",
+        "conditional Windows-to-WSL bridge when a Windows host targets a canonical WSL project",
+        "CI workflow is red when any mandatory dogfood job fails",
+    }
+    if not required_scenarios.issubset(scenarios):
+        fail(
+            "solo dogfood required scenarios omit host-neutral root, conditional "
+            "bridge, or mandatory-CI evidence"
+        )
+    release_evidence = mapping(
+        testing.get("release_evidence"),
+        "solo dogfood specification.testing_decisions.release_evidence",
+    )
+    if release_evidence.get("minimum_consecutive_runs") != 3:
+        fail("Solo Dogfood Ready must require three consecutive packaged runs")
+
+    backlog = exact_keys(
+        document.get("delivery_backlog"),
+        {"directory", "ticket_contract", "tickets"},
+        "solo dogfood specification.delivery_backlog",
+    )
+    if backlog.get("directory") != ".scratch/solo-dogfood-readiness/issues":
+        fail("solo dogfood ticket directory drifted")
+    ticket_contract = exact_keys(
+        backlog.get("ticket_contract"),
+        {"required_sections", "status_vocabulary"},
+        "solo dogfood specification.delivery_backlog.ticket_contract",
+    )
+    required_sections = string_list(
+        ticket_contract.get("required_sections"),
+        "solo dogfood specification.delivery_backlog.ticket_contract.required_sections",
+    )
+    if required_sections != ["What to build", "Blocked by", "Status"]:
+        fail("solo dogfood Markdown ticket section contract drifted")
+    if set(
+        unique_string_list(
+            ticket_contract.get("status_vocabulary"),
+            "solo dogfood specification.delivery_backlog.ticket_contract.status_vocabulary",
+        )
+    ) != SOLO_TICKET_STATUSES:
+        fail("solo dogfood ticket status vocabulary drifted")
+
+    tickets = indexed(
+        backlog.get("tickets"),
+        "solo dogfood specification.delivery_backlog.tickets",
+    )
+    expected_ticket_ids = {f"{index:02d}" for index in range(1, 22)}
+    if set(tickets) != expected_ticket_ids:
+        fail("solo dogfood backlog must contain exactly tickets 01 through 21")
+    for ticket_id, ticket in tickets.items():
+        exact_keys(
+            ticket,
+            {"id", "file", "blocked_by"},
+            f"solo dogfood ticket {ticket_id}",
+        )
+        filename = ticket.get("file")
+        if (
+            not isinstance(filename, str)
+            or not filename.startswith(f"{ticket_id}-")
+            or not filename.endswith(".md")
+            or Path(filename).name != filename
+        ):
+            fail(f"solo dogfood ticket {ticket_id}.file is not canonical")
+        unique_string_list(
+            ticket.get("blocked_by"), f"solo dogfood ticket {ticket_id}.blocked_by"
+        )
+    validate_dag(tickets, "blocked_by", "solo dogfood ticket")
+
+    directory = ticket_directory or SOLO_TICKET_DIRECTORY
+    if directory.is_symlink() or not directory.is_dir():
+        fail("solo dogfood ticket directory must be a regular directory")
+    expected_files = {ticket["file"] for ticket in tickets.values()}
+    actual_files = {path.name for path in directory.glob("*.md")}
+    if actual_files != expected_files:
+        fail(
+            "solo dogfood ticket/spec parity drifted; "
+            f"missing={sorted(expected_files - actual_files)}, "
+            f"unknown={sorted(actual_files - expected_files)}"
+        )
+    for ticket_id, ticket in sorted(tickets.items()):
+        path = directory / ticket["file"]
+        label = f"solo dogfood ticket {ticket_id}"
+        if path.is_symlink() or not path.is_file():
+            fail(f"{label} must be a regular non-symlink Markdown file")
+        source = read_strict_utf8_text(path, label, reject_controls=True)
+        if not re.search(rf"^# {re.escape(ticket_id)} [—-] ", source, re.MULTILINE):
+            fail(f"{label} heading does not match its typed id")
+        for section in required_sections:
+            marker = f"**{section}:**"
+            if source.count(marker) != 1:
+                fail(f"{label} must contain exactly one {marker} section")
+        status_match = re.search(r"^\*\*Status:\*\* ([^\r\n]+)$", source, re.MULTILINE)
+        if status_match is None or status_match.group(1) not in SOLO_TICKET_STATUSES:
+            fail(f"{label} status is absent or outside the closed vocabulary")
+        blocked_match = re.search(
+            r"^\*\*Blocked by:\*\* ([^\r\n]+)$", source, re.MULTILINE
+        )
+        if blocked_match is None:
+            fail(f"{label} has no Blocked by authority")
+        blocked_text = blocked_match.group(1)
+        actual_dependencies = re.findall(r"(?<!\d)(\d{2})\s+[—-]", blocked_text)
+        expected_dependencies = ticket["blocked_by"]
+        if not expected_dependencies and not blocked_text.startswith("None"):
+            fail(f"{label} must explicitly state that it has no blocker")
+        if actual_dependencies != expected_dependencies:
+            fail(
+                f"{label} blocker parity drifted; "
+                f"expected={expected_dependencies}, actual={actual_dependencies}"
+            )
 
 
 def validate_combined_source_graph(
@@ -1076,7 +1548,7 @@ def validate_inventory(value: Any) -> tuple[dict[str, Any], dict[str, dict[str, 
         string_list(document.get("scheduling_invariants"), "inventory.scheduling_invariants")
     )
     expected_compiler_invariants = {
-        "Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through /usr/bin/python3 -I /mnt/d/forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.",
+        "Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.",
         "C3.2 is stabilization only; it may execute deferred runtime, full-suite, failure-injection, project-linked-build, platform, archive, and hosted gates but may not own missing source implementation.",
         "A source_complete value records source state and does not by itself claim compiler-feedback, runtime, full-suite, hosted, publication, independent-review, or field evidence passed.",
     }
@@ -1432,8 +1904,32 @@ def validate_pi_loop(value: Any) -> None:
     document = mapping(value, relative(PI_LOOP))
     if set(document) != {"timeoutMs", "checks"}:
         fail("pi-green-loop keys drifted")
-    if document.get("timeoutMs") != 600000 or document.get("checks") != PI_CHECKS:
-        fail("pi-green-loop must contain the six reviewed static checks plus one trusted compile-only workspace check")
+    if document.get("timeoutMs") != 600000:
+        fail("pi-green-loop timeoutMs must be 600000")
+    expected = authoritative_pi_checks()
+    actual = document.get("checks")
+    if actual != expected:
+        expected_names = [check["name"] for check in expected]
+        actual_names = (
+            [
+                check.get("name")
+                if isinstance(check, dict) and isinstance(check.get("name"), str)
+                else None
+                for check in actual
+            ]
+            if isinstance(actual, list)
+            else []
+        )
+        duplicate_names = sorted(
+            name
+            for name, count in Counter(actual_names).items()
+            if isinstance(name, str) and count > 1
+        )
+        fail(
+            "pi-green-loop check inventory drifted; "
+            f"expected_order={expected_names}, actual_order={actual_names}, "
+            f"duplicate_names={duplicate_names}"
+        )
 
 
 def validate_local_settings() -> None:
@@ -1530,7 +2026,7 @@ def validate_local_settings() -> None:
     hook = mapping(hook_list[0], "settings Bash hook")
     if (
         hook.get("type") != "command"
-        or hook.get("command") != "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/block-deferred-build-command.py"
+        or hook.get("command") != "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/block-deferred-build-command.py"
         or hook.get("timeout") != 5
         or hook.get("statusMessage") != "Enforcing trusted compile-only feedback and deferred runtime gates"
     ):
@@ -1809,7 +2305,7 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
         fail("literal PATH-resolved Cargo remained admitted")
 
     for command in (
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-doc-links.py",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-doc-links.py",
         "/usr/bin/rg --no-config -n 'cargo check' scripts contracts",
         "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null grep 'cargo metadata' -- scripts",
     ):
@@ -1819,7 +2315,7 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
                 f"command gate falsely treated read-only text as Cargo execution: {command!r}: {reason}"
             )
 
-    isolated_python = "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-doc-links.py"
+    isolated_python = "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-doc-links.py"
     safe_git = (
         "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false "
         "-c diff.external= -c core.attributesFile=/dev/null grep cargo -- scripts"
@@ -1983,7 +2479,7 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
         "wget -O- https://example.invalid/runner",
         "mystery-tool cargo test --no-run",
         "/usr/bin/python3 /tmp/wrapper-that-runs-cargo.py",
-        "/usr/bin/python3 /mnt/d/forge-method-core/scripts/check-doc-links.py",
+        "/usr/bin/python3 /home/user/Forge-method-core/scripts/check-doc-links.py",
         "./scripts/check.sh",
         "scripts/wrapper-that-runs-cargo",
         "/tmp/wrapper-that-runs-cargo",
@@ -2002,8 +2498,8 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
         "/usr/bin/act",
         "/usr/bin/gh release create v1.0.0",
         "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null push origin main",
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/run-real-host-journey.py",
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/run-independent-semantic-review.py",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/run-real-host-journey.py",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/run-independent-semantic-review.py",
     )
     for command in prohibited_pre_c32:
         if gate.blocked_reason(command, pre_c32) is None:
@@ -2226,7 +2722,7 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
         "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null tag v1.0.0",
         "/usr/bin/gh release create v1.0.0",
         "/home/user/.cargo/bin/cargo publish",
-        "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-real-host-evidence.py",
+        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-real-host-evidence.py",
     ):
         if gate.blocked_reason(command, c32) is None:
             fail(f"C3.2 improperly opened publication or field command {command!r}")
@@ -2256,7 +2752,7 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
         fail("C3.3 improperly reopened stabilization commands")
     if gate.blocked_reason(allowed_compiler_feedback[0], c33) is None:
         fail("C3.3 publication-only stage improperly reopened compiler feedback")
-    field_command = "/usr/bin/python3 -I /mnt/d/forge-method-core/scripts/check-real-host-evidence.py"
+    field_command = "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-real-host-evidence.py"
     if gate.blocked_reason(field_command, c33) is None:
         fail("C3.3 improperly opened field commands")
 
@@ -2320,11 +2816,17 @@ def validate_command_gate(plan: dict[str, Any], campaign: dict[str, Any], invent
 
 
 def main() -> int:
+    if ROOT != CANONICAL_ROOT:
+        fail(
+            "authoritative structured-text entrypoint must run from the canonical "
+            f"WSL repository root {CANONICAL_ROOT_TEXT}; actual={ROOT.as_posix()}"
+        )
+    authoritative_pi_checks()
     try:
         parsed = parse_all()
     except subprocess.CalledProcessError as error:
         fail(f"git ls-files failed with status {error.returncode}")
-    for required in (PLAN, CAMPAIGN, INVENTORY, CONTINUITY, PI_LOOP):
+    for required in (PLAN, CAMPAIGN, INVENTORY, CONTINUITY, PI_LOOP, SOLO_DOGFOOD_SPEC):
         if required not in parsed:
             fail(f"required structured file is absent from the candidate set: {relative(required)}")
     plan = validate_plan(parsed[PLAN])
@@ -2333,6 +2835,7 @@ def main() -> int:
     validate_cross_authorities(plan, campaign, campaign_items, inventory, records)
     validate_continuity(parsed[CONTINUITY])
     validate_pi_loop(parsed[PI_LOOP])
+    validate_solo_dogfood_spec(parsed[SOLO_DOGFOOD_SPEC])
     validate_local_settings()
     validate_command_gate(plan, campaign, inventory)
     print(f"Static structured text: clean ({len(parsed)} files)")

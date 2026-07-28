@@ -1,0 +1,78 @@
+schema_version: "1.0"
+artifact_kind: msrv-policy-trust-root-rollout-procedure
+migration_id: msrv-policy-v2-two-phase
+status: immutable_procedure
+progress_semantics: >-
+  This artifact defines the reviewed immutable ordering and admission
+  procedure; it is not a tracker and makes no claim that either phase is
+  pending, landed, or complete. Landing state is established only from the
+  immutable default-branch history and the exact workflow digest observed
+  during a separately recorded rollout.
+reason_single_change_is_unsafe: >-
+  The current protected-base check-msrv.py requires byte-for-byte checker
+  parity and rejects the new ci-verdict job. The current protected base also
+  lacks check-ci-verdict.py. Therefore one pull request cannot both replace the
+  trust root and activate the new topology without bypassing the checker or
+  executing candidate code as trusted.
+default_branch_evidence:
+  local_remote_head: refs/remotes/origin/master
+  protected_policy_base_filters:
+    - master
+    - main
+  remote_required_checks_configuration: unverified
+  required_checks_claim: not_made
+trust_rule: >-
+  Candidate checker, verdict, and MSRV regression code is never executed as
+  trusted policy. Trusted policy code comes only from the immutable base SHA.
+states:
+  - id: phase-1-bootstrap-trust-root
+    must_land_first: true
+    ci_workflow_digest: sha256:395ed0da560d68809556406b27cb29e17a05946a285562fbb929ae02c082735c
+    ci_topology: legacy_without_ci_verdict
+    lands:
+      - scripts/check-msrv.py
+      - scripts/test-msrv.py
+      - scripts/check-ci-verdict.py
+      - scripts/test-check-ci-verdict.py
+      - scripts/check-static-structured-text.py
+      - scripts/test-check-static-structured-text.py
+      - scripts/block-deferred-build-command.py
+      - pi-green-loop.json
+      - contracts/plan/product-gap-closure-plan.yaml
+      - contracts/plan/product-gap-closure-campaign-v1.yaml
+      - contracts/plan/product-gap-closure-story-inventory-v1.yaml
+      - contracts/plan/c2.2-campaign-continuity-v1.yaml
+      - contracts/spec/solo-dogfood-readiness-v0.yaml
+      - .scratch/solo-dogfood-readiness/issues/*.md
+      - contracts/migration/markdown-debt-inventory.yaml
+      - crates/forge-contract-validator/tests/parity.rs
+      - .github/workflows/msrv-policy.yml
+      - contracts/migration/msrv-policy-v2-rollout.yaml
+      - contracts/fixtures/msrv-policy/phase-1-ci.yml
+      - contracts/fixtures/msrv-policy/phase-2-ci.yml
+    explicitly_does_not_land:
+      - .github/workflows/ci.yml
+    landing_constraint: >-
+      The old self-locking checker cannot authorize its own replacement.
+      Phase 1 therefore requires an explicitly reviewed administrative landing
+      with the immutable commit, approver, and local test evidence recorded.
+      Silently weakening, deleting, or marking the old MSRV result successful
+      is forbidden.
+    exit_condition: >-
+      The phase-1 files are present on the default branch, the policy workflow
+      covers master and main, and its immutable base checkout contains the new
+      checker, verdict tool, and regression suite.
+  - id: phase-2-activate-protected-topology
+    must_follow: phase-1-bootstrap-trust-root
+    ci_workflow_digest: sha256:471aa5c6c19efdef298315054db2ab8700301d4c9bc7b6561931552a4637ebb0
+    ci_topology: final_ci_verdict_and_protected_regressions
+    lands:
+      - .github/workflows/ci.yml
+    admission: >-
+      The phase-2 pull request must be validated by phase-1
+      trusted/scripts/check-msrv.py from the immutable base SHA. The candidate
+      checker is data only and must match the protected base byte-for-byte.
+    exit_condition: >-
+      The default branch contains the final workflow digest; mandatory
+      static_docs, msrv, and focused jobs fail closed; platform and
+      expensive-journey remain informational prerelease-channel observations only.

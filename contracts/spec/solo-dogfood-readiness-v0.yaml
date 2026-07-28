@@ -1,0 +1,565 @@
+schema_version: "0.1"
+artifact_kind: "product-readiness-specification"
+spec_id: "solo-dogfood-readiness-v0"
+status: "accepted_design"
+created_at: "2026-07-27"
+project: "forge-method-core"
+
+problem_statement: >-
+  Forge has substantial typed governance, evidence, continuity, transaction,
+  and recovery machinery, but its ordinary development journey currently
+  requires authority guarantees that a solo developer using cooperative host
+  agents cannot supply through normal chat. The result is a product that can
+  explain the next action yet blocks before durably accepting the objective,
+  admitting ordinary development evidence, or promoting agent changes. The
+  human is exposed to broker and registry concerns that belong to later
+  multi-owner or enterprise trust boundaries. Named integrations such as
+  Codex, ZCode, OpenCode, Claude, Pi.dev, and Cursor are only candidates, the
+  working runtime is in WSL, and the current CI presentation can report overall
+  success while important platform or journey jobs fail. This prevents the
+  creator from using Forge to improve Forge through the intended one-command,
+  chat-native experience.
+
+solution: >-
+  Introduce a first-class solo_cooperative readiness profile that reuses the
+  existing workflow ledger, action packets, admission, evidence, WAL, receipts,
+  recovery, and worktree isolation while making honest cooperative authority
+  sufficient for solo dogfooding. The human invokes the Forge start skill once
+  per chat. The host agent then binds objectives and material decisions from
+  ordinary conversation, autonomously researches and iterates in an isolated
+  worktree, admits provenance-bearing evidence without claiming independent
+  review, and uses Forge to govern promotion into the canonical repository.
+  External human-origin, independent-reviewer, trusted-runtime, and
+  compliance-grade brokers remain additive stricter profiles for later product
+  stages rather than blockers for the solo journey.
+
+success_definition:
+  milestone: "Solo Dogfood Ready"
+  target_user: "one repository owner working with one or more cooperative agents"
+  activation: "one Forge start skill invocation per human-agent chat"
+  human_forge_commands: 0
+  host_model: >-
+    Open-world and capability-scoped: any host may become supported by passing
+    the same versioned conformance contract without requiring host-name logic
+    in the Forge core.
+  initial_host_candidates:
+    - "Codex"
+    - "ZCode"
+    - "OpenCode"
+    - "Claude"
+    - "Pi.dev"
+    - "Cursor"
+  end_to_end_outcome: >-
+    Starting from a normal chat request, a fresh supported host agent can
+    recover project truth, bind the current objective, implement and verify an
+    isolated change, request only irreducible human decisions, promote the
+    accepted change through Forge, and leave sufficient durable state for a
+    replacement agent to continue without hidden transcript context.
+
+user_stories:
+  - id: "US-001"
+    story: >-
+      As a solo developer, I want to invoke the Forge start skill once when I
+      open a chat so that Forge remains active without repeated setup commands.
+  - id: "US-002"
+    story: >-
+      As a solo developer, I want task, phase, retry, and implementation changes
+      inside the same chat to preserve Forge activation so that the protocol
+      does not become conversational friction.
+  - id: "US-003"
+    story: >-
+      As a solo developer, I want a repeated start invocation to be idempotent
+      so that accidental reactivation cannot erase or fork project authority.
+  - id: "US-004"
+    story: >-
+      As a solo developer, I want to state objectives, constraints, preferences,
+      and corrections in ordinary chat so that I never need to author Forge
+      YAML, JSON, signatures, registry entries, or broker commands.
+  - id: "US-005"
+    story: >-
+      As a solo developer, I want the agent to show its interpreted objective
+      when ambiguity is material so that I can correct meaning before costly
+      work proceeds.
+  - id: "US-006"
+    story: >-
+      As a solo developer, I want an unambiguous conversational agreement to be
+      bound durably to the current action packet and project state so that a
+      replacement agent can recover what was accepted.
+  - id: "US-007"
+    story: >-
+      As a solo developer, I want conversational corrections to supersede prior
+      intent explicitly rather than silently rewriting history so that changes
+      of direction remain understandable.
+  - id: "US-008"
+    story: >-
+      As a solo developer, I want Forge to ask me only about product objectives,
+      material trade-offs, material risk acceptance, and irreversible or
+      external actions so that the agent remains genuinely autonomous.
+  - id: "US-009"
+    story: >-
+      As a host agent, I want to choose research, implementation, refactoring,
+      test, documentation, and retry strategies without human approval so that
+      Forge scales with agent capability instead of scripting it.
+  - id: "US-010"
+    story: >-
+      As a host agent, I want to perform reversible local work without a Forge
+      confirmation for every file edit so that iterative development remains
+      fast.
+  - id: "US-011"
+    story: >-
+      As a host agent, I want a typed explanation when Forge blocks an action so
+      that I can remediate it without exposing internal governance machinery to
+      the human.
+  - id: "US-012"
+    story: >-
+      As a solo developer, I want cooperative chat provenance recorded honestly
+      so that Forge never claims cryptographic proof that the host cannot
+      provide.
+  - id: "US-013"
+    story: >-
+      As a solo developer, I want local tests, inspections, and readbacks to be
+      admissible evidence when their provenance and subject bindings are valid
+      so that normal development can progress.
+  - id: "US-014"
+    story: >-
+      As a solo developer, I want evidence produced by the same cooperative
+      agent to remain distinguishable from independent review so that readiness
+      claims are not overstated.
+  - id: "US-015"
+    story: >-
+      As a host agent, I want to work freely in an isolated worktree so that
+      experimentation and repair do not mutate the canonical repository
+      prematurely.
+  - id: "US-016"
+    story: >-
+      As a solo developer, I want Forge to govern the promotion boundary rather
+      than every intermediate edit so that canonical changes are controlled
+      without choking agent iteration.
+  - id: "US-017"
+    story: >-
+      As a solo developer, I want a promotion to bind the accepted objective,
+      source and destination snapshots, exact diff, required evidence, declared
+      effects, and resulting receipt so that I can audit what entered the
+      canonical repository.
+  - id: "US-018"
+    story: >-
+      As a host agent, I want stale, conflicting, or out-of-scope promotions to
+      fail before canonical mutation so that concurrent work cannot be admitted
+      against the wrong state.
+  - id: "US-019"
+    story: >-
+      As a host agent, I want interrupted promotion to recover idempotently so
+      that a crash cannot leave canonical state and Forge authority disagreeing.
+  - id: "US-020"
+    story: >-
+      As a replacement agent, I want to resume the active objective, decisions,
+      unresolved obligations, evidence, worktree, and next action from durable
+      Forge state so that hidden chat history is not required.
+  - id: "US-021"
+    story: >-
+      As a solo developer, I want multiple cooperative agents to have explicit
+      identities and isolated work without pretending they are independent
+      compliance reviewers so that parallel work remains traceable.
+  - id: "US-022"
+    story: >-
+      As a host user on Windows, I want the start skill and agent to operate the
+      canonical WSL repository without copying it to a Windows filesystem so
+      that the currently working runtime can be dogfooded from my chosen host.
+  - id: "US-023"
+    story: >-
+      As a host integrator, I want any capable host to run the same conformance
+      journey without Forge core changes so that support is based on observed
+      behavior rather than a hard-coded host name.
+  - id: "US-024"
+    story: >-
+      As a solo developer, I want host support reported independently for
+      activation, read-only guidance, conversation-derived intent, evidence
+      admission, governed promotion, and recovery so that partial support is
+      not marketed as complete.
+  - id: "US-025"
+    story: >-
+      As a maintainer, I want the Solo Dogfood end-to-end journey to be a
+      mandatory hard-fail CI gate so that a green workflow cannot hide a broken
+      core journey.
+  - id: "US-026"
+    story: >-
+      As a maintainer, I want the CI journey to exercise packaged artifacts on
+      supported host and WSL boundaries so that source-only tests are not
+      confused with installable product proof.
+  - id: "US-027"
+    story: >-
+      As the Forge creator, I want real Forge improvements to be delivered
+      through this profile repeatedly so that readiness is established by
+      sustained dogfooding rather than one scripted demonstration.
+  - id: "US-028"
+    story: >-
+      As a future team adopter, I want stricter authority profiles to be
+      additive and epoch-separated so that solo evidence is preserved honestly
+      but never silently upgraded into independent or enterprise evidence.
+
+delivery_backlog:
+  directory: ".scratch/solo-dogfood-readiness/issues"
+  ticket_contract:
+    required_sections:
+      - "What to build"
+      - "Blocked by"
+      - "Status"
+    status_vocabulary:
+      - "ready-for-agent"
+      - "implemented-local-verified"
+      - "implemented-pending-two-phase-rollout"
+  tickets:
+    - id: "01"
+      file: "01-repair-authoritative-static-validator.md"
+      blocked_by: []
+    - id: "02"
+      file: "02-rebase-roadmap-to-solo-dogfood.md"
+      blocked_by: ["01"]
+    - id: "03"
+      file: "03-make-mandatory-ci-failures-visible.md"
+      blocked_by: []
+    - id: "04"
+      file: "04-activate-solo-profile-through-start-next.md"
+      blocked_by: ["02"]
+    - id: "05"
+      file: "05-bind-initial-objective-from-chat.md"
+      blocked_by: ["04"]
+    - id: "06"
+      file: "06-supersede-objective-with-history.md"
+      blocked_by: ["05"]
+    - id: "07"
+      file: "07-enforce-agent-autonomy-boundary.md"
+      blocked_by: ["05"]
+    - id: "08"
+      file: "08-admit-cooperative-evidence-honestly.md"
+      blocked_by: ["07"]
+    - id: "09"
+      file: "09-preview-governed-promotion.md"
+      blocked_by: ["08"]
+    - id: "10"
+      file: "10-apply-governed-promotion-atomically.md"
+      blocked_by: ["09"]
+    - id: "11"
+      file: "11-recover-interrupted-promotion.md"
+      blocked_by: ["10"]
+    - id: "12"
+      file: "12-resume-with-replacement-agent.md"
+      blocked_by: ["06", "07", "11"]
+    - id: "13"
+      file: "13-ship-host-neutral-conformance-kit.md"
+      blocked_by: ["12"]
+    - id: "14"
+      file: "14-conform-codex-host.md"
+      blocked_by: ["13"]
+    - id: "15"
+      file: "15-conform-zcode-host.md"
+      blocked_by: ["13"]
+    - id: "16"
+      file: "16-conform-opencode-host.md"
+      blocked_by: ["13"]
+    - id: "17"
+      file: "17-conform-claude-host.md"
+      blocked_by: ["13"]
+    - id: "18"
+      file: "18-conform-pidev-host.md"
+      blocked_by: ["13"]
+    - id: "19"
+      file: "19-conform-cursor-host.md"
+      blocked_by: ["13"]
+    - id: "20"
+      file: "20-gate-packaged-solo-journey.md"
+      blocked_by: ["01", "03", "14", "15", "16", "17", "18", "19"]
+    - id: "21"
+      file: "21-qualify-solo-dogfood-ready.md"
+      blocked_by: ["20"]
+
+implementation_decisions:
+  readiness_profiles:
+    - id: "solo_cooperative"
+      purpose: "default profile for the first dogfood milestone"
+      authority_model: >-
+        One owner delegates work to cooperative agents and accepts
+        agent-carried conversation provenance without claiming unforgeable
+        proof of human presence or actor independence.
+      admission_rule: >-
+        Cooperative authority may progress solo-scoped claims when the packet,
+        project snapshot, principal, provenance, and evidence bindings are
+        current and complete.
+    - id: "strict_external"
+      purpose: "later team and enterprise authority profile"
+      authority_model: >-
+        Human, reviewer, or runtime origin is established outside the governed
+        agent process through separated custody and administration.
+      admission_rule: >-
+        Existing external broker and separation-domain requirements remain
+        mandatory for claims that explicitly require independent authority.
+  activation:
+    scope: "current human-agent chat"
+    rule: >-
+      A successful or already-initialized start activates Forge behavior for the
+      entire chat. Internal task boundaries, policy changes, retries, handoffs,
+      and phase changes do not require another invocation.
+    new_chat_rule: >-
+      During the alpha, the human explicitly invokes the start skill once in
+      each new chat. Automatic host activation is not required.
+    repeated_invocation: "idempotent resume; never a new authority epoch by itself"
+  conversation_derived_intent:
+    reuse: >-
+      Extend the existing packet-bound local authorization seam rather than
+      create a second intent store or accept free-form transcript text as
+      authority.
+    accepted_content:
+      - "desired outcome"
+      - "constraints and preferences"
+      - "unacceptable outcomes"
+      - "material decisions and their rationale"
+      - "remaining uncertainty"
+    provenance: >-
+      Record a redacted conversation reference, host kind, chat-local
+      interaction reference when available, carrying principal, packet digest,
+      project snapshot, and acceptance time. Do not require transcript storage.
+    honesty_rule: >-
+      The resulting record proves durable cooperative acceptance, not
+      unforgeable human presence.
+    ambiguity_rule: >-
+      The agent asks for clarification only when ambiguity changes value,
+      material scope, material risk, or an irreversible or external effect.
+  human_decision_boundary:
+    requires_human:
+      - "change to product objective or success definition"
+      - "material trade-off among valid outcomes"
+      - "acceptance of material unresolved risk"
+      - "irreversible, external, production, publication, or secret-bearing action"
+    delegated_to_agent:
+      - "research and investigation"
+      - "planning and decomposition"
+      - "implementation and refactoring strategy"
+      - "local reversible file edits"
+      - "local tests, inspections, and readbacks"
+      - "documentation and evidence generation"
+      - "retries and course correction within the accepted objective"
+  evidence_admission:
+    rule: >-
+      Reuse existing claim, evaluator, provenance, subject, freshness, and
+      admission checks. Replace independence as a universal prerequisite with a
+      claim-declared requirement.
+    solo_evidence_label: "cooperative_same_owner"
+    must_not_claim:
+      - "independent semantic review"
+      - "independent runtime execution"
+      - "unforgeable human presence"
+      - "enterprise compliance"
+    strong_local_evidence:
+      - "representative execution"
+      - "authoritative business or runtime readback"
+      - "negative and adversarial cases"
+      - "cleanup or rollback verification"
+      - "package and installation proof"
+  mutation_boundary:
+    decision: "free isolated work, governed canonical promotion"
+    working_rule: >-
+      Agents may iterate autonomously inside assigned worktrees and reversible
+      local environments. Forge does not mediate every edit.
+    promotion_rule: >-
+      A canonical promotion is one governed operation bound to source and
+      destination snapshots, exact diff, objective and claim coverage, required
+      evidence, declared write set, authorization, transaction, readback, and
+      receipt.
+    conflict_rule: >-
+      Destination drift, overlapping active ownership, out-of-scope effects,
+      missing evidence, stale authority, and failed readback block promotion
+      without partial canonical mutation.
+    recovery_rule: >-
+      Promotion reuses prepared execution, replay protection, write-ahead
+      intent and commit ordering, idempotent recovery, and durable provenance.
+  continuity:
+    source_of_truth: >-
+      The workflow ledger and admitted artifacts, not hidden chat history or a
+      hand-edited status summary.
+    resume_projection:
+      - "active readiness profile"
+      - "accepted objective and superseded objective history"
+      - "current project and canonical repository snapshots"
+      - "active agents and worktree ownership"
+      - "open obligations, decisions, risks, and capability gaps"
+      - "admitted and rejected evidence"
+      - "pending or recovered promotions"
+      - "ranked next action with rationale"
+  host_support:
+    principle: "support is capability-scoped, versioned, and evidence-backed"
+    open_world_rule: >-
+      Forge core recognizes capabilities and conformance results, not a closed
+      whitelist of host brands. A new host can implement the versioned adapter
+      contract, run the public corpus, and publish evidence without a Forge core
+      release.
+    project_root_resolution:
+      global_claim: "canonical project root resolution"
+      windows_to_wsl_bridge: >-
+        Conditional transport seam used only when the host process runs on
+        Windows and the canonical project root is inside WSL. Native and other
+        host/platform combinations prove the same global project-root claim
+        without being required to traverse a Windows-to-WSL bridge.
+    initial_candidates:
+      - "Codex"
+      - "ZCode"
+      - "OpenCode"
+      - "Claude"
+      - "Pi.dev"
+      - "Cursor"
+    outcome_vocabulary:
+      - "supported"
+      - "partially_supported"
+      - "unsupported"
+    honesty_rule: >-
+      A candidate receives an outcome for each required capability. Missing
+      host APIs produce typed gaps and never weaken the solo profile or inflate
+      generic support.
+    required_claims:
+      - "skill activation"
+      - "canonical project root resolution"
+      - "read-only guidance"
+      - "conversation-derived intent binding"
+      - "cooperative evidence admission"
+      - "isolated work ownership"
+      - "governed canonical promotion"
+      - "replacement-agent recovery"
+  delivery_sequence:
+    - id: "SD-00"
+      title: "Make readiness and CI claims honest"
+      outcome: >-
+        Solo Dogfood Ready, strict external readiness, and partial host
+        capabilities are separate public states; mandatory gates cannot be
+        hidden behind allowed failures.
+    - id: "SD-01"
+      title: "Bind one objective from chat"
+      outcome: >-
+        One start invocation plus ordinary chat produces a durable accepted
+        objective under solo cooperative authority with no human Forge command.
+    - id: "SD-02"
+      title: "Admit one representative solo evidence set"
+      outcome: >-
+        The agent runs and admits evidence sufficient for a solo-scoped claim
+        while the projection explicitly withholds independence claims.
+    - id: "SD-03"
+      title: "Promote one isolated change"
+      outcome: >-
+        An agent iterates in a worktree and Forge atomically promotes the exact
+        verified change to the canonical repository or leaves it unchanged.
+    - id: "SD-04"
+      title: "Resume with a replacement agent"
+      outcome: >-
+        A fresh process recovers the objective, evidence, work ownership,
+        promotion state, and next action without transcript dependence.
+    - id: "SD-05"
+      title: "Ship the host-neutral conformance kit"
+      outcome: >-
+        Any host can execute the same clean packaged solo journey and produce a
+        capability-scoped evidence bundle without Forge core changes.
+    - id: "SD-06"
+      title: "Conform the initial host candidates"
+      outcome: >-
+        Codex, ZCode, OpenCode, Claude, Pi.dev, and Cursor each complete the
+        public corpus or receive an honest typed gap for every unsupported
+        capability.
+    - id: "SD-07"
+      title: "Gate the packaged journey"
+      outcome: >-
+        CI hard-fails when the supported solo journey, platform package, WSL
+        bridge, or recovery proof fails.
+    - id: "SD-08"
+      title: "Sustain real dogfood"
+      outcome: >-
+        Multiple non-trivial Forge changes are completed through the same
+        public path, and observed friction becomes governed product work.
+
+testing_decisions:
+  quality_rule: >-
+    Tests assert externally visible behavior, durable state, canonical
+    readback, failure semantics, and recovery. They do not pass merely because
+    a schema parses, an artifact exists, or a command returns success.
+  highest_end_to_end_seam: >-
+    Start once, converse normally, accept an objective, implement in an
+    isolated worktree, admit representative evidence, promote to canonical
+    state, restart with a replacement agent, and recover the exact next action.
+  focused_seams:
+    - seam: "packet-bound workflow authority"
+      reason: >-
+        It already owns current-state authorization, closed semantic input,
+        ledger progression, and receipts, so conversation-derived intent should
+        extend it rather than create parallel authority.
+    - seam: "governed canonical promotion"
+      reason: >-
+        It is the narrowest boundary that controls real project mutation while
+        preserving free agent iteration.
+  required_scenarios:
+    - "fresh chat activation and healthy resume"
+    - "no second start across task and phase changes in one chat"
+    - "idempotent repeated start"
+    - "unambiguous acceptance from ordinary chat"
+    - "material ambiguity produces one concise Decision Request"
+    - "agent-autonomous reversible action proceeds without human confirmation"
+    - "objective correction preserves supersession history"
+    - "stale packet and stale project snapshot rejection"
+    - "cooperative evidence admitted without independent-review claim"
+    - "evidence subject mismatch, freshness failure, and fabricated result rejection"
+    - "worktree source and canonical destination snapshot binding"
+    - "destination drift and overlapping write-set rejection"
+    - "crash before promotion commit leaves canonical state unchanged"
+    - "crash after commit recovers one receipt without duplicate effects"
+    - "replacement process resumes without transcript content"
+    - "canonical project root resolution on every advertised host/platform combination"
+    - "conditional Windows-to-WSL bridge when a Windows host targets a canonical WSL project"
+    - "CI workflow is red when any mandatory dogfood job fails"
+  prior_art:
+    - "workflow governance golden-path and action-packet end-to-end tests"
+    - "prepared execution, operation-wide transaction, replay, and provenance recovery tests"
+    - "trusted MCP single-effect and operation-wide execution tests"
+    - "replacement-agent continuity scenarios"
+    - "platform package and reference-journey CI jobs"
+  release_evidence:
+    minimum_consecutive_runs: 3
+    rule: >-
+      A release may claim Solo Dogfood Ready only after consecutive clean runs
+      of the packaged end-to-end journey on every advertised host capability
+      and platform boundary, followed by at least one real non-fixture Forge
+      improvement through the released path.
+
+out_of_scope:
+  - "enterprise compliance certification or compliance marketing claims"
+  - "cryptographic proof that a chat message was typed by a human"
+  - "independent reviewer or trusted runtime separation for solo-scoped claims"
+  - "same-operating-system-user confinement against a malicious agent"
+  - "multi-organization key management, enrollment, rotation, and revocation UX"
+  - "automatic Forge activation in every new chat"
+  - "native Windows Forge runtime support"
+  - "claiming support for capabilities that a host cannot expose or prove"
+  - "mediation of every intermediate file edit"
+  - "publication, push, merge, deployment, production mutation, or secret use without explicit human confirmation"
+  - "silent conversion of solo evidence into stricter assurance"
+
+further_notes:
+  product_sequence:
+    - "solo developer plus cooperative agents"
+    - "small teams"
+    - "medium teams"
+    - "enterprise and compliance"
+  assurance_epoch_rule: >-
+    Moving a project from solo_cooperative to strict_external opens a new
+    assurance epoch. Existing records remain valid for their original claims
+    and provenance but do not satisfy newly introduced independence
+    requirements.
+  terminology_rule: >-
+    User-facing diagnostics must describe the missing binding or capability,
+    for example objective from conversation not yet bound to the ledger,
+    instead of implying that the human failed to express intent.
+  roadmap_relationship: >-
+    This specification defines the first product-readiness milestone and should
+    become the first executable vertical slice of the active product gap plan.
+    Strict host-origin broker work remains valuable but moves off the solo
+    dogfood critical path.
+  canonical_decision_basis:
+    - "cooperative agents in one repository are the current threat model"
+    - "origin-bound signatures and separated authority are additive at a later trust boundary"
+    - "the Rust core remains host-neutral and model-neutral"
+    - "host support is open-world and conformance-based, never a brand whitelist"
+    - "the human remains in chat and does not operate Forge artifacts"

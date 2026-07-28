@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import subprocess
@@ -13,14 +14,29 @@ from pathlib import Path
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / ".github/workflows/ci.yml"
+TRUSTED_ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(
+    os.environ.get("FORGE_MSRV_CANDIDATE_ROOT", str(TRUSTED_ROOT))
+).resolve()
 POLICY_WORKFLOW = ROOT / ".github/workflows/msrv-policy.yml"
-FIXTURE = ROOT / "contracts/fixtures/msrv/post-1.85-language"
+ROLLOUT = ROOT / "contracts/migration/msrv-policy-v2-rollout.yaml"
+PHASE_ONE_WORKFLOW = ROOT / "contracts/fixtures/msrv-policy/phase-1-ci.yml"
+PHASE_TWO_WORKFLOW = ROOT / "contracts/fixtures/msrv-policy/phase-2-ci.yml"
+ACTUAL_WORKFLOW = ROOT / ".github/workflows/ci.yml"
+WORKFLOW = (
+    ACTUAL_WORKFLOW
+    if "  ci-verdict:\n" in ACTUAL_WORKFLOW.read_text(encoding="utf-8")
+    else PHASE_TWO_WORKFLOW
+)
+FIXTURE = TRUSTED_ROOT / "contracts/fixtures/msrv/post-1.85-language"
 
 
 def load_checker():
-    path = ROOT / "scripts/check-msrv.py"
+    return load_checker_from(TRUSTED_ROOT)
+
+
+def load_checker_from(root: Path):
+    path = root / "scripts/check-msrv.py"
     spec = importlib.util.spec_from_file_location("forge_msrv_checker", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
@@ -62,9 +78,95 @@ class MsrvContractTests(unittest.TestCase):
         shutil.copytree(ROOT / "crates", destination / "crates")
 
     def test_repository_contract_is_complete(self) -> None:
-        packages = checker.check()
+        packages = checker.check(
+            workflow=WORKFLOW,
+            root=ROOT,
+            policy_workflow=POLICY_WORKFLOW,
+        )
         self.assertEqual(len(packages), 23)
         self.assertEqual(len(packages), len(set(packages)))
+
+    def test_two_phase_rollout_contract_is_explicit_and_non_claiming(self) -> None:
+        document = checker.parse_workflow(ROLLOUT.read_text(encoding="utf-8"))
+        self.assertEqual(document["status"], "immutable_procedure")
+        self.assertIn("not a tracker", document["progress_semantics"])
+        self.assertIn("makes no claim", document["progress_semantics"])
+        self.assertIn("cannot both replace", document["reason_single_change_is_unsafe"])
+        evidence = document["default_branch_evidence"]
+        self.assertEqual(
+            evidence["protected_policy_base_filters"], ["master", "main"]
+        )
+        self.assertEqual(
+            evidence["remote_required_checks_configuration"], "unverified"
+        )
+        self.assertEqual(evidence["required_checks_claim"], "not_made")
+        states = {state["id"]: state for state in document["states"]}
+        phase_one = states["phase-1-bootstrap-trust-root"]
+        phase_two = states["phase-2-activate-protected-topology"]
+        self.assertEqual(
+            phase_one["ci_workflow_digest"],
+            f"sha256:{checker.LEGACY_WORKFLOW_DIGEST}",
+        )
+        self.assertIn(
+            "contracts/migration/markdown-debt-inventory.yaml",
+            phase_one["lands"],
+        )
+        self.assertIn(
+            "crates/forge-contract-validator/tests/parity.rs",
+            phase_one["lands"],
+        )
+        self.assertIn(".github/workflows/ci.yml", phase_one["explicitly_does_not_land"])
+        self.assertEqual(
+            phase_two["ci_workflow_digest"],
+            f"sha256:{checker.FINAL_WORKFLOW_DIGEST}",
+        )
+        self.assertEqual(phase_two["lands"], [".github/workflows/ci.yml"])
+        self.assertIn("immutable base SHA", document["trust_rule"])
+
+    def test_rollout_accepts_legacy_only_while_bootstrap_is_explicit(self) -> None:
+        legacy_source = PHASE_ONE_WORKFLOW.read_text(encoding="utf-8")
+        legacy_document = checker.parse_workflow(legacy_source)
+        self.assertEqual(
+            checker._normalized_digest(legacy_document),
+            checker.LEGACY_WORKFLOW_DIGEST,
+        )
+        checker.check_workflow_source(
+            legacy_source,
+            bootstrap_legacy_allowed=True,
+        )
+        with self.assertRaisesRegex(
+            checker.MsrvCheckError,
+            "legacy CI topology is valid only during the audited bootstrap state",
+        ):
+            checker.check_workflow_source(legacy_source)
+        final_source = PHASE_TWO_WORKFLOW.read_text(encoding="utf-8")
+        self.assertEqual(
+            checker._normalized_digest(checker.parse_workflow(final_source)),
+            checker.FINAL_WORKFLOW_DIGEST,
+        )
+        checker.check_workflow_source(final_source)
+        checker.check_workflow_source(self.source)
+
+        # Reproduce the real cross-root boundary: an immutable phase-1 base
+        # checker validates a phase-2 candidate without executing candidate
+        # trust code or defaulting manifest reads back to the base root.
+        with tempfile.TemporaryDirectory() as directory:
+            trusted_phase_one = Path(directory)
+            (trusted_phase_one / "scripts").mkdir(parents=True)
+            for relative in checker.PROTECTED_TRUST_FILES:
+                target = trusted_phase_one / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(TRUSTED_ROOT / relative, target)
+            trusted_workflow = trusted_phase_one / ".github/workflows/ci.yml"
+            trusted_workflow.parent.mkdir(parents=True)
+            shutil.copy2(PHASE_ONE_WORKFLOW, trusted_workflow)
+            phase_one_checker = load_checker_from(trusted_phase_one)
+            packages = phase_one_checker.check(
+                workflow=PHASE_TWO_WORKFLOW,
+                root=ROOT,
+                policy_workflow=POLICY_WORKFLOW,
+            )
+            self.assertEqual(len(packages), 23)
 
     def test_duplicate_safe_structured_parse_preserves_scalars(self) -> None:
         document = checker.parse_workflow(self.source)
@@ -114,7 +216,13 @@ class MsrvContractTests(unittest.TestCase):
         ]
         for old, new in mutations:
             with self.subTest(mutation=(old, new)):
-                self.assert_workflow_rejected(old, new, "exact values")
+                mutated_command = checker.CHECK_COMMAND.replace(old, new, 1)
+                self.assertNotEqual(mutated_command, checker.CHECK_COMMAND)
+                self.assert_workflow_rejected(
+                    checker.CHECK_COMMAND,
+                    mutated_command,
+                    "exact values",
+                )
 
     def test_rejects_pyyaml_install_after_contract_verification(self) -> None:
         self.assert_workflow_rejected(
@@ -147,7 +255,9 @@ class MsrvContractTests(unittest.TestCase):
             runner, runner.replace("ubuntu-latest", "windows-latest"), "job runner"
         )
         self.assert_workflow_rejected(
-            "  pull_request:\n", "  workflow_dispatch:\n", "workflow triggers"
+            "  pull_request:\n",
+            "  pull_request:\n    branches: [develop]\n",
+            "workflow triggers",
         )
 
     def test_rejects_unknown_or_forbidden_job_keys(self) -> None:
@@ -319,24 +429,33 @@ class MsrvContractTests(unittest.TestCase):
         self.assert_workflow_rejected(msrv_checkout, mutated, "exact values")
 
     def test_requires_immutable_trusted_checkout_boundary(self) -> None:
+        trusted_checkout = (
+            "      - name: Checkout immutable trusted MSRV tools\n"
+            f"        uses: {checker.CHECKOUT_ACTION} # v4\n"
+            "        with:\n"
+            "          repository: ${{ github.repository }}\n"
+            f"          ref: {checker.TRUSTED_REF}\n"
+            "          path: trusted\n"
+            "          persist-credentials: false\n"
+            "          fetch-depth: 1\n"
+        )
         mutations = [
             (
                 f"          ref: {checker.TRUSTED_REF}\n",
                 "          ref: ${{ github.sha }}\n",
             ),
+            ("          path: trusted\n", "          path: candidate/trusted\n"),
             (
-                "          path: trusted\n          persist-credentials: false\n",
-                "          path: candidate/trusted\n          persist-credentials: false\n",
-            ),
-            (
-                "          path: trusted\n          persist-credentials: false\n",
-                "          path: trusted\n          persist-credentials: true\n",
+                "          persist-credentials: false\n",
+                "          persist-credentials: true\n",
             ),
             ("          fetch-depth: 1\n", "          fetch-depth: 0\n"),
         ]
         for old, new in mutations:
             with self.subTest(mutation=new.strip()):
-                self.assert_workflow_rejected(old, new, "exact values")
+                self.assert_workflow_rejected(
+                    trusted_checkout, trusted_checkout.replace(old, new), "exact values"
+                )
 
     def test_requires_isolated_python_for_every_trusted_invocation(self) -> None:
         workflow_mutations = [
@@ -395,7 +514,7 @@ class MsrvContractTests(unittest.TestCase):
                 [
                     sys.executable,
                     "-I",
-                    str(ROOT / "scripts/run-ci-tier.py"),
+                    str(TRUSTED_ROOT / "scripts/run-ci-tier.py"),
                     "--tier",
                     "adversarial-msrv-wrapper",
                     "--budget-seconds",
@@ -457,10 +576,147 @@ class MsrvContractTests(unittest.TestCase):
             static_header + "    if: false\n",
             "static_docs job keys",
         )
+        msrv_condition = (
+            "  msrv:\n"
+            "    name: Rust 1.85 minimum supported version\n"
+            "    needs: static_docs\n"
+            "    if: always()\n"
+            "    runs-on: ubuntu-latest\n"
+        )
         self.assert_workflow_rejected(
-            "    if: always()\n    runs-on: ubuntu-latest\n",
-            "    if: false\n    runs-on: ubuntu-latest\n",
+            msrv_condition,
+            msrv_condition.replace("always()", "false"),
             "msrv job condition",
+        )
+
+    def test_required_ci_jobs_reject_job_or_step_allowed_failure(self) -> None:
+        focused_header = (
+            "  focused:\n"
+            "    name: Focused package and integration evidence\n"
+            "    needs: static_docs\n"
+        )
+        self.assert_workflow_rejected(
+            focused_header,
+            focused_header + "    continue-on-error: true\n",
+            "required CI job 'focused' cannot use allowed-failure semantics",
+        )
+        focused_step = "      - name: Check generated command surface docs\n"
+        self.assert_workflow_rejected(
+            focused_step,
+            focused_step + "        continue-on-error: true\n",
+            "required CI job 'focused' step .* cannot use allowed-failure semantics",
+        )
+
+    def test_rejects_false_green_focused_and_test_lane_mutations(self) -> None:
+        focused_start = self.source.index("  focused:\n")
+        focused_end = self.source.index("\n  platform:\n", focused_start)
+        focused = self.source[focused_start:focused_end]
+        steps_start = focused.index("    steps:\n")
+        without_steps = focused[:steps_start] + "    steps: []\n"
+        self.assert_source_rejected(
+            self.source[:focused_start] + without_steps + self.source[focused_end:],
+            "focused job steps must be a non-empty",
+        )
+
+        focused_header = (
+            "  focused:\n"
+            "    name: Focused package and integration evidence\n"
+            "    needs: static_docs\n"
+        )
+        self.assert_workflow_rejected(
+            focused_header,
+            focused_header + "    if: false\n",
+            "focused job keys",
+        )
+        focused_run = (
+            "run: python scripts/run-ci-tier.py --tier focused-command-surface "
+            "--budget-seconds 900 --report target/ci-timing/command-surface.json -- "
+            "cargo run -p forge-core-command-surface --example "
+            "generate_command_surface_docs -- --check"
+        )
+        self.assert_workflow_rejected(
+            focused_run,
+            "run: true",
+            "focused job topology, conditions, and commands",
+        )
+        self.assert_workflow_rejected(
+            focused_run,
+            focused_run + " || true",
+            "focused job topology, conditions, and commands",
+        )
+        self.assert_workflow_rejected(
+            " && python -I scripts/test-check-static-structured-text.py",
+            "",
+            "static_docs step .* fields must match reviewed exact values",
+        )
+
+    def test_protected_msrv_regression_lane_cannot_be_removed_or_swapped(self) -> None:
+        step = (
+            "      - name: Run protected MSRV topology regression suite\n"
+            "        timeout-minutes: 7\n"
+            f"        run: {checker.MSRV_REGRESSION_COMMAND}\n\n"
+        )
+        self.assertEqual(self.source.count(step), 1)
+        self.assert_source_rejected(
+            self.source.replace(step, "", 1),
+            "msrv job step topology",
+        )
+        self.assert_workflow_rejected(
+            checker.MSRV_REGRESSION_COMMAND,
+            checker.MSRV_REGRESSION_COMMAND.replace(
+                "trusted/scripts/test-msrv.py",
+                "candidate/scripts/test-msrv.py",
+            ),
+            "exact values",
+        )
+
+    def test_informational_alpha_jobs_are_explicitly_excluded(self) -> None:
+        self.assertNotIn("0.12.0-alpha.1", self.source)
+        self.assert_workflow_rejected(
+            '    name: "[informational prerelease] ${{ matrix.name }} platform observation"\n',
+            '    name: "${{ matrix.name }} platform gate"\n',
+            "informational prerelease CI job 'platform' name",
+        )
+        mutated = self.source.replace(
+            "    continue-on-error: true\n",
+            "    continue-on-error: false\n",
+            1,
+        )
+        self.assert_source_rejected(
+            mutated, "informational prerelease CI job 'platform' allowed-failure marker"
+        )
+        self.assert_workflow_rejected(
+            "--informational platform \"Prerelease-channel native platform observations\"",
+            "--mandatory platform \"Prerelease-channel native platform observations\"",
+            "ci-verdict steps",
+        )
+
+    def test_ci_verdict_requires_all_dependencies_and_always_runs(self) -> None:
+        self.assert_workflow_rejected(
+            "    needs: [static_docs, msrv, focused, platform, expensive-journey]\n",
+            "    needs: [static_docs, msrv, focused, platform]\n",
+            "ci-verdict dependencies",
+        )
+        verdict_condition = (
+            "  ci-verdict:\n"
+            "    name: Required source-only CI verdict\n"
+            "    needs: [static_docs, msrv, focused, platform, expensive-journey]\n"
+            "    if: always()\n"
+        )
+        self.assert_workflow_rejected(
+            verdict_condition,
+            verdict_condition.replace("always()", "success()"),
+            "ci-verdict condition",
+        )
+        self.assert_workflow_rejected(
+            "    timeout-minutes: 5\n    steps:\n",
+            "    timeout-minutes: 5\n    continue-on-error: true\n    steps:\n",
+            "ci-verdict job keys",
+        )
+        self.assert_workflow_rejected(
+            "python -I trusted/scripts/check-ci-verdict.py",
+            "python scripts/check-ci-verdict.py",
+            "ci-verdict steps",
         )
 
     def test_policy_rejects_trigger_permissions_and_job_bypasses(self) -> None:
@@ -471,7 +727,7 @@ class MsrvContractTests(unittest.TestCase):
                 "workflow triggers",
             ),
             (
-                "    branches: [main]\n",
+                "    branches: [master, main]\n",
                 "    branches: [develop]\n",
                 "workflow triggers",
             ),
@@ -552,7 +808,11 @@ class MsrvContractTests(unittest.TestCase):
     def test_policy_deletion_rename_and_symlink_fail_closed(self) -> None:
         missing = ROOT / ".github/workflows/msrv-policy-renamed.yml"
         with self.assertRaisesRegex(checker.MsrvCheckError, "required MSRV policy"):
-            checker.check(policy_workflow=missing)
+            checker.check(
+                workflow=WORKFLOW,
+                root=ROOT,
+                policy_workflow=missing,
+            )
 
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
             root = Path(directory)
@@ -562,7 +822,11 @@ class MsrvContractTests(unittest.TestCase):
             shutil.copy2(WORKFLOW, workflows / "ci.yml")
             (workflows / "msrv-policy.yml").symlink_to(POLICY_WORKFLOW)
             with self.assertRaisesRegex(checker.MsrvCheckError, "symbolic link"):
-                checker.check(workflows / "ci.yml", root, workflows / "msrv-policy.yml")
+                checker.check(
+                    workflow=workflows / "ci.yml",
+                    root=root,
+                    policy_workflow=workflows / "msrv-policy.yml",
+                )
 
     def test_candidate_msrv_checker_drift_is_rejected_without_execution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -584,7 +848,11 @@ class MsrvContractTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 checker.MsrvCheckError, "candidate MSRV checker differs"
             ):
-                checker.check(workflows / "ci.yml", root, workflows / "msrv-policy.yml")
+                checker.check(
+                    workflow=workflows / "ci.yml",
+                    root=root,
+                    policy_workflow=workflows / "msrv-policy.yml",
+                )
             self.assertFalse(marker.exists(), "candidate MSRV checker was executed")
 
     def test_rejects_candidate_root_cargo_compiler_overrides_and_aliases(self) -> None:
