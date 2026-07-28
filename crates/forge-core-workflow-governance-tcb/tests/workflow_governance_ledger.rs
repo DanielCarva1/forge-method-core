@@ -1,5 +1,8 @@
 use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::request::RequestStatus;
+use forge_core_contracts::workflow_governance::{
+    WorkflowReadinessProfile, WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
+};
 use forge_core_contracts::{
     CoordinationMutationHandoff, CoordinationRequestState, CoordinationStateAppliedEvent,
     CoordinationStateRecord, Phase, PhaseAdvancedEvent, PostBuildVerifyAdmittedGateResult,
@@ -109,6 +112,17 @@ fn imported() -> WorkflowGovernanceEvent {
         source_digest: "sha256:source".to_owned(),
         snapshot_digest: "sha256:snapshot-0".to_owned(),
         initial_phase: id("discover"),
+        readiness_profile: None,
+    })
+}
+
+fn solo_imported() -> WorkflowGovernanceEvent {
+    WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+        source_ref: "project/state.yaml".to_owned(),
+        source_digest: "sha256:source".to_owned(),
+        snapshot_digest: "sha256:snapshot-0".to_owned(),
+        initial_phase: id("discover"),
+        readiness_profile: Some(WorkflowReadinessProfile::SoloCooperative),
     })
 }
 
@@ -130,6 +144,7 @@ fn post_build_verify_imported() -> WorkflowGovernanceEvent {
         source_digest: named_digest("source"),
         snapshot_digest: named_digest("snapshot"),
         initial_phase: id("4-build-verify"),
+        readiness_profile: None,
     })
 }
 
@@ -420,6 +435,97 @@ fn initialize_append_and_recover_ordered_chain() {
         "failed initialization must not leave replacement artifacts"
     );
     fs::remove_dir_all(blocked).expect("cleanup blocked initialization");
+}
+
+#[test]
+fn legacy_profileless_genesis_preserves_bytes_hash_and_projects_strict() {
+    let root = temp_root("legacy-profileless");
+    let record = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize historical profile-less ledger");
+    let before = fs::read(wal_path(&root)).expect("read historical bytes");
+    let documents = read_documents(&root);
+    assert_eq!(
+        documents[0].schema_version,
+        WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION
+    );
+
+    let projection = recover_workflow_governance_ledger(&root).expect("recover historical ledger");
+    assert_eq!(
+        projection.readiness_profile(),
+        Some(WorkflowReadinessProfile::StrictExternal)
+    );
+    assert_eq!(
+        projection.head_digest.as_deref(),
+        Some(record.record_digest.as_str())
+    );
+    assert_eq!(fs::read(wal_path(&root)).expect("re-read WAL"), before);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn explicit_solo_genesis_and_successors_remain_on_profile_epoch() {
+    let root = temp_root("solo-profile-epoch");
+    let first = initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, solo_imported())
+        .expect("initialize solo ledger");
+    let second = append_workflow_governance_event_tcb(
+        &root,
+        &first.record_digest,
+        &identity(),
+        1,
+        advanced(1),
+    )
+    .expect("append solo successor");
+    let documents = read_documents(&root);
+    assert_eq!(documents.len(), 2);
+    assert!(documents.iter().all(|document| {
+        document.schema_version == WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
+    }));
+    let projection = recover_workflow_governance_ledger(&root).expect("recover solo ledger");
+    assert_eq!(projection.records.last(), Some(&second));
+    assert_eq!(
+        projection.readiness_profile(),
+        Some(WorkflowReadinessProfile::SoloCooperative)
+    );
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn explicit_profile_is_rejected_under_every_older_wire_epoch() {
+    for old_epoch in ["0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8"] {
+        let root = temp_root(&format!("solo-old-epoch-{old_epoch}"));
+        initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, solo_imported())
+            .expect("initialize solo ledger");
+        let mut documents = read_documents(&root);
+        documents[0].schema_version = old_epoch.to_owned();
+        write_documents(&root, &documents);
+        assert!(matches!(
+            recover_workflow_governance_ledger(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+}
+
+#[test]
+fn old_wire_rejects_present_null_readiness_profile_before_digest_canonicalization() {
+    let root = temp_root("legacy-null-profile");
+    initialize_workflow_governance_ledger_tcb(&root, &identity(), 0, imported())
+        .expect("initialize historical profile-less ledger");
+    let raw = fs::read_to_string(wal_path(&root)).expect("read historical line");
+    let mut document: serde_json::Value =
+        serde_json::from_str(raw.trim_end()).expect("parse historical line");
+    document["workflow_governance_receipt"]["event"]["payload"]["readiness_profile"] =
+        serde_json::Value::Null;
+    let mut tampered = serde_json::to_vec(&document).expect("serialize null-field tamper");
+    tampered.push(b'\n');
+    fs::write(wal_path(&root), tampered).expect("write null-field tamper");
+
+    assert!(matches!(
+        recover_workflow_governance_ledger(&root),
+        Err(WorkflowGovernanceLedgerError::MalformedRecord { source, .. })
+            if source.contains("readiness_profile must be a non-null closed value")
+    ));
+    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[test]

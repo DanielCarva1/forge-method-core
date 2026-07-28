@@ -284,6 +284,69 @@ fn state_one_no_link_bootstraps_the_project_in_one_command() {
 }
 
 #[test]
+fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
+    let parent = FreshParent::new("solo-workflow-handoff");
+    let app = parent.path.join("app");
+    fs::create_dir_all(&app).expect("create app");
+    fs::write(app.join("README.md"), "fresh project\n").expect("project evidence");
+
+    let (start_ok, start) = run_start(&app);
+    assert!(start_ok);
+    assert_agent_native_workflow_handoff(&start, &app, STATE_SIDECAR_READY);
+
+    let init_output = bin()
+        .args(["workflow", "init", "--root"])
+        .arg(&app)
+        .arg("--json")
+        .output()
+        .expect("run workflow init handoff");
+    assert!(init_output.status.success());
+    let initialized: Value =
+        serde_json::from_slice(&init_output.stdout).expect("parse initialization envelope");
+    assert_eq!(initialized["data"]["readiness_profile"], "solo_cooperative");
+
+    let (restart_ok, restart) = run_start(&app);
+    assert!(restart_ok);
+    assert_agent_native_workflow_handoff(&restart, &app, STATE_SIDECAR_READY);
+    let repeated_init_output = bin()
+        .args(["workflow", "init", "--root"])
+        .arg(&app)
+        .arg("--json")
+        .output()
+        .expect("repeat workflow init handoff");
+    assert!(repeated_init_output.status.success());
+    let repeated: Value = serde_json::from_slice(&repeated_init_output.stdout)
+        .expect("parse repeated initialization envelope");
+    assert_eq!(repeated["data"]["status"], "already_initialized");
+    for field in ["readiness_profile", "head_digest", "state_version"] {
+        assert_eq!(
+            repeated["data"][field], initialized["data"][field],
+            "start -> init -> start -> init must preserve {field}"
+        );
+    }
+
+    let next_output = bin()
+        .args(["workflow", "next", "--root"])
+        .arg(&app)
+        .arg("--json")
+        .output()
+        .expect("run workflow next handoff");
+    assert!(next_output.status.success());
+    let next: Value = serde_json::from_slice(&next_output.stdout).expect("parse next envelope");
+    assert_eq!(next["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        next["data"]["durable_assurance"]["status"],
+        "missing_human_intent"
+    );
+    assert!(next["data"]["authorization"]["action_packets"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(next["data"]["authorization"]["setup_gaps"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+}
+
+#[test]
 fn state_one_no_link_bootstraps_project_with_space_in_path() {
     // Space-in-path must not break bootstrap. The link is created at the raw
     // path (no shell quoting); agents read `actions_performed` and `state`.

@@ -12,6 +12,7 @@ use forge_core_authority::{
     PRINCIPAL_REGISTRY_SCHEMA_VERSION,
 };
 use forge_core_contracts::operation::CallerRole;
+use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{
     NextActionKind, PrincipalId, ReadinessTarget, ReceiptRevokedEvent, StableId,
     WorkflowContentAddressedReference, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
@@ -179,7 +180,9 @@ impl SignedFixture {
         )
         .expect("operator trust root");
         fs::write(&operator_registry_path, registry_yaml).expect("fixed registry");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
         Self {
             project_id,
             root,

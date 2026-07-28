@@ -292,7 +292,7 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
 pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
     name: "workflow",
     usage_lines: &[
-        "       forge-core workflow init [--root <path>] [--json|--no-json]",
+        "       forge-core workflow init [--root <path>] [--readiness-profile <solo_cooperative|strict_external>] [--json|--no-json]",
         "       forge-core workflow next [--root <path>] [--json|--no-json]",
         "       forge-core workflow action-packets [--root <path>] [--json|--no-json]",
         "       forge-core workflow action authorize --root <path> --packet-digest <sha256> --input-file <closed-input.json> --credential-id <id> [--json|--no-json]",
@@ -971,6 +971,14 @@ mod tests {
                 command.canonical_usage()
             );
         }
+    }
+
+    #[test]
+    fn workflow_init_exposes_the_closed_readiness_profile_selector() {
+        assert_eq!(
+            COMMAND_WORKFLOW.usage_lines[0],
+            "       forge-core workflow init [--root <path>] [--readiness-profile <solo_cooperative|strict_external>] [--json|--no-json]"
+        );
     }
 
     #[test]

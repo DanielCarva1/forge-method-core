@@ -47,6 +47,7 @@ use forge_core_contracts::recovery::{HealthStatus, RecoveryAction};
 use forge_core_contracts::request::{DependencyKind, RequestStatus};
 use forge_core_contracts::workflow_governance::{
     BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, WorkflowBrokerOriginProfile,
+    WorkflowReadinessProfile,
 };
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ClaimContract, ContinuityRecordedEvent,
@@ -1086,19 +1087,40 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn initialize(
         &self,
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
-        initialize_workflow_action_replay(&self.binding.state_root)?;
+        self.initialize_with_readiness_profile(None)
+    }
+
+    /// Initialize with an explicit readiness profile. An absent selector
+    /// defaults only a pristine ledger to the cooperative solo posture; an
+    /// existing ledger always retains its durable genesis profile.
+    pub fn initialize_with_readiness_profile(
+        &self,
+        requested_profile: Option<WorkflowReadinessProfile>,
+    ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
-            &self.binding.state_root,
-        )?;
         let genesis = registry.genesis();
         let project_snapshot =
             RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let snapshot_digest = project_snapshot.digest().to_owned();
+        initialize_workflow_action_replay(&self.binding.state_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
         if !projection.records.is_empty() {
+            let readiness_profile = projection
+                .readiness_profile()
+                .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+            if requested_profile.is_some_and(|requested| requested != readiness_profile) {
+                return Err(
+                    WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration {
+                        current: readiness_profile,
+                        requested: requested_profile.unwrap_or(readiness_profile),
+                    },
+                );
+            }
             let admitted = self.resolve_active_release(&registry, &projection)?;
             let effective = domain.admit_effective(admitted)?;
             projection =
@@ -1107,6 +1129,7 @@ impl WorkflowGovernanceProjectAdapter {
             validate_identity(&projection, &active_identity, &self.binding.project_root)?;
             return Ok(WorkflowGovernanceInitialization {
                 status: WorkflowGovernanceInitializationStatus::AlreadyInitialized,
+                readiness_profile,
                 project_id: self.binding.project_id.clone(),
                 bundle_id: effective
                     .identity()
@@ -1131,11 +1154,14 @@ impl WorkflowGovernanceProjectAdapter {
                 current_phase: current_phase(&projection)?.0,
             });
         }
+        let readiness_profile =
+            requested_profile.unwrap_or(WorkflowReadinessProfile::SoloCooperative);
         let event = WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
             source_ref: self.binding.project_root.display().to_string(),
             source_digest: snapshot_digest.clone(),
             snapshot_digest: snapshot_digest.clone(),
             initial_phase: StableId(INITIAL_PHASE.to_owned()),
+            readiness_profile: Some(readiness_profile),
         });
         let identity = self.identity(genesis);
         project_snapshot.revalidate()?;
@@ -1146,6 +1172,7 @@ impl WorkflowGovernanceProjectAdapter {
             self.reconcile_effective_epoch(&mut ledger, genesis, &effective, projection)?;
         Ok(WorkflowGovernanceInitialization {
             status: WorkflowGovernanceInitializationStatus::Initialized,
+            readiness_profile,
             project_id: self.binding.project_id.clone(),
             bundle_id: effective
                 .identity()
@@ -3851,6 +3878,9 @@ impl WorkflowGovernanceProjectAdapter {
     > {
         let identity = self.identity(admitted);
         validate_identity(projection, &identity, &self.binding.project_root)?;
+        let readiness_profile = projection
+            .readiness_profile()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
         snapshot.revalidate()?;
         let snapshot_digest = snapshot.digest().to_owned();
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
@@ -4084,6 +4114,7 @@ impl WorkflowGovernanceProjectAdapter {
         let mut guidance = WorkflowGovernanceGuidance {
             authority: WorkflowGovernanceGuidanceAuthority::VerifiedProjectSnapshot,
             status: guidance_status,
+            readiness_profile,
             project_id: self.binding.project_id.clone(),
             bundle_id: effective
                 .identity()
@@ -4122,14 +4153,18 @@ impl WorkflowGovernanceProjectAdapter {
                 action_packets: Vec::new(),
             },
         };
-        let action_packets = authorization_action_packets(
-            effective.document(),
-            &guidance,
-            &derived,
-            Some(&assurance_facts),
-            trusted_registry_digest.clone(),
-            trusted_broker_registry.digest.clone(),
-        )?;
+        let action_packets = if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
+            Vec::new()
+        } else {
+            authorization_action_packets(
+                effective.document(),
+                &guidance,
+                &derived,
+                Some(&assurance_facts),
+                trusted_registry_digest.clone(),
+                trusted_broker_registry.digest.clone(),
+            )?
+        };
         assurance_facts.action_packets = action_packets
             .iter()
             .map(|packet| GovernedAssuranceActionPacketFact {
@@ -4423,6 +4458,7 @@ pub struct WorkflowGovernanceReleaseAudit {
 #[serde(deny_unknown_fields)]
 pub struct WorkflowGovernanceInitialization {
     pub status: WorkflowGovernanceInitializationStatus,
+    pub readiness_profile: WorkflowReadinessProfile,
     pub project_id: StableId,
     pub bundle_id: StableId,
     pub bundle_digest: String,
@@ -4461,6 +4497,7 @@ pub enum WorkflowGovernanceGuidanceStatus {
 pub struct WorkflowGovernanceGuidance {
     pub authority: WorkflowGovernanceGuidanceAuthority,
     pub status: WorkflowGovernanceGuidanceStatus,
+    pub readiness_profile: WorkflowReadinessProfile,
     pub project_id: StableId,
     pub bundle_id: StableId,
     pub bundle_digest: String,
@@ -4598,6 +4635,10 @@ pub enum WorkflowGovernanceAdapterError {
     AssuranceProjection(AssuranceProjectionError),
     LedgerIdentityMismatch,
     LedgerUninitialized,
+    ReadinessProfileReconfiguration {
+        current: WorkflowReadinessProfile,
+        requested: WorkflowReadinessProfile,
+    },
     UnknownRelease(String),
     ReleaseNotAdjacent,
     ReleasePolicyDrift,
@@ -4688,6 +4729,12 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             }
             Self::LedgerIdentityMismatch => f.write_str("governance ledger identity does not match the resolved project and admitted bundle"),
             Self::LedgerUninitialized => f.write_str("governance ledger is not initialized; run workflow init"),
+            Self::ReadinessProfileReconfiguration { current, requested } => write!(
+                f,
+                "workflow readiness profile cannot be reconfigured from {} to {} after initialization",
+                current.wire_name(),
+                requested.wire_name()
+            ),
             Self::UnknownRelease(id) => write!(f, "unknown admitted workflow release {id}"),
             Self::ReleaseNotAdjacent => f.write_str("target workflow release is not the exact adjacent successor"),
             Self::ReleasePolicyDrift => f.write_str("workflow release policy set drift forbids receipt carryover"),
@@ -9988,6 +10035,7 @@ mod tests {
                 source_digest: format!("sha256:{}", "1".repeat(64)),
                 snapshot_digest: format!("sha256:{}", "2".repeat(64)),
                 initial_phase: StableId("4-build-verify".to_owned()),
+                readiness_profile: None,
             }),
         );
         let mut release = release_record(
@@ -10205,6 +10253,7 @@ mod tests {
                 source_digest: format!("sha256:{}", "1".repeat(64)),
                 snapshot_digest: format!("sha256:{}", "2".repeat(64)),
                 initial_phase: StableId("4-build-verify".to_owned()),
+                readiness_profile: None,
             }),
         );
         let release = release_record(
@@ -10387,6 +10436,7 @@ mod tests {
                     source_digest: format!("sha256:{}", "e".repeat(64)),
                     snapshot_digest: format!("sha256:{}", "e".repeat(64)),
                     initial_phase: StableId("1-discovery".to_owned()),
+                    readiness_profile: None,
                 }),
             }],
             head_digest: Some(format!("sha256:{}", "b".repeat(64))),
@@ -10433,6 +10483,10 @@ mod tests {
         )
         .expect("adapter");
         let initialized = adapter.initialize().expect("initialize");
+        assert_eq!(
+            initialized.readiness_profile,
+            WorkflowReadinessProfile::SoloCooperative
+        );
         assert_eq!(initialized.current_phase, "1-discovery");
         assert_eq!(
             initialized.effective.core_runtime_bundle,
@@ -10441,7 +10495,46 @@ mod tests {
         assert!(initialized.effective.domain_pack_generation.is_none());
         assert!(!initialized.domain_pack_degraded);
         assert!(initialized.domain_pack_gaps.is_empty());
+        let repeated = adapter.initialize().expect("idempotent initialization");
+        assert_eq!(
+            repeated.status,
+            WorkflowGovernanceInitializationStatus::AlreadyInitialized
+        );
+        assert_eq!(repeated.readiness_profile, initialized.readiness_profile);
+        assert_eq!(repeated.head_digest, initialized.head_digest);
+        assert_eq!(repeated.state_version, initialized.state_version);
+        assert!(matches!(
+            adapter
+                .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal)),
+            Err(
+                WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration {
+                    current: WorkflowReadinessProfile::SoloCooperative,
+                    requested: WorkflowReadinessProfile::StrictExternal,
+                }
+            )
+        ));
+        assert_eq!(
+            lock_workflow_governance_ledger_tcb(&state)
+                .expect("ledger")
+                .recover()
+                .expect("projection")
+                .records
+                .len(),
+            1,
+            "repeated initialization must not append"
+        );
         let next = adapter.next().expect("next");
+        assert_eq!(next.readiness_profile, initialized.readiness_profile);
+        assert_eq!(
+            next.durable_assurance.status,
+            WorkflowDurableAssuranceStatus::MissingHumanIntent
+        );
+        assert!(next.authorization.action_packets.is_empty());
+        assert!(next.authorization.setup_gaps.is_empty());
+        assert_eq!(
+            adapter.resume().expect("resume").readiness_profile,
+            initialized.readiness_profile
+        );
         assert_eq!(
             next.selected_policy_ref.0,
             "policy.workflow.discover-intent"
@@ -10464,6 +10557,65 @@ mod tests {
     }
 
     #[test]
+    fn initialization_recovers_missing_action_replay_authority_before_early_return() {
+        let (root, state) = temp_project("init-replay-recovery");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.replay-recovery".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        let initialized = adapter.initialize().expect("initialize ledger and replay");
+        let wal = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_WAL_RELATIVE_PATH,
+        );
+        let manifest = state.join(
+            forge_core_store::workflow_action_replay::WORKFLOW_ACTION_REPLAY_MANIFEST_RELATIVE_PATH,
+        );
+        fs::remove_file(&wal).expect("remove replay WAL");
+        fs::remove_file(&manifest).expect("remove replay manifest");
+
+        let recovered = adapter
+            .initialize()
+            .expect("existing ledger must recreate the absent replay pair");
+        assert_eq!(
+            recovered.status,
+            WorkflowGovernanceInitializationStatus::AlreadyInitialized
+        );
+        assert_eq!(recovered.readiness_profile, initialized.readiness_profile);
+        assert_eq!(recovered.head_digest, initialized.head_digest);
+        assert_eq!(recovered.state_version, initialized.state_version);
+        assert!(wal.is_file(), "replay WAL must be recreated");
+        assert!(manifest.is_file(), "replay manifest must be recreated");
+    }
+
+    #[test]
+    fn initialization_source_preserves_replay_then_domain_then_ledger_lock_order() {
+        let source = include_str!("adapter.rs");
+        let start = source
+            .find("pub fn initialize_with_readiness_profile")
+            .expect("initialization function");
+        let end = source[start..]
+            .find("    pub fn next(")
+            .map(|offset| start + offset)
+            .expect("next function boundary");
+        let initialization = &source[start..end];
+        let replay = initialization
+            .find("initialize_workflow_action_replay")
+            .expect("replay initialization");
+        let domain = initialization
+            .find("LockedWorkflowDomainPackContext::acquire")
+            .expect("Domain Pack lock");
+        let ledger = initialization
+            .find("lock_workflow_governance_ledger_tcb")
+            .expect("workflow ledger lock");
+        assert!(
+            replay < domain && domain < ledger,
+            "initialization must validate replay, then retain Domain Pack authority, then acquire the workflow ledger"
+        );
+    }
+
+    #[test]
     fn human_intent_is_the_durable_first_blocker_and_revises_monotonically() {
         let (root, state) = temp_project("durable-human-intent");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -10472,9 +10624,15 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
 
         let missing = adapter.next().expect("missing-intent guidance");
+        assert_eq!(
+            missing.readiness_profile,
+            WorkflowReadinessProfile::StrictExternal
+        );
         assert_eq!(
             missing.durable_assurance.status,
             WorkflowDurableAssuranceStatus::MissingHumanIntent
@@ -10769,6 +10927,7 @@ mod tests {
                 source_digest: digest('e'),
                 snapshot_digest: digest('f'),
                 initial_phase: StableId(Phase::BuildVerify.to_string()),
+                readiness_profile: None,
             }),
         );
         let advanced = record(
@@ -10839,7 +10998,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
         accept_test_intent(&adapter);
 
         let projection = lock_workflow_governance_ledger_tcb(&state)
@@ -10885,7 +11046,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
         accept_test_intent(&adapter);
 
         let first = adapter.action_packets().expect("first packets");
@@ -11007,7 +11170,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
         accept_test_intent(&adapter);
 
         let bundle: WorkflowGovernanceBundleDocument = yaml_serde::from_str(include_str!(
@@ -11157,9 +11322,19 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
 
         let missing = adapter.next().expect("missing broker guidance");
+        assert_eq!(
+            missing.readiness_profile,
+            WorkflowReadinessProfile::StrictExternal
+        );
+        assert!(missing.authorization.action_packets.iter().any(|packet| {
+            packet.required_authority.approval_boundary
+                == WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker
+        }));
         assert_eq!(
             missing.authorization.registry_setup.broker_registry,
             WorkflowAuthorizationRegistrySetupStatus::Missing
@@ -11268,7 +11443,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile");
         accept_test_intent(&adapter);
         fs::remove_file(adapter.trusted_broker_registry_path())
             .expect("remove test intent broker registry");
@@ -11444,7 +11621,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[23_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
@@ -11680,7 +11859,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[31_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
@@ -11865,7 +12046,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         let human_key = SigningKey::from_bytes(&[61_u8; 32]);
         let runtime_key = SigningKey::from_bytes(&[62_u8; 32]);
         let replacement_key = SigningKey::from_bytes(&[63_u8; 32]);
@@ -12108,7 +12291,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[37_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
@@ -12175,7 +12360,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[43_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);
@@ -12248,7 +12435,9 @@ mod tests {
             &state,
         )
         .expect("adapter");
-        adapter.initialize().expect("initialize with replay");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict profile with replay");
         accept_test_intent(&adapter);
         let key = SigningKey::from_bytes(&[29_u8; 32]);
         let broker_document = install_runtime_broker_registry(&adapter, &key);

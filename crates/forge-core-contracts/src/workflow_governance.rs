@@ -59,6 +59,11 @@ pub const WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION: &str = "0
 /// `0.8` requires the complete candidate snapshot and permanently carries exact
 /// request, completion, and health-recovery projections for fresh processes.
 pub const WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION: &str = "0.8";
+/// Ledger records written from a profile-bearing project genesis. Historical
+/// project imports omit the profile and retain their exact bytes and earlier
+/// wire epochs; explicit profiles require at least `0.9` and remain durable
+/// across every successor record.
+pub const WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION: &str = "0.9";
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -594,6 +599,29 @@ pub struct WorkflowReleaseAdmissionProof {
     pub to_policy_set_digest: String,
 }
 
+/// Durable project-local workflow readiness posture.
+///
+/// Historical ledgers omit this value and are projected as
+/// [`Self::StrictExternal`] without changing their bytes or record digests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReadinessProfile {
+    SoloCooperative,
+    StrictExternal,
+}
+
+impl WorkflowReadinessProfile {
+    /// Stable serialized name used in CLI diagnostics and other wire-visible
+    /// projections. This must stay aligned with the serde representation.
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::SoloCooperative => "solo_cooperative",
+            Self::StrictExternal => "strict_external",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectImportedEvent {
@@ -601,6 +629,17 @@ pub struct ProjectImportedEvent {
     pub source_digest: String,
     pub snapshot_digest: String,
     pub initial_phase: StableId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readiness_profile: Option<WorkflowReadinessProfile>,
+}
+
+impl ProjectImportedEvent {
+    /// Legacy profile-less imports retain the historical strict posture.
+    #[must_use]
+    pub fn effective_readiness_profile(&self) -> WorkflowReadinessProfile {
+        self.readiness_profile
+            .unwrap_or(WorkflowReadinessProfile::StrictExternal)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -343,8 +343,22 @@ fn action_packet<'a>(packet_set: &'a Value, kind: &str) -> &'a Value {
 fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let consumer = Consumer::new();
     let initialized = assert_ok(&consumer.run(&["init"]));
+    assert_eq!(initialized["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
     assert_eq!(initialized["data"]["state_version"], 0);
+    let repeated = assert_ok(&consumer.run(&["init"]));
+    assert_eq!(repeated["data"]["status"], "already_initialized");
+    for field in [
+        "readiness_profile",
+        "head_digest",
+        "state_version",
+        "current_phase",
+    ] {
+        assert_eq!(
+            repeated["data"][field], initialized["data"][field],
+            "{field}"
+        );
+    }
     assert!(consumer
         .state
         .join("wal/workflow-governance.ndjson")
@@ -357,6 +371,21 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     );
     assert_eq!(next["data"]["current_phase"], "1-discovery");
     assert_eq!(next["data"]["authority"], "verified_project_snapshot");
+    assert_eq!(next["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        next["data"]["durable_assurance"]["status"],
+        "missing_human_intent"
+    );
+    assert_eq!(
+        next["data"]["durable_assurance"]["blockers"][0]["code"],
+        "missing_accepted_human_intent"
+    );
+    assert!(next["data"]["authorization"]["action_packets"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(next["data"]["authorization"]["setup_gaps"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
     assert_ne!(
         next["data"]["simulation"]["candidate_status"], "complete",
         "artifact-free fluent progress must not appear complete"
@@ -379,21 +408,13 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         .as_array()
         .expect("typed workflow action packet list");
     assert!(
-        !packets.is_empty(),
-        "current guidance must expose its actions"
+        packets.is_empty(),
+        "solo profile must not project strict external authorization packets"
     );
-    assert!(packets.iter().all(|packet| {
-        packet["packet_digest"]
-            .as_str()
-            .is_some_and(|digest| digest.starts_with("sha256:") && digest.len() == 71)
-            && packet["binding"]["ledger_head_digest"] == next["data"]["ledger_head_digest"]
-            && packet["required_authority"]["approval_boundary"]
-                .as_str()
-                .is_some_and(|value| value.ends_with("_broker"))
-    }));
 
     let resumed = assert_ok(&consumer.run(&["resume"]));
     for field in [
+        "readiness_profile",
         "selected_policy_ref",
         "snapshot_digest",
         "ledger_head_digest",
@@ -458,10 +479,32 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
 }
 
 #[test]
+fn readiness_profile_reconfiguration_is_an_exact_conflict_envelope() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+
+    let rejected = consumer.run(&["init", "--readiness-profile", "strict_external"]);
+    assert_eq!(rejected.status.code(), Some(4));
+    assert_eq!(
+        json(&rejected),
+        serde_json::json!({
+            "schema_version": "0.1",
+            "command": "workflow.init",
+            "ok": false,
+            "exit_reason": "conflict",
+            "error": {
+                "code": "conflict",
+                "message": "workflow readiness profile cannot be reconfigured from solo_cooperative to strict_external after initialization"
+            }
+        })
+    );
+}
+
+#[test]
 #[allow(clippy::too_many_lines)] // One public ceremony proves both local denial and permitted one-call commit.
 fn local_action_authorize_prepares_signs_and_commits_without_intermediate_authority_files() {
     let consumer = Consumer::new();
-    assert_ok(&consumer.run(&["init"]));
+    assert_ok(&consumer.run(&["init", "--readiness-profile", "strict_external"]));
     let root = consumer.app.display().to_string();
     let provisioned = bin()
         .args([
@@ -598,7 +641,8 @@ fn local_action_authorize_prepares_signs_and_commits_without_intermediate_author
 #[allow(clippy::too_many_lines)]
 fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     let consumer = Consumer::new();
-    let initialized = assert_ok(&consumer.run(&["init"]));
+    let initialized = assert_ok(&consumer.run(&["init", "--readiness-profile", "strict_external"]));
+    assert_eq!(initialized["data"]["readiness_profile"], "strict_external");
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
     let broker = StrictHumanBroker::install(&consumer);
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
@@ -733,6 +777,9 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
         .expect("workflow help");
     assert!(output.status.success());
     let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains(
+        "workflow init [--root <path>] [--readiness-profile <solo_cooperative|strict_external>]"
+    ));
     assert!(text.contains("workflow next"));
     assert!(text.contains("workflow resume"));
     assert!(text.contains("workflow action authorize"));

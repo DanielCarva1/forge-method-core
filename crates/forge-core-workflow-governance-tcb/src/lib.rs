@@ -11,7 +11,8 @@
 use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::request::RequestStatus;
 use forge_core_contracts::workflow_governance::{
-    WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
+    WorkflowReadinessProfile, WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
@@ -140,6 +141,28 @@ impl WorkflowGovernanceLedgerProjection {
     #[must_use]
     pub fn current_state_version(&self) -> Option<u64> {
         self.records.last().map(|record| record.state_version)
+    }
+
+    /// Readiness profile fixed by the project-import genesis. Historical
+    /// profile-less ledgers project the strict external posture.
+    #[must_use]
+    pub fn readiness_profile(&self) -> Option<WorkflowReadinessProfile> {
+        self.records.first().and_then(|record| match &record.event {
+            WorkflowGovernanceEvent::ProjectImported(imported) => {
+                Some(imported.effective_readiness_profile())
+            }
+            _ => None,
+        })
+    }
+
+    fn contains_explicit_readiness_profile(&self) -> bool {
+        self.records.first().is_some_and(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::ProjectImported(imported)
+                    if imported.readiness_profile.is_some()
+            )
+        })
     }
 
     fn contains_core_domain_pack_rebase(&self) -> bool {
@@ -1539,7 +1562,16 @@ fn recover_from_reader(
                 maximum: WORKFLOW_GOVERNANCE_LEDGER_MAX_RECORDS,
             });
         }
-        let document: WorkflowGovernanceReceiptDocument = serde_json::from_slice(&line_bytes)
+        let raw_document: serde_json::Value =
+            serde_json::from_slice(&line_bytes).map_err(|error| {
+                WorkflowGovernanceLedgerError::MalformedRecord {
+                    line: line_number,
+                    source: error.to_string(),
+                }
+            })?;
+        let readiness_profile_field_present =
+            raw_project_import_readiness_profile_field_present(&raw_document);
+        let document: WorkflowGovernanceReceiptDocument = serde_json::from_value(raw_document)
             .map_err(|error| WorkflowGovernanceLedgerError::MalformedRecord {
                 line: line_number,
                 source: error.to_string(),
@@ -1554,6 +1586,8 @@ fn recover_from_reader(
                 != WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION
+            && document.schema_version
+                != WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1561,6 +1595,18 @@ fn recover_from_reader(
             });
         }
         let record = document.workflow_governance_receipt;
+        let is_readiness_profile_genesis = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::ProjectImported(imported)
+                if imported.readiness_profile.is_some()
+        );
+        if readiness_profile_field_present && !is_readiness_profile_genesis {
+            return Err(WorkflowGovernanceLedgerError::MalformedRecord {
+                line: line_number,
+                source: "project_imported readiness_profile must be a non-null closed value"
+                    .to_owned(),
+            });
+        }
         let is_domain_transition = matches!(
             &record.event,
             WorkflowGovernanceEvent::DomainPackGenerationTransitioned(_)
@@ -1598,9 +1644,11 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_replacement_continuity
-            || identity_state.replacement_continuity_seen
+        let expected_schema = if is_readiness_profile_genesis
+            || identity_state.readiness_profile_epoch_seen
         {
+            WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
+        } else if is_replacement_continuity || identity_state.replacement_continuity_seen {
             WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION
         } else if is_post_build_verify_episode || identity_state.post_build_verify_episode_seen {
             WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION
@@ -1631,7 +1679,10 @@ fn recover_from_reader(
             WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION
                 | WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION
                 | WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION
-        ) {
+        ) || (document.schema_version
+            == WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
+            && (is_strict_replay_origin || identity_state.strict_replay_origin_seen))
+        {
             require_strict_broker_origin_replay_digest(&record.event, Some(line_number))?;
         }
         validate_record_fields(&record, Some(line_number))?;
@@ -1707,6 +1758,7 @@ struct RecoveredIdentityState {
     strict_replay_origin_seen: bool,
     post_build_verify_episode_seen: bool,
     replacement_continuity_seen: bool,
+    readiness_profile_epoch_seen: bool,
     current_phase: Option<StableId>,
     last_post_build_verify_episode_by_id: BTreeMap<String, (u64, String)>,
     latest_coordination_request_by_id: BTreeMap<String, CoordinationRequestState>,
@@ -1726,6 +1778,7 @@ fn validate_recovered_semantics(
         identity.genesis = Some(genesis.clone());
         identity.active = Some(genesis);
         identity.current_phase = Some(imported.initial_phase.clone());
+        identity.readiness_profile_epoch_seen = imported.readiness_profile.is_some();
     } else if matches!(record.event, WorkflowGovernanceEvent::ProjectImported(_)) {
         return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
     }
@@ -2061,6 +2114,20 @@ fn build_record_line(
     Ok((record, line))
 }
 
+fn raw_project_import_readiness_profile_field_present(document: &serde_json::Value) -> bool {
+    document
+        .get("workflow_governance_receipt")
+        .and_then(|receipt| receipt.get("event"))
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|event| {
+            event.get("type").and_then(serde_json::Value::as_str) == Some("project_imported")
+                && event
+                    .get("payload")
+                    .and_then(serde_json::Value::as_object)
+                    .is_some_and(|payload| payload.contains_key("readiness_profile"))
+        })
+}
+
 struct DeterministicBrokerRecordBinding<'a> {
     action_packet_digest: &'a str,
     broker_event_digest: &'a str,
@@ -2121,6 +2188,13 @@ fn ledger_wire_schema(
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
     if matches!(
+        event,
+        WorkflowGovernanceEvent::ProjectImported(imported)
+            if imported.readiness_profile.is_some()
+    ) || projection.contains_explicit_readiness_profile()
+    {
+        WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION
+    } else if matches!(
         event,
         WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(applied)
             if applied.episode_snapshot.is_some()
@@ -3960,6 +4034,7 @@ mod replacement_protocol_tests {
                 source_digest: "sha256:source".to_owned(),
                 snapshot_digest: "sha256:snapshot-0".to_owned(),
                 initial_phase: StableId("discover".to_owned()),
+                readiness_profile: None,
             }),
         )
         .expect("build initial record");
@@ -4126,6 +4201,7 @@ mod replacement_protocol_tests {
                     source_digest: sha256_digest(b"source"),
                     snapshot_digest: sha256_digest(b"snapshot"),
                     initial_phase: StableId("discover".to_owned()),
+                    readiness_profile: None,
                 }),
             )
             .expect("initialize");

@@ -1,9 +1,10 @@
 use forge_core_contracts::{
     ProjectImportedEvent, ReleaseUpgradedEvent, StableId, WorkflowGovernanceEvent,
     WorkflowGovernanceReleaseIdentity, WorkflowGovernanceReleaseRegistryDocument,
-    WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryAuthority,
-    WorkflowReleaseRegistryProvenance, WorkflowReleaseRegistrySource,
-    WorkflowRuntimeBundleIdentity,
+    WorkflowReadinessProfile, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
+    WorkflowReleaseRegistryAuthority, WorkflowReleaseRegistryProvenance,
+    WorkflowReleaseRegistrySource, WorkflowRuntimeBundleIdentity,
+    WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
 };
 
 fn registry_text() -> &'static str {
@@ -112,10 +113,49 @@ fn adding_event_variant_does_not_change_project_imported_bytes() {
         source_digest: "sha256:source".to_owned(),
         snapshot_digest: "sha256:snapshot".to_owned(),
         initial_phase: id("explore"),
+        readiness_profile: None,
     });
     let bytes = serde_json::to_string(&event).expect("serialize legacy event");
     assert_eq!(
         bytes,
         r#"{"type":"project_imported","payload":{"source_ref":"legacy","source_digest":"sha256:source","snapshot_digest":"sha256:snapshot","initial_phase":"explore"}}"#
     );
+    let decoded: WorkflowGovernanceEvent =
+        serde_json::from_str(&bytes).expect("legacy project import remains readable");
+    let WorkflowGovernanceEvent::ProjectImported(decoded) = decoded else {
+        panic!("decoded wrong event");
+    };
+    assert_eq!(
+        decoded.effective_readiness_profile(),
+        WorkflowReadinessProfile::StrictExternal
+    );
+    assert_eq!(
+        serde_json::to_string(&WorkflowGovernanceEvent::ProjectImported(decoded))
+            .expect("legacy event reserializes"),
+        bytes
+    );
+}
+
+#[test]
+fn readiness_profile_is_closed_and_round_trips() {
+    assert_eq!(
+        WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION, "0.9",
+        "profile and its ledger epoch must remain importable from the crate root"
+    );
+    let event = WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+        source_ref: "solo".to_owned(),
+        source_digest: "sha256:source".to_owned(),
+        snapshot_digest: "sha256:snapshot".to_owned(),
+        initial_phase: id("explore"),
+        readiness_profile: Some(WorkflowReadinessProfile::SoloCooperative),
+    });
+    let value = serde_json::to_value(&event).expect("serialize solo profile");
+    assert_eq!(value["payload"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        serde_json::from_value::<WorkflowGovernanceEvent>(value.clone()).expect("round trip"),
+        event
+    );
+    let mut unknown = value;
+    unknown["payload"]["readiness_profile"] = serde_json::json!("delegated_magic");
+    assert!(serde_json::from_value::<WorkflowGovernanceEvent>(unknown).is_err());
 }

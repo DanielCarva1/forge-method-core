@@ -61,7 +61,15 @@ fn product_genesis_is_typed_blocked_without_selected_host_anchor() {
         .output()
         .expect("start"));
     ok(&bin()
-        .args(["workflow", "init", "--root", &app_arg, "--json"])
+        .args([
+            "workflow",
+            "init",
+            "--root",
+            &app_arg,
+            "--readiness-profile",
+            "strict_external",
+            "--json",
+        ])
         .output()
         .expect("workflow init"));
 

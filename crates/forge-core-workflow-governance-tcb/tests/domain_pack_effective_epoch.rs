@@ -92,6 +92,7 @@ fn imported() -> WorkflowGovernanceEvent {
         source_digest: digest('d'),
         snapshot_digest: digest('e'),
         initial_phase: StableId("1-discovery".to_owned()),
+        readiness_profile: None,
     })
 }
 

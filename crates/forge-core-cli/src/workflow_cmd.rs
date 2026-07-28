@@ -12,6 +12,7 @@ use forge_core_authority::{
     WorkflowSignalAuthorizationRequest, WorkflowWaiverAuthorizationRequest,
 };
 use forge_core_command_surface::COMMAND_WORKFLOW;
+use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{CliEnvelope, ExitReason, PrincipalId, StableId};
 use forge_core_kernel::{
     load_admitted_workflow_retirement_checkpoint, WorkflowGovernanceAdapterError,
@@ -150,7 +151,10 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
     };
     let result = match parsed.subcommand.as_str() {
         "init" => adapter
-            .initialize()
+            .initialize_with_readiness_profile(
+                requested_readiness_profile(&parsed)
+                    .expect("readiness profile was validated before adapter dispatch"),
+            )
             .map(|value| serde_json::to_value(value).expect("serializable initialization")),
         "next" => adapter
             .next()
@@ -569,7 +573,8 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             | "--expected-current-release-digest"
             | "--expected-head-digest"
             | "--expected-rebase-plan-digest"
-            | "--expected-snapshot-digest" => {
+            | "--expected-snapshot-digest"
+            | "--readiness-profile" => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -630,6 +635,20 @@ fn invalid_observation(message: String) -> forge_core_kernel::WorkflowGovernance
     forge_core_kernel::WorkflowGovernanceAdapterError::InvalidObservation(message)
 }
 
+fn requested_readiness_profile(
+    args: &WorkflowCliArgs,
+) -> Result<Option<WorkflowReadinessProfile>, String> {
+    optional(args, "readiness-profile")
+        .map(|value| match value.as_str() {
+            "solo_cooperative" => Ok(WorkflowReadinessProfile::SoloCooperative),
+            "strict_external" => Ok(WorkflowReadinessProfile::StrictExternal),
+            _ => Err(
+                "--readiness-profile must be one of: solo_cooperative, strict_external".to_owned(),
+            ),
+        })
+        .transpose()
+}
+
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
     if let Some(flag) = ["request-file", "attestation-file"]
         .iter()
@@ -640,7 +659,23 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             args.subcommand
         ));
     }
+    if args.subcommand != "init" && args.flags.contains_key("readiness-profile") {
+        return Err(format!(
+            "--readiness-profile is valid only for workflow init, not workflow {}",
+            args.subcommand
+        ));
+    }
     match args.subcommand.as_str() {
+        "init" => {
+            if let Some(flag) = args
+                .flags
+                .keys()
+                .find(|flag| flag.as_str() != "readiness-profile")
+            {
+                return Err(format!("--{flag} is not valid for workflow init"));
+            }
+            requested_readiness_profile(args).map(|_| ())
+        }
         "action-packets" | "release-status" | "retirement-status" if !args.flags.is_empty() => {
             Err(format!(
                 "workflow {} accepts only --root and the JSON output switch",
@@ -716,6 +751,7 @@ fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
     match error {
         WorkflowGovernanceAdapterError::Ledger(_)
         | WorkflowGovernanceAdapterError::LedgerIdentityMismatch
+        | WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration { .. }
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate
@@ -837,6 +873,54 @@ mod tests {
     }
 
     #[test]
+    fn readiness_profile_selector_is_closed_and_init_only() {
+        for (wire, expected) in [
+            (
+                "solo_cooperative",
+                WorkflowReadinessProfile::SoloCooperative,
+            ),
+            ("strict_external", WorkflowReadinessProfile::StrictExternal),
+        ] {
+            let parsed = parse_args(&argv(&["workflow", "init", "--readiness-profile", wire]))
+                .expect("known profile parses");
+            validate_release_args(&parsed).expect("known init profile validates");
+            assert_eq!(
+                requested_readiness_profile(&parsed).expect("known profile"),
+                Some(expected)
+            );
+        }
+
+        let unknown = parse_args(&argv(&[
+            "workflow",
+            "init",
+            "--readiness-profile",
+            "permissive_magic",
+        ]))
+        .expect("value shape parses before closed-enum validation");
+        assert!(validate_release_args(&unknown).is_err());
+
+        let wrong_command = parse_args(&argv(&[
+            "workflow",
+            "next",
+            "--readiness-profile",
+            "strict_external",
+        ]))
+        .expect("known value-bearing flag parses");
+        assert!(validate_release_args(&wrong_command).is_err());
+
+        let duplicate = parse_args(&argv(&[
+            "workflow",
+            "init",
+            "--readiness-profile",
+            "solo_cooperative",
+            "--readiness-profile",
+            "strict_external",
+        ]))
+        .expect_err("profile selector must be single-valued");
+        assert_eq!(duplicate, "--readiness-profile may be supplied only once");
+    }
+
+    #[test]
     fn release_upgrade_requires_lowercase_sha256_cas_inputs() {
         let digest = format!("sha256:{}", "a".repeat(64));
         let args = argv(&[
@@ -907,6 +991,10 @@ mod tests {
             WorkflowGovernanceAdapterError::ReleaseCasMismatch,
             WorkflowGovernanceAdapterError::LedgerIdentityMismatch,
             WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate,
+            WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration {
+                current: WorkflowReadinessProfile::SoloCooperative,
+                requested: WorkflowReadinessProfile::StrictExternal,
+            },
         ] {
             assert_eq!(classify_error(&error), ExitReason::Conflict);
         }
