@@ -103,6 +103,40 @@ or routes a healthy project into agent-native workflow governance.
    agent performs the action and asks `workflow next` again. The human stays in
    chat and never operates Forge commands or edits Forge artifacts.
 
+   A packet whose approval boundary is exactly `cooperative_same_owner` is the
+   Solo Cooperative missing-objective lane. It is not human-origin authority.
+   Read the packet's dedicated `cooperative_objective` input contract: it
+   carries the two JSON variants, UTF-8 file encoding, byte/item limits, and a
+   structured argv template. Do not reinterpret the packet as the legacy
+   `intent_revision` JSON shape.
+
+   - If the ordinary chat objective is unambiguous, materialize the
+     `unambiguous` template into a temporary JSON file. Fill only outcome,
+     constraints, unacceptable outcomes, open uncertainties, same-owner
+     carrying principal, and generic host/session/interaction coordinates.
+     The human does not edit the file or run a command.
+   - If one irreducible value choice remains, materialize the
+     `decision_required` template instead. Forge validates the current Solo
+     profile, packet, snapshot, ledger head, boundary, and missing-objective
+     state read-only, then returns the same typed Decision Request with zero
+     workflow writes. Ask that concise question in chat; do not guess.
+   - Execute the packet's argv array exactly, substituting its current packet
+     digest, project root, and temporary-file path while preserving argument
+     boundaries. Its canonical shape is:
+
+   ```bash
+   forge-core workflow intent accept-cooperative --root "<project-root>" \
+     --packet-digest "<packet-sha256>" \
+     --input-file "<temporary-cooperative-input.json>" --json
+   ```
+
+   Delete the temporary host file after Forge has read it. An exact retry is
+   idempotent; a changed payload or stale packet must fail closed. On either
+   `accepted` or a later chat answer, run a fresh `workflow next`; never cache
+   the pre-acceptance packet. Never describe this lane as verified human
+   presence, a signature, external origin, reviewer independence, or
+   `strict_external` satisfaction.
+
    A packet whose approval boundary is exactly `operator_credential_broker`
    may use the cooperative local one-call lane. The host materializes the
    packet's closed input without asking the human to edit JSON, then runs:

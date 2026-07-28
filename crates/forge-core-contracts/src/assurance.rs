@@ -84,6 +84,45 @@ pub struct WorkflowHumanIntentRevision {
     pub source_conversation_digest: String,
 }
 
+/// Origin-neutral semantic objective projected into durable Assurance state.
+///
+/// Its wire shape intentionally matches the historical human-intent projection
+/// so existing readback remains stable. Authority provenance stays on the
+/// admitted ledger event and is never inferred from this semantic value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowObjectiveRevision {
+    pub intent_id: StableId,
+    pub revision: u64,
+    pub desired_outcome: String,
+    #[serde(default)]
+    pub constraints: Vec<String>,
+    #[serde(default)]
+    pub preferences: Vec<String>,
+    #[serde(default)]
+    pub unacceptable_outcomes: Vec<String>,
+    #[serde(default)]
+    pub uncertainties: Vec<String>,
+    pub source_conversation_ref: String,
+    pub source_conversation_digest: String,
+}
+
+impl From<&WorkflowHumanIntentRevision> for WorkflowObjectiveRevision {
+    fn from(value: &WorkflowHumanIntentRevision) -> Self {
+        Self {
+            intent_id: value.intent_id.clone(),
+            revision: value.revision,
+            desired_outcome: value.desired_outcome.clone(),
+            constraints: value.constraints.clone(),
+            preferences: value.preferences.clone(),
+            unacceptable_outcomes: value.unacceptable_outcomes.clone(),
+            uncertainties: value.uncertainties.clone(),
+            source_conversation_ref: value.source_conversation_ref.clone(),
+            source_conversation_digest: value.source_conversation_digest.clone(),
+        }
+    }
+}
+
 /// Universal assurance questions that apply across product domains.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
@@ -275,7 +314,7 @@ pub enum DurableAssuranceReadinessState {
 #[serde(deny_unknown_fields)]
 pub struct DurableAssuranceProjection {
     pub binding: DurableAssuranceEpochBinding,
-    pub intent: WorkflowHumanIntentRevision,
+    pub intent: WorkflowObjectiveRevision,
     pub lenses: Vec<DurableAssuranceLensProjection>,
     pub readiness: DurableAssuranceReadinessState,
     pub blocker_lenses: Vec<UniversalAssuranceLens>,

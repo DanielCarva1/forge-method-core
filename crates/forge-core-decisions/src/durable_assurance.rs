@@ -5,16 +5,17 @@
 //! human intent opens a new assurance epoch with every universal lens unknown.
 
 use forge_core_contracts::{
-    DurableAssuranceCapabilityBinding, DurableAssuranceClaimBinding,
-    DurableAssuranceDecisionBinding, DurableAssuranceEpistemicState, DurableAssuranceEpochBinding,
-    DurableAssuranceEvidenceBinding, DurableAssuranceLensProjection, DurableAssuranceNextAction,
-    DurableAssuranceProjection, DurableAssuranceReadinessState, DurableAssuranceWaiverBinding,
-    HumanIntentRevisionAcceptedEvent, NextActionKind, ObligationCriticality, PrincipalId,
-    ReadinessTarget, StableId, UniversalAssuranceLens, WorkflowAssuranceClaimRole,
-    WorkflowBrokerOriginProfile, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
-    WorkflowEvidenceOutcome, WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
-    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowHumanIntentRevision, WorkflowRepresentativeSliceDefinitionDocument,
+    CooperativeObjectiveAcceptedEvent, DurableAssuranceCapabilityBinding,
+    DurableAssuranceClaimBinding, DurableAssuranceDecisionBinding, DurableAssuranceEpistemicState,
+    DurableAssuranceEpochBinding, DurableAssuranceEvidenceBinding, DurableAssuranceLensProjection,
+    DurableAssuranceNextAction, DurableAssuranceProjection, DurableAssuranceReadinessState,
+    DurableAssuranceWaiverBinding, HumanIntentRevisionAcceptedEvent, NextActionKind,
+    ObligationCriticality, PrincipalId, ReadinessTarget, StableId, UniversalAssuranceLens,
+    WorkflowAssuranceClaimRole, WorkflowBrokerOriginProfile, WorkflowCooperativeObjectiveProposal,
+    WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceOutcome,
+    WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord, WorkflowHumanIntentRevision,
+    WorkflowObjectiveRevision, WorkflowRepresentativeSliceDefinitionDocument,
     MAX_DURABLE_ASSURANCE_NEXT_ACTIONS, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
     MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
@@ -66,6 +67,8 @@ pub enum AssuranceProjectionIssue {
     ProjectIdentityChanged,
     CounterOverflow,
     ProjectionEncodingFailed,
+    CooperativeObjectiveBindingMismatch,
+    DuplicateInitialCooperativeObjective,
     RepresentativeSliceInvalid { field: String },
 }
 
@@ -87,6 +90,37 @@ pub fn workflow_human_intent_digest(
         return Err(AssuranceProjectionError { issues });
     }
     canonical_digest(intent)
+}
+
+/// Validate and canonically digest one kernel-assigned cooperative objective.
+///
+/// The digest covers kernel-derived identity/revision/epoch together with the
+/// bounded semantic proposal. Host provenance and carrying identity remain
+/// separately visible on the event and cannot alter objective identity.
+pub fn workflow_cooperative_objective_digest(
+    objective_id: &StableId,
+    revision: u64,
+    assurance_epoch: u64,
+    proposal: &WorkflowCooperativeObjectiveProposal,
+) -> Result<String, AssuranceProjectionError> {
+    let issues = validate_cooperative_proposal(objective_id, revision, assurance_epoch, proposal);
+    if !issues.is_empty() {
+        return Err(AssuranceProjectionError { issues });
+    }
+    canonical_digest(&CooperativeObjectiveDigestSubject {
+        objective_id,
+        revision,
+        assurance_epoch,
+        proposal,
+    })
+}
+
+#[derive(Serialize)]
+struct CooperativeObjectiveDigestSubject<'a> {
+    objective_id: &'a StableId,
+    revision: u64,
+    assurance_epoch: u64,
+    proposal: &'a WorkflowCooperativeObjectiveProposal,
 }
 
 /// Reconstruct the latest durable Assurance epoch from governance history.
@@ -250,7 +284,7 @@ pub fn project_durable_assurance(
             snapshot_digest: event.snapshot_digest.clone(),
             ledger_head_before_acceptance: event.ledger_head_digest.clone(),
         },
-        intent: event.intent.clone(),
+        intent: WorkflowObjectiveRevision::from(&event.intent),
         lenses,
         readiness: DurableAssuranceReadinessState::Unknown,
         blocker_lenses: UniversalAssuranceLens::ALL.to_vec(),
@@ -271,11 +305,123 @@ pub fn project_durable_assurance(
 #[derive(Serialize)]
 struct DurableAssuranceProjectionDigestSubject<'a> {
     binding: &'a DurableAssuranceEpochBinding,
-    intent: &'a WorkflowHumanIntentRevision,
+    intent: &'a WorkflowObjectiveRevision,
     lenses: &'a [DurableAssuranceLensProjection],
     readiness: DurableAssuranceReadinessState,
     blocker_lenses: &'a [UniversalAssuranceLens],
     next_actions: &'a [DurableAssuranceNextAction],
+}
+
+/// Reconstruct the initial same-owner cooperative objective as an Assurance
+/// epoch without upgrading it to verified human or broker origin.
+///
+/// This projector accepts only the dedicated event, only revision/epoch one,
+/// and never consumes `HumanIntentRevisionAccepted` as cooperative authority.
+pub fn project_cooperative_durable_assurance(
+    records: &[WorkflowGovernanceLedgerRecord],
+) -> Result<Option<DurableAssuranceProjection>, AssuranceProjectionError> {
+    let mut accepted: Option<(
+        &CooperativeObjectiveAcceptedEvent,
+        &WorkflowGovernanceLedgerRecord,
+    )> = None;
+    let mut issues = Vec::new();
+    for record in records {
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
+            continue;
+        };
+        if accepted.is_some() {
+            issues.push(AssuranceProjectionIssue::DuplicateInitialCooperativeObjective);
+            continue;
+        }
+        issues.extend(validate_cooperative_proposal(
+            &event.objective_id,
+            event.revision,
+            event.assurance_epoch,
+            &event.proposal,
+        ));
+        if event.revision != 1
+            || event.assurance_epoch != 1
+            || event.previous_objective_digest.is_some()
+            || record.previous_record_digest.as_deref() != Some(event.ledger_head_digest.as_str())
+            || record.recorded_at_unix != event.accepted_at_unix
+            || !is_sha256_digest(&event.snapshot_digest)
+            || !is_sha256_digest(&event.acceptance_action_packet_digest)
+            || event.carrying_principal.0.trim().is_empty()
+        {
+            issues.push(AssuranceProjectionIssue::CooperativeObjectiveBindingMismatch);
+        }
+        match workflow_cooperative_objective_digest(
+            &event.objective_id,
+            event.revision,
+            event.assurance_epoch,
+            &event.proposal,
+        ) {
+            Ok(digest) if digest == event.objective_digest => {}
+            Ok(_) => issues.push(AssuranceProjectionIssue::IntentDigestMismatch),
+            Err(_) => {}
+        }
+        accepted = Some((event, record));
+    }
+    if !issues.is_empty() {
+        return Err(AssuranceProjectionError { issues });
+    }
+    let Some((event, record)) = accepted else {
+        return Ok(None);
+    };
+    let intent = WorkflowObjectiveRevision {
+        intent_id: event.objective_id.clone(),
+        revision: event.revision,
+        desired_outcome: event.proposal.outcome.clone(),
+        constraints: event.proposal.constraints.clone(),
+        preferences: Vec::new(),
+        unacceptable_outcomes: event.proposal.unacceptable_outcomes.clone(),
+        uncertainties: event.proposal.open_uncertainties.clone(),
+        source_conversation_ref: event.host_provenance.interaction_ref.clone(),
+        source_conversation_digest: event.host_provenance.conversation_digest.clone(),
+    };
+    let lenses = UniversalAssuranceLens::ALL
+        .into_iter()
+        .map(|lens| DurableAssuranceLensProjection {
+            lens,
+            claim_status: DurableAssuranceEpistemicState::Unknown,
+            required_before: ReadinessTarget::Release,
+            due: true,
+            claims: Vec::new(),
+            evidence: Vec::new(),
+            capabilities: Vec::new(),
+            decisions: Vec::new(),
+            waivers: Vec::new(),
+        })
+        .collect::<Vec<_>>();
+    let mut projection = DurableAssuranceProjection {
+        binding: DurableAssuranceEpochBinding {
+            project_id: record.project_id.clone(),
+            assurance_epoch: event.assurance_epoch,
+            intent_id: event.objective_id.clone(),
+            intent_revision: event.revision,
+            intent_digest: event.objective_digest.clone(),
+            accepted_record_digest: record.record_digest.clone(),
+            accepted_sequence: record.sequence,
+            accepted_state_version: record.state_version,
+            snapshot_digest: event.snapshot_digest.clone(),
+            ledger_head_before_acceptance: event.ledger_head_digest.clone(),
+        },
+        intent,
+        lenses,
+        readiness: DurableAssuranceReadinessState::Unknown,
+        blocker_lenses: UniversalAssuranceLens::ALL.to_vec(),
+        next_actions: Vec::new(),
+        projection_digest: String::new(),
+    };
+    projection.projection_digest = canonical_digest(&DurableAssuranceProjectionDigestSubject {
+        binding: &projection.binding,
+        intent: &projection.intent,
+        lenses: &projection.lenses,
+        readiness: projection.readiness,
+        blocker_lenses: &projection.blocker_lenses,
+        next_actions: &projection.next_actions,
+    })?;
+    Ok(Some(projection))
 }
 
 /// Evidence fact already authenticated and freshness-checked by the kernel.
@@ -1206,6 +1352,75 @@ fn validate_intent(intent: &WorkflowHumanIntentRevision) -> Vec<AssuranceProject
         + intent.uncertainties.iter().map(String::len).sum::<usize>()
         + intent.source_conversation_ref.len()
         + intent.source_conversation_digest.len();
+    if aggregate_bytes > MAX_WORKFLOW_INTENT_TOTAL_BYTES {
+        issues.push(AssuranceProjectionIssue::AggregateIntentTooLarge {
+            maximum_bytes: MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+        });
+    }
+    issues
+}
+
+fn validate_cooperative_proposal(
+    objective_id: &StableId,
+    revision: u64,
+    assurance_epoch: u64,
+    proposal: &WorkflowCooperativeObjectiveProposal,
+) -> Vec<AssuranceProjectionIssue> {
+    let mut issues = Vec::new();
+    if objective_id.0.trim().is_empty() {
+        issues.push(AssuranceProjectionIssue::EmptyField {
+            field: "objective_id".to_owned(),
+        });
+    }
+    if revision == 0 {
+        issues.push(AssuranceProjectionIssue::InvalidInitialRevision { found: revision });
+    }
+    if assurance_epoch == 0 {
+        issues.push(AssuranceProjectionIssue::InvalidInitialEpoch {
+            found: assurance_epoch,
+        });
+    }
+    validate_required_text(
+        &mut issues,
+        "outcome",
+        &proposal.outcome,
+        MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+    );
+    for (field, values) in [
+        ("constraints", proposal.constraints.as_slice()),
+        (
+            "unacceptable_outcomes",
+            proposal.unacceptable_outcomes.as_slice(),
+        ),
+        ("open_uncertainties", proposal.open_uncertainties.as_slice()),
+    ] {
+        if values.len() > MAX_WORKFLOW_INTENT_LIST_ITEMS {
+            issues.push(AssuranceProjectionIssue::TooManyItems {
+                field: field.to_owned(),
+                maximum_items: MAX_WORKFLOW_INTENT_LIST_ITEMS,
+            });
+        }
+        for (index, value) in values.iter().enumerate() {
+            validate_required_text(
+                &mut issues,
+                &format!("{field}[{index}]"),
+                value,
+                MAX_WORKFLOW_INTENT_ITEM_BYTES,
+            );
+        }
+    }
+    let aggregate_bytes = proposal.outcome.len()
+        + proposal.constraints.iter().map(String::len).sum::<usize>()
+        + proposal
+            .unacceptable_outcomes
+            .iter()
+            .map(String::len)
+            .sum::<usize>()
+        + proposal
+            .open_uncertainties
+            .iter()
+            .map(String::len)
+            .sum::<usize>();
     if aggregate_bytes > MAX_WORKFLOW_INTENT_TOTAL_BYTES {
         issues.push(AssuranceProjectionIssue::AggregateIntentTooLarge {
             maximum_bytes: MAX_WORKFLOW_INTENT_TOTAL_BYTES,

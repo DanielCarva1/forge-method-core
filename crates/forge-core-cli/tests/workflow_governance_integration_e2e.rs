@@ -24,7 +24,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -123,6 +123,92 @@ fn assert_ok(output: &Output) -> Value {
     let envelope = json(output);
     assert_eq!(envelope["ok"], true);
     envelope
+}
+
+fn state_tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
+    fn walk(root: &Path, current: &Path, entries: &mut Vec<(String, String, Vec<u8>)>) {
+        let mut children = fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read state tree {}: {error}", current.display()))
+            .map(|entry| entry.expect("state tree entry").path())
+            .collect::<Vec<_>>();
+        children.sort();
+        for path in children {
+            let relative = path
+                .strip_prefix(root)
+                .expect("state entry beneath root")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let metadata = fs::symlink_metadata(&path).expect("state entry metadata");
+            if metadata.file_type().is_symlink() {
+                entries.push((
+                    relative,
+                    "symlink".to_owned(),
+                    fs::read_link(&path)
+                        .expect("state symlink target")
+                        .to_string_lossy()
+                        .as_bytes()
+                        .to_vec(),
+                ));
+            } else if metadata.is_dir() {
+                entries.push((relative, "directory".to_owned(), Vec::new()));
+                walk(root, &path, entries);
+            } else {
+                entries.push((
+                    relative,
+                    "file".to_owned(),
+                    fs::read(&path).expect("state file bytes"),
+                ));
+            }
+        }
+    }
+
+    let mut entries = Vec::new();
+    walk(root, root, &mut entries);
+    entries
+}
+
+fn run_cooperative_input(consumer: &Consumer, packet_digest: &str, input_path: &Path) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "intent",
+            "accept-cooperative",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--packet-digest",
+            packet_digest,
+            "--input-file",
+            &input_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run cooperative objective command")
+}
+
+fn cooperative_decision_json() -> Value {
+    serde_json::json!({
+        "kind": "decision_required",
+        "decision_request": {
+            "id": "decision.objective-scope",
+            "question": "Should enterprise authority be included in the current objective?",
+            "reason": "product_direction",
+            "alternatives": [
+                {
+                    "id": "solo-first",
+                    "description": "Keep this objective solo-first",
+                    "consequences": ["Enterprise authority remains deferred"]
+                },
+                {
+                    "id": "enterprise-now",
+                    "description": "Include enterprise authority now",
+                    "consequences": ["The objective becomes materially larger"]
+                }
+            ],
+            "recommended_alternative_ref": "solo-first",
+            "blocking": true,
+            "blocks_before": "execute"
+        }
+    })
 }
 
 struct StrictHumanBroker {
@@ -374,15 +460,17 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     assert_eq!(next["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(
         next["data"]["durable_assurance"]["status"],
-        "missing_human_intent"
+        "missing_objective"
     );
     assert_eq!(
         next["data"]["durable_assurance"]["blockers"][0]["code"],
-        "missing_accepted_human_intent"
+        "missing_accepted_objective"
     );
-    assert!(next["data"]["authorization"]["action_packets"]
-        .as_array()
-        .is_some_and(Vec::is_empty));
+    assert_eq!(
+        next["data"]["authorization"]["action_packets"][0]["required_authority"]
+            ["approval_boundary"],
+        "cooperative_same_owner"
+    );
     assert!(next["data"]["authorization"]["setup_gaps"]
         .as_array()
         .is_some_and(Vec::is_empty));
@@ -407,9 +495,50 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let packets = action_packets["data"]["packets"]
         .as_array()
         .expect("typed workflow action packet list");
-    assert!(
-        packets.is_empty(),
-        "solo profile must not project strict external authorization packets"
+    assert_eq!(packets.len(), 1);
+    assert_eq!(
+        packets[0]["required_authority"]["approval_boundary"], "cooperative_same_owner",
+        "solo profile projects only its same-owner objective packet"
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["kind"],
+        "cooperative_objective"
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["input_encoding"],
+        "utf8_json_file"
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["unknown_fields_allowed"],
+        false
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["variants"][0]["variant"],
+        "unambiguous"
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["variants"][1]["variant"],
+        "decision_required"
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["limits"]["input_max_bytes"],
+        128 * 1024
+    );
+    assert_eq!(
+        packets[0]["input_contract"]["command_argv_template"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "intent",
+            "accept-cooperative",
+            "--root",
+            "<project-root>",
+            "--packet-digest",
+            "<packet-digest>",
+            "--input-file",
+            "<temporary-utf8-json-path>",
+            "--json"
+        ])
     );
 
     let resumed = assert_ok(&consumer.run(&["resume"]));
@@ -476,6 +605,259 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         .is_some_and(|message| {
             message.contains("unrecognized workflow argument '--principal-registry'")
         }));
+}
+
+#[test]
+fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet digest")
+        .to_owned();
+    let input = consumer.write_json(
+        "cooperative objective with spaces.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Use Forge to improve Forge as a solo developer with agents",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["claim verified human origin"],
+                "open_uncertainties": ["future team authority"]
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.cli-e2e",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let accepted = assert_ok(&run_cooperative_input(&consumer, &packet_digest, &input));
+    assert_eq!(accepted["data"]["status"], "accepted");
+    assert_eq!(
+        accepted["data"]["active_objective"]["authority_basis"],
+        "cooperative_same_owner"
+    );
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let accepted_wal = fs::read(&wal).expect("accepted WAL");
+    let retry = assert_ok(&run_cooperative_input(&consumer, &packet_digest, &input));
+    assert_eq!(
+        retry["data"], accepted["data"],
+        "an exact operational retry must reproduce the same receipt/readback"
+    );
+    assert_eq!(
+        fs::read(&wal).expect("WAL after retry"),
+        accepted_wal,
+        "exact retry must not append"
+    );
+
+    let divergent = consumer.write_json(
+        "divergent cooperative objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Use Forge for a materially different objective",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["claim verified human origin"],
+                "open_uncertainties": ["future team authority"]
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.cli-e2e",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let conflict = run_cooperative_input(&consumer, &packet_digest, &divergent);
+    assert_eq!(conflict.status.code(), Some(4));
+    let conflict = json(&conflict);
+    assert_eq!(conflict["command"], "workflow.intent.accept_cooperative");
+    assert_eq!(conflict["exit_reason"], "conflict");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after divergent retry"),
+        accepted_wal
+    );
+
+    let fresh = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(
+        fresh["data"]["durable_assurance"]["status"],
+        "objective_accepted"
+    );
+    assert_eq!(
+        fresh["data"]["active_cooperative_objective"]["objective_digest"],
+        accepted["data"]["active_objective"]["objective_digest"]
+    );
+
+    let decision =
+        consumer.write_json("decision after accepted.json", &cooperative_decision_json());
+    let before_decision = state_tree_snapshot(&consumer.state);
+    let consumed = run_cooperative_input(&consumer, &packet_digest, &decision);
+    assert_eq!(consumed.status.code(), Some(4));
+    assert_eq!(
+        json(&consumed)["command"],
+        "workflow.intent.accept_cooperative"
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), before_decision);
+}
+
+#[test]
+fn cooperative_decision_validates_live_packet_and_keeps_the_entire_state_tree_byte_exact() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet")
+        .to_owned();
+    let input = consumer.write_json(
+        "decision request with spaces.json",
+        &cooperative_decision_json(),
+    );
+    let before = state_tree_snapshot(&consumer.state);
+
+    let decision = assert_ok(&run_cooperative_input(&consumer, &packet, &input));
+    assert_eq!(decision["command"], "workflow.intent.accept_cooperative");
+    assert_eq!(decision["data"]["status"], "decision_required");
+    assert_eq!(state_tree_snapshot(&consumer.state), before);
+
+    let wrong = run_cooperative_input(&consumer, &format!("sha256:{}", "f".repeat(64)), &input);
+    assert!(!wrong.status.success());
+    assert_eq!(
+        json(&wrong)["command"],
+        "workflow.intent.accept_cooperative"
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), before);
+
+    fs::write(consumer.app.join("README.md"), "stale packet snapshot\n").expect("change project");
+    let stale = run_cooperative_input(&consumer, &packet, &input);
+    assert!(!stale.status.success());
+    assert_eq!(
+        json(&stale)["command"],
+        "workflow.intent.accept_cooperative"
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), before);
+
+    let strict = Consumer::new();
+    assert_ok(&strict.run(&["init", "--readiness-profile", "strict_external"]));
+    let strict_next = assert_ok(&strict.run(&["next"]));
+    let strict_packet = strict_next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("strict intent packet")
+        .to_owned();
+    let strict_input =
+        strict.write_json("strict decision request.json", &cooperative_decision_json());
+    let strict_before = state_tree_snapshot(&strict.state);
+    let rejected = run_cooperative_input(&strict, &strict_packet, &strict_input);
+    assert!(!rejected.status.success());
+    let rejected = json(&rejected);
+    assert_eq!(rejected["command"], "workflow.intent.accept_cooperative");
+    assert!(rejected["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("solo_cooperative")));
+    assert_eq!(state_tree_snapshot(&strict.state), strict_before);
+}
+
+#[test]
+fn cooperative_cli_rejects_unbounded_ambiguous_or_special_inputs_with_exact_command_envelopes() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet")
+        .to_owned();
+    let before = state_tree_snapshot(&consumer.state);
+
+    let unknown = consumer.write_json(
+        "unknown field.json",
+        &serde_json::json!({
+            "kind": "decision_required",
+            "decision_request": cooperative_decision_json()["decision_request"],
+            "invented_authority": true
+        }),
+    );
+    let duplicate = consumer.parent.join("duplicate fields.json");
+    fs::write(
+        &duplicate,
+        br#"{"kind":"decision_required","kind":"unambiguous"}"#,
+    )
+    .expect("duplicate fixture");
+    let invalid_utf8 = consumer.parent.join("invalid encoding.json");
+    fs::write(&invalid_utf8, [0xff, 0xfe, 0xfd]).expect("invalid UTF-8 fixture");
+    let oversize = consumer.parent.join("oversize.json");
+    fs::write(&oversize, vec![b' '; 128 * 1024 + 1]).expect("oversize fixture");
+    let directory = consumer.parent.join("input directory");
+    fs::create_dir(&directory).expect("input directory fixture");
+
+    let mut cases = vec![unknown, duplicate, invalid_utf8, oversize, directory];
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let valid = consumer.write_json("symlink target.json", &cooperative_decision_json());
+        let link = consumer.parent.join("symlink input.json");
+        symlink(valid, &link).expect("symlink fixture");
+        cases.push(link);
+        let fifo = consumer.parent.join("fifo input.json");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo command");
+        assert!(status.success(), "mkfifo fixture");
+        cases.push(fifo);
+    }
+
+    for path in cases {
+        let rejected = run_cooperative_input(&consumer, &packet, &path);
+        assert!(
+            !rejected.status.success(),
+            "hostile input unexpectedly succeeded: {}",
+            path.display()
+        );
+        assert_eq!(
+            json(&rejected)["command"],
+            "workflow.intent.accept_cooperative",
+            "{}",
+            path.display()
+        );
+    }
+
+    let valid = consumer.write_json("duplicate flag valid.json", &cooperative_decision_json());
+    let duplicate_flag = bin()
+        .args([
+            "workflow",
+            "intent",
+            "accept-cooperative",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--packet-digest",
+            &packet,
+            "--input-file",
+            &valid.display().to_string(),
+            "--input-file",
+            &valid.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("duplicate input-file flag");
+    assert!(!duplicate_flag.status.success());
+    assert_eq!(
+        json(&duplicate_flag)["command"],
+        "workflow.intent.accept_cooperative"
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        before,
+        "file, encoding, JSON, and usage errors must not touch Forge state"
+    );
 }
 
 #[test]
@@ -785,6 +1167,7 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
     assert!(text.contains("workflow action authorize"));
     assert!(text.contains("workflow action apply"));
     assert!(text.contains("workflow intent record"));
+    assert!(text.contains("workflow intent accept-cooperative"));
     assert!(!text.contains("workflow applicability-authorize"));
     assert!(!text.contains("workflow capability-authorize"));
     assert!(!text.contains("workflow evidence-authorize"));

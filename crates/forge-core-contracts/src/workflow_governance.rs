@@ -7,8 +7,8 @@
 //! have no field capable of authorizing progression or done.
 
 use crate::assurance::{
-    CapabilityGapKind, DecisionAlternative, HumanDecisionReason, ObligationCriticality,
-    ReadinessTarget, UniversalAssuranceLens, WorkflowHumanIntentRevision,
+    CapabilityGapKind, DecisionAlternative, DecisionRequest, HumanDecisionReason,
+    ObligationCriticality, ReadinessTarget, UniversalAssuranceLens, WorkflowHumanIntentRevision,
 };
 use crate::common::{PrincipalId, StableId};
 use crate::completion::CompletionContractDocument;
@@ -64,6 +64,19 @@ pub const WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION: &str
 /// wire epochs; explicit profiles require at least `0.9` and remain durable
 /// across every successor record.
 pub const WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION: &str = "0.9";
+/// Ledger records written from the first same-owner cooperative objective.
+///
+/// The new event is intentionally distinct from human intent and external
+/// broker provenance. Frozen `0.1` through `0.9` records retain their exact
+/// bytes; a cooperative objective requires `0.10` and every successor record
+/// remains on that epoch.
+pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION: &str = "0.10";
+
+/// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
+/// command. The action packet publishes this same bound so a host never needs
+/// source-code knowledge to materialize the closed input.
+pub const MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES: u64 = 128 * 1024;
+pub const MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES: usize = 1024;
 
 /// Non-authoritative typed policy contribution. It is deliberately not a
 /// runtime bundle: references into the declared base are resolved only by the
@@ -403,6 +416,7 @@ pub struct WorkflowGovernanceLedgerRecord {
 pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
     HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
+    CooperativeObjectiveAccepted(CooperativeObjectiveAcceptedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     CoreDomainPackRebased(Box<CoreDomainPackRebasedEvent>),
@@ -420,6 +434,88 @@ pub enum WorkflowGovernanceEvent {
     PolicyCompleted(PolicyCompletedEvent),
     ReceiptRevoked(ReceiptRevokedEvent),
     ContinuityRecorded(ContinuityRecordedEvent),
+}
+
+/// Closed authority basis for an objective carried by the same owner-operated
+/// host agent. It is neither verified human origin nor an external-broker
+/// attestation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCooperativeAuthorityBasis {
+    CooperativeSameOwner,
+}
+
+/// Bounded semantic proposal materialized by a host from ordinary chat.
+///
+/// No readiness, evidence, evaluator, issuer, signature, or identity-
+/// separation claim can be supplied through this shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeObjectiveProposal {
+    pub outcome: String,
+    #[serde(default)]
+    pub constraints: Vec<String>,
+    #[serde(default)]
+    pub unacceptable_outcomes: Vec<String>,
+    #[serde(default)]
+    pub open_uncertainties: Vec<String>,
+}
+
+/// Content-free, caller-carried host coordinates for audit and continuity.
+///
+/// These values identify where a proposal was materialized; they do not prove
+/// that the named host, principal, or human interaction existed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeHostProvenance {
+    pub host_id: StableId,
+    pub host_version: String,
+    pub session_ref: String,
+    pub interaction_ref: String,
+    pub conversation_digest: String,
+    pub observed_at_unix: u64,
+}
+
+/// Closed host input for cooperative objective admission.
+///
+/// `DecisionRequired` is deliberately non-authorizing. Forge returns its one
+/// typed question without reading or mutating governance state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowCooperativeObjectiveInput {
+    Unambiguous {
+        proposal: WorkflowCooperativeObjectiveProposal,
+        carrying_principal: PrincipalId,
+        host_provenance: WorkflowCooperativeHostProvenance,
+    },
+    DecisionRequired {
+        decision_request: DecisionRequest,
+    },
+}
+
+/// One initial objective durably admitted for a Solo Cooperative workflow.
+///
+/// The kernel derives identity, revision, epoch, digest, predecessor, packet,
+/// snapshot, head, and commit time. The carrying principal and generic host
+/// provenance are audit coordinates only: this event makes no signature,
+/// issuer-verification, human-origin, or identity-separation claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CooperativeObjectiveAcceptedEvent {
+    pub objective_id: StableId,
+    pub revision: u64,
+    pub assurance_epoch: u64,
+    pub proposal: WorkflowCooperativeObjectiveProposal,
+    pub objective_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_objective_digest: Option<String>,
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub acceptance_action_packet_digest: String,
+    pub carrying_principal: PrincipalId,
+    pub host_provenance: WorkflowCooperativeHostProvenance,
+    pub authority_basis: WorkflowCooperativeAuthorityBasis,
+    pub accepted_at_unix: u64,
 }
 
 /// One bounded human intent revision admitted by the workflow mutation TCB.

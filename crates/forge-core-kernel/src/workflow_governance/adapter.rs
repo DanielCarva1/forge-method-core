@@ -47,17 +47,18 @@ use forge_core_contracts::recovery::{HealthStatus, RecoveryAction};
 use forge_core_contracts::request::{DependencyKind, RequestStatus};
 use forge_core_contracts::workflow_governance::{
     BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, WorkflowBrokerOriginProfile,
-    WorkflowReadinessProfile,
+    WorkflowCooperativeAuthorityBasis, WorkflowReadinessProfile,
 };
 use forge_core_contracts::{
     ApplicabilityAssessedEvent, CapabilityProbedEvent, ClaimContract, ContinuityRecordedEvent,
-    CoordinationCompletionState, CoordinationHealthRecoveryState, CoordinationMutationHandoff,
-    CoordinationRequestState, CoordinationStateAppliedEvent, CoordinationStateRecord,
-    CoreDomainPackRebasedEvent, DecisionAlternative, DecisionResolvedEvent,
-    DomainPackCompositionGap, DomainPackCoreBinding, DomainPackLifecycleOperation,
-    DomainPackRebasePlanDocument, DomainPackRebasePlanInput, DurableAssuranceEpistemicState,
-    DurableAssuranceProjection, EvaluatorObservedEvent, Phase, PhaseAdvancedEvent,
-    PolicyCompletedEvent, PostBuildVerifyAdmittedGateResult, PostBuildVerifyEpisodeAppliedEvent,
+    CooperativeObjectiveAcceptedEvent, CoordinationCompletionState,
+    CoordinationHealthRecoveryState, CoordinationMutationHandoff, CoordinationRequestState,
+    CoordinationStateAppliedEvent, CoordinationStateRecord, CoreDomainPackRebasedEvent,
+    DecisionAlternative, DecisionRequest, DecisionResolvedEvent, DomainPackCompositionGap,
+    DomainPackCoreBinding, DomainPackLifecycleOperation, DomainPackRebasePlanDocument,
+    DomainPackRebasePlanInput, DurableAssuranceEpistemicState, DurableAssuranceProjection,
+    EvaluatorObservedEvent, Phase, PhaseAdvancedEvent, PolicyCompletedEvent,
+    PostBuildVerifyAdmittedGateResult, PostBuildVerifyEpisodeAppliedEvent,
     PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
     PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent,
     SignalChangedEvent, StableId, UniversalAssuranceLens, WaiverAuthorizedEvent,
@@ -65,17 +66,20 @@ use forge_core_contracts::{
     WorkflowBrokerExternalSetupBlockReason, WorkflowBrokerExternalSetupState,
     WorkflowBrokerPublicRegistryDocument, WorkflowCapabilityProbeKind,
     WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
-    WorkflowContentAddressedReference, WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider,
-    WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
-    WorkflowEvidenceOutcome, WorkflowEvidenceProvenance, WorkflowEvidenceStrength,
-    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluation, WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
-    WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
-    WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
+    WorkflowContentAddressedReference, WorkflowCooperativeHostProvenance,
+    WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
+    WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
+    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
+    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
+    WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
+    WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
+    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
     MAX_REPRESENTATIVE_SLICE_ITEMS, MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
     MAX_REPRESENTATIVE_SLICE_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
+    MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES, MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES,
     MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
     MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
     MAX_WORKFLOW_INTENT_TOTAL_BYTES, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
@@ -83,14 +87,15 @@ use forge_core_contracts::{
 };
 use forge_core_decisions::{
     evaluate_post_build_verify_episode, evaluate_transition, find_entry, is_live,
-    load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase, project_durable_assurance,
+    load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
+    project_cooperative_durable_assurance, project_durable_assurance,
     project_governed_durable_assurance, project_legacy_workflow_compatibility, rfc3339_to_unix,
     route_post_build_verify_episode, simulate_workflow_governance,
     validate_representative_slice_definition, verify_domain_pack_rebase_plan,
-    workflow_human_intent_digest, AssuranceProjectionError, DomainPackRebasePlanError, GateKind,
-    GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
-    GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
-    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
+    workflow_cooperative_objective_digest, workflow_human_intent_digest, AssuranceProjectionError,
+    DomainPackRebasePlanError, GateKind, GovernedAssuranceActionPacketFact,
+    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
+    GovernedAssuranceFacts, GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
     PostBuildVerifyEpisodeRuntimeRoute, ProvidedGateResult, TransitionDecision, TransitionRequest,
     WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
     WorkflowGovernanceStatus,
@@ -138,6 +143,10 @@ const MAX_TRUSTED_REGISTRY_BYTES: u64 = 1024 * 1024;
 const WORKFLOW_AUTHORIZATION_ACTION_PACKET_SCHEMA_VERSION: &str =
     "workflow_authorization_action_packets_v1";
 const WORKFLOW_AUTHORIZATION_PREPARATION_TTL_SECONDS: u64 = 300;
+const MAX_WORKFLOW_COOPERATIVE_DECISION_QUESTION_BYTES: usize = 512;
+const MIN_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES: usize = 2;
+const MAX_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES: usize = 8;
+const MAX_WORKFLOW_COOPERATIVE_DECISION_CONSEQUENCES: usize = 8;
 const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
 const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
 const DOMAIN_PACK_REBASE_PLAN_LOCK_RELATIVE_PATH: &str = "locks/domain-packs.rebase-plan.lock";
@@ -150,6 +159,9 @@ const TEST_EXPIRE_AFTER_REPLAY_RESERVATION_MARKER: &str = ".test-expire-after-re
 #[cfg(all(test, unix))]
 const TEST_REPLACE_PROJECT_FILE_AFTER_REPLAY_RESERVATION_MARKER: &str =
     ".test-replace-project-file-after-replay-reservation";
+#[cfg(test)]
+const TEST_CHANGE_PROJECT_BEFORE_COOPERATIVE_COMMIT_MARKER: &str =
+    ".test-change-project-before-cooperative-commit";
 const DOMAIN_PACK_REBASE_PLAN_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Canonical project binding used by every live governance operation.
@@ -192,6 +204,7 @@ pub struct WorkflowAuthorizationPacketBinding {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowAuthorizationApprovalBoundary {
+    CooperativeSameOwner,
     HumanApprovalBroker,
     IndependentReviewerBroker,
     TrustedRuntimeBroker,
@@ -236,6 +249,34 @@ pub enum WorkflowRepresentativeSliceActionBinding {
     },
 }
 
+/// One machine-readable example for a closed cooperative-objective input
+/// variant. Templates contain placeholder values, not authority, and are
+/// emitted inside the packet so a generic host need not inspect Forge source.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeObjectiveInputTemplate {
+    pub variant: String,
+    pub template: serde_json::Value,
+}
+
+/// Complete host-facing bounds for the cooperative-objective JSON file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeObjectiveInputLimits {
+    pub input_max_bytes: u64,
+    pub objective_id_max_bytes: usize,
+    pub carrying_principal_max_bytes: usize,
+    pub host_coordinate_max_bytes: usize,
+    pub outcome_max_bytes: usize,
+    pub list_max_items: usize,
+    pub list_item_max_bytes: usize,
+    pub proposal_total_max_bytes: usize,
+    pub decision_question_max_bytes: usize,
+    pub decision_alternatives_min_items: usize,
+    pub decision_alternatives_max_items: usize,
+    pub decision_consequences_max_items: usize,
+}
+
 /// Closed semantic input contract for a generated action packet.
 ///
 /// This is a choice/shape description, never an authorization response. It
@@ -246,6 +287,17 @@ pub enum WorkflowRepresentativeSliceActionBinding {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkflowAuthorizationInputContract {
+    CooperativeObjective {
+        objective_id: StableId,
+        next_objective_revision: u64,
+        next_assurance_epoch: u64,
+        input_encoding: String,
+        discriminator_field: String,
+        unknown_fields_allowed: bool,
+        variants: Vec<WorkflowCooperativeObjectiveInputTemplate>,
+        limits: WorkflowCooperativeObjectiveInputLimits,
+        command_argv_template: Vec<String>,
+    },
     IntentRevision {
         intent_id: StableId,
         next_intent_revision: u64,
@@ -381,9 +433,11 @@ pub struct WorkflowAuthorizationGuidance {
     pub action_packets: Vec<WorkflowAuthorizationActionPacket>,
 }
 
-/// Durable human-intent authority reconstructed from the workflow ledger.
-/// Proposal-only Assurance Case files and host readiness claims are never
-/// consulted by this projection.
+/// Origin-aware durable objective projection reconstructed from the workflow
+/// ledger. `status` distinguishes strict human intent from same-owner
+/// objectives, while `active_cooperative_objective.authority_basis` preserves
+/// the weaker cooperative origin. Proposal-only Assurance Case files and host
+/// readiness claims are never consulted.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowDurableAssuranceGuidance {
@@ -398,6 +452,8 @@ pub struct WorkflowDurableAssuranceGuidance {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowDurableAssuranceStatus {
+    MissingObjective,
+    ObjectiveAccepted,
     MissingHumanIntent,
     IntentAccepted,
 }
@@ -413,6 +469,7 @@ pub struct WorkflowDurableAssuranceBlocker {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowDurableAssuranceBlockerCode {
+    MissingAcceptedObjective,
     MissingAcceptedHumanIntent,
     UniversalLensUnknown,
     UniversalLensSupported,
@@ -1240,6 +1297,212 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
         self.action_packets_at(unix_time()?)
+    }
+
+    /// Admit one initial same-owner objective or return one irreducible
+    /// decision request after read-only validation of the current packet and
+    /// workflow state.
+    pub fn accept_cooperative_objective(
+        &self,
+        packet_digest: &str,
+        input: WorkflowCooperativeObjectiveInput,
+    ) -> Result<WorkflowCooperativeObjectiveAcceptance, WorkflowGovernanceAdapterError> {
+        match &input {
+            WorkflowCooperativeObjectiveInput::DecisionRequired { decision_request } => {
+                validate_cooperative_decision_request(&decision_request)?;
+            }
+            WorkflowCooperativeObjectiveInput::Unambiguous {
+                proposal,
+                carrying_principal,
+                host_provenance,
+            } => {
+                validate_cooperative_carrier(carrying_principal, host_provenance)?;
+                // Reject malformed proposal material before acquiring any
+                // retained project or governance authority. The final digest
+                // is re-derived from the live packet identity below.
+                workflow_cooperative_objective_digest(
+                    &StableId("objective.validation".to_owned()),
+                    1,
+                    1,
+                    proposal,
+                )?;
+            }
+        }
+        let now = unix_time()?;
+        if matches!(
+            &input,
+            WorkflowCooperativeObjectiveInput::Unambiguous {
+                host_provenance,
+                ..
+            } if host_provenance.observed_at_unix > now
+        ) {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "cooperative host observation cannot be in the future".to_owned(),
+            ));
+        }
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
+            return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
+        }
+
+        if let Some((objective_record, accepted_event)) =
+            accepted_cooperative_objective_record(&projection.records)?
+        {
+            let WorkflowCooperativeObjectiveInput::Unambiguous {
+                proposal,
+                carrying_principal,
+                host_provenance,
+            } = &input
+            else {
+                return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted);
+            };
+            if packet_digest != accepted_event.acceptance_action_packet_digest {
+                return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+            }
+            if proposal != &accepted_event.proposal
+                || carrying_principal != &accepted_event.carrying_principal
+                || host_provenance != &accepted_event.host_provenance
+            {
+                return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict);
+            }
+            self.require_effective_epoch_current(admitted, &effective, &projection)?;
+            if projection.head_digest.as_deref() != Some(objective_record.record_digest.as_str())
+                || snapshot.digest() != accepted_event.snapshot_digest
+            {
+                return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+            }
+            snapshot.revalidate()?;
+            let next = self.guidance_from_projection_with_snapshot(
+                &registry,
+                admitted,
+                &effective,
+                &projection,
+                accepted_event.accepted_at_unix,
+                &snapshot,
+            )?;
+            let active_objective = next
+                .active_cooperative_objective
+                .clone()
+                .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+            return Ok(WorkflowCooperativeObjectiveAcceptance::Accepted {
+                objective_record: objective_record.clone(),
+                active_objective,
+                next: Box::new(next),
+            });
+        }
+        if project_durable_assurance(&projection.records)?.is_some() {
+            return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted);
+        }
+
+        if let WorkflowCooperativeObjectiveInput::DecisionRequired { decision_request } = input {
+            self.require_effective_epoch_current(admitted, &effective, &projection)?;
+            let guidance = self.guidance_from_projection_with_snapshot(
+                &registry,
+                admitted,
+                &effective,
+                &projection,
+                now,
+                &snapshot,
+            )?;
+            validated_cooperative_objective_packet(&guidance, packet_digest)?;
+            snapshot.revalidate()?;
+            if projection.head_digest.as_deref() != Some(guidance.ledger_head_digest.as_str())
+                || snapshot.digest() != guidance.snapshot_digest
+            {
+                return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+            }
+            return Ok(WorkflowCooperativeObjectiveAcceptance::DecisionRequired {
+                decision_request,
+            });
+        }
+
+        let WorkflowCooperativeObjectiveInput::Unambiguous {
+            proposal,
+            carrying_principal,
+            host_provenance,
+        } = input
+        else {
+            unreachable!("the decision branch returned above");
+        };
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        let guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &snapshot,
+        )?;
+        let (packet, objective_id, next_objective_revision, next_assurance_epoch) =
+            validated_cooperative_objective_packet(&guidance, packet_digest)?;
+        if packet.binding.project_id != self.binding.project_id {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        if next_objective_revision != 1 || next_assurance_epoch != 1 {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        let objective_digest = workflow_cooperative_objective_digest(
+            &objective_id,
+            next_objective_revision,
+            next_assurance_epoch,
+            &proposal,
+        )?;
+        #[cfg(test)]
+        inject_project_change_before_cooperative_commit(
+            &self.binding.state_root,
+            &self.binding.project_root,
+        );
+        snapshot.revalidate()?;
+        if snapshot.digest() != packet.binding.snapshot_digest
+            || projection.head_digest.as_deref() != Some(packet.binding.ledger_head_digest.as_str())
+        {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        let event = CooperativeObjectiveAcceptedEvent {
+            objective_id,
+            revision: next_objective_revision,
+            assurance_epoch: next_assurance_epoch,
+            proposal,
+            objective_digest,
+            previous_objective_digest: None,
+            snapshot_digest: packet.binding.snapshot_digest.clone(),
+            ledger_head_digest: packet.binding.ledger_head_digest.clone(),
+            acceptance_action_packet_digest: packet.packet_digest.clone(),
+            carrying_principal,
+            host_provenance,
+            authority_basis: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+            accepted_at_unix: now,
+        };
+        let identity = self.identity(admitted);
+        let objective_record = ledger.accept_cooperative_objective_unchecked_tcb(
+            &packet.binding.ledger_head_digest,
+            &identity,
+            projection.current_state_version().unwrap_or_default(),
+            event,
+        )?;
+        let committed = ledger.recover()?;
+        let next = self.guidance_from_projection_with_snapshot(
+            &registry, admitted, &effective, &committed, now, &snapshot,
+        )?;
+        let active_objective = next
+            .active_cooperative_objective
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+        Ok(WorkflowCooperativeObjectiveAcceptance::Accepted {
+            objective_record,
+            active_objective,
+            next: Box::new(next),
+        })
     }
 
     fn action_packets_at(
@@ -3470,6 +3733,26 @@ impl WorkflowGovernanceProjectAdapter {
         }
     }
 
+    /// Prove that a read-only cooperative lane can derive its packet without
+    /// silently performing the normal Domain Pack reconciliation write.
+    fn require_effective_epoch_current(
+        &self,
+        core: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+    ) -> Result<(), WorkflowGovernanceAdapterError> {
+        let core_identity = self.identity(core);
+        validate_identity(projection, &core_identity, &self.binding.project_root)?;
+        let active = match projection.active_effective_bundle_identity() {
+            Some(active) => active,
+            None => derive_core_only_workflow_effective_identity(core)?,
+        };
+        if active != *effective.identity() {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        Ok(())
+    }
+
     /// Reconcile the independently committed lifecycle generation into the
     /// workflow ledger before any guidance or mutation is derived. The caller
     /// already retains the lifecycle lock, so this never inverts lock order.
@@ -4013,7 +4296,17 @@ impl WorkflowGovernanceProjectAdapter {
             ADAPTER_SOURCE_ID.to_owned(),
         )?;
         let verified = evaluate_verified_workflow_governance(trusted)?;
-        let base_assurance_projection = project_durable_assurance(&projection.records)?;
+        let strict_assurance_projection = project_durable_assurance(&projection.records)?;
+        let cooperative_assurance_projection =
+            project_cooperative_durable_assurance(&projection.records)?;
+        let base_assurance_projection = match readiness_profile {
+            WorkflowReadinessProfile::SoloCooperative => {
+                cooperative_assurance_projection.or(strict_assurance_projection)
+            }
+            WorkflowReadinessProfile::StrictExternal => strict_assurance_projection,
+        };
+        let active_cooperative_objective =
+            active_cooperative_objective_from_ledger(&projection.records)?;
         let mut assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
             derive_governed_assurance_facts(
                 effective.document(),
@@ -4096,7 +4389,13 @@ impl WorkflowGovernanceProjectAdapter {
             Some(projection) => {
                 let blockers = durable_assurance_blockers(&projection);
                 WorkflowDurableAssuranceGuidance {
-                    status: WorkflowDurableAssuranceStatus::IntentAccepted,
+                    status: if readiness_profile == WorkflowReadinessProfile::SoloCooperative
+                        && active_cooperative_objective.is_some()
+                    {
+                        WorkflowDurableAssuranceStatus::ObjectiveAccepted
+                    } else {
+                        WorkflowDurableAssuranceStatus::IntentAccepted
+                    },
                     blockers,
                     current_snapshot_digest: snapshot_digest.clone(),
                     source_ledger_head_digest: assurance_source_head.clone(),
@@ -4105,13 +4404,28 @@ impl WorkflowGovernanceProjectAdapter {
                 }
             }
             None => WorkflowDurableAssuranceGuidance {
-                status: WorkflowDurableAssuranceStatus::MissingHumanIntent,
-                blockers: vec![WorkflowDurableAssuranceBlocker {
-                    code: WorkflowDurableAssuranceBlockerCode::MissingAcceptedHumanIntent,
-                    lens: None,
-                    summary: "A human-origin intent revision must be accepted before governed work can proceed."
-                        .to_owned(),
-                }],
+                status: if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
+                    WorkflowDurableAssuranceStatus::MissingObjective
+                } else {
+                    WorkflowDurableAssuranceStatus::MissingHumanIntent
+                },
+                blockers: vec![
+                    if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
+                        WorkflowDurableAssuranceBlocker {
+                        code: WorkflowDurableAssuranceBlockerCode::MissingAcceptedObjective,
+                        lens: None,
+                        summary: "An unambiguous same-owner objective must be accepted before governed work can proceed."
+                            .to_owned(),
+                    }
+                    } else {
+                        WorkflowDurableAssuranceBlocker {
+                        code: WorkflowDurableAssuranceBlockerCode::MissingAcceptedHumanIntent,
+                        lens: None,
+                        summary: "A human-origin intent revision must be accepted before governed work can proceed."
+                            .to_owned(),
+                    }
+                    },
+                ],
                 current_snapshot_digest: snapshot_digest.clone(),
                 source_ledger_head_digest: assurance_source_head,
                 case_digest: assurance_case_digest,
@@ -4150,6 +4464,7 @@ impl WorkflowGovernanceProjectAdapter {
             applicability,
             boundary_rechecks,
             simulation: verified.simulation.clone(),
+            active_cooperative_objective,
             durable_assurance,
             authorization: WorkflowAuthorizationGuidance {
                 registry_setup: WorkflowAuthorizationRegistrySetup {
@@ -4161,7 +4476,7 @@ impl WorkflowGovernanceProjectAdapter {
             },
         };
         let action_packets = if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
-            Vec::new()
+            cooperative_objective_action_packets(&guidance)?
         } else {
             authorization_action_packets(
                 effective.document(),
@@ -4522,8 +4837,52 @@ pub struct WorkflowGovernanceGuidance {
     pub applicability: Option<bool>,
     pub boundary_rechecks: Vec<WorkflowGovernanceBoundaryRecheck>,
     pub simulation: WorkflowGovernanceSimulation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_cooperative_objective: Option<WorkflowActiveCooperativeObjective>,
     pub durable_assurance: WorkflowDurableAssuranceGuidance,
     pub authorization: WorkflowAuthorizationGuidance,
+}
+
+/// Honest ledger-derived readback for the same-owner cooperative objective.
+///
+/// The carrying identity and host coordinates are audit provenance only. This
+/// type has no field that can imply a signature, verified issuer, human origin,
+/// or independent identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowActiveCooperativeObjective {
+    pub objective_id: StableId,
+    pub revision: u64,
+    pub assurance_epoch: u64,
+    pub proposal: WorkflowCooperativeObjectiveProposal,
+    pub objective_digest: String,
+    pub previous_objective_digest: Option<String>,
+    pub accepted_record_digest: String,
+    pub accepted_sequence: u64,
+    pub accepted_state_version: u64,
+    pub snapshot_digest_at_acceptance: String,
+    pub ledger_head_before_acceptance: String,
+    pub acceptance_action_packet_digest: String,
+    pub carrying_principal: PrincipalId,
+    pub host_provenance: WorkflowCooperativeHostProvenance,
+    pub authority_basis: WorkflowCooperativeAuthorityBasis,
+    pub accepted_at_unix: u64,
+}
+
+/// Result of one closed cooperative-objective input. The decision branch has
+/// no workflow state fields because it validates the current packet and state
+/// read-only and performs zero Forge writes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowCooperativeObjectiveAcceptance {
+    DecisionRequired {
+        decision_request: DecisionRequest,
+    },
+    Accepted {
+        objective_record: WorkflowGovernanceLedgerRecord,
+        active_objective: WorkflowActiveCooperativeObjective,
+        next: Box<WorkflowGovernanceGuidance>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -4646,6 +5005,9 @@ pub enum WorkflowGovernanceAdapterError {
         current: WorkflowReadinessProfile,
         requested: WorkflowReadinessProfile,
     },
+    CooperativeObjectiveProfileRequired,
+    CooperativeObjectiveAlreadyAccepted,
+    CooperativeObjectiveRetryConflict,
     UnknownRelease(String),
     ReleaseNotAdjacent,
     ReleasePolicyDrift,
@@ -4741,6 +5103,15 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
                 "workflow readiness profile cannot be reconfigured from {} to {} after initialization",
                 current.wire_name(),
                 requested.wire_name()
+            ),
+            Self::CooperativeObjectiveProfileRequired => f.write_str(
+                "cooperative objective admission requires the solo_cooperative readiness profile",
+            ),
+            Self::CooperativeObjectiveAlreadyAccepted => f.write_str(
+                "an initial objective is already durable; refresh workflow next",
+            ),
+            Self::CooperativeObjectiveRetryConflict => f.write_str(
+                "cooperative objective retry conflicts with the durably accepted payload",
             ),
             Self::UnknownRelease(id) => write!(f, "unknown admitted workflow release {id}"),
             Self::ReleaseNotAdjacent => f.write_str("target workflow release is not the exact adjacent successor"),
@@ -6724,6 +7095,7 @@ fn validate_broker_packet_audit(
         WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker => {
             audit.issuer_profile == WorkflowBrokerIssuerProfile::Human
         }
+        WorkflowAuthorizationApprovalBoundary::CooperativeSameOwner => false,
         WorkflowAuthorizationApprovalBoundary::IndependentReviewerBroker => {
             audit.issuer_profile == WorkflowBrokerIssuerProfile::Reviewer
         }
@@ -7301,7 +7673,8 @@ fn prepare_authorization_from_packet(
 ) -> Result<PreparedWorkflowAuthorization, WorkflowGovernanceAdapterError> {
     let policy = policy_by_id(bundle, &packet.binding.policy_ref)?;
     let contract_kind = match &packet.input_contract {
-        WorkflowAuthorizationInputContract::IntentRevision { .. } => {
+        WorkflowAuthorizationInputContract::CooperativeObjective { .. }
+        | WorkflowAuthorizationInputContract::IntentRevision { .. } => {
             WorkflowAuthorizationKind::IntentRevision
         }
         WorkflowAuthorizationInputContract::Applicability { .. } => {
@@ -7755,6 +8128,240 @@ fn latest_representative_definition<'a>(
         .filter(|fact| {
             fact.outcome == WorkflowEvidenceOutcome::Pass && fact.representative_slice.is_some()
         })
+}
+
+fn active_cooperative_objective_from_ledger(
+    records: &[WorkflowGovernanceLedgerRecord],
+) -> Result<Option<WorkflowActiveCooperativeObjective>, WorkflowGovernanceAdapterError> {
+    let mut active = None;
+    for record in records {
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
+            continue;
+        };
+        if active.is_some() {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        active = Some(WorkflowActiveCooperativeObjective {
+            objective_id: event.objective_id.clone(),
+            revision: event.revision,
+            assurance_epoch: event.assurance_epoch,
+            proposal: event.proposal.clone(),
+            objective_digest: event.objective_digest.clone(),
+            previous_objective_digest: event.previous_objective_digest.clone(),
+            accepted_record_digest: record.record_digest.clone(),
+            accepted_sequence: record.sequence,
+            accepted_state_version: record.state_version,
+            snapshot_digest_at_acceptance: event.snapshot_digest.clone(),
+            ledger_head_before_acceptance: event.ledger_head_digest.clone(),
+            acceptance_action_packet_digest: event.acceptance_action_packet_digest.clone(),
+            carrying_principal: event.carrying_principal.clone(),
+            host_provenance: event.host_provenance.clone(),
+            authority_basis: event.authority_basis,
+            accepted_at_unix: event.accepted_at_unix,
+        });
+    }
+    Ok(active)
+}
+
+fn accepted_cooperative_objective_record(
+    records: &[WorkflowGovernanceLedgerRecord],
+) -> Result<
+    Option<(
+        &WorkflowGovernanceLedgerRecord,
+        &CooperativeObjectiveAcceptedEvent,
+    )>,
+    WorkflowGovernanceAdapterError,
+> {
+    let mut accepted = None;
+    for record in records {
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
+            continue;
+        };
+        if accepted.is_some() {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        accepted = Some((record, event));
+    }
+    Ok(accepted)
+}
+
+fn validated_cooperative_objective_packet(
+    guidance: &WorkflowGovernanceGuidance,
+    packet_digest: &str,
+) -> Result<(WorkflowAuthorizationActionPacket, StableId, u64, u64), WorkflowGovernanceAdapterError>
+{
+    let packet = guidance
+        .authorization
+        .action_packets
+        .iter()
+        .find(|packet| packet.packet_digest == packet_digest)
+        .cloned()
+        .ok_or(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)?;
+    if packet.authorization_kind != WorkflowAuthorizationKind::IntentRevision
+        || packet.required_authority.approval_boundary
+            != WorkflowAuthorizationApprovalBoundary::CooperativeSameOwner
+        || packet.binding.snapshot_digest != guidance.snapshot_digest
+        || packet.binding.ledger_head_digest != guidance.ledger_head_digest
+        || packet.binding.state_version != guidance.state_version
+        || packet.binding.trusted_principal_registry_digest.is_some()
+        || packet.binding.trusted_broker_registry_digest.is_some()
+    {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    }
+    let WorkflowAuthorizationInputContract::CooperativeObjective {
+        objective_id,
+        next_objective_revision,
+        next_assurance_epoch,
+        ..
+    } = &packet.input_contract
+    else {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    };
+    if objective_id.0.trim().is_empty()
+        || objective_id.0.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
+    {
+        return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+    }
+    Ok((
+        packet.clone(),
+        objective_id.clone(),
+        *next_objective_revision,
+        *next_assurance_epoch,
+    ))
+}
+
+fn cooperative_objective_action_packets(
+    guidance: &WorkflowGovernanceGuidance,
+) -> Result<Vec<WorkflowAuthorizationActionPacket>, WorkflowGovernanceAdapterError> {
+    if guidance.active_cooperative_objective.is_some()
+        || guidance.durable_assurance.projection.is_some()
+    {
+        return Ok(Vec::new());
+    }
+    let objective_id = StableId(format!("objective.workflow.{}", guidance.project_id.0));
+    if objective_id.0.trim().is_empty()
+        || objective_id.0.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
+    {
+        return Err(WorkflowGovernanceAdapterError::InvalidObservation(format!(
+            "derived objective_id must be nonblank and at most {MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES} bytes"
+        )));
+    }
+    let binding = WorkflowAuthorizationPacketBinding {
+        project_id: guidance.project_id.clone(),
+        effective_bundle_id: guidance
+            .effective
+            .effective_runtime_bundle
+            .bundle_id
+            .clone(),
+        effective_bundle_digest: guidance
+            .effective
+            .effective_runtime_bundle
+            .bundle_digest
+            .clone(),
+        policy_ref: guidance.selected_policy_ref.clone(),
+        subject_ref: objective_id.clone(),
+        state_version: guidance.state_version,
+        current_phase: StableId(guidance.current_phase.clone()),
+        snapshot_digest: guidance.snapshot_digest.clone(),
+        ledger_head_digest: guidance.ledger_head_digest.clone(),
+        trusted_principal_registry_digest: None,
+        trusted_broker_registry_digest: None,
+        readiness_target: guidance.target,
+    };
+    make_authorization_action_packet(
+        WorkflowAuthorizationKind::IntentRevision,
+        StableId(format!(
+            "packet.workflow.cooperative-objective.{}",
+            objective_id.0
+        )),
+        binding,
+        cooperative_authority("workflow.objective.accept_cooperative"),
+        WorkflowAuthorizationInputContract::CooperativeObjective {
+            objective_id,
+            next_objective_revision: 1,
+            next_assurance_epoch: 1,
+            input_encoding: "utf8_json_file".to_owned(),
+            discriminator_field: "kind".to_owned(),
+            unknown_fields_allowed: false,
+            variants: vec![
+                WorkflowCooperativeObjectiveInputTemplate {
+                    variant: "unambiguous".to_owned(),
+                    template: serde_json::json!({
+                        "kind": "unambiguous",
+                        "proposal": {
+                            "outcome": "<chat-derived outcome>",
+                            "constraints": ["<constraint>"],
+                            "unacceptable_outcomes": ["<unacceptable outcome>"],
+                            "open_uncertainties": ["<open uncertainty>"]
+                        },
+                        "carrying_principal": "<same-owner host principal>",
+                        "host_provenance": {
+                            "host_id": "<host id>",
+                            "host_version": "<host version>",
+                            "session_ref": "<chat/session reference>",
+                            "interaction_ref": "<human interaction reference>",
+                            "conversation_digest": "sha256:<64 lowercase hex>",
+                            "observed_at_unix": 1
+                        }
+                    }),
+                },
+                WorkflowCooperativeObjectiveInputTemplate {
+                    variant: "decision_required".to_owned(),
+                    template: serde_json::json!({
+                        "kind": "decision_required",
+                        "decision_request": {
+                            "id": "<decision id>",
+                            "question": "<one concise irreducible question>",
+                            "reason": "product_direction",
+                            "alternatives": [
+                                {
+                                    "id": "<alternative id>",
+                                    "description": "<alternative description>",
+                                    "consequences": ["<consequence>"]
+                                },
+                                {
+                                    "id": "<alternative id>",
+                                    "description": "<alternative description>",
+                                    "consequences": ["<consequence>"]
+                                }
+                            ],
+                            "recommended_alternative_ref": "<one supplied alternative id>",
+                            "blocking": true,
+                            "blocks_before": "execute"
+                        }
+                    }),
+                },
+            ],
+            limits: WorkflowCooperativeObjectiveInputLimits {
+                input_max_bytes: MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES,
+                objective_id_max_bytes: MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+                carrying_principal_max_bytes: MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+                host_coordinate_max_bytes: MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+                outcome_max_bytes: MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+                list_max_items: MAX_WORKFLOW_INTENT_LIST_ITEMS,
+                list_item_max_bytes: MAX_WORKFLOW_INTENT_ITEM_BYTES,
+                proposal_total_max_bytes: MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+                decision_question_max_bytes: MAX_WORKFLOW_COOPERATIVE_DECISION_QUESTION_BYTES,
+                decision_alternatives_min_items: MIN_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES,
+                decision_alternatives_max_items: MAX_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES,
+                decision_consequences_max_items: MAX_WORKFLOW_COOPERATIVE_DECISION_CONSEQUENCES,
+            },
+            command_argv_template: vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "intent".to_owned(),
+                "accept-cooperative".to_owned(),
+                "--root".to_owned(),
+                "<project-root>".to_owned(),
+                "--packet-digest".to_owned(),
+                "<packet-digest>".to_owned(),
+                "--input-file".to_owned(),
+                "<temporary-utf8-json-path>".to_owned(),
+                "--json".to_owned(),
+            ],
+        },
+    )
+    .map(|packet| vec![packet])
 }
 
 fn authorization_action_packets(
@@ -8240,6 +8847,92 @@ fn human_authority(grant: &str) -> WorkflowAuthorizationRequiredAuthority {
     }
 }
 
+fn cooperative_authority(grant: &str) -> WorkflowAuthorizationRequiredAuthority {
+    WorkflowAuthorizationRequiredAuthority {
+        accepted_roles: vec![CallerRole::Runtime, CallerRole::Worker, CallerRole::Driver],
+        required_grant: StableId(grant.to_owned()),
+        approval_boundary: WorkflowAuthorizationApprovalBoundary::CooperativeSameOwner,
+    }
+}
+
+fn validate_cooperative_carrier(
+    principal: &PrincipalId,
+    provenance: &WorkflowCooperativeHostProvenance,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    for (field, value) in [
+        ("carrying_principal", principal.0.as_str()),
+        ("host_id", provenance.host_id.0.as_str()),
+        ("host_version", provenance.host_version.as_str()),
+        ("session_ref", provenance.session_ref.as_str()),
+        ("interaction_ref", provenance.interaction_ref.as_str()),
+    ] {
+        if value.trim().is_empty() || value.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(format!(
+                "{field} must be nonblank and at most {MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES} bytes"
+            )));
+        }
+    }
+    if provenance.observed_at_unix == 0 || !is_lower_sha256_text(&provenance.conversation_digest) {
+        return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+            "cooperative host provenance requires a nonzero observation time and canonical conversation digest"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_cooperative_decision_request(
+    request: &DecisionRequest,
+) -> Result<(), WorkflowGovernanceAdapterError> {
+    if request.id.0.trim().is_empty()
+        || request.id.0.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
+        || request.question.trim().is_empty()
+        || request.question.len() > MAX_WORKFLOW_COOPERATIVE_DECISION_QUESTION_BYTES
+        || request.question.contains('\r')
+        || request.question.contains('\n')
+        || !(MIN_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES
+            ..=MAX_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES)
+            .contains(&request.alternatives.len())
+    {
+        return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+            "decision_required must contain one concise question and two to eight alternatives"
+                .to_owned(),
+        ));
+    }
+    let mut ids = BTreeSet::new();
+    for alternative in &request.alternatives {
+        if alternative.id.0.trim().is_empty()
+            || alternative.id.0.len() > MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES
+            || alternative.description.trim().is_empty()
+            || alternative.description.len() > MAX_WORKFLOW_INTENT_ITEM_BYTES
+            || !ids.insert(alternative.id.clone())
+            || alternative.consequences.len() > MAX_WORKFLOW_COOPERATIVE_DECISION_CONSEQUENCES
+            || alternative.consequences.iter().any(|consequence| {
+                consequence.trim().is_empty() || consequence.len() > MAX_WORKFLOW_INTENT_ITEM_BYTES
+            })
+        {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "decision_required alternatives must be unique, bounded, and concrete".to_owned(),
+            ));
+        }
+    }
+    if !ids.contains(&request.recommended_alternative_ref) {
+        return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+            "decision_required recommendation must reference one supplied alternative".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_lower_sha256_text(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
 fn runtime_authority(grant: &str) -> WorkflowAuthorizationRequiredAuthority {
     WorkflowAuthorizationRequiredAuthority {
         accepted_roles: vec![CallerRole::Runtime],
@@ -8406,6 +9099,7 @@ fn authorization_setup_gaps(
     let mut runtime = false;
     for packet in packets {
         match packet.required_authority.approval_boundary {
+            WorkflowAuthorizationApprovalBoundary::CooperativeSameOwner => {}
             WorkflowAuthorizationApprovalBoundary::HumanApprovalBroker => human = true,
             WorkflowAuthorizationApprovalBoundary::IndependentReviewerBroker => reviewer = true,
             WorkflowAuthorizationApprovalBoundary::TrustedRuntimeBroker
@@ -8710,6 +9404,30 @@ fn inject_byte_identical_project_replacement_after_replay_reservation(
     let bytes = fs::read(&target).expect("test replacement target must be readable");
     fs::remove_file(&target).expect("test replacement target must be removable");
     fs::write(&target, bytes).expect("test replacement target must be reminted byte-identically");
+}
+
+#[cfg(test)]
+fn inject_project_change_before_cooperative_commit(state_root: &Path, project_root: &Path) {
+    let marker = state_root.join(TEST_CHANGE_PROJECT_BEFORE_COOPERATIVE_COMMIT_MARKER);
+    if !marker.is_file() {
+        return;
+    }
+    let relative = fs::read_to_string(&marker)
+        .expect("cooperative precommit marker must contain a project-relative path");
+    fs::remove_file(&marker).expect("cooperative precommit marker must be consumed");
+    let relative = Path::new(relative.trim());
+    assert!(
+        relative.components().next().is_some()
+            && relative
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_))),
+        "cooperative precommit test path must be non-empty and project-relative"
+    );
+    fs::write(
+        project_root.join(relative),
+        b"deterministic project change before cooperative commit\n",
+    )
+    .expect("cooperative precommit test change");
 }
 
 fn replay_locked_commit_time(state_root: &Path) -> Result<u64, WorkflowGovernanceAdapterError> {
@@ -10590,9 +11308,50 @@ mod tests {
         assert_eq!(next.readiness_profile, initialized.readiness_profile);
         assert_eq!(
             next.durable_assurance.status,
-            WorkflowDurableAssuranceStatus::MissingHumanIntent
+            WorkflowDurableAssuranceStatus::MissingObjective
         );
-        assert!(next.authorization.action_packets.is_empty());
+        assert_eq!(next.authorization.action_packets.len(), 1);
+        assert_eq!(
+            next.authorization.action_packets[0]
+                .required_authority
+                .approval_boundary,
+            WorkflowAuthorizationApprovalBoundary::CooperativeSameOwner
+        );
+        let WorkflowAuthorizationInputContract::CooperativeObjective {
+            input_encoding,
+            variants,
+            limits,
+            command_argv_template,
+            ..
+        } = &next.authorization.action_packets[0].input_contract
+        else {
+            panic!("solo packet must expose its dedicated cooperative contract");
+        };
+        assert_eq!(input_encoding, "utf8_json_file");
+        assert_eq!(
+            variants
+                .iter()
+                .map(|variant| variant.variant.as_str())
+                .collect::<Vec<_>>(),
+            ["unambiguous", "decision_required"]
+        );
+        assert_eq!(limits.input_max_bytes, MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES);
+        assert_eq!(
+            command_argv_template,
+            &[
+                "forge-core",
+                "workflow",
+                "intent",
+                "accept-cooperative",
+                "--root",
+                "<project-root>",
+                "--packet-digest",
+                "<packet-digest>",
+                "--input-file",
+                "<temporary-utf8-json-path>",
+                "--json",
+            ]
+        );
         assert!(next.authorization.setup_gaps.is_empty());
         assert_eq!(
             adapter.resume().expect("resume").readiness_profile,
@@ -10632,6 +11391,330 @@ mod tests {
                 .exists(),
             "read-only workflow observation must leave absent Domain Pack pointer absent"
         );
+    }
+
+    fn cooperative_objective_input() -> WorkflowCooperativeObjectiveInput {
+        WorkflowCooperativeObjectiveInput::Unambiguous {
+            proposal: WorkflowCooperativeObjectiveProposal {
+                outcome: "Make solo developer plus agent dogfooding reliable".to_owned(),
+                constraints: vec!["Remain host neutral".to_owned()],
+                unacceptable_outcomes: vec!["Claim verified human origin".to_owned()],
+                open_uncertainties: vec!["Later multi-user authority model".to_owned()],
+            },
+            carrying_principal: PrincipalId("principal.agent.codex".to_owned()),
+            host_provenance: WorkflowCooperativeHostProvenance {
+                host_id: StableId("host.codex".to_owned()),
+                host_version: "test".to_owned(),
+                session_ref: "session.test".to_owned(),
+                interaction_ref: "turn.test".to_owned(),
+                conversation_digest: format!("sha256:{}", "a".repeat(64)),
+                observed_at_unix: 1,
+            },
+        }
+    }
+
+    fn cooperative_decision_input() -> WorkflowCooperativeObjectiveInput {
+        WorkflowCooperativeObjectiveInput::DecisionRequired {
+            decision_request: DecisionRequest {
+                id: StableId("decision.objective-scope".to_owned()),
+                question: "Should the objective include enterprise authority now?".to_owned(),
+                reason: forge_core_contracts::HumanDecisionReason::ProductDirection,
+                alternatives: vec![
+                    DecisionAlternative {
+                        id: StableId("solo-first".to_owned()),
+                        description: "Keep the objective solo-first".to_owned(),
+                        consequences: vec!["Enterprise authority stays deferred".to_owned()],
+                    },
+                    DecisionAlternative {
+                        id: StableId("enterprise-now".to_owned()),
+                        description: "Include enterprise authority now".to_owned(),
+                        consequences: vec!["The objective becomes materially larger".to_owned()],
+                    },
+                ],
+                recommended_alternative_ref: StableId("solo-first".to_owned()),
+                blocking: true,
+                blocks_before: ReadinessTarget::Execute,
+            },
+        }
+    }
+
+    #[test]
+    fn solo_objective_acceptance_is_durable_bound_and_ledger_derived() {
+        let (root, state) = temp_project("cooperative-objective");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-objective".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let before = adapter.next().expect("objective packet");
+        let packet = before.authorization.action_packets[0].clone();
+
+        let accepted = adapter
+            .accept_cooperative_objective(&packet.packet_digest, cooperative_objective_input())
+            .expect("accept cooperative objective");
+        let WorkflowCooperativeObjectiveAcceptance::Accepted {
+            objective_record,
+            active_objective,
+            next,
+        } = accepted
+        else {
+            panic!("unambiguous objective must be accepted");
+        };
+        assert_eq!(
+            active_objective.authority_basis,
+            WorkflowCooperativeAuthorityBasis::CooperativeSameOwner
+        );
+        assert_eq!(
+            active_objective.accepted_record_digest,
+            objective_record.record_digest
+        );
+        assert_eq!(
+            active_objective.snapshot_digest_at_acceptance,
+            before.snapshot_digest
+        );
+        assert_eq!(
+            active_objective.ledger_head_before_acceptance,
+            before.ledger_head_digest
+        );
+        assert_eq!(
+            active_objective.acceptance_action_packet_digest,
+            packet.packet_digest
+        );
+        assert_eq!(
+            next.durable_assurance.status,
+            WorkflowDurableAssuranceStatus::ObjectiveAccepted
+        );
+        assert!(next.durable_assurance.projection.is_some());
+        assert!(next.authorization.action_packets.is_empty());
+
+        let fresh = adapter.next().expect("fresh ledger-derived guidance");
+        assert_eq!(
+            fresh
+                .active_cooperative_objective
+                .as_ref()
+                .expect("active objective")
+                .accepted_record_digest,
+            objective_record.record_digest
+        );
+        let retry = adapter
+            .accept_cooperative_objective(&packet.packet_digest, cooperative_objective_input())
+            .expect("exact cooperative retry");
+        let WorkflowCooperativeObjectiveAcceptance::Accepted {
+            objective_record: retry_record,
+            active_objective: retry_objective,
+            ..
+        } = retry
+        else {
+            panic!("exact retry must reproduce accepted receipt");
+        };
+        assert_eq!(retry_record, objective_record);
+        assert_eq!(retry_objective, active_objective);
+        let mut divergent = cooperative_objective_input();
+        let WorkflowCooperativeObjectiveInput::Unambiguous { proposal, .. } = &mut divergent else {
+            unreachable!();
+        };
+        proposal.outcome.push_str(" but with changed scope");
+        assert!(matches!(
+            adapter.accept_cooperative_objective(&packet.packet_digest, divergent),
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict)
+        ));
+        assert!(matches!(
+            adapter.accept_cooperative_objective(
+                &format!("sha256:{}", "f".repeat(64)),
+                cooperative_objective_input()
+            ),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        let projection = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("projection");
+        assert_eq!(projection.records.len(), 2, "replay must not append");
+        assert!(
+            project_durable_assurance(&projection.records)
+                .expect("strict projection")
+                .is_none(),
+            "same-owner authority must never satisfy strict external intent"
+        );
+    }
+
+    #[test]
+    fn cooperative_decision_required_returns_without_ledger_write() {
+        let (root, state) = temp_project("cooperative-decision");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-decision".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let packet = adapter
+            .next()
+            .expect("decision packet")
+            .authorization
+            .action_packets
+            .into_iter()
+            .next()
+            .expect("cooperative packet");
+        let before = fs::read(
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH),
+        )
+        .expect("ledger bytes");
+        assert!(matches!(
+            adapter
+                .accept_cooperative_objective(&packet.packet_digest, cooperative_decision_input())
+                .expect("typed decision"),
+            WorkflowCooperativeObjectiveAcceptance::DecisionRequired { .. }
+        ));
+        assert_eq!(
+            fs::read(
+                state.join(
+                    forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH,
+                )
+            )
+            .expect("ledger bytes after"),
+            before
+        );
+    }
+
+    #[test]
+    fn cooperative_decision_rejects_wrong_stale_strict_and_consumed_packets_without_write() {
+        let (root, state) = temp_project("cooperative-decision-rejections");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-decision-rejections".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let packet = adapter
+            .next()
+            .expect("decision packet")
+            .authorization
+            .action_packets[0]
+            .clone();
+        let wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let before = fs::read(&wal).expect("WAL before wrong packet");
+        assert!(matches!(
+            adapter.accept_cooperative_objective(
+                &format!("sha256:{}", "f".repeat(64)),
+                cooperative_decision_input()
+            ),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        assert_eq!(fs::read(&wal).expect("WAL after wrong packet"), before);
+
+        fs::write(root.join("README.md"), "stale project snapshot\n").expect("stale project");
+        assert!(matches!(
+            adapter
+                .accept_cooperative_objective(&packet.packet_digest, cooperative_decision_input()),
+            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+        ));
+        assert_eq!(fs::read(&wal).expect("WAL after stale packet"), before);
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup stale fixture");
+
+        let (strict_root, strict_state) = temp_project("cooperative-decision-strict");
+        let strict = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-decision-strict".to_owned()),
+            &strict_root,
+            &strict_state,
+        )
+        .expect("strict adapter");
+        strict
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("initialize strict");
+        let strict_packet = strict
+            .next()
+            .expect("strict packet")
+            .authorization
+            .action_packets[0]
+            .packet_digest
+            .clone();
+        let strict_wal = strict_state
+            .join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let strict_before = fs::read(&strict_wal).expect("strict WAL before");
+        assert!(matches!(
+            strict.accept_cooperative_objective(&strict_packet, cooperative_decision_input()),
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired)
+        ));
+        assert_eq!(
+            fs::read(&strict_wal).expect("strict WAL after"),
+            strict_before
+        );
+        fs::remove_dir_all(strict_root.parent().expect("strict fixture root"))
+            .expect("cleanup strict fixture");
+
+        let (accepted_root, accepted_state) = temp_project("cooperative-decision-consumed");
+        let accepted = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-decision-consumed".to_owned()),
+            &accepted_root,
+            &accepted_state,
+        )
+        .expect("accepted adapter");
+        accepted.initialize().expect("initialize accepted");
+        let accepted_packet = accepted
+            .next()
+            .expect("accepted packet")
+            .authorization
+            .action_packets[0]
+            .packet_digest
+            .clone();
+        accepted
+            .accept_cooperative_objective(&accepted_packet, cooperative_objective_input())
+            .expect("accept objective");
+        let accepted_wal = accepted_state
+            .join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let accepted_before = fs::read(&accepted_wal).expect("accepted WAL before decision");
+        assert!(matches!(
+            accepted.accept_cooperative_objective(&accepted_packet, cooperative_decision_input()),
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted)
+        ));
+        assert_eq!(
+            fs::read(&accepted_wal).expect("accepted WAL after decision"),
+            accepted_before
+        );
+        fs::remove_dir_all(accepted_root.parent().expect("accepted fixture root"))
+            .expect("cleanup accepted fixture");
+    }
+
+    #[test]
+    fn cooperative_objective_revalidates_project_immediately_before_ledger_commit() {
+        let (root, state) = temp_project("cooperative-precommit-snapshot");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-precommit-snapshot".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let packet = adapter
+            .next()
+            .expect("cooperative packet")
+            .authorization
+            .action_packets[0]
+            .packet_digest
+            .clone();
+        let wal =
+            state.join(forge_core_workflow_governance_tcb::WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH);
+        let before = fs::read(&wal).expect("WAL before precommit drift");
+        fs::write(
+            state.join(TEST_CHANGE_PROJECT_BEFORE_COOPERATIVE_COMMIT_MARKER),
+            b"README.md\n",
+        )
+        .expect("arm precommit drift");
+        assert!(matches!(
+            adapter.accept_cooperative_objective(&packet, cooperative_objective_input()),
+            Err(WorkflowGovernanceAdapterError::RetainedProjectSnapshot(_))
+        ));
+        assert_eq!(
+            fs::read(&wal).expect("WAL after precommit drift"),
+            before,
+            "project drift must fail before the cooperative ledger append"
+        );
+        fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup");
     }
 
     #[test]
@@ -10785,7 +11868,10 @@ mod tests {
             .expect("durable assurance projection");
         assert_eq!(accepted.binding.assurance_epoch, 1);
         assert_eq!(accepted.binding.intent_revision, 1);
-        assert_eq!(accepted.intent, first_event.intent);
+        assert_eq!(
+            accepted.intent,
+            forge_core_contracts::WorkflowObjectiveRevision::from(&first_event.intent)
+        );
         assert_eq!(
             accepted.lenses.len(),
             forge_core_contracts::UniversalAssuranceLens::ALL.len()
@@ -10930,7 +12016,10 @@ mod tests {
             .expect("revised durable projection");
         assert_eq!(durable.binding.assurance_epoch, 2);
         assert_eq!(durable.binding.intent_revision, 2);
-        assert_eq!(durable.intent, second_event.intent);
+        assert_eq!(
+            durable.intent,
+            forge_core_contracts::WorkflowObjectiveRevision::from(&second_event.intent)
+        );
         let ledger = lock_workflow_governance_ledger_tcb(&state)
             .expect("ledger")
             .recover()

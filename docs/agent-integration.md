@@ -13,9 +13,12 @@ preserving the distinction between advice, evidence, and admitted authority.
 5. Check the durable release and perform only an exact returned upgrade.
 6. Call `workflow next` without caller-selected phase, policy, bundle, or
    readiness target.
-7. If Forge returns a missing-intent packet, ask for only the human's product
-   outcome and value constraints, then send the externally signed closed input
-   through `workflow intent record`; never ask the human to design the method.
+7. If Forge returns a missing-objective packet in `solo_cooperative`, materialize
+   the unambiguous chat outcome through `workflow intent accept-cooperative`.
+   If one irreducible choice remains, send the closed `decision_required` input
+   and ask the returned question; that branch performs no Forge state write. In
+   `strict_external`, continue to admit the externally signed human input
+   through `workflow intent record`. Never ask the human to design the method.
 8. Perform the highest-ranked feasible action.
 9. Collect evidence from the tool/runtime/human named by the evaluator; never
    self-upgrade artifact presence into representative proof.
@@ -49,6 +52,34 @@ Forge-derived packets and the external origin-broker bridge described in the
 bound to the returned packet; `workflow action apply` derives, verifies, and
 records the exact request without exposing an intermediate attestation. Never
 manufacture request, registry, ledger, or receipt documents in the host.
+
+A `cooperative_same_owner` objective packet is a separate authority boundary,
+not a weaker spelling of human approval. The host supplies only bounded outcome,
+constraints, unacceptable outcomes, open uncertainties, carrying principal,
+and generic host/session coordinates. Forge derives objective identity,
+revision, assurance epoch, project snapshot, ledger head, packet binding, and
+commit time. The resulting provenance supports same-owner continuity but never
+claims a signature, verified human origin, independent identity, or satisfaction
+of the `strict_external` boundary.
+
+The packet's `input_contract.kind` is `cooperative_objective`, not the strict
+broker `intent_revision` shape. It publishes both closed JSON templates,
+`utf8_json_file` encoding, every relevant byte/item bound, denial of unknown
+fields, and a structured argv template. A generic host must be able to execute
+the lane from that packet without reading Forge source:
+
+1. Materialize one temporary file from `unambiguous` when chat already contains
+   a clear objective, or from `decision_required` when exactly one irreducible
+   choice remains.
+2. Preserve path boundaries, including paths with spaces, and execute the
+   packet-derived `workflow intent accept-cooperative` argv.
+3. Keep the human chat-only. For `decision_required`, ask the returned question;
+   Forge has validated the current packet/state read-only and written nothing.
+4. Remove the temporary host file, then obtain a fresh `workflow next`.
+
+Exact accepted-input retries return the same durable receipt without appending.
+Changed payloads, strict-profile use, consumed or stale packets, and changed
+project snapshots fail closed.
 
 `workflow action authorize` is a cooperative local one-call lane only for a
 packet marked `operator_credential_broker`. Forge rejects that lane before

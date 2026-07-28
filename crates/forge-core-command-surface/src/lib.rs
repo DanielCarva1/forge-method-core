@@ -297,6 +297,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow action-packets [--root <path>] [--json|--no-json]",
         "       forge-core workflow action authorize --root <path> --packet-digest <sha256> --input-file <closed-input.json> --credential-id <id> [--json|--no-json]",
         "       forge-core workflow action apply --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
+        "       forge-core workflow intent accept-cooperative --root <path> --packet-digest <sha256> --input-file <cooperative-input.json> [--json|--no-json]",
         "       forge-core workflow intent record --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
         "       forge-core workflow release-status [--root <path>] [--json|--no-json]",

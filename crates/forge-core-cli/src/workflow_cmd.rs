@@ -44,10 +44,21 @@ struct WorkflowCliArgs {
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
     if args.get(1).is_some_and(|value| value == "intent") {
         let want_json = wants_json(args);
+        let command = if args
+            .get(2)
+            .is_some_and(|value| value == "accept-cooperative")
+        {
+            "workflow.intent.accept_cooperative"
+        } else {
+            "workflow.intent"
+        };
         return match crate::workflow_intent_cmd::run(&args[2..]) {
             Ok(()) => Ok(()),
+            // An empty message is the shared envelope emitter's signal that the
+            // subdispatcher already wrote the canonical failure envelope.
+            Err(error) if error.message().is_empty() => Err(error),
             Err(error) if want_json => emit_failure(
-                "workflow.intent",
+                command,
                 credential_exit_reason(&error),
                 error.message().to_owned(),
                 true,
@@ -517,7 +528,7 @@ fn load_json<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
     serde_json::from_str(&raw).map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
-fn resolve_adapter(root: &Path) -> Result<WorkflowGovernanceProjectAdapter, String> {
+pub(crate) fn resolve_adapter(root: &Path) -> Result<WorkflowGovernanceProjectAdapter, String> {
     let project = crate::project_cmd::resolve_project(root)
         .map_err(|error| format!("project resolve failed: {error}"))?;
     if !project.state_exists {
@@ -747,11 +758,13 @@ fn is_lowercase_sha256(value: &str) -> bool {
     })
 }
 
-fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
+pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
     match error {
         WorkflowGovernanceAdapterError::Ledger(_)
         | WorkflowGovernanceAdapterError::LedgerIdentityMismatch
         | WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration { .. }
+        | WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted
+        | WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate
@@ -783,7 +796,7 @@ fn legacy_direct_authorization_is_disabled(subcommand: &str) -> bool {
     )
 }
 
-fn emit_failure(
+pub(crate) fn emit_failure(
     command: &str,
     reason: ExitReason,
     message: String,
