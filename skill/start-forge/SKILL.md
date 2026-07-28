@@ -149,6 +149,37 @@ or routes a healthy project into agent-native workflow governance.
    objective's revision, `revision_kind`, `revision_reason`, and predecessor
    digest before continuing.
 
+   With an active objective, read `data.agent_autonomy` from `workflow next`.
+   Its binding is read-only and exact to the current objective revision/digest,
+   assurance epoch, project snapshot, ledger head, and state version. The agent
+   now owns research, analysis, planning, strategy, reversible local edits,
+   tests, verification, documentation, implementation tactics, file choice,
+   work order, retries, read-only external research, reversible local commits,
+   and local evidence generation. Generating evidence is autonomous; its
+   admission, promotion, publication, and any authority claim remain governed.
+   Do not ask the human to approve those implementation choices and do not
+   create an authorization packet per edit, test, or task.
+
+   Ask the human only for one of the four closed classes:
+   `product_objective_change`, `material_tradeoff`,
+   `material_risk_acceptance`, or `irreversible_or_external_effect`. Publication,
+   remote push/merge, deployment, production mutation, secret use, destructive
+   external effects, and non-destructive external mutations such as Slack/Jira/
+   email sends, HTTP writes, or staging-system changes require an explicit human
+   decision. A product-objective change must then use the objective supersession
+   flow above; never disguise it as a tactic change.
+
+   `data.agent_autonomy.assessment_argv` is the execution form and
+   `input_contract` is the machine-readable contract. The host must derive the
+   required effect descriptor from the selected tool and concrete operation,
+   independently of the model's work-class claim; never infer it from free-form
+   task text alone. Unknown/ambiguous effects and contradictory class/effect
+   pairs fail closed. Keep the temporary input outside the project snapshot.
+   Run the optional assessment only at a real semantic/effect boundary, never
+   per edit/task. Refresh its binding after objective, assurance-epoch, snapshot,
+   ledger-head, or state-version change. Local staging/commit stays autonomous;
+   remote push is protected. Assessment performs zero Forge state writes.
+
    A packet whose approval boundary is exactly `operator_credential_broker`
    may use the cooperative local one-call lane. The host materializes the
    packet's closed input without asking the human to edit JSON, then runs:

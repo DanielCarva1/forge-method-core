@@ -185,6 +185,22 @@ fn run_cooperative_input(consumer: &Consumer, packet_digest: &str, input_path: &
         .expect("run cooperative objective command")
 }
 
+fn run_autonomy_assessment(consumer: &Consumer, input_path: &Path) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "autonomy",
+            "assess",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--input-file",
+            &input_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run agent autonomy assessment")
+}
+
 fn cooperative_decision_json() -> Value {
     serde_json::json!({
         "kind": "decision_required",
@@ -875,6 +891,226 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
         replacement["data"]["active_cooperative_objective"]["revision_reason"],
         "The owner added execution detail without changing direction"
     );
+}
+
+#[test]
+fn agent_autonomy_cli_is_read_only_typed_and_stale_after_objective_change() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("objective packet")
+        .to_owned();
+    let objective_input = consumer.write_json(
+        "autonomy initial objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Improve Forge through solo developer agent dogfooding",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["ask for routine implementation approval"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.autonomy",
+                "interaction_ref": "turn.objective",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let accepted = assert_ok(&run_cooperative_input(&consumer, &packet, &objective_input));
+    let autonomy = &accepted["data"]["next"]["agent_autonomy"];
+    let binding = autonomy["binding"].clone();
+    assert_eq!(autonomy["status"], "active");
+    assert_eq!(binding["assurance_epoch"], 1);
+    assert_eq!(autonomy["assessment_argv"][0], "forge-core");
+    assert_eq!(autonomy["input_contract"]["unknown_fields_allowed"], false);
+    assert_eq!(
+        autonomy["input_contract"]["temporary_input_must_be_outside_project_snapshot"],
+        true
+    );
+    let assess = |name: &str, work: Value, effect: Value| {
+        consumer.write_json(
+            name,
+            &serde_json::json!({
+                "schema_version": "agent_autonomy_assessment_v1",
+                "binding": binding.clone(),
+                "work": work,
+                "effect": effect
+            }),
+        )
+    };
+    let local = assess(
+        "autonomy local edit.json",
+        serde_json::json!({
+            "kind": "agent_owned",
+            "class": "reversible_local_editing",
+            "summary": "edit a local Rust file and run a focused test"
+        }),
+        serde_json::json!({"scope": "local_reversible"}),
+    );
+    let objective = assess(
+        "autonomy objective decision.json",
+        serde_json::json!({
+            "kind": "human_decision",
+            "class": "product_objective_change",
+            "summary": "expand the product objective to enterprise teams"
+        }),
+        serde_json::json!({"scope": "local_read_only"}),
+    );
+    let publication = assess(
+        "autonomy publication decision.json",
+        serde_json::json!({
+            "kind": "agent_owned",
+            "class": "reversible_local_editing",
+            "summary": "publish the alpha release"
+        }),
+        serde_json::json!({
+            "scope": "protected_effect",
+            "effect": "publication"
+        }),
+    );
+    let contradiction = assess(
+        "autonomy contradiction.json",
+        serde_json::json!({
+            "kind": "agent_owned",
+            "class": "reversible_local_editing",
+            "summary": "claim a local edit while invoking an external read"
+        }),
+        serde_json::json!({"scope": "external_read_only"}),
+    );
+    let external_mutation = assess(
+        "autonomy external mutation.json",
+        serde_json::json!({
+            "kind": "agent_owned",
+            "class": "documentation",
+            "summary": "post the result to Jira"
+        }),
+        serde_json::json!({"scope": "external_mutation"}),
+    );
+    let missing_effect = consumer.write_json(
+        "autonomy missing effect.json",
+        &serde_json::json!({
+            "schema_version": "agent_autonomy_assessment_v1",
+            "binding": binding.clone(),
+            "work": {
+                "kind": "agent_owned",
+                "class": "reversible_local_editing",
+                "summary": "edit locally"
+            }
+        }),
+    );
+
+    let before = state_tree_snapshot(&consumer.state);
+    let local_result = assert_ok(&run_autonomy_assessment(&consumer, &local));
+    assert_eq!(local_result["data"]["status"], "proceed_autonomously");
+    assert_eq!(local_result["data"]["class"], "reversible_local_editing");
+    assert!(local_result["data"].get("request").is_none());
+
+    let objective_result = assert_ok(&run_autonomy_assessment(&consumer, &objective));
+    assert_eq!(objective_result["data"]["status"], "decision_required");
+    assert_eq!(
+        objective_result["data"]["request"]["class"],
+        "product_objective_change"
+    );
+    let objective_request = &objective_result["data"]["request"];
+    assert!(objective_request["question"]
+        .as_str()
+        .is_some_and(|value| value.contains("expand the product objective")));
+    assert!(objective_request["alternatives"]
+        .as_array()
+        .is_some_and(|items| items.len() >= 2));
+
+    for path in [&publication, &contradiction, &external_mutation] {
+        let result = assert_ok(&run_autonomy_assessment(&consumer, path));
+        assert_eq!(result["data"]["status"], "decision_required");
+        assert_eq!(
+            result["data"]["request"]["class"],
+            "irreversible_or_external_effect"
+        );
+        assert_ne!(
+            result["data"]["request"]["id"],
+            objective_result["data"]["request"]["id"]
+        );
+    }
+
+    let missing = run_autonomy_assessment(&consumer, &missing_effect);
+    assert_eq!(missing.status.code(), Some(3));
+    let missing = json(&missing);
+    assert_eq!(missing["command"], "workflow.autonomy.assess");
+    assert_eq!(missing["exit_reason"], "invalid_decision_shape");
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        before,
+        "all autonomy assessments must leave Forge state byte-exact"
+    );
+
+    let unknown = bin()
+        .args(["workflow", "autonomy", "unknown", "--json"])
+        .output()
+        .expect("unknown autonomy command");
+    assert_eq!(unknown.status.code(), Some(3));
+    assert_eq!(json(&unknown)["command"], "workflow.autonomy");
+    let conflicting_output = bin()
+        .args(["workflow", "autonomy", "assess", "--json", "--text"])
+        .output()
+        .expect("conflicting output flags");
+    assert_eq!(conflicting_output.status.code(), Some(3));
+    assert_eq!(json(&conflicting_output)["command"], "workflow.autonomy");
+    let text_unknown = bin()
+        .args(["workflow", "autonomy", "unknown", "--text"])
+        .output()
+        .expect("text autonomy error");
+    assert_eq!(text_unknown.status.code(), Some(3));
+    assert!(serde_json::from_slice::<Value>(&text_unknown.stdout).is_err());
+
+    let revision_packet = accepted["data"]["next"]["authorization"]["objective_management_packet"]
+        ["packet_digest"]
+        .as_str()
+        .expect("revision packet")
+        .to_owned();
+    let revision = consumer.write_json(
+        "autonomy objective supersession.json",
+        &serde_json::json!({
+            "kind": "material_supersession",
+            "proposal": {
+                "outcome": "Make Forge excellent for solo developer dogfooding before teams",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["ask for routine implementation approval"],
+                "open_uncertainties": []
+            },
+            "supersession_reason": "The owner narrowed the immediate direction",
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.autonomy",
+                "interaction_ref": "turn.supersede",
+                "conversation_digest": format!("sha256:{}", "e".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &revision_packet,
+        &revision,
+    ));
+    let after_revision = state_tree_snapshot(&consumer.state);
+    let stale = run_autonomy_assessment(&consumer, &local);
+    assert_eq!(stale.status.code(), Some(4));
+    let stale = json(&stale);
+    assert_eq!(stale["command"], "workflow.autonomy.assess");
+    assert_eq!(stale["exit_reason"], "conflict");
+    assert!(stale["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("stale")));
+    assert_eq!(state_tree_snapshot(&consumer.state), after_revision);
 }
 
 #[test]

@@ -51,19 +51,21 @@ use forge_core_contracts::workflow_governance::{
     WorkflowReadinessProfile,
 };
 use forge_core_contracts::{
-    ApplicabilityAssessedEvent, CapabilityProbedEvent, ClaimContract, ContinuityRecordedEvent,
+    AgentAutonomyAssessment, AgentAutonomyAssessmentInput, AgentAutonomyBinding,
+    AgentAutonomyEffectDescriptor, AgentOwnedWorkClass, ApplicabilityAssessedEvent,
+    CapabilityProbedEvent, ClaimContract, ContinuityRecordedEvent,
     CooperativeObjectiveAcceptedEvent, CoordinationCompletionState,
     CoordinationHealthRecoveryState, CoordinationMutationHandoff, CoordinationRequestState,
     CoordinationStateAppliedEvent, CoordinationStateRecord, CoreDomainPackRebasedEvent,
     DecisionAlternative, DecisionRequest, DecisionResolvedEvent, DomainPackCompositionGap,
     DomainPackCoreBinding, DomainPackLifecycleOperation, DomainPackRebasePlanDocument,
     DomainPackRebasePlanInput, DurableAssuranceEpistemicState, DurableAssuranceProjection,
-    EvaluatorObservedEvent, Phase, PhaseAdvancedEvent, PolicyCompletedEvent,
+    EvaluatorObservedEvent, HumanDecisionClass, Phase, PhaseAdvancedEvent, PolicyCompletedEvent,
     PostBuildVerifyAdmittedGateResult, PostBuildVerifyEpisodeAppliedEvent,
     PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
-    PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ReadinessTarget, ReleaseUpgradedEvent,
-    SignalChangedEvent, StableId, UniversalAssuranceLens, WaiverAuthorizedEvent,
-    WorkflowAssuranceClaimRole, WorkflowBrokerCredentialStatus,
+    PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ProtectedEffect, ReadinessTarget,
+    ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
+    WaiverAuthorizedEvent, WorkflowAssuranceClaimRole, WorkflowBrokerCredentialStatus,
     WorkflowBrokerExternalSetupBlockReason, WorkflowBrokerExternalSetupState,
     WorkflowBrokerPublicRegistryDocument, WorkflowCapabilityProbeKind,
     WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
@@ -87,17 +89,17 @@ use forge_core_contracts::{
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    evaluate_post_build_verify_episode, evaluate_transition, find_entry, is_live,
-    load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
+    evaluate_agent_autonomy, evaluate_post_build_verify_episode, evaluate_transition, find_entry,
+    is_live, load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
     project_cooperative_durable_assurance, project_durable_assurance,
     project_governed_durable_assurance, project_legacy_workflow_compatibility, rfc3339_to_unix,
     route_post_build_verify_episode, simulate_workflow_governance,
     validate_representative_slice_definition, verify_domain_pack_rebase_plan,
     workflow_cooperative_objective_digest, workflow_cooperative_revision_input_digest,
-    workflow_human_intent_digest, AssuranceProjectionError, DomainPackRebasePlanError, GateKind,
-    GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
-    GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
-    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
+    workflow_human_intent_digest, AgentAutonomyEvaluationError, AssuranceProjectionError,
+    DomainPackRebasePlanError, GateKind, GovernedAssuranceActionPacketFact,
+    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
+    GovernedAssuranceFacts, GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
     PostBuildVerifyEpisodeRuntimeRoute, ProvidedGateResult, TransitionDecision, TransitionRequest,
     WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
     WorkflowGovernanceStatus,
@@ -440,6 +442,107 @@ pub struct WorkflowAuthorizationGuidance {
     /// ahead of the governed policy action packets.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub objective_management_packet: Option<WorkflowAuthorizationActionPacket>,
+}
+
+/// Host-neutral, read-only autonomy boundary projected alongside the governed
+/// next action. It never grants workflow mutation authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowAgentAutonomyGuidance {
+    pub status: WorkflowAgentAutonomyGuidanceStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binding: Option<AgentAutonomyBinding>,
+    pub delegated_work_classes: Vec<AgentOwnedWorkClass>,
+    pub human_decision_classes: Vec<HumanDecisionClass>,
+    pub protected_effects: Vec<ProtectedEffect>,
+    /// Structured argv for execution. Display strings are not an execution contract.
+    pub assessment_argv: Vec<String>,
+    pub input_contract: WorkflowAgentAutonomyInputContract,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowAgentAutonomyInputContract {
+    pub schema_version: &'static str,
+    pub max_input_file_bytes: u64,
+    pub max_summary_bytes: usize,
+    pub unknown_fields_allowed: bool,
+    pub temporary_input_must_be_outside_project_snapshot: bool,
+    pub effect_descriptor_source: &'static str,
+    pub agent_owned_work_classes: Vec<AgentOwnedWorkClass>,
+    pub human_decision_classes: Vec<HumanDecisionClass>,
+    pub protected_effects: Vec<ProtectedEffect>,
+    pub effect_descriptors: Vec<AgentAutonomyEffectDescriptor>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowAgentAutonomyGuidanceStatus {
+    ObjectiveRequired,
+    Active,
+    UnsupportedProfile,
+}
+
+fn workflow_agent_autonomy_guidance(
+    readiness_profile: WorkflowReadinessProfile,
+    objective: Option<&WorkflowActiveCooperativeObjective>,
+    snapshot_digest: &str,
+    ledger_head_digest: &str,
+    state_version: u64,
+) -> WorkflowAgentAutonomyGuidance {
+    let active =
+        readiness_profile == WorkflowReadinessProfile::SoloCooperative && objective.is_some();
+    WorkflowAgentAutonomyGuidance {
+        status: match readiness_profile {
+            WorkflowReadinessProfile::StrictExternal => {
+                WorkflowAgentAutonomyGuidanceStatus::UnsupportedProfile
+            }
+            WorkflowReadinessProfile::SoloCooperative if objective.is_some() => {
+                WorkflowAgentAutonomyGuidanceStatus::Active
+            }
+            WorkflowReadinessProfile::SoloCooperative => {
+                WorkflowAgentAutonomyGuidanceStatus::ObjectiveRequired
+            }
+        },
+        binding: active.then(|| {
+            let objective = objective.expect("active cooperative objective");
+            AgentAutonomyBinding {
+                objective_id: objective.objective_id.clone(),
+                objective_revision: objective.revision,
+                objective_digest: objective.objective_digest.clone(),
+                assurance_epoch: objective.assurance_epoch,
+                snapshot_digest: snapshot_digest.to_owned(),
+                ledger_head_digest: ledger_head_digest.to_owned(),
+                state_version,
+            }
+        }),
+        delegated_work_classes: AgentOwnedWorkClass::ALL.to_vec(),
+        human_decision_classes: HumanDecisionClass::ALL.to_vec(),
+        protected_effects: ProtectedEffect::ALL.to_vec(),
+        assessment_argv: vec![
+            "forge-core".to_owned(),
+            "workflow".to_owned(),
+            "autonomy".to_owned(),
+            "assess".to_owned(),
+            "--root".to_owned(),
+            "<project-root>".to_owned(),
+            "--input-file".to_owned(),
+            "<temporary-file-outside-project-snapshot>".to_owned(),
+            "--json".to_owned(),
+        ],
+        input_contract: WorkflowAgentAutonomyInputContract {
+            schema_version: forge_core_contracts::AGENT_AUTONOMY_ASSESSMENT_SCHEMA_VERSION,
+            max_input_file_bytes: forge_core_contracts::MAX_AGENT_AUTONOMY_INPUT_BYTES,
+            max_summary_bytes: forge_core_contracts::MAX_AGENT_AUTONOMY_SUMMARY_BYTES,
+            unknown_fields_allowed: false,
+            temporary_input_must_be_outside_project_snapshot: true,
+            effect_descriptor_source: "derive from the host tool and concrete operation boundary, never from free-form task text alone",
+            agent_owned_work_classes: AgentOwnedWorkClass::ALL.to_vec(),
+            human_decision_classes: HumanDecisionClass::ALL.to_vec(),
+            protected_effects: ProtectedEffect::ALL.to_vec(),
+            effect_descriptors: AgentAutonomyEffectDescriptor::ALL.to_vec(),
+        },
+    }
 }
 
 /// Origin-aware durable objective projection reconstructed from the workflow
@@ -1290,6 +1393,39 @@ impl WorkflowGovernanceProjectAdapter {
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         self.guidance_from_projection(&registry, admitted, &effective, &projection, now)
+    }
+
+    /// Assess one host-neutral work description against the exact active
+    /// objective and current project/ledger CAS coordinates. This path is
+    /// read-only: it does not reconcile epochs, append events, or initialize
+    /// replay/state files.
+    pub fn assess_agent_autonomy(
+        &self,
+        input: AgentAutonomyAssessmentInput,
+    ) -> Result<AgentAutonomyAssessment, WorkflowGovernanceAdapterError> {
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
+            return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
+        }
+        let objective = active_cooperative_objective_from_ledger(&projection.records)?
+            .ok_or(WorkflowGovernanceAdapterError::AgentAutonomyObjectiveRequired)?;
+        let current_binding = AgentAutonomyBinding {
+            objective_id: objective.objective_id,
+            objective_revision: objective.revision,
+            objective_digest: objective.objective_digest,
+            assurance_epoch: objective.assurance_epoch,
+            snapshot_digest: snapshot.digest().to_owned(),
+            ledger_head_digest: projection
+                .head_digest
+                .clone()
+                .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?,
+            state_version: projection.current_state_version().unwrap_or_default(),
+        };
+        let assessment = evaluate_agent_autonomy(&current_binding, &input)?;
+        snapshot.revalidate()?;
+        Ok(assessment)
     }
 
     /// Project the currently admissible authority-bearing actions without
@@ -4417,6 +4553,13 @@ impl WorkflowGovernanceProjectAdapter {
                 .as_ref()
                 .map(|projection| projection.projection_digest.as_str()),
         )?;
+        let agent_autonomy = workflow_agent_autonomy_guidance(
+            readiness_profile,
+            active_cooperative_objective.as_ref(),
+            &snapshot_digest,
+            &assurance_source_head,
+            projection.current_state_version().unwrap_or_default(),
+        );
         let durable_assurance = match durable_assurance_projection {
             Some(projection) => {
                 let blockers = durable_assurance_blockers(&projection);
@@ -4497,6 +4640,7 @@ impl WorkflowGovernanceProjectAdapter {
             boundary_rechecks,
             simulation: verified.simulation.clone(),
             active_cooperative_objective,
+            agent_autonomy,
             durable_assurance,
             authorization: WorkflowAuthorizationGuidance {
                 registry_setup: WorkflowAuthorizationRegistrySetup {
@@ -4882,6 +5026,7 @@ pub struct WorkflowGovernanceGuidance {
     pub simulation: WorkflowGovernanceSimulation,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_cooperative_objective: Option<WorkflowActiveCooperativeObjective>,
+    pub agent_autonomy: WorkflowAgentAutonomyGuidance,
     pub durable_assurance: WorkflowDurableAssuranceGuidance,
     pub authorization: WorkflowAuthorizationGuidance,
 }
@@ -5051,6 +5196,8 @@ pub enum WorkflowGovernanceAdapterError {
         requested: WorkflowReadinessProfile,
     },
     CooperativeObjectiveProfileRequired,
+    AgentAutonomyObjectiveRequired,
+    AgentAutonomyEvaluation(AgentAutonomyEvaluationError),
     CooperativeObjectiveAlreadyAccepted,
     CooperativeObjectiveRetryConflict,
     StaleCooperativeObjectiveManagementPacket,
@@ -5153,6 +5300,12 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::CooperativeObjectiveProfileRequired => f.write_str(
                 "cooperative objective admission requires the solo_cooperative readiness profile",
             ),
+            Self::AgentAutonomyObjectiveRequired => f.write_str(
+                "agent autonomy assessment requires an active cooperative objective",
+            ),
+            Self::AgentAutonomyEvaluation(error) => {
+                write!(f, "agent autonomy assessment rejected: {error}")
+            }
             Self::CooperativeObjectiveAlreadyAccepted => f.write_str(
                 "an initial objective is already durable; refresh workflow next",
             ),
@@ -5236,6 +5389,12 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
 }
 
 impl std::error::Error for WorkflowGovernanceAdapterError {}
+
+impl From<AgentAutonomyEvaluationError> for WorkflowGovernanceAdapterError {
+    fn from(value: AgentAutonomyEvaluationError) -> Self {
+        Self::AgentAutonomyEvaluation(value)
+    }
+}
 
 impl From<RetainedProjectTreeError> for WorkflowGovernanceAdapterError {
     fn from(value: RetainedProjectTreeError) -> Self {
@@ -9873,6 +10032,7 @@ mod tests {
     };
     use forge_core_contracts::request::DependencyRef;
     use forge_core_contracts::{
+        AgentAutonomyAssessmentInput, AgentAutonomyWork, AgentOwnedWorkClass,
         ClaimContractDocument, CompletionContractDocument, HealthRecoveryContractDocument,
         PostBuildVerifyContinuityBinding, PostBuildVerifyEpisode, PostBuildVerifyEpisodeAuthority,
         PostBuildVerifyEvolutionIdentity, PostBuildVerifyEvolutionStatus,
@@ -9927,6 +10087,28 @@ mod tests {
             }
         }
         found
+    }
+
+    fn state_file_bytes(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        let mut files = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in fs::read_dir(&directory).expect("walk state") {
+                let entry = entry.expect("state entry");
+                let kind = entry.file_type().expect("state entry type");
+                if kind.is_dir() {
+                    pending.push(entry.path());
+                } else if kind.is_file() {
+                    let relative = entry
+                        .path()
+                        .strip_prefix(root)
+                        .expect("relative state path")
+                        .to_path_buf();
+                    files.insert(relative, fs::read(entry.path()).expect("state bytes"));
+                }
+            }
+        }
+        files
     }
 
     fn coordination_request_document() -> RequestContractDocument {
@@ -11994,6 +12176,212 @@ mod tests {
             active.revision_reason.as_deref(),
             Some("The owner clarified execution constraints without changing direction")
         );
+    }
+
+    #[test]
+    fn agent_autonomy_is_bound_read_only_and_stales_after_objective_supersession() {
+        let (root, state) = temp_project("agent-autonomy-boundary");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.agent-autonomy-boundary".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let missing = AgentAutonomyAssessmentInput {
+            schema_version: forge_core_contracts::AGENT_AUTONOMY_ASSESSMENT_SCHEMA_VERSION
+                .to_owned(),
+            binding: AgentAutonomyBinding {
+                objective_id: StableId("objective.missing".to_owned()),
+                objective_revision: 1,
+                objective_digest: format!("sha256:{}", "a".repeat(64)),
+                assurance_epoch: 1,
+                snapshot_digest: format!("sha256:{}", "b".repeat(64)),
+                ledger_head_digest: format!("sha256:{}", "c".repeat(64)),
+                state_version: 0,
+            },
+            work: AgentAutonomyWork::AgentOwned {
+                class: AgentOwnedWorkClass::ResearchAndAnalysis,
+                summary: "inspect the codebase".to_owned(),
+            },
+            effect: AgentAutonomyEffectDescriptor::LocalReadOnly,
+        };
+        assert!(matches!(
+            adapter.assess_agent_autonomy(missing),
+            Err(WorkflowGovernanceAdapterError::AgentAutonomyObjectiveRequired)
+        ));
+
+        let initial = adapter.next().expect("objective packet");
+        assert_eq!(
+            initial.agent_autonomy.status,
+            WorkflowAgentAutonomyGuidanceStatus::ObjectiveRequired
+        );
+        let accepted = adapter
+            .accept_cooperative_objective(
+                &initial.authorization.action_packets[0].packet_digest,
+                cooperative_objective_input(),
+            )
+            .expect("accept objective");
+        let WorkflowCooperativeObjectiveAcceptance::Accepted { next, .. } = accepted else {
+            panic!("objective accepted");
+        };
+        let binding = next
+            .agent_autonomy
+            .binding
+            .clone()
+            .expect("active autonomy binding");
+        assert_eq!(binding.assurance_epoch, 1);
+        assert_eq!(
+            next.agent_autonomy.status,
+            WorkflowAgentAutonomyGuidanceStatus::Active
+        );
+        assert_eq!(
+            next.agent_autonomy.delegated_work_classes,
+            AgentOwnedWorkClass::ALL
+        );
+        assert_eq!(
+            next.agent_autonomy.human_decision_classes,
+            HumanDecisionClass::ALL
+        );
+        assert_eq!(next.agent_autonomy.protected_effects, ProtectedEffect::ALL);
+        assert!(!next.agent_autonomy.input_contract.unknown_fields_allowed);
+        assert!(
+            next.agent_autonomy
+                .input_contract
+                .temporary_input_must_be_outside_project_snapshot
+        );
+        assert_eq!(next.agent_autonomy.assessment_argv[0], "forge-core");
+
+        let input = |work, effect| AgentAutonomyAssessmentInput {
+            schema_version: forge_core_contracts::AGENT_AUTONOMY_ASSESSMENT_SCHEMA_VERSION
+                .to_owned(),
+            binding: binding.clone(),
+            work,
+            effect,
+        };
+        let before = state_file_bytes(&state);
+        let local = adapter
+            .assess_agent_autonomy(input(
+                AgentAutonomyWork::AgentOwned {
+                    class: AgentOwnedWorkClass::TacticFileOrderOrRetryChange,
+                    summary: "retry a focused test using a different file order".to_owned(),
+                },
+                AgentAutonomyEffectDescriptor::LocalReversible,
+            ))
+            .expect("local autonomy");
+        assert!(matches!(
+            local,
+            AgentAutonomyAssessment::ProceedAutonomously {
+                class: AgentOwnedWorkClass::TacticFileOrderOrRetryChange,
+                ..
+            }
+        ));
+        let objective = adapter
+            .assess_agent_autonomy(input(
+                AgentAutonomyWork::HumanDecision {
+                    class: HumanDecisionClass::ProductObjectiveChange,
+                    summary: "expand the accepted product direction".to_owned(),
+                },
+                AgentAutonomyEffectDescriptor::LocalReadOnly,
+            ))
+            .expect("objective decision");
+        assert!(matches!(
+            objective,
+            AgentAutonomyAssessment::DecisionRequired { .. }
+        ));
+        let publication = adapter
+            .assess_agent_autonomy(input(
+                AgentAutonomyWork::AgentOwned {
+                    class: AgentOwnedWorkClass::ReversibleLocalEditing,
+                    summary: "publish a public release".to_owned(),
+                },
+                AgentAutonomyEffectDescriptor::ProtectedEffect {
+                    effect: ProtectedEffect::Publication,
+                },
+            ))
+            .expect("publication decision");
+        assert!(matches!(
+            publication,
+            AgentAutonomyAssessment::DecisionRequired { .. }
+        ));
+        assert_eq!(
+            state_file_bytes(&state),
+            before,
+            "assessment must not write state"
+        );
+
+        let revision_packet = next
+            .authorization
+            .objective_management_packet
+            .as_ref()
+            .expect("revision packet");
+        adapter
+            .accept_cooperative_objective(
+                &revision_packet.packet_digest,
+                cooperative_material_supersession_input(),
+            )
+            .expect("supersede objective");
+        let after_revision = state_file_bytes(&state);
+        assert!(matches!(
+            adapter.assess_agent_autonomy(input(
+                AgentAutonomyWork::AgentOwned {
+                    class: AgentOwnedWorkClass::TestingAndVerification,
+                    summary: "run focused tests".to_owned(),
+                },
+                AgentAutonomyEffectDescriptor::LocalReadOnly,
+            )),
+            Err(WorkflowGovernanceAdapterError::AgentAutonomyEvaluation(
+                AgentAutonomyEvaluationError::StaleBinding
+            ))
+        ));
+        assert_eq!(
+            state_file_bytes(&state),
+            after_revision,
+            "stale rejection must not write state"
+        );
+    }
+
+    #[test]
+    fn strict_profile_projects_autonomy_as_unsupported_and_assessment_fails_closed() {
+        let (root, state) = temp_project("agent-autonomy-strict-profile");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.agent-autonomy-strict-profile".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .expect("strict initialize");
+        let next = adapter.next().expect("strict guidance");
+        assert_eq!(
+            next.agent_autonomy.status,
+            WorkflowAgentAutonomyGuidanceStatus::UnsupportedProfile
+        );
+        assert!(next.agent_autonomy.binding.is_none());
+
+        let input = AgentAutonomyAssessmentInput {
+            schema_version: forge_core_contracts::AGENT_AUTONOMY_ASSESSMENT_SCHEMA_VERSION
+                .to_owned(),
+            binding: AgentAutonomyBinding {
+                objective_id: StableId("objective.strict".to_owned()),
+                objective_revision: 1,
+                objective_digest: format!("sha256:{}", "a".repeat(64)),
+                assurance_epoch: 1,
+                snapshot_digest: next.snapshot_digest,
+                ledger_head_digest: next.ledger_head_digest,
+                state_version: next.state_version,
+            },
+            work: AgentAutonomyWork::AgentOwned {
+                class: AgentOwnedWorkClass::ResearchAndAnalysis,
+                summary: "inspect locally".to_owned(),
+            },
+            effect: AgentAutonomyEffectDescriptor::LocalReadOnly,
+        };
+        assert!(matches!(
+            adapter.assess_agent_autonomy(input),
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired)
+        ));
     }
 
     #[test]

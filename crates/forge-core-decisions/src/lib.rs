@@ -25,6 +25,7 @@
 // `clippy::too_many_lines` would scatter related checks.
 #![allow(clippy::too_many_lines)]
 
+pub mod agent_autonomy;
 pub mod autonomy_router;
 pub mod catalog;
 pub mod claim_engine;
@@ -77,6 +78,7 @@ pub use embedded_contracts::{
     embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,
 };
 
+pub use agent_autonomy::{evaluate_agent_autonomy, AgentAutonomyEvaluationError};
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 pub use eval::{
     load_eval_corpus, score_router, CaseScore, EvalCase, EvalCorpusDocument, RouterScore,

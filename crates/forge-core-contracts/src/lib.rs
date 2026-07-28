@@ -5,6 +5,7 @@ pub mod common;
 pub mod envelope;
 pub mod typed_failure;
 
+pub mod agent_autonomy;
 pub mod agent_run;
 pub mod assurance;
 pub mod autonomy_policy;
@@ -96,6 +97,7 @@ pub(crate) fn is_lowercase_sha256_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
 }
 
+pub use agent_autonomy::*;
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
 pub use assurance::{
     AssuranceCase, AssuranceCaseDocument, AssuranceClaim, AssuranceClaimStatus, AssuranceWaiver,

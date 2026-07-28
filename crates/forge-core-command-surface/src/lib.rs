@@ -295,6 +295,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow init [--root <path>] [--readiness-profile <solo_cooperative|strict_external>] [--json|--no-json]",
         "       forge-core workflow next [--root <path>] [--json|--no-json]",
         "       forge-core workflow action-packets [--root <path>] [--json|--no-json]",
+        "       forge-core workflow autonomy assess --root <path> --input-file <assessment.json> [--json|--no-json|--text]",
         "       forge-core workflow action authorize --root <path> --packet-digest <sha256> --input-file <closed-input.json> --credential-id <id> [--json|--no-json]",
         "       forge-core workflow action apply --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
         "       forge-core workflow intent accept-cooperative --root <path> --packet-digest <sha256> --input-file <cooperative-input.json> [--json|--no-json]",
@@ -1119,6 +1120,7 @@ mod tests {
                 "init",
                 "next",
                 "action-packets",
+                "autonomy",
                 "action",
                 "intent",
                 "resume",
@@ -1152,6 +1154,7 @@ mod tests {
                 "forbidden workflow surface: {forbidden}"
             );
         }
+        assert!(usage.contains("workflow autonomy assess"));
         assert!(usage.contains("workflow action authorize"));
         assert!(usage.contains("workflow action apply"));
         assert!(usage.contains("workflow broker initialize"));

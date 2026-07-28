@@ -14,6 +14,7 @@ use forge_core_authority::{
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{CliEnvelope, ExitReason, PrincipalId, StableId};
+use forge_core_decisions::AgentAutonomyEvaluationError;
 use forge_core_kernel::{
     load_admitted_workflow_retirement_checkpoint, WorkflowGovernanceAdapterError,
     WorkflowGovernanceProjectAdapter,
@@ -42,6 +43,9 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
+    if args.get(1).is_some_and(|value| value == "autonomy") {
+        return crate::workflow_autonomy_cmd::run(&args[2..]);
+    }
     if args.get(1).is_some_and(|value| value == "intent") {
         let want_json = wants_json(args);
         let command = if args
@@ -760,7 +764,10 @@ fn is_lowercase_sha256(value: &str) -> bool {
 
 pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReason {
     match error {
-        WorkflowGovernanceAdapterError::Ledger(_)
+        WorkflowGovernanceAdapterError::AgentAutonomyEvaluation(
+            AgentAutonomyEvaluationError::StaleBinding,
+        )
+        | WorkflowGovernanceAdapterError::Ledger(_)
         | WorkflowGovernanceAdapterError::LedgerIdentityMismatch
         | WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration { .. }
         | WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted

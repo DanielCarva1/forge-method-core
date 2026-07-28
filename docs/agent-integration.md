@@ -104,6 +104,47 @@ readback uses the latest `active_cooperative_objective`, whose `revision_kind`,
 `revision_reason`, and `previous_objective_digest` explain why it superseded or
 clarified the prior objective.
 
+## Agent autonomy boundary
+
+Once `workflow next` exposes an active `agent_autonomy.binding`, ordinary work
+inside the accepted objective proceeds autonomously. The binding contains the
+objective id/revision/digest and assurance epoch plus current project snapshot,
+ledger head, and state version. It becomes stale after objective supersession or
+any bound state change. Strict-external readiness reports
+`unsupported_profile`; it never misreports a missing cooperative objective.
+
+The delegated classes are research/analysis, planning/strategy, reversible
+local editing, testing/verification, documentation, changes of tactic/file/work
+order/retry, external read-only research, reversible local commits, and local
+evidence generation. Generating evidence locally is autonomous; admitting,
+promoting, or publishing it remains governed by the existing evidence and
+effect boundaries. The only human decision classes are product-objective
+change, material trade-off, material risk acceptance, and
+irreversible/external effect.
+
+Every assessment input also carries a required closed effect descriptor. The
+host derives it from the selected tool and concrete operation boundary,
+independently of the model-declared work class, never from free-form task text
+alone. Local read-only, local reversible, and compatible external read-only
+operations may proceed. External mutation (for example Slack/Jira/email sends,
+HTTP writes, or mutations to a staging system), unknown/ambiguous operations,
+and contradictory class/effect pairs fail closed into a Decision Request.
+Publication, remote push/merge, deployment, production mutation, secret use,
+and destructive external effects are protected. Local git staging/commit is
+local reversible work; a remote push is protected.
+
+`workflow next` publishes structured assessment argv and a machine-readable
+input contract: schema version, byte bounds, the complete enum lists,
+unknown-fields policy, and the requirement to place the temporary input outside
+the project snapshot. `workflow autonomy assess` is an optional read-only
+validator at an actual semantic/effect boundary, not an authorization step and
+never a per-edit/per-task command. It returns exactly one tagged branch:
+`proceed_autonomously` or `decision_required`, whose concrete request preserves
+the proposed-work summary, two alternatives beyond the recommendation, and
+non-empty consequences. Assessment never writes the workflow ledger, replay
+WAL, or Forge state; it supplements rather than replaces the governed ranked
+next action.
+
 `workflow action authorize` is a cooperative local one-call lane only for a
 packet marked `operator_credential_broker`. Forge rejects that lane before
 signing for human, independent-reviewer, and trusted-runtime broker packets.
