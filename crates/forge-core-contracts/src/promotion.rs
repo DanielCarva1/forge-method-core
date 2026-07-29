@@ -358,6 +358,7 @@ pub const GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION: &str = "governed_promotion_
 #[serde(rename_all = "snake_case")]
 pub enum GovernedPromotionApplyStatus {
     Applied,
+    Recovered,
     AlreadyCommitted,
 }
 
@@ -383,6 +384,16 @@ pub struct PromotionReplayBinding {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct PromotionRecoveryExecutionBinding {
+    pub schema_version: String,
+    pub recovery_kind: String,
+    pub durable_intent_digest: String,
+    pub superseded_provenance_digest: String,
+    pub superseded_publication_capability_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GovernedPromotionReceipt {
     pub schema_version: String,
     /// Digest of the canonical receipt with this field blank.
@@ -397,6 +408,8 @@ pub struct GovernedPromotionReceipt {
     /// Store apply/readback. It is evidence, not reusable mutation authority.
     pub publication_capability_digest: String,
     pub replay: PromotionReplayBinding,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery_execution: Option<PromotionRecoveryExecutionBinding>,
     pub applied_files: Vec<PromotionAppliedFileBinding>,
     pub result_snapshot: PromotionSnapshotBinding,
     pub result_snapshot_digest: String,

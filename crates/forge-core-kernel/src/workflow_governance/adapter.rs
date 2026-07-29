@@ -1555,6 +1555,7 @@ impl WorkflowGovernanceProjectAdapter {
             &effect_lock,
             isolation_id,
             expected_preview_digest,
+            false,
         )? {
             return Ok(committed);
         }
@@ -1588,6 +1589,105 @@ impl WorkflowGovernanceProjectAdapter {
             destination.tree_mut(),
             &effect_lock,
             &claim_guard,
+        )
+        .map_err(WorkflowGovernanceAdapterError::PromotionApply)
+    }
+
+    /// Reconcile one interrupted governed promotion without asking the caller
+    /// to generate a replacement preview.
+    ///
+    /// Durable intent/WAL authority and exact source/destination bytes select
+    /// the only admissible continuation. Ambiguous, corrupt, rolled-back, or
+    /// mismatched state fails closed before any additional canonical write.
+    pub fn recover_promotion(
+        &self,
+        isolation_id: &StableId,
+        expected_preview_digest: &str,
+    ) -> Result<forge_core_contracts::GovernedPromotionApplication, WorkflowGovernanceAdapterError>
+    {
+        super::promotion::validate_expected_preview_digest(expected_preview_digest)?;
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_existing(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        let claim_guard = retain_existing_claim_wal_projection(
+            &self.binding.state_root,
+            &ClaimWalProjectionOptions {
+                repair: false,
+                stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+            },
+        )
+        .map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        let effect_lock = acquire_effect_store_lock(
+            &self.binding.state_root,
+            super::promotion::PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        )
+        .map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        if let Some(committed) = super::promotion::inspect_promotion_retry_under_lock(
+            &self.binding,
+            &effect_lock,
+            isolation_id,
+            expected_preview_digest,
+            true,
+        )? {
+            return Ok(committed);
+        }
+        let mut destination = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let stored_preview = super::promotion::recovery_preview_under_lock(
+            &self.binding,
+            &effect_lock,
+            isolation_id,
+            expected_preview_digest,
+        )?;
+        let fallback_prepared = if stored_preview.is_none() {
+            let guidance = self.guidance_from_projection_with_snapshot(
+                &registry,
+                admitted,
+                &effective,
+                &projection,
+                now,
+                &destination,
+            )?;
+            Some(
+                super::promotion::prepare_governed_promotion_with_claim_projection(
+                    &self.binding,
+                    isolation_id,
+                    &guidance,
+                    destination.tree(),
+                    now,
+                    claim_guard.projection(),
+                )?,
+            )
+        } else {
+            None
+        };
+        claim_guard.revalidate().map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        destination.revalidate()?;
+        super::promotion::recover_promotion_under_lock(
+            &self.binding,
+            isolation_id,
+            expected_preview_digest,
+            fallback_prepared,
+            destination.tree_mut(),
+            &effect_lock,
         )
         .map_err(WorkflowGovernanceAdapterError::PromotionApply)
     }

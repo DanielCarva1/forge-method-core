@@ -1262,6 +1262,39 @@ pub struct EffectReplayCompletionResult {
     pub completion: EffectReplayCompletion,
 }
 
+/// Durable stage of one provenance-bound split-root transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum SplitRootEffectTransactionStage {
+    Begun,
+    Committed,
+    RolledBack,
+    ReplayConsumed,
+}
+
+/// Strict inspection of the authority embedded in one split-root effect WAL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct SplitRootEffectTransactionInspection {
+    pub tx_id: String,
+    pub effect_id: StableId,
+    pub stage: SplitRootEffectTransactionStage,
+    pub provenance: EffectExecutionProvenance,
+    pub replay_binding: EffectReplayCommitBinding,
+}
+
+/// Result of reconciling one interrupted existing-file-only split-root effect.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct SplitRootEffectRecoveryResult {
+    pub status: SplitRootEffectTransactionStage,
+    pub canonical_mutation_performed: bool,
+    pub applied_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EffectReplayReconciliationError {
@@ -4614,6 +4647,7 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             validation_warning_count,
         );
     }
+    debug_test_promotion_crash("after_begin");
 
     let mut applied = Vec::<(String, Vec<u8>, Vec<u8>)>::new();
     for (write, before, after) in &writes {
@@ -4665,6 +4699,7 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
                 validation_warning_count,
             );
         }
+        debug_test_promotion_crash("after_before_image");
         if let Err(error) =
             publication_tree.apply_exact_regular_file_write(&write.reference, before, after)
         {
@@ -4685,6 +4720,7 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             );
         }
         applied.push((write.reference.clone(), before.clone(), after.clone()));
+        debug_test_promotion_crash("after_bytes_before_marker");
         #[cfg(test)]
         if applied.len() == 1
             && state_root
@@ -4761,6 +4797,7 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             validation_warning_count,
         );
     }
+    debug_test_promotion_crash("after_commit");
     EffectApplicationResult {
         status: EffectApplicationStatus::Applied,
         effect_id: effect_contract.id.clone(),
@@ -5147,6 +5184,437 @@ pub fn pending_effect_replay_commits_under_lock(
     project_pending_effect_replay_commits(&records)
 }
 
+/// Inspect one exact split-root transaction without mutating either root.
+///
+/// The WAL is parsed strictly: a corrupt or torn tail is not repaired by this
+/// recovery boundary. The caller can therefore distinguish an interrupted
+/// operation from damaged authority and fail closed without publication.
+pub fn inspect_split_root_effect_transaction_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    wal_relative_path: &str,
+    tx_id: &str,
+) -> Result<Option<SplitRootEffectTransactionInspection>, EffectReplayReconciliationError> {
+    let records = strict_effect_wal_records_under_lock(
+        root.as_ref(),
+        effect_lock,
+        expected_lock_relative_path,
+        wal_relative_path,
+    )?;
+    inspect_split_root_transaction_records(&records, tx_id)
+}
+
+/// Resume one exact existing-file-only split-root effect from its durable WAL.
+///
+/// Every destination is compared with both the recorded before image and the
+/// caller-bound replacement bytes. Only an unambiguous old/new state is
+/// accepted. A committed transaction is validated but never applied again.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
+    state_root: impl AsRef<Path>,
+    publication_tree: &mut retained_project_tree::RetainedProjectTree,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    tx_id: &str,
+    provenance: &EffectExecutionProvenance,
+    replay_binding: &EffectReplayCommitBinding,
+) -> Result<SplitRootEffectRecoveryResult, EffectReplayReconciliationError> {
+    let state_root = state_root.as_ref();
+    validate_effect_lock_scope(state_root, effect_lock, expected_lock_relative_path)?;
+    provenance.verify().map_err(
+        |source| EffectReplayReconciliationError::InvalidProvenance {
+            tx_id: tx_id.to_owned(),
+            source: source.to_string(),
+        },
+    )?;
+    validate_effect_replay_binding(replay_binding).map_err(|reason| {
+        EffectReplayReconciliationError::InvalidReplayBinding {
+            tx_id: tx_id.to_owned(),
+            reason,
+        }
+    })?;
+    let records = strict_effect_wal_records_under_lock(
+        state_root,
+        effect_lock,
+        expected_lock_relative_path,
+        wal_relative_path,
+    )?;
+    let inspection = inspect_split_root_transaction_records(&records, tx_id)?.ok_or_else(|| {
+        EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "durable replay reservation has no matching effect begin record".to_owned(),
+        }
+    })?;
+    if inspection.effect_id != effect.tool_effect_contract.id
+        || inspection.provenance != *provenance
+        || inspection.replay_binding != *replay_binding
+    {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "effect begin authority differs from the recovery intent".to_owned(),
+        });
+    }
+    if inspection.stage == SplitRootEffectTransactionStage::RolledBack {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "transaction is terminally rolled back and cannot be promoted".to_owned(),
+        });
+    }
+
+    let mut writes = Vec::new();
+    let mut seen = BTreeSet::new();
+    for write in &effect.tool_effect_contract.write_set {
+        if write.target_kind != EffectTargetKind::FilePath
+            || write.access_mode != AccessMode::Write
+            || write.destructive
+            || !seen.insert(write.reference.clone())
+        {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!(
+                    "{} is not one unique non-destructive regular-file write",
+                    write.reference
+                ),
+            });
+        }
+        let expected_before = write.expected_hash.as_ref().ok_or_else(|| {
+            EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} lacks an expected before digest", write.reference),
+            }
+        })?;
+        let payload = payload_for(payloads, &write.reference).ok_or_else(|| {
+            EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} lacks exact recovery payload bytes", write.reference),
+            }
+        })?;
+        if sha256_content_hash(&payload.content) != payload.content_hash {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} recovery payload digest is invalid", write.reference),
+            });
+        }
+        let before_records = records
+            .iter()
+            .filter(|record| {
+                record.tx_id == tx_id
+                    && record.stage == EffectWalStage::BeforeImage
+                    && record.target_ref.as_deref() == Some(write.reference.as_str())
+            })
+            .collect::<Vec<_>>();
+        let write_records = records
+            .iter()
+            .filter(|record| {
+                record.tx_id == tx_id
+                    && record.stage == EffectWalStage::WriteApplied
+                    && record.target_ref.as_deref() == Some(write.reference.as_str())
+            })
+            .collect::<Vec<_>>();
+        if before_records.len() > 1 || write_records.len() > 1 {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} has duplicate WAL progress records", write.reference),
+            });
+        }
+        let recorded_before = before_records
+            .first()
+            .map(|record| {
+                let original = record.original.as_ref().ok_or_else(|| {
+                    EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!("{} before-image has no original bytes", write.reference),
+                    }
+                })?;
+                if !original.existed
+                    || original.content_hash != sha256_content_hash(&original.content)
+                    || original.content_hash != *expected_before
+                    || record.physical_target_ref.as_deref() != Some(write.reference.as_str())
+                {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!(
+                            "{} before-image differs from the bound effect",
+                            write.reference
+                        ),
+                    });
+                }
+                Ok(original.content.clone())
+            })
+            .transpose()?;
+        if let Some(record) = write_records.first() {
+            let metadata = record.target_metadata.as_ref().ok_or_else(|| {
+                EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} write marker lacks metadata", write.reference),
+                }
+            })?;
+            if metadata.target_kind != EffectTargetKind::FilePath
+                || metadata.access_mode != AccessMode::Write
+                || metadata.destructive
+                || metadata.content_hash.as_deref() != Some(payload.content_hash.as_str())
+                || metadata.byte_len != payload.content.len() as u64
+                || metadata.operation_id != effect.tool_effect_contract.operation_ref
+                || metadata.actor_agent_id != effect.tool_effect_contract.actor.agent_id
+                || metadata.actor_role != effect.tool_effect_contract.actor.role
+                || metadata.redaction_hint.0 != "raw_content_not_indexed"
+                || record.physical_target_ref.as_deref() != Some(write.reference.as_str())
+                || recorded_before.is_none()
+            {
+                return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!(
+                        "{} write marker differs from the bound payload",
+                        write.reference
+                    ),
+                });
+            }
+        }
+        if let (Some(before_record), Some(write_record)) =
+            (before_records.first(), write_records.first())
+        {
+            let before_position = records
+                .iter()
+                .position(|candidate| std::ptr::eq(candidate, *before_record))
+                .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: "before-image record disappeared during inspection".to_owned(),
+                })?;
+            let write_position = records
+                .iter()
+                .position(|candidate| std::ptr::eq(candidate, *write_record))
+                .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: "write marker disappeared during inspection".to_owned(),
+                })?;
+            if before_position >= write_position {
+                return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!(
+                        "{} write marker does not follow its exact before-image",
+                        write.reference
+                    ),
+                });
+            }
+        }
+        let current = publication_tree
+            .exact_regular_file_bytes(&write.reference)
+            .map_err(
+                |error| EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} destination inspection failed: {error}", write.reference),
+                },
+            )?
+            .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} is no longer an existing regular file", write.reference),
+            })?;
+        let current_digest = sha256_content_hash(&current);
+        let is_old = current_digest == *expected_before;
+        let is_new = current_digest == payload.content_hash;
+        if !is_old && !is_new {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!(
+                    "{} has third-party bytes: expected recorded old or exact new content",
+                    write.reference
+                ),
+            });
+        }
+        if is_new && recorded_before.is_none() {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} is new without a durable before-image", write.reference),
+            });
+        }
+        if is_old && !write_records.is_empty() {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!("{} is old after a durable write marker", write.reference),
+            });
+        }
+        writes.push((
+            write.clone(),
+            payload.content.clone(),
+            recorded_before,
+            !write_records.is_empty(),
+            is_new,
+        ));
+    }
+    for record in records.iter().filter(|record| {
+        record.tx_id == tx_id
+            && matches!(
+                record.stage,
+                EffectWalStage::BeforeImage | EffectWalStage::WriteApplied
+            )
+    }) {
+        let Some(target_ref) = record.target_ref.as_deref() else {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: "write-progress record is missing its target reference".to_owned(),
+            });
+        };
+        if !seen.contains(target_ref) || record.physical_target_ref.as_deref() != Some(target_ref) {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: format!(
+                    "write-progress record names unexpected or mismatched target {target_ref}"
+                ),
+            });
+        }
+    }
+    if writes.len() != payloads.len() {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "payload set differs from the exact recovery write set".to_owned(),
+        });
+    }
+    if matches!(
+        inspection.stage,
+        SplitRootEffectTransactionStage::Committed
+            | SplitRootEffectTransactionStage::ReplayConsumed
+    ) {
+        if writes.iter().any(|write| !write.4) {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: "commit marker exists but at least one destination is not new".to_owned(),
+            });
+        }
+        return Ok(SplitRootEffectRecoveryResult {
+            status: inspection.stage,
+            canonical_mutation_performed: false,
+            applied_refs: writes
+                .iter()
+                .map(|write| write.0.reference.clone())
+                .collect(),
+        });
+    }
+
+    let wal_path = state_root.join(wal_relative_path);
+    let mut canonical_mutation_performed = false;
+    for (write, after, recorded_before, write_recorded, is_new) in &writes {
+        let before = if let Some(before) = recorded_before {
+            before.clone()
+        } else {
+            let before = publication_tree
+                .exact_regular_file_bytes(&write.reference)
+                .map_err(
+                    |error| EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!(
+                            "{} before-image inspection failed: {error}",
+                            write.reference
+                        ),
+                    },
+                )?
+                .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} disappeared before recovery", write.reference),
+                })?;
+            let prepared = PreparedWrite {
+                reference: write.reference.clone(),
+                physical_reference: write.reference.clone(),
+                target: PathBuf::from(&write.reference),
+                target_kind: write.target_kind,
+                access_mode: PreparedAccessMode::Write,
+                destructive: false,
+                expected_hash: write.expected_hash.clone(),
+                payload_content: Some(after.clone()),
+                content: after.clone(),
+            };
+            let original = OriginalFileState {
+                target: PathBuf::from(&write.reference),
+                physical_reference: write.reference.clone(),
+                existed: true,
+                content: before.clone(),
+                installed_content: Some(after.clone()),
+            };
+            append_effect_wal_record_for_publication(
+                &effect_lock.state_root,
+                state_root,
+                wal_relative_path,
+                EffectWalRecord::before_image(
+                    tx_id,
+                    effect.tool_effect_contract.id.clone(),
+                    &prepared,
+                    &original,
+                ),
+                WalDurability::SyncOnAppend,
+            )
+            .map_err(|error| EffectReplayReconciliationError::WalAppend {
+                path: wal_path.clone(),
+                source: error.to_string(),
+            })?;
+            debug_test_promotion_crash("after_before_image");
+            before
+        };
+        if !*is_new {
+            publication_tree
+                .apply_exact_regular_file_write(&write.reference, &before, after)
+                .map_err(
+                    |error| EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!("{} exact recovery write failed: {error}", write.reference),
+                    },
+                )?;
+            canonical_mutation_performed = true;
+            debug_test_promotion_crash("after_bytes_before_marker");
+        }
+        if !*write_recorded {
+            let prepared = PreparedWrite {
+                reference: write.reference.clone(),
+                physical_reference: write.reference.clone(),
+                target: PathBuf::from(&write.reference),
+                target_kind: write.target_kind,
+                access_mode: PreparedAccessMode::Write,
+                destructive: false,
+                expected_hash: write.expected_hash.clone(),
+                payload_content: Some(after.clone()),
+                content: after.clone(),
+            };
+            append_effect_wal_record_for_publication(
+                &effect_lock.state_root,
+                state_root,
+                wal_relative_path,
+                EffectWalRecord::write_applied(tx_id, effect, &prepared),
+                WalDurability::SyncOnAppend,
+            )
+            .map_err(|error| EffectReplayReconciliationError::WalAppend {
+                path: wal_path.clone(),
+                source: error.to_string(),
+            })?;
+        }
+    }
+    append_effect_wal_record_for_publication(
+        &effect_lock.state_root,
+        state_root,
+        wal_relative_path,
+        EffectWalRecord::stage(
+            tx_id,
+            effect.tool_effect_contract.id.clone(),
+            EffectWalStage::Commit,
+        ),
+        WalDurability::SyncOnAppend,
+    )
+    .map_err(|error| EffectReplayReconciliationError::WalAppend {
+        path: wal_path,
+        source: error.to_string(),
+    })?;
+    debug_test_promotion_crash("after_commit");
+    Ok(SplitRootEffectRecoveryResult {
+        status: SplitRootEffectTransactionStage::Committed,
+        canonical_mutation_performed,
+        applied_refs: writes
+            .iter()
+            .map(|write| write.0.reference.clone())
+            .collect(),
+    })
+}
+
 /// Append the durable effect-WAL acknowledgement for a consumed replay
 /// reservation while retaining the exact effect lock.
 ///
@@ -5384,7 +5852,7 @@ fn recover_effect_wal_under_publication_root(
             recovered_transactions: Vec::new(),
             reasons: vec![EffectWalRecoveryReason::ExternalPublicationUnsupported],
             diagnostics: vec![
-                "split-root effect WAL requires the Ticket 11 promotion recovery command; generic same-root recovery is forbidden from applying before-images under the Forge state root"
+                "split-root effect WAL requires `forge-core workflow promotion recover`; generic same-root recovery is forbidden from applying before-images under the Forge state root"
                     .to_owned(),
             ],
         };
@@ -8413,6 +8881,207 @@ fn project_pending_effect_replay_commits(
         })
         .collect())
 }
+
+fn strict_effect_wal_records_under_lock(
+    root: &Path,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    wal_relative_path: &str,
+) -> Result<Vec<EffectWalRecord>, EffectReplayReconciliationError> {
+    validate_effect_lock_scope(root, effect_lock, expected_lock_relative_path)?;
+    let wal_relative = reconciliation_relative_path("wal_relative_path", wal_relative_path)?;
+    let wal_path = root.join(&wal_relative);
+    if !authority_leaf_exists(&effect_lock.root, &wal_relative).map_err(|source| {
+        EffectReplayReconciliationError::WalRead {
+            path: wal_path.clone(),
+            source: source.to_string(),
+        }
+    })? {
+        return Ok(Vec::new());
+    }
+    read_effect_wal_records_strict_retained(&effect_lock.root, &wal_relative, &wal_path)
+}
+
+fn inspect_split_root_transaction_records(
+    records: &[EffectWalRecord],
+    tx_id: &str,
+) -> Result<Option<SplitRootEffectTransactionInspection>, EffectReplayReconciliationError> {
+    let transaction_records = records
+        .iter()
+        .filter(|record| record.tx_id == tx_id)
+        .collect::<Vec<_>>();
+    if transaction_records.is_empty() {
+        return Ok(None);
+    }
+    for record in &transaction_records {
+        validate_split_root_record_shape(record, tx_id)?;
+    }
+    let begin_records = transaction_records
+        .iter()
+        .copied()
+        .filter(|record| record.stage == EffectWalStage::Begin)
+        .collect::<Vec<_>>();
+    if begin_records.len() != 1 || transaction_records.first() != begin_records.first() {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "transaction must start with exactly one begin record".to_owned(),
+        });
+    }
+    let begin = begin_records[0];
+    let provenance = begin.execution_provenance.clone().ok_or_else(|| {
+        EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "split-root begin is missing provenance".to_owned(),
+        }
+    })?;
+    provenance.verify().map_err(
+        |source| EffectReplayReconciliationError::InvalidProvenance {
+            tx_id: tx_id.to_owned(),
+            source: source.to_string(),
+        },
+    )?;
+    let replay_binding = begin.replay_binding.clone().ok_or_else(|| {
+        EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "split-root begin is missing replay binding".to_owned(),
+        }
+    })?;
+    validate_effect_replay_binding(&replay_binding).map_err(|reason| {
+        EffectReplayReconciliationError::InvalidReplayBinding {
+            tx_id: tx_id.to_owned(),
+            reason,
+        }
+    })?;
+    let mut stage = SplitRootEffectTransactionStage::Begun;
+    for record in transaction_records.iter().skip(1) {
+        if record.effect_id != begin.effect_id {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: tx_id.to_owned(),
+                reason: "effect id changed within split-root transaction".to_owned(),
+            });
+        }
+        match record.stage {
+            EffectWalStage::Begin => unreachable!("unique begin checked above"),
+            EffectWalStage::BeforeImage | EffectWalStage::WriteApplied => {
+                if stage != SplitRootEffectTransactionStage::Begun {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: "write progress appears after a terminal marker".to_owned(),
+                    });
+                }
+            }
+            EffectWalStage::Commit => {
+                if stage != SplitRootEffectTransactionStage::Begun {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: "duplicate or contradictory commit marker".to_owned(),
+                    });
+                }
+                stage = SplitRootEffectTransactionStage::Committed;
+            }
+            EffectWalStage::RollbackComplete | EffectWalStage::RecoveredRollback => {
+                if stage != SplitRootEffectTransactionStage::Begun {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: "rollback appears after another terminal marker".to_owned(),
+                    });
+                }
+                stage = SplitRootEffectTransactionStage::RolledBack;
+            }
+            EffectWalStage::ReplayConsumed => {
+                if stage != SplitRootEffectTransactionStage::Committed
+                    || record.replay_binding.as_ref() != Some(&replay_binding)
+                    || record.replay_completion.as_ref().is_none_or(|completion| {
+                        completion.key_hash != replay_binding.key_hash
+                            || completion.reservation_revision
+                                != replay_binding.reservation_revision
+                            || completion.consumed_revision
+                                != replay_binding.reservation_revision.saturating_add(1)
+                    })
+                {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: "replay completion is missing or contradicts the begin".to_owned(),
+                    });
+                }
+                stage = SplitRootEffectTransactionStage::ReplayConsumed;
+            }
+        }
+    }
+    Ok(Some(SplitRootEffectTransactionInspection {
+        tx_id: tx_id.to_owned(),
+        effect_id: begin.effect_id.clone(),
+        stage,
+        provenance,
+        replay_binding,
+    }))
+}
+
+fn validate_split_root_record_shape(
+    record: &EffectWalRecord,
+    tx_id: &str,
+) -> Result<(), EffectReplayReconciliationError> {
+    let no_target = record.target_ref.is_none()
+        && record.physical_target_ref.is_none()
+        && record.target_metadata.is_none()
+        && record.original.is_none();
+    let no_authority = record.execution_provenance.is_none()
+        && record.replay_binding.is_none()
+        && record.replay_completion.is_none();
+    let valid = record.schema_version == "0.1"
+        && record.diagnostic.is_none()
+        && match record.stage {
+            EffectWalStage::Begin => {
+                no_target
+                    && record.execution_provenance.is_some()
+                    && record.replay_binding.is_some()
+                    && record.replay_completion.is_none()
+            }
+            EffectWalStage::BeforeImage => {
+                record.target_ref.is_some()
+                    && record.physical_target_ref.is_some()
+                    && record.target_metadata.is_none()
+                    && record.original.is_some()
+                    && no_authority
+            }
+            EffectWalStage::WriteApplied => {
+                record.target_ref.is_some()
+                    && record.physical_target_ref.is_some()
+                    && record.target_metadata.is_some()
+                    && record.original.is_none()
+                    && no_authority
+            }
+            EffectWalStage::Commit
+            | EffectWalStage::RollbackComplete
+            | EffectWalStage::RecoveredRollback => no_target && no_authority,
+            EffectWalStage::ReplayConsumed => {
+                no_target
+                    && record.execution_provenance.is_none()
+                    && record.replay_binding.is_some()
+                    && record.replay_completion.is_some()
+            }
+        };
+    if valid {
+        return Ok(());
+    }
+    Err(EffectReplayReconciliationError::ConflictingTransaction {
+        tx_id: tx_id.to_owned(),
+        reason: format!(
+            "{:?} record has an unsupported schema or unexpected fields",
+            record.stage
+        ),
+    })
+}
+
+#[cfg(debug_assertions)]
+fn debug_test_promotion_crash(point: &str) {
+    if std::env::var("FORGE_TEST_PROMOTION_CRASH_AT").as_deref() == Ok(point) {
+        std::process::exit(86);
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn debug_test_promotion_crash(_point: &str) {}
 
 impl EffectWalRecord {
     fn begin(tx_id: &str, effect_id: StableId) -> Self {

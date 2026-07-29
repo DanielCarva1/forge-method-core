@@ -47,12 +47,14 @@ struct Consumer {
 
 impl Consumer {
     fn new() -> Self {
+        Self::new_with_prefix("forge-workflow-p5c-e2e")
+    }
+
+    fn new_with_prefix(prefix: &str) -> Self {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let sequence = SEQ.fetch_add(1, Ordering::SeqCst);
-        let parent = std::env::temp_dir().join(format!(
-            "forge-workflow-p5c-e2e-{}-{sequence}",
-            std::process::id()
-        ));
+        let parent =
+            std::env::temp_dir().join(format!("{prefix}-{}-{sequence}", std::process::id()));
         let _ = fs::remove_dir_all(&parent);
         let app = parent.join("app");
         let sidecar = parent.join("forge-app");
@@ -2233,4 +2235,731 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     assert!(unconsumed_retry["typed_failure"]["data"]["reason"]
         .as_str()
         .is_some_and(|reason| reason.contains("not durably consumed")));
+}
+
+struct PromotionRecoveryFixture {
+    consumer: Consumer,
+    root: String,
+    preview_digest: String,
+}
+
+impl PromotionRecoveryFixture {
+    #[allow(clippy::too_many_lines)]
+    fn new() -> Self {
+        let consumer = Consumer::new_with_prefix("forge workflow promotion recovery e2e");
+        fs::write(consumer.app.join("NOTES.md"), "old notes\n").expect("second canonical file");
+        let run_git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&consumer.app)
+                .args(args)
+                .output()
+                .expect("run Git recovery fixture command");
+            assert!(
+                output.status.success(),
+                "git {:?} failed\nstdout={}\nstderr={}",
+                args,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        run_git(&["init", "-b", "master"]);
+        run_git(&["config", "user.name", "Forge Promotion Recovery E2E"]);
+        run_git(&[
+            "config",
+            "user.email",
+            "forge-promotion-recovery-e2e@example.invalid",
+        ]);
+        run_git(&["add", "."]);
+        run_git(&["commit", "-m", "initial recovery fixture"]);
+        assert_ok(&consumer.run(&["init"]));
+        forge_core_store::replay_wal::initialize_replay_wal(&consumer.state)
+            .expect("initialize recovery replay WAL");
+        let next = assert_ok(&consumer.run(&["next"]));
+        let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+            .as_str()
+            .expect("recovery objective packet")
+            .to_owned();
+        let objective = consumer.write_json(
+            "promotion recovery objective.json",
+            &serde_json::json!({
+                "kind": "unambiguous",
+                "proposal": {
+                    "outcome": "Recover one exact interrupted two-file promotion",
+                    "constraints": ["retain durable intent", "read back canonical bytes"],
+                    "unacceptable_outcomes": ["apply third-party bytes", "duplicate committed effects"],
+                    "open_uncertainties": []
+                },
+                "carrying_principal": "principal.agent.promotion-recovery-e2e",
+                "host_provenance": {
+                    "host_id": "host.promotion-recovery-e2e",
+                    "host_version": "test",
+                    "session_ref": "session.promotion-recovery-e2e",
+                    "interaction_ref": "turn.promotion-recovery",
+                    "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                    "observed_at_unix": 1
+                }
+            }),
+        );
+        assert_ok(&run_cooperative_input(
+            &consumer,
+            &packet_digest,
+            &objective,
+        ));
+        let root = consumer.app.display().to_string();
+        let now_unix = now().to_string();
+        let claim = bin()
+            .args([
+                "claim",
+                "acquire",
+                "--root",
+                &root,
+                "--scope",
+                "story",
+                "--id",
+                "promotion-recovery-e2e",
+                "--agent",
+                "agent.promotion-recovery-e2e",
+                "--principal-id",
+                "principal.agent.promotion-recovery-e2e",
+                "--path",
+                "README.md",
+                "--path",
+                "NOTES.md",
+                "--now-unix",
+                &now_unix,
+                "--json",
+            ])
+            .output()
+            .expect("acquire promotion recovery claim");
+        let claim = assert_ok(&claim);
+        let claim_id = claim["data"]["claim_id"]
+            .as_str()
+            .expect("recovery claim id")
+            .to_owned();
+        let worktree = consumer.parent.join("wt").join("recover");
+        fs::create_dir_all(worktree.parent().expect("recovery worktree parent"))
+            .expect("recovery worktree parent");
+        let worktree_text = worktree.display().to_string();
+        run_git(&[
+            "worktree",
+            "add",
+            "-b",
+            "agent/recover",
+            &worktree_text,
+            "master",
+        ]);
+        fs::write(
+            worktree.join("README.md"),
+            "consumer project\nrecovered readme\n",
+        )
+        .expect("write recovery README");
+        fs::write(worktree.join("NOTES.md"), "recovered notes\n").expect("write recovery NOTES");
+        assert_ok(
+            &bin()
+                .args([
+                    "isolation",
+                    "propose",
+                    "--root",
+                    &root,
+                    "--agent",
+                    "agent.promotion-recovery-e2e",
+                    "--branch",
+                    "agent/recover",
+                    "--worktree-path",
+                    "../wt/recover",
+                    "--base-ref",
+                    "master",
+                    "--claim",
+                    &claim_id,
+                    "--id",
+                    "isolation.promotion-recovery-e2e",
+                    "--now-unix",
+                    &now_unix,
+                    "--json",
+                ])
+                .output()
+                .expect("propose recovery isolation"),
+        );
+        assert_ok(
+            &bin()
+                .args([
+                    "isolation",
+                    "transition",
+                    "--root",
+                    &root,
+                    "--id",
+                    "isolation.promotion-recovery-e2e",
+                    "--to",
+                    "active",
+                    "--now-unix",
+                    &now_unix,
+                    "--json",
+                ])
+                .output()
+                .expect("activate recovery isolation"),
+        );
+        let next = assert_ok(&consumer.run(&["next"]));
+        let mut offer =
+            next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+        offer["offer_id"] = serde_json::json!("offer.promotion-recovery-e2e.pass");
+        let offer_file = consumer.write_json("promotion recovery evidence.json", &offer);
+        assert_ok(&run_cooperative_evidence(&consumer, &offer_file));
+        let preview = assert_ok(
+            &bin()
+                .args([
+                    "workflow",
+                    "promotion",
+                    "preview",
+                    "--root",
+                    &root,
+                    "--isolation-id",
+                    "isolation.promotion-recovery-e2e",
+                    "--json",
+                ])
+                .output()
+                .expect("preview recovery promotion"),
+        );
+        assert_eq!(preview["data"]["status"], "reviewable", "{preview}");
+        assert_eq!(
+            preview["data"]["diff"].as_array().map(Vec::len),
+            Some(2),
+            "recovery fixture must exercise two files"
+        );
+        let preview_digest = preview["data"]["preview_digest"]
+            .as_str()
+            .expect("recovery preview digest")
+            .to_owned();
+        Self {
+            consumer,
+            root,
+            preview_digest,
+        }
+    }
+
+    fn command(&self, action: &str) -> Command {
+        let mut command = bin();
+        command.args([
+            "workflow",
+            "promotion",
+            action,
+            "--root",
+            &self.root,
+            "--isolation-id",
+            "isolation.promotion-recovery-e2e",
+            "--expected-preview-digest",
+            &self.preview_digest,
+            "--json",
+        ]);
+        command
+    }
+
+    fn intent_path(&self) -> PathBuf {
+        self.consumer
+            .state
+            .join("promotion")
+            .join("intents")
+            .join(format!(
+                "{}.json",
+                self.preview_digest
+                    .strip_prefix("sha256:")
+                    .expect("preview sha256")
+            ))
+    }
+
+    fn effect_wal_path(&self) -> PathBuf {
+        self.consumer.state.join("promotion").join("effects.ndjson")
+    }
+}
+
+#[test]
+fn promotion_apply_failure_supplies_one_safe_recovery_argv_and_recover_failure_stops() {
+    let fixture = PromotionRecoveryFixture::new();
+    assert!(
+        fixture.root.contains(' '),
+        "fixture must prove a path containing spaces"
+    );
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_begin")
+        .output()
+        .expect("leave incomplete promotion");
+    assert_eq!(crashed.status.code(), Some(86));
+
+    let retry = fixture
+        .command("apply")
+        .output()
+        .expect("inspect apply retry guidance");
+    assert!(!retry.status.success());
+    let retry = json(&retry);
+    assert_eq!(retry["typed_failure"]["type"], "recovery_required");
+    assert_eq!(retry["typed_failure"]["data"]["can_recover"], true);
+    let argv = retry["typed_failure"]["data"]["recovery_argv"]
+        .as_array()
+        .expect("structured recovery argv");
+    assert_eq!(argv[3], "recover");
+    assert_eq!(argv[5], fixture.root);
+    assert_eq!(argv[7], "isolation.promotion-recovery-e2e");
+    assert_eq!(argv[9], fixture.preview_digest);
+    assert_eq!(argv[10], "--json");
+
+    fs::write(
+        fixture.consumer.app.join("README.md"),
+        "third content blocks recovery\n",
+    )
+    .expect("inject ambiguous destination");
+    let stopped = fixture
+        .command("recover")
+        .output()
+        .expect("recover must stop");
+    assert!(!stopped.status.success());
+    let stopped = json(&stopped);
+    assert_eq!(stopped["typed_failure"]["type"], "recovery_required");
+    assert_eq!(stopped["typed_failure"]["data"]["can_recover"], false);
+    assert!(stopped["typed_failure"]["data"]
+        .get("recovery_argv")
+        .is_none());
+}
+
+#[test]
+fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_intent")
+        .output()
+        .expect("leave v2 intent before replay/effect begin");
+    assert_eq!(crashed.status.code(), Some(86));
+
+    let intent_path = fixture.intent_path();
+    let mut intent: Value =
+        serde_json::from_slice(&fs::read(&intent_path).expect("read durable intent"))
+            .expect("parse durable intent");
+    intent["schema_version"] = serde_json::json!("governed_promotion_intent_v1");
+    intent
+        .as_object_mut()
+        .expect("intent object")
+        .remove("preview");
+    intent["replay"]["intent_digest"] = serde_json::json!("");
+    let v1_intent_digest =
+        forge_core_decisions::promotion_domain_digest("promotion.intent.v1", &intent)
+            .expect("derive exact v1 wire digest");
+    intent["replay"]["intent_digest"] = serde_json::json!(v1_intent_digest);
+    assert!(
+        intent.get("preview").is_none(),
+        "v1 wire fixture must not retain a historical preview"
+    );
+    fs::write(
+        &intent_path,
+        serde_json_canonicalizer::to_vec(&intent).expect("canonical v1 intent"),
+    )
+    .expect("install exact v1 intent fixture");
+
+    let recovered = assert_ok(
+        &fixture
+            .command("recover")
+            .output()
+            .expect("recover legacy v1 intent"),
+    );
+    assert_eq!(recovered["data"]["status"], "recovered");
+    assert_eq!(
+        recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
+        "legacy_v1_pre_begin_fresh_execution_v1"
+    );
+    assert_eq!(
+        recovered["data"]["receipt"]["recovery_execution"]["durable_intent_digest"],
+        recovered["data"]["receipt"]["replay"]["intent_digest"]
+    );
+    assert_eq!(
+        recovered["data"]["receipt"]["replay"]["intent_digest"],
+        intent["replay"]["intent_digest"]
+    );
+    let repeated = assert_ok(
+        &fixture
+            .command("recover")
+            .output()
+            .expect("verify legacy receipt retry"),
+    );
+    assert_eq!(repeated["data"]["status"], "already_committed");
+    assert_eq!(repeated["data"]["canonical_mutation_performed"], false);
+}
+
+#[test]
+fn promotion_recover_blocks_bad_replay_authority_before_any_recovery_write() {
+    for replay_case in ["missing", "consumed", "mismatched"] {
+        let fixture = PromotionRecoveryFixture::new();
+        let crashed = fixture
+            .command("apply")
+            .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_begin")
+            .output()
+            .expect("leave effect begin with reserved replay");
+        assert_eq!(crashed.status.code(), Some(86));
+
+        let intent: Value =
+            serde_json::from_slice(&fs::read(fixture.intent_path()).expect("read intent"))
+                .expect("parse intent");
+        let principal = PrincipalId(
+            intent["principal_id"]
+                .as_str()
+                .expect("intent principal")
+                .to_owned(),
+        );
+        let intent_digest = intent["replay"]["intent_digest"]
+            .as_str()
+            .expect("intent digest")
+            .to_owned();
+        let commit_digest = intent["replay"]["commit_digest"]
+            .as_str()
+            .expect("commit digest")
+            .to_owned();
+        let replay_path = forge_core_store::replay_wal::replay_wal_path(&fixture.consumer.state);
+        match replay_case {
+            "missing" => {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(&replay_path)
+                    .expect("open replay WAL")
+                    .set_len(0)
+                    .expect("remove reservation");
+            }
+            "consumed" => {
+                forge_core_store::replay_wal::consume_replay_nonce_non_boundary(
+                    &fixture.consumer.state,
+                    &principal,
+                    "forge.workflow.promotion.apply.local-reversible.v1",
+                    &fixture.preview_digest,
+                    &intent_digest,
+                    &commit_digest,
+                    1,
+                )
+                .expect("consume replay before effect commit");
+            }
+            "mismatched" => {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(&replay_path)
+                    .expect("open replay WAL")
+                    .set_len(0)
+                    .expect("remove exact reservation");
+                forge_core_store::replay_wal::reserve_replay_nonce(
+                    &fixture.consumer.state,
+                    &principal,
+                    "forge.workflow.promotion.apply.local-reversible.v1",
+                    &fixture.preview_digest,
+                    &format!("sha256:{}", "e".repeat(64)),
+                    &commit_digest,
+                )
+                .expect("install mismatched valid reservation");
+            }
+            _ => unreachable!(),
+        }
+
+        let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+        let state_before = state_tree_snapshot(&fixture.consumer.state);
+        let effect_wal_before =
+            fs::read(fixture.effect_wal_path()).expect("read effect WAL before recovery");
+        let refused = fixture
+            .command("recover")
+            .output()
+            .expect("attempt recovery with invalid replay authority");
+        assert!(!refused.status.success(), "{replay_case}");
+        let refused = json(&refused);
+        assert_eq!(refused["typed_failure"]["type"], "recovery_required");
+        assert_eq!(refused["typed_failure"]["data"]["can_recover"], false);
+        assert!(refused["typed_failure"]["data"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("could not be retained before recovery")));
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.app),
+            canonical_before,
+            "{replay_case}: canonical bytes changed"
+        );
+        assert_eq!(
+            fs::read(fixture.effect_wal_path()).expect("read effect WAL after refusal"),
+            effect_wal_before,
+            "{replay_case}: effect WAL changed"
+        );
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.state),
+            state_before,
+            "{replay_case}: Forge state changed"
+        );
+    }
+}
+
+#[test]
+fn promotion_recover_rejects_semantically_corrupt_effect_wal_without_writing() {
+    const CORRUPTIONS: &[&str] = &[
+        "wrong_schema",
+        "unexpected_terminal_ref",
+        "extra_progress_record",
+        "unknown_target",
+        "physical_target",
+        "operation",
+        "actor",
+        "role",
+        "destructive",
+        "content",
+    ];
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_commit")
+        .output()
+        .expect("leave committed effect before replay consume");
+    assert_eq!(crashed.status.code(), Some(86));
+    let wal_path = fixture.effect_wal_path();
+    let original_wal = fs::read(&wal_path).expect("read valid effect WAL");
+
+    for corruption in CORRUPTIONS {
+        let mut records = String::from_utf8(original_wal.clone())
+            .expect("UTF-8 WAL")
+            .lines()
+            .map(|line| serde_json::from_str::<Value>(line).expect("WAL record"))
+            .collect::<Vec<_>>();
+        let begin_index = records
+            .iter()
+            .position(|record| record["stage"] == "begin")
+            .expect("begin record");
+        let before_index = records
+            .iter()
+            .position(|record| record["stage"] == "before_image")
+            .expect("before-image record");
+        let write_index = records
+            .iter()
+            .position(|record| record["stage"] == "write_applied")
+            .expect("write record");
+        let commit_index = records
+            .iter()
+            .position(|record| record["stage"] == "commit")
+            .expect("commit record");
+        match *corruption {
+            "wrong_schema" => {
+                records[begin_index]["schema_version"] = serde_json::json!("9.9");
+            }
+            "unexpected_terminal_ref" => {
+                records[commit_index]["target_ref"] = serde_json::json!("README.md");
+            }
+            "extra_progress_record" => {
+                records.push(records[before_index].clone());
+            }
+            "unknown_target" => {
+                records[write_index]["target_ref"] = serde_json::json!("EXTRA.md");
+                records[write_index]["physical_target_ref"] = serde_json::json!("EXTRA.md");
+            }
+            "physical_target" => {
+                records[write_index]["physical_target_ref"] = serde_json::json!("OTHER.md");
+            }
+            "operation" => {
+                records[write_index]["target_metadata"]["operation_id"] =
+                    serde_json::json!("objective.not-the-approved-operation");
+            }
+            "actor" => {
+                records[write_index]["target_metadata"]["actor_agent_id"] =
+                    serde_json::json!("agent.not-the-isolation-owner");
+            }
+            "role" => {
+                records[write_index]["target_metadata"]["actor_role"] = serde_json::json!("human");
+            }
+            "destructive" => {
+                records[write_index]["target_metadata"]["destructive"] = serde_json::json!(true);
+            }
+            "content" => {
+                records[write_index]["target_metadata"]["content_hash"] =
+                    serde_json::json!(format!("sha256:{}", "f".repeat(64)));
+            }
+            _ => unreachable!(),
+        }
+        let mut corrupted_wal = Vec::new();
+        for record in &records {
+            corrupted_wal.extend(serde_json::to_vec(record).expect("serialize corrupt record"));
+            corrupted_wal.push(b'\n');
+        }
+        fs::write(&wal_path, corrupted_wal).expect("install corrupt WAL");
+
+        let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+        let state_before = state_tree_snapshot(&fixture.consumer.state);
+        let refused = fixture
+            .command("recover")
+            .output()
+            .expect("reject corrupt effect WAL");
+        assert!(!refused.status.success(), "{corruption}");
+        let refused = json(&refused);
+        assert_eq!(refused["typed_failure"]["type"], "recovery_required");
+        assert_eq!(refused["typed_failure"]["data"]["can_recover"], false);
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.app),
+            canonical_before,
+            "{corruption}: canonical state changed"
+        );
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.state),
+            state_before,
+            "{corruption}: Forge state changed"
+        );
+        fs::write(&wal_path, &original_wal).expect("restore valid WAL fixture");
+    }
+
+    let recovered = assert_ok(
+        &fixture
+            .command("recover")
+            .output()
+            .expect("recover after restoring exact WAL"),
+    );
+    assert_eq!(recovered["data"]["status"], "recovered");
+}
+
+#[test]
+fn promotion_recover_converges_across_every_durable_crash_boundary() {
+    const CRASH_POINTS: &[&str] = &[
+        "after_intent",
+        "after_replay_reservation",
+        "after_begin",
+        "after_before_image",
+        "after_bytes_before_marker",
+        "after_commit",
+        "after_replay_consume",
+        "after_readback",
+        "after_receipt",
+    ];
+    for crash_point in CRASH_POINTS {
+        let fixture = PromotionRecoveryFixture::new();
+        let crashed = fixture
+            .command("apply")
+            .env("FORGE_TEST_PROMOTION_CRASH_AT", crash_point)
+            .output()
+            .expect("run crash-injected promotion subprocess");
+        assert_eq!(
+            crashed.status.code(),
+            Some(86),
+            "crash point {crash_point} did not terminate at its durable boundary\nstdout={}\nstderr={}",
+            String::from_utf8_lossy(&crashed.stdout),
+            String::from_utf8_lossy(&crashed.stderr)
+        );
+        if *crash_point == "after_bytes_before_marker" {
+            let current = [
+                fs::read_to_string(fixture.consumer.app.join("README.md")).expect("README partial"),
+                fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("NOTES partial"),
+            ];
+            assert_eq!(
+                current
+                    .iter()
+                    .filter(|value| value.contains("recovered"))
+                    .count(),
+                1,
+                "partial crash must leave exactly one old and one new file"
+            );
+        }
+        let recovered = assert_ok(
+            &fixture
+                .command("recover")
+                .output()
+                .expect("recover interrupted promotion"),
+        );
+        assert!(
+            matches!(
+                recovered["data"]["status"].as_str(),
+                Some("recovered" | "already_committed")
+            ),
+            "unexpected recovery status at {crash_point}: {recovered}"
+        );
+        if matches!(*crash_point, "after_intent" | "after_replay_reservation") {
+            assert_eq!(
+                recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
+                "pre_begin_fresh_execution_v1",
+                "pre-Begin recovery must disclose its fresh execution provenance link"
+            );
+            assert_eq!(
+                recovered["data"]["receipt"]["recovery_execution"]["durable_intent_digest"],
+                recovered["data"]["receipt"]["replay"]["intent_digest"]
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(fixture.consumer.app.join("README.md")).expect("recovered README"),
+            "consumer project\nrecovered readme\n"
+        );
+        assert_eq!(
+            fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("recovered NOTES"),
+            "recovered notes\n"
+        );
+        let canonical_once = state_tree_snapshot(&fixture.consumer.app);
+        let state_once = state_tree_snapshot(&fixture.consumer.state);
+        let repeated = assert_ok(
+            &fixture
+                .command("recover")
+                .output()
+                .expect("repeat recovered promotion"),
+        );
+        assert_eq!(repeated["data"]["status"], "already_committed");
+        assert_eq!(
+            repeated["data"]["canonical_mutation_performed"], false,
+            "terminal recovery must not write again"
+        );
+        assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_once);
+        assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_once);
+    }
+}
+
+#[test]
+fn promotion_recover_refuses_third_content_without_another_write() {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_bytes_before_marker")
+        .output()
+        .expect("leave partial two-file promotion");
+    assert_eq!(crashed.status.code(), Some(86));
+    fs::write(
+        fixture.consumer.app.join("README.md"),
+        "unrelated third-party bytes\n",
+    )
+    .expect("inject incompatible canonical content");
+    let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+    let state_before = state_tree_snapshot(&fixture.consumer.state);
+    let refused = fixture
+        .command("recover")
+        .output()
+        .expect("attempt ambiguous recovery");
+    assert!(!refused.status.success());
+    let refused = json(&refused);
+    assert_eq!(refused["typed_failure"]["type"], "recovery_required");
+    assert!(refused["typed_failure"]["data"]["reason"]
+        .as_str()
+        .is_some_and(|reason| reason.contains("neither the recorded old nor exact new bytes")));
+    assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_before);
+    assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_before);
+}
+
+#[test]
+fn promotion_recover_refuses_changed_destination_before_effect_begin() {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_intent")
+        .output()
+        .expect("leave durable intent before effect begin");
+    assert_eq!(crashed.status.code(), Some(86));
+    fs::write(
+        fixture.consumer.app.join("README.md"),
+        "changed after approval but before begin\n",
+    )
+    .expect("change canonical destination before recovery");
+    let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+    let state_before = state_tree_snapshot(&fixture.consumer.state);
+    let refused = fixture
+        .command("recover")
+        .output()
+        .expect("attempt pre-begin recovery against changed destination");
+    assert!(!refused.status.success());
+    let refused = json(&refused);
+    assert_eq!(refused["typed_failure"]["type"], "recovery_required");
+    assert!(refused["typed_failure"]["data"]["reason"]
+        .as_str()
+        .is_some_and(|reason| reason.contains("exactly match the approved destination snapshot")));
+    assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_before);
+    assert_eq!(
+        state_tree_snapshot(&fixture.consumer.state),
+        state_before,
+        "refusal must happen before effect Begin or any other durable write"
+    );
 }

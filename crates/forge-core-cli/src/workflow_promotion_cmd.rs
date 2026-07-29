@@ -1,13 +1,14 @@
-//! Host-neutral CLI for governed isolated-work preview and exact-CAS apply.
+//! Host-neutral CLI for governed isolated-work preview, apply, and recovery.
 
 use crate::cli_error::ExitError;
 use crate::cli_util::emit_envelope;
 use forge_core_contracts::{CliEnvelope, ExitReason, StableId, TypedFailure};
 use forge_core_kernel::workflow_governance::{PromotionApplyError, WorkflowGovernanceAdapterError};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PREVIEW_COMMAND: &str = "workflow.promotion.preview";
 const APPLY_COMMAND: &str = "workflow.promotion.apply";
+const RECOVER_COMMAND: &str = "workflow.promotion.recover";
 
 pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
     let json_count = args.iter().filter(|arg| arg.as_str() == "--json").count();
@@ -16,10 +17,10 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
         .filter(|arg| arg.as_str() == "--no-json")
         .count();
     let want_json = no_json_count == 0;
-    let command = if args.first().is_some_and(|arg| arg == "apply") {
-        APPLY_COMMAND
-    } else {
-        PREVIEW_COMMAND
+    let command = match args.first().map(String::as_str) {
+        Some("apply") => APPLY_COMMAND,
+        Some("recover") => RECOVER_COMMAND,
+        _ => PREVIEW_COMMAND,
     };
     if json_count > 1 || no_json_count > 1 || (json_count > 0 && no_json_count > 0) {
         return failure(
@@ -35,13 +36,14 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
     {
         println!(
             "forge-core workflow promotion preview --root <canonical-project> --isolation-id <id> [--json|--no-json]\n\
-             forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]"
+             forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]\n\
+             forge-core workflow promotion recover --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]"
         );
         return Ok(());
     }
     if args
         .first()
-        .is_none_or(|arg| !matches!(arg.as_str(), "preview" | "apply"))
+        .is_none_or(|arg| !matches!(arg.as_str(), "preview" | "apply" | "recover"))
     {
         return failure(
             command,
@@ -163,19 +165,19 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
         return failure(
             command,
             ExitReason::InvalidDecisionShape,
-            "--expected-preview-digest is apply-only",
+            "--expected-preview-digest is apply/recover-only",
             want_json,
         );
     }
-    if command == APPLY_COMMAND && expected_preview_digest.is_none() {
+    if matches!(command, APPLY_COMMAND | RECOVER_COMMAND) && expected_preview_digest.is_none() {
         return failure(
             command,
             ExitReason::InvalidDecisionShape,
-            "--expected-preview-digest is required for apply",
+            "--expected-preview-digest is required for apply/recover",
             want_json,
         );
     }
-    if command == APPLY_COMMAND
+    if matches!(command, APPLY_COMMAND | RECOVER_COMMAND)
         && expected_preview_digest
             .as_deref()
             .is_none_or(|digest| !valid_sha256_digest(digest))
@@ -189,6 +191,19 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
     }
     let adapter = match crate::workflow_cmd::resolve_adapter(&root) {
         Ok(adapter) => adapter,
+        Err(error) if command == RECOVER_COMMAND => {
+            return failure_typed(
+                command,
+                ExitReason::EnvConfig,
+                error.clone(),
+                TypedFailure::RecoveryRequired {
+                    reason: error,
+                    can_recover: false,
+                    recovery_argv: None,
+                },
+                want_json,
+            );
+        }
         Err(error) => return failure(command, ExitReason::EnvConfig, error, want_json),
     };
     if command == PREVIEW_COMMAND {
@@ -203,33 +218,52 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
         };
     }
     let Some(expected_preview_digest) = expected_preview_digest else {
-        unreachable!("apply digest presence was validated before adapter resolution");
+        unreachable!("apply/recover digest presence was validated before adapter resolution");
     };
-    match adapter.apply_promotion(&isolation_id, &expected_preview_digest) {
+    let result = if command == APPLY_COMMAND {
+        adapter.apply_promotion(&isolation_id, &expected_preview_digest)
+    } else {
+        adapter.recover_promotion(&isolation_id, &expected_preview_digest)
+    };
+    match result {
         Ok(application) => emit_envelope(CliEnvelope::ok(command, application), want_json),
-        Err(error) => {
-            if let WorkflowGovernanceAdapterError::PromotionApply(
+        Err(error) => match &error {
+            WorkflowGovernanceAdapterError::PromotionApply(
                 PromotionApplyError::RecoveryRequired(reason),
-            ) = &error
-            {
+            ) => {
+                let can_recover = command == APPLY_COMMAND;
+                let recovery_argv = can_recover
+                    .then(|| exact_recovery_argv(&root, &isolation_id, &expected_preview_digest));
                 failure_typed(
                     command,
                     ExitReason::Conflict,
                     error.to_string(),
                     TypedFailure::RecoveryRequired {
                         reason: reason.clone(),
+                        can_recover,
+                        recovery_argv,
                     },
                     want_json,
                 )
-            } else {
-                failure(
-                    command,
-                    ExitReason::RejectedByGate,
-                    error.to_string(),
-                    want_json,
-                )
             }
-        }
+            _ if command == RECOVER_COMMAND => failure_typed(
+                command,
+                ExitReason::RejectedByGate,
+                error.to_string(),
+                TypedFailure::RecoveryRequired {
+                    reason: error.to_string(),
+                    can_recover: false,
+                    recovery_argv: None,
+                },
+                want_json,
+            ),
+            _ => failure(
+                command,
+                ExitReason::RejectedByGate,
+                error.to_string(),
+                want_json,
+            ),
+        },
     }
 }
 
@@ -239,7 +273,21 @@ fn failure(
     message: impl Into<String>,
     want_json: bool,
 ) -> Result<(), ExitError> {
-    crate::workflow_cmd::emit_failure(command, reason, message.into(), want_json)
+    let message = message.into();
+    if command == RECOVER_COMMAND {
+        return failure_typed(
+            command,
+            reason,
+            message.clone(),
+            TypedFailure::RecoveryRequired {
+                reason: message,
+                can_recover: false,
+                recovery_argv: None,
+            },
+            want_json,
+        );
+    }
+    crate::workflow_cmd::emit_failure(command, reason, message, want_json)
 }
 
 fn failure_typed(
@@ -259,6 +307,26 @@ fn valid_sha256_digest(value: &str) -> bool {
     value
         .strip_prefix("sha256:")
         .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
+fn exact_recovery_argv(
+    root: &Path,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+) -> Vec<String> {
+    vec![
+        "forge-core".to_owned(),
+        "workflow".to_owned(),
+        "promotion".to_owned(),
+        "recover".to_owned(),
+        "--root".to_owned(),
+        root.to_string_lossy().into_owned(),
+        "--isolation-id".to_owned(),
+        isolation_id.0.clone(),
+        "--expected-preview-digest".to_owned(),
+        expected_preview_digest.to_owned(),
+        "--json".to_owned(),
+    ]
 }
 
 #[cfg(test)]
@@ -347,5 +415,18 @@ mod tests {
             error.exit_code(),
             ExitReason::InvalidDecisionShape.as_code()
         );
+    }
+
+    #[test]
+    fn recovery_argv_keeps_a_root_with_spaces_as_one_component() {
+        let argv = exact_recovery_argv(
+            Path::new("/tmp/project with spaces"),
+            &StableId("isolation.one".to_owned()),
+            &format!("sha256:{}", "a".repeat(64)),
+        );
+        assert_eq!(argv[5], "/tmp/project with spaces");
+        assert_eq!(argv.len(), 11);
+        assert_eq!(argv[3], "recover");
+        assert_eq!(argv[10], "--json");
     }
 }

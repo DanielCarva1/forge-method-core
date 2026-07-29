@@ -42,6 +42,40 @@ or routes a healthy project into agent-native workflow governance.
      || echo "NOT_FOUND"
    ```
 
+   On Windows only, when no native binary is found, the agent may prove and
+   retain one Windows-to-WSL bridge for the rest of this chat:
+
+   1. Find `wsl.exe` through the host's normal executable lookup and enumerate
+      distributions with `wsl.exe --list --quiet`. Do not assume a distribution
+      name or Linux user.
+   2. Derive the distribution and Linux project path. For a
+      `\\wsl.localhost\<distribution>\...` root, use that exact distribution
+      and convert the remainder to `/...`. For a Windows drive path, ask each
+      listed distribution to convert the exact path with `wslpath`, passed as
+      one argv component, and accept only one conversion that resolves to the
+      same existing project. Zero or multiple proven matches stop plainly.
+   3. Warm only that distribution with
+      `wsl.exe -d <distribution> -- true`.
+   4. Discover the binary inside that distribution with a constant lookup
+      command (`command -v forge-core`, then `$HOME/.cargo/bin/forge-core`).
+      Do not hard-code `/home/<user>` and do not install or build as fallback.
+   5. Execute Forge as separate argv components:
+      `wsl.exe -d <distribution> -- <linux-forge-core> <forge-args...>`,
+      using the proven Linux root for every Forge `--root` in this chat.
+
+   Retain the exact distribution, Linux root, and binary path after this
+   single discovery. `/start-forge` and bridge discovery both remain once per
+   chat, not once per task. For each later structured Forge argv, replace only
+   its first `forge-core` executable component, preserve every later component,
+   verify its root is the proven Linux root, and execute those arguments after the retained
+   `wsl.exe -d <distribution> -- <linux-forge-core>` prefix rather than invoking
+   a missing Windows binary. Never rebuild argv from display text or
+   shell-quote a combined command. If executable discovery, path identity, or
+   the exact project cannot be proven, report that the bridge is unavailable
+   and stop; do not silently switch roots. This fallback is agent-operated and
+   host-neutral. Its success does **not** claim official conformance for Codex,
+   ZCode, Cursor, Claude, OpenCode, pi.dev, or any other host.
+
 3. **Run `forge-core start`.** This is the zero-config bootstrap entry point.
    On a fresh repo with no Project Link and an unoccupied, symlink-free target it
    creates the Project Link + sidecar. If linked authority is missing, incomplete,
@@ -129,10 +163,30 @@ or routes a healthy project into agent-native workflow governance.
    Never copy or merge the worktree manually. Accept success only with the
    durable receipt and canonical readback. An exact retry may return
    `already_committed` without another write. If Forge reports
-   `typed_failure.type=recovery_required`, stop without retrying or changing
-   the digest. Preserve the canonical tree and Forge sidecar exactly. There is
-   no interrupted-promotion recovery command yet; Ticket 11 must add it, and
-   the generic effect-WAL recovery path is forbidden for this split-root WAL.
+   `typed_failure.type=recovery_required`, preserve the canonical tree and
+   Forge sidecar. Execute `typed_failure.data.recovery_argv` directly only when
+   `typed_failure.data.can_recover=true`; its components are already safe for
+   paths containing spaces. Its canonical shape is:
+
+   ```bash
+   forge-core workflow promotion recover --root "<project-root>" \
+     --isolation-id "<active-isolation-id>" \
+     --expected-preview-digest "<preview_digest>" --json
+   ```
+
+   Never rebuild that argv from the diagnostic. If the recover command fails,
+   it returns `can_recover=false` and no recovery argv: stop instead of
+   looping. Do not ask the human to generate a replacement preview. Recovery compares
+   the durable record with the real old/new bytes, completes only an
+   unambiguous attempt, never reapplies a committed effect, and converges to
+   one verified receipt. Corrupt, third-content, mismatched, or rolled-back
+   state fails closed; report the plain-language diagnostic without editing
+   either root. The generic effect-WAL recovery path remains forbidden for this
+   split-root WAL. A legacy v1 pre-Begin intent did not store its historical
+   observation timestamp. Recovery verifies that opaque self-digested intent,
+   requires a fresh preview with the same semantic digest and an exactly
+   unchanged destination, and records the fresh execution honestly; it never
+   claims to have recreated the missing historical observation.
 
    A packet whose approval boundary is exactly `cooperative_same_owner` is the
    Solo Cooperative missing-objective lane. It is not human-origin authority.

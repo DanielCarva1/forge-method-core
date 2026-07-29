@@ -81,7 +81,15 @@ pub enum TypedFailure {
     ExecutionFailed { reason: String },
     /// A durable promotion intent or effect may exist, so an agent must stop
     /// and preserve state rather than retrying or attempting manual rollback.
-    RecoveryRequired { reason: String },
+    RecoveryRequired {
+        reason: String,
+        /// Whether the caller may safely invoke the supplied recovery argv.
+        can_recover: bool,
+        /// Exact argv for the one admissible recovery command. Components
+        /// remain separate so paths containing spaces are never shell-parsed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recovery_argv: Option<Vec<String>>,
+    },
     /// Catch-all for failures with no clean typed home.
     Other { message: String },
 }
@@ -140,7 +148,7 @@ impl fmt::Display for TypedFailure {
                 }
             }
             Self::ExecutionFailed { reason } => write!(f, "execution failed: {reason}"),
-            Self::RecoveryRequired { reason } => write!(f, "recovery required: {reason}"),
+            Self::RecoveryRequired { reason, .. } => write!(f, "recovery required: {reason}"),
             Self::Other { message } => f.write_str(message),
         }
     }
@@ -231,6 +239,8 @@ mod tests {
             (
                 TypedFailure::RecoveryRequired {
                     reason: "preserve state".into(),
+                    can_recover: false,
+                    recovery_argv: None,
                 },
                 "recovery_required",
             ),

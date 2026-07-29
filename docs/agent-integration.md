@@ -235,7 +235,7 @@ The initial route accepts only the kernel-executed current `project_snapshot` sc
 
 `/start-forge` activation is once per chat, not once per task. After the objective is accepted, evidence operation is mechanical: inspect each fresh `data.cooperative_evidence_action_packet`; write `offer_template` to a temporary file outside the snapshot; replace only `required_replacements`; execute `argv` as tokens after replacing only `input_file_token`; delete the temporary file; and refresh `workflow next`. Never shell-parse the vector. If the packet is absent, report `data.cooperative_evidence_action_gap`. A `rejected` result is audited non-support, not success.
 
-## Governed promotion preview and exact-CAS apply
+## Governed promotion preview, exact-CAS apply, and recovery
 
 When isolated work is ready for inspection, the host may run
 `forge-core workflow promotion preview --root <canonical-project> --isolation-id <id> --json`.
@@ -271,10 +271,31 @@ regular files and does not require the strict-external broker. `unknown` and
 
 Success includes a durable self-digested receipt and fresh canonical readback.
 An exact retry returns `already_committed` after verifying the receipt, exact
-consumed replay authority, and readback, without another write. `recovery_required` is also emitted as the
-typed JSON failure `typed_failure.type=recovery_required`; it means durable
-intent or commit state may exist without a complete receipt. Stop, preserve the
-canonical tree plus Forge sidecar exactly, and do not manually copy, merge,
-recover the generic effect WAL, or retry under a new digest. No interrupted
-promotion recovery command exists in `0.12.0-alpha.3`; Ticket 11 owns that
-reconciliation workflow.
+consumed replay authority, and readback, without another write.
+`recovery_required` is emitted as
+`typed_failure.type=recovery_required` when durable intent or commit state may
+exist without a complete receipt. An apply failure includes
+`typed_failure.data.can_recover=true` plus the exact
+`typed_failure.data.recovery_argv` array. Execute that array as separate
+components; a project path containing spaces remains one component. Preserve
+the canonical tree plus Forge sidecar and run:
+
+`forge-core workflow promotion recover --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> --json`.
+
+Recovery uses the already approved preview, durable intent, split-root effect
+WAL, replay WAL, retained source, and actual canonical bytes. Each target must
+be exactly its recorded old or new content; any third content, corrupt record,
+contradictory receipt, changed binding, or terminal rollback stops before a new
+write. A pre-write interruption resumes the same attempt without asking for a
+new preview. A partial two-or-more-file write completes only the unambiguous
+remainder. A commit is never applied again: recovery completes any missing
+single-use replay acknowledgement, performs canonical readback, and
+creates/verifies the receipt. Repeating recover converges to
+`already_committed`. The generic effect-WAL recovery remains forbidden for this
+split-root transaction. If recover itself fails, its typed failure has
+`can_recover=false` and no recovery argv: stop rather than recursively invoking
+recover. A legacy v1 intent created before effect Begin has no stored historical
+preview observation. Recovery verifies its opaque self-digested intent, derives
+a fresh candidate with the same semantic preview digest, requires the
+destination to remain exactly unchanged, and records that fresh execution
+without claiming the historical observation was reconstructed.

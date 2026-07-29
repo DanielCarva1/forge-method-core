@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Crash-safe governed promotion recovery.** Added
+  `workflow promotion recover` for interrupted existing-file promotions. It
+  retains the exact single-use replay authority before any resumed write,
+  validates the split-root effect history and real destination bytes, handles
+  legacy v1 pre-write intent honestly, reads back the result, and converges to
+  one receipt. Apply failures now carry a shell-safe recovery argv array;
+  recover failures explicitly stop recursive retries. The `/start-forge`
+  instructions also define a detected, non-hardcoded Windows-to-WSL fallback
+  without claiming host conformance.
 - **Canonical Rust product gap register and closure plan.** Added an evidence-
   backed, machine-checked distinction between absent implementation, partial
   public surfaces, engineering hardening debt, and external evidence. The plan

@@ -25,12 +25,13 @@ use forge_core_contracts::{
     PromotionEvidenceRecordBinding, PromotionEvidenceSetBinding, PromotionExcludedRootBinding,
     PromotionExcludedRootKind, PromotionGitWorktreeBinding, PromotionGovernanceBinding,
     PromotionObjectiveBinding, PromotionObjectiveCoverage, PromotionObjectiveCoverageStatus,
-    PromotionPathClaimAttribution, PromotionReplayBinding, PromotionSnapshotBinding,
-    PromotionSourceBinding, PromotionUnsupportedEffect, PromotionUnsupportedEffectKind,
-    PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus, RepoPath, StableId,
-    ToolEffectContract, ToolEffectContractDocument, WorkflowCooperativeEvidenceCurrentStatus,
-    WorkflowCooperativeEvidenceDisposition, WorkflowReadinessProfile,
-    GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION, GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
+    PromotionPathClaimAttribution, PromotionRecoveryExecutionBinding, PromotionReplayBinding,
+    PromotionSnapshotBinding, PromotionSourceBinding, PromotionUnsupportedEffect,
+    PromotionUnsupportedEffectKind, PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus,
+    RepoPath, StableId, ToolEffectContract, ToolEffectContractDocument,
+    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
+    WorkflowReadinessProfile, GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION,
+    GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     check_write_against_claims, derive_promotion_diff, evaluate_promotion_readiness, is_live,
@@ -43,15 +44,19 @@ use forge_core_store::claim_wal::{
     ClaimWalProjectionStopPolicy, CLAIM_WAL_LOCK_RELATIVE_PATH, CLAIM_WAL_RELATIVE_PATH,
 };
 use forge_core_store::replay_wal::{
-    acquire_replay_commit_guard, replay_nonce_key_hash, reserve_replay_nonce_under_effect_lock,
-    verify_consumed_replay_key_hash_under_effect_lock,
+    acquire_replay_commit_guard, consume_replay_key_hash_under_effect_lock, replay_nonce_key_hash,
+    reserve_replay_nonce_under_effect_lock, verify_consumed_replay_key_hash_under_effect_lock,
+    ReplayWalError,
 };
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::{
     append_effect_replay_completion_under_lock,
-    apply_existing_file_effect_transaction_to_retained_project_tree, sha256_content_hash,
+    apply_existing_file_effect_transaction_to_retained_project_tree,
+    inspect_split_root_effect_transaction_under_lock,
+    recover_existing_file_effect_transaction_to_retained_project_tree, sha256_content_hash,
     EffectApplicationPayload, EffectApplicationStatus, EffectExecutionProvenance,
-    EffectReplayCommitBinding, EffectStoreLock,
+    EffectReplayCommitBinding, EffectStoreLock, SplitRootEffectTransactionInspection,
+    SplitRootEffectTransactionStage,
 };
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
@@ -67,6 +72,10 @@ pub(super) const PROMOTION_EFFECT_LOCK_RELATIVE_PATH: &str = "promotion/apply.lo
 const PROMOTION_EFFECT_WAL_RELATIVE_PATH: &str = "promotion/effects.ndjson";
 const PROMOTION_RECEIPT_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const PROMOTION_REPLAY_AUDIENCE: &str = "forge.workflow.promotion.apply.local-reversible.v1";
+const PROMOTION_RECOVERY_EXECUTION_SCHEMA_VERSION: &str =
+    "governed_promotion_recovery_execution_v1";
+const PROMOTION_PRE_BEGIN_RECOVERY_KIND: &str = "pre_begin_fresh_execution_v1";
+const PROMOTION_LEGACY_V1_PRE_BEGIN_RECOVERY_KIND: &str = "legacy_v1_pre_begin_fresh_execution_v1";
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -832,6 +841,8 @@ struct PromotionReplayIntent {
     replay: PromotionReplayBinding,
     provenance_digest: String,
     publication_capability_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preview: Option<GovernedPromotionPreview>,
 }
 
 pub(super) fn inspect_promotion_retry_under_lock(
@@ -839,6 +850,7 @@ pub(super) fn inspect_promotion_retry_under_lock(
     effect_lock: &EffectStoreLock,
     isolation_id: &StableId,
     expected_preview_digest: &str,
+    allow_incomplete_intent: bool,
 ) -> Result<Option<GovernedPromotionApplication>, PromotionApplyError> {
     let receipt_name = promotion_state_leaf_name(expected_preview_digest)?;
     let io = effect_lock
@@ -878,6 +890,9 @@ pub(super) fn inspect_promotion_retry_under_lock(
         .map_err(|error| PromotionApplyError::Store(error.to_string()))?
         .is_some()
     {
+        if allow_incomplete_intent {
+            return Ok(None);
+        }
         return Err(PromotionApplyError::RecoveryRequired(format!(
             "durable intent exists without receipt for {expected_preview_digest}; do not re-execute"
         )));
@@ -889,6 +904,872 @@ pub(super) fn validate_expected_preview_digest(
     expected_preview_digest: &str,
 ) -> Result<(), PromotionApplyError> {
     promotion_state_leaf_name(expected_preview_digest).map(|_| ())
+}
+
+pub(super) fn recovery_preview_under_lock(
+    binding: &WorkflowGovernanceProjectBinding,
+    effect_lock: &EffectStoreLock,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+) -> Result<Option<GovernedPromotionPreview>, PromotionApplyError> {
+    let intent = load_promotion_intent_under_lock(effect_lock, expected_preview_digest)?;
+    validate_intent_request(&intent, isolation_id, expected_preview_digest)?;
+    if let Some(preview) = intent.preview {
+        return Ok(Some(preview));
+    }
+    let inspection = inspect_split_root_effect_transaction_under_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+        &intent.transaction_id.0,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    inspection
+        .map(|inspection| preview_from_effect_inspection(&inspection))
+        .transpose()
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(super) fn recover_promotion_under_lock(
+    binding: &WorkflowGovernanceProjectBinding,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+    fallback_prepared: Option<PreparedPromotion>,
+    destination_tree: &mut RetainedProjectTree,
+    effect_lock: &EffectStoreLock,
+) -> Result<GovernedPromotionApplication, PromotionApplyError> {
+    let intent = load_promotion_intent_under_lock(effect_lock, expected_preview_digest)?;
+    validate_intent_request(&intent, isolation_id, expected_preview_digest)?;
+    let inspection = inspect_split_root_effect_transaction_under_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+        &intent.transaction_id.0,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let stored_preview = intent.preview.clone().or_else(|| {
+        inspection
+            .as_ref()
+            .and_then(|inspection| preview_from_effect_inspection(inspection).ok())
+    });
+    let prepared = if let Some(preview) = stored_preview {
+        prepare_recovery_from_stored_preview(
+            binding,
+            isolation_id,
+            expected_preview_digest,
+            preview,
+            destination_tree,
+        )?
+    } else {
+        let prepared = fallback_prepared.ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(
+                "legacy v1 intent has no effect begin and current source/destination could not reconstruct the exact approved preview; preserve both roots and retry after restoring the expected state"
+                    .to_owned(),
+            )
+        })?;
+        if prepared.preview.preview_digest != expected_preview_digest {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "legacy v1 intent reconstructed a different preview; no recovery write was attempted"
+                    .to_owned(),
+            ));
+        }
+        prepared
+    };
+    validate_recovery_preview_identity(&prepared.preview, expected_preview_digest)?;
+    if inspection.is_none() {
+        validate_pre_begin_destination_exact(binding, destination_tree, &prepared.preview)?;
+    }
+    validate_recovery_destination(destination_tree, &prepared.source_tree, &prepared.preview)?;
+    let (effect, payloads, applied_files) = promotion_effect_and_payloads(&prepared)?;
+    let legacy_v1_pre_begin =
+        intent.schema_version == "governed_promotion_intent_v1" && inspection.is_none();
+    let original_provenance = if legacy_v1_pre_begin {
+        // v1 intentionally did not retain the preview. Its self-digested
+        // intent remains authoritative, but a fresh preview with the same
+        // semantic digest cannot recreate the historical observed_at value.
+        // Do not pretend that historical provenance was reconstructed.
+        None
+    } else {
+        let reconstructed = promotion_provenance_from_intent(&intent, &prepared.preview, &effect)?;
+        if reconstructed.digest != intent.provenance_digest {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "durable intent provenance differs from its exact historical preview/effect binding"
+                    .to_owned(),
+            ));
+        }
+        Some(reconstructed)
+    };
+    let (provenance, publication_capability_digest, recovery_execution) = if let Some(inspection) =
+        &inspection
+    {
+        let original_provenance = original_provenance.as_ref().ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(
+                "legacy intent has an effect begin but no reconstructable historical preview"
+                    .to_owned(),
+            )
+        })?;
+        if inspection.provenance == *original_provenance {
+            (
+                original_provenance.clone(),
+                intent.publication_capability_digest.clone(),
+                None,
+            )
+        } else {
+            let publication_capability_digest =
+                recovery_publication_capability_from_wal(&inspection.provenance)?;
+            let recovery_execution = recovery_execution_binding(&intent);
+            let expected_recovery = pre_begin_recovery_provenance(
+                &intent,
+                &prepared.preview,
+                &effect,
+                &publication_capability_digest,
+                &recovery_execution,
+            )?;
+            if inspection.provenance != expected_recovery {
+                return Err(PromotionApplyError::RecoveryRequired(
+                        "effect WAL recovery provenance does not exactly link to the durable original intent"
+                            .to_owned(),
+                    ));
+            }
+            (
+                inspection.provenance.clone(),
+                publication_capability_digest,
+                Some(recovery_execution),
+            )
+        }
+    } else {
+        let publication_capability_digest = destination_tree
+            .exact_mutation_capability_digest()
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+        let recovery_execution = recovery_execution_binding(&intent);
+        let provenance = pre_begin_recovery_provenance(
+            &intent,
+            &prepared.preview,
+            &effect,
+            &publication_capability_digest,
+            &recovery_execution,
+        )?;
+        (
+            provenance,
+            publication_capability_digest,
+            Some(recovery_execution),
+        )
+    };
+    let replay_binding = EffectReplayCommitBinding::new(
+        intent.replay.key_hash.clone(),
+        intent.replay.intent_digest.clone(),
+        intent.replay.commit_digest.clone(),
+        intent.replay.reservation_revision,
+    );
+    let (canonical_mutation_performed, stage) = if let Some(inspection) = &inspection {
+        if inspection.provenance != provenance
+            || inspection.replay_binding != replay_binding
+            || inspection.effect_id != effect.tool_effect_contract.id
+        {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "effect WAL begin contradicts the durable promotion intent".to_owned(),
+            ));
+        }
+        if inspection.stage == SplitRootEffectTransactionStage::Begun {
+            // Recovery can write only while the exact still-reserved replay
+            // authority remains locked. Missing, consumed, or mismatched replay
+            // state therefore blocks before another canonical or effect-WAL
+            // write.
+            let replay_guard = acquire_replay_commit_guard(
+                &binding.state_root,
+                effect_lock,
+                PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+                &intent.principal_id,
+                PROMOTION_REPLAY_AUDIENCE,
+                expected_preview_digest,
+                &intent.replay.intent_digest,
+                &intent.replay.commit_digest,
+                intent.replay.reservation_revision,
+            )
+            .map_err(|error| {
+                PromotionApplyError::RecoveryRequired(format!(
+                    "incomplete promotion replay authority could not be retained before recovery: {error}"
+                ))
+            })?;
+            let recovered = recover_existing_file_effect_transaction_to_retained_project_tree(
+                &binding.state_root,
+                destination_tree,
+                replay_guard.effect_lock(),
+                PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+                &effect,
+                &payloads,
+                PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+                &intent.transaction_id.0,
+                &provenance,
+                &replay_binding,
+            )
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+            if recovered.status != SplitRootEffectTransactionStage::Committed {
+                return Err(PromotionApplyError::RecoveryRequired(format!(
+                    "incomplete promotion did not converge to a commit: {:?}",
+                    recovered.status
+                )));
+            }
+            let replay_result = replay_guard.consume().map_err(|error| {
+                PromotionApplyError::RecoveryRequired(format!(
+                    "recovered effect committed but replay consume failed: {error}"
+                ))
+            })?;
+            debug_test_promotion_crash("after_replay_consume");
+            append_effect_replay_completion_under_lock(
+                &binding.state_root,
+                effect_lock,
+                PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+                PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+                &intent.transaction_id.0,
+                &intent.effect_id,
+                &replay_binding,
+                &replay_result,
+                true,
+            )
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+            (
+                recovered.canonical_mutation_performed,
+                SplitRootEffectTransactionStage::ReplayConsumed,
+            )
+        } else {
+            let recovered = recover_existing_file_effect_transaction_to_retained_project_tree(
+                &binding.state_root,
+                destination_tree,
+                effect_lock,
+                PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+                &effect,
+                &payloads,
+                PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+                &intent.transaction_id.0,
+                &provenance,
+                &replay_binding,
+            )
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+            (recovered.canonical_mutation_performed, recovered.status)
+        }
+    } else {
+        match reserve_replay_nonce_under_effect_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &intent.principal_id,
+            PROMOTION_REPLAY_AUDIENCE,
+            expected_preview_digest,
+            &intent.replay.intent_digest,
+            &intent.replay.commit_digest,
+        ) {
+            Ok(reservation) => {
+                if reservation.reservation.key_hash != intent.replay.key_hash
+                    || reservation.reservation.revision != intent.replay.reservation_revision
+                {
+                    return Err(PromotionApplyError::RecoveryRequired(
+                        "reconstructed replay reservation differs from the durable intent"
+                            .to_owned(),
+                    ));
+                }
+            }
+            Err(ReplayWalError::DuplicateNonce { .. }) => {}
+            Err(error) => {
+                return Err(PromotionApplyError::RecoveryRequired(format!(
+                    "legacy/pre-begin replay reservation could not be reconciled: {error}"
+                )));
+            }
+        }
+        let replay_guard = acquire_replay_commit_guard(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &intent.principal_id,
+            PROMOTION_REPLAY_AUDIENCE,
+            expected_preview_digest,
+            &intent.replay.intent_digest,
+            &intent.replay.commit_digest,
+            intent.replay.reservation_revision,
+        )
+        .map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "pre-begin replay authority could not be retained: {error}"
+            ))
+        })?;
+        let effect_result = apply_existing_file_effect_transaction_to_retained_project_tree(
+            &binding.state_root,
+            destination_tree,
+            replay_guard.effect_lock(),
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &effect,
+            &payloads,
+            PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+            intent.transaction_id.0.clone(),
+            provenance.clone(),
+            replay_binding.clone(),
+        );
+        if effect_result.status != EffectApplicationStatus::Applied {
+            return Err(PromotionApplyError::RecoveryRequired(format!(
+                "pre-begin recovery effect did not commit: status={:?}, diagnostics={:?}",
+                effect_result.status, effect_result.diagnostics
+            )));
+        }
+        let replay_result = replay_guard.consume().map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "recovered effect committed but replay consume failed: {error}"
+            ))
+        })?;
+        debug_test_promotion_crash("after_replay_consume");
+        append_effect_replay_completion_under_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+            &intent.transaction_id.0,
+            &intent.effect_id,
+            &replay_binding,
+            &replay_result,
+            true,
+        )
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+        (true, SplitRootEffectTransactionStage::ReplayConsumed)
+    };
+    if stage != SplitRootEffectTransactionStage::ReplayConsumed {
+        let replay_result = consume_replay_key_hash_under_effect_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &intent.replay.key_hash,
+            &intent.replay.intent_digest,
+            &intent.replay.commit_digest,
+            intent.replay.reservation_revision,
+        )
+        .map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "committed promotion replay consume failed: {error}"
+            ))
+        })?;
+        debug_test_promotion_crash("after_replay_consume");
+        append_effect_replay_completion_under_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+            &intent.transaction_id.0,
+            &intent.effect_id,
+            &replay_binding,
+            &replay_result,
+            true,
+        )
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    } else {
+        verify_consumed_replay_key_hash_under_effect_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &intent.replay.key_hash,
+            &intent.replay.intent_digest,
+            &intent.replay.commit_digest,
+            intent.replay.reservation_revision,
+        )
+        .map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "effect replay completion contradicts replay WAL: {error}"
+            ))
+        })?;
+    }
+
+    destination_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "recovered canonical readback failed: {error}"
+        ))
+    })?;
+    verify_logical_result_matches_source(destination_tree, &prepared.source_tree)
+        .map_err(PromotionApplyError::RecoveryRequired)?;
+    let committed_at_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+        .as_secs();
+    let result_root = canonical_directory(&binding.project_root, "recovered result root")
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let result_snapshot = snapshot_binding(
+        &result_root,
+        destination_tree,
+        excluded_root_bindings(&result_root)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let result_snapshot_digest =
+        promotion_domain_digest("promotion.result_snapshot.v1", &result_snapshot)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    debug_test_promotion_crash("after_readback");
+    let mut receipt = GovernedPromotionReceipt {
+        schema_version: GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION.to_owned(),
+        receipt_digest: String::new(),
+        committed_at_unix,
+        preview: prepared.preview,
+        derived_principal_id: intent.principal_id,
+        transaction_id: intent.transaction_id,
+        effect_id: intent.effect_id,
+        provenance_digest: provenance.digest,
+        publication_capability_digest,
+        replay: intent.replay,
+        recovery_execution,
+        applied_files,
+        result_snapshot,
+        result_snapshot_digest,
+        readback_verified: true,
+    };
+    receipt.receipt_digest = promotion_receipt_digest(&receipt)?;
+    let state_leaf = promotion_state_leaf_name(expected_preview_digest)?;
+    let receipt_bytes = serde_json_canonicalizer::to_vec(&receipt)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let io = effect_lock
+        .retained_store_io()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let receipts = io
+        .retain_subdirectory(Path::new("receipts"))
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let mut receipt_witness = receipts
+        .write_new_file_synced(
+            Path::new(&state_leaf),
+            &receipt_bytes,
+            PROMOTION_RECEIPT_MAX_BYTES,
+        )
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    receipt_witness
+        .revalidate()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    debug_test_promotion_crash("after_receipt");
+    let persisted: GovernedPromotionReceipt =
+        serde_json::from_slice(receipt_witness.raw_bytes())
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    verify_promotion_receipt(&persisted, expected_preview_digest)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    verify_consumed_replay_binding_under_lock(binding, effect_lock, &persisted)?;
+    verify_committed_receipt_readback(binding, &persisted)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    Ok(GovernedPromotionApplication {
+        status: GovernedPromotionApplyStatus::Recovered,
+        canonical_mutation_performed,
+        receipt: persisted,
+    })
+}
+
+fn load_promotion_intent_under_lock(
+    effect_lock: &EffectStoreLock,
+    expected_preview_digest: &str,
+) -> Result<PromotionReplayIntent, PromotionApplyError> {
+    let state_leaf = promotion_state_leaf_name(expected_preview_digest)?;
+    let io = effect_lock
+        .retained_store_io()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let intents = io
+        .retain_subdirectory(Path::new("intents"))
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let mut witness = intents
+        .read_optional_bounded(Path::new(&state_leaf), PROMOTION_RECEIPT_MAX_BYTES)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+        .ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "no durable promotion intent exists for {expected_preview_digest}"
+            ))
+        })?;
+    let intent: PromotionReplayIntent =
+        serde_json::from_slice(witness.raw_bytes()).map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "durable promotion intent is corrupt or has an unsupported shape: {error}"
+            ))
+        })?;
+    witness.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "durable promotion intent changed during recovery: {error}"
+        ))
+    })?;
+    if !matches!(
+        intent.schema_version.as_str(),
+        "governed_promotion_intent_v1" | "governed_promotion_intent_v2"
+    ) || (intent.schema_version == "governed_promotion_intent_v1" && intent.preview.is_some())
+        || (intent.schema_version == "governed_promotion_intent_v2" && intent.preview.is_none())
+    {
+        return Err(PromotionApplyError::RecoveryRequired(format!(
+            "unsupported or contradictory promotion intent schema {}",
+            intent.schema_version
+        )));
+    }
+    Ok(intent)
+}
+
+fn validate_intent_request(
+    intent: &PromotionReplayIntent,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+) -> Result<(), PromotionApplyError> {
+    let expected_hex = expected_preview_digest.trim_start_matches("sha256:");
+    if intent.expected_preview_digest != expected_preview_digest
+        || intent.transaction_id != StableId(format!("promotion.tx.{expected_hex}"))
+        || intent.effect_id != StableId(format!("promotion.effect.{expected_hex}"))
+        || intent.replay.audience != PROMOTION_REPLAY_AUDIENCE
+        || intent.replay.reservation_revision != 1
+        || !is_sha256_digest(&intent.replay.key_hash)
+        || !is_sha256_digest(&intent.replay.intent_digest)
+        || !is_sha256_digest(&intent.replay.commit_digest)
+        || !is_sha256_digest(&intent.provenance_digest)
+        || !is_sha256_digest(&intent.publication_capability_digest)
+        || intent
+            .preview
+            .as_ref()
+            .is_some_and(|preview| preview.source.isolation_id != *isolation_id)
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "durable intent bindings differ from the requested isolation/preview".to_owned(),
+        ));
+    }
+    let expected_key = replay_nonce_key_hash(
+        &intent.principal_id,
+        PROMOTION_REPLAY_AUDIENCE,
+        expected_preview_digest,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if expected_key != intent.replay.key_hash {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "durable intent replay key differs from its principal/preview binding".to_owned(),
+        ));
+    }
+    let mut canonical = intent.clone();
+    canonical.replay.intent_digest.clear();
+    let actual_intent = promotion_domain_digest("promotion.intent.v1", &canonical)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if actual_intent != intent.replay.intent_digest {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "durable intent self-binding digest is invalid".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn preview_from_effect_inspection(
+    inspection: &SplitRootEffectTransactionInspection,
+) -> Result<GovernedPromotionPreview, PromotionApplyError> {
+    let preview = inspection
+        .provenance
+        .document
+        .get("preview")
+        .ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(
+                "legacy v1 effect begin lacks its embedded approved preview".to_owned(),
+            )
+        })?;
+    serde_json::from_value(preview.clone()).map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "legacy v1 effect begin contains an invalid approved preview: {error}"
+        ))
+    })
+}
+
+fn prepare_recovery_from_stored_preview(
+    binding: &WorkflowGovernanceProjectBinding,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+    preview: GovernedPromotionPreview,
+    destination_tree: &RetainedProjectTree,
+) -> Result<PreparedPromotion, PromotionApplyError> {
+    validate_recovery_preview_identity(&preview, expected_preview_digest)?;
+    if preview.source.isolation_id != *isolation_id
+        || preview.destination.project_id != binding.project_id
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "stored preview source/destination identity differs from the current project request"
+                .to_owned(),
+        ));
+    }
+    let isolation = load_active_isolation(&binding.state_root, isolation_id)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if isolation.raw_digest != preview.source.isolation_contract_digest
+        || isolation.relative_path != preview.source.isolation_contract_relative_path
+        || isolation.contract.agent_id != preview.source.agent_id
+        || isolation.contract.worktree_path != preview.source.declared_worktree_path
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "active isolation contract differs from the durable approved preview".to_owned(),
+        ));
+    }
+    let destination_root = canonical_directory(&binding.project_root, "recovery destination root")
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if destination_root.to_string_lossy().as_ref()
+        != preview.destination.snapshot.canonical_root.as_str()
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "canonical destination root differs from the approved preview".to_owned(),
+        ));
+    }
+    let declared_source =
+        declared_worktree_candidate(&binding.project_root, &isolation.contract.worktree_path)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let source_root = canonical_directory(&declared_source, "recovery isolation worktree")
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let source_tree = RetainedProjectTree::capture(
+        &source_root,
+        MAX_PROMOTION_SNAPSHOT_ENTRIES,
+        MAX_PROMOTION_SNAPSHOT_BYTES,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if source_tree
+        .aliases_root(destination_tree)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+        || source_tree
+            .shares_regular_file_object_with(destination_tree)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "recovery source aliases the canonical destination".to_owned(),
+        ));
+    }
+    let source_snapshot = snapshot_binding(
+        &source_root,
+        &source_tree,
+        excluded_root_bindings(&source_root)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if source_snapshot != preview.source.snapshot {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "isolation source bytes, namespace, or metadata changed after durable intent"
+                .to_owned(),
+        ));
+    }
+    let git_observation = observe_git_worktree(
+        &source_root,
+        &destination_root,
+        &isolation.contract.branch_name,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if git_observation.binding != preview.source.git_worktree {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "Git worktree binding changed after durable intent".to_owned(),
+        ));
+    }
+    Ok(PreparedPromotion {
+        derived_principal_id: Some(preview.source.linked_claim_principal_id.clone().ok_or(
+            PromotionApplyError::RecoveryRequired(
+                "stored preview lacks its derived principal".to_owned(),
+            ),
+        )?),
+        preview,
+        source_tree,
+    })
+}
+
+fn validate_recovery_preview_identity(
+    preview: &GovernedPromotionPreview,
+    expected_preview_digest: &str,
+) -> Result<(), PromotionApplyError> {
+    if preview.preview_digest != expected_preview_digest
+        || preview.status != forge_core_contracts::GovernedPromotionPreviewStatus::Reviewable
+        || preview.apply_eligibility != PromotionApplyEligibility::EligibleLocalReversible
+        || preview.authority != GovernedPromotionPreviewAuthority::ReadOnlyCandidateNoApplyAuthority
+        || preview.canonical_mutation_performed
+        || preview.forge_state_mutation_performed
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "stored preview is not the exact approved local-reversible candidate".to_owned(),
+        ));
+    }
+    let mut canonical = preview.clone();
+    canonical.preview_id = StableId(String::new());
+    canonical.preview_digest.clear();
+    canonical.observed_at_unix = 0;
+    let actual = promotion_domain_digest("promotion.preview.v1", &canonical)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if actual != expected_preview_digest
+        || preview.preview_id
+            != StableId(format!(
+                "promotion.preview.{}",
+                expected_preview_digest.trim_start_matches("sha256:")
+            ))
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "stored preview canonical identity is invalid".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_recovery_destination(
+    destination_tree: &RetainedProjectTree,
+    source_tree: &RetainedProjectTree,
+    preview: &GovernedPromotionPreview,
+) -> Result<(), PromotionApplyError> {
+    let destination_files = inventory_files(destination_tree);
+    let source_files = inventory_files(source_tree);
+    if inventory_directories(destination_tree) != inventory_directories(source_tree)
+        || destination_files.len() != source_files.len()
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "canonical destination namespace or directory metadata is incompatible with recovery"
+                .to_owned(),
+        ));
+    }
+    for source in &source_files {
+        let current = destination_files
+            .iter()
+            .find(|candidate| candidate.relative_path == source.relative_path)
+            .ok_or_else(|| {
+                PromotionApplyError::RecoveryRequired(format!(
+                    "{} disappeared from the canonical destination",
+                    source.relative_path
+                ))
+            })?;
+        if current.metadata_fingerprint != source.metadata_fingerprint {
+            return Err(PromotionApplyError::RecoveryRequired(format!(
+                "{} metadata differs from the approved source/destination",
+                source.relative_path
+            )));
+        }
+        let diff = preview
+            .diff
+            .iter()
+            .find(|entry| entry.path.0 == source.relative_path);
+        if let Some(diff) = diff {
+            let old_digest = diff.before_content_digest.as_deref().ok_or_else(|| {
+                PromotionApplyError::RecoveryRequired(format!(
+                    "{} approved diff lacks old content",
+                    source.relative_path
+                ))
+            })?;
+            let new_digest = diff.after_content_digest.as_deref().ok_or_else(|| {
+                PromotionApplyError::RecoveryRequired(format!(
+                    "{} approved diff lacks new content",
+                    source.relative_path
+                ))
+            })?;
+            if current.content_digest != old_digest && current.content_digest != new_digest {
+                return Err(PromotionApplyError::RecoveryRequired(format!(
+                    "{} contains neither the recorded old nor exact new bytes",
+                    source.relative_path
+                )));
+            }
+        } else if current != source {
+            return Err(PromotionApplyError::RecoveryRequired(format!(
+                "{} changed outside the approved promotion write set",
+                source.relative_path
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_pre_begin_destination_exact(
+    binding: &WorkflowGovernanceProjectBinding,
+    destination_tree: &RetainedProjectTree,
+    preview: &GovernedPromotionPreview,
+) -> Result<(), PromotionApplyError> {
+    let destination_root =
+        canonical_directory(&binding.project_root, "pre-begin recovery destination root")
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let current = snapshot_binding(
+        &destination_root,
+        destination_tree,
+        excluded_root_bindings(&destination_root)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if current != preview.destination.snapshot {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "pre-begin recovery requires the canonical destination to exactly match the approved destination snapshot"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn promotion_provenance_from_intent(
+    intent: &PromotionReplayIntent,
+    preview: &GovernedPromotionPreview,
+    effect: &ToolEffectContractDocument,
+) -> Result<EffectExecutionProvenance, PromotionApplyError> {
+    EffectExecutionProvenance::new(serde_json::json!({
+        "kind": "governed_promotion_local_reversible_v1",
+        "publication_scope": {
+            "kind": "external_retained_project_tree_v1",
+            "retained_capability_digest": &intent.publication_capability_digest,
+            "canonical_root_digest": &preview.destination.snapshot.canonical_root_digest,
+        },
+        "preview": preview,
+        "derived_principal_id": &intent.principal_id,
+        "transaction_id": &intent.transaction_id,
+        "effect": effect,
+        "commit_digest": &intent.replay.commit_digest,
+    }))
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))
+}
+
+fn recovery_execution_binding(intent: &PromotionReplayIntent) -> PromotionRecoveryExecutionBinding {
+    PromotionRecoveryExecutionBinding {
+        schema_version: PROMOTION_RECOVERY_EXECUTION_SCHEMA_VERSION.to_owned(),
+        recovery_kind: if intent.schema_version == "governed_promotion_intent_v1" {
+            PROMOTION_LEGACY_V1_PRE_BEGIN_RECOVERY_KIND
+        } else {
+            PROMOTION_PRE_BEGIN_RECOVERY_KIND
+        }
+        .to_owned(),
+        durable_intent_digest: intent.replay.intent_digest.clone(),
+        superseded_provenance_digest: intent.provenance_digest.clone(),
+        superseded_publication_capability_digest: intent.publication_capability_digest.clone(),
+    }
+}
+
+fn pre_begin_recovery_provenance(
+    intent: &PromotionReplayIntent,
+    preview: &GovernedPromotionPreview,
+    effect: &ToolEffectContractDocument,
+    publication_capability_digest: &str,
+    recovery_execution: &PromotionRecoveryExecutionBinding,
+) -> Result<EffectExecutionProvenance, PromotionApplyError> {
+    EffectExecutionProvenance::new(serde_json::json!({
+        "kind": "governed_promotion_recovery_execution_v1",
+        "recovery": recovery_execution,
+        "publication_scope": {
+            "kind": "external_retained_project_tree_v1",
+            "retained_capability_digest": publication_capability_digest,
+            "canonical_root_digest": &preview.destination.snapshot.canonical_root_digest,
+        },
+        "preview": preview,
+        "derived_principal_id": &intent.principal_id,
+        "transaction_id": &intent.transaction_id,
+        "effect": effect,
+        "commit_digest": &intent.replay.commit_digest,
+    }))
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))
+}
+
+fn recovery_publication_capability_from_wal(
+    provenance: &EffectExecutionProvenance,
+) -> Result<String, PromotionApplyError> {
+    let document = &provenance.document;
+    if document.get("kind").and_then(serde_json::Value::as_str)
+        != Some("governed_promotion_recovery_execution_v1")
+        || document
+            .get("publication_scope")
+            .and_then(|scope| scope.get("kind"))
+            .and_then(serde_json::Value::as_str)
+            != Some("external_retained_project_tree_v1")
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "effect WAL provenance is neither the durable original execution nor an admitted recovery execution"
+                .to_owned(),
+        ));
+    }
+    let digest = document
+        .get("publication_scope")
+        .and_then(|scope| scope.get("retained_capability_digest"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|digest| is_sha256_digest(digest))
+        .ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(
+                "effect WAL recovery provenance lacks a valid retained capability digest"
+                    .to_owned(),
+            )
+        })?;
+    Ok(digest.to_owned())
 }
 
 pub(super) fn apply_prepared_promotion_under_lock(
@@ -970,7 +1851,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
         reservation_revision: 1,
     };
     let mut intent = PromotionReplayIntent {
-        schema_version: "governed_promotion_intent_v1".to_owned(),
+        schema_version: "governed_promotion_intent_v2".to_owned(),
         expected_preview_digest: expected_preview_digest.to_owned(),
         principal_id: principal_id.clone(),
         transaction_id: transaction_id.clone(),
@@ -978,6 +1859,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
         replay: provisional_replay,
         provenance_digest: provenance.digest.clone(),
         publication_capability_digest,
+        preview: Some(prepared.preview.clone()),
     };
     intent.replay.intent_digest = promotion_domain_digest("promotion.intent.v1", &intent)
         .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
@@ -1034,6 +1916,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
     intent_witness
         .revalidate()
         .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    debug_test_promotion_crash("after_intent");
 
     let reservation = reserve_replay_nonce_under_effect_lock(
         &binding.state_root,
@@ -1057,6 +1940,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
             "replay reservation differs from the durable promotion intent".to_owned(),
         ));
     }
+    debug_test_promotion_crash("after_replay_reservation");
     let replay_binding = EffectReplayCommitBinding::new(
         reservation.reservation.key_hash.clone(),
         reservation.reservation.intent_digest.clone(),
@@ -1119,6 +2003,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
             "promotion effect committed but replay consume failed: {error}"
         ))
     })?;
+    debug_test_promotion_crash("after_replay_consume");
     append_effect_replay_completion_under_lock(
         &binding.state_root,
         effect_lock,
@@ -1164,6 +2049,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
     let result_snapshot_digest =
         promotion_domain_digest("promotion.result_snapshot.v1", &result_snapshot)
             .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    debug_test_promotion_crash("after_readback");
     let mut receipt = GovernedPromotionReceipt {
         schema_version: GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION.to_owned(),
         receipt_digest: String::new(),
@@ -1175,6 +2061,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
         provenance_digest: provenance.digest,
         publication_capability_digest: intent.publication_capability_digest.clone(),
         replay: intent.replay,
+        recovery_execution: None,
         applied_files,
         result_snapshot,
         result_snapshot_digest,
@@ -1196,6 +2083,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
     receipt_witness
         .revalidate()
         .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    debug_test_promotion_crash("after_receipt");
     let persisted: GovernedPromotionReceipt =
         serde_json::from_slice(receipt_witness.raw_bytes())
             .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
@@ -1512,6 +2400,22 @@ fn verify_promotion_receipt(
             ));
         }
     }
+    if let Some(recovery) = &receipt.recovery_execution {
+        if recovery.schema_version != PROMOTION_RECOVERY_EXECUTION_SCHEMA_VERSION
+            || !matches!(
+                recovery.recovery_kind.as_str(),
+                PROMOTION_PRE_BEGIN_RECOVERY_KIND | PROMOTION_LEGACY_V1_PRE_BEGIN_RECOVERY_KIND
+            )
+            || recovery.durable_intent_digest != receipt.replay.intent_digest
+            || !is_sha256_digest(&recovery.superseded_provenance_digest)
+            || !is_sha256_digest(&recovery.superseded_publication_capability_digest)
+        {
+            return Err(PromotionApplyError::ReceiptInvalid(
+                "receipt recovery execution binding is malformed or contradicts replay authority"
+                    .to_owned(),
+            ));
+        }
+    }
     if receipt.replay.audience != PROMOTION_REPLAY_AUDIENCE
         || receipt.replay.reservation_revision != 1
     {
@@ -1552,11 +2456,23 @@ fn verify_promotion_receipt(
             "derived effect contract identity differs from the receipt".to_owned(),
         ));
     }
-    let expected_provenance = EffectExecutionProvenance::new(serde_json::json!({
+    let original_publication_capability_digest = receipt
+        .recovery_execution
+        .as_ref()
+        .map_or(&receipt.publication_capability_digest, |recovery| {
+            &recovery.superseded_publication_capability_digest
+        });
+    let original_provenance_digest = receipt
+        .recovery_execution
+        .as_ref()
+        .map_or(&receipt.provenance_digest, |recovery| {
+            &recovery.superseded_provenance_digest
+        });
+    let expected_original_provenance = EffectExecutionProvenance::new(serde_json::json!({
         "kind": "governed_promotion_local_reversible_v1",
         "publication_scope": {
             "kind": "external_retained_project_tree_v1",
-            "retained_capability_digest": &receipt.publication_capability_digest,
+            "retained_capability_digest": original_publication_capability_digest,
             "canonical_root_digest": &preview.destination.snapshot.canonical_root_digest,
         },
         "preview": preview,
@@ -1566,28 +2482,70 @@ fn verify_promotion_receipt(
         "commit_digest": &expected_commit,
     }))
     .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
-    if receipt.provenance_digest != expected_provenance.digest {
-        return Err(PromotionApplyError::ReceiptInvalid(
-            "execution provenance digest differs from the receipt semantics".to_owned(),
-        ));
-    }
+    let original_provenance_reconstructed =
+        original_provenance_digest == &expected_original_provenance.digest;
     let mut replay_without_intent = receipt.replay.clone();
     replay_without_intent.intent_digest.clear();
-    let intent = PromotionReplayIntent {
-        schema_version: "governed_promotion_intent_v1".to_owned(),
+    let mut intent = PromotionReplayIntent {
+        schema_version: "governed_promotion_intent_v2".to_owned(),
         expected_preview_digest: expected_preview_digest.to_owned(),
         principal_id: receipt.derived_principal_id.clone(),
         transaction_id: receipt.transaction_id.clone(),
         effect_id: receipt.effect_id.clone(),
         replay: replay_without_intent,
-        provenance_digest: receipt.provenance_digest.clone(),
-        publication_capability_digest: receipt.publication_capability_digest.clone(),
+        provenance_digest: original_provenance_digest.to_owned(),
+        publication_capability_digest: original_publication_capability_digest.to_owned(),
+        preview: Some(receipt.preview.clone()),
     };
-    let expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
+    let mut expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
         .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    if receipt.replay.intent_digest != expected_intent {
+        intent.schema_version = "governed_promotion_intent_v1".to_owned();
+        intent.preview = None;
+        expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
+            .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    }
     if receipt.replay.intent_digest != expected_intent {
         return Err(PromotionApplyError::ReceiptInvalid(
             "replay intent digest differs from receipt semantics".to_owned(),
+        ));
+    }
+    let legacy_v1_fresh_execution = intent.schema_version == "governed_promotion_intent_v1"
+        && receipt.recovery_execution.is_some();
+    if !original_provenance_reconstructed && !legacy_v1_fresh_execution {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "original execution provenance digest differs from the approved receipt semantics"
+                .to_owned(),
+        ));
+    }
+    if let Some(recovery) = &receipt.recovery_execution {
+        let expected_kind = if legacy_v1_fresh_execution {
+            PROMOTION_LEGACY_V1_PRE_BEGIN_RECOVERY_KIND
+        } else {
+            PROMOTION_PRE_BEGIN_RECOVERY_KIND
+        };
+        if recovery.recovery_kind != expected_kind {
+            return Err(PromotionApplyError::ReceiptInvalid(
+                "recovery kind contradicts the self-digested original intent schema".to_owned(),
+            ));
+        }
+        let expected_recovery = pre_begin_recovery_provenance(
+            &intent,
+            preview,
+            &expected_effect_contract,
+            &receipt.publication_capability_digest,
+            recovery,
+        )
+        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+        if receipt.provenance_digest != expected_recovery.digest {
+            return Err(PromotionApplyError::ReceiptInvalid(
+                "actual recovery execution provenance differs from its durable original-intent link"
+                    .to_owned(),
+            ));
+        }
+    } else if receipt.provenance_digest != expected_original_provenance.digest {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "execution provenance digest differs from the receipt semantics".to_owned(),
         ));
     }
     let expected_applied = preview
@@ -1760,6 +2718,16 @@ fn is_sha256_digest(value: &str) -> bool {
         .strip_prefix("sha256:")
         .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
+
+#[cfg(debug_assertions)]
+fn debug_test_promotion_crash(point: &str) {
+    if std::env::var("FORGE_TEST_PROMOTION_CRASH_AT").as_deref() == Ok(point) {
+        std::process::exit(86);
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn debug_test_promotion_crash(_point: &str) {}
 
 fn load_active_isolation(
     state_root: &Path,
