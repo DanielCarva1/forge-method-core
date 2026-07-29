@@ -79,6 +79,10 @@ pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION: &str 
 pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION: &str = "0.11";
 /// Ledger records written from the first kernel-adjudicated cooperative evidence offer.
 pub const WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION: &str = "0.12";
+/// Ledger records written from the explicit adoption of Solo Cooperative by a
+/// legacy profile-less project. Frozen history remains byte-identical; the
+/// typed transition and every successor record require this wire epoch.
+pub const WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION: &str = "0.13";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs
@@ -423,6 +427,7 @@ pub struct WorkflowGovernanceLedgerRecord {
 )]
 pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
+    LegacySoloProfileAdopted(LegacySoloProfileAdoptedEvent),
     HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
     CooperativeObjectiveAccepted(CooperativeObjectiveAcceptedEvent),
     CooperativeEvidenceObserved(WorkflowCooperativeEvidenceObservedEvent),
@@ -783,6 +788,20 @@ pub struct ProjectImportedEvent {
     pub initial_phase: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub readiness_profile: Option<WorkflowReadinessProfile>,
+}
+
+/// One explicit, one-way adoption of Solo Cooperative by a historical project
+/// whose genesis predates readiness profiles.
+///
+/// This records cooperative same-owner provenance only. It does not claim a
+/// verified human interaction, signature, external reviewer, or broker event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LegacySoloProfileAdoptedEvent {
+    pub legacy_project_import_record_digest: String,
+    pub prior_ledger_head_digest: String,
+    pub snapshot_digest: String,
+    pub authority_basis: WorkflowCooperativeAuthorityBasis,
 }
 
 impl ProjectImportedEvent {

@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Explicit adoption of Solo Cooperative for safe legacy projects.** Added the
+  read-only `workflow profile status` command and the CAS-bound
+  `workflow profile adopt-solo` command. Eligible profile-less ledgers append one
+  irreversible `legacy_solo_profile_adopted` event under schema `0.13`; existing
+  history is never rewritten, explicit `strict_external` projects remain strict,
+  and projects already created as Solo report that no migration is needed. After
+  this event is appended, older Forge binaries that do not understand workflow
+  ledger schema `0.13` cannot open that ledger and must be upgraded. `start` and
+  `workflow init` never perform the adoption silently.
 - **Crash-safe governed promotion recovery.** Added
   `workflow promotion recover` for interrupted existing-file promotions. It
   retains the exact single-use replay authority before any resumed write,

@@ -33,7 +33,7 @@ fn historical_crypto_items_remain_available_from_cli_root() {
 #[test]
 fn historical_crypto_modules_remain_available_beneath_cli() {
     assert_eq!(forge_core_cli::hashing::hex_bytes(&[0x0f, 0xa0]), "0fa0");
-    assert!(forge_core_cli::version_like("0.12.0-alpha.3"));
+    assert!(forge_core_cli::version_like("0.12.0-alpha.4"));
     assert!(forge_core_cli::rekor::parse_rekor_log_entry("{}").is_err());
 
     // This public module path was exported by the former wildcard facade.

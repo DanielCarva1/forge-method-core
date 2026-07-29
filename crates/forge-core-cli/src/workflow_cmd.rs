@@ -43,6 +43,24 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
+    let normalized_profile_args;
+    let args = if args.get(1).is_some_and(|value| value == "profile") {
+        let Some(action) = args.get(2) else {
+            return emit_failure(
+                "workflow.profile",
+                ExitReason::InvalidDecisionShape,
+                "workflow profile requires one of: status, adopt-solo".to_owned(),
+                wants_json(args),
+            );
+        };
+        normalized_profile_args = std::iter::once("workflow".to_owned())
+            .chain(std::iter::once(format!("profile-{action}")))
+            .chain(args.iter().skip(3).cloned())
+            .collect::<Vec<_>>();
+        normalized_profile_args.as_slice()
+    } else {
+        args
+    };
     if args.get(1).is_some_and(|value| value == "autonomy") {
         return crate::workflow_autonomy_cmd::run(&args[2..]);
     }
@@ -138,7 +156,11 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         println!("{}", command_surface_usage(&COMMAND_WORKFLOW));
         return Ok(());
     }
-    let command = format!("workflow.{}", parsed.subcommand.replace('-', "_"));
+    let command = if let Some(action) = parsed.subcommand.strip_prefix("profile-") {
+        format!("workflow.profile.{}", action.replace('-', "_"))
+    } else {
+        format!("workflow.{}", parsed.subcommand.replace('-', "_"))
+    };
     if legacy_direct_authorization_is_disabled(&parsed.subcommand) {
         return emit_failure(
             &command,
@@ -189,6 +211,10 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         "release-status" => adapter
             .release_status()
             .map(|value| serde_json::to_value(value).expect("serializable release status")),
+        "profile-status" => adapter
+            .profile_status()
+            .map(|value| serde_json::to_value(value).expect("serializable profile status")),
+        "profile-adopt-solo" => profile_adopt_solo(&adapter, &parsed),
         "release-rebase-plan" => release_rebase_plan(&adapter, &parsed),
         "release-rebase-apply" => release_rebase_apply(&adapter, &parsed),
         "release-upgrade" => release_upgrade(&adapter, &parsed),
@@ -282,6 +308,19 @@ fn retirement_status(_root: &Path) -> Result<Value, String> {
         scorecard_ref: RETIREMENT_SCORECARD,
     })
     .map_err(|error| format!("serialize retirement status: {error}"))
+}
+
+fn profile_adopt_solo(
+    adapter: &WorkflowGovernanceProjectAdapter,
+    args: &WorkflowCliArgs,
+) -> Result<Value, WorkflowGovernanceAdapterError> {
+    let expected_head_digest =
+        required(args, "expected-head-digest").map_err(invalid_observation)?;
+    let expected_snapshot_digest =
+        required(args, "expected-snapshot-digest").map_err(invalid_observation)?;
+    adapter
+        .adopt_legacy_solo_profile(&expected_head_digest, &expected_snapshot_digest)
+        .map(|value| serde_json::to_value(value).expect("serializable legacy profile adoption"))
 }
 
 fn release_upgrade(
@@ -697,11 +736,34 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             requested_readiness_profile(args).map(|_| ())
         }
-        "action-packets" | "release-status" | "retirement-status" if !args.flags.is_empty() => {
+        "action-packets" | "release-status" | "retirement-status" | "profile-status"
+            if !args.flags.is_empty() =>
+        {
             Err(format!(
                 "workflow {} accepts only --root and the JSON output switch",
                 args.subcommand
             ))
+        }
+        "profile-adopt-solo" => {
+            let expected = ["expected-head-digest", "expected-snapshot-digest"];
+            if let Some(flag) = args
+                .flags
+                .keys()
+                .find(|flag| !expected.contains(&flag.as_str()))
+            {
+                return Err(format!(
+                    "--{flag} is not valid for workflow profile adopt-solo"
+                ));
+            }
+            for name in expected {
+                let digest = required(args, name)?;
+                if !is_lowercase_sha256(&digest) {
+                    return Err(format!(
+                        "--{name} must be a canonical lowercase sha256:<64-hex> digest"
+                    ));
+                }
+            }
+            Ok(())
         }
         "release-upgrade" => {
             let expected = [
@@ -776,6 +838,8 @@ pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReas
         | WorkflowGovernanceAdapterError::Ledger(_)
         | WorkflowGovernanceAdapterError::LedgerIdentityMismatch
         | WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration { .. }
+        | WorkflowGovernanceAdapterError::LegacySoloAdoptionCasMismatch
+        | WorkflowGovernanceAdapterError::LegacySoloAdoptionRetryConflict
         | WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted
         | WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict
         | WorkflowGovernanceAdapterError::StaleCooperativeObjectiveManagementPacket
@@ -945,6 +1009,30 @@ mod tests {
         ]))
         .expect_err("profile selector must be single-valued");
         assert_eq!(duplicate, "--readiness-profile may be supplied only once");
+    }
+
+    #[test]
+    fn nested_profile_commands_preserve_root_with_spaces_and_exact_cas() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let original = argv(&[
+            "workflow",
+            "profile",
+            "adopt-solo",
+            "--root",
+            "/tmp/project with spaces",
+            "--expected-head-digest",
+            &digest,
+            "--expected-snapshot-digest",
+            &digest,
+            "--json",
+        ]);
+        let normalized = std::iter::once("workflow".to_owned())
+            .chain(std::iter::once("profile-adopt-solo".to_owned()))
+            .chain(original.iter().skip(3).cloned())
+            .collect::<Vec<_>>();
+        let parsed = parse_args(&normalized).expect("nested profile argv parses");
+        validate_release_args(&parsed).expect("exact profile CAS validates");
+        assert_eq!(parsed.root, PathBuf::from("/tmp/project with spaces"));
     }
 
     #[test]

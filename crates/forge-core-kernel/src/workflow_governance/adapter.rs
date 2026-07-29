@@ -46,9 +46,9 @@ use forge_core_contracts::operation::CallerRole;
 use forge_core_contracts::recovery::{HealthStatus, RecoveryAction};
 use forge_core_contracts::request::{DependencyKind, RequestStatus};
 use forge_core_contracts::workflow_governance::{
-    BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, WorkflowBrokerOriginProfile,
-    WorkflowCooperativeAuthorityBasis, WorkflowCooperativeObjectiveRevisionKind,
-    WorkflowReadinessProfile,
+    BrokerOriginAppliedEvent, HumanIntentRevisionAcceptedEvent, LegacySoloProfileAdoptedEvent,
+    WorkflowBrokerOriginProfile, WorkflowCooperativeAuthorityBasis,
+    WorkflowCooperativeObjectiveRevisionKind, WorkflowReadinessProfile,
 };
 use forge_core_contracts::{
     AgentAutonomyAssessment, AgentAutonomyAssessmentInput, AgentAutonomyBinding,
@@ -1408,6 +1408,117 @@ impl WorkflowGovernanceProjectAdapter {
                 .current_state_version()
                 .unwrap_or(record.state_version),
             current_phase: INITIAL_PHASE.to_owned(),
+        })
+    }
+
+    /// Inspect whether a historical profile-less ledger may explicitly adopt
+    /// Solo Cooperative without changing any state.
+    pub fn profile_status(
+        &self,
+    ) -> Result<WorkflowLegacyProfileStatus, WorkflowGovernanceAdapterError> {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        validate_identity(
+            &projection,
+            &self.identity(admitted),
+            &self.binding.project_root,
+        )?;
+        project_snapshot.revalidate()?;
+        profile_status_projection(&self.binding.project_root, &projection, snapshot_digest)
+    }
+
+    /// Append the single explicit transition from legacy profile-less strict
+    /// compatibility to Solo Cooperative under exact head and snapshot CAS.
+    pub fn adopt_legacy_solo_profile(
+        &self,
+        expected_head_digest: &str,
+        expected_snapshot_digest: &str,
+    ) -> Result<WorkflowLegacySoloAdoptionReceipt, WorkflowGovernanceAdapterError> {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let current_snapshot_digest = project_snapshot.digest().to_owned();
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let identity = self.identity(admitted);
+        validate_identity(&projection, &identity, &self.binding.project_root)?;
+
+        if let Some(record) = projection.records.iter().find(|record| {
+            matches!(
+                record.event,
+                WorkflowGovernanceEvent::LegacySoloProfileAdopted(_)
+            )
+        }) {
+            let WorkflowGovernanceEvent::LegacySoloProfileAdopted(event) = &record.event else {
+                unreachable!("filtered event kind")
+            };
+            let adoption_is_current_head = projection
+                .records
+                .last()
+                .is_some_and(|current| current.record_digest == record.record_digest);
+            if event.prior_ledger_head_digest != expected_head_digest
+                || event.snapshot_digest != expected_snapshot_digest
+                || !adoption_is_current_head
+            {
+                return Err(WorkflowGovernanceAdapterError::LegacySoloAdoptionRetryConflict);
+            }
+            project_snapshot.revalidate()?;
+            return Ok(WorkflowLegacySoloAdoptionReceipt {
+                status: WorkflowLegacySoloAdoptionReceiptStatus::AlreadyAdopted,
+                readiness_profile: WorkflowReadinessProfile::SoloCooperative,
+                legacy_profileless_genesis: true,
+                provenance: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+                snapshot_digest: event.snapshot_digest.clone(),
+                ledger_head_digest: projection
+                    .head_digest
+                    .clone()
+                    .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?,
+                state_version: projection.current_state_version().unwrap_or_default(),
+                transition_record: Some(record.clone()),
+            });
+        }
+
+        if current_snapshot_digest != expected_snapshot_digest
+            || projection.head_digest.as_deref() != Some(expected_head_digest)
+        {
+            return Err(WorkflowGovernanceAdapterError::LegacySoloAdoptionCasMismatch);
+        }
+        let (availability, reason) = legacy_solo_adoption_availability(&projection)?;
+        if availability != WorkflowLegacySoloAdoptionAvailability::Eligible {
+            return Err(WorkflowGovernanceAdapterError::LegacySoloAdoptionUnavailable(reason));
+        }
+        let genesis = projection
+            .records
+            .first()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let event = LegacySoloProfileAdoptedEvent {
+            legacy_project_import_record_digest: genesis.record_digest.clone(),
+            prior_ledger_head_digest: expected_head_digest.to_owned(),
+            snapshot_digest: current_snapshot_digest.clone(),
+            authority_basis: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+        };
+        project_snapshot.revalidate()?;
+        let record = ledger.adopt_legacy_solo_unchecked_tcb(
+            expected_head_digest,
+            &identity,
+            projection.next_state_version,
+            event,
+        )?;
+        Ok(WorkflowLegacySoloAdoptionReceipt {
+            status: WorkflowLegacySoloAdoptionReceiptStatus::Adopted,
+            readiness_profile: WorkflowReadinessProfile::SoloCooperative,
+            legacy_profileless_genesis: true,
+            provenance: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+            snapshot_digest: current_snapshot_digest,
+            ledger_head_digest: record.record_digest.clone(),
+            state_version: record.state_version,
+            transition_record: Some(record),
         })
     }
 
@@ -5470,6 +5581,50 @@ pub struct WorkflowGovernanceReleaseAudit {
     pub pin_origin: WorkflowGovernanceReleasePinOrigin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowLegacySoloAdoptionAvailability {
+    Eligible,
+    AlreadyAdopted,
+    AlreadySolo,
+    Ineligible,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowLegacyProfileStatus {
+    pub current_profile: WorkflowReadinessProfile,
+    pub legacy_profileless_genesis: bool,
+    pub solo_adoption: WorkflowLegacySoloAdoptionAvailability,
+    pub reason: &'static str,
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adopt_solo_argv: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowLegacySoloAdoptionReceiptStatus {
+    Adopted,
+    AlreadyAdopted,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowLegacySoloAdoptionReceipt {
+    pub status: WorkflowLegacySoloAdoptionReceiptStatus,
+    pub readiness_profile: WorkflowReadinessProfile,
+    pub legacy_profileless_genesis: bool,
+    pub provenance: WorkflowCooperativeAuthorityBasis,
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transition_record: Option<WorkflowGovernanceLedgerRecord>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowGovernanceInitialization {
@@ -5748,6 +5903,9 @@ pub enum WorkflowGovernanceAdapterError {
         current: WorkflowReadinessProfile,
         requested: WorkflowReadinessProfile,
     },
+    LegacySoloAdoptionUnavailable(&'static str),
+    LegacySoloAdoptionCasMismatch,
+    LegacySoloAdoptionRetryConflict,
     CooperativeObjectiveProfileRequired,
     AgentAutonomyObjectiveRequired,
     AgentAutonomyEvaluation(AgentAutonomyEvaluationError),
@@ -5851,6 +6009,16 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
                 "workflow readiness profile cannot be reconfigured from {} to {} after initialization",
                 current.wire_name(),
                 requested.wire_name()
+            ),
+            Self::LegacySoloAdoptionUnavailable(reason) => write!(
+                f,
+                "legacy Solo Cooperative adoption is unavailable: {reason}"
+            ),
+            Self::LegacySoloAdoptionCasMismatch => f.write_str(
+                "legacy Solo Cooperative adoption is stale; refresh workflow profile status",
+            ),
+            Self::LegacySoloAdoptionRetryConflict => f.write_str(
+                "legacy Solo Cooperative adoption retry conflicts with the durable transition",
             ),
             Self::CooperativeObjectiveProfileRequired => f.write_str(
                 "cooperative objective admission requires the solo_cooperative readiness profile",
@@ -7745,6 +7913,107 @@ impl<T> TransposeCoordinationOption<T> for Option<Option<T>> {
             None => Ok(None),
         }
     }
+}
+
+fn legacy_solo_adoption_availability(
+    projection: &WorkflowGovernanceLedgerProjection,
+) -> Result<(WorkflowLegacySoloAdoptionAvailability, &'static str), WorkflowGovernanceAdapterError>
+{
+    let genesis = projection
+        .records
+        .first()
+        .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+    let WorkflowGovernanceEvent::ProjectImported(imported) = &genesis.event else {
+        return Err(WorkflowGovernanceAdapterError::LedgerUninitialized);
+    };
+    if projection.contains_legacy_solo_adoption() {
+        return Ok((
+            WorkflowLegacySoloAdoptionAvailability::AlreadyAdopted,
+            "this legacy project already adopted Solo Cooperative",
+        ));
+    }
+    if imported.readiness_profile == Some(WorkflowReadinessProfile::SoloCooperative) {
+        return Ok((
+            WorkflowLegacySoloAdoptionAvailability::AlreadySolo,
+            "this project already started in Solo Cooperative mode; no adoption is needed",
+        ));
+    }
+    if imported.readiness_profile.is_some() {
+        return Ok((
+            WorkflowLegacySoloAdoptionAvailability::Ineligible,
+            "genesis already selected the explicit strict_external readiness profile",
+        ));
+    }
+    if projection.readiness_profile() != Some(WorkflowReadinessProfile::StrictExternal) {
+        return Ok((
+            WorkflowLegacySoloAdoptionAvailability::Ineligible,
+            "legacy profile is not in its strict-compatible starting state",
+        ));
+    }
+    if projection.records.iter().any(|record| {
+        !matches!(
+            record.event,
+            WorkflowGovernanceEvent::ProjectImported(_)
+                | WorkflowGovernanceEvent::ReleaseUpgraded(_)
+        )
+    }) {
+        return Ok((
+            WorkflowLegacySoloAdoptionAvailability::Ineligible,
+            "legacy history already contains workflow decisions, evidence, coordination, claims, or authority-bearing events",
+        ));
+    }
+    Ok((
+        WorkflowLegacySoloAdoptionAvailability::Eligible,
+        "profile-less legacy history contains only project import and release upgrades",
+    ))
+}
+
+fn profile_status_projection(
+    project_root: &Path,
+    projection: &WorkflowGovernanceLedgerProjection,
+    snapshot_digest: String,
+) -> Result<WorkflowLegacyProfileStatus, WorkflowGovernanceAdapterError> {
+    let head = projection
+        .head_digest
+        .clone()
+        .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+    let genesis = projection
+        .records
+        .first()
+        .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+    let WorkflowGovernanceEvent::ProjectImported(imported) = &genesis.event else {
+        return Err(WorkflowGovernanceAdapterError::LedgerUninitialized);
+    };
+    let current_profile = projection
+        .readiness_profile()
+        .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+    let (solo_adoption, reason) = legacy_solo_adoption_availability(projection)?;
+    let adopt_solo_argv =
+        (solo_adoption == WorkflowLegacySoloAdoptionAvailability::Eligible).then(|| {
+            vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "profile".to_owned(),
+                "adopt-solo".to_owned(),
+                "--root".to_owned(),
+                project_root.display().to_string(),
+                "--expected-head-digest".to_owned(),
+                head.clone(),
+                "--expected-snapshot-digest".to_owned(),
+                snapshot_digest.clone(),
+                "--json".to_owned(),
+            ]
+        });
+    Ok(WorkflowLegacyProfileStatus {
+        current_profile,
+        legacy_profileless_genesis: imported.readiness_profile.is_none(),
+        solo_adoption,
+        reason,
+        snapshot_digest,
+        ledger_head_digest: head,
+        state_version: projection.current_state_version().unwrap_or_default(),
+        adopt_solo_argv,
+    })
 }
 
 fn projected_active_release(
@@ -11915,6 +12184,119 @@ mod tests {
             validate_request_coordination(&dependent, &ledger, &claims, &index, now),
             Err(WorkflowGovernanceAdapterError::CoordinationInvalid(_))
         ));
+    }
+
+    fn legacy_profile_projection(
+        readiness_profile: Option<WorkflowReadinessProfile>,
+        extra_event: Option<WorkflowGovernanceEvent>,
+    ) -> WorkflowGovernanceLedgerProjection {
+        let mut records = vec![coordination_record(
+            1,
+            0,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                source_ref: "/tmp/project with spaces".to_owned(),
+                source_digest: format!("sha256:{}", "1".repeat(64)),
+                snapshot_digest: format!("sha256:{}", "2".repeat(64)),
+                initial_phase: StableId("1-discovery".to_owned()),
+                readiness_profile,
+            }),
+        )];
+        if let Some(event) = extra_event {
+            let mut record = coordination_record(2, 1, event);
+            record.previous_record_digest = Some(records[0].record_digest.clone());
+            records.push(record);
+        }
+        let head_digest = records.last().map(|record| record.record_digest.clone());
+        let next_sequence = u64::try_from(records.len())
+            .expect("small test projection")
+            .saturating_add(1);
+        let next_state_version = records
+            .last()
+            .map_or(0, |record| record.state_version.saturating_add(1));
+        WorkflowGovernanceLedgerProjection {
+            records,
+            head_digest,
+            next_sequence,
+            next_state_version,
+        }
+    }
+
+    #[test]
+    fn legacy_profile_status_publishes_exact_host_neutral_argv_with_spaced_root() {
+        let projection = legacy_profile_projection(None, None);
+        assert_eq!(
+            projection.readiness_profile(),
+            Some(WorkflowReadinessProfile::StrictExternal)
+        );
+        let snapshot = format!("sha256:{}", "a".repeat(64));
+        let status = profile_status_projection(
+            Path::new("/tmp/project with spaces"),
+            &projection,
+            snapshot.clone(),
+        )
+        .expect("legacy profile status");
+        assert_eq!(
+            status.solo_adoption,
+            WorkflowLegacySoloAdoptionAvailability::Eligible
+        );
+        let argv = status.adopt_solo_argv.expect("exact adoption argv");
+        assert_eq!(argv[0], "forge-core");
+        assert_eq!(argv[1], "workflow");
+        assert_eq!(argv[2], "profile");
+        assert_eq!(argv[3], "adopt-solo");
+        assert_eq!(argv[4], "--root");
+        assert_eq!(argv[5], "/tmp/project with spaces");
+        assert_eq!(argv[7], projection.head_digest.expect("head"));
+        assert_eq!(argv[9], snapshot);
+        assert_eq!(argv[10], "--json");
+    }
+
+    #[test]
+    fn legacy_profile_status_distinguishes_existing_solo_strict_and_authority_history() {
+        let strict = profile_status_projection(
+            Path::new("/tmp/project"),
+            &legacy_profile_projection(Some(WorkflowReadinessProfile::StrictExternal), None),
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .expect("explicit strict status");
+        assert_eq!(
+            strict.solo_adoption,
+            WorkflowLegacySoloAdoptionAvailability::Ineligible
+        );
+        assert!(strict.adopt_solo_argv.is_none());
+
+        let solo = profile_status_projection(
+            Path::new("/tmp/project"),
+            &legacy_profile_projection(Some(WorkflowReadinessProfile::SoloCooperative), None),
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .expect("explicit solo status");
+        assert_eq!(
+            solo.solo_adoption,
+            WorkflowLegacySoloAdoptionAvailability::AlreadySolo
+        );
+        assert_eq!(
+            solo.current_profile,
+            WorkflowReadinessProfile::SoloCooperative
+        );
+        assert!(solo.adopt_solo_argv.is_none());
+
+        let authority = WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+            from_phase: Some(StableId("1-discovery".to_owned())),
+            to_phase: StableId("2-definition".to_owned()),
+            snapshot_digest: format!("sha256:{}", "b".repeat(64)),
+        });
+        let status = profile_status_projection(
+            Path::new("/tmp/project"),
+            &legacy_profile_projection(None, Some(authority)),
+            format!("sha256:{}", "a".repeat(64)),
+        )
+        .expect("authority-bearing status");
+        assert_eq!(
+            status.solo_adoption,
+            WorkflowLegacySoloAdoptionAvailability::Ineligible
+        );
+        assert!(status.adopt_solo_argv.is_none());
     }
 
     #[test]

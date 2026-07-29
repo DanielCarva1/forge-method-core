@@ -35,6 +35,28 @@ and Domain Pack effective epoch. Use the canonical
 [identity table](../README.md#four-identitiesdo-not-collapse-them); never infer
 one from another.
 
+## Windows-to-WSL root association
+
+A host-side Windows workspace and a WSL path are not assumed to be the same
+project. When a native Windows binary is unavailable, a drive-path bridge first
+uses the local, unversioned `forge_wsl_bridge_map_v1` association described in
+the canonical start skill. The default location is
+`%LOCALAPPDATA%\Forge Method\wsl-bridges.json`, and
+`FORGE_WSL_BRIDGE_MAP` may select another local file. Each entry binds one exact
+normalized `host_root` to one listed WSL `distribution` and one absolute existing
+`linux_root`. Duplicate, prefix-only, malformed, or unknown-distribution entries
+are rejected.
+
+Without that association, `wslpath` is discovery only. A translated drive path
+may be used only when exactly one distribution resolves it to an existing
+project with a regular `.forge-method.yaml` Project Link. A fresh or unlinked
+translated destination is not initialized: the agent stops before `start` or
+`workflow init` and asks the operator to establish the local association. Direct
+`\\wsl.localhost\<distribution>\...` roots already identify the Linux tree
+and do not require a drive mapping. The chosen distribution, Linux root, binary,
+and proof source are retained once per chat. No host brand, distribution, user,
+drive, or repository is built into this contract.
+
 ## JSON handling
 
 - Treat `CliEnvelope.ok` as the result, not process exit alone.
@@ -206,6 +228,32 @@ A replacement begins from `start` and `workflow resume`. It must not require
 prior chat context. If durable state cannot reconstruct release, effective
 Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
+
+## Legacy profile adoption
+
+`forge-core workflow profile status --root <path> --json` is the read-only,
+host-neutral check for historical ledgers that predate readiness profiles. A
+legacy project remains `strict_external` until this command reports
+`solo_adoption=eligible` and publishes `data.adopt_solo_argv`. Eligibility is
+intentionally narrow: the genesis `project_imported` must omit
+`readiness_profile`, and the history before adoption may contain only that
+import plus kernel-admitted `release_upgraded` records. Workflow decisions,
+evidence, claims, coordination, intent, broker origin, and every other
+authority-bearing event make the first adoption route ineligible.
+
+The host executes the returned argv only after the ordinary chat has clearly
+chosen Solo Cooperative. The command rechecks both the exact ledger head and
+the exact project snapshot while retaining the workflow lock. It appends one
+`legacy_solo_profile_adopted` record with `cooperative_same_owner` provenance;
+it does not rewrite the historical genesis or claim a verified human presence,
+signature, reviewer separation, or broker event. An exact retry returns
+`already_adopted` without another record even if project files changed after the
+original transition; the retry receipt still identifies the original snapshot.
+A later ledger record makes the old adoption argv a conflict rather than a
+second write. A project whose genesis already selected `solo_cooperative`
+reports `already_solo` and needs no migration. Explicit `strict_external`, stale,
+tampered, reverse, conflicting, or unsupported history fails closed without a
+write. `start` and `workflow init` never perform this transition silently.
 
 ## Compatibility surfaces
 

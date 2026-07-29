@@ -12,14 +12,18 @@ use forge_core_authority::{
     WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    workflow_broker_expected_audience, GovernedPromotionReceipt, PrincipalId, RuntimeKind,
-    StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
-    WorkflowBrokerCredentialPurpose, WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind,
-    WorkflowBrokerHostBinding, WorkflowBrokerHostInteractionKind,
-    WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
-    WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
-    WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    workflow_broker_expected_audience, GovernedPromotionReceipt, PhaseAdvancedEvent, PrincipalId,
+    ProjectImportedEvent, RuntimeKind, StableId, WorkflowBrokerBoundOperation,
+    WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
+    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
+    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
+    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    WorkflowGovernanceEvent, WorkflowGovernanceReceiptDocument,
     WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+};
+use forge_core_workflow_governance_tcb::{
+    lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerIdentity,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -77,6 +81,37 @@ impl Consumer {
         Self { parent, app, state }
     }
 
+    fn new_start_ready_with_prefix(prefix: &str) -> Self {
+        static SEQ: AtomicUsize = AtomicUsize::new(0);
+        let sequence = SEQ.fetch_add(1, Ordering::SeqCst);
+        let parent = std::env::temp_dir().join(format!(
+            "{prefix}-start-ready-{}-{sequence}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&parent);
+        let app = parent.join("app");
+        fs::create_dir_all(&app).expect("start-ready consumer app");
+        fs::write(app.join("README.md"), "consumer project\n")
+            .expect("start-ready consumer artifact");
+
+        let output = bin()
+            .args(["start", "--root"])
+            .arg(&app)
+            .arg("--json")
+            .output()
+            .expect("bootstrap complete consumer through start");
+        let envelope = assert_ok(&output);
+        assert_eq!(envelope["command"], "start");
+        assert_eq!(envelope["data"]["actions_performed"][0], "initialized");
+        let state = PathBuf::from(
+            envelope["data"]["project"]["state_root"]
+                .as_str()
+                .expect("bootstrapped state root"),
+        );
+        assert!(state.join("state.yaml").is_file());
+        Self { parent, app, state }
+    }
+
     fn run(&self, tail: &[&str]) -> Output {
         let mut args = vec![
             "workflow".to_owned(),
@@ -126,6 +161,90 @@ fn assert_ok(output: &Output) -> Value {
     let envelope = json(output);
     assert_eq!(envelope["ok"], true);
     envelope
+}
+
+fn run_profile(consumer: &Consumer, action: &str, tail: &[String]) -> Output {
+    let mut args = vec![
+        "workflow".to_owned(),
+        "profile".to_owned(),
+        action.to_owned(),
+        "--root".to_owned(),
+        consumer.app.display().to_string(),
+    ];
+    args.extend(tail.iter().cloned());
+    bin()
+        .args(args)
+        .output()
+        .expect("run workflow profile command")
+}
+
+fn replace_with_legacy_profileless_genesis(consumer: &Consumer) {
+    assert_ok(&consumer.run(&["init", "--readiness-profile", "strict_external"]));
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let first = fs::read_to_string(&wal)
+        .expect("initialized WAL")
+        .lines()
+        .next()
+        .expect("genesis line")
+        .to_owned();
+    let document: WorkflowGovernanceReceiptDocument =
+        serde_json::from_str(&first).expect("typed genesis");
+    let record = document.workflow_governance_receipt;
+    let WorkflowGovernanceEvent::ProjectImported(imported) = record.event else {
+        panic!("first event must be project import")
+    };
+    let identity = WorkflowGovernanceLedgerIdentity {
+        project_id: record.project_id,
+        bundle_id: record.bundle_id,
+        bundle_digest: record.bundle_digest,
+    };
+    fs::remove_file(&wal).expect("remove test-only explicit genesis");
+    let mut ledger = lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock legacy WAL");
+    ledger
+        .initialize_unchecked_tcb(
+            &identity,
+            0,
+            WorkflowGovernanceEvent::ProjectImported(ProjectImportedEvent {
+                readiness_profile: None,
+                ..imported
+            }),
+        )
+        .expect("write canonical profile-less genesis");
+}
+
+fn execute_structured_argv(argv: &[Value]) -> Output {
+    let tokens = argv
+        .iter()
+        .map(|value| value.as_str().expect("argv string").to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(tokens.first().map(String::as_str), Some("forge-core"));
+    bin()
+        .args(tokens.iter().skip(1))
+        .output()
+        .expect("execute exact argv")
+}
+
+fn append_test_phase(consumer: &Consumer) {
+    let mut ledger =
+        lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock concurrent ledger");
+    let projection = ledger.recover().expect("recover concurrent ledger");
+    let head = projection.head_digest.clone().expect("current ledger head");
+    let identity = projection
+        .active_identity()
+        .expect("active identity")
+        .clone();
+    ledger
+        .append_unchecked_tcb_event(
+            &head,
+            &identity,
+            projection.next_state_version,
+            WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+                from_phase: Some(StableId("1-discovery".to_owned())),
+                to_phase: StableId("2-definition".to_owned()),
+                snapshot_digest: format!("sha256:{}", "9".repeat(64)),
+            }),
+        )
+        .expect("append concurrent phase event");
 }
 
 fn state_tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
@@ -457,6 +576,171 @@ fn action_packet<'a>(packet_set: &'a Value, kind: &str) -> &'a Value {
         .iter()
         .find(|packet| packet["authorization_kind"] == kind)
         .unwrap_or_else(|| panic!("missing {kind} action packet: {packet_set:#}"))
+}
+
+#[test]
+fn legacy_profileless_project_explicitly_adopts_solo_and_exact_retry_is_one_write() {
+    let consumer =
+        Consumer::new_start_ready_with_prefix("forge workflow legacy project with spaces");
+    replace_with_legacy_profileless_genesis(&consumer);
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let legacy_bytes = fs::read(&wal).expect("legacy WAL bytes");
+
+    let started = assert_ok(
+        &bin()
+            .args([
+                "start",
+                "--root",
+                consumer.app.to_str().expect("UTF-8 project root"),
+                "--json",
+            ])
+            .output()
+            .expect("run start against legacy project"),
+    );
+    assert_eq!(started["command"], "start");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after start"),
+        legacy_bytes,
+        "start must never adopt or rewrite a profile-less ledger",
+    );
+
+    let repeated_init = assert_ok(&consumer.run(&["init"]));
+    assert_eq!(
+        repeated_init["data"]["readiness_profile"],
+        "strict_external"
+    );
+    assert_eq!(fs::read(&wal).expect("WAL after init"), legacy_bytes);
+
+    let status = assert_ok(&run_profile(&consumer, "status", &[]));
+    assert_eq!(status["command"], "workflow.profile.status");
+    assert_eq!(status["data"]["current_profile"], "strict_external");
+    assert_eq!(status["data"]["legacy_profileless_genesis"], true);
+    assert_eq!(status["data"]["solo_adoption"], "eligible");
+    let argv = status["data"]["adopt_solo_argv"]
+        .as_array()
+        .expect("exact adoption argv");
+    assert_eq!(
+        argv[5].as_str().expect("root argv"),
+        consumer.app.display().to_string()
+    );
+
+    let adopted = assert_ok(&execute_structured_argv(argv));
+    assert_eq!(adopted["command"], "workflow.profile.adopt_solo");
+    assert_eq!(adopted["data"]["status"], "adopted");
+    assert_eq!(adopted["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(adopted["data"]["provenance"], "cooperative_same_owner");
+    let adopted_bytes = fs::read(&wal).expect("adopted WAL bytes");
+    assert!(adopted_bytes.starts_with(&legacy_bytes));
+
+    fs::write(
+        consumer.app.join("README.md"),
+        "project changed after the durable adoption\n",
+    )
+    .expect("change project after adoption");
+    let retried = assert_ok(&execute_structured_argv(argv));
+    assert_eq!(retried["data"]["status"], "already_adopted");
+    assert_eq!(
+        retried["data"]["snapshot_digest"], adopted["data"]["snapshot_digest"],
+        "the retry receipt must describe the original transition",
+    );
+    assert_eq!(fs::read(&wal).expect("retry WAL"), adopted_bytes);
+
+    for action in ["next", "resume"] {
+        let guidance = assert_ok(&consumer.run(&[action]));
+        assert_eq!(guidance["data"]["readiness_profile"], "solo_cooperative");
+        assert_eq!(
+            guidance["data"]["durable_assurance"]["status"],
+            "missing_objective"
+        );
+        assert_eq!(
+            guidance["data"]["authorization"]["action_packets"][0]["required_authority"]
+                ["approval_boundary"],
+            "cooperative_same_owner"
+        );
+        assert!(guidance["data"]["authorization"]["setup_gaps"]
+            .as_array()
+            .is_some_and(Vec::is_empty));
+    }
+}
+
+#[test]
+fn legacy_profile_adoption_rejects_stale_snapshot_and_explicit_strict_without_writes() {
+    let legacy = Consumer::new();
+    replace_with_legacy_profileless_genesis(&legacy);
+    let status = assert_ok(&run_profile(&legacy, "status", &[]));
+    let argv = status["data"]["adopt_solo_argv"]
+        .as_array()
+        .expect("eligible argv")
+        .clone();
+    fs::write(
+        legacy.app.join("README.md"),
+        "changed after status
+",
+    )
+    .expect("change project");
+    let wal = legacy.state.join("wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("WAL before stale apply");
+    let stale = execute_structured_argv(&argv);
+    assert_eq!(stale.status.code(), Some(4));
+    assert_eq!(json(&stale)["exit_reason"], "conflict");
+    assert_eq!(fs::read(&wal).expect("WAL after stale apply"), before);
+
+    let explicit = Consumer::new();
+    assert_ok(&explicit.run(&["init", "--readiness-profile", "strict_external"]));
+    let before = state_tree_snapshot(&explicit.state);
+    let status = assert_ok(&run_profile(&explicit, "status", &[]));
+    assert_eq!(status["data"]["solo_adoption"], "ineligible");
+    assert!(status["data"]["adopt_solo_argv"].is_null());
+    assert_eq!(state_tree_snapshot(&explicit.state), before);
+
+    let solo = Consumer::new();
+    assert_ok(&solo.run(&["init", "--readiness-profile", "solo_cooperative"]));
+    let before = state_tree_snapshot(&solo.state);
+    let status = assert_ok(&run_profile(&solo, "status", &[]));
+    assert_eq!(status["data"]["current_profile"], "solo_cooperative");
+    assert_eq!(status["data"]["solo_adoption"], "already_solo");
+    assert!(status["data"]["adopt_solo_argv"].is_null());
+    assert_eq!(state_tree_snapshot(&solo.state), before);
+}
+
+#[test]
+fn legacy_profile_adoption_rejects_concurrent_heads_and_retries_after_later_records() {
+    let concurrent = Consumer::new();
+    replace_with_legacy_profileless_genesis(&concurrent);
+    let status = assert_ok(&run_profile(&concurrent, "status", &[]));
+    let argv = status["data"]["adopt_solo_argv"]
+        .as_array()
+        .expect("eligible concurrent argv")
+        .clone();
+    append_test_phase(&concurrent);
+    let wal = concurrent.state.join("wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("WAL after concurrent head");
+    let stale = execute_structured_argv(&argv);
+    assert_eq!(stale.status.code(), Some(4));
+    assert_eq!(json(&stale)["exit_reason"], "conflict");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after rejected stale head"),
+        before
+    );
+
+    let later = Consumer::new();
+    replace_with_legacy_profileless_genesis(&later);
+    let status = assert_ok(&run_profile(&later, "status", &[]));
+    let argv = status["data"]["adopt_solo_argv"]
+        .as_array()
+        .expect("eligible retry argv")
+        .clone();
+    assert_ok(&execute_structured_argv(&argv));
+    append_test_phase(&later);
+    let wal = later.state.join("wal/workflow-governance.ndjson");
+    let before = fs::read(&wal).expect("WAL with later record");
+    let retry = execute_structured_argv(&argv);
+    assert_eq!(retry.status.code(), Some(4));
+    assert_eq!(json(&retry)["exit_reason"], "conflict");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after rejected late retry"),
+        before
+    );
 }
 
 #[test]

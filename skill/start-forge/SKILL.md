@@ -43,38 +43,74 @@ or routes a healthy project into agent-native workflow governance.
    ```
 
    On Windows only, when no native binary is found, the agent may prove and
-   retain one Windows-to-WSL bridge for the rest of this chat:
+   retain one Windows-to-WSL bridge for the rest of this chat. A Windows drive
+   path and a Linux path may name different copies of a repo, so path conversion
+   alone is never permission to initialize anything.
 
    1. Find `wsl.exe` through the host's normal executable lookup and enumerate
       distributions with `wsl.exe --list --quiet`. Do not assume a distribution
       name or Linux user.
-   2. Derive the distribution and Linux project path. For a
-      `\\wsl.localhost\<distribution>\...` root, use that exact distribution
-      and convert the remainder to `/...`. For a Windows drive path, ask each
-      listed distribution to convert the exact path with `wslpath`, passed as
-      one argv component, and accept only one conversion that resolves to the
-      same existing project. Zero or multiple proven matches stop plainly.
-   3. Warm only that distribution with
+   2. For a `\\wsl.localhost\<distribution>\...` root, use that exact
+      distribution and convert only the remainder to `/...`; the UNC path
+      already names the Linux tree directly.
+   3. For a Windows drive root, first look for the local, unversioned association
+      file. `FORGE_WSL_BRIDGE_MAP` may name it explicitly; otherwise use
+      `%LOCALAPPDATA%\Forge Method\wsl-bridges.json`. It has this closed shape:
+
+      ```json
+      {
+        "schema_version": "forge_wsl_bridge_map_v1",
+        "mappings": [
+          {
+            "host_root": "X:\\path\\to\\workspace",
+            "distribution": "chosen-distribution",
+            "linux_root": "/absolute/linux/project/root"
+          }
+        ]
+      }
+      ```
+
+      The file is local operator configuration and must stay outside every
+      project and outside version control. Require a regular file, the exact
+      schema, and exactly one mapping whose normalized `host_root` equals the
+      selected Windows project root. Reject duplicate, partial-prefix, unknown-
+      distribution, relative-root, or malformed matches. Never create or edit
+      the association silently.
+   4. When an exact association exists, verify that its distribution is listed
+      and that its `linux_root` is the existing directory selected for this
+      project. Use that distribution and root; do not also translate the drive
+      path with `wslpath`.
+   5. Without an association, `wslpath` may be used only as a read-only probe in
+      each listed distribution. Accept exactly one result only when the
+      translated directory already contains a regular `.forge-method.yaml`
+      Project Link. That existing link is enough to let the later `start`
+      command validate the full identity. If the translated destination has no
+      existing Forge identity, or zero/multiple distributions match, stop before
+      `start` or `workflow init` and explain that a local association is needed.
+      This fail-closed rule deliberately prevents Forge from initializing a
+      mounted copy while the user's real project lives elsewhere.
+   6. Warm only the selected distribution with
       `wsl.exe -d <distribution> -- true`.
-   4. Discover the binary inside that distribution with a constant lookup
+   7. Discover the binary inside that distribution with a constant lookup
       command (`command -v forge-core`, then `$HOME/.cargo/bin/forge-core`).
-      Do not hard-code `/home/<user>` and do not install or build as fallback.
-   5. Execute Forge as separate argv components:
+      Do not hard-code a home directory and do not install or build as fallback.
+   8. Execute Forge as separate argv components:
       `wsl.exe -d <distribution> -- <linux-forge-core> <forge-args...>`,
       using the proven Linux root for every Forge `--root` in this chat.
 
-   Retain the exact distribution, Linux root, and binary path after this
+   Retain the exact distribution, Linux root, binary path, and proof source
+   (`direct_unc`, `explicit_mapping`, or `existing_project_link`) after this
    single discovery. `/start-forge` and bridge discovery both remain once per
    chat, not once per task. For each later structured Forge argv, replace only
    its first `forge-core` executable component, preserve every later component,
-   verify its root is the proven Linux root, and execute those arguments after the retained
-   `wsl.exe -d <distribution> -- <linux-forge-core>` prefix rather than invoking
-   a missing Windows binary. Never rebuild argv from display text or
-   shell-quote a combined command. If executable discovery, path identity, or
-   the exact project cannot be proven, report that the bridge is unavailable
-   and stop; do not silently switch roots. This fallback is agent-operated and
-   host-neutral. Its success does **not** claim official conformance for Codex,
-   ZCode, Cursor, Claude, OpenCode, pi.dev, or any other host.
+   verify its root is the proven Linux root, and execute those arguments after
+   the retained `wsl.exe -d <distribution> -- <linux-forge-core>` prefix rather
+   than invoking a missing Windows binary. Never rebuild argv from display text
+   or shell-quote a combined command. If executable discovery, root association,
+   or exact project identity cannot be proven, report that the bridge is
+   unavailable and stop; do not silently switch roots. This fallback is agent-
+   operated and host-neutral. Its success does **not** claim official conformance
+   for Codex, ZCode, Cursor, Claude, OpenCode, pi.dev, or any other host.
 
 3. **Run `forge-core start`.** This is the zero-config bootstrap entry point.
    On a fresh repo with no Project Link and an unoccupied, symlink-free target it
@@ -117,6 +153,34 @@ or routes a healthy project into agent-native workflow governance.
    without mutation. An older P5c binary that genuinely lacks this subcommand
    may continue on its existing implicit release; ordinary status/upgrade
    errors still fail closed rather than triggering fallback.
+
+   After initialization and the release-status/upgrade check, run
+   **`forge-core workflow profile status --root "<project-root>" --json`**
+   exactly once. This command is read-only. `start` and `workflow init` never
+   silently change an old profile-less project.
+
+   - If `data.solo_adoption=eligible` and this chat has already clearly chosen
+     Solo Cooperative (for example, the user asked to dogfood as a solo
+     developer with agents), verify `data.adopt_solo_argv` is an argv array
+     shaped as `forge-core workflow profile adopt-solo --root
+     <same-project-root> --expected-head-digest <sha256> --expected-snapshot-digest
+     <sha256> --json`, then execute that exact array as tokens.
+   - If the chat has not chosen, ask one short plain-language question: "Este
+     projeto antigo deve passar para o modo solo com agentes?" Do not execute
+     adoption until the answer is clearly yes.
+   - If status says `already_adopted` or `already_solo`, continue silently
+     without another write. `already_solo` means the project started in Solo
+     Cooperative and needs no migration. If it is `ineligible`, explain the
+     returned reason plainly and do not invent a migration; an explicit
+     `strict_external` project remains strict.
+
+   After a successful adoption, run profile status once more and require
+   `data.current_profile=solo_cooperative` with no adoption argv. The durable
+   transition records cooperative same-owner provenance only; it never claims
+   verified human presence, an independent reviewer, a signature, a broker, or
+   enterprise compliance. Never rebuild the adoption command from display
+   text, never change either CAS digest, and never retry a stale/tampered error
+   without refreshing status.
 
    Then run **`forge-core workflow next --root "<project-root>" --json`**.
 
