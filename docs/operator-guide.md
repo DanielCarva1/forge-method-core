@@ -356,6 +356,15 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
+For a replacement agent, inspect `data.replacement_continuity`. Run a
+`recover_promotion` argv before new work, preserving every array element
+exactly. A `completed` promotion has no recovery argv. A blocking gap means
+stop and explain the plain-language summary; `resume` is read-only and will not
+recreate a worktree, edit a contract, repair a WAL, or reapply completed work.
+It also will not create a missing lock, finish an interrupted release rebase, or
+record a newer Domain Pack generation. Those conditions stop read-only resume
+until an explicit mutating command handles them.
+
 Preserve evidence before remediation. Never delete or recreate the sidecar,
 truncate a WAL, or provision a new trust root merely to make an integrity or
 state-loss error disappear.

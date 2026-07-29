@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Durable replacement-agent continuity for Solo dogfooding.** `workflow
+  resume` now preserves the ordinary guidance and adds a versioned,
+  host-neutral `replacement_continuity` projection. Fresh processes recover
+  objective revisions, recorded decision/evidence history, claim ownership,
+  validated Git worktrees, and promotion state from durable truth only.
+  Questions calculated by the current simulation remain explicitly separate
+  from recorded decisions. Interrupted
+  promotions expose exact argv arrays only after read-only recovery validation;
+  completed work never offers reapply, and stale, missing, expired,
+  strict-profile, or tampered state becomes a typed blocking gap without
+  automatic repair. Resume neither creates missing locks nor performs release
+  rebase or Domain Pack generation reconciliation.
 - **Explicit adoption of Solo Cooperative for safe legacy projects.** Added the
   read-only `workflow profile status` command and the CAS-bound
   `workflow profile adopt-solo` command. Eligible profile-less ledgers append one

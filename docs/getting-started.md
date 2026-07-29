@@ -148,7 +148,14 @@ newer binary never silently migrates project authority; the agent follows
   linked missing or partial state. Automatic bootstrap requires both no Project
   Link and an unoccupied, symlink-free target state path; preexisting sidecar
   state is preserved for explicit inspection.
-- Use `workflow resume` after agent/process replacement when state is healthy.
+- Use `workflow resume` once at the start of a new chat or after agent/process
+  replacement. It returns the normal guidance plus durable objective history,
+  recorded decision history, evidence, claims, checked worktrees, promotion
+  recovery state, typed gaps, and the same ranked next action. Questions
+  calculated now stay in the normal simulation fields and are not called
+  recovered decisions. `resume` does not use the old chat, create missing locks,
+  finish a release rebase, reconcile a generation, or repair inconsistent
+  state.
 - Use `domain-pack status` and `domain-pack recover` for lifecycle recovery.
 - Do not delete the sidecar to fix an integrity error; preserve and inspect it.
 

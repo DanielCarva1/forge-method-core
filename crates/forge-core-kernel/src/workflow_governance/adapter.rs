@@ -60,10 +60,11 @@ use forge_core_contracts::{
     DecisionAlternative, DecisionRequest, DecisionResolvedEvent, DomainPackCompositionGap,
     DomainPackCoreBinding, DomainPackLifecycleOperation, DomainPackRebasePlanDocument,
     DomainPackRebasePlanInput, DurableAssuranceEpistemicState, DurableAssuranceProjection,
-    EvaluatorObservedEvent, HumanDecisionClass, Phase, PhaseAdvancedEvent, PolicyCompletedEvent,
-    PostBuildVerifyAdmittedGateResult, PostBuildVerifyEpisodeAppliedEvent,
-    PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
-    PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ProtectedEffect, ReadinessTarget,
+    EvaluatorObservedEvent, HumanDecisionClass, IsolationContract, IsolationStatus, NextAction,
+    Phase, PhaseAdvancedEvent, PolicyCompletedEvent, PostBuildVerifyAdmittedGateResult,
+    PostBuildVerifyEpisodeAppliedEvent, PostBuildVerifyEpisodeDocument,
+    PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind, PrincipalId, ProjectImportedEvent,
+    ProjectLinkDocument, PromotionGitWorktreeBinding, ProtectedEffect, ReadinessTarget,
     ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
     WaiverAuthorizedEvent, WorkflowAdmittedCooperativeEvidence, WorkflowAssuranceClaimRole,
     WorkflowBrokerCredentialStatus, WorkflowBrokerExternalSetupBlockReason,
@@ -121,8 +122,9 @@ use forge_core_domain_pack_tcb::{
     LockedDomainPackLifecycleObservation,
 };
 use forge_core_store::claim_wal::{
-    project_claim_wal, retain_existing_claim_wal_projection, ClaimWalProjection,
-    ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
+    claim_wal_lock_path, claim_wal_path, project_claim_wal, project_existing_claim_wal,
+    retain_existing_claim_wal_projection, ClaimWalProjection, ClaimWalProjectionOptions,
+    ClaimWalProjectionStopPolicy,
 };
 use forge_core_store::retained_crash_replace::observe_file_crash_safe_under_owned_lock;
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
@@ -862,7 +864,7 @@ pub enum ReplacementClaimLiveness {
 
 /// Authority-free claim snapshot joined while the claim-WAL retained recovery
 /// lock is held. Returning this value releases that lock and carries no claim.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReplacementClaimProjection {
     pub claim: ClaimContract,
@@ -2686,12 +2688,379 @@ impl WorkflowGovernanceProjectAdapter {
     }
 
     /// Replacement-agent view. This is intentionally the same deterministic
-    /// authority derivation as `next`; chat history is not an input.
+    /// authority derivation as `next`; chat history is not an input. Unlike
+    /// `next`, this observer never repairs a pending release rebase, creates a
+    /// missing lock, or reconciles a Domain Pack generation into the ledger.
     ///
     /// # Errors
     /// Returns a typed error when durable guidance cannot be reconstructed.
     pub fn resume(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
-        self.next()
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_existing(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        self.require_effective_epoch_current(admitted, &effective, &projection)
+            .map_err(|_| {
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "the Domain Pack generation or pending release rebase requires an explicit mutating workflow command before continuation can be projected",
+                )
+            })?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let mut guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &snapshot,
+        )?;
+        let continuity = self.replacement_continuity(&guidance, &projection, &snapshot, now)?;
+        snapshot.revalidate()?;
+        let final_projection = ledger.recover()?;
+        if final_projection.head_digest != projection.head_digest
+            || final_projection.current_state_version() != projection.current_state_version()
+            || final_projection.records != projection.records
+        {
+            return Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "durable workflow state changed during read-only replacement inspection",
+                ),
+            );
+        }
+        guidance.replacement_continuity = Some(continuity);
+        Ok(guidance)
+    }
+
+    fn replacement_continuity(
+        &self,
+        guidance: &WorkflowGovernanceGuidance,
+        projection: &WorkflowGovernanceLedgerProjection,
+        snapshot: &RetainedWorkflowProjectSnapshot,
+        now: u64,
+    ) -> Result<WorkflowReplacementContinuity, WorkflowGovernanceAdapterError> {
+        let head = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        if head != guidance.ledger_head_digest || state_version != guidance.state_version {
+            return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
+        }
+        let claims = replacement_claims_from_existing_state(&self.binding.state_root, now)?;
+        let (objective_history, active_objective_digest, active_objective_revision, active_epoch) =
+            replacement_objective_history(&projection.records, guidance.readiness_profile)?;
+        let decision_history = replacement_decision_history(&projection.records);
+        let durable_pending_decisions = decision_history
+            .iter()
+            .filter(|decision| decision.status == WorkflowReplacementDecisionStatus::Unresolved)
+            .cloned()
+            .collect::<Vec<_>>();
+        let governed_evidence = replacement_evidence_history(&projection.records, guidance, now);
+
+        let workspace = super::promotion::inspect_replacement_workspace(
+            &self.binding,
+            guidance.readiness_profile,
+            guidance,
+            now,
+        );
+        let workspace_binding = workspace.clone();
+        let mut gaps = workspace
+            .gaps
+            .into_iter()
+            .map(|gap| WorkflowReplacementGap {
+                code: match gap.code {
+                    super::promotion::ReplacementWorkspaceGapCode::IsolationRegistryInvalid => {
+                        WorkflowReplacementGapCode::IsolationRegistryInvalid
+                    }
+                    super::promotion::ReplacementWorkspaceGapCode::IsolationConflict => {
+                        WorkflowReplacementGapCode::IsolationConflict
+                    }
+                    super::promotion::ReplacementWorkspaceGapCode::WorktreeMissing => {
+                        WorkflowReplacementGapCode::WorktreeMissing
+                    }
+                    super::promotion::ReplacementWorkspaceGapCode::GitWorktreeMismatch => {
+                        WorkflowReplacementGapCode::GitWorktreeMismatch
+                    }
+                    super::promotion::ReplacementWorkspaceGapCode::PromotionStateInvalid => {
+                        WorkflowReplacementGapCode::PromotionStateInvalid
+                    }
+                    super::promotion::ReplacementWorkspaceGapCode::PromotionRequiresSoloProfile => {
+                        WorkflowReplacementGapCode::PromotionRequiresSoloProfile
+                    }
+                },
+                blocking: gap.blocking,
+                summary: gap.summary,
+                isolation_id: gap.isolation_id,
+            })
+            .collect::<Vec<_>>();
+        let mut isolations = workspace
+            .isolations
+            .into_iter()
+            .map(|isolation| WorkflowReplacementIsolationAudit {
+                contract_path: isolation.contract_path,
+                contract_digest: isolation.contract_digest,
+                declared_worktree: isolation.declared_worktree,
+                validation: match isolation.validation {
+                    super::promotion::ReplacementIsolationValidation::Valid => {
+                        WorkflowReplacementIsolationValidation::Valid
+                    }
+                    super::promotion::ReplacementIsolationValidation::ProposedNotCreated => {
+                        WorkflowReplacementIsolationValidation::ProposedNotCreated
+                    }
+                    super::promotion::ReplacementIsolationValidation::RetiredWorktreeAbsent => {
+                        WorkflowReplacementIsolationValidation::RetiredWorktreeAbsent
+                    }
+                    super::promotion::ReplacementIsolationValidation::Missing => {
+                        WorkflowReplacementIsolationValidation::Missing
+                    }
+                    super::promotion::ReplacementIsolationValidation::Mismatched => {
+                        WorkflowReplacementIsolationValidation::Mismatched
+                    }
+                },
+                git: isolation.git,
+                gap_codes: isolation
+                    .gap_codes
+                    .into_iter()
+                    .map(|code| match code {
+                        super::promotion::ReplacementWorkspaceGapCode::IsolationRegistryInvalid => {
+                            WorkflowReplacementGapCode::IsolationRegistryInvalid
+                        }
+                        super::promotion::ReplacementWorkspaceGapCode::IsolationConflict => {
+                            WorkflowReplacementGapCode::IsolationConflict
+                        }
+                        super::promotion::ReplacementWorkspaceGapCode::WorktreeMissing => {
+                            WorkflowReplacementGapCode::WorktreeMissing
+                        }
+                        super::promotion::ReplacementWorkspaceGapCode::GitWorktreeMismatch => {
+                            WorkflowReplacementGapCode::GitWorktreeMismatch
+                        }
+                        super::promotion::ReplacementWorkspaceGapCode::PromotionStateInvalid => {
+                            WorkflowReplacementGapCode::PromotionStateInvalid
+                        }
+                        super::promotion::ReplacementWorkspaceGapCode::PromotionRequiresSoloProfile => {
+                            WorkflowReplacementGapCode::PromotionRequiresSoloProfile
+                        }
+                    })
+                    .collect(),
+                contract: isolation.contract,
+            })
+            .collect::<Vec<_>>();
+
+        for isolation in &mut isolations {
+            let Some(claim_id) = isolation.contract.claim_id.as_ref() else {
+                continue;
+            };
+            let linked = claims
+                .iter()
+                .find(|claim| claim.claim.id.0.as_str() == claim_id.0.as_str());
+            match linked {
+                None => {
+                    isolation
+                        .gap_codes
+                        .push(WorkflowReplacementGapCode::LinkedClaimMissing);
+                    gaps.push(WorkflowReplacementGap {
+                        code: WorkflowReplacementGapCode::LinkedClaimMissing,
+                        blocking: matches!(
+                            isolation.contract.status,
+                            IsolationStatus::Active | IsolationStatus::Merging
+                        ),
+                        summary: format!(
+                            "Isolation {} points to claim {} but that durable claim is absent.",
+                            isolation.contract.id.0, claim_id.0
+                        ),
+                        isolation_id: Some(isolation.contract.id.clone()),
+                    });
+                }
+                Some(claim)
+                    if claim.claim.claim.claimant_agent_id != isolation.contract.agent_id =>
+                {
+                    isolation
+                        .gap_codes
+                        .push(WorkflowReplacementGapCode::LinkedClaimOwnerMismatch);
+                    gaps.push(WorkflowReplacementGap {
+                        code: WorkflowReplacementGapCode::LinkedClaimOwnerMismatch,
+                        blocking: matches!(
+                            isolation.contract.status,
+                            IsolationStatus::Active | IsolationStatus::Merging
+                        ),
+                        summary: format!(
+                            "Isolation {} belongs to agent {}, but linked claim {} belongs to agent {}.",
+                            isolation.contract.id.0,
+                            isolation.contract.agent_id.0,
+                            claim_id.0,
+                            claim.claim.claim.claimant_agent_id.0
+                        ),
+                        isolation_id: Some(isolation.contract.id.clone()),
+                    });
+                }
+                Some(claim) => {
+                    let (code, summary) = match claim.liveness {
+                        ReplacementClaimLiveness::Live => continue,
+                        ReplacementClaimLiveness::Expired => (
+                            WorkflowReplacementGapCode::LinkedClaimExpired,
+                            format!(
+                                "Isolation {} is linked to claim {}, but that claim has expired.",
+                                isolation.contract.id.0, claim_id.0
+                            ),
+                        ),
+                        ReplacementClaimLiveness::NonActive => (
+                            WorkflowReplacementGapCode::LinkedClaimInactive,
+                            format!(
+                                "Isolation {} is linked to claim {}, but that claim was released or is otherwise inactive.",
+                                isolation.contract.id.0, claim_id.0
+                            ),
+                        ),
+                    };
+                    isolation.gap_codes.push(code);
+                    gaps.push(WorkflowReplacementGap {
+                        code,
+                        blocking: matches!(
+                            isolation.contract.status,
+                            IsolationStatus::Active | IsolationStatus::Merging
+                        ),
+                        summary,
+                        isolation_id: Some(isolation.contract.id.clone()),
+                    });
+                }
+            }
+            isolation.gap_codes.sort();
+            isolation.gap_codes.dedup();
+        }
+        gaps.sort_by(|left, right| {
+            left.isolation_id
+                .cmp(&right.isolation_id)
+                .then_with(|| left.code.cmp(&right.code))
+                .then_with(|| left.summary.cmp(&right.summary))
+        });
+        let promotions = workspace
+            .promotions
+            .into_iter()
+            .map(|promotion| {
+                let status = match promotion.status {
+                    super::promotion::ReplacementPromotionStatus::NotStarted => {
+                        WorkflowReplacementPromotionStatus::NotStarted
+                    }
+                    super::promotion::ReplacementPromotionStatus::Recoverable => {
+                        WorkflowReplacementPromotionStatus::Recoverable
+                    }
+                    super::promotion::ReplacementPromotionStatus::Completed => {
+                        WorkflowReplacementPromotionStatus::Completed
+                    }
+                    super::promotion::ReplacementPromotionStatus::BlockedCorrupt => {
+                        WorkflowReplacementPromotionStatus::BlockedCorrupt
+                    }
+                };
+                let recovery_argv = (status == WorkflowReplacementPromotionStatus::Recoverable)
+                    .then(|| {
+                        vec![
+                            "forge-core".to_owned(),
+                            "workflow".to_owned(),
+                            "promotion".to_owned(),
+                            "recover".to_owned(),
+                            "--root".to_owned(),
+                            self.binding.project_root.display().to_string(),
+                            "--isolation-id".to_owned(),
+                            promotion.isolation_id.0.clone(),
+                            "--expected-preview-digest".to_owned(),
+                            promotion
+                                .preview_digest
+                                .clone()
+                                .expect("recoverable promotion has preview digest"),
+                            "--json".to_owned(),
+                        ]
+                    });
+                WorkflowReplacementPromotionAudit {
+                    isolation_id: promotion.isolation_id,
+                    status,
+                    preview_digest: promotion.preview_digest,
+                    receipt_digest: promotion.receipt_digest,
+                    recovery_argv: recovery_argv.unwrap_or_default(),
+                    summary: promotion.summary,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let claim_projection_digest =
+            replacement_projection_digest("replacement.claims.v1", &claims)?;
+        let isolation_registry_digest =
+            replacement_projection_digest("replacement.isolations.v1", &isolations)?;
+        let promotion_projection_digest =
+            replacement_projection_digest("replacement.promotions.v1", &promotions)?;
+        let mut ranked_next_actions = replacement_ranked_actions(
+            &promotions,
+            &gaps,
+            &guidance.simulation.candidate_next_actions,
+        );
+        for (index, action) in ranked_next_actions.iter_mut().enumerate() {
+            action.rank = u32::try_from(index + 1).unwrap_or(u32::MAX);
+        }
+        let ranked_action_digest =
+            replacement_projection_digest("replacement.ranked_actions.v1", &ranked_next_actions)?;
+        snapshot.revalidate()?;
+        let final_claims = replacement_claims_from_existing_state(&self.binding.state_root, now)?;
+        if final_claims != claims {
+            return Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "claim state changed during read-only replacement inspection",
+                ),
+            );
+        }
+        let final_workspace = super::promotion::inspect_replacement_workspace(
+            &self.binding,
+            guidance.readiness_profile,
+            guidance,
+            now,
+        );
+        if final_workspace != workspace_binding {
+            return Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "isolation or promotion state changed during read-only replacement inspection",
+                ),
+            );
+        }
+        let status = if gaps.iter().any(|gap| gap.blocking)
+            || promotions.iter().any(|promotion| {
+                promotion.status == WorkflowReplacementPromotionStatus::BlockedCorrupt
+            }) {
+            WorkflowReplacementContinuityStatus::Blocked
+        } else {
+            WorkflowReplacementContinuityStatus::Ready
+        };
+        Ok(WorkflowReplacementContinuity {
+            schema_version: WORKFLOW_REPLACEMENT_CONTINUITY_SCHEMA_VERSION.to_owned(),
+            status,
+            binding: WorkflowReplacementContinuityBinding {
+                project_id: guidance.project_id.clone(),
+                readiness_profile: guidance.readiness_profile,
+                project_snapshot_digest: guidance.snapshot_digest.clone(),
+                ledger_head_digest: guidance.ledger_head_digest.clone(),
+                state_version: guidance.state_version,
+                active_release_digest: guidance.release.release.release_digest.clone(),
+                active_objective_digest,
+                active_objective_revision,
+                active_assurance_epoch: active_epoch,
+                claim_projection_digest,
+                isolation_registry_digest,
+                promotion_projection_digest,
+            },
+            objective_history,
+            durable_pending_decisions,
+            decision_history,
+            governed_evidence,
+            cooperative_evidence: guidance.cooperative_evidence.clone(),
+            claims,
+            isolations,
+            promotions,
+            gaps,
+            ranked_next_actions,
+            ranked_action_digest,
+        })
     }
 
     /// Return the exact durable release pin and the sole admitted adjacent
@@ -4418,7 +4787,7 @@ impl WorkflowGovernanceProjectAdapter {
             registry: transition_provenance.unwrap_or_else(|| registry.registry_provenance()),
             pin_origin: if projection.records.iter().any(|record| {
                 matches!(
-                    record.event,
+                    &record.event,
                     WorkflowGovernanceEvent::ReleaseUpgraded(_)
                         | WorkflowGovernanceEvent::CoreDomainPackRebased(_)
                 )
@@ -5269,6 +5638,7 @@ impl WorkflowGovernanceProjectAdapter {
                 action_packets: Vec::new(),
                 objective_management_packet: None,
             },
+            replacement_continuity: None,
         };
         let (action_packets, objective_management_packet) =
             if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
@@ -5697,6 +6067,217 @@ pub struct WorkflowGovernanceGuidance {
     pub agent_autonomy: WorkflowAgentAutonomyGuidance,
     pub durable_assurance: WorkflowDurableAssuranceGuidance,
     pub authorization: WorkflowAuthorizationGuidance,
+    /// Fresh-process continuation reconstructed only by `workflow resume`.
+    ///
+    /// Ordinary `workflow next` responses omit this additive block so every
+    /// historical field and action packet retains its exact public shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replacement_continuity: Option<WorkflowReplacementContinuity>,
+}
+
+pub const WORKFLOW_REPLACEMENT_CONTINUITY_SCHEMA_VERSION: &str =
+    "workflow_replacement_continuity_v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementContinuityStatus {
+    Ready,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementContinuityBinding {
+    pub project_id: StableId,
+    pub readiness_profile: WorkflowReadinessProfile,
+    pub project_snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+    pub active_release_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_objective_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_objective_revision: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_assurance_epoch: Option<u64>,
+    pub claim_projection_digest: String,
+    pub isolation_registry_digest: String,
+    pub promotion_projection_digest: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "authority_kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowReplacementObjectiveRevision {
+    CooperativeSameOwner {
+        active: bool,
+        record_digest: String,
+        sequence: u64,
+        state_version: u64,
+        objective: WorkflowActiveCooperativeObjective,
+    },
+    HumanIntent {
+        active: bool,
+        record_digest: String,
+        sequence: u64,
+        state_version: u64,
+        event: HumanIntentRevisionAcceptedEvent,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementDecisionStatus {
+    Unresolved,
+    Resolved,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementDecisionAudit {
+    pub policy_ref: StableId,
+    pub decision_ref: StableId,
+    pub status: WorkflowReplacementDecisionStatus,
+    pub need_record_digest: String,
+    pub need_sequence: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_record_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_alternative_ref: Option<StableId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementEvidenceStatus {
+    Admitted,
+    Rejected,
+    Expired,
+    Revoked,
+    HistoricalNotCurrent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementEvidenceAudit {
+    pub record_digest: String,
+    pub sequence: u64,
+    pub status: WorkflowReplacementEvidenceStatus,
+    pub evidence: EvaluatorObservedEvent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementIsolationValidation {
+    Valid,
+    ProposedNotCreated,
+    RetiredWorktreeAbsent,
+    Missing,
+    Mismatched,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementIsolationAudit {
+    pub contract_path: String,
+    pub contract_digest: String,
+    pub contract: IsolationContract,
+    pub declared_worktree: String,
+    pub validation: WorkflowReplacementIsolationValidation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git: Option<PromotionGitWorktreeBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gap_codes: Vec<WorkflowReplacementGapCode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementPromotionStatus {
+    NotStarted,
+    Recoverable,
+    Completed,
+    BlockedCorrupt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementPromotionAudit {
+    pub isolation_id: StableId,
+    pub status: WorkflowReplacementPromotionStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recovery_argv: Vec<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementGapCode {
+    IsolationRegistryInvalid,
+    IsolationConflict,
+    WorktreeMissing,
+    GitWorktreeMismatch,
+    LinkedClaimMissing,
+    LinkedClaimOwnerMismatch,
+    LinkedClaimExpired,
+    LinkedClaimInactive,
+    PromotionStateInvalid,
+    PromotionRequiresSoloProfile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementGap {
+    pub code: WorkflowReplacementGapCode,
+    pub blocking: bool,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub isolation_id: Option<StableId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowReplacementRankedActionKind {
+    RecoverPromotion,
+    ResolveContinuityGap,
+    GovernedNext,
+    Continue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementRankedAction {
+    pub rank: u32,
+    pub kind: WorkflowReplacementRankedActionKind,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub argv: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub governed_action: Option<NextAction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowReplacementContinuity {
+    pub schema_version: String,
+    pub status: WorkflowReplacementContinuityStatus,
+    pub binding: WorkflowReplacementContinuityBinding,
+    pub objective_history: Vec<WorkflowReplacementObjectiveRevision>,
+    /// Only decisions actually present as unresolved ledger events. Questions
+    /// calculated by the current simulation remain under
+    /// `simulation.candidate_decision_requests` and are never presented as
+    /// recovered chat history.
+    pub durable_pending_decisions: Vec<WorkflowReplacementDecisionAudit>,
+    pub decision_history: Vec<WorkflowReplacementDecisionAudit>,
+    pub governed_evidence: Vec<WorkflowReplacementEvidenceAudit>,
+    pub cooperative_evidence: Vec<WorkflowCooperativeEvidenceAudit>,
+    pub claims: Vec<ReplacementClaimProjection>,
+    pub isolations: Vec<WorkflowReplacementIsolationAudit>,
+    pub promotions: Vec<WorkflowReplacementPromotionAudit>,
+    pub gaps: Vec<WorkflowReplacementGap>,
+    pub ranked_next_actions: Vec<WorkflowReplacementRankedAction>,
+    pub ranked_action_digest: String,
 }
 
 /// Honest ledger-derived readback for the same-owner cooperative objective.
@@ -9501,6 +10082,327 @@ fn cooperative_bounded_offer_id(offer_id: &StableId) -> Option<StableId> {
         && offer_id.0.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES)
         .then(|| offer_id.clone())
 }
+
+fn replacement_claims(
+    projection: &ClaimWalProjection,
+    now: u64,
+) -> Result<Vec<ReplacementClaimProjection>, WorkflowGovernanceAdapterError> {
+    let now = i64::try_from(now).map_err(|_| WorkflowGovernanceAdapterError::ClockOverflow)?;
+    Ok(projection
+        .latest_by_claim_id
+        .iter()
+        .map(|(id, projected)| {
+            let liveness = if projection.active_by_claim_id.contains_key(id) {
+                if is_live(&projected.claim_contract, now) {
+                    ReplacementClaimLiveness::Live
+                } else {
+                    ReplacementClaimLiveness::Expired
+                }
+            } else {
+                ReplacementClaimLiveness::NonActive
+            };
+            ReplacementClaimProjection {
+                claim: projected.claim_contract.clone(),
+                last_sequence: projected.last_seq,
+                liveness,
+            }
+        })
+        .collect())
+}
+
+fn replacement_claims_from_existing_state(
+    state_root: &Path,
+    now: u64,
+) -> Result<Vec<ReplacementClaimProjection>, WorkflowGovernanceAdapterError> {
+    let wal = claim_wal_path(state_root);
+    let lock = claim_wal_lock_path(state_root);
+    let wal_exists = fs::symlink_metadata(&wal);
+    let lock_exists = fs::symlink_metadata(&lock);
+    match (&wal_exists, &lock_exists) {
+        (Err(wal_error), Err(lock_error))
+            if wal_error.kind() == std::io::ErrorKind::NotFound
+                && lock_error.kind() == std::io::ErrorKind::NotFound =>
+        {
+            return Ok(Vec::new());
+        }
+        (Ok(_), Ok(_)) => {}
+        _ => {
+            return Err(WorkflowGovernanceAdapterError::ClaimProjection(
+                "claim WAL and its lock must both be present or both be absent".to_owned(),
+            ));
+        }
+    }
+    let projection = project_existing_claim_wal(
+        state_root,
+        &ClaimWalProjectionOptions {
+            repair: false,
+            stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+        },
+    )
+    .map_err(|error| WorkflowGovernanceAdapterError::ClaimProjection(error.to_string()))?;
+    replacement_claims(&projection, now)
+}
+
+fn replacement_objective_history(
+    records: &[WorkflowGovernanceLedgerRecord],
+    readiness_profile: WorkflowReadinessProfile,
+) -> Result<
+    (
+        Vec<WorkflowReplacementObjectiveRevision>,
+        Option<String>,
+        Option<u64>,
+        Option<u64>,
+    ),
+    WorkflowGovernanceAdapterError,
+> {
+    let active_cooperative = (readiness_profile == WorkflowReadinessProfile::SoloCooperative)
+        .then(|| {
+            records.iter().rev().find_map(|record| {
+                matches!(
+                    &record.event,
+                    WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
+                )
+                .then_some(record.record_digest.as_str())
+            })
+        })
+        .flatten();
+    let active_human = (readiness_profile == WorkflowReadinessProfile::StrictExternal)
+        .then(|| {
+            records.iter().rev().find_map(|record| {
+                matches!(
+                    record.event,
+                    WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
+                )
+                .then_some(record.record_digest.as_str())
+            })
+        })
+        .flatten();
+    let mut history = Vec::new();
+    let mut active_digest = None;
+    let mut active_revision = None;
+    let mut active_epoch = None;
+    for record in records {
+        match &record.event {
+            WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) => {
+                let active = active_cooperative == Some(record.record_digest.as_str());
+                let objective = WorkflowActiveCooperativeObjective {
+                    objective_id: event.objective_id.clone(),
+                    revision: event.revision,
+                    assurance_epoch: event.assurance_epoch,
+                    proposal: event.proposal.clone(),
+                    objective_digest: event.objective_digest.clone(),
+                    previous_objective_digest: event.previous_objective_digest.clone(),
+                    revision_kind: event.revision_kind,
+                    revision_reason: event.revision_reason.clone(),
+                    accepted_record_digest: record.record_digest.clone(),
+                    accepted_sequence: record.sequence,
+                    accepted_state_version: record.state_version,
+                    snapshot_digest_at_acceptance: event.snapshot_digest.clone(),
+                    ledger_head_before_acceptance: event.ledger_head_digest.clone(),
+                    acceptance_action_packet_digest: event.acceptance_action_packet_digest.clone(),
+                    carrying_principal: event.carrying_principal.clone(),
+                    host_provenance: event.host_provenance.clone(),
+                    authority_basis: event.authority_basis,
+                    accepted_at_unix: event.accepted_at_unix,
+                };
+                if active {
+                    active_digest = Some(event.objective_digest.clone());
+                    active_revision = Some(event.revision);
+                    active_epoch = Some(event.assurance_epoch);
+                }
+                history.push(WorkflowReplacementObjectiveRevision::CooperativeSameOwner {
+                    active,
+                    record_digest: record.record_digest.clone(),
+                    sequence: record.sequence,
+                    state_version: record.state_version,
+                    objective,
+                });
+            }
+            WorkflowGovernanceEvent::HumanIntentRevisionAccepted(event) => {
+                let active = active_human == Some(record.record_digest.as_str());
+                if active {
+                    active_digest = Some(event.intent_digest.clone());
+                    active_revision = Some(event.intent.revision);
+                    active_epoch = Some(event.assurance_epoch);
+                }
+                history.push(WorkflowReplacementObjectiveRevision::HumanIntent {
+                    active,
+                    record_digest: record.record_digest.clone(),
+                    sequence: record.sequence,
+                    state_version: record.state_version,
+                    event: event.clone(),
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok((history, active_digest, active_revision, active_epoch))
+}
+
+fn replacement_decision_history(
+    records: &[WorkflowGovernanceLedgerRecord],
+) -> Vec<WorkflowReplacementDecisionAudit> {
+    let mut history = Vec::<WorkflowReplacementDecisionAudit>::new();
+    for record in records {
+        match &record.event {
+            WorkflowGovernanceEvent::DecisionNeedRaised(event) => {
+                history.push(WorkflowReplacementDecisionAudit {
+                    policy_ref: event.policy_ref.clone(),
+                    decision_ref: event.decision_ref.clone(),
+                    status: WorkflowReplacementDecisionStatus::Unresolved,
+                    need_record_digest: record.record_digest.clone(),
+                    need_sequence: record.sequence,
+                    resolution_record_digest: None,
+                    selected_alternative_ref: None,
+                });
+            }
+            WorkflowGovernanceEvent::DecisionResolved(event) => {
+                if let Some(pending) = history.iter_mut().rev().find(|pending| {
+                    pending.policy_ref == event.policy_ref
+                        && pending.decision_ref == event.decision_ref
+                        && pending.status == WorkflowReplacementDecisionStatus::Unresolved
+                }) {
+                    pending.status = WorkflowReplacementDecisionStatus::Resolved;
+                    pending.resolution_record_digest = Some(record.record_digest.clone());
+                    pending.selected_alternative_ref = Some(event.selected_alternative_ref.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    history
+}
+
+fn replacement_evidence_history(
+    records: &[WorkflowGovernanceLedgerRecord],
+    guidance: &WorkflowGovernanceGuidance,
+    now: u64,
+) -> Vec<WorkflowReplacementEvidenceAudit> {
+    let mut admitted = guidance
+        .simulation
+        .candidate_claim_results
+        .iter()
+        .flat_map(|claim| claim.accepted_evidence_refs.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if let Some(assurance) = guidance.durable_assurance.projection.as_ref() {
+        admitted.extend(assurance.lenses.iter().flat_map(|lens| {
+            lens.evidence
+                .iter()
+                .map(|evidence| evidence.evidence_ref.clone())
+        }));
+    }
+    let rejected = guidance
+        .simulation
+        .candidate_claim_results
+        .iter()
+        .flat_map(|claim| claim.rejected_evidence_refs.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let revoked = records
+        .iter()
+        .filter_map(|record| {
+            if let WorkflowGovernanceEvent::ReceiptRevoked(event) = &record.event {
+                Some(event.revoked_record_digest.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<BTreeSet<_>>();
+    records
+        .iter()
+        .filter_map(|record| {
+            let WorkflowGovernanceEvent::EvaluatorObserved(event) = &record.event else {
+                return None;
+            };
+            let status = if revoked.contains(&record.record_digest) {
+                WorkflowReplacementEvidenceStatus::Revoked
+            } else if event
+                .expires_at_unix
+                .is_some_and(|expires_at| expires_at < now)
+            {
+                WorkflowReplacementEvidenceStatus::Expired
+            } else if admitted.contains(&event.provenance.semantic_identity.0) {
+                WorkflowReplacementEvidenceStatus::Admitted
+            } else if rejected.contains(&event.provenance.semantic_identity.0) {
+                WorkflowReplacementEvidenceStatus::Rejected
+            } else {
+                WorkflowReplacementEvidenceStatus::HistoricalNotCurrent
+            };
+            Some(WorkflowReplacementEvidenceAudit {
+                record_digest: record.record_digest.clone(),
+                sequence: record.sequence,
+                status,
+                evidence: event.clone(),
+            })
+        })
+        .collect()
+}
+
+fn replacement_projection_digest(
+    domain: &str,
+    value: &impl Serialize,
+) -> Result<String, WorkflowGovernanceAdapterError> {
+    let canonical = serde_json_canonicalizer::to_vec(value).map_err(|error| {
+        WorkflowGovernanceAdapterError::InvalidObservation(format!(
+            "replacement continuity projection could not be canonicalized: {error}"
+        ))
+    })?;
+    let mut material = Vec::with_capacity(domain.len() + canonical.len() + 1);
+    material.extend_from_slice(domain.as_bytes());
+    material.push(0);
+    material.extend_from_slice(&canonical);
+    Ok(sha256_content_hash(&material))
+}
+
+fn replacement_ranked_actions(
+    promotions: &[WorkflowReplacementPromotionAudit],
+    gaps: &[WorkflowReplacementGap],
+    governed: &[NextAction],
+) -> Vec<WorkflowReplacementRankedAction> {
+    if let Some(gap) = gaps.iter().find(|gap| gap.blocking) {
+        return vec![WorkflowReplacementRankedAction {
+            rank: 1,
+            kind: WorkflowReplacementRankedActionKind::ResolveContinuityGap,
+            description: gap.summary.clone(),
+            argv: Vec::new(),
+            governed_action: None,
+        }];
+    }
+    let mut actions = promotions
+        .iter()
+        .filter(|promotion| promotion.status == WorkflowReplacementPromotionStatus::Recoverable)
+        .map(|promotion| WorkflowReplacementRankedAction {
+            rank: 0,
+            kind: WorkflowReplacementRankedActionKind::RecoverPromotion,
+            description: promotion.summary.clone(),
+            argv: promotion.recovery_argv.clone(),
+            governed_action: None,
+        })
+        .collect::<Vec<_>>();
+    let mut governed = governed.to_vec();
+    governed.sort_by_key(|action| (action.rank, action.id.0.clone()));
+    actions.extend(
+        governed
+            .into_iter()
+            .map(|action| WorkflowReplacementRankedAction {
+                rank: 0,
+                kind: WorkflowReplacementRankedActionKind::GovernedNext,
+                description: action.description.clone(),
+                argv: Vec::new(),
+                governed_action: Some(action),
+            }),
+    );
+    if actions.is_empty() {
+        actions.push(WorkflowReplacementRankedAction {
+            rank: 1,
+            kind: WorkflowReplacementRankedActionKind::Continue,
+            description: "Continue from the durable governed state shown above.".to_owned(),
+            argv: Vec::new(),
+            governed_action: None,
+        });
+    }
+    actions
+}
+
 fn active_cooperative_objective_from_ledger(
     records: &[WorkflowGovernanceLedgerRecord],
 ) -> Result<Option<WorkflowActiveCooperativeObjective>, WorkflowGovernanceAdapterError> {
@@ -13094,6 +13996,35 @@ mod tests {
             "read-only rebase recovery must not create placeholders or cleanup debt"
         );
         fs::remove_dir_all(root.parent().expect("fixture root")).expect("cleanup");
+    }
+
+    #[test]
+    fn resume_source_stays_on_existing_only_observer_paths() {
+        let source = include_str!("adapter.rs");
+        let start = source
+            .find("    pub fn resume(")
+            .expect("resume function source");
+        let end = source[start..]
+            .find("    fn replacement_continuity(")
+            .map(|offset| start + offset)
+            .expect("resume function boundary");
+        let resume = &source[start..end];
+        for forbidden in [
+            "self.next()",
+            "recover_pending_release_rebase",
+            "reconcile_effective_epoch",
+            "LockedWorkflowDomainPackContext::acquire(",
+            "lock_workflow_governance_ledger_tcb",
+        ] {
+            assert!(
+                !resume.contains(forbidden),
+                "read-only resume must not use mutating path {forbidden}"
+            );
+        }
+        assert!(resume.contains("LockedWorkflowDomainPackContext::acquire_existing"));
+        assert!(resume.contains("observe_existing_workflow_governance_ledger"));
+        assert!(resume.contains("require_effective_epoch_current"));
+        assert!(resume.contains("snapshot.revalidate()"));
     }
 
     #[test]

@@ -34,23 +34,24 @@ use forge_core_contracts::{
     GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    check_write_against_claims, derive_promotion_diff, evaluate_promotion_readiness, is_live,
-    promotion_domain_digest, rfc3339_to_unix, validate_isolation_contract,
-    PromotionInventoryDirectory, PromotionInventoryFile, PromotionPlanningError,
-    PromotionReadinessInput, WorkflowClaimResultStatus, WriteCheck,
+    check_write_against_claims, derive_promotion_diff, detect_isolation_conflict,
+    evaluate_promotion_readiness, is_live, promotion_domain_digest, rfc3339_to_unix,
+    validate_isolation_contract, PromotionInventoryDirectory, PromotionInventoryFile,
+    PromotionPlanningError, PromotionReadinessInput, WorkflowClaimResultStatus, WriteCheck,
 };
 use forge_core_store::claim_wal::{
     project_existing_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions,
     ClaimWalProjectionStopPolicy, CLAIM_WAL_LOCK_RELATIVE_PATH, CLAIM_WAL_RELATIVE_PATH,
 };
 use forge_core_store::replay_wal::{
-    acquire_replay_commit_guard, consume_replay_key_hash_under_effect_lock, replay_nonce_key_hash,
+    acquire_replay_commit_guard, consume_replay_key_hash_under_effect_lock,
+    inspect_replay_key_hash_under_effect_lock, replay_nonce_key_hash,
     reserve_replay_nonce_under_effect_lock, verify_consumed_replay_key_hash_under_effect_lock,
-    ReplayWalError,
+    ReplayReservationState, ReplayWalError,
 };
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::{
-    append_effect_replay_completion_under_lock,
+    acquire_existing_effect_store_lock, append_effect_replay_completion_under_lock,
     apply_existing_file_effect_transaction_to_retained_project_tree,
     inspect_split_root_effect_transaction_under_lock,
     recover_existing_file_effect_transaction_to_retained_project_tree, sha256_content_hash,
@@ -59,14 +60,18 @@ use forge_core_store::{
     SplitRootEffectTransactionStage,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 const MAX_PROMOTION_SNAPSHOT_ENTRIES: usize = 200_000;
 const MAX_PROMOTION_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
-const MAX_ISOLATION_DOCUMENTS: usize = 10_000;
-const MAX_ISOLATION_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_ISOLATION_DOCUMENTS: usize = 4_096;
+const MAX_ISOLATION_DOCUMENT_BYTES: u64 = 1024 * 1024;
+const MAX_ISOLATION_DOCUMENT_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_PROMOTION_STATE_DOCUMENTS: usize = 4_096;
+const MAX_PROMOTION_STATE_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
 pub(super) const PROMOTION_EFFECT_LOCK_RELATIVE_PATH: &str = "promotion/apply.lock";
 const PROMOTION_EFFECT_WAL_RELATIVE_PATH: &str = "promotion/effects.ndjson";
@@ -252,6 +257,68 @@ struct IsolationSelection {
     relative_path: String,
     raw_digest: String,
     contract: IsolationContract,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum ReplacementWorkspaceGapCode {
+    IsolationRegistryInvalid,
+    IsolationConflict,
+    WorktreeMissing,
+    GitWorktreeMismatch,
+    PromotionStateInvalid,
+    PromotionRequiresSoloProfile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ReplacementWorkspaceGap {
+    pub code: ReplacementWorkspaceGapCode,
+    pub blocking: bool,
+    pub summary: String,
+    pub isolation_id: Option<StableId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReplacementIsolationValidation {
+    Valid,
+    ProposedNotCreated,
+    RetiredWorktreeAbsent,
+    Missing,
+    Mismatched,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ReplacementIsolationInspection {
+    pub contract_path: String,
+    pub contract_digest: String,
+    pub contract: IsolationContract,
+    pub declared_worktree: String,
+    pub validation: ReplacementIsolationValidation,
+    pub git: Option<PromotionGitWorktreeBinding>,
+    pub gap_codes: Vec<ReplacementWorkspaceGapCode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReplacementPromotionStatus {
+    NotStarted,
+    Recoverable,
+    Completed,
+    BlockedCorrupt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ReplacementPromotionInspection {
+    pub isolation_id: StableId,
+    pub status: ReplacementPromotionStatus,
+    pub preview_digest: Option<String>,
+    pub receipt_digest: Option<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(super) struct ReplacementWorkspaceInspection {
+    pub isolations: Vec<ReplacementIsolationInspection>,
+    pub promotions: Vec<ReplacementPromotionInspection>,
+    pub gaps: Vec<ReplacementWorkspaceGap>,
 }
 
 /// Kernel-only prepared promotion observation. It deliberately implements
@@ -843,6 +910,12 @@ struct PromotionReplayIntent {
     publication_capability_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     preview: Option<GovernedPromotionPreview>,
+}
+
+#[derive(Debug, Default)]
+struct PromotionStateBudget {
+    documents: usize,
+    bytes: u64,
 }
 
 pub(super) fn inspect_promotion_retry_under_lock(
@@ -2484,6 +2557,16 @@ fn verify_promotion_receipt(
     .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
     let original_provenance_reconstructed =
         original_provenance_digest == &expected_original_provenance.digest;
+    let disclosed_legacy_v1_recovery =
+        receipt.recovery_execution.as_ref().is_some_and(|recovery| {
+            recovery.recovery_kind == PROMOTION_LEGACY_V1_PRE_BEGIN_RECOVERY_KIND
+        });
+    if !original_provenance_reconstructed && !disclosed_legacy_v1_recovery {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "original execution provenance digest differs from the approved receipt semantics"
+                .to_owned(),
+        ));
+    }
     let mut replay_without_intent = receipt.replay.clone();
     replay_without_intent.intent_digest.clear();
     let mut intent = PromotionReplayIntent {
@@ -2729,10 +2812,957 @@ fn debug_test_promotion_crash(point: &str) {
 #[cfg(not(debug_assertions))]
 fn debug_test_promotion_crash(_point: &str) {}
 
+pub(super) fn inspect_replacement_workspace(
+    binding: &WorkflowGovernanceProjectBinding,
+    readiness_profile: WorkflowReadinessProfile,
+    guidance: &WorkflowGovernanceGuidance,
+    now: u64,
+) -> ReplacementWorkspaceInspection {
+    let mut result = ReplacementWorkspaceInspection::default();
+    let registry_root = binding.state_root.join("contracts").join("isolations");
+    let selections = match fs::symlink_metadata(&registry_root) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::IsolationRegistryInvalid,
+                true,
+                format!("The isolation registry could not be read without changing it: {error}"),
+                None,
+            ));
+            return result;
+        }
+        Ok(_) => match load_isolation_registry(&binding.state_root) {
+            Ok(selections) => selections,
+            Err(error) => {
+                result.gaps.push(replacement_gap(
+                    ReplacementWorkspaceGapCode::IsolationRegistryInvalid,
+                    true,
+                    format!("The isolation registry is not trustworthy: {error}"),
+                    None,
+                ));
+                return result;
+            }
+        },
+    };
+
+    let mut seen_ids = BTreeSet::new();
+    for isolation in &selections {
+        if !seen_ids.insert(isolation.contract.id.clone()) {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::IsolationRegistryInvalid,
+                true,
+                format!(
+                    "Isolation id {} appears in more than one durable contract.",
+                    isolation.contract.id.0
+                ),
+                Some(isolation.contract.id.clone()),
+            ));
+        }
+    }
+    for (index, isolation) in selections.iter().enumerate() {
+        let previous = selections[..index]
+            .iter()
+            .map(|candidate| &candidate.contract)
+            .collect::<Vec<_>>();
+        if let Err(error) = detect_isolation_conflict(&isolation.contract, &previous) {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::IsolationConflict,
+                true,
+                format!(
+                    "Isolation {} conflicts with another live isolation: {error}",
+                    isolation.contract.id.0
+                ),
+                Some(isolation.contract.id.clone()),
+            ));
+        }
+    }
+
+    let destination = canonical_directory(&binding.project_root, "replacement destination root");
+    for isolation in &selections {
+        let mut gap_codes = result
+            .gaps
+            .iter()
+            .filter(|gap| gap.isolation_id.as_ref() == Some(&isolation.contract.id))
+            .map(|gap| gap.code)
+            .collect::<Vec<_>>();
+        let declared = match declared_worktree_candidate(
+            &binding.project_root,
+            &isolation.contract.worktree_path,
+        ) {
+            Ok(path) => path,
+            Err(error) => {
+                gap_codes.push(ReplacementWorkspaceGapCode::GitWorktreeMismatch);
+                result.gaps.push(replacement_gap(
+                    ReplacementWorkspaceGapCode::GitWorktreeMismatch,
+                    matches!(
+                        isolation.contract.status,
+                        IsolationStatus::Active | IsolationStatus::Merging
+                    ),
+                    format!(
+                        "Isolation {} declares an invalid worktree path: {error}",
+                        isolation.contract.id.0
+                    ),
+                    Some(isolation.contract.id.clone()),
+                ));
+                binding
+                    .project_root
+                    .join(&isolation.contract.worktree_path.0)
+            }
+        };
+        let declared_text = declared.display().to_string();
+        let live = matches!(
+            isolation.contract.status,
+            IsolationStatus::Active | IsolationStatus::Merging
+        );
+        let (validation, git) = match fs::symlink_metadata(&declared) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match isolation.contract.status {
+                    IsolationStatus::Proposed => {
+                        (ReplacementIsolationValidation::ProposedNotCreated, None)
+                    }
+                    IsolationStatus::Merged | IsolationStatus::Abandoned => {
+                        (ReplacementIsolationValidation::RetiredWorktreeAbsent, None)
+                    }
+                    IsolationStatus::Active | IsolationStatus::Merging => {
+                        gap_codes.push(ReplacementWorkspaceGapCode::WorktreeMissing);
+                        result.gaps.push(replacement_gap(
+                            ReplacementWorkspaceGapCode::WorktreeMissing,
+                            true,
+                            format!(
+                                "Isolation {} is live, but its declared worktree is missing.",
+                                isolation.contract.id.0
+                            ),
+                            Some(isolation.contract.id.clone()),
+                        ));
+                        (ReplacementIsolationValidation::Missing, None)
+                    }
+                }
+            }
+            Err(error) => {
+                gap_codes.push(ReplacementWorkspaceGapCode::GitWorktreeMismatch);
+                result.gaps.push(replacement_gap(
+                    ReplacementWorkspaceGapCode::GitWorktreeMismatch,
+                    live,
+                    format!(
+                        "Isolation {} worktree could not be inspected: {error}",
+                        isolation.contract.id.0
+                    ),
+                    Some(isolation.contract.id.clone()),
+                ));
+                (ReplacementIsolationValidation::Mismatched, None)
+            }
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                gap_codes.push(ReplacementWorkspaceGapCode::GitWorktreeMismatch);
+                result.gaps.push(replacement_gap(
+                    ReplacementWorkspaceGapCode::GitWorktreeMismatch,
+                    live,
+                    format!(
+                        "Isolation {} worktree is not a no-follow directory.",
+                        isolation.contract.id.0
+                    ),
+                    Some(isolation.contract.id.clone()),
+                ));
+                (ReplacementIsolationValidation::Mismatched, None)
+            }
+            Ok(_) => {
+                let observed = match &destination {
+                    Ok(destination) => canonical_directory(
+                        &declared,
+                        "replacement isolation worktree",
+                    )
+                    .and_then(|source| {
+                        observe_git_worktree(&source, destination, &isolation.contract.branch_name)
+                    }),
+                    Err(error) => Err(PromotionPreviewError::GitWorktree(format!(
+                        "canonical destination could not be retained: {error}"
+                    ))),
+                };
+                match observed {
+                    Ok(observed) => (
+                        ReplacementIsolationValidation::Valid,
+                        Some(observed.binding),
+                    ),
+                    Err(error) => {
+                        gap_codes.push(ReplacementWorkspaceGapCode::GitWorktreeMismatch);
+                        result.gaps.push(replacement_gap(
+                            ReplacementWorkspaceGapCode::GitWorktreeMismatch,
+                            live,
+                            format!(
+                                "Isolation {} is not the declared branch/worktree in the canonical repository: {error}",
+                                isolation.contract.id.0
+                            ),
+                            Some(isolation.contract.id.clone()),
+                        ));
+                        (ReplacementIsolationValidation::Mismatched, None)
+                    }
+                }
+            }
+        };
+        gap_codes.sort();
+        gap_codes.dedup();
+        result.isolations.push(ReplacementIsolationInspection {
+            contract_path: isolation.relative_path.clone(),
+            contract_digest: isolation.raw_digest.clone(),
+            contract: isolation.contract.clone(),
+            declared_worktree: declared_text,
+            validation,
+            git,
+            gap_codes,
+        });
+    }
+
+    inspect_replacement_promotions(
+        binding,
+        readiness_profile,
+        guidance,
+        now,
+        &selections,
+        &mut result,
+    );
+    result.isolations.sort_by(|left, right| {
+        left.contract
+            .id
+            .0
+            .cmp(&right.contract.id.0)
+            .then_with(|| left.contract_path.cmp(&right.contract_path))
+    });
+    result.promotions.sort_by(|left, right| {
+        left.isolation_id
+            .0
+            .cmp(&right.isolation_id.0)
+            .then_with(|| left.preview_digest.cmp(&right.preview_digest))
+            .then_with(|| {
+                replacement_promotion_status_rank(left.status)
+                    .cmp(&replacement_promotion_status_rank(right.status))
+            })
+    });
+    result.gaps.sort_by(|left, right| {
+        left.isolation_id
+            .cmp(&right.isolation_id)
+            .then_with(|| left.code.cmp(&right.code))
+            .then_with(|| left.summary.cmp(&right.summary))
+    });
+    result
+}
+
+fn replacement_gap(
+    code: ReplacementWorkspaceGapCode,
+    blocking: bool,
+    summary: String,
+    isolation_id: Option<StableId>,
+) -> ReplacementWorkspaceGap {
+    ReplacementWorkspaceGap {
+        code,
+        blocking,
+        summary,
+        isolation_id,
+    }
+}
+
+const fn replacement_promotion_status_rank(status: ReplacementPromotionStatus) -> u8 {
+    match status {
+        ReplacementPromotionStatus::NotStarted => 0,
+        ReplacementPromotionStatus::Recoverable => 1,
+        ReplacementPromotionStatus::Completed => 2,
+        ReplacementPromotionStatus::BlockedCorrupt => 3,
+    }
+}
+
+fn inspect_replacement_promotions(
+    binding: &WorkflowGovernanceProjectBinding,
+    readiness_profile: WorkflowReadinessProfile,
+    guidance: &WorkflowGovernanceGuidance,
+    now: u64,
+    selections: &[IsolationSelection],
+    result: &mut ReplacementWorkspaceInspection,
+) {
+    let promotion_root = binding.state_root.join("promotion");
+    match fs::symlink_metadata(&promotion_root) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            add_not_started_promotions(selections, &BTreeSet::new(), result);
+            return;
+        }
+        Err(error) => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                format!("Promotion state could not be inspected: {error}"),
+                None,
+            ));
+            return;
+        }
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                "Promotion state is not a no-follow directory.".to_owned(),
+                None,
+            ));
+            return;
+        }
+        Ok(_) => {}
+    }
+    let effect_lock = match acquire_existing_effect_store_lock(
+        &binding.state_root,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+    ) {
+        Ok(lock) => lock,
+        Err(error) => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                format!(
+                    "Promotion state exists, but its existing lock could not be retained: {error}"
+                ),
+                None,
+            ));
+            return;
+        }
+    };
+    let mut budget = PromotionStateBudget::default();
+    let intents = match promotion_state_leaf_names(&promotion_root.join("intents"), &mut budget) {
+        Ok(names) => names,
+        Err(reason) => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                reason,
+                None,
+            ));
+            return;
+        }
+    };
+    let receipts = match promotion_state_leaf_names(&promotion_root.join("receipts"), &mut budget) {
+        Ok(names) => names,
+        Err(reason) => {
+            result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                reason,
+                None,
+            ));
+            return;
+        }
+    };
+    let all_digests = intents
+        .iter()
+        .chain(receipts.iter())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let mut touched_isolations = BTreeSet::new();
+    let mut read_bytes = 0_u64;
+    let mut legacy_previews: Option<
+        Result<BTreeMap<String, GovernedPromotionPreview>, PromotionApplyError>,
+    > = None;
+    for digest in all_digests {
+        let intent = if intents.contains(&digest) {
+            match read_promotion_state_document(&effect_lock, "intents", &digest, &mut read_bytes) {
+                Ok(bytes) => serde_json::from_slice::<PromotionReplayIntent>(&bytes)
+                    .map_err(|error| format!("promotion intent {digest} is invalid: {error}")),
+                Err(error) => Err(error),
+            }
+            .ok()
+        } else {
+            None
+        };
+        let receipt_result = if receipts.contains(&digest) {
+            match read_promotion_state_document(&effect_lock, "receipts", &digest, &mut read_bytes)
+            {
+                Ok(bytes) => serde_json::from_slice::<GovernedPromotionReceipt>(&bytes)
+                    .map_err(|error| format!("promotion receipt {digest} is invalid: {error}")),
+                Err(error) => Err(error),
+            }
+            .map(Some)
+        } else {
+            Ok(None)
+        };
+        let expected_digest = format!("sha256:{digest}");
+        match receipt_result {
+            Err(reason) => result.gaps.push(replacement_gap(
+                ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                true,
+                reason,
+                None,
+            )),
+            Ok(Some(receipt)) => {
+                let isolation_id = receipt.preview.source.isolation_id.clone();
+                touched_isolations.insert(isolation_id.clone());
+                let validation = (|| {
+                    let intent = intent.as_ref().ok_or_else(|| {
+                        PromotionApplyError::ReceiptInvalid(
+                            "receipt has no matching durable intent".to_owned(),
+                        )
+                    })?;
+                    validate_intent_request(intent, &isolation_id, &expected_digest)?;
+                    verify_promotion_receipt(&receipt, &expected_digest)?;
+                    verify_receipt_matches_intent(&receipt, intent)?;
+                    verify_consumed_replay_binding_under_lock(binding, &effect_lock, &receipt)
+                })();
+                match validation {
+                    Ok(()) => result.promotions.push(ReplacementPromotionInspection {
+                        isolation_id,
+                        status: ReplacementPromotionStatus::Completed,
+                        preview_digest: Some(expected_digest),
+                        receipt_digest: Some(receipt.receipt_digest),
+                        summary:
+                            "This promotion has a valid durable receipt and consumed replay record."
+                                .to_owned(),
+                    }),
+                    Err(error) => {
+                        result.promotions.push(ReplacementPromotionInspection {
+                            isolation_id: isolation_id.clone(),
+                            status: ReplacementPromotionStatus::BlockedCorrupt,
+                            preview_digest: Some(expected_digest),
+                            receipt_digest: Some(receipt.receipt_digest),
+                            summary: format!(
+                                "This promotion cannot be trusted or recovered automatically: {error}"
+                            ),
+                        });
+                        result.gaps.push(replacement_gap(
+                            ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                            true,
+                            format!(
+                                "Promotion state for isolation {} is invalid: {error}",
+                                isolation_id.0
+                            ),
+                            Some(isolation_id),
+                        ));
+                    }
+                }
+            }
+            Ok(None) => {
+                let Some(intent) = intent else {
+                    result.gaps.push(replacement_gap(
+                        ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                        true,
+                        format!("Promotion intent {expected_digest} could not be decoded safely."),
+                        None,
+                    ));
+                    continue;
+                };
+                let inspection = inspect_split_root_effect_transaction_under_lock(
+                    &binding.state_root,
+                    &effect_lock,
+                    PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+                    PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+                    &intent.transaction_id.0,
+                );
+                let mut preview = inspection
+                    .as_ref()
+                    .ok()
+                    .and_then(|inspection| inspection.as_ref())
+                    .and_then(|inspection| preview_from_effect_inspection(inspection).ok())
+                    .or_else(|| intent.preview.clone());
+                if preview.is_none()
+                    && intent.schema_version == "governed_promotion_intent_v1"
+                    && inspection.as_ref().is_ok_and(Option::is_none)
+                {
+                    if let Err(error) = validate_intent_request(
+                        &intent,
+                        &StableId("legacy.intent.unbound".to_owned()),
+                        &expected_digest,
+                    ) {
+                        result.gaps.push(replacement_gap(
+                            ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                            true,
+                            format!(
+                                "Promotion intent {expected_digest} is not a valid legacy recovery authority: {error}"
+                            ),
+                            None,
+                        ));
+                        continue;
+                    }
+                    if legacy_previews.is_none() {
+                        legacy_previews = Some(reconstruct_legacy_v1_previews(
+                            binding, guidance, now, selections,
+                        ));
+                    }
+                    preview = legacy_previews
+                        .as_ref()
+                        .and_then(|previews| previews.as_ref().ok())
+                        .and_then(|previews| previews.get(&expected_digest))
+                        .cloned();
+                }
+                let Some(preview) = preview else {
+                    let detail = legacy_previews
+                        .as_ref()
+                        .and_then(|previews| previews.as_ref().err())
+                        .map_or_else(
+                            || {
+                                "no trustworthy isolation/preview binding could be reconstructed"
+                                    .to_owned()
+                            },
+                            ToString::to_string,
+                        );
+                    result.gaps.push(replacement_gap(
+                        ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                        true,
+                        format!(
+                            "Promotion intent {expected_digest} has no trustworthy isolation/preview binding: {detail}."
+                        ),
+                        None,
+                    ));
+                    continue;
+                };
+                let isolation_id = preview.source.isolation_id.clone();
+                touched_isolations.insert(isolation_id.clone());
+                if readiness_profile != WorkflowReadinessProfile::SoloCooperative {
+                    result.promotions.push(ReplacementPromotionInspection {
+                        isolation_id: isolation_id.clone(),
+                        status: ReplacementPromotionStatus::BlockedCorrupt,
+                        preview_digest: Some(expected_digest),
+                        receipt_digest: None,
+                        summary: "An incomplete local promotion exists, but this readiness profile does not admit solo recovery.".to_owned(),
+                    });
+                    result.gaps.push(replacement_gap(
+                        ReplacementWorkspaceGapCode::PromotionRequiresSoloProfile,
+                        true,
+                        format!(
+                            "Isolation {} has an incomplete promotion that requires the solo_cooperative profile.",
+                            isolation_id.0
+                        ),
+                        Some(isolation_id),
+                    ));
+                    continue;
+                }
+                let validation = inspection
+                    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))
+                    .and_then(|inspection| {
+                        validate_recoverable_promotion(
+                            binding,
+                            &effect_lock,
+                            &intent,
+                            preview,
+                            inspection,
+                            &expected_digest,
+                        )
+                    });
+                match validation {
+                    Ok(()) => result.promotions.push(ReplacementPromotionInspection {
+                        isolation_id,
+                        status: ReplacementPromotionStatus::Recoverable,
+                        preview_digest: Some(expected_digest),
+                        receipt_digest: None,
+                        summary: "A previous promotion stopped safely. Recover it before starting new work.".to_owned(),
+                    }),
+                    Err(error) => {
+                        result.promotions.push(ReplacementPromotionInspection {
+                            isolation_id: isolation_id.clone(),
+                            status: ReplacementPromotionStatus::BlockedCorrupt,
+                            preview_digest: Some(expected_digest),
+                            receipt_digest: None,
+                            summary: format!(
+                                "The incomplete promotion is not safe to recover automatically: {error}"
+                            ),
+                        });
+                        result.gaps.push(replacement_gap(
+                            ReplacementWorkspaceGapCode::PromotionStateInvalid,
+                            true,
+                            format!(
+                                "Promotion state for isolation {} needs manual repair: {error}",
+                                isolation_id.0
+                            ),
+                            Some(isolation_id),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    if let Err(error) = effect_lock.validate_retained_lock_file() {
+        result.gaps.push(replacement_gap(
+            ReplacementWorkspaceGapCode::PromotionStateInvalid,
+            true,
+            format!("Promotion state changed during read-only inspection: {error}"),
+            None,
+        ));
+    }
+    add_not_started_promotions(selections, &touched_isolations, result);
+}
+
+fn reconstruct_legacy_v1_previews(
+    binding: &WorkflowGovernanceProjectBinding,
+    guidance: &WorkflowGovernanceGuidance,
+    now: u64,
+    selections: &[IsolationSelection],
+) -> Result<BTreeMap<String, GovernedPromotionPreview>, PromotionApplyError> {
+    let destination = RetainedProjectTree::capture(
+        &binding.project_root,
+        MAX_PROMOTION_SNAPSHOT_ENTRIES,
+        MAX_PROMOTION_SNAPSHOT_BYTES,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let claim_wal = binding.state_root.join(CLAIM_WAL_RELATIVE_PATH);
+    let claim_lock = binding.state_root.join(CLAIM_WAL_LOCK_RELATIVE_PATH);
+    let claim_projection = match (
+        path_exists_no_follow(&claim_wal).map_err(PromotionApplyError::Preview)?,
+        path_exists_no_follow(&claim_lock).map_err(PromotionApplyError::Preview)?,
+    ) {
+        (false, false) => None,
+        (true, true) => Some(
+            project_existing_claim_wal(
+                &binding.state_root,
+                &ClaimWalProjectionOptions {
+                    repair: false,
+                    stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+                },
+            )
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?,
+        ),
+        _ => {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "claim WAL and its existing lock must both be present or both be absent".to_owned(),
+            ))
+        }
+    };
+    let mut previews = BTreeMap::new();
+    for isolation in selections
+        .iter()
+        .filter(|selection| selection.contract.status == IsolationStatus::Active)
+    {
+        let Ok(prepared) = derive_governed_promotion(
+            binding,
+            &isolation.contract.id,
+            guidance,
+            &destination,
+            now,
+            claim_projection.as_ref(),
+        ) else {
+            continue;
+        };
+        previews.insert(
+            prepared.preview.preview_digest.clone(),
+            prepared.preview.clone(),
+        );
+    }
+    destination
+        .revalidate()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    Ok(previews)
+}
+
+fn add_not_started_promotions(
+    selections: &[IsolationSelection],
+    touched: &BTreeSet<StableId>,
+    result: &mut ReplacementWorkspaceInspection,
+) {
+    result.promotions.extend(
+        selections
+            .iter()
+            .filter(|isolation| !touched.contains(&isolation.contract.id))
+            .map(|isolation| ReplacementPromotionInspection {
+                isolation_id: isolation.contract.id.clone(),
+                status: ReplacementPromotionStatus::NotStarted,
+                preview_digest: None,
+                receipt_digest: None,
+                summary: "No durable promotion has started for this isolation.".to_owned(),
+            }),
+    );
+}
+
+fn promotion_state_leaf_names(
+    directory: &Path,
+    budget: &mut PromotionStateBudget,
+) -> Result<BTreeSet<String>, String> {
+    match fs::symlink_metadata(directory) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) => {
+            return Err(format!(
+                "Promotion state directory {} could not be inspected: {error}",
+                directory.display()
+            ))
+        }
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(format!(
+                "Promotion state directory {} is not a no-follow directory.",
+                directory.display()
+            ))
+        }
+        Ok(_) => {}
+    }
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("Could not list {}: {error}", directory.display()))?;
+    let mut names = BTreeSet::new();
+    for entry in entries {
+        if budget.documents >= MAX_PROMOTION_STATE_DOCUMENTS {
+            return Err(format!(
+                "Promotion state exceeds the combined limit of {MAX_PROMOTION_STATE_DOCUMENTS} intent and receipt documents."
+            ));
+        }
+        let entry = entry.map_err(|error| {
+            format!(
+                "Could not inspect an entry in {}: {error}",
+                directory.display()
+            )
+        })?;
+        let metadata = fs::symlink_metadata(entry.path()).map_err(|error| {
+            format!(
+                "Could not inspect promotion state entry {}: {error}",
+                entry.path().display()
+            )
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(format!(
+                "Promotion state entry {} is not a no-follow regular file.",
+                entry.path().display()
+            ));
+        }
+        budget.documents = budget.documents.saturating_add(1);
+        budget.bytes = budget.bytes.saturating_add(metadata.len());
+        if budget.bytes > MAX_PROMOTION_STATE_TOTAL_BYTES {
+            return Err(format!(
+                "Promotion state exceeds the combined byte budget of {MAX_PROMOTION_STATE_TOTAL_BYTES} bytes."
+            ));
+        }
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| "Promotion state contains a non-UTF-8 leaf name.".to_owned())?;
+        let Some(hex) = name.strip_suffix(".json") else {
+            return Err(format!(
+                "Promotion state leaf {name} has an unsupported name."
+            ));
+        };
+        if hex.len() != 64
+            || !hex
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(format!(
+                "Promotion state leaf {name} is not a lowercase sha256 name."
+            ));
+        }
+        names.insert(hex.to_owned());
+    }
+    Ok(names)
+}
+
+fn read_promotion_state_document(
+    effect_lock: &EffectStoreLock,
+    directory: &str,
+    digest_hex: &str,
+    total_read_bytes: &mut u64,
+) -> Result<Vec<u8>, String> {
+    if *total_read_bytes >= MAX_PROMOTION_STATE_TOTAL_BYTES {
+        return Err(format!(
+            "Promotion state exceeds the combined read budget of {MAX_PROMOTION_STATE_TOTAL_BYTES} bytes."
+        ));
+    }
+    let remaining_budget = MAX_PROMOTION_STATE_TOTAL_BYTES - *total_read_bytes;
+    let io = effect_lock
+        .retained_store_io()
+        .map_err(|error| error.to_string())?;
+    let directory = io
+        .retain_existing_subdirectory(Path::new(directory))
+        .map_err(|error| error.to_string())?;
+    let leaf = format!("{digest_hex}.json");
+    let mut witness = directory
+        .read_optional_bounded(
+            Path::new(&leaf),
+            PROMOTION_RECEIPT_MAX_BYTES.min(remaining_budget),
+        )
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("Promotion state leaf {leaf} disappeared during inspection."))?;
+    let bytes = witness.raw_bytes().to_vec();
+    *total_read_bytes =
+        (*total_read_bytes).saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+    if *total_read_bytes > MAX_PROMOTION_STATE_TOTAL_BYTES {
+        return Err(format!(
+            "Promotion state exceeds the combined read budget of {MAX_PROMOTION_STATE_TOTAL_BYTES} bytes."
+        ));
+    }
+    witness.revalidate().map_err(|error| error.to_string())?;
+    directory.validate().map_err(|error| error.to_string())?;
+    Ok(bytes)
+}
+
+fn verify_receipt_matches_intent(
+    receipt: &GovernedPromotionReceipt,
+    intent: &PromotionReplayIntent,
+) -> Result<(), PromotionApplyError> {
+    let original_provenance = receipt
+        .recovery_execution
+        .as_ref()
+        .map_or(&receipt.provenance_digest, |recovery| {
+            &recovery.superseded_provenance_digest
+        });
+    let original_publication = receipt
+        .recovery_execution
+        .as_ref()
+        .map_or(&receipt.publication_capability_digest, |recovery| {
+            &recovery.superseded_publication_capability_digest
+        });
+    if receipt.derived_principal_id != intent.principal_id
+        || receipt.transaction_id != intent.transaction_id
+        || receipt.effect_id != intent.effect_id
+        || receipt.replay != intent.replay
+        || original_provenance != &intent.provenance_digest
+        || original_publication != &intent.publication_capability_digest
+        || intent
+            .preview
+            .as_ref()
+            .is_some_and(|preview| preview != &receipt.preview)
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "receipt differs from its matching durable intent".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_recoverable_promotion(
+    binding: &WorkflowGovernanceProjectBinding,
+    effect_lock: &EffectStoreLock,
+    intent: &PromotionReplayIntent,
+    preview: GovernedPromotionPreview,
+    inspection: Option<SplitRootEffectTransactionInspection>,
+    expected_preview_digest: &str,
+) -> Result<(), PromotionApplyError> {
+    let isolation_id = preview.source.isolation_id.clone();
+    validate_intent_request(intent, &isolation_id, expected_preview_digest)?;
+    let destination_tree = RetainedProjectTree::capture(
+        &binding.project_root,
+        MAX_PROMOTION_SNAPSHOT_ENTRIES,
+        MAX_PROMOTION_SNAPSHOT_BYTES,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let prepared = prepare_recovery_from_stored_preview(
+        binding,
+        &isolation_id,
+        expected_preview_digest,
+        preview,
+        &destination_tree,
+    )?;
+    validate_recovery_preview_identity(&prepared.preview, expected_preview_digest)?;
+    if inspection.is_none() {
+        validate_pre_begin_destination_exact(binding, &destination_tree, &prepared.preview)?;
+    }
+    validate_recovery_destination(&destination_tree, &prepared.source_tree, &prepared.preview)?;
+    let (effect, _payloads, _applied_files) = promotion_effect_and_payloads(&prepared)?;
+    let original_provenance = promotion_provenance_from_intent(intent, &prepared.preview, &effect)?;
+    let legacy_v1_pre_begin =
+        intent.schema_version == "governed_promotion_intent_v1" && inspection.is_none();
+    if !legacy_v1_pre_begin && original_provenance.digest != intent.provenance_digest {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "durable intent provenance differs from its preview/effect binding".to_owned(),
+        ));
+    }
+    let replay_binding = EffectReplayCommitBinding::new(
+        intent.replay.key_hash.clone(),
+        intent.replay.intent_digest.clone(),
+        intent.replay.commit_digest.clone(),
+        intent.replay.reservation_revision,
+    );
+    if let Some(inspection) = &inspection {
+        if inspection.effect_id != effect.tool_effect_contract.id
+            || inspection.replay_binding != replay_binding
+        {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "effect WAL begin contradicts the durable promotion intent".to_owned(),
+            ));
+        }
+        if inspection.provenance != original_provenance {
+            let publication_capability_digest =
+                recovery_publication_capability_from_wal(&inspection.provenance)?;
+            let recovery_execution = recovery_execution_binding(intent);
+            let expected_recovery = pre_begin_recovery_provenance(
+                intent,
+                &prepared.preview,
+                &effect,
+                &publication_capability_digest,
+                &recovery_execution,
+            )?;
+            if inspection.provenance != expected_recovery {
+                return Err(PromotionApplyError::RecoveryRequired(
+                    "effect WAL provenance does not link to the durable original intent".to_owned(),
+                ));
+            }
+        }
+        if inspection.stage == SplitRootEffectTransactionStage::RolledBack {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "the interrupted promotion was rolled back and cannot be resumed".to_owned(),
+            ));
+        }
+    }
+    let replay = inspect_replay_key_hash_under_effect_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        &intent.replay.key_hash,
+        &intent.replay.intent_digest,
+        &intent.replay.commit_digest,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let exact_reserved = replay.as_ref().is_some_and(|reservation| {
+        reservation.state == ReplayReservationState::Reserved
+            && reservation.revision == intent.replay.reservation_revision
+            && reservation.consumed_seq.is_none()
+    });
+    let exact_consumed = replay.as_ref().is_some_and(|reservation| {
+        reservation.state == ReplayReservationState::Consumed
+            && reservation.revision == intent.replay.reservation_revision.saturating_add(1)
+            && reservation.consumed_seq.is_some()
+    });
+    let replay_is_safe = match inspection.as_ref().map(|inspection| inspection.stage) {
+        None => replay.is_none() || exact_reserved,
+        Some(SplitRootEffectTransactionStage::Begun) => exact_reserved,
+        Some(SplitRootEffectTransactionStage::Committed) => exact_reserved || exact_consumed,
+        Some(SplitRootEffectTransactionStage::ReplayConsumed) => exact_consumed,
+        Some(SplitRootEffectTransactionStage::RolledBack) => false,
+        Some(_) => false,
+    };
+    if !replay_is_safe {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "replay state is missing or contradicts the interrupted promotion stage".to_owned(),
+        ));
+    }
+    prepared.source_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "isolation source changed during inspection: {error}"
+        ))
+    })?;
+    destination_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "canonical project changed during inspection: {error}"
+        ))
+    })?;
+    effect_lock
+        .validate_retained_lock_file()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))
+}
+
 fn load_active_isolation(
     state_root: &Path,
     isolation_id: &StableId,
 ) -> Result<IsolationSelection, PromotionPreviewError> {
+    let mut selected = load_isolation_registry(state_root)?
+        .into_iter()
+        .filter(|isolation| isolation.contract.id == *isolation_id)
+        .collect::<Vec<_>>();
+    let isolation = match selected.len() {
+        0 => {
+            return Err(PromotionPreviewError::IsolationNotFound(
+                isolation_id.0.clone(),
+            ))
+        }
+        1 => selected.pop().expect("one selected isolation"),
+        _ => {
+            return Err(PromotionPreviewError::DuplicateIsolationId(
+                isolation_id.0.clone(),
+            ))
+        }
+    };
+    if isolation.contract.status != IsolationStatus::Active {
+        return Err(PromotionPreviewError::IsolationNotActive(
+            isolation_id.0.clone(),
+        ));
+    }
+    Ok(isolation)
+}
+
+fn load_isolation_registry(
+    state_root: &Path,
+) -> Result<Vec<IsolationSelection>, PromotionPreviewError> {
     let isolation_dir = state_root.join("contracts").join("isolations");
     let isolation_directory_metadata = fs::symlink_metadata(&isolation_dir).map_err(|error| {
         PromotionPreviewError::IsolationDirectory {
@@ -2769,6 +3799,7 @@ fn load_active_isolation(
         return Err(PromotionPreviewError::TooManyIsolationDocuments);
     }
     let mut selected = Vec::new();
+    let mut total_bytes = 0_u64;
     for path in paths {
         if path.extension().and_then(|extension| extension.to_str()) != Some("yaml") {
             continue;
@@ -2786,6 +3817,15 @@ fn load_active_isolation(
             });
         }
         let raw = read_bounded(&path, MAX_ISOLATION_DOCUMENT_BYTES)?;
+        total_bytes = total_bytes.saturating_add(u64::try_from(raw.len()).unwrap_or(u64::MAX));
+        if total_bytes > MAX_ISOLATION_DOCUMENT_TOTAL_BYTES {
+            return Err(PromotionPreviewError::IsolationDirectory {
+                path: isolation_dir.clone(),
+                source: format!(
+                    "registry documents exceed the combined byte budget of {MAX_ISOLATION_DOCUMENT_TOTAL_BYTES} bytes"
+                ),
+            });
+        }
         let document: IsolationContractDocument =
             yaml_serde::from_slice(&raw).map_err(|error| {
                 PromotionPreviewError::IsolationDocument {
@@ -2793,46 +3833,46 @@ fn load_active_isolation(
                     source: error.to_string(),
                 }
             })?;
-        validate_isolation_contract(&document.isolation_contract)
-            .map_err(|error| PromotionPreviewError::IsolationInvalid(error.to_string()))?;
-        if document.isolation_contract.id == *isolation_id {
-            let file_name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| PromotionPreviewError::NonUtf8Path(path.clone()))?;
-            selected.push(IsolationSelection {
-                relative_path: format!("contracts/isolations/{file_name}"),
-                raw_digest: sha256_content_hash(&raw),
-                contract: document.isolation_contract,
+        if document.schema_version.trim().is_empty() {
+            return Err(PromotionPreviewError::IsolationDocument {
+                path,
+                source: "schema_version must not be blank".to_owned(),
             });
         }
+        validate_isolation_contract(&document.isolation_contract)
+            .map_err(|error| PromotionPreviewError::IsolationInvalid(error.to_string()))?;
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| PromotionPreviewError::NonUtf8Path(path.clone()))?;
+        selected.push(IsolationSelection {
+            relative_path: format!("contracts/isolations/{file_name}"),
+            raw_digest: sha256_content_hash(&raw),
+            contract: document.isolation_contract,
+        });
     }
-    let isolation = match selected.len() {
-        0 => {
-            return Err(PromotionPreviewError::IsolationNotFound(
-                isolation_id.0.clone(),
-            ))
-        }
-        1 => selected.pop().expect("one selected isolation"),
-        _ => {
-            return Err(PromotionPreviewError::DuplicateIsolationId(
-                isolation_id.0.clone(),
-            ))
-        }
-    };
-    if isolation.contract.status != IsolationStatus::Active {
-        return Err(PromotionPreviewError::IsolationNotActive(
-            isolation_id.0.clone(),
-        ));
-    }
-    Ok(isolation)
+    Ok(selected)
 }
 
 fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, PromotionPreviewError> {
-    let mut file = File::open(path).map_err(|error| PromotionPreviewError::IsolationDocument {
-        path: path.to_path_buf(),
-        source: error.to_string(),
+    let mut file = open_git_file_no_follow(path).map_err(|error| {
+        PromotionPreviewError::IsolationDocument {
+            path: path.to_path_buf(),
+            source: error.to_string(),
+        }
     })?;
+    let opened_metadata =
+        file.metadata()
+            .map_err(|error| PromotionPreviewError::IsolationDocument {
+                path: path.to_path_buf(),
+                source: error.to_string(),
+            })?;
+    if !opened_metadata.is_file() || !metadata_has_single_link(&opened_metadata) {
+        return Err(PromotionPreviewError::IsolationDocument {
+            path: path.to_path_buf(),
+            source: "opened document must be a single-link no-follow regular file".to_owned(),
+        });
+    }
     let mut raw = Vec::new();
     file.by_ref()
         .take(maximum.saturating_add(1))
@@ -2847,7 +3887,61 @@ fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, PromotionPreviewEr
             source: format!("document exceeds {maximum} bytes"),
         });
     }
+    let reopened = open_git_file_no_follow(path).map_err(|error| {
+        PromotionPreviewError::IsolationDocument {
+            path: path.to_path_buf(),
+            source: format!("document changed during retained read: {error}"),
+        }
+    })?;
+    let reopened_metadata =
+        reopened
+            .metadata()
+            .map_err(|error| PromotionPreviewError::IsolationDocument {
+                path: path.to_path_buf(),
+                source: format!("document changed during retained read: {error}"),
+            })?;
+    if !same_file_identity(&opened_metadata, &reopened_metadata) {
+        return Err(PromotionPreviewError::IsolationDocument {
+            path: path.to_path_buf(),
+            source: "document identity changed during retained read".to_owned(),
+        });
+    }
     Ok(raw)
+}
+
+#[cfg(unix)]
+fn metadata_has_single_link(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    metadata.nlink() == 1
+}
+
+#[cfg(windows)]
+fn metadata_has_single_link(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt as _;
+    metadata.number_of_links() == Some(1)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn metadata_has_single_link(_metadata: &std::fs::Metadata) -> bool {
+    true
+}
+
+#[cfg(unix)]
+fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+#[cfg(windows)]
+fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt as _;
+    left.volume_serial_number() == right.volume_serial_number()
+        && left.file_index() == right.file_index()
+}
+
+#[cfg(not(any(unix, windows)))]
+fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.len() == right.len() && left.modified().ok() == right.modified().ok()
 }
 
 fn canonical_directory(path: &Path, field: &'static str) -> Result<PathBuf, PromotionPreviewError> {

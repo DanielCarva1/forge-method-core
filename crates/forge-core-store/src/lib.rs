@@ -2664,6 +2664,42 @@ impl<'lock> RetainedEffectStoreIo<'lock> {
         Ok(capability)
     }
 
+    /// Retain one exact descendant directory only when it already exists.
+    ///
+    /// Unlike [`Self::retain_subdirectory`], this observer seam never creates
+    /// or synchronizes a directory. It is therefore suitable for read-only
+    /// recovery inspection while the exact effect-store lock is held.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error for an invalid path, an absent or unsafe child,
+    /// or any changed retained root, directory, or lock binding.
+    pub fn retain_existing_subdirectory(
+        &self,
+        relative: &Path,
+    ) -> io::Result<RetainedEffectStoreIo<'lock>> {
+        self.validate_relative(relative)?;
+        if relative.components().count() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "retained subdirectory must be one direct normal child",
+            ));
+        }
+        self.validate()?;
+        let directory = self.directory.open_directory(relative)?;
+        let directory_identity = directory.identity()?;
+        let capability = RetainedEffectStoreIo {
+            lock: self.lock,
+            directory,
+            directory_relative_path: self.directory_relative_path.join(relative),
+            directory_identity,
+            state_root_identity: self.state_root_identity.clone(),
+        };
+        capability.validate()?;
+        self.validate()?;
+        Ok(capability)
+    }
+
     /// Revalidate the exact root, parent, and lock bindings retained by this
     /// capability.
     ///

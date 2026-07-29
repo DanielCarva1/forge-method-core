@@ -1039,6 +1039,54 @@ pub fn verify_consumed_replay_key_hash_under_effect_lock(
     Ok(existing.clone())
 }
 
+/// Inspect one exact replay key without mutating or repairing replay state.
+///
+/// `None` means the clean replay WAL contains no reservation for `key_hash`.
+/// A present reservation is returned only when its intent and commit digests
+/// match the caller's exact durable binding.
+///
+/// # Errors
+///
+/// Returns [`ReplayWalError`] for invalid input, lock-scope mismatch, corrupt
+/// replay state, or a reservation whose durable digests contradict the
+/// requested binding.
+#[allow(clippy::too_many_arguments)]
+pub fn inspect_replay_key_hash_under_effect_lock(
+    state_root: impl AsRef<Path>,
+    effect_lock: &crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    key_hash: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+) -> Result<Option<ReplayReservation>, ReplayWalError> {
+    validate_sha256_field("key_hash", key_hash)?;
+    validate_sha256_digest(intent_digest)?;
+    validate_commit_digest(commit_digest)?;
+    let scope = retained_effect_scope(
+        state_root.as_ref(),
+        effect_lock,
+        expected_effect_lock_relative_path,
+    )?;
+    let replay_lock = ReplayWalRetainedLock::acquire_existing_under_effect_scope(&scope)?;
+    let recovery =
+        recover_replay_wal_under_retained_lock(&scope.state_root_display, &replay_lock, false)?;
+    ensure_appendable(&recovery)?;
+    let Some(existing) = recovery.reservations.get(key_hash) else {
+        return Ok(None);
+    };
+    if existing.intent_digest != intent_digest {
+        return Err(ReplayWalError::IntentDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
+    }
+    if existing.commit_digest != commit_digest {
+        return Err(ReplayWalError::CommitDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
+    }
+    Ok(Some(existing.clone()))
+}
+
 fn consume_replay_recovered(
     replay_lock: &ReplayWalRetainedLock,
     wal_path: PathBuf,
@@ -1756,6 +1804,46 @@ fn retained_effect_scope(
 }
 
 impl ReplayWalRetainedLock {
+    fn acquire_existing_under_effect_scope(
+        scope: &crate::RetainedEffectReplayScope,
+    ) -> Result<Self, ReplayWalError> {
+        let relative = Path::new(REPLAY_WAL_LOCK_RELATIVE_PATH);
+        let path = replay_wal_lock_path(&scope.state_root_display);
+        let file = scope
+            .state_root
+            .open_leaf_read_write_existing(relative)
+            .map_err(|source| ReplayWalError::OpenLock {
+                path: path.clone(),
+                source: source.to_string(),
+            })?;
+        FileExt::lock(&file).map_err(|source| ReplayWalError::Lock {
+            path: path.clone(),
+            source: source.to_string(),
+        })?;
+        let lock_identity =
+            crate::retained_dir::RetainedDirectory::identity_of(&file).map_err(|source| {
+                ReplayWalError::Lock {
+                    path: path.clone(),
+                    source: source.to_string(),
+                }
+            })?;
+        Ok(Self {
+            file,
+            boundary: scope.boundary.clone(),
+            root: scope
+                .state_root
+                .try_clone()
+                .map_err(|source| ReplayWalError::Lock {
+                    path: path.clone(),
+                    source: source.to_string(),
+                })?,
+            lock_identity,
+            state_root: scope.state_root_display.clone(),
+            wal_path: replay_wal_path(&scope.state_root_display),
+            validate_boundary: false,
+        })
+    }
+
     pub(crate) fn acquire_under_effect_scope(
         scope: &crate::RetainedEffectReplayScope,
     ) -> Result<Self, ReplayWalError> {

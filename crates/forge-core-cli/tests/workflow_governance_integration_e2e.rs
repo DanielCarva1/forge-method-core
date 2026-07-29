@@ -871,6 +871,49 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     ] {
         assert_eq!(resumed["data"][field], next["data"][field], "{field}");
     }
+    let continuity = &resumed["data"]["replacement_continuity"];
+    assert_eq!(
+        continuity["schema_version"],
+        "workflow_replacement_continuity_v1"
+    );
+    assert_eq!(continuity["status"], "ready");
+    assert_eq!(
+        continuity["binding"]["ledger_head_digest"],
+        next["data"]["ledger_head_digest"]
+    );
+    assert_eq!(
+        continuity["binding"]["project_snapshot_digest"],
+        next["data"]["snapshot_digest"]
+    );
+    assert!(continuity["objective_history"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(continuity["durable_pending_decisions"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(continuity["decision_history"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(
+        resumed["data"]["simulation"]["candidate_decision_requests"].is_array(),
+        "questions calculated now remain in the simulation and are not reported as recovered history"
+    );
+    assert!(continuity["isolations"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(continuity["promotions"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert_eq!(
+        continuity["ranked_next_actions"][0]["governed_action"],
+        next["data"]["simulation"]["candidate_next_actions"][0]
+    );
+    let second_process = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        second_process["data"]["replacement_continuity"]["ranked_action_digest"],
+        continuity["ranked_action_digest"],
+        "fresh processes must rank the same durable next action"
+    );
 
     let shadow = assert_ok(&consumer.run(&["shadow"]));
     assert_eq!(shadow["data"]["mutation_allowed"], false);
@@ -924,6 +967,27 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         .is_some_and(|message| {
             message.contains("unrecognized workflow argument '--principal-registry'")
         }));
+}
+
+#[test]
+fn workflow_resume_does_not_create_a_missing_domain_pack_lock() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let lock = consumer.state.join("locks/domain-packs.lifecycle.lock");
+    fs::remove_file(&lock).expect("remove existing lifecycle lock");
+    let before = state_tree_snapshot(&consumer.state);
+
+    let resumed = consumer.run(&["resume"]);
+    assert!(
+        !resumed.status.success(),
+        "read-only resume must stop when its existing lock is absent"
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        before,
+        "resume must not create or alter Forge state while observing a missing lock"
+    );
+    assert!(!lock.exists(), "resume must not recreate the missing lock");
 }
 
 #[test]
@@ -1289,6 +1353,33 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
     assert_eq!(
         replacement["data"]["active_cooperative_objective"]["revision_reason"],
         "The owner added execution detail without changing direction"
+    );
+    let history = replacement["data"]["replacement_continuity"]["objective_history"]
+        .as_array()
+        .expect("durable ordered objective history");
+    assert_eq!(history.len(), 3);
+    assert_eq!(history[0]["objective"]["revision"], 1);
+    assert_eq!(history[0]["objective"]["revision_kind"], "initial");
+    assert_eq!(history[0]["active"], false);
+    assert_eq!(history[1]["objective"]["revision"], 2);
+    assert_eq!(
+        history[1]["objective"]["revision_kind"],
+        "material_supersession"
+    );
+    assert_eq!(
+        history[1]["objective"]["previous_objective_digest"],
+        initial_digest
+    );
+    assert_eq!(history[1]["active"], false);
+    assert_eq!(history[2]["objective"]["revision"], 3);
+    assert_eq!(
+        history[2]["objective"]["revision_kind"],
+        "non_material_clarification"
+    );
+    assert_eq!(history[2]["active"], true);
+    assert_eq!(
+        replacement["data"]["replacement_continuity"]["binding"]["active_objective_revision"],
+        3
     );
 }
 
@@ -2188,6 +2279,26 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     );
     assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
     assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
+
+    run_git(&["worktree", "remove", "--force", &worktree_text]);
+    let state_before_resume = state_tree_snapshot(&consumer.state);
+    let replacement = assert_ok(&consumer.run(&["resume"]));
+    let continuity = &replacement["data"]["replacement_continuity"];
+    assert_eq!(continuity["status"], "blocked");
+    assert!(continuity["gaps"].as_array().is_some_and(|gaps| {
+        gaps.iter().any(|gap| {
+            gap["code"] == "worktree_missing" && gap["isolation_id"] == "isolation.promotion-e2e"
+        })
+    }));
+    assert_eq!(
+        continuity["isolations"][0]["validation"], "missing",
+        "resume reports the missing real worktree instead of inventing continuation"
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_resume,
+        "read-only resume must not recreate or repair the missing worktree"
+    );
 }
 
 #[test]
@@ -2432,6 +2543,41 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         retry["data"]["receipt"]["receipt_digest"],
         applied["data"]["receipt"]["receipt_digest"]
     );
+    let replacement = assert_ok(&consumer.run(&["resume"]));
+    let completed = replacement["data"]["replacement_continuity"]["promotions"]
+        .as_array()
+        .expect("promotion continuity")
+        .iter()
+        .find(|promotion| promotion["preview_digest"] == preview_digest)
+        .expect("completed promotion");
+    assert_eq!(completed["status"], "completed");
+    assert!(completed["recovery_argv"]
+        .as_array()
+        .is_none_or(Vec::is_empty));
+    assert!(
+        !replacement["data"]["replacement_continuity"]["ranked_next_actions"]
+            .as_array()
+            .expect("ranked actions")
+            .iter()
+            .any(|action| action["kind"] == "recover_promotion")
+    );
+    fs::write(
+        consumer.app.join("AFTER_PROMOTION.txt"),
+        "later independent project change\n",
+    )
+    .expect("later project change");
+    let after_drift = assert_ok(&consumer.run(&["resume"]));
+    let historical = after_drift["data"]["replacement_continuity"]["promotions"]
+        .as_array()
+        .expect("historical promotion continuity")
+        .iter()
+        .find(|promotion| promotion["preview_digest"] == preview_digest)
+        .expect("historical receipt remains visible");
+    assert_eq!(
+        historical["status"], "completed",
+        "a valid historical receipt must not become corrupt merely because the project changed later"
+    );
+    fs::remove_file(consumer.app.join("AFTER_PROMOTION.txt")).expect("restore project fixture");
 
     let receipt_name = format!(
         "{}.json",
@@ -2457,6 +2603,22 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         serde_json_canonicalizer::to_vec(&tampered_receipt).expect("canonical tampered receipt"),
     )
     .expect("write tampered receipt");
+    let state_before_tampered_resume = state_tree_snapshot(&consumer.state);
+    let tampered_resume = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        tampered_resume["data"]["replacement_continuity"]["status"],
+        "blocked"
+    );
+    assert!(tampered_resume["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .is_some_and(|gaps| gaps
+            .iter()
+            .any(|gap| gap["code"] == "promotion_state_invalid")));
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_tampered_resume,
+        "resume must not repair a tampered receipt"
+    );
     let tampered_retry = bin()
         .args([
             "workflow",
@@ -2495,6 +2657,22 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         .expect("open replay WAL for crash fixture")
         .set_len(consume.offset)
         .expect("truncate exact consume frame");
+    let state_before_replay_resume = state_tree_snapshot(&consumer.state);
+    let replay_resume = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        replay_resume["data"]["replacement_continuity"]["status"],
+        "blocked"
+    );
+    assert!(replay_resume["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .is_some_and(|gaps| gaps
+            .iter()
+            .any(|gap| gap["code"] == "promotion_state_invalid")));
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_replay_resume,
+        "resume must not consume or repair a truncated replay record"
+    );
     let unconsumed_retry = bin()
         .args([
             "workflow",
@@ -2524,6 +2702,7 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
 struct PromotionRecoveryFixture {
     consumer: Consumer,
     root: String,
+    claim_id: String,
     preview_digest: String,
 }
 
@@ -2717,6 +2896,7 @@ impl PromotionRecoveryFixture {
         Self {
             consumer,
             root,
+            claim_id,
             preview_digest,
         }
     }
@@ -2838,6 +3018,37 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
         serde_json_canonicalizer::to_vec(&intent).expect("canonical v1 intent"),
     )
     .expect("install exact v1 intent fixture");
+
+    let state_before_resume = state_tree_snapshot(&fixture.consumer.state);
+    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let legacy = resumed["data"]["replacement_continuity"]["promotions"]
+        .as_array()
+        .expect("legacy promotion continuity")
+        .iter()
+        .find(|promotion| promotion["preview_digest"] == fixture.preview_digest)
+        .expect("legacy v1 promotion must be reconstructed");
+    assert_eq!(legacy["status"], "recoverable");
+    assert_eq!(
+        legacy["recovery_argv"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "promotion",
+            "recover",
+            "--root",
+            fixture.root.clone(),
+            "--isolation-id",
+            "isolation.promotion-recovery-e2e",
+            "--expected-preview-digest",
+            fixture.preview_digest.clone(),
+            "--json"
+        ])
+    );
+    assert_eq!(
+        state_tree_snapshot(&fixture.consumer.state),
+        state_before_resume,
+        "legacy v1 resume must reconstruct guidance without creating replay or effect state"
+    );
 
     let recovered = assert_ok(
         &fixture
@@ -3182,6 +3393,191 @@ fn promotion_recover_converges_across_every_durable_crash_boundary() {
         assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_once);
         assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_once);
     }
+}
+
+#[test]
+fn replacement_agent_ranks_exact_spaced_root_recovery_then_observes_completion() {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_intent")
+        .output()
+        .expect("crash promotion after durable intent");
+    assert_eq!(crashed.status.code(), Some(86));
+    let state_before = state_tree_snapshot(&fixture.consumer.state);
+
+    let replacement = assert_ok(&fixture.consumer.run(&["resume"]));
+    let continuity = &replacement["data"]["replacement_continuity"];
+    let promotion = continuity["promotions"]
+        .as_array()
+        .expect("promotion continuity")
+        .iter()
+        .find(|promotion| promotion["preview_digest"] == fixture.preview_digest)
+        .expect("recoverable promotion");
+    assert_eq!(promotion["status"], "recoverable");
+    let expected_argv = serde_json::json!([
+        "forge-core",
+        "workflow",
+        "promotion",
+        "recover",
+        "--root",
+        fixture.root.clone(),
+        "--isolation-id",
+        "isolation.promotion-recovery-e2e",
+        "--expected-preview-digest",
+        fixture.preview_digest.clone(),
+        "--json"
+    ]);
+    assert_eq!(promotion["recovery_argv"], expected_argv);
+    assert_eq!(
+        continuity["ranked_next_actions"][0]["kind"],
+        "recover_promotion"
+    );
+    assert_eq!(continuity["ranked_next_actions"][0]["argv"], expected_argv);
+    assert_eq!(
+        state_tree_snapshot(&fixture.consumer.state),
+        state_before,
+        "resume inspection must not repair interrupted promotion state"
+    );
+
+    let argv = expected_argv.as_array().expect("structured recovery argv");
+    assert_ok(&execute_structured_argv(argv));
+    let completed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let promotion = completed["data"]["replacement_continuity"]["promotions"]
+        .as_array()
+        .expect("completed promotion continuity")
+        .iter()
+        .find(|promotion| promotion["preview_digest"] == fixture.preview_digest)
+        .expect("completed promotion");
+    assert_eq!(promotion["status"], "completed");
+    assert!(promotion["recovery_argv"].is_null());
+}
+
+#[test]
+fn replacement_agent_blocks_tampered_intent_without_repairing_it() {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_intent")
+        .output()
+        .expect("crash promotion after durable intent");
+    assert_eq!(crashed.status.code(), Some(86));
+    let intent = fixture.intent_path();
+    let mut bytes = fs::read(&intent).expect("read intent");
+    let index = bytes
+        .iter()
+        .position(|byte| *byte == b'{')
+        .expect("JSON object");
+    bytes[index] = b'[';
+    fs::write(&intent, &bytes).expect("tamper intent");
+    let before = state_tree_snapshot(&fixture.consumer.state);
+
+    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    assert_eq!(
+        resumed["data"]["replacement_continuity"]["status"],
+        "blocked"
+    );
+    assert!(resumed["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .is_some_and(|gaps| gaps
+            .iter()
+            .any(|gap| gap["code"] == "promotion_state_invalid")));
+    assert_eq!(
+        state_tree_snapshot(&fixture.consumer.state),
+        before,
+        "resume must not rewrite a tampered intent"
+    );
+}
+
+#[test]
+fn replacement_agent_blocks_missing_wrong_owner_and_released_linked_claims() {
+    let fixture = PromotionRecoveryFixture::new();
+    let live = assert_ok(&fixture.consumer.run(&["resume"]));
+    let live_continuity = &live["data"]["replacement_continuity"];
+    assert_eq!(live_continuity["claims"][0]["liveness"], "live");
+    assert!(!live_continuity["gaps"].as_array().is_some_and(|gaps| {
+        gaps.iter().any(|gap| {
+            matches!(
+                gap["code"].as_str(),
+                Some(
+                    "linked_claim_missing"
+                        | "linked_claim_owner_mismatch"
+                        | "linked_claim_expired"
+                        | "linked_claim_inactive"
+                )
+            )
+        })
+    }));
+
+    let isolation_path = fs::read_dir(fixture.consumer.state.join("contracts/isolations"))
+        .expect("list isolation contracts")
+        .map(|entry| entry.expect("isolation entry").path())
+        .find(|path| path.extension().and_then(|value| value.to_str()) == Some("yaml"))
+        .expect("one isolation contract");
+    let original_contract = fs::read_to_string(&isolation_path).expect("read isolation contract");
+    assert!(original_contract.contains(&fixture.claim_id));
+    assert!(original_contract.contains("agent.promotion-recovery-e2e"));
+
+    fs::write(
+        &isolation_path,
+        original_contract.replace(&fixture.claim_id, "claim.missing.replacement-e2e"),
+    )
+    .expect("point isolation at missing claim");
+    let missing = assert_ok(&fixture.consumer.run(&["resume"]));
+    assert!(missing["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .is_some_and(|gaps| gaps.iter().any(|gap| {
+            gap["code"] == "linked_claim_missing"
+                && gap["blocking"] == true
+                && gap["isolation_id"] == "isolation.promotion-recovery-e2e"
+        })));
+
+    fs::write(
+        &isolation_path,
+        original_contract.replace(
+            "agent.promotion-recovery-e2e",
+            "agent.different-replacement-e2e",
+        ),
+    )
+    .expect("point isolation at a different owner");
+    let wrong_owner = assert_ok(&fixture.consumer.run(&["resume"]));
+    assert!(wrong_owner["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .is_some_and(|gaps| gaps.iter().any(|gap| {
+            gap["code"] == "linked_claim_owner_mismatch"
+                && gap["blocking"] == true
+                && gap["isolation_id"] == "isolation.promotion-recovery-e2e"
+        })));
+    fs::write(&isolation_path, &original_contract).expect("restore isolation contract");
+
+    let released = bin()
+        .args([
+            "claim",
+            "release",
+            "--root",
+            &fixture.root,
+            "--id",
+            &fixture.claim_id,
+            "--agent",
+            "agent.promotion-recovery-e2e",
+            "--now-unix",
+            &now().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("release linked claim");
+    assert_ok(&released);
+
+    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let continuity = &resumed["data"]["replacement_continuity"];
+    assert_eq!(continuity["status"], "blocked");
+    assert!(continuity["gaps"].as_array().is_some_and(|gaps| {
+        gaps.iter().any(|gap| {
+            gap["code"] == "linked_claim_inactive"
+                && gap["blocking"] == true
+                && gap["isolation_id"] == "isolation.promotion-recovery-e2e"
+        })
+    }));
 }
 
 #[test]

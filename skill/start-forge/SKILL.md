@@ -182,7 +182,19 @@ or routes a healthy project into agent-native workflow governance.
    text, never change either CAS digest, and never retry a stale/tampered error
    without refreshing status.
 
-   Then run **`forge-core workflow next --root "<project-root>" --json`**.
+   Then run **`forge-core workflow resume --root "<project-root>" --json`**.
+   `/start-forge` is run once per chat, not once per task. `resume` contains
+   the ordinary current guidance plus `data.replacement_continuity`, rebuilt
+   without relying on an earlier chat. Inspect its typed gaps, checked
+   worktrees, promotion statuses, and `ranked_next_actions` before doing new
+   work. Execute a published recovery argv as tokens before lower-ranked work;
+   never shell-parse it. `completed` promotions must not be applied or
+   recovered again. After any operation in this same chat, refresh with
+   `workflow next` as usual.
+
+   `durable_pending_decisions` contains only decision events actually recorded
+   in the ledger. A question under `simulation.candidate_decision_requests` was
+   calculated now; do not tell the user it came from the previous chat.
 
    Any unexpected healthy-state argv, integrity, binding, snapshot, ledger, or
    environment error fails closed. Report it; do not erase state, reinitialize
