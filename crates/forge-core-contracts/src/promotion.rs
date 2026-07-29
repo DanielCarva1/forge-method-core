@@ -5,14 +5,15 @@
 //! re-admission of every bound snapshot and governance coordinate.
 
 use crate::{
-    ClaimId, IsolationStatus, RepoPath, StableId, WorkflowCooperativeEvidenceCurrentStatus,
-    WorkflowCooperativeEvidenceDisposition, WorkflowCooperativeEvidenceNonProof,
-    WorkflowCooperativeEvidenceProof, WorkflowReadinessProfile,
+    ClaimId, IsolationStatus, PrincipalId, RepoPath, StableId,
+    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
+    WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
+    WorkflowReadinessProfile,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION: &str = "governed_promotion_preview_v1";
+pub const GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION: &str = "governed_promotion_preview_v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +27,18 @@ pub enum GovernedPromotionPreviewStatus {
     NoChanges,
     Reviewable,
     Blocked,
+}
+
+/// Whether the exact preview may enter the local reversible apply lane.
+///
+/// This is deliberately separate from assurance completeness: carried
+/// `unknown`/`supported` source claims remain visible but do not pretend to be
+/// independent verification and do not block same-owner local publication.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PromotionApplyEligibility {
+    EligibleLocalReversible,
+    NotEligible,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -87,6 +100,8 @@ pub struct PromotionSourceBinding {
     pub isolation_status: IsolationStatus,
     pub agent_id: StableId,
     pub linked_claim_id: Option<ClaimId>,
+    /// Derived only from the current linked claim. Callers cannot supply it.
+    pub linked_claim_principal_id: Option<PrincipalId>,
     pub declared_worktree_path: RepoPath,
     pub git_worktree: PromotionGitWorktreeBinding,
     pub snapshot: PromotionSnapshotBinding,
@@ -209,6 +224,18 @@ pub struct PromotionAssuranceClaimCoverage {
     pub rejected_evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PromotionCarriedAssuranceGap {
+    pub claim_ref: StableId,
+    /// Only `unknown` and `supported` are carryable. Disproven or contradictory
+    /// claims remain blocking readiness gaps.
+    pub status: PromotionAssuranceClaimStatus,
+    pub accepted_evidence_refs: Vec<String>,
+    pub rejected_evidence_refs: Vec<String>,
+    pub cooperative_evidence_is_independent_verification: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PromotionWriteClaimCoverageStatus {
@@ -273,6 +300,7 @@ pub enum PromotionGapCode {
     MissingSupportingCooperativeEvidence,
     SourceAssuranceClaimUnsatisfied,
     MissingLinkedIsolationClaim,
+    MissingLinkedClaimPrincipal,
     UngovernedWriteSet,
     ConflictingClaim,
     DestructiveDeleteRequiresSeparateAuthority,
@@ -301,6 +329,7 @@ pub struct GovernedPromotionPreview {
     pub valid_through_unix: Option<u64>,
     pub authority: GovernedPromotionPreviewAuthority,
     pub status: GovernedPromotionPreviewStatus,
+    pub apply_eligibility: PromotionApplyEligibility,
     pub canonical_mutation_performed: bool,
     pub forge_state_mutation_performed: bool,
     pub source: PromotionSourceBinding,
@@ -316,8 +345,68 @@ pub struct GovernedPromotionPreview {
     pub predicted_result_regular_file_set_digest: String,
     pub objective_coverage: PromotionObjectiveCoverage,
     pub assurance_claim_coverage: Vec<PromotionAssuranceClaimCoverage>,
+    pub carried_assurance_gaps: Vec<PromotionCarriedAssuranceGap>,
     pub write_claim_coverage: PromotionWriteClaimCoverage,
     pub conflicts: Vec<PromotionClaimConflict>,
     pub unsupported_effects: Vec<PromotionUnsupportedEffect>,
     pub unresolved_gaps: Vec<PromotionGap>,
+}
+
+pub const GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION: &str = "governed_promotion_receipt_v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GovernedPromotionApplyStatus {
+    Applied,
+    AlreadyCommitted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PromotionAppliedFileBinding {
+    pub path: RepoPath,
+    pub before_content_digest: String,
+    pub before_byte_length: u64,
+    pub after_content_digest: String,
+    pub after_byte_length: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PromotionReplayBinding {
+    pub audience: String,
+    pub key_hash: String,
+    pub intent_digest: String,
+    pub commit_digest: String,
+    pub reservation_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GovernedPromotionReceipt {
+    pub schema_version: String,
+    /// Digest of the canonical receipt with this field blank.
+    pub receipt_digest: String,
+    pub committed_at_unix: u64,
+    pub preview: GovernedPromotionPreview,
+    pub derived_principal_id: PrincipalId,
+    pub transaction_id: StableId,
+    pub effect_id: StableId,
+    pub provenance_digest: String,
+    /// Digest of the exact live destination-root capability retained across
+    /// Store apply/readback. It is evidence, not reusable mutation authority.
+    pub publication_capability_digest: String,
+    pub replay: PromotionReplayBinding,
+    pub applied_files: Vec<PromotionAppliedFileBinding>,
+    pub result_snapshot: PromotionSnapshotBinding,
+    pub result_snapshot_digest: String,
+    pub readback_verified: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GovernedPromotionApplication {
+    pub status: GovernedPromotionApplyStatus,
+    pub canonical_mutation_performed: bool,
+    pub receipt: GovernedPromotionReceipt,
 }

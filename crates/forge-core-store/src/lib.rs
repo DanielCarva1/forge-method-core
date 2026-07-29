@@ -26,7 +26,7 @@ use forge_core_validate::{
 use fs4::{FileExt, TryLockError};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::fmt;
 use std::fs::{self, File};
@@ -1236,6 +1236,7 @@ pub enum EffectWalRecoveryReason {
     WalReadFailed,
     WalParseFailed,
     ReservedStatePath,
+    ExternalPublicationUnsupported,
     RollbackFailed,
 }
 
@@ -4405,6 +4406,431 @@ pub fn apply_file_effect_transaction_with_provenance_under_lock(
     )
 }
 
+/// Apply an existing-file-only transaction through one exact retained project
+/// capability while the WAL remains beneath an external Forge state root.
+///
+/// This promotion-specific path never reopens `publication_root` by ambient
+/// pathname and never uses replacement/quarantine names. Each write mutates the
+/// exact admitted file handle in place, preserving admitted Unix mode/uid/gid.
+/// On unsupported platforms or insufficient write authority it blocks before
+/// appending the effect WAL begin record.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[must_use]
+pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
+    state_root: impl AsRef<Path>,
+    publication_tree: &mut retained_project_tree::RetainedProjectTree,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    tx_id: impl Into<String>,
+    provenance: EffectExecutionProvenance,
+    replay_binding: EffectReplayCommitBinding,
+) -> EffectApplicationResult {
+    let state_root = state_root.as_ref();
+    let tx_id = tx_id.into();
+    let effect_contract = &effect.tool_effect_contract;
+    let validation = validate_tool_effect(effect);
+    let validation_error_count = validation
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .count();
+    let validation_warning_count = validation
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning)
+        .count();
+    let mut reasons = Vec::new();
+    let mut diagnostics = Vec::new();
+    if let Err(error) =
+        validate_effect_lock_scope(state_root, effect_lock, expected_lock_relative_path)
+    {
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
+            vec![EffectApplicationReason::StoreLockFailed],
+            vec![error.to_string()],
+            validation_error_count,
+            validation_warning_count,
+        );
+    }
+    if validation_error_count > 0 {
+        reasons.push(EffectApplicationReason::EffectValidationErrors);
+    }
+    if let Err(error) = provenance.verify() {
+        reasons.push(EffectApplicationReason::ExecutionProvenanceInvalid);
+        diagnostics.push(error.to_string());
+    }
+    if let Err(reason) = validate_effect_replay_binding(&replay_binding) {
+        reasons.push(EffectApplicationReason::ExecutionProvenanceInvalid);
+        diagnostics.push(reason);
+    }
+    let publication_binding = provenance
+        .document
+        .get("publication_scope")
+        .and_then(serde_json::Value::as_object);
+    let bound_capability = publication_binding
+        .and_then(|binding| binding.get("retained_capability_digest"))
+        .and_then(serde_json::Value::as_str);
+    let expected_capability = match publication_tree.exact_mutation_capability_digest() {
+        Ok(digest) => Some(digest),
+        Err(error) => {
+            reasons.push(EffectApplicationReason::InvalidTargetPath);
+            diagnostics.push(format!("retained publication capability failed: {error}"));
+            None
+        }
+    };
+    if publication_binding
+        .and_then(|binding| binding.get("kind"))
+        .and_then(serde_json::Value::as_str)
+        != Some("external_retained_project_tree_v1")
+        || bound_capability != expected_capability.as_deref()
+    {
+        reasons.push(EffectApplicationReason::ExecutionProvenanceInvalid);
+        diagnostics.push(
+            "split-root provenance does not bind the exact retained publication capability"
+                .to_owned(),
+        );
+    }
+
+    let mut writes = Vec::new();
+    let mut seen = BTreeSet::new();
+    for write in &effect_contract.write_set {
+        if write.target_kind != EffectTargetKind::FilePath
+            || write.access_mode != AccessMode::Write
+            || write.destructive
+        {
+            reasons.push(EffectApplicationReason::UnsupportedAccessMode);
+            diagnostics.push(format!(
+                "promotion exact mutation supports only non-destructive existing file writes: {}",
+                write.reference
+            ));
+            continue;
+        }
+        if !seen.insert(write.reference.clone()) {
+            reasons.push(EffectApplicationReason::InternalInvariant);
+            diagnostics.push(format!("duplicate promotion write {}", write.reference));
+            continue;
+        }
+        let Some(expected_hash) = write.expected_hash.as_ref() else {
+            reasons.push(EffectApplicationReason::MissingExpectedHashForOverwrite);
+            diagnostics.push(format!("missing expected hash for {}", write.reference));
+            continue;
+        };
+        let Some(payload) = payload_for(payloads, &write.reference) else {
+            reasons.push(EffectApplicationReason::MissingPayloadForWrite);
+            diagnostics.push(format!("missing payload for {}", write.reference));
+            continue;
+        };
+        if sha256_content_hash(&payload.content) != payload.content_hash {
+            reasons.push(EffectApplicationReason::PayloadHashMismatch);
+            diagnostics.push(format!("payload hash mismatch for {}", write.reference));
+            continue;
+        }
+        let before = match publication_tree.exact_regular_file_bytes(&write.reference) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => {
+                reasons.push(EffectApplicationReason::TargetMissingForWrite);
+                diagnostics.push(format!("write target missing {}", write.reference));
+                continue;
+            }
+            Err(error) => {
+                reasons.push(EffectApplicationReason::InvalidTargetPath);
+                diagnostics.push(format!(
+                    "retained target {} failed: {error}",
+                    write.reference
+                ));
+                continue;
+            }
+        };
+        if sha256_content_hash(&before) != *expected_hash {
+            reasons.push(EffectApplicationReason::ExpectedHashMismatch);
+            diagnostics.push(format!("write freshness mismatch {}", write.reference));
+            continue;
+        }
+        if let Err(error) =
+            publication_tree.preflight_exact_regular_file_write(&write.reference, &before)
+        {
+            reasons.push(EffectApplicationReason::ApplyFailed);
+            diagnostics.push(format!(
+                "exact metadata-preserving mutation unavailable for {}: {error}",
+                write.reference
+            ));
+            continue;
+        }
+        writes.push((write.clone(), before, payload.content.clone()));
+    }
+    for read in &effect_contract.read_set {
+        if read.target_kind != EffectTargetKind::FilePath {
+            reasons.push(EffectApplicationReason::UnsupportedTargetKind);
+            diagnostics.push(format!("unsupported promotion read {}", read.reference));
+            continue;
+        }
+        if let Some(expected_hash) = &read.expected_hash {
+            match publication_tree.exact_regular_file_bytes(&read.reference) {
+                Ok(Some(bytes)) if sha256_content_hash(&bytes) == *expected_hash => {}
+                _ => {
+                    reasons.push(EffectApplicationReason::ExpectedHashMismatch);
+                    diagnostics.push(format!("read freshness mismatch {}", read.reference));
+                }
+            }
+        }
+    }
+    if writes.len() != payloads.len() {
+        reasons.push(EffectApplicationReason::InternalInvariant);
+        diagnostics.push("payload set differs from exact promotion write set".to_owned());
+    }
+    if !reasons.is_empty() {
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        );
+    }
+
+    let begin = EffectWalRecord::begin_with_authority(
+        &tx_id,
+        effect_contract.id.clone(),
+        provenance,
+        replay_binding,
+    );
+    if append_effect_wal_record_for_publication(
+        &effect_lock.state_root,
+        state_root,
+        wal_relative_path,
+        begin,
+        WalDurability::SyncOnAppend,
+    )
+    .is_err()
+    {
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
+            vec![EffectApplicationReason::WalAppendFailed],
+            vec!["failed to append split-root WAL begin record".to_owned()],
+            validation_error_count,
+            validation_warning_count,
+        );
+    }
+
+    let mut applied = Vec::<(String, Vec<u8>, Vec<u8>)>::new();
+    for (write, before, after) in &writes {
+        let prepared = PreparedWrite {
+            reference: write.reference.clone(),
+            physical_reference: write.reference.clone(),
+            target: PathBuf::from(&write.reference),
+            target_kind: write.target_kind,
+            access_mode: PreparedAccessMode::Write,
+            destructive: false,
+            expected_hash: write.expected_hash.clone(),
+            payload_content: Some(after.clone()),
+            content: after.clone(),
+        };
+        let original = OriginalFileState {
+            target: PathBuf::from(&write.reference),
+            physical_reference: write.reference.clone(),
+            existed: true,
+            content: before.clone(),
+            installed_content: Some(after.clone()),
+        };
+        let before_record =
+            EffectWalRecord::before_image(&tx_id, effect_contract.id.clone(), &prepared, &original);
+        if append_effect_wal_record_for_publication(
+            &effect_lock.state_root,
+            state_root,
+            wal_relative_path,
+            before_record,
+            WalDurability::SyncOnAppend,
+        )
+        .is_err()
+        {
+            diagnostics.push(format!(
+                "append before image failed for {}",
+                write.reference
+            ));
+            reasons.push(EffectApplicationReason::WalAppendFailed);
+            return rollback_exact_project_writes(
+                state_root,
+                publication_tree,
+                effect_lock,
+                wal_relative_path,
+                &tx_id,
+                effect_contract.id.clone(),
+                applied,
+                reasons,
+                diagnostics,
+                validation_error_count,
+                validation_warning_count,
+            );
+        }
+        if let Err(error) =
+            publication_tree.apply_exact_regular_file_write(&write.reference, before, after)
+        {
+            diagnostics.push(format!("exact apply {} failed: {error}", write.reference));
+            reasons.push(EffectApplicationReason::ApplyFailed);
+            return rollback_exact_project_writes(
+                state_root,
+                publication_tree,
+                effect_lock,
+                wal_relative_path,
+                &tx_id,
+                effect_contract.id.clone(),
+                applied,
+                reasons,
+                diagnostics,
+                validation_error_count,
+                validation_warning_count,
+            );
+        }
+        applied.push((write.reference.clone(), before.clone(), after.clone()));
+        #[cfg(test)]
+        if applied.len() == 1
+            && state_root
+                .join(".test-fail-exact-promotion-after-first-write")
+                .is_file()
+        {
+            reasons.push(EffectApplicationReason::ApplyFailed);
+            diagnostics.push("injected exact promotion failure after first write".to_owned());
+            return rollback_exact_project_writes(
+                state_root,
+                publication_tree,
+                effect_lock,
+                wal_relative_path,
+                &tx_id,
+                effect_contract.id.clone(),
+                applied,
+                reasons,
+                diagnostics,
+                validation_error_count,
+                validation_warning_count,
+            );
+        }
+        if append_effect_wal_record_for_publication(
+            &effect_lock.state_root,
+            state_root,
+            wal_relative_path,
+            EffectWalRecord::write_applied(&tx_id, effect, &prepared),
+            WalDurability::SyncOnAppend,
+        )
+        .is_err()
+        {
+            diagnostics.push(format!(
+                "append write marker failed for {}",
+                write.reference
+            ));
+            reasons.push(EffectApplicationReason::WalAppendFailed);
+            return rollback_exact_project_writes(
+                state_root,
+                publication_tree,
+                effect_lock,
+                wal_relative_path,
+                &tx_id,
+                effect_contract.id.clone(),
+                applied,
+                reasons,
+                diagnostics,
+                validation_error_count,
+                validation_warning_count,
+            );
+        }
+    }
+    if append_effect_wal_record_for_publication(
+        &effect_lock.state_root,
+        state_root,
+        wal_relative_path,
+        EffectWalRecord::stage(&tx_id, effect_contract.id.clone(), EffectWalStage::Commit),
+        WalDurability::SyncOnAppend,
+    )
+    .is_err()
+    {
+        diagnostics.push("append split-root commit marker failed".to_owned());
+        reasons.push(EffectApplicationReason::WalAppendFailed);
+        return rollback_exact_project_writes(
+            state_root,
+            publication_tree,
+            effect_lock,
+            wal_relative_path,
+            &tx_id,
+            effect_contract.id.clone(),
+            applied,
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        );
+    }
+    EffectApplicationResult {
+        status: EffectApplicationStatus::Applied,
+        effect_id: effect_contract.id.clone(),
+        applied_refs: writes
+            .iter()
+            .map(|(write, _, _)| write.reference.clone())
+            .collect(),
+        metadata_records: Vec::new(),
+        rolled_back: false,
+        reasons: vec![EffectApplicationReason::Applied],
+        diagnostics,
+        validation_error_count,
+        validation_warning_count,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rollback_exact_project_writes(
+    state_root: &Path,
+    publication_tree: &mut retained_project_tree::RetainedProjectTree,
+    effect_lock: &EffectStoreLock,
+    wal_relative_path: &str,
+    tx_id: &str,
+    effect_id: StableId,
+    applied: Vec<(String, Vec<u8>, Vec<u8>)>,
+    mut reasons: Vec<EffectApplicationReason>,
+    mut diagnostics: Vec<String>,
+    validation_error_count: usize,
+    validation_warning_count: usize,
+) -> EffectApplicationResult {
+    let mut rollback_ok = true;
+    for (path, before, after) in applied.iter().rev() {
+        if let Err(error) = publication_tree.apply_exact_regular_file_write(path, after, before) {
+            rollback_ok = false;
+            diagnostics.push(format!("exact rollback {path} failed: {error}"));
+        }
+    }
+    if rollback_ok
+        && append_effect_wal_record_for_publication(
+            &effect_lock.state_root,
+            state_root,
+            wal_relative_path,
+            EffectWalRecord::stage(tx_id, effect_id.clone(), EffectWalStage::RollbackComplete),
+            WalDurability::SyncOnAppend,
+        )
+        .is_err()
+    {
+        rollback_ok = false;
+        diagnostics.push("append exact rollback marker failed".to_owned());
+    }
+    if !rollback_ok {
+        reasons.push(EffectApplicationReason::RollbackFailed);
+    }
+    EffectApplicationResult {
+        status: if rollback_ok {
+            EffectApplicationStatus::RolledBack
+        } else {
+            EffectApplicationStatus::RollbackFailed
+        },
+        effect_id,
+        applied_refs: applied.into_iter().map(|(path, _, _)| path).collect(),
+        metadata_records: Vec::new(),
+        rolled_back: rollback_ok,
+        reasons,
+        diagnostics,
+        validation_error_count,
+        validation_warning_count,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip_all, fields(effect_id = %effect.tool_effect_contract.id.0, tx_id = tracing::field::Empty), level = "info")]
 fn apply_file_effect_transaction_with_wal_inner(
@@ -4943,6 +5369,26 @@ fn recover_effect_wal_under_publication_root(
             };
         }
     };
+    if records.iter().any(|record| {
+        record.stage == EffectWalStage::Begin
+            && record
+                .execution_provenance
+                .as_ref()
+                .and_then(|provenance| provenance.document.get("publication_scope"))
+                .and_then(|scope| scope.get("kind"))
+                .and_then(serde_json::Value::as_str)
+                == Some("external_retained_project_tree_v1")
+    }) {
+        return EffectWalRecoveryResult {
+            status: EffectWalRecoveryStatus::RecoveryFailed,
+            recovered_transactions: Vec::new(),
+            reasons: vec![EffectWalRecoveryReason::ExternalPublicationUnsupported],
+            diagnostics: vec![
+                "split-root effect WAL requires the Ticket 11 promotion recovery command; generic same-root recovery is forbidden from applying before-images under the Forge state root"
+                    .to_owned(),
+            ],
+        };
+    }
     if let Some((tx_id, reserved)) = reserved_wal_target(&records) {
         return EffectWalRecoveryResult {
             status: EffectWalRecoveryStatus::RecoveryFailed,
@@ -8974,6 +9420,258 @@ mod tests {
         write.reference = "out/committed.txt".to_owned();
         write.target_kind = EffectTargetKind::FilePath;
         effect
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_split_root_apply_preserves_modes_and_leaves_no_quarantine_namespace() {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+        let root = temp_root("external-state-promotion");
+        let state = root.join("state");
+        let publication = root.join("publication");
+        fs::create_dir_all(&state).expect("state root");
+        fs::create_dir_all(publication.join("out")).expect("publication root");
+        fs::write(publication.join("out/committed.txt"), b"old\n").expect("old publication");
+        fs::write(publication.join("out/tool.sh"), b"old-tool\n").expect("old tool");
+        fs::set_permissions(
+            publication.join("out/committed.txt"),
+            fs::Permissions::from_mode(0o644),
+        )
+        .expect("0644");
+        fs::set_permissions(
+            publication.join("out/tool.sh"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("0755");
+        let mut effect = namespace_split_test_effect();
+        effect.tool_effect_contract.read_set.clear();
+        let write = &mut effect.tool_effect_contract.write_set[0];
+        write.access_mode = AccessMode::Write;
+        write.expected_hash = Some(sha256_content_hash(b"old\n"));
+        let mut second = write.clone();
+        second.reference = "out/tool.sh".to_owned();
+        second.expected_hash = Some(sha256_content_hash(b"old-tool\n"));
+        effect.tool_effect_contract.write_set.push(second);
+        effect.tool_effect_contract.read_set = vec![
+            forge_core_contracts::tool_effect::EffectRead {
+                target_kind: EffectTargetKind::FilePath,
+                reference: "out/committed.txt".to_owned(),
+                expected_hash: Some(sha256_content_hash(b"old\n")),
+                expected_version: None,
+                required_for_plan: true,
+            },
+            forge_core_contracts::tool_effect::EffectRead {
+                target_kind: EffectTargetKind::FilePath,
+                reference: "out/tool.sh".to_owned(),
+                expected_hash: Some(sha256_content_hash(b"old-tool\n")),
+                expected_version: None,
+                required_for_plan: true,
+            },
+        ];
+        let payloads = vec![
+            EffectApplicationPayload {
+                target_ref: "out/committed.txt".to_owned(),
+                content: b"new\n".to_vec(),
+                content_hash: sha256_content_hash(b"new\n"),
+            },
+            EffectApplicationPayload {
+                target_ref: "out/tool.sh".to_owned(),
+                content: b"new-tool\n".to_vec(),
+                content_hash: sha256_content_hash(b"new-tool\n"),
+            },
+        ];
+        let lock =
+            acquire_effect_store_lock(&state, "promotion/apply.lock").expect("promotion lock");
+        let mut publication_tree =
+            retained_project_tree::RetainedProjectTree::capture(&publication, 100, 1024 * 1024)
+                .expect("retain publication");
+        let capability = publication_tree
+            .exact_mutation_capability_digest()
+            .expect("capability digest");
+        let provenance = EffectExecutionProvenance::new(serde_json::json!({
+            "kind": "test-promotion",
+            "preview_digest": format!("sha256:{}", "a".repeat(64)),
+            "publication_scope": {
+                "kind": "external_retained_project_tree_v1",
+                "retained_capability_digest": capability,
+            },
+        }))
+        .expect("provenance");
+        let replay = EffectReplayCommitBinding::new(
+            format!("sha256:{}", "b".repeat(64)),
+            format!("sha256:{}", "c".repeat(64)),
+            format!("sha256:{}", "d".repeat(64)),
+            1,
+        );
+        let validation = validate_tool_effect(&effect);
+        assert!(
+            validation
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.severity != DiagnosticSeverity::Error),
+            "{:?}",
+            validation.diagnostics()
+        );
+        let result = apply_existing_file_effect_transaction_to_retained_project_tree(
+            &state,
+            &mut publication_tree,
+            &lock,
+            "promotion/apply.lock",
+            &effect,
+            &payloads,
+            "promotion/effects.ndjson",
+            "promotion-tx",
+            provenance,
+            replay,
+        );
+        assert_eq!(
+            result.status,
+            EffectApplicationStatus::Applied,
+            "{result:?}"
+        );
+        assert_eq!(
+            fs::read(publication.join("out/committed.txt")).expect("publication readback"),
+            b"new\n"
+        );
+        assert_eq!(
+            fs::read(publication.join("out/tool.sh")).expect("tool readback"),
+            b"new-tool\n"
+        );
+        assert_eq!(
+            fs::metadata(publication.join("out/committed.txt"))
+                .expect("committed metadata")
+                .mode()
+                & 0o777,
+            0o644
+        );
+        assert_eq!(
+            fs::metadata(publication.join("out/tool.sh"))
+                .expect("tool metadata")
+                .mode()
+                & 0o777,
+            0o755
+        );
+        assert!(state.join("promotion/effects.ndjson").is_file());
+        assert!(!publication.join("promotion").exists());
+        let generic_recovery = recover_effect_wal_under_lock(
+            &state,
+            &lock,
+            "promotion/apply.lock",
+            "promotion/effects.ndjson",
+        );
+        assert_eq!(
+            generic_recovery.status,
+            EffectWalRecoveryStatus::RecoveryFailed
+        );
+        assert_eq!(
+            generic_recovery.reasons,
+            vec![EffectWalRecoveryReason::ExternalPublicationUnsupported]
+        );
+        assert!(!state.join("out").exists());
+        for directory in [&publication, &publication.join("out")] {
+            for entry in fs::read_dir(directory).expect("namespace readback") {
+                let name = entry.expect("namespace entry").file_name();
+                assert!(
+                    !name.to_string_lossy().contains(".forge-retained-"),
+                    "promotion left an unpreviewed Store quarantine"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retained_split_root_rollback_restores_bytes_and_mode_without_quarantine() {
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+        let root = temp_root("external-state-promotion-rollback");
+        let state = root.join("state");
+        let publication = root.join("publication");
+        fs::create_dir_all(&state).expect("state root");
+        fs::create_dir_all(publication.join("out")).expect("publication root");
+        fs::write(publication.join("out/committed.txt"), b"old\n").expect("old publication");
+        fs::set_permissions(
+            publication.join("out/committed.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("0755");
+        fs::write(
+            state.join(".test-fail-exact-promotion-after-first-write"),
+            b"fail\n",
+        )
+        .expect("failure marker");
+        let mut effect = namespace_split_test_effect();
+        effect.tool_effect_contract.read_set.clear();
+        let write = &mut effect.tool_effect_contract.write_set[0];
+        write.access_mode = AccessMode::Write;
+        write.expected_hash = Some(sha256_content_hash(b"old\n"));
+        effect.tool_effect_contract.read_set =
+            vec![forge_core_contracts::tool_effect::EffectRead {
+                target_kind: EffectTargetKind::FilePath,
+                reference: "out/committed.txt".to_owned(),
+                expected_hash: Some(sha256_content_hash(b"old\n")),
+                expected_version: None,
+                required_for_plan: true,
+            }];
+        let payload = EffectApplicationPayload {
+            target_ref: "out/committed.txt".to_owned(),
+            content: b"new\n".to_vec(),
+            content_hash: sha256_content_hash(b"new\n"),
+        };
+        let lock =
+            acquire_effect_store_lock(&state, "promotion/apply.lock").expect("promotion lock");
+        let mut publication_tree =
+            retained_project_tree::RetainedProjectTree::capture(&publication, 100, 1024 * 1024)
+                .expect("retain publication");
+        let capability = publication_tree
+            .exact_mutation_capability_digest()
+            .expect("capability digest");
+        let provenance = EffectExecutionProvenance::new(serde_json::json!({
+            "kind": "test-promotion",
+            "publication_scope": {
+                "kind": "external_retained_project_tree_v1",
+                "retained_capability_digest": capability,
+            },
+        }))
+        .expect("provenance");
+        let result = apply_existing_file_effect_transaction_to_retained_project_tree(
+            &state,
+            &mut publication_tree,
+            &lock,
+            "promotion/apply.lock",
+            &effect,
+            &[payload],
+            "promotion/effects.ndjson",
+            "promotion-rollback",
+            provenance,
+            EffectReplayCommitBinding::new(
+                format!("sha256:{}", "b".repeat(64)),
+                format!("sha256:{}", "c".repeat(64)),
+                format!("sha256:{}", "d".repeat(64)),
+                1,
+            ),
+        );
+        assert_eq!(result.status, EffectApplicationStatus::RolledBack);
+        assert!(result.rolled_back);
+        assert_eq!(
+            fs::read(publication.join("out/committed.txt")).expect("rollback readback"),
+            b"old\n"
+        );
+        assert_eq!(
+            fs::metadata(publication.join("out/committed.txt"))
+                .expect("rollback metadata")
+                .mode()
+                & 0o777,
+            0o755
+        );
+        for entry in fs::read_dir(publication.join("out")).expect("namespace readback") {
+            assert!(!entry
+                .expect("namespace entry")
+                .file_name()
+                .to_string_lossy()
+                .contains(".forge-retained-"));
+        }
     }
 
     #[cfg(unix)]

@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, Metadata};
-use std::io::{self, Read as _, Seek as _, SeekFrom};
+use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
 
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
@@ -574,6 +574,229 @@ impl RetainedProjectTree {
             .collect::<Vec<_>>();
         observations.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
         observations
+    }
+
+    /// Copy bytes from the already-retained exact file handle for one normalized
+    /// project-relative path.
+    ///
+    /// This never reopens the ambient pathname. The complete retained tree is
+    /// revalidated before and after the copy so a promotion payload cannot be
+    /// sourced from a substituted worktree entry.
+    pub fn exact_regular_file_bytes(
+        &self,
+        relative_path: &str,
+    ) -> Result<Option<Vec<u8>>, RetainedProjectTreeError> {
+        if relative_path.is_empty()
+            || relative_path.starts_with('/')
+            || relative_path.starts_with('\\')
+            || relative_path.contains('\\')
+            || relative_path
+                .split('/')
+                .any(|component| component.is_empty() || matches!(component, "." | ".."))
+        {
+            return Err(RetainedProjectTreeError::InvalidRoot {
+                path: self.display_root.join(relative_path),
+                reason: "exact-byte lookup requires a normalized project-relative path".to_owned(),
+            });
+        }
+        self.revalidate()?;
+        let bytes = self
+            .files
+            .iter()
+            .find(|file| file.relative_path == relative_path)
+            .map(|file| file.exact_bytes.clone());
+        self.revalidate()?;
+        Ok(bytes)
+    }
+
+    /// Digest of the exact live destination capability used by promotion apply.
+    ///
+    /// The random root nonce exists only for this retained capture, so a later
+    /// ambient pathname reopen cannot recreate this binding even if it points
+    /// at byte-identical content.
+    pub fn exact_mutation_capability_digest(&self) -> Result<String, RetainedProjectTreeError> {
+        self.revalidate()?;
+        let root =
+            self.directories
+                .first()
+                .ok_or_else(|| RetainedProjectTreeError::InvalidRoot {
+                    path: self.display_root.clone(),
+                    reason: "retained project tree has no root capability".to_owned(),
+                })?;
+        let mut hasher = Sha256::new();
+        hasher.update(b"forge.retained-project.exact-mutation-capability.v1\0");
+        hasher.update(os_path_digest(&self.display_root).as_bytes());
+        hasher.update(b"\0");
+        hasher.update(root.capability_nonce.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(self.snapshot_digest.as_bytes());
+        Ok(format!("sha256:{:x}", hasher.finalize()))
+    }
+
+    /// Prove that one exact admitted regular file can be mutated through a
+    /// retained read/write handle without reopening the project root.
+    ///
+    /// Ticket 10 deliberately supports Unix only. Other platforms fail before
+    /// durable intent until their exact-handle metadata-preserving write path
+    /// has equivalent evidence.
+    pub fn preflight_exact_regular_file_write(
+        &self,
+        relative_path: &str,
+        expected: &[u8],
+    ) -> Result<(), RetainedProjectTreeError> {
+        self.revalidate()?;
+        let file_index = self.exact_regular_file_index(relative_path)?;
+        let retained = &self.files[file_index];
+        if retained.exact_bytes != expected {
+            return Err(identity_error(
+                &self.display_root.join(relative_path_to_path(relative_path)),
+                "exact mutation preflight bytes differ from the admitted destination",
+            ));
+        }
+        if hard_link_count(&retained.metadata) != 1 {
+            return Err(identity_error(
+                &self.display_root.join(relative_path_to_path(relative_path)),
+                "exact promotion mutation requires a single-link destination file",
+            ));
+        }
+        let parent = &self.directories[retained.parent];
+        let display_path = self.display_root.join(relative_path_to_path(relative_path));
+        let writable = platform::open_child_for_mutation(&parent.handle, &retained.name_in_parent)
+            .map_err(|error| io_error(&display_path, error))?;
+        let writable_metadata = RetainedMetadata::capture(&writable, &display_path)?;
+        validate_file_metadata(&writable_metadata, &display_path, self.file_alias_policy)?;
+        if !same_stable_file_metadata(
+            &retained.metadata,
+            &writable_metadata,
+            self.file_alias_policy,
+        ) {
+            return Err(identity_error(
+                &display_path,
+                "writable handle does not name the exact admitted destination file",
+            ));
+        }
+        let bytes = read_retained_file(&writable, retained.metadata.metadata.len(), &display_path)?;
+        if bytes != expected {
+            return Err(identity_error(
+                &display_path,
+                "writable handle bytes differ from the exact admitted destination",
+            ));
+        }
+        self.revalidate()
+    }
+
+    /// Mutate one exact admitted regular file in place and advance this live
+    /// retained capability to the new bytes.
+    ///
+    /// In-place mutation preserves the admitted object, Unix mode, uid, gid,
+    /// and link count and therefore creates no hidden quarantine namespace.
+    pub(crate) fn apply_exact_regular_file_write(
+        &mut self,
+        relative_path: &str,
+        expected: &[u8],
+        replacement: &[u8],
+    ) -> Result<(), RetainedProjectTreeError> {
+        self.preflight_exact_regular_file_write(relative_path, expected)?;
+        let file_index = self.exact_regular_file_index(relative_path)?;
+        let parent_index = self.files[file_index].parent;
+        let name = self.files[file_index].name_in_parent.clone();
+        let before_metadata = self.files[file_index].metadata.clone();
+        let display_path = self.display_root.join(relative_path_to_path(relative_path));
+        let mut writable =
+            platform::open_child_for_mutation(&self.directories[parent_index].handle, &name)
+                .map_err(|error| io_error(&display_path, error))?;
+        let rebound_metadata = RetainedMetadata::capture(&writable, &display_path)?;
+        if !same_stable_file_metadata(&before_metadata, &rebound_metadata, self.file_alias_policy) {
+            return Err(identity_error(
+                &display_path,
+                "destination changed before exact retained mutation",
+            ));
+        }
+        writable
+            .seek(SeekFrom::Start(0))
+            .and_then(|_| writable.write_all(replacement))
+            .and_then(|_| writable.set_len(u64::try_from(replacement.len()).unwrap_or(u64::MAX)))
+            .and_then(|_| writable.sync_all())
+            .map_err(|error| io_error(&display_path, error))?;
+        let after_metadata = RetainedMetadata::capture(&writable, &display_path)?;
+        validate_file_metadata(&after_metadata, &display_path, self.file_alias_policy)?;
+        if !same_exact_file_and_admitted_metadata_after_mutation(
+            &before_metadata,
+            &after_metadata,
+            self.file_alias_policy,
+        ) {
+            return Err(identity_error(
+                &display_path,
+                "exact mutation changed admitted file identity, mode, owner, or link policy",
+            ));
+        }
+        let observed = read_retained_file(
+            &writable,
+            u64::try_from(replacement.len()).unwrap_or(u64::MAX),
+            &display_path,
+        )?;
+        if observed != replacement {
+            return Err(identity_error(
+                &display_path,
+                "exact retained mutation readback differs from requested bytes",
+            ));
+        }
+        self.files[file_index].handle = writable;
+        self.files[file_index].metadata = after_metadata;
+        self.files[file_index].exact_bytes = replacement.to_vec();
+        self.refresh_snapshot_digests()?;
+        self.revalidate()
+    }
+
+    fn exact_regular_file_index(
+        &self,
+        relative_path: &str,
+    ) -> Result<usize, RetainedProjectTreeError> {
+        if relative_path.is_empty()
+            || relative_path.starts_with('/')
+            || relative_path.starts_with('\\')
+            || relative_path.contains('\\')
+            || relative_path
+                .split('/')
+                .any(|component| component.is_empty() || matches!(component, "." | ".."))
+        {
+            return Err(RetainedProjectTreeError::InvalidRoot {
+                path: self.display_root.join(relative_path),
+                reason: "exact mutation requires a normalized project-relative path".to_owned(),
+            });
+        }
+        self.files
+            .iter()
+            .position(|file| file.relative_path == relative_path)
+            .ok_or_else(|| RetainedProjectTreeError::Identity {
+                path: self.display_root.join(relative_path_to_path(relative_path)),
+                reason: "exact mutation target is not an admitted regular file".to_owned(),
+            })
+    }
+
+    fn refresh_snapshot_digests(&mut self) -> Result<(), RetainedProjectTreeError> {
+        let mut regular = self
+            .files
+            .iter()
+            .map(|file| {
+                (
+                    file.relative_path.clone(),
+                    crate::sha256_content_hash(&file.exact_bytes),
+                )
+            })
+            .collect::<Vec<_>>();
+        regular.sort();
+        self.regular_file_snapshot_digest = digest_entries_digest(&regular)?;
+        let mut complete = regular;
+        complete.extend(self.directories.iter().skip(1).map(|directory| {
+            (
+                directory.relative_path.clone(),
+                DIRECTORY_DIGEST_MARKER.to_owned(),
+            )
+        }));
+        complete.sort();
+        self.snapshot_digest = digest_entries_digest(&complete)?;
+        Ok(())
     }
 
     /// Sorted directory projection for empty-directory and mode diagnostics.
@@ -1533,8 +1756,7 @@ fn read_retained_file(
         .seek(SeekFrom::Start(0))
         .map_err(|error| io_error(display_path, error))?;
     let mut bytes = Vec::with_capacity(usize::try_from(expected_length).unwrap_or(0));
-    reader
-        .by_ref()
+    std::io::Read::by_ref(&mut reader)
         .take(expected_length.saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|error| io_error(display_path, error))?;
@@ -1861,6 +2083,33 @@ fn same_stable_file_metadata(
 }
 
 #[cfg(unix)]
+fn same_exact_file_and_admitted_metadata_after_mutation(
+    before: &RetainedMetadata,
+    after: &RetainedMetadata,
+    file_alias_policy: RetainedFileAliasPolicy,
+) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    let before = &before.metadata;
+    let after = &after.metadata;
+    before.dev() == after.dev()
+        && before.ino() == after.ino()
+        && before.file_type() == after.file_type()
+        && before.mode() == after.mode()
+        && before.uid() == after.uid()
+        && before.gid() == after.gid()
+        && (file_alias_policy.allows_alias_metadata_changes() || before.nlink() == after.nlink())
+}
+
+#[cfg(not(unix))]
+fn same_exact_file_and_admitted_metadata_after_mutation(
+    _before: &RetainedMetadata,
+    _after: &RetainedMetadata,
+    _file_alias_policy: RetainedFileAliasPolicy,
+) -> bool {
+    false
+}
+
+#[cfg(unix)]
 fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
     use std::os::unix::fs::MetadataExt as _;
     format!(
@@ -1923,6 +2172,18 @@ mod platform {
             parent,
             name,
             OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
+            Mode::empty(),
+        )
+        .map_err(io::Error::from)?;
+        Ok(File::from(descriptor))
+    }
+
+    pub(super) fn open_child_for_mutation(parent: &File, name: &OsStr) -> io::Result<File> {
+        use rustix::fs::{openat, Mode, OFlags};
+        let descriptor = openat(
+            parent,
+            name,
+            OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK,
             Mode::empty(),
         )
         .map_err(io::Error::from)?;
@@ -2109,6 +2370,13 @@ mod platform {
         }
     }
 
+    pub(super) fn open_child_for_mutation(_parent: &File, _name: &OsStr) -> io::Result<File> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "exact metadata-preserving promotion mutation is not admitted on Windows yet",
+        ))
+    }
+
     #[allow(clippy::cast_ptr_alignment)]
     // the directory-query buffer is file-read and intentionally unaligned; the cast is paired with read_unaligned.
     #[allow(clippy::cast_sign_loss)] // FILE_ID_BOTH_DIR_INFO.FileId is an i64 whose bit pattern is treated as an opaque Windows FILE_ID (unsigned semantics).
@@ -2226,6 +2494,10 @@ mod platform {
         unsupported()
     }
 
+    pub(super) fn open_child_for_mutation(_parent: &File, _name: &OsStr) -> io::Result<File> {
+        unsupported()
+    }
+
     pub(super) fn read_entries(_directory: &File) -> io::Result<Vec<DirectoryEntry>> {
         unsupported()
     }
@@ -2235,7 +2507,6 @@ mod platform {
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::Write as _;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn project_root(label: &str) -> PathBuf {
@@ -2280,6 +2551,26 @@ mod tests {
                 maximum: 8,
             })
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn exact_regular_file_bytes_use_retained_handle_and_fail_on_drift() {
+        let root = project_root("exact-bytes");
+        fs::create_dir_all(&root).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"retained").unwrap();
+        let retained = RetainedProjectTree::capture(&root, 8, 32).unwrap();
+        assert_eq!(
+            retained
+                .exact_regular_file_bytes("README.md")
+                .unwrap()
+                .as_deref(),
+            Some(b"retained".as_slice())
+        );
+        fs::write(&leaf, b"changed!").unwrap();
+        assert!(retained.exact_regular_file_bytes("README.md").is_err());
+        drop(retained);
         fs::remove_dir_all(root).unwrap();
     }
 

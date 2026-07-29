@@ -79,6 +79,9 @@ pub enum TypedFailure {
     /// The operation reached the runtime but did not complete for a reason
     /// not covered by a more specific variant.
     ExecutionFailed { reason: String },
+    /// A durable promotion intent or effect may exist, so an agent must stop
+    /// and preserve state rather than retrying or attempting manual rollback.
+    RecoveryRequired { reason: String },
     /// Catch-all for failures with no clean typed home.
     Other { message: String },
 }
@@ -137,6 +140,7 @@ impl fmt::Display for TypedFailure {
                 }
             }
             Self::ExecutionFailed { reason } => write!(f, "execution failed: {reason}"),
+            Self::RecoveryRequired { reason } => write!(f, "recovery required: {reason}"),
             Self::Other { message } => f.write_str(message),
         }
     }
@@ -223,6 +227,12 @@ mod tests {
                     reason: "boom".into(),
                 },
                 "execution_failed",
+            ),
+            (
+                TypedFailure::RecoveryRequired {
+                    reason: "preserve state".into(),
+                },
+                "recovery_required",
             ),
             (
                 TypedFailure::Other {

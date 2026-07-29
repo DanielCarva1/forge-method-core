@@ -121,7 +121,8 @@ use forge_core_domain_pack_tcb::{
     LockedDomainPackLifecycleObservation,
 };
 use forge_core_store::claim_wal::{
-    project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
+    project_claim_wal, retain_existing_claim_wal_projection, ClaimWalProjection,
+    ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
 };
 use forge_core_store::retained_crash_replace::observe_file_crash_safe_under_owned_lock;
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
@@ -129,7 +130,9 @@ use forge_core_store::workflow_action_replay::{
     begin_workflow_action_replay_reservation, initialize_workflow_action_replay,
     workflow_action_replay_origin_fingerprint, WorkflowActionReplayError,
 };
-use forge_core_store::{sha256_content_hash, ReferenceIndexBuilder, RetainedEffectStoreRoot};
+use forge_core_store::{
+    acquire_effect_store_lock, sha256_content_hash, ReferenceIndexBuilder, RetainedEffectStoreRoot,
+};
 use forge_core_validate::{
     validate_completion, validate_health_recovery, validate_request, ReferenceIndex, ReferenceKind,
 };
@@ -796,6 +799,10 @@ impl RetainedWorkflowProjectSnapshot {
 
     pub(super) const fn tree(&self) -> &RetainedProjectTree {
         &self.tree
+    }
+
+    pub(super) const fn tree_mut(&mut self) -> &mut RetainedProjectTree {
+        &mut self.tree
     }
 }
 
@@ -1497,6 +1504,92 @@ impl WorkflowGovernanceProjectAdapter {
         )?;
         destination.revalidate()?;
         Ok(preview)
+    }
+
+    /// Apply one exact reviewable local-reversible promotion preview.
+    ///
+    /// The preview digest is only a compare-and-swap identity. Domain, ledger,
+    /// live claim/principal, evidence, source, destination, effect, and payload
+    /// are re-derived under retained locks. No broker or strict-external
+    /// authorization is required for this solo-cooperative local lane.
+    pub fn apply_promotion(
+        &self,
+        isolation_id: &StableId,
+        expected_preview_digest: &str,
+    ) -> Result<forge_core_contracts::GovernedPromotionApplication, WorkflowGovernanceAdapterError>
+    {
+        super::promotion::validate_expected_preview_digest(expected_preview_digest)?;
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_existing(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        let claim_guard = retain_existing_claim_wal_projection(
+            &self.binding.state_root,
+            &ClaimWalProjectionOptions {
+                repair: false,
+                stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+            },
+        )
+        .map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        let effect_lock = acquire_effect_store_lock(
+            &self.binding.state_root,
+            super::promotion::PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        )
+        .map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        if let Some(committed) = super::promotion::inspect_promotion_retry_under_lock(
+            &self.binding,
+            &effect_lock,
+            isolation_id,
+            expected_preview_digest,
+        )? {
+            return Ok(committed);
+        }
+        let mut destination = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &destination,
+        )?;
+        let prepared = super::promotion::prepare_governed_promotion_with_claim_projection(
+            &self.binding,
+            isolation_id,
+            &guidance,
+            destination.tree(),
+            now,
+            claim_guard.projection(),
+        )?;
+        claim_guard.revalidate().map_err(|error| {
+            WorkflowGovernanceAdapterError::PromotionApply(
+                super::promotion::PromotionApplyError::Store(error.to_string()),
+            )
+        })?;
+        destination.revalidate()?;
+        super::promotion::apply_prepared_promotion_under_lock(
+            &self.binding,
+            expected_preview_digest,
+            prepared,
+            destination.tree_mut(),
+            &effect_lock,
+            &claim_guard,
+        )
+        .map_err(WorkflowGovernanceAdapterError::PromotionApply)
     }
 
     /// Adjudicate and durably record a same-owner evidence offer. Rejections
@@ -5603,6 +5696,7 @@ pub enum WorkflowGovernanceAdapterError {
     CoordinationInvalid(String),
     ClaimProjection(String),
     PromotionPreview(super::promotion::PromotionPreviewError),
+    PromotionApply(super::promotion::PromotionApplyError),
     ReplacementContinuityUnavailable(&'static str),
     FoundationalReceiptRevocation,
     StateVersionOverflow,
@@ -5737,6 +5831,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::PromotionPreview(error) => {
                 write!(f, "governed promotion preview failed: {error}")
             }
+            Self::PromotionApply(error) => {
+                write!(f, "governed promotion apply failed: {error}")
+            }
             Self::ReplacementContinuityUnavailable(reason) => {
                 write!(f, "replacement continuity is unavailable: {reason}")
             }
@@ -5816,6 +5913,12 @@ impl From<AssuranceProjectionError> for WorkflowGovernanceAdapterError {
 impl From<super::promotion::PromotionPreviewError> for WorkflowGovernanceAdapterError {
     fn from(value: super::promotion::PromotionPreviewError) -> Self {
         Self::PromotionPreview(value)
+    }
+}
+
+impl From<super::promotion::PromotionApplyError> for WorkflowGovernanceAdapterError {
+    fn from(value: super::promotion::PromotionApplyError) -> Self {
+        Self::PromotionApply(value)
     }
 }
 

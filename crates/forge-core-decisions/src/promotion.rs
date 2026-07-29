@@ -1,8 +1,9 @@
 //! Pure, deterministic planning for read-only governed-promotion previews.
 
 use forge_core_contracts::{
-    GovernedPromotionPreviewStatus, PromotionDiffEffect, PromotionDiffEntry, PromotionGap,
-    PromotionGapCode, PromotionUnsupportedEffect, PromotionUnsupportedEffectKind, RepoPath,
+    GovernedPromotionPreviewStatus, PromotionApplyEligibility, PromotionDiffEffect,
+    PromotionDiffEntry, PromotionGap, PromotionGapCode, PromotionUnsupportedEffect,
+    PromotionUnsupportedEffectKind, RepoPath,
 };
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
@@ -232,13 +233,15 @@ pub struct PromotionReadinessInput<'a> {
     pub conflicting_paths: &'a [RepoPath],
     pub unsupported_effects: &'a [PromotionUnsupportedEffect],
     pub supporting_cooperative_evidence: usize,
-    pub unsatisfied_source_claim_refs: &'a [String],
+    pub blocking_source_claim_refs: &'a [String],
+    pub has_linked_claim_principal: bool,
     pub open_objective_uncertainties: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromotionReadinessEvaluation {
     pub status: GovernedPromotionPreviewStatus,
+    pub apply_eligibility: PromotionApplyEligibility,
     pub unresolved_gaps: Vec<PromotionGap>,
 }
 
@@ -274,7 +277,7 @@ pub fn evaluate_promotion_readiness(
             "no current supporting cooperative evidence record is bound",
         ));
     }
-    for claim_ref in input.unsatisfied_source_claim_refs {
+    for claim_ref in input.blocking_source_claim_refs {
         gaps.push(gap(
             PromotionGapCode::SourceAssuranceClaimUnsatisfied,
             claim_ref,
@@ -286,6 +289,13 @@ pub fn evaluate_promotion_readiness(
             PromotionGapCode::MissingLinkedIsolationClaim,
             "promotion.source.isolation",
             "active isolation text has no linked claim and is not ownership proof",
+        ));
+    }
+    if input.has_linked_claim && !input.has_linked_claim_principal {
+        gaps.push(gap(
+            PromotionGapCode::MissingLinkedClaimPrincipal,
+            "promotion.source.linked_claim",
+            "the current linked claim has no principal identity",
         ));
     }
     if !input.ungoverned_paths.is_empty() {
@@ -339,6 +349,11 @@ pub fn evaluate_promotion_readiness(
     };
     PromotionReadinessEvaluation {
         status,
+        apply_eligibility: if status == GovernedPromotionPreviewStatus::Reviewable {
+            PromotionApplyEligibility::EligibleLocalReversible
+        } else {
+            PromotionApplyEligibility::NotEligible
+        },
         unresolved_gaps: gaps,
     }
 }
@@ -463,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn cooperative_evidence_never_satisfies_a_source_assurance_claim() {
+    fn carried_assurance_gap_does_not_block_local_reversible_eligibility() {
         let changed = PromotionDiffEntry {
             path: RepoPath("src/lib.rs".to_owned()),
             effect: PromotionDiffEffect::WriteRegularFile,
@@ -482,14 +497,46 @@ mod tests {
             conflicting_paths: &[],
             unsupported_effects: &[],
             supporting_cooperative_evidence: 1,
-            unsatisfied_source_claim_refs: &["claim.source.runtime".to_owned()],
+            blocking_source_claim_refs: &[],
+            has_linked_claim_principal: true,
+            open_objective_uncertainties: 0,
+        });
+        assert_eq!(
+            evaluation.status,
+            GovernedPromotionPreviewStatus::Reviewable
+        );
+        assert_eq!(
+            evaluation.apply_eligibility,
+            PromotionApplyEligibility::EligibleLocalReversible
+        );
+        assert!(evaluation.unresolved_gaps.is_empty());
+    }
+
+    #[test]
+    fn disproven_source_assurance_remains_blocking() {
+        let changed = PromotionDiffEntry {
+            path: RepoPath("src/lib.rs".to_owned()),
+            effect: PromotionDiffEffect::WriteRegularFile,
+            before_content_digest: Some("sha256:before".to_owned()),
+            before_byte_length: Some(1),
+            after_content_digest: Some("sha256:after".to_owned()),
+            after_byte_length: Some(1),
+            before_metadata_fingerprint: Some("mode=a".to_owned()),
+            after_metadata_fingerprint: Some("mode=a".to_owned()),
+            destructive: false,
+        };
+        let evaluation = evaluate_promotion_readiness(&PromotionReadinessInput {
+            diff: &[changed],
+            has_linked_claim: true,
+            has_linked_claim_principal: true,
+            ungoverned_paths: &[],
+            conflicting_paths: &[],
+            unsupported_effects: &[],
+            supporting_cooperative_evidence: 1,
+            blocking_source_claim_refs: &["claim.source.runtime".to_owned()],
             open_objective_uncertainties: 0,
         });
         assert_eq!(evaluation.status, GovernedPromotionPreviewStatus::Blocked);
-        assert!(evaluation.unresolved_gaps.iter().any(|gap| {
-            gap.code == PromotionGapCode::SourceAssuranceClaimUnsatisfied
-                && gap.subject_ref == "claim.source.runtime"
-        }));
     }
 
     #[test]
@@ -535,7 +582,8 @@ mod tests {
             conflicting_paths: &[],
             unsupported_effects: &projection.unsupported_effects,
             supporting_cooperative_evidence: 1,
-            unsatisfied_source_claim_refs: &[],
+            blocking_source_claim_refs: &[],
+            has_linked_claim_principal: true,
             open_objective_uncertainties: 0,
         });
         assert_eq!(readiness.status, GovernedPromotionPreviewStatus::Blocked);
@@ -576,7 +624,8 @@ mod tests {
             conflicting_paths: &[],
             unsupported_effects: &projection.unsupported_effects,
             supporting_cooperative_evidence: 1,
-            unsatisfied_source_claim_refs: &[],
+            blocking_source_claim_refs: &[],
+            has_linked_claim_principal: true,
             open_objective_uncertainties: 0,
         });
         assert_eq!(readiness.status, GovernedPromotionPreviewStatus::Blocked);

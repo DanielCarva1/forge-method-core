@@ -498,6 +498,10 @@ pub enum ReplayWalError {
         key_hash: String,
         state: ReplayReservationState,
     },
+    ReservationNotConsumed {
+        key_hash: String,
+        state: ReplayReservationState,
+    },
     EffectLockScopeMismatch {
         expected: PathBuf,
         actual: PathBuf,
@@ -624,6 +628,10 @@ impl fmt::Display for ReplayWalError {
             Self::ReservationNotReserved { key_hash, state } => write!(
                 formatter,
                 "replay reservation {key_hash} is not reserved ({state:?})"
+            ),
+            Self::ReservationNotConsumed { key_hash, state } => write!(
+                formatter,
+                "replay reservation {key_hash} is not consumed ({state:?})"
             ),
             Self::EffectLockScopeMismatch { expected, actual } => write!(
                 formatter,
@@ -951,6 +959,84 @@ pub fn consume_replay_key_hash_under_effect_lock(
         commit_digest,
         expected_revision,
     )
+}
+
+/// Verify, without mutation, that an exact replay binding was durably consumed
+/// while retaining the caller's effect-store lock.
+///
+/// This is the receipt/readback path for committed effects. It preserves the
+/// global `effect -> replay` lock order, refuses torn or corrupt WAL state, and
+/// never repairs or appends replay records.
+///
+/// # Errors
+///
+/// Returns [`ReplayWalError`] for invalid input, lock-scope mismatch, corrupt
+/// replay state, a missing/mismatched reservation, or a binding that is not at
+/// the exact consumed revision.
+#[allow(clippy::too_many_arguments)]
+pub fn verify_consumed_replay_key_hash_under_effect_lock(
+    state_root: impl AsRef<Path>,
+    effect_lock: &crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    key_hash: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+    reservation_revision: u64,
+) -> Result<ReplayReservation, ReplayWalError> {
+    validate_sha256_field("key_hash", key_hash)?;
+    validate_sha256_digest(intent_digest)?;
+    validate_commit_digest(commit_digest)?;
+    if reservation_revision == 0 {
+        return Err(ReplayWalError::InvalidInput {
+            field: "reservation_revision",
+            reason: "must be greater than zero",
+        });
+    }
+    let scope = retained_effect_scope(
+        state_root.as_ref(),
+        effect_lock,
+        expected_effect_lock_relative_path,
+    )?;
+    let replay_lock = ReplayWalRetainedLock::acquire_under_effect_scope(&scope)?;
+    let recovery =
+        recover_replay_wal_under_retained_lock(&scope.state_root_display, &replay_lock, false)?;
+    ensure_appendable(&recovery)?;
+    let Some(existing) = recovery.reservations.get(key_hash) else {
+        return Err(ReplayWalError::ReservationMissing {
+            key_hash: key_hash.to_owned(),
+        });
+    };
+    if existing.intent_digest != intent_digest {
+        return Err(ReplayWalError::IntentDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
+    }
+    if existing.commit_digest != commit_digest {
+        return Err(ReplayWalError::CommitDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
+    }
+    if existing.state != ReplayReservationState::Consumed || existing.consumed_seq.is_none() {
+        return Err(ReplayWalError::ReservationNotConsumed {
+            key_hash: key_hash.to_owned(),
+            state: existing.state,
+        });
+    }
+    let consumed_revision =
+        reservation_revision
+            .checked_add(1)
+            .ok_or_else(|| ReplayWalError::RevisionOverflow {
+                key_hash: key_hash.to_owned(),
+                revision: reservation_revision,
+            })?;
+    if existing.revision != consumed_revision {
+        return Err(ReplayWalError::RevisionMismatch {
+            key_hash: key_hash.to_owned(),
+            expected: consumed_revision,
+            actual: existing.revision,
+        });
+    }
+    Ok(existing.clone())
 }
 
 fn consume_replay_recovered(

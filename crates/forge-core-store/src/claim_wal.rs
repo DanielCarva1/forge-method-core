@@ -365,6 +365,50 @@ pub struct ClaimWalProjection {
     pub diagnostics: Vec<ClaimWalProjectionDiagnostic>,
 }
 
+/// Existing-only, retained claim projection used by governed promotion.
+///
+/// The type is intentionally opaque, non-`Clone`, and non-Serde. Holding it
+/// keeps the exact claim-WAL lock and producer boundary alive; callers may only
+/// inspect the admitted projection or prove it has not changed.
+pub struct ExistingClaimProjectionGuard {
+    state_root: PathBuf,
+    guard: ClaimWalRetainedLock,
+    projection: ClaimWalProjection,
+}
+
+impl ExistingClaimProjectionGuard {
+    #[must_use]
+    pub const fn projection(&self) -> &ClaimWalProjection {
+        &self.projection
+    }
+
+    /// Re-read beneath the retained lock and require byte-semantic projection
+    /// equality. No repair or state creation is permitted.
+    pub fn revalidate(&self) -> Result<(), ClaimWalProjectionError> {
+        let recovery = recover_claim_wal_under_retained_lock(&self.state_root, &self.guard, false)
+            .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+        if recovery.stop_reason != ClaimWalStopReason::CleanEof {
+            return Err(ClaimWalProjectionError::RecoveryStopped {
+                stop_reason: recovery.stop_reason,
+                last_good_offset: recovery.last_good_offset,
+                original_len: recovery.original_len,
+            });
+        }
+        let current = project_claim_wal_recovery(recovery);
+        if current != self.projection {
+            return Err(ClaimWalProjectionError::RecoverWal {
+                source: ClaimWalReadError::ReadWal {
+                    path: claim_wal_path(&self.state_root),
+                    source: "claim projection changed while retained".to_owned(),
+                },
+            });
+        }
+        self.guard
+            .validate(&self.state_root)
+            .map_err(|source| ClaimWalProjectionError::RecoverWal { source })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectedClaim {
@@ -1326,6 +1370,52 @@ pub fn project_existing_claim_wal(
         });
     }
     Ok(project_claim_wal_recovery(recovery))
+}
+
+/// Project a pre-existing claim WAL while retaining its exact lock.
+///
+/// This is the narrow promotion admission seam. It never creates the producer
+/// boundary, lock, WAL, or manifest and never exposes mutation authority.
+pub fn retain_existing_claim_wal_projection(
+    state_root: impl AsRef<Path>,
+    options: &ClaimWalProjectionOptions,
+) -> Result<ExistingClaimProjectionGuard, ClaimWalProjectionError> {
+    if options.repair {
+        return Err(ClaimWalProjectionError::RecoverWal {
+            source: ClaimWalReadError::ReadWal {
+                path: claim_wal_path(state_root.as_ref()),
+                source: "retained existing-only projection forbids repair".to_owned(),
+            },
+        });
+    }
+    let state_root = state_root.as_ref();
+    let boundary = crate::producer_quiescence::admit_existing_effect_producer(state_root, false)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal {
+            source: ClaimWalReadError::Lock {
+                path: claim_wal_lock_path(state_root),
+                source: source.to_string(),
+            },
+        })?;
+    let guard = acquire_existing_claim_wal_retained_lock_under_boundary(&boundary, state_root)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+    let recovery = recover_claim_wal_under_retained_lock(state_root, &guard, false)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+    if options.stop_policy == ClaimWalProjectionStopPolicy::RequireCleanEof
+        && recovery.stop_reason != ClaimWalStopReason::CleanEof
+    {
+        return Err(ClaimWalProjectionError::RecoveryStopped {
+            stop_reason: recovery.stop_reason,
+            last_good_offset: recovery.last_good_offset,
+            original_len: recovery.original_len,
+        });
+    }
+    let retained = ExistingClaimProjectionGuard {
+        state_root: state_root.to_path_buf(),
+        guard,
+        projection: project_claim_wal_recovery(recovery),
+    };
+    retained.revalidate()?;
+    Ok(retained)
 }
 
 /// Rotate the active claim WAL when one of the configured thresholds is crossed.

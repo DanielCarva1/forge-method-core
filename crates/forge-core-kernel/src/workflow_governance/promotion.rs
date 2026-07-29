@@ -1,25 +1,36 @@
-//! Read-only governed promotion preview.
+//! Governed isolated-work preview and exact local-reversible apply.
 //!
 //! This module binds one Active isolation contract to retained source and
 //! destination trees plus current objective, evidence, ledger, and claim-WAL
-//! projections. It deliberately has no apply, WAL append, or replay surface.
+//! projections. Apply re-derives the same facts under retained locks, records a
+//! durable replay intent, writes only exact existing regular files, reads back
+//! canonical state, and publishes a self-digested receipt.
 
 use super::adapter::{WorkflowGovernanceGuidance, WorkflowGovernanceProjectBinding};
+use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::isolation::{
     IsolationContract, IsolationContractDocument, IsolationStatus,
 };
+use forge_core_contracts::tool_effect::{
+    AccessMode, ConflictCode, ConflictDetection, ConflictPolicy, EffectActor, EffectKind,
+    EffectNotification, EffectRead, EffectRepair, EffectTargetKind, EffectWrite, InverseKind,
+    InverseMetadata, InverseSource, RepairStrategy,
+};
 use forge_core_contracts::{
-    ClaimId, GovernedPromotionPreview, GovernedPromotionPreviewAuthority,
-    PromotionAssuranceClaimCoverage, PromotionAssuranceClaimStatus, PromotionClaimConflict,
-    PromotionClaimSetBinding, PromotionDestinationBinding, PromotionEvidenceRecordBinding,
-    PromotionEvidenceSetBinding, PromotionExcludedRootBinding, PromotionExcludedRootKind,
-    PromotionGitWorktreeBinding, PromotionGovernanceBinding, PromotionObjectiveBinding,
-    PromotionObjectiveCoverage, PromotionObjectiveCoverageStatus, PromotionPathClaimAttribution,
-    PromotionSnapshotBinding, PromotionSourceBinding, PromotionUnsupportedEffect,
-    PromotionUnsupportedEffectKind, PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus,
-    RepoPath, StableId, WorkflowCooperativeEvidenceCurrentStatus,
+    ClaimId, GovernedPromotionApplication, GovernedPromotionApplyStatus, GovernedPromotionPreview,
+    GovernedPromotionPreviewAuthority, GovernedPromotionReceipt, PrincipalId,
+    PromotionAppliedFileBinding, PromotionApplyEligibility, PromotionAssuranceClaimCoverage,
+    PromotionAssuranceClaimStatus, PromotionCarriedAssuranceGap, PromotionClaimConflict,
+    PromotionClaimSetBinding, PromotionDestinationBinding, PromotionDiffEffect,
+    PromotionEvidenceRecordBinding, PromotionEvidenceSetBinding, PromotionExcludedRootBinding,
+    PromotionExcludedRootKind, PromotionGitWorktreeBinding, PromotionGovernanceBinding,
+    PromotionObjectiveBinding, PromotionObjectiveCoverage, PromotionObjectiveCoverageStatus,
+    PromotionPathClaimAttribution, PromotionReplayBinding, PromotionSnapshotBinding,
+    PromotionSourceBinding, PromotionUnsupportedEffect, PromotionUnsupportedEffectKind,
+    PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus, RepoPath, StableId,
+    ToolEffectContract, ToolEffectContractDocument, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceDisposition, WorkflowReadinessProfile,
-    GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION,
+    GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION, GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     check_write_against_claims, derive_promotion_diff, evaluate_promotion_readiness, is_live,
@@ -28,11 +39,21 @@ use forge_core_decisions::{
     PromotionReadinessInput, WorkflowClaimResultStatus, WriteCheck,
 };
 use forge_core_store::claim_wal::{
-    project_existing_claim_wal, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
-    CLAIM_WAL_LOCK_RELATIVE_PATH, CLAIM_WAL_RELATIVE_PATH,
+    project_existing_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions,
+    ClaimWalProjectionStopPolicy, CLAIM_WAL_LOCK_RELATIVE_PATH, CLAIM_WAL_RELATIVE_PATH,
+};
+use forge_core_store::replay_wal::{
+    acquire_replay_commit_guard, replay_nonce_key_hash, reserve_replay_nonce_under_effect_lock,
+    verify_consumed_replay_key_hash_under_effect_lock,
 };
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
-use forge_core_store::sha256_content_hash;
+use forge_core_store::{
+    append_effect_replay_completion_under_lock,
+    apply_existing_file_effect_transaction_to_retained_project_tree, sha256_content_hash,
+    EffectApplicationPayload, EffectApplicationStatus, EffectExecutionProvenance,
+    EffectReplayCommitBinding, EffectStoreLock,
+};
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -42,6 +63,10 @@ const MAX_PROMOTION_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ISOLATION_DOCUMENTS: usize = 10_000;
 const MAX_ISOLATION_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
+pub(super) const PROMOTION_EFFECT_LOCK_RELATIVE_PATH: &str = "promotion/apply.lock";
+const PROMOTION_EFFECT_WAL_RELATIVE_PATH: &str = "promotion/effects.ndjson";
+const PROMOTION_RECEIPT_MAX_BYTES: u64 = 64 * 1024 * 1024;
+const PROMOTION_REPLAY_AUDIENCE: &str = "forge.workflow.promotion.apply.local-reversible.v1";
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -67,6 +92,67 @@ pub enum PromotionPreviewError {
     ClockOverflow,
     GitWorktree(String),
     FreshnessExpiredDuringDerivation,
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum PromotionApplyError {
+    InvalidExpectedPreviewDigest,
+    Store(String),
+    ReceiptInvalid(String),
+    RecoveryRequired(String),
+    Preview(PromotionPreviewError),
+    PreviewDigestMismatch { expected: String, actual: String },
+    NotEligible(String),
+    MissingDerivedPrincipal,
+    UnsupportedEffect(String),
+    Payload(String),
+    Effect(String),
+    Readback(String),
+}
+
+impl std::fmt::Display for PromotionApplyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidExpectedPreviewDigest => {
+                formatter.write_str("expected preview digest must be one sha256 digest")
+            }
+            Self::Store(reason) => write!(formatter, "promotion store failed: {reason}"),
+            Self::ReceiptInvalid(reason) => {
+                write!(formatter, "promotion receipt is invalid: {reason}")
+            }
+            Self::RecoveryRequired(reason) => {
+                write!(formatter, "promotion recovery_required: {reason}")
+            }
+            Self::Preview(error) => error.fmt(formatter),
+            Self::PreviewDigestMismatch { expected, actual } => write!(
+                formatter,
+                "promotion preview changed before mutation: expected {expected}, actual {actual}"
+            ),
+            Self::NotEligible(reason) => {
+                write!(
+                    formatter,
+                    "promotion is not eligible for local apply: {reason}"
+                )
+            }
+            Self::MissingDerivedPrincipal => formatter
+                .write_str("linked live claim must carry a principal matching the isolation agent"),
+            Self::UnsupportedEffect(reason) => {
+                write!(formatter, "unsupported promotion effect: {reason}")
+            }
+            Self::Payload(reason) => write!(formatter, "promotion payload failed: {reason}"),
+            Self::Effect(reason) => write!(formatter, "promotion effect failed: {reason}"),
+            Self::Readback(reason) => write!(formatter, "promotion readback failed: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for PromotionApplyError {}
+
+impl From<PromotionPreviewError> for PromotionApplyError {
+    fn from(value: PromotionPreviewError) -> Self {
+        Self::Preview(value)
+    }
 }
 
 impl std::fmt::Display for PromotionPreviewError {
@@ -159,6 +245,15 @@ struct IsolationSelection {
     contract: IsolationContract,
 }
 
+/// Kernel-only prepared promotion observation. It deliberately implements
+/// neither `Clone` nor Serde and retains the exact source-tree bytes that may
+/// later become effect payloads.
+pub(super) struct PreparedPromotion {
+    pub(super) preview: GovernedPromotionPreview,
+    pub(super) source_tree: RetainedProjectTree,
+    pub(super) derived_principal_id: Option<forge_core_contracts::PrincipalId>,
+}
+
 pub(super) fn preview_governed_promotion(
     binding: &WorkflowGovernanceProjectBinding,
     isolation_id: &StableId,
@@ -166,6 +261,36 @@ pub(super) fn preview_governed_promotion(
     destination_tree: &RetainedProjectTree,
     now: u64,
 ) -> Result<GovernedPromotionPreview, PromotionPreviewError> {
+    derive_governed_promotion(binding, isolation_id, guidance, destination_tree, now, None)
+        .map(|prepared| prepared.preview)
+}
+
+pub(super) fn prepare_governed_promotion_with_claim_projection(
+    binding: &WorkflowGovernanceProjectBinding,
+    isolation_id: &StableId,
+    guidance: &WorkflowGovernanceGuidance,
+    destination_tree: &RetainedProjectTree,
+    now: u64,
+    claim_projection: &ClaimWalProjection,
+) -> Result<PreparedPromotion, PromotionPreviewError> {
+    derive_governed_promotion(
+        binding,
+        isolation_id,
+        guidance,
+        destination_tree,
+        now,
+        Some(claim_projection),
+    )
+}
+
+fn derive_governed_promotion(
+    binding: &WorkflowGovernanceProjectBinding,
+    isolation_id: &StableId,
+    guidance: &WorkflowGovernanceGuidance,
+    destination_tree: &RetainedProjectTree,
+    now: u64,
+    retained_claim_projection: Option<&ClaimWalProjection>,
+) -> Result<PreparedPromotion, PromotionPreviewError> {
     if guidance.readiness_profile != WorkflowReadinessProfile::SoloCooperative {
         return Err(PromotionPreviewError::SoloProfileRequired);
     }
@@ -264,18 +389,22 @@ pub(super) fn preview_governed_promotion(
                 .to_owned(),
         ));
     }
-    let claim_projection = claim_lock_present
-        .then(|| {
-            project_existing_claim_wal(
-                &binding.state_root,
-                &ClaimWalProjectionOptions {
-                    repair: false,
-                    stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
-                },
-            )
-            .map_err(|error| PromotionPreviewError::ClaimProjection(error.to_string()))
-        })
-        .transpose()?;
+    let claim_projection = if let Some(retained) = retained_claim_projection {
+        Some(retained.clone())
+    } else {
+        claim_lock_present
+            .then(|| {
+                project_existing_claim_wal(
+                    &binding.state_root,
+                    &ClaimWalProjectionOptions {
+                        repair: false,
+                        stop_policy: ClaimWalProjectionStopPolicy::RequireCleanEof,
+                    },
+                )
+                .map_err(|error| PromotionPreviewError::ClaimProjection(error.to_string()))
+            })
+            .transpose()?
+    };
     let claim_projection_digest = match &claim_projection {
         Some(projection) => promotion_domain_digest("promotion.claim_projection.v1", projection)?,
         None => promotion_domain_digest(
@@ -313,6 +442,9 @@ pub(super) fn preview_governed_promotion(
         })
     });
     let linked_claim_current = linked_claim_contract.is_some();
+    let linked_claim_principal_id = linked_claim_contract
+        .as_ref()
+        .and_then(|claim| claim.claim.claimant_principal_id.clone());
     let linked_claim_valid_through = linked_claim_contract.as_ref().and_then(|claim| {
         rfc3339_to_unix(&claim.lease.expires_at).and_then(|value| u64::try_from(value).ok())
     });
@@ -492,15 +624,32 @@ pub(super) fn preview_governed_promotion(
         })
         .collect::<Vec<_>>();
     assurance_claim_coverage.sort_by(|left, right| left.claim_ref.cmp(&right.claim_ref));
-    let unsatisfied_source_claim_refs = assurance_claim_coverage
+    let blocking_source_claim_refs = assurance_claim_coverage
         .iter()
         .filter(|claim| {
-            !matches!(
+            matches!(
                 claim.status,
-                PromotionAssuranceClaimStatus::Verified | PromotionAssuranceClaimStatus::Waived
+                PromotionAssuranceClaimStatus::Disproven
+                    | PromotionAssuranceClaimStatus::Contradictory
             )
         })
         .map(|claim| claim.claim_ref.0.clone())
+        .collect::<Vec<_>>();
+    let carried_assurance_gaps = assurance_claim_coverage
+        .iter()
+        .filter(|claim| {
+            matches!(
+                claim.status,
+                PromotionAssuranceClaimStatus::Unknown | PromotionAssuranceClaimStatus::Supported
+            )
+        })
+        .map(|claim| PromotionCarriedAssuranceGap {
+            claim_ref: claim.claim_ref.clone(),
+            status: claim.status,
+            accepted_evidence_refs: claim.accepted_evidence_refs.clone(),
+            rejected_evidence_refs: claim.rejected_evidence_refs.clone(),
+            cooperative_evidence_is_independent_verification: false,
+        })
         .collect::<Vec<_>>();
 
     let conflicting_paths = conflicts
@@ -514,7 +663,8 @@ pub(super) fn preview_governed_promotion(
         conflicting_paths: &conflicting_paths,
         unsupported_effects: &diff.unsupported_effects,
         supporting_cooperative_evidence: evidence.supporting_record_count,
-        unsatisfied_source_claim_refs: &unsatisfied_source_claim_refs,
+        blocking_source_claim_refs: &blocking_source_claim_refs,
+        has_linked_claim_principal: linked_claim_principal_id.is_some(),
         open_objective_uncertainties: objective.proposal.open_uncertainties.len(),
     });
 
@@ -531,6 +681,7 @@ pub(super) fn preview_governed_promotion(
         isolation_status: IsolationStatus::Active,
         agent_id: isolation.contract.agent_id.clone(),
         linked_claim_id: linked_claim_id.clone(),
+        linked_claim_principal_id: linked_claim_principal_id.clone(),
         declared_worktree_path: isolation.contract.worktree_path.clone(),
         git_worktree: git_observation.binding.clone(),
         snapshot: source_snapshot,
@@ -581,6 +732,7 @@ pub(super) fn preview_governed_promotion(
         valid_through_unix,
         authority: GovernedPromotionPreviewAuthority::ReadOnlyCandidateNoApplyAuthority,
         status: readiness.status,
+        apply_eligibility: readiness.apply_eligibility,
         canonical_mutation_performed: false,
         forge_state_mutation_performed: false,
         source,
@@ -596,6 +748,7 @@ pub(super) fn preview_governed_promotion(
         predicted_result_regular_file_set_digest: diff.predicted_result_regular_file_set_digest,
         objective_coverage,
         assurance_claim_coverage,
+        carried_assurance_gaps,
         write_claim_coverage,
         conflicts,
         unsupported_effects: diff.unsupported_effects,
@@ -626,7 +779,10 @@ pub(super) fn preview_governed_promotion(
     if current_isolation != isolation {
         return Err(PromotionPreviewError::IsolationChanged);
     }
-    if claim_projection.is_none() {
+    if retained_claim_projection.is_some() {
+        // The caller retains and revalidates the exact claim lock; reacquiring
+        // here would self-deadlock and would weaken the linear authority chain.
+    } else if claim_projection.is_none() {
         if path_exists_no_follow(&claim_wal_path)? || path_exists_no_follow(&claim_lock_path)? {
             return Err(PromotionPreviewError::ClaimProjection(
                 "claim authority appeared while the read-only preview was being derived".to_owned(),
@@ -658,7 +814,951 @@ pub(super) fn preview_governed_promotion(
     {
         return Err(PromotionPreviewError::FreshnessExpiredDuringDerivation);
     }
-    Ok(preview)
+    Ok(PreparedPromotion {
+        preview,
+        source_tree,
+        derived_principal_id: linked_claim_principal_id,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PromotionReplayIntent {
+    schema_version: String,
+    expected_preview_digest: String,
+    principal_id: PrincipalId,
+    transaction_id: StableId,
+    effect_id: StableId,
+    replay: PromotionReplayBinding,
+    provenance_digest: String,
+    publication_capability_digest: String,
+}
+
+pub(super) fn inspect_promotion_retry_under_lock(
+    binding: &WorkflowGovernanceProjectBinding,
+    effect_lock: &EffectStoreLock,
+    isolation_id: &StableId,
+    expected_preview_digest: &str,
+) -> Result<Option<GovernedPromotionApplication>, PromotionApplyError> {
+    let receipt_name = promotion_state_leaf_name(expected_preview_digest)?;
+    let io = effect_lock
+        .retained_store_io()
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    let receipts = io
+        .retain_subdirectory(Path::new("receipts"))
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    if let Some(mut witness) = receipts
+        .read_optional_bounded(Path::new(&receipt_name), PROMOTION_RECEIPT_MAX_BYTES)
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?
+    {
+        let receipt: GovernedPromotionReceipt = serde_json::from_slice(witness.raw_bytes())
+            .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+        verify_promotion_receipt(&receipt, expected_preview_digest)?;
+        if receipt.preview.source.isolation_id != *isolation_id {
+            return Err(PromotionApplyError::ReceiptInvalid(
+                "receipt isolation differs from the requested isolation".to_owned(),
+            ));
+        }
+        verify_consumed_replay_binding_under_lock(binding, effect_lock, &receipt)?;
+        witness
+            .revalidate()
+            .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+        verify_committed_receipt_readback(binding, &receipt)?;
+        return Ok(Some(GovernedPromotionApplication {
+            status: GovernedPromotionApplyStatus::AlreadyCommitted,
+            canonical_mutation_performed: false,
+            receipt,
+        }));
+    }
+    let intents = io
+        .retain_subdirectory(Path::new("intents"))
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    if intents
+        .read_optional_bounded(Path::new(&receipt_name), PROMOTION_RECEIPT_MAX_BYTES)
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?
+        .is_some()
+    {
+        return Err(PromotionApplyError::RecoveryRequired(format!(
+            "durable intent exists without receipt for {expected_preview_digest}; do not re-execute"
+        )));
+    }
+    Ok(None)
+}
+
+pub(super) fn validate_expected_preview_digest(
+    expected_preview_digest: &str,
+) -> Result<(), PromotionApplyError> {
+    promotion_state_leaf_name(expected_preview_digest).map(|_| ())
+}
+
+pub(super) fn apply_prepared_promotion_under_lock(
+    binding: &WorkflowGovernanceProjectBinding,
+    expected_preview_digest: &str,
+    prepared: PreparedPromotion,
+    destination_tree: &mut RetainedProjectTree,
+    effect_lock: &EffectStoreLock,
+    claim_guard: &forge_core_store::claim_wal::ExistingClaimProjectionGuard,
+) -> Result<GovernedPromotionApplication, PromotionApplyError> {
+    if prepared.preview.preview_digest != expected_preview_digest {
+        return Err(PromotionApplyError::PreviewDigestMismatch {
+            expected: expected_preview_digest.to_owned(),
+            actual: prepared.preview.preview_digest,
+        });
+    }
+    if prepared.preview.apply_eligibility != PromotionApplyEligibility::EligibleLocalReversible
+        || prepared.preview.status
+            != forge_core_contracts::GovernedPromotionPreviewStatus::Reviewable
+    {
+        return Err(PromotionApplyError::NotEligible(format!(
+            "status={:?}, gaps={:?}",
+            prepared.preview.status, prepared.preview.unresolved_gaps
+        )));
+    }
+    let principal_id = prepared
+        .derived_principal_id
+        .clone()
+        .ok_or(PromotionApplyError::MissingDerivedPrincipal)?;
+    if prepared.preview.source.linked_claim_principal_id.as_ref() != Some(&principal_id) {
+        return Err(PromotionApplyError::MissingDerivedPrincipal);
+    }
+    let (effect, payloads, applied_files) = promotion_effect_and_payloads(&prepared)?;
+    let effect_id = effect.tool_effect_contract.id.clone();
+    let transaction_id = StableId(format!(
+        "promotion.tx.{}",
+        expected_preview_digest.trim_start_matches("sha256:")
+    ));
+    let replay_key_hash = replay_nonce_key_hash(
+        &principal_id,
+        PROMOTION_REPLAY_AUDIENCE,
+        expected_preview_digest,
+    )
+    .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    let commit_digest = promotion_domain_digest(
+        "promotion.commit.v1",
+        &(
+            expected_preview_digest,
+            &transaction_id,
+            &effect_id,
+            &prepared.preview.diff_digest,
+            &prepared.preview.write_set_digest,
+        ),
+    )
+    .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    let publication_capability_digest = destination_tree
+        .exact_mutation_capability_digest()
+        .map_err(|error| PromotionApplyError::UnsupportedEffect(error.to_string()))?;
+    let provenance_document = serde_json::json!({
+        "kind": "governed_promotion_local_reversible_v1",
+        "publication_scope": {
+            "kind": "external_retained_project_tree_v1",
+            "retained_capability_digest": &publication_capability_digest,
+            "canonical_root_digest": &prepared.preview.destination.snapshot.canonical_root_digest,
+        },
+        "preview": &prepared.preview,
+        "derived_principal_id": &principal_id,
+        "transaction_id": &transaction_id,
+        "effect": &effect,
+        "commit_digest": &commit_digest,
+    });
+    let provenance = EffectExecutionProvenance::new(provenance_document)
+        .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    let provisional_replay = PromotionReplayBinding {
+        audience: PROMOTION_REPLAY_AUDIENCE.to_owned(),
+        key_hash: replay_key_hash,
+        intent_digest: String::new(),
+        commit_digest,
+        reservation_revision: 1,
+    };
+    let mut intent = PromotionReplayIntent {
+        schema_version: "governed_promotion_intent_v1".to_owned(),
+        expected_preview_digest: expected_preview_digest.to_owned(),
+        principal_id: principal_id.clone(),
+        transaction_id: transaction_id.clone(),
+        effect_id: effect_id.clone(),
+        replay: provisional_replay,
+        provenance_digest: provenance.digest.clone(),
+        publication_capability_digest,
+    };
+    intent.replay.intent_digest = promotion_domain_digest("promotion.intent.v1", &intent)
+        .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    prepared
+        .source_tree
+        .revalidate()
+        .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    destination_tree
+        .revalidate()
+        .map_err(|error| PromotionApplyError::Preview(PromotionPreviewError::Snapshot(error)))?;
+    claim_guard
+        .revalidate()
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    effect_lock
+        .validate_retained_lock_file()
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    ensure_preview_fresh(&prepared.preview, false)?;
+    for file in &applied_files {
+        let before = destination_tree
+            .exact_regular_file_bytes(&file.path.0)
+            .map_err(|error| PromotionApplyError::UnsupportedEffect(error.to_string()))?
+            .ok_or_else(|| {
+                PromotionApplyError::UnsupportedEffect(format!(
+                    "{} is not an admitted existing regular file",
+                    file.path.0
+                ))
+            })?;
+        destination_tree
+            .preflight_exact_regular_file_write(&file.path.0, &before)
+            .map_err(|error| {
+                PromotionApplyError::UnsupportedEffect(format!(
+                    "{} cannot preserve exact admitted metadata before durable intent: {error}",
+                    file.path.0
+                ))
+            })?;
+    }
+
+    let state_leaf = promotion_state_leaf_name(expected_preview_digest)?;
+    let io = effect_lock
+        .retained_store_io()
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    let intents = io
+        .retain_subdirectory(Path::new("intents"))
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    let intent_bytes = serde_json_canonicalizer::to_vec(&intent)
+        .map_err(|error| PromotionApplyError::Payload(error.to_string()))?;
+    let mut intent_witness = intents
+        .write_new_file_synced(
+            Path::new(&state_leaf),
+            &intent_bytes,
+            PROMOTION_RECEIPT_MAX_BYTES,
+        )
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+    intent_witness
+        .revalidate()
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
+
+    let reservation = reserve_replay_nonce_under_effect_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        &principal_id,
+        PROMOTION_REPLAY_AUDIENCE,
+        expected_preview_digest,
+        &intent.replay.intent_digest,
+        &intent.replay.commit_digest,
+    )
+    .map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "durable promotion intent could not reserve replay authority: {error}"
+        ))
+    })?;
+    if reservation.reservation.key_hash != intent.replay.key_hash
+        || reservation.reservation.revision != intent.replay.reservation_revision
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "replay reservation differs from the durable promotion intent".to_owned(),
+        ));
+    }
+    let replay_binding = EffectReplayCommitBinding::new(
+        reservation.reservation.key_hash.clone(),
+        reservation.reservation.intent_digest.clone(),
+        reservation.reservation.commit_digest.clone(),
+        reservation.reservation.revision,
+    );
+    let replay_guard = acquire_replay_commit_guard(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        &principal_id,
+        PROMOTION_REPLAY_AUDIENCE,
+        expected_preview_digest,
+        &intent.replay.intent_digest,
+        &intent.replay.commit_digest,
+        intent.replay.reservation_revision,
+    )
+    .map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "reserved promotion replay authority could not be retained: {error}"
+        ))
+    })?;
+
+    claim_guard.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "claim projection changed after replay reservation: {error}"
+        ))
+    })?;
+    prepared.source_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "source changed after replay reservation: {error}"
+        ))
+    })?;
+    destination_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "destination changed after replay reservation: {error}"
+        ))
+    })?;
+    ensure_preview_fresh(&prepared.preview, true)?;
+    let effect_result = apply_existing_file_effect_transaction_to_retained_project_tree(
+        &binding.state_root,
+        destination_tree,
+        replay_guard.effect_lock(),
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        &effect,
+        &payloads,
+        PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+        transaction_id.0.clone(),
+        provenance.clone(),
+        replay_binding,
+    );
+    if effect_result.status != EffectApplicationStatus::Applied {
+        return Err(PromotionApplyError::RecoveryRequired(format!(
+            "reserved promotion effect did not complete: status={:?}, diagnostics={:?}",
+            effect_result.status, effect_result.diagnostics
+        )));
+    }
+    let replay_result = replay_guard.consume().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "promotion effect committed but replay consume failed: {error}"
+        ))
+    })?;
+    append_effect_replay_completion_under_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        PROMOTION_EFFECT_WAL_RELATIVE_PATH,
+        &transaction_id.0,
+        &effect_id,
+        &EffectReplayCommitBinding::new(
+            intent.replay.key_hash.clone(),
+            intent.replay.intent_digest.clone(),
+            intent.replay.commit_digest.clone(),
+            intent.replay.reservation_revision,
+        ),
+        &replay_result,
+        false,
+    )
+    .map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "promotion replay consumed but effect completion marker failed: {error}"
+        ))
+    })?;
+
+    let committed_at_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+        .as_secs();
+    destination_tree.revalidate().map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "exact retained canonical readback failed: {error}"
+        ))
+    })?;
+    verify_logical_result_matches_source(destination_tree, &prepared.source_tree)
+        .map_err(PromotionApplyError::RecoveryRequired)?;
+    let result_root = canonical_directory(&binding.project_root, "result root")
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let result_snapshot = snapshot_binding(
+        &result_root,
+        destination_tree,
+        excluded_root_bindings(&result_root)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let result_snapshot_digest =
+        promotion_domain_digest("promotion.result_snapshot.v1", &result_snapshot)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let mut receipt = GovernedPromotionReceipt {
+        schema_version: GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION.to_owned(),
+        receipt_digest: String::new(),
+        committed_at_unix,
+        preview: prepared.preview,
+        derived_principal_id: principal_id,
+        transaction_id,
+        effect_id,
+        provenance_digest: provenance.digest,
+        publication_capability_digest: intent.publication_capability_digest.clone(),
+        replay: intent.replay,
+        applied_files,
+        result_snapshot,
+        result_snapshot_digest,
+        readback_verified: true,
+    };
+    receipt.receipt_digest = promotion_receipt_digest(&receipt)?;
+    let receipt_bytes = serde_json_canonicalizer::to_vec(&receipt)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let receipts = io
+        .retain_subdirectory(Path::new("receipts"))
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let mut receipt_witness = receipts
+        .write_new_file_synced(
+            Path::new(&state_leaf),
+            &receipt_bytes,
+            PROMOTION_RECEIPT_MAX_BYTES,
+        )
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    receipt_witness
+        .revalidate()
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let persisted: GovernedPromotionReceipt =
+        serde_json::from_slice(receipt_witness.raw_bytes())
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    verify_promotion_receipt(&persisted, expected_preview_digest)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    verify_consumed_replay_binding_under_lock(binding, effect_lock, &persisted)?;
+    verify_committed_receipt_readback(binding, &persisted)
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    Ok(GovernedPromotionApplication {
+        status: GovernedPromotionApplyStatus::Applied,
+        canonical_mutation_performed: true,
+        receipt: persisted,
+    })
+}
+
+fn verify_logical_result_matches_source(
+    result_tree: &RetainedProjectTree,
+    source_tree: &RetainedProjectTree,
+) -> Result<(), String> {
+    let mut source = inventory_files(source_tree)
+        .into_iter()
+        .map(|file| (file.relative_path, file.content_digest, file.byte_length))
+        .collect::<Vec<_>>();
+    source.sort();
+    let result = inventory_files(result_tree);
+    let mut logical_result = result
+        .into_iter()
+        .map(|file| (file.relative_path, file.content_digest, file.byte_length))
+        .collect::<Vec<_>>();
+    logical_result.sort();
+    if logical_result != source {
+        let source_paths = source
+            .iter()
+            .map(|(path, _, _)| path.as_str())
+            .collect::<Vec<_>>();
+        let result_paths = logical_result
+            .iter()
+            .map(|(path, _, _)| path.as_str())
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "canonical logical readback differs from the predicted exact result: source_paths={source_paths:?}, result_paths={result_paths:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn promotion_effect_and_payloads(
+    prepared: &PreparedPromotion,
+) -> Result<
+    (
+        ToolEffectContractDocument,
+        Vec<EffectApplicationPayload>,
+        Vec<PromotionAppliedFileBinding>,
+    ),
+    PromotionApplyError,
+> {
+    let principal = prepared
+        .derived_principal_id
+        .as_ref()
+        .ok_or(PromotionApplyError::MissingDerivedPrincipal)?;
+    let mut payloads = Vec::new();
+    let mut applied = Vec::new();
+    for entry in &prepared.preview.diff {
+        if entry.effect != PromotionDiffEffect::WriteRegularFile
+            || entry.destructive
+            || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
+        {
+            return Err(PromotionApplyError::UnsupportedEffect(format!(
+                "{} is not one metadata-stable write to an existing regular file",
+                entry.path.0
+            )));
+        }
+        let before = entry.before_content_digest.clone().ok_or_else(|| {
+            PromotionApplyError::Payload(format!("{} lacks before digest", entry.path.0))
+        })?;
+        let after = entry.after_content_digest.clone().ok_or_else(|| {
+            PromotionApplyError::Payload(format!("{} lacks after digest", entry.path.0))
+        })?;
+        let content = prepared
+            .source_tree
+            .exact_regular_file_bytes(&entry.path.0)
+            .map_err(|error| PromotionApplyError::Payload(error.to_string()))?
+            .ok_or_else(|| {
+                PromotionApplyError::Payload(format!("{} missing in retained source", entry.path.0))
+            })?;
+        if sha256_content_hash(&content) != after {
+            return Err(PromotionApplyError::Payload(format!(
+                "{} retained source digest differs from preview",
+                entry.path.0
+            )));
+        }
+        payloads.push(EffectApplicationPayload {
+            target_ref: entry.path.0.clone(),
+            content_hash: after.clone(),
+            content,
+        });
+        applied.push(PromotionAppliedFileBinding {
+            path: entry.path.clone(),
+            before_content_digest: before,
+            before_byte_length: entry.before_byte_length.unwrap_or_default(),
+            after_content_digest: after,
+            after_byte_length: entry.after_byte_length.unwrap_or_default(),
+        });
+    }
+    let effect = promotion_effect_contract(&prepared.preview, principal)?;
+    Ok((effect, payloads, applied))
+}
+
+fn promotion_effect_contract(
+    preview: &GovernedPromotionPreview,
+    principal: &PrincipalId,
+) -> Result<ToolEffectContractDocument, PromotionApplyError> {
+    let mut reads = Vec::new();
+    let mut writes = Vec::new();
+    for entry in &preview.diff {
+        if entry.effect != PromotionDiffEffect::WriteRegularFile
+            || entry.destructive
+            || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
+        {
+            return Err(PromotionApplyError::UnsupportedEffect(format!(
+                "{} is not one metadata-stable write to an existing regular file",
+                entry.path.0
+            )));
+        }
+        let before = entry.before_content_digest.clone().ok_or_else(|| {
+            PromotionApplyError::Payload(format!("{} lacks before digest", entry.path.0))
+        })?;
+        reads.push(EffectRead {
+            target_kind: EffectTargetKind::FilePath,
+            reference: entry.path.0.clone(),
+            expected_hash: Some(before.clone()),
+            expected_version: None,
+            required_for_plan: true,
+        });
+        writes.push(EffectWrite {
+            target_kind: EffectTargetKind::FilePath,
+            reference: entry.path.0.clone(),
+            access_mode: AccessMode::Write,
+            expected_hash: Some(before),
+            expected_version: None,
+            destructive: false,
+        });
+    }
+    if writes.is_empty() {
+        return Err(PromotionApplyError::UnsupportedEffect(
+            "apply requires at least one exact regular-file write".to_owned(),
+        ));
+    }
+    let effect_id = StableId(format!(
+        "promotion.effect.{}",
+        preview.preview_digest.trim_start_matches("sha256:")
+    ));
+    let effect = ToolEffectContractDocument {
+        schema_version: "0.1".to_owned(),
+        tool_effect_contract: ToolEffectContract {
+            id: effect_id,
+            contract_ref: RepoPath(format!(
+                "promotion/derived/{}.json",
+                preview.preview_digest.trim_start_matches("sha256:")
+            )),
+            effect_kind: EffectKind::OperationTransaction,
+            operation_ref: preview.objective.objective_id.clone(),
+            actor: EffectActor {
+                agent_id: preview.source.agent_id.clone(),
+                role: ActorRole::Worker,
+            },
+            read_set: reads,
+            write_set: writes,
+            conflict_detection: ConflictDetection {
+                check_against: StableId("promotion-current-destination-and-claims".to_owned()),
+                granularity: StableId("normalized-file-path".to_owned()),
+                conflict_codes: vec![
+                    ConflictCode::ReadTargetChanged,
+                    ConflictCode::WriteTargetChanged,
+                    ConflictCode::WriteTargetClaimed,
+                    ConflictCode::OverlappingWriteSet,
+                ],
+                policy: ConflictPolicy::Block,
+            },
+            notification: EffectNotification {
+                required: false,
+                recipients: vec![StableId(principal.0.clone())],
+                request_contract_ref: None,
+            },
+            repair: EffectRepair {
+                strategy: RepairStrategy::None,
+                automatic_repair_allowed: false,
+                inverse_operation_ref: None,
+                stop_if_inverse_missing: false,
+                inverse: InverseMetadata {
+                    kind: InverseKind::None,
+                    source: InverseSource::Unavailable,
+                    reference: None,
+                    input_mapping_refs: Vec::new(),
+                    validation_gate_refs: Vec::new(),
+                    review_required: false,
+                },
+            },
+        },
+    };
+    Ok(effect)
+}
+
+fn promotion_state_leaf_name(expected_preview_digest: &str) -> Result<String, PromotionApplyError> {
+    let Some(hex) = expected_preview_digest.strip_prefix("sha256:") else {
+        return Err(PromotionApplyError::InvalidExpectedPreviewDigest);
+    };
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(PromotionApplyError::InvalidExpectedPreviewDigest);
+    }
+    Ok(format!("{}.json", hex.to_ascii_lowercase()))
+}
+
+fn ensure_preview_fresh(
+    preview: &GovernedPromotionPreview,
+    reservation_durable: bool,
+) -> Result<(), PromotionApplyError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| PromotionApplyError::Store(error.to_string()))?
+        .as_secs();
+    if preview
+        .valid_through_unix
+        .is_some_and(|valid_through| now > valid_through)
+    {
+        let reason = "claim or cooperative evidence freshness expired before first write";
+        return if reservation_durable {
+            Err(PromotionApplyError::RecoveryRequired(reason.to_owned()))
+        } else {
+            Err(PromotionApplyError::NotEligible(reason.to_owned()))
+        };
+    }
+    Ok(())
+}
+
+fn promotion_receipt_digest(
+    receipt: &GovernedPromotionReceipt,
+) -> Result<String, PromotionApplyError> {
+    let mut canonical = receipt.clone();
+    canonical.receipt_digest.clear();
+    promotion_domain_digest("promotion.receipt.v1", &canonical)
+        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))
+}
+
+fn verify_promotion_receipt(
+    receipt: &GovernedPromotionReceipt,
+    expected_preview_digest: &str,
+) -> Result<(), PromotionApplyError> {
+    if receipt.schema_version != GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION
+        || receipt.preview.preview_digest != expected_preview_digest
+        || !receipt.readback_verified
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "schema, preview identity, or readback flag mismatch".to_owned(),
+        ));
+    }
+    let preview = &receipt.preview;
+    if preview.status != forge_core_contracts::GovernedPromotionPreviewStatus::Reviewable
+        || preview.apply_eligibility != PromotionApplyEligibility::EligibleLocalReversible
+        || preview.authority != GovernedPromotionPreviewAuthority::ReadOnlyCandidateNoApplyAuthority
+        || preview.canonical_mutation_performed
+        || preview.forge_state_mutation_performed
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "receipt preview is not an honest reviewable read-only candidate".to_owned(),
+        ));
+    }
+    if preview.source.linked_claim_principal_id.as_ref() != Some(&receipt.derived_principal_id) {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "derived principal differs from the exact linked claim".to_owned(),
+        ));
+    }
+    let mut canonical_preview = preview.clone();
+    canonical_preview.preview_id = StableId(String::new());
+    canonical_preview.preview_digest.clear();
+    canonical_preview.observed_at_unix = 0;
+    let actual_preview_digest = promotion_domain_digest("promotion.preview.v1", &canonical_preview)
+        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    let actual_preview_id = StableId(format!(
+        "promotion.preview.{}",
+        actual_preview_digest.trim_start_matches("sha256:")
+    ));
+    if preview.preview_digest != actual_preview_digest || preview.preview_id != actual_preview_id {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "embedded preview identity is not derived from its canonical semantics".to_owned(),
+        ));
+    }
+    let digest_hex = expected_preview_digest
+        .strip_prefix("sha256:")
+        .ok_or(PromotionApplyError::InvalidExpectedPreviewDigest)?;
+    let expected_tx = StableId(format!("promotion.tx.{digest_hex}"));
+    let expected_effect_id = StableId(format!("promotion.effect.{digest_hex}"));
+    if receipt.transaction_id != expected_tx || receipt.effect_id != expected_effect_id {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "transaction or effect identity is not derived from the preview".to_owned(),
+        ));
+    }
+    for digest in [
+        &preview.preview_digest,
+        &preview.diff_digest,
+        &preview.write_set_digest,
+        &preview.predicted_result_regular_file_set_digest,
+        &receipt.provenance_digest,
+        &receipt.publication_capability_digest,
+        &receipt.replay.key_hash,
+        &receipt.replay.intent_digest,
+        &receipt.replay.commit_digest,
+        &receipt.result_snapshot_digest,
+        &receipt.receipt_digest,
+    ] {
+        if !is_sha256_digest(digest) {
+            return Err(PromotionApplyError::ReceiptInvalid(
+                "receipt contains a malformed content digest".to_owned(),
+            ));
+        }
+    }
+    if receipt.replay.audience != PROMOTION_REPLAY_AUDIENCE
+        || receipt.replay.reservation_revision != 1
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "replay audience or reservation revision is invalid".to_owned(),
+        ));
+    }
+    let expected_key = replay_nonce_key_hash(
+        &receipt.derived_principal_id,
+        PROMOTION_REPLAY_AUDIENCE,
+        expected_preview_digest,
+    )
+    .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    let expected_commit = promotion_domain_digest(
+        "promotion.commit.v1",
+        &(
+            expected_preview_digest,
+            &receipt.transaction_id,
+            &receipt.effect_id,
+            &preview.diff_digest,
+            &preview.write_set_digest,
+        ),
+    )
+    .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    if receipt.replay.key_hash != expected_key || receipt.replay.commit_digest != expected_commit {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "replay key or commit digest differs from receipt semantics".to_owned(),
+        ));
+    }
+    let expected_effect_contract =
+        promotion_effect_contract(preview, &receipt.derived_principal_id).map_err(|error| {
+            PromotionApplyError::ReceiptInvalid(format!(
+                "receipt preview cannot derive its claimed effect: {error}"
+            ))
+        })?;
+    if expected_effect_contract.tool_effect_contract.id != receipt.effect_id {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "derived effect contract identity differs from the receipt".to_owned(),
+        ));
+    }
+    let expected_provenance = EffectExecutionProvenance::new(serde_json::json!({
+        "kind": "governed_promotion_local_reversible_v1",
+        "publication_scope": {
+            "kind": "external_retained_project_tree_v1",
+            "retained_capability_digest": &receipt.publication_capability_digest,
+            "canonical_root_digest": &preview.destination.snapshot.canonical_root_digest,
+        },
+        "preview": preview,
+        "derived_principal_id": &receipt.derived_principal_id,
+        "transaction_id": &receipt.transaction_id,
+        "effect": &expected_effect_contract,
+        "commit_digest": &expected_commit,
+    }))
+    .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    if receipt.provenance_digest != expected_provenance.digest {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "execution provenance digest differs from the receipt semantics".to_owned(),
+        ));
+    }
+    let mut replay_without_intent = receipt.replay.clone();
+    replay_without_intent.intent_digest.clear();
+    let intent = PromotionReplayIntent {
+        schema_version: "governed_promotion_intent_v1".to_owned(),
+        expected_preview_digest: expected_preview_digest.to_owned(),
+        principal_id: receipt.derived_principal_id.clone(),
+        transaction_id: receipt.transaction_id.clone(),
+        effect_id: receipt.effect_id.clone(),
+        replay: replay_without_intent,
+        provenance_digest: receipt.provenance_digest.clone(),
+        publication_capability_digest: receipt.publication_capability_digest.clone(),
+    };
+    let expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
+        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    if receipt.replay.intent_digest != expected_intent {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "replay intent digest differs from receipt semantics".to_owned(),
+        ));
+    }
+    let expected_applied = preview
+        .diff
+        .iter()
+        .map(|entry| {
+            if entry.effect != PromotionDiffEffect::WriteRegularFile
+                || entry.destructive
+                || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
+            {
+                return Err(PromotionApplyError::ReceiptInvalid(
+                    "receipt preview contains a non-admitted apply effect".to_owned(),
+                ));
+            }
+            Ok(PromotionAppliedFileBinding {
+                path: entry.path.clone(),
+                before_content_digest: entry.before_content_digest.clone().ok_or_else(|| {
+                    PromotionApplyError::ReceiptInvalid(
+                        "receipt preview write lacks before digest".to_owned(),
+                    )
+                })?,
+                before_byte_length: entry.before_byte_length.ok_or_else(|| {
+                    PromotionApplyError::ReceiptInvalid(
+                        "receipt preview write lacks before length".to_owned(),
+                    )
+                })?,
+                after_content_digest: entry.after_content_digest.clone().ok_or_else(|| {
+                    PromotionApplyError::ReceiptInvalid(
+                        "receipt preview write lacks after digest".to_owned(),
+                    )
+                })?,
+                after_byte_length: entry.after_byte_length.ok_or_else(|| {
+                    PromotionApplyError::ReceiptInvalid(
+                        "receipt preview write lacks after length".to_owned(),
+                    )
+                })?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if receipt.applied_files != expected_applied
+        || preview.write_set
+            != receipt
+                .applied_files
+                .iter()
+                .map(|file| file.path.clone())
+                .collect::<Vec<_>>()
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "receipt applied-file set differs from the exact preview diff".to_owned(),
+        ));
+    }
+    let source = &preview.source.snapshot;
+    let result = &receipt.result_snapshot;
+    let mut snapshot_mismatches = Vec::new();
+    if result.canonical_root != preview.destination.snapshot.canonical_root {
+        snapshot_mismatches.push("canonical_root");
+    }
+    if result.canonical_root_digest != preview.destination.snapshot.canonical_root_digest {
+        snapshot_mismatches.push("canonical_root_digest");
+    }
+    if result.excluded_roots != preview.destination.snapshot.excluded_roots {
+        snapshot_mismatches.push("excluded_roots");
+    }
+    if result.snapshot_digest != source.snapshot_digest {
+        snapshot_mismatches.push("snapshot_digest");
+    }
+    if result.retained_tree_digest != source.retained_tree_digest {
+        snapshot_mismatches.push("retained_tree_digest");
+    }
+    if result.regular_file_set_digest != source.regular_file_set_digest {
+        snapshot_mismatches.push("regular_file_set_digest");
+    }
+    if result.file_count != source.file_count {
+        snapshot_mismatches.push("file_count");
+    }
+    if result.directory_count != source.directory_count {
+        snapshot_mismatches.push("directory_count");
+    }
+    if result.total_regular_file_bytes != source.total_regular_file_bytes {
+        snapshot_mismatches.push("total_regular_file_bytes");
+    }
+    if !snapshot_mismatches.is_empty() {
+        return Err(PromotionApplyError::ReceiptInvalid(format!(
+            "receipt result snapshot differs from the exact predicted source result: {}",
+            snapshot_mismatches.join(", ")
+        )));
+    }
+    let expected_result_digest =
+        promotion_domain_digest("promotion.result_snapshot.v1", &receipt.result_snapshot)
+            .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    if receipt.result_snapshot_digest != expected_result_digest
+        || receipt.committed_at_unix < preview.observed_at_unix
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "result snapshot digest or commit time is invalid".to_owned(),
+        ));
+    }
+    let actual = promotion_receipt_digest(receipt)?;
+    if actual != receipt.receipt_digest {
+        return Err(PromotionApplyError::ReceiptInvalid(format!(
+            "self digest mismatch: expected {}, actual {actual}",
+            receipt.receipt_digest
+        )));
+    }
+    Ok(())
+}
+
+fn verify_consumed_replay_binding_under_lock(
+    binding: &WorkflowGovernanceProjectBinding,
+    effect_lock: &EffectStoreLock,
+    receipt: &GovernedPromotionReceipt,
+) -> Result<(), PromotionApplyError> {
+    let consumed = verify_consumed_replay_key_hash_under_effect_lock(
+        &binding.state_root,
+        effect_lock,
+        PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+        &receipt.replay.key_hash,
+        &receipt.replay.intent_digest,
+        &receipt.replay.commit_digest,
+        receipt.replay.reservation_revision,
+    )
+    .map_err(|error| {
+        PromotionApplyError::RecoveryRequired(format!(
+            "committed receipt replay binding is not durably consumed: {error}"
+        ))
+    })?;
+    if consumed.key_hash != receipt.replay.key_hash
+        || consumed.intent_digest != receipt.replay.intent_digest
+        || consumed.commit_digest != receipt.replay.commit_digest
+        || consumed.revision != receipt.replay.reservation_revision.saturating_add(1)
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "consumed replay authority differs from the committed receipt".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn verify_committed_receipt_readback(
+    binding: &WorkflowGovernanceProjectBinding,
+    receipt: &GovernedPromotionReceipt,
+) -> Result<(), PromotionApplyError> {
+    let tree = RetainedProjectTree::capture(
+        &binding.project_root,
+        MAX_PROMOTION_SNAPSHOT_ENTRIES,
+        MAX_PROMOTION_SNAPSHOT_BYTES,
+    )
+    .map_err(|error| PromotionApplyError::Readback(error.to_string()))?;
+    let root = canonical_directory(&binding.project_root, "receipt readback root")
+        .map_err(|error| PromotionApplyError::Readback(error.to_string()))?;
+    let actual = snapshot_binding(
+        &root,
+        &tree,
+        excluded_root_bindings(&root)
+            .map_err(|error| PromotionApplyError::Readback(error.to_string()))?,
+    )
+    .map_err(|error| PromotionApplyError::Readback(error.to_string()))?;
+    if actual != receipt.result_snapshot {
+        return Err(PromotionApplyError::Readback(
+            "canonical project bytes, namespace, or admitted metadata no longer match the committed receipt"
+                .to_owned(),
+        ));
+    }
+    tree.revalidate()
+        .map_err(|error| PromotionApplyError::Readback(error.to_string()))
+}
+
+fn is_sha256_digest(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
 fn load_active_isolation(

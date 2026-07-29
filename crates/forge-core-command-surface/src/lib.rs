@@ -301,6 +301,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow intent accept-cooperative --root <path> --packet-digest <sha256> --input-file <cooperative-input.json> [--json|--no-json]",
         "       forge-core workflow evidence admit-cooperative --root <path> --input-file <offer.json> [--json|--no-json]",
         "       forge-core workflow promotion preview --root <canonical-project> --isolation-id <id> [--json|--no-json]",
+        "       forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]",
         "       forge-core workflow intent record --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
         "       forge-core workflow release-status [--root <path>] [--json|--no-json]",

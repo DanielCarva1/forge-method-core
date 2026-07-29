@@ -116,8 +116,23 @@ or routes a healthy project into agent-native workflow governance.
    source/destination snapshots, objective and evidence bindings, final
    observation validity, diff, write set, linked-claim path attribution,
    ambient conflicts, destructive deletes, excluded roots (including blocking source-side build/dependency caches), unsupported
-   created-file metadata and directory/type/mode effects, and unresolved gaps. A preview grants no apply authority; do not mutate the
-   canonical repository from it or invent an apply command.
+   created-file metadata and directory/type/mode effects, carried assurance
+   gaps, apply eligibility, and unresolved blocking gaps. A preview digest is
+   CAS identity, not authority. If it is `eligible_local_reversible`, run:
+
+   ```bash
+   forge-core workflow promotion apply --root "<project-root>" \
+     --isolation-id "<active-isolation-id>" \
+     --expected-preview-digest "<preview_digest>" --json
+   ```
+
+   Never copy or merge the worktree manually. Accept success only with the
+   durable receipt and canonical readback. An exact retry may return
+   `already_committed` without another write. If Forge reports
+   `typed_failure.type=recovery_required`, stop without retrying or changing
+   the digest. Preserve the canonical tree and Forge sidecar exactly. There is
+   no interrupted-promotion recovery command yet; Ticket 11 must add it, and
+   the generic effect-WAL recovery path is forbidden for this split-root WAL.
 
    A packet whose approval boundary is exactly `cooperative_same_owner` is the
    Solo Cooperative missing-objective lane. It is not human-origin authority.

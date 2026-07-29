@@ -235,7 +235,7 @@ The initial route accepts only the kernel-executed current `project_snapshot` sc
 
 `/start-forge` activation is once per chat, not once per task. After the objective is accepted, evidence operation is mechanical: inspect each fresh `data.cooperative_evidence_action_packet`; write `offer_template` to a temporary file outside the snapshot; replace only `required_replacements`; execute `argv` as tokens after replacing only `input_file_token`; delete the temporary file; and refresh `workflow next`. Never shell-parse the vector. If the packet is absent, report `data.cooperative_evidence_action_gap`. A `rejected` result is audited non-support, not success.
 
-## Read-only governed promotion preview
+## Governed promotion preview and exact-CAS apply
 
 When isolated work is ready for inspection, the host may run
 `forge-core workflow promotion preview --root <canonical-project> --isolation-id <id> --json`.
@@ -253,8 +253,28 @@ unresolved gaps. A source-side `target` or `node_modules` root is an explicit bl
 
 The preview acquires only pre-existing lifecycle, workflow, and claim locks; a
 missing lock or state namespace is rejected without materializing it. Its stable
-preview digest excludes only the volatile observation instant so Ticket 10 can
+preview digest excludes only the volatile observation instant so apply can
 re-admit the same still-valid bound candidate. The preview is strictly read-only and caller-carried: `authority` is
 `read_only_candidate_no_apply_authority`, both mutation flags are false, and no
-apply or recovery command exists in this slice. Same-owner cooperative evidence
-remains explicitly unable to satisfy the selected source claim.
+authority is granted by the digest. Same-owner cooperative evidence remains
+explicitly unable to verify the selected source claim.
+
+When the preview reports `apply_eligibility=eligible_local_reversible`, apply
+that exact observation with
+`forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> --json`.
+Forge re-derives the live isolation, linked claim principal, objective, ledger,
+evidence, claims, source, destination, effect, and payload under retained locks.
+This solo-cooperative lane supports only metadata-stable writes to existing
+regular files and does not require the strict-external broker. `unknown` and
+`supported` source assurance claims remain explicit `carried_assurance_gaps`;
+`disproven` and `contradictory` claims remain blocking.
+
+Success includes a durable self-digested receipt and fresh canonical readback.
+An exact retry returns `already_committed` after verifying the receipt, exact
+consumed replay authority, and readback, without another write. `recovery_required` is also emitted as the
+typed JSON failure `typed_failure.type=recovery_required`; it means durable
+intent or commit state may exist without a complete receipt. Stop, preserve the
+canonical tree plus Forge sidecar exactly, and do not manually copy, merge,
+recover the generic effect WAL, or retry under a new digest. No interrupted
+promotion recovery command exists in `0.12.0-alpha.3`; Ticket 11 owns that
+reconciliation workflow.

@@ -12,12 +12,13 @@ use forge_core_authority::{
     WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    workflow_broker_expected_audience, PrincipalId, RuntimeKind, StableId,
-    WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
-    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
-    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
-    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
-    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    workflow_broker_expected_audience, GovernedPromotionReceipt, PrincipalId, RuntimeKind,
+    StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
+    WorkflowBrokerCredentialPurpose, WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind,
+    WorkflowBrokerHostBinding, WorkflowBrokerHostInteractionKind,
+    WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
+    WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
+    WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
     WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use serde::Serialize;
@@ -1901,4 +1902,335 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     );
     assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
     assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
+    let consumer = Consumer::new();
+    let run_git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&consumer.app)
+            .args(args)
+            .output()
+            .expect("run Git fixture command");
+        assert!(
+            output.status.success(),
+            "git {:?} failed\nstdout={}\nstderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    run_git(&["init", "-b", "master"]);
+    run_git(&["config", "user.name", "Forge Promotion Apply E2E"]);
+    run_git(&[
+        "config",
+        "user.email",
+        "forge-promotion-apply-e2e@example.invalid",
+    ]);
+    run_git(&["add", "."]);
+    run_git(&["commit", "-m", "initial fixture"]);
+
+    assert_ok(&consumer.run(&["init"]));
+    forge_core_store::replay_wal::initialize_replay_wal(&consumer.state)
+        .expect("initialize project replay WAL required by promotion apply");
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "promotion apply objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Apply one exact isolated regular-file write",
+                "constraints": ["retain exact claim authority", "read back canonical bytes"],
+                "unacceptable_outcomes": ["copy files outside governed apply"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.promotion-apply-e2e",
+            "host_provenance": {
+                "host_id": "host.promotion-apply-e2e",
+                "host_version": "test",
+                "session_ref": "session.promotion-apply-e2e",
+                "interaction_ref": "turn.promotion-apply",
+                "conversation_digest": format!("sha256:{}", "e".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+    let root = consumer.app.display().to_string();
+    let now_unix = now().to_string();
+    let claim = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--root",
+            &root,
+            "--scope",
+            "story",
+            "--id",
+            "promotion-apply-e2e",
+            "--agent",
+            "agent.promotion-apply-e2e",
+            "--principal-id",
+            "principal.agent.promotion-apply-e2e",
+            "--path",
+            "README.md",
+            "--now-unix",
+            &now_unix,
+            "--json",
+        ])
+        .output()
+        .expect("acquire promotion claim");
+    let claim = assert_ok(&claim);
+    let claim_id = claim["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_owned();
+
+    let worktree = consumer.parent.join("wt").join("apply");
+    fs::create_dir_all(worktree.parent().expect("worktree parent")).expect("worktree parent");
+    let worktree_text = worktree.display().to_string();
+    run_git(&[
+        "worktree",
+        "add",
+        "-b",
+        "agent/apply",
+        &worktree_text,
+        "master",
+    ]);
+    fs::write(
+        worktree.join("README.md"),
+        "consumer project\ngoverned apply\n",
+    )
+    .expect("write isolated modification");
+    assert_ok(
+        &bin()
+            .args([
+                "isolation",
+                "propose",
+                "--root",
+                &root,
+                "--agent",
+                "agent.promotion-apply-e2e",
+                "--branch",
+                "agent/apply",
+                "--worktree-path",
+                "../wt/apply",
+                "--base-ref",
+                "master",
+                "--claim",
+                &claim_id,
+                "--id",
+                "isolation.promotion-apply-e2e",
+                "--now-unix",
+                &now_unix,
+                "--json",
+            ])
+            .output()
+            .expect("propose promotion isolation"),
+    );
+    assert_ok(
+        &bin()
+            .args([
+                "isolation",
+                "transition",
+                "--root",
+                &root,
+                "--id",
+                "isolation.promotion-apply-e2e",
+                "--to",
+                "active",
+                "--now-unix",
+                &now_unix,
+                "--json",
+            ])
+            .output()
+            .expect("activate promotion isolation"),
+    );
+
+    // Admit freshness-bound cooperative evidence immediately before preview;
+    // claim/Git/isolation fixture setup must not consume its short live window.
+    let next = assert_ok(&consumer.run(&["next"]));
+    let mut offer = next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+    offer["offer_id"] = serde_json::json!("offer.promotion-apply-e2e.pass");
+    let offer_file = consumer.write_json("promotion apply evidence.json", &offer);
+    assert_ok(&run_cooperative_evidence(&consumer, &offer_file));
+
+    let preview = assert_ok(
+        &bin()
+            .args([
+                "workflow",
+                "promotion",
+                "preview",
+                "--root",
+                &root,
+                "--isolation-id",
+                "isolation.promotion-apply-e2e",
+                "--json",
+            ])
+            .output()
+            .expect("preview promotion apply"),
+    );
+    assert_eq!(
+        preview["data"]["status"], "reviewable",
+        "promotion preview: {preview}"
+    );
+    assert_eq!(
+        preview["data"]["apply_eligibility"], "eligible_local_reversible",
+        "promotion preview: {preview}"
+    );
+    assert!(!preview["data"]["carried_assurance_gaps"]
+        .as_array()
+        .expect("carried assurance gaps")
+        .is_empty());
+    let preview_digest = preview["data"]["preview_digest"]
+        .as_str()
+        .expect("preview digest")
+        .to_owned();
+    let applied = assert_ok(
+        &bin()
+            .args([
+                "workflow",
+                "promotion",
+                "apply",
+                "--root",
+                &root,
+                "--isolation-id",
+                "isolation.promotion-apply-e2e",
+                "--expected-preview-digest",
+                &preview_digest,
+                "--json",
+            ])
+            .output()
+            .expect("apply governed promotion"),
+    );
+    assert_eq!(applied["data"]["status"], "applied");
+    assert_eq!(applied["data"]["canonical_mutation_performed"], true);
+    assert_eq!(applied["data"]["receipt"]["readback_verified"], true);
+    assert_eq!(
+        fs::read_to_string(consumer.app.join("README.md")).expect("canonical readback"),
+        "consumer project\ngoverned apply\n"
+    );
+    assert!(!consumer.app.join(".forge-method").exists());
+
+    let retry = assert_ok(
+        &bin()
+            .args([
+                "workflow",
+                "promotion",
+                "apply",
+                "--root",
+                &root,
+                "--isolation-id",
+                "isolation.promotion-apply-e2e",
+                "--expected-preview-digest",
+                &preview_digest,
+                "--json",
+            ])
+            .output()
+            .expect("retry governed promotion"),
+    );
+    assert_eq!(retry["data"]["status"], "already_committed");
+    assert_eq!(retry["data"]["canonical_mutation_performed"], false);
+    assert_eq!(
+        retry["data"]["receipt"]["receipt_digest"],
+        applied["data"]["receipt"]["receipt_digest"]
+    );
+
+    let receipt_name = format!(
+        "{}.json",
+        preview_digest
+            .strip_prefix("sha256:")
+            .expect("canonical preview digest")
+    );
+    let receipt_path = consumer
+        .state
+        .join("promotion")
+        .join("receipts")
+        .join(receipt_name);
+    let original_receipt_bytes = fs::read(&receipt_path).expect("persisted promotion receipt");
+    let mut tampered_receipt: GovernedPromotionReceipt =
+        serde_json::from_slice(&original_receipt_bytes).expect("typed promotion receipt");
+    tampered_receipt.provenance_digest = format!("sha256:{}", "f".repeat(64));
+    tampered_receipt.receipt_digest.clear();
+    tampered_receipt.receipt_digest =
+        forge_core_decisions::promotion_domain_digest("promotion.receipt.v1", &tampered_receipt)
+            .expect("self-consistent tampered receipt digest");
+    fs::write(
+        &receipt_path,
+        serde_json_canonicalizer::to_vec(&tampered_receipt).expect("canonical tampered receipt"),
+    )
+    .expect("write tampered receipt");
+    let tampered_retry = bin()
+        .args([
+            "workflow",
+            "promotion",
+            "apply",
+            "--root",
+            &root,
+            "--isolation-id",
+            "isolation.promotion-apply-e2e",
+            "--expected-preview-digest",
+            &preview_digest,
+            "--json",
+        ])
+        .output()
+        .expect("retry with self-consistent provenance tamper");
+    assert!(!tampered_retry.status.success());
+    let tampered_retry = json(&tampered_retry);
+    assert!(tampered_retry["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("execution provenance digest differs")));
+    fs::write(&receipt_path, &original_receipt_bytes).expect("restore exact receipt bytes");
+
+    let replay = forge_core_store::replay_wal::recover_replay_wal(&consumer.state, false)
+        .expect("clean committed replay WAL");
+    let consume = replay
+        .records
+        .iter()
+        .rev()
+        .find(|record| {
+            record.operation == forge_core_store::replay_wal::ReplayWalOperation::Consume
+        })
+        .expect("durable replay consume record");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&replay.wal_path)
+        .expect("open replay WAL for crash fixture")
+        .set_len(consume.offset)
+        .expect("truncate exact consume frame");
+    let unconsumed_retry = bin()
+        .args([
+            "workflow",
+            "promotion",
+            "apply",
+            "--root",
+            &root,
+            "--isolation-id",
+            "isolation.promotion-apply-e2e",
+            "--expected-preview-digest",
+            &preview_digest,
+            "--json",
+        ])
+        .output()
+        .expect("retry with receipt but no durable replay consume");
+    assert!(!unconsumed_retry.status.success());
+    let unconsumed_retry = json(&unconsumed_retry);
+    assert_eq!(
+        unconsumed_retry["typed_failure"]["type"],
+        "recovery_required"
+    );
+    assert!(unconsumed_retry["typed_failure"]["data"]["reason"]
+        .as_str()
+        .is_some_and(|reason| reason.contains("not durably consumed")));
 }
