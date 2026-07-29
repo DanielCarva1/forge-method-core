@@ -105,9 +105,13 @@ tampered, or unsafe bundle is invalid; Forge never softens that into
 ## Codex cooperative adapter
 
 The packaged Codex adapter is
-`contracts/hosts/codex/solo-host-conformance-v1/adapter.py`. It translates one
-closed, same-owner observation from an exact Codex journey into the public
-protocol. It rejects unknown fields and never claims native authenticity.
+`contracts/hosts/codex/solo-host-conformance-v1/adapter.py`. Version `1.0.0`
+translates one closed, same-owner observation from an exact, completed Codex
+journey into the public protocol. It is a post-journey evaluation tool invoked
+explicitly with `host-conformance run`; it is not run by every `forge start` or
+chat activation. It rejects unknown fields, validates its declared adapter ID
+and version, remains neutral to the Codex host version, and never claims native
+authenticity.
 
 This is useful for honest dogfood: Forge can bind exact versions, calculate all
 eight results, retain an integrity-checked bundle, and show missing host
@@ -118,3 +122,9 @@ separately. If Codex Desktop runs on Windows while Forge runs inside WSL, the
 Linux runner can verify the canonical WSL project but cannot independently
 observe the Windows side of that bridge. The result must keep that limitation
 visible.
+
+The retained candidate result for Codex CLI `0.144.6` is documented at
+`contracts/hosts/conformance-results/codex/0.144.6/README.md`; its
+`run-summary.json` and `bundle/` preserve the exact partial results and typed
+gaps. Re-verifying that bundle establishes file integrity and result
+consistency only, not the truth of the adapter-reported host actions.

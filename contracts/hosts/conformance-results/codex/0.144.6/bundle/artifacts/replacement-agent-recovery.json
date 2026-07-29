@@ -1,0 +1,24 @@
+{
+  "case_id": "replacement-agent-recovery",
+  "assertions": {
+    "durable_state_reconstructed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "fresh_agent_has_no_transcript_dependency": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "recovery_ranked_before_new_work": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "continuity_ready_readback",
+      "fresh_agent_no_history_resume_revision_2"
+    ]
+  }
+}

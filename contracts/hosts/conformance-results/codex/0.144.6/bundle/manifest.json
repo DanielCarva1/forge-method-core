@@ -1,0 +1,140 @@
+{
+  "schema_version": "solo_host_conformance_bundle_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "openai.codex",
+      "host_version": "0.144.6",
+      "adapter_id": "forge.codex.cooperative",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200",
+      "environment_label": "codex-desktop-26.721.4979.0-wsl-2.6.1.0-ubuntu-24.04.4-forge-0.12.0-alpha.5"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.5",
+      "forge_executable_sha256": "sha256:1d957e5dd57654c75da8cfa0c2f615173614fa635a1aeb04846abb21cb78d5e7",
+      "platform": {
+        "os": "linux",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:1556b0dfbc25cdaa2d6e90267d4d712ce8af16bd1680dc738db053be504becd7",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "python3.12",
+          "sha256": "sha256:1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+          "byte_length": 8020928
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "file",
+            "safe_display": "adapter.py",
+            "argument_sha256": "sha256:879ecbd3e8b48d17125f6f23940f7d1f665b8bd61355905ef879819121d4de60",
+            "file_identity": {
+              "file_name": "adapter.py",
+              "sha256": "sha256:b64462d9283e1f06e09aea02b9237c4df071dd587e239230f02a1e3f862c7647",
+              "byte_length": 8854
+            }
+          },
+          {
+            "position": 1,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:6d3357119d99a3077f6e0ec1a5c221c13b81667348d323d2ce1ad5ed8e23f741",
+            "file_identity": null
+          },
+          {
+            "position": 2,
+            "kind": "file",
+            "safe_display": "codex-0.144.6-observation.json",
+            "argument_sha256": "sha256:b9e711d12e4eeb90c46ac14f90d2829d6e091309a25a5f67e9bfa72a59e8fffb",
+            "file_identity": {
+              "file_name": "codex-0.144.6-observation.json",
+              "sha256": "sha256:f543183810796b786c02692fc2ae262f26a3f705cf3e28cd382ec91f96da45d5",
+              "byte_length": 3110
+            }
+          }
+        ],
+        "argv_sha256": "sha256:015b717154bfbbd4e4cfba7c743aaaef61056ef01468db94e676c0d1e4dbe3bf",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "bundle_digest": "sha256:fe2995e8c7143a30134bbe9057f80fb4120155c52f0f7d20950e26ed419a84db",
+  "files": [
+    {
+      "path": "artifacts/activation.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:b1c29b41f049a42f7973485f33f50592219fb9b56861e3b22fe322d90bcf8cff",
+      "byte_length": 465
+    },
+    {
+      "path": "artifacts/canonical-project-root.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:3502a2fa2e8dfb1f83a8a616e1c806ffb89450a7ac0b9055bb531a4f32808d7c",
+      "byte_length": 773
+    },
+    {
+      "path": "artifacts/conversation-derived-intent.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:19768ebd128dff73caed0edf0273bfce4ab07c9db692f4c901f71235fe4ad474",
+      "byte_length": 507
+    },
+    {
+      "path": "artifacts/cooperative-evidence.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:cc0cce4029c63d1ea85aa39eb52ed7aab85c2302db720cb96b6ccefd65fd7927",
+      "byte_length": 504
+    },
+    {
+      "path": "artifacts/governed-promotion.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:677c5f887d59f367a596a23934569f27bbbd082cd9bda05c4c4f41e4eb06a169",
+      "byte_length": 554
+    },
+    {
+      "path": "artifacts/isolated-work.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:60f74ba5d18266b5038916b6d3523a6650e899a27ccb720ea83a03eb2fce9e78",
+      "byte_length": 594
+    },
+    {
+      "path": "artifacts/read-only-guidance.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:de1af91fb9e40e40df6ca9b12b3309244c7f3cbf4faea6f5c2bb4de42bf9b974",
+      "byte_length": 491
+    },
+    {
+      "path": "artifacts/replacement-agent-recovery.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:7e668844305bbb77cb6695b8a88d2f664f2a8afe5a1dbe52435dc376acb14e53",
+      "byte_length": 527
+    },
+    {
+      "path": "request.json",
+      "role": "protocol_request",
+      "sha256": "sha256:f6969c92af55d4734d86a20390d53d535c1ff3c4c83a549870414704a527cd03",
+      "byte_length": 5827
+    },
+    {
+      "path": "response.json",
+      "role": "protocol_response",
+      "sha256": "sha256:c904bfcce22848f5f9cf9e5137d1c18557da5fc0d06d2eba7b49dfce2b5776c8",
+      "byte_length": 7996
+    },
+    {
+      "path": "result.json",
+      "role": "derived_result",
+      "sha256": "sha256:5c527f4342458b60dcdc1ca4fc3005fecc447f7c3ab5500a1e96cd8a088f28d8",
+      "byte_length": 10197
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": "forge_host_conformance_run_summary_v1",
+  "recorded_on": "2026-07-29",
+  "authority": "same_owner_cooperative_candidate_only",
+  "identities": {
+    "codex_cli_declared": "0.144.6",
+    "codex_desktop_declared": "26.721.4979.0",
+    "adapter_id": "forge.codex.cooperative",
+    "adapter_version": "1.0.0",
+    "adapter_sha256_measured": "sha256:b64462d9283e1f06e09aea02b9237c4df071dd587e239230f02a1e3f862c7647",
+    "forge_package_measured": "forge-core-cli",
+    "forge_version_measured": "0.12.0-alpha.5",
+    "forge_executable_sha256": "sha256:1d957e5dd57654c75da8cfa0c2f615173614fa635a1aeb04846abb21cb78d5e7",
+    "windows_build_declared": "10.0.26200",
+    "wsl_declared": "2.6.1.0",
+    "ubuntu_declared": "24.04.4",
+    "linux_architecture_measured": "x86_64",
+    "repository_start_commit": "fd65da9f2ed2471228b9deacc61db1049a997690",
+    "canonical_commit_at_bundle_run": "b9e2675b101fd7313041c6dffbee835813e3ffd0"
+  },
+  "canonical_project_root": {
+    "runner_measurement": {
+      "exists": true,
+      "is_directory": true,
+      "resolved_path_sha256": "sha256:1556b0dfbc25cdaa2d6e90267d4d712ce8af16bd1680dc738db053be504becd7",
+      "transport_check": "not_applicable_to_linux_runner",
+      "transport_gap": "linux_runner_cannot_independently_verify_windows_bridge"
+    },
+    "host_cooperative_bridge_check": {
+      "status": "passed_same_project_link_bytes",
+      "windows_unc_file_sha256": "sha256:5c21aa02acc04b0761b9fc4ae428a3d679d5f8f518f8167f70b21f148a0223d5",
+      "wsl_file_sha256": "sha256:5c21aa02acc04b0761b9fc4ae428a3d679d5f8f518f8167f70b21f148a0223d5",
+      "same_bytes": true,
+      "independent_runner_verification": false
+    }
+  },
+  "governance_state_report": {
+    "accepted_objective_revision": 2,
+    "open_objective_uncertainties": 0,
+    "current_supporting_evidence_sequence": 12,
+    "deliberately_rejected_evidence_sequence": 10,
+    "rejection_code": "binding_stale",
+    "authority": "adapter_reported_same_owner"
+  },
+  "result": {
+    "overall": "candidate",
+    "capabilities": 8,
+    "partially_supported": 8,
+    "supported": 0,
+    "assertions_passed": 21,
+    "assertions_failed": 2,
+    "assertions_not_applicable": 1,
+    "integrity_proves_host_authenticity": false
+  },
+  "unexercised_negative_checks": [
+    "ambiguous_root_rejection",
+    "ownership_mismatch_rejection"
+  ],
+  "bundle": {
+    "relative_path": "bundle",
+    "bundle_digest": "sha256:fe2995e8c7143a30134bbe9057f80fb4120155c52f0f7d20950e26ed419a84db",
+    "bundle_integrity_verification": "passed",
+    "verification_scope": "closed_bundle_structure_completeness_derived_result_and_digests_only",
+    "reported_host_actions_verified": false
+  },
+  "governed_promotion_report": {
+    "authority": "adapter_reported_same_owner",
+    "isolation_id": "isolation.solo-dogfood-14.codex-v4",
+    "preview_digest": "sha256:c0c490761c938b003c16f92dd8fe2a5c6b6dcc0633934473004715d50f3b8668",
+    "receipt_digest": "sha256:84ac081a59ba48e612e20b6e8406c701737795d9a7d3d6fa356494c1abd65462",
+    "open_objective_uncertainties": 0,
+    "write_set": ["CHANGELOG.md"],
+    "first_apply": "adapter_reported_applied_and_read_back",
+    "exact_retry": "adapter_reported_already_committed_without_mutation",
+    "forge_native_action_proof_in_bundle": false
+  }
+}

@@ -23,6 +23,11 @@ fn reference_adapter() -> PathBuf {
         .join("../../contracts/hosts/solo-host-conformance-v1/reference-adapter.py")
 }
 
+fn codex_adapter() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/hosts/codex/solo-host-conformance-v1/adapter.py")
+}
+
 fn python_program() -> &'static str {
     if cfg!(windows) {
         "python"
@@ -95,6 +100,294 @@ fn verify(bundle: &Path) -> assert_cmd::assert::Assert {
             "--json",
         ])
         .assert()
+}
+
+#[test]
+fn codex_adapter_preserves_partial_observations_and_typed_gaps() {
+    let observation_path = temp_dir("codex-observation.json");
+    let bundle = temp_dir("codex-bundle");
+    let corpus: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../contracts/hosts/solo-host-conformance-v1/corpus.json"),
+        )
+        .expect("read corpus"),
+    )
+    .expect("parse corpus");
+    let mut cases = corpus["cases"]
+        .as_array()
+        .expect("corpus cases")
+        .iter()
+        .map(|case| {
+            let assertions = case["required_assertions"]
+                .as_array()
+                .expect("required assertions")
+                .iter()
+                .map(|assertion| {
+                    (
+                        assertion.as_str().expect("assertion").to_owned(),
+                        serde_json::Value::Bool(true),
+                    )
+                })
+                .collect::<serde_json::Map<String, serde_json::Value>>();
+            serde_json::json!({
+                "case_id": case["case_id"],
+                "assertions": assertions,
+                "gaps": [],
+                "fact_codes": ["codex_cooperative_observation"]
+            })
+        })
+        .collect::<Vec<_>>();
+    for case in &mut cases {
+        match case["case_id"].as_str().expect("case id") {
+            "canonical-project-root" => {
+                case["assertions"]["ambiguous_roots_rejected"] = serde_json::Value::Bool(false);
+                case["assertions"]["windows_wsl_bridge_applied_only_when_required"] =
+                    serde_json::Value::Bool(true);
+                case["gaps"] = serde_json::json!([
+                    {
+                        "kind": "canonical_root_unavailable",
+                        "code": "ambiguous_root_rejection_not_exercised"
+                    },
+                    {
+                        "kind": "platform_boundary_unavailable",
+                        "code": "linux_runner_cannot_independently_verify_windows_bridge"
+                    }
+                ]);
+            }
+            "isolated-work" => {
+                case["assertions"]["ownership_mismatch_stops"] = serde_json::Value::Bool(false);
+                case["gaps"] = serde_json::json!([
+                    {
+                        "kind": "isolation_unavailable",
+                        "code": "ownership_mismatch_not_exercised_in_host_run"
+                    }
+                ]);
+            }
+            _ => {}
+        }
+    }
+    fs::write(
+        &observation_path,
+        serde_json::to_vec(&serde_json::json!({
+            "schema_version": "forge_codex_host_observation_v1",
+            "evidence_mode": "cooperative_same_owner",
+            "cases": cases
+        }))
+        .expect("serialize observation"),
+    )
+    .expect("write observation");
+
+    let output = Command::cargo_bin("forge-core")
+        .expect("forge binary")
+        .args([
+            "host-conformance",
+            "run",
+            "--adapter",
+            python_program(),
+            "--adapter-arg",
+            codex_adapter().to_str().expect("UTF-8 adapter path"),
+            "--adapter-arg",
+            "--observation-file",
+            "--adapter-arg",
+            observation_path.to_str().expect("UTF-8 observation path"),
+            "--host-id",
+            "openai.codex",
+            "--host-version",
+            "0.144.6",
+            "--adapter-id",
+            "forge.codex.cooperative",
+            "--adapter-version",
+            "1.0.0",
+            "--platform-id",
+            "windows-10.0.26200",
+            "--environment-id",
+            "codex-desktop-wsl-ubuntu-24.04",
+            "--canonical-root",
+            env!("CARGO_MANIFEST_DIR"),
+            "--output-dir",
+            bundle.to_str().expect("UTF-8 bundle path"),
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let envelope: CliEnvelope<SoloHostConformanceResultDocument> =
+        serde_json::from_slice(&output).expect("run envelope");
+    let result = envelope.data.expect("run result");
+    assert_eq!(result.capabilities.len(), 8);
+    assert!(result.capabilities.iter().all(|capability| {
+        capability.outcome == SoloHostConformanceOutcome::PartiallySupported
+            && capability.gaps.iter().any(|gap| {
+                gap.kind == SoloHostGapKind::NativeAuthenticityUnavailable
+                    && gap.code == "forge_native_verifier_unavailable"
+            })
+    }));
+
+    let canonical_root = result
+        .capabilities
+        .iter()
+        .find(|capability| capability.capability == SoloHostCapability::CanonicalProjectRoot)
+        .expect("canonical root result");
+    assert!(canonical_root.assertions.iter().any(|assertion| {
+        assertion.assertion == "ambiguous_roots_rejected"
+            && assertion.status == SoloHostAssertionStatus::Failed
+    }));
+    assert!(canonical_root.assertions.iter().any(|assertion| {
+        assertion.assertion == "windows_wsl_bridge_applied_only_when_required"
+            && assertion.status == SoloHostAssertionStatus::NotApplicable
+    }));
+    assert!(canonical_root.gaps.iter().any(|gap| {
+        gap.kind == SoloHostGapKind::CanonicalRootUnavailable
+            && gap.code == "ambiguous_root_rejection_not_exercised"
+    }));
+    assert!(canonical_root.gaps.iter().any(|gap| {
+        gap.kind == SoloHostGapKind::PlatformBoundaryUnavailable
+            && gap.code == "linux_runner_cannot_independently_verify_windows_bridge"
+    }));
+
+    let isolated_work = result
+        .capabilities
+        .iter()
+        .find(|capability| capability.capability == SoloHostCapability::IsolatedWork)
+        .expect("isolated work result");
+    assert!(isolated_work.assertions.iter().any(|assertion| {
+        assertion.assertion == "ownership_mismatch_stops"
+            && assertion.status == SoloHostAssertionStatus::Failed
+    }));
+    assert!(isolated_work.gaps.iter().any(|gap| {
+        gap.kind == SoloHostGapKind::IsolationUnavailable
+            && gap.code == "ownership_mismatch_not_exercised_in_host_run"
+    }));
+
+    verify(&bundle).success();
+
+    fs::remove_file(observation_path).expect("observation cleanup");
+    fs::remove_dir_all(bundle).expect("bundle cleanup");
+}
+
+#[test]
+fn codex_adapter_rejects_observations_with_unknown_fields() {
+    let observation_path = temp_dir("codex-unknown-field.json");
+    let bundle = temp_dir("codex-unknown-field-bundle");
+    fs::write(
+        &observation_path,
+        br#"{"schema_version":"forge_codex_host_observation_v1","evidence_mode":"cooperative_same_owner","cases":[],"raw_chat":"forbidden"}"#,
+    )
+    .expect("write observation");
+
+    Command::cargo_bin("forge-core")
+        .expect("forge binary")
+        .args([
+            "host-conformance",
+            "run",
+            "--adapter",
+            python_program(),
+            "--adapter-arg",
+            codex_adapter().to_str().expect("UTF-8 adapter path"),
+            "--adapter-arg",
+            "--observation-file",
+            "--adapter-arg",
+            observation_path.to_str().expect("UTF-8 observation path"),
+            "--host-id",
+            "openai.codex",
+            "--host-version",
+            "0.144.6",
+            "--adapter-id",
+            "forge.codex.cooperative",
+            "--adapter-version",
+            "1.0.0",
+            "--platform-id",
+            "windows-10.0.26200",
+            "--environment-id",
+            "codex-desktop-wsl-ubuntu-24.04",
+            "--canonical-root",
+            env!("CARGO_MANIFEST_DIR"),
+            "--output-dir",
+            bundle.to_str().expect("UTF-8 bundle path"),
+            "--json",
+        ])
+        .assert()
+        .failure();
+    assert!(!bundle.exists());
+
+    fs::remove_file(observation_path).expect("observation cleanup");
+}
+
+#[test]
+fn retained_codex_run_summary_matches_bundle_manifest_and_result() {
+    let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/hosts/conformance-results/codex/0.144.6");
+    let read_json = |path: &Path| -> serde_json::Value {
+        serde_json::from_slice(&fs::read(path).expect("read retained JSON"))
+            .expect("parse retained JSON")
+    };
+    let summary = read_json(&retained.join("run-summary.json"));
+    let manifest = read_json(&retained.join("bundle/manifest.json"));
+    let result = read_json(&retained.join("bundle/result.json"));
+
+    let summary_bundle_digest = summary
+        .pointer("/bundle/bundle_digest")
+        .and_then(serde_json::Value::as_str)
+        .expect("summary bundle digest");
+    let manifest_bundle_digest = manifest["bundle_digest"]
+        .as_str()
+        .expect("manifest bundle digest");
+    assert_eq!(summary_bundle_digest, manifest_bundle_digest);
+
+    let summary_forge_hash = summary
+        .pointer("/identities/forge_executable_sha256")
+        .and_then(serde_json::Value::as_str)
+        .expect("summary Forge hash");
+    let manifest_forge_hash = manifest
+        .pointer("/bindings/observed/forge_executable_sha256")
+        .and_then(serde_json::Value::as_str)
+        .expect("manifest Forge hash");
+    let result_forge_hash = result
+        .pointer("/bindings/observed/forge_executable_sha256")
+        .and_then(serde_json::Value::as_str)
+        .expect("result Forge hash");
+    assert_eq!(summary_forge_hash, manifest_forge_hash);
+    assert_eq!(summary_forge_hash, result_forge_hash);
+
+    let capabilities = result["capabilities"]
+        .as_array()
+        .expect("retained capabilities");
+    let mut passed = 0_u64;
+    let mut failed = 0_u64;
+    let mut not_applicable = 0_u64;
+    for assertion in capabilities.iter().flat_map(|capability| {
+        capability["assertions"]
+            .as_array()
+            .expect("retained assertions")
+    }) {
+        match assertion["status"].as_str().expect("assertion status") {
+            "passed" => passed += 1,
+            "failed" => failed += 1,
+            "not_applicable" => not_applicable += 1,
+            other => panic!("unexpected retained assertion status: {other}"),
+        }
+    }
+    let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
+    let summary_counts = (
+        summary["result"]["capabilities"]
+            .as_u64()
+            .expect("summary capability count"),
+        summary["result"]["assertions_passed"]
+            .as_u64()
+            .expect("summary passed count"),
+        summary["result"]["assertions_failed"]
+            .as_u64()
+            .expect("summary failed count"),
+        summary["result"]["assertions_not_applicable"]
+            .as_u64()
+            .expect("summary not-applicable count"),
+    );
+    assert_eq!(derived_counts, (8, 21, 2, 1));
+    assert_eq!(summary_counts, derived_counts);
 }
 
 #[test]

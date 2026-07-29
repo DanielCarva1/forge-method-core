@@ -1,0 +1,24 @@
+{
+  "case_id": "conversation-derived-intent",
+  "assertions": {
+    "accepted_intent_read_back": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "agent_proposal_separated": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "human_message_source_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "objective_revision_2_read_back",
+      "zero_open_objective_uncertainties"
+    ]
+  }
+}

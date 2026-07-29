@@ -12,4 +12,36 @@ host_support_matrix:
     grants_trust_authority: false
     grants_private_key_authority: false
     grants_host_selection_authority: false
-  records: []
+  records:
+    - runtime:
+        kind: "codex"
+        version: "0.144.6"
+      status: "candidate"
+      recognition:
+        status: "candidate"
+        evidence: null
+      installability:
+        status: "unknown"
+        evidence: null
+      read_only_mcp:
+        status: "unknown"
+        evidence: null
+      native_human_origin_assurance:
+        status: "unknown"
+        evidence: null
+      governed_mutation:
+        status: "candidate"
+        evidence: null
+      conformance:
+        status: "candidate"
+        evidence: null
+      release_asset:
+        status: "unknown"
+        evidence: null
+      field_evidence:
+        status: "candidate"
+        evidence: null
+      known_limits:
+        status: "unknown"
+        limits: []
+        disclosure_evidence: null

@@ -1,0 +1,24 @@
+{
+  "case_id": "cooperative-evidence",
+  "assertions": {
+    "admission_result_read_back": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "evidence_source_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "rejected_evidence_stays_rejected": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "evidence_sequence_10_binding_stale",
+      "evidence_sequence_12_admitted"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "isolated-work",
+  "assertions": {
+    "isolation_exists_and_is_linked": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "missing_isolation_stops": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "ownership_mismatch_stops": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "isolation_unavailable",
+      "code": "ownership_mismatch_not_exercised_in_host_run"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "isolation_codex_v4_valid",
+      "missing_isolation_rejected"
+    ]
+  }
+}

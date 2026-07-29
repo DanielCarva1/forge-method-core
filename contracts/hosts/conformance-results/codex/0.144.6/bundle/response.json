@@ -1,0 +1,280 @@
+{
+  "schema_version": "solo_host_conformance_protocol_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "openai.codex",
+      "host_version": "0.144.6",
+      "adapter_id": "forge.codex.cooperative",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200",
+      "environment_label": "codex-desktop-26.721.4979.0-wsl-2.6.1.0-ubuntu-24.04.4-forge-0.12.0-alpha.5"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.5",
+      "forge_executable_sha256": "sha256:1d957e5dd57654c75da8cfa0c2f615173614fa635a1aeb04846abb21cb78d5e7",
+      "platform": {
+        "os": "linux",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:1556b0dfbc25cdaa2d6e90267d4d712ce8af16bd1680dc738db053be504becd7",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "python3.12",
+          "sha256": "sha256:1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
+          "byte_length": 8020928
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "file",
+            "safe_display": "adapter.py",
+            "argument_sha256": "sha256:879ecbd3e8b48d17125f6f23940f7d1f665b8bd61355905ef879819121d4de60",
+            "file_identity": {
+              "file_name": "adapter.py",
+              "sha256": "sha256:b64462d9283e1f06e09aea02b9237c4df071dd587e239230f02a1e3f862c7647",
+              "byte_length": 8854
+            }
+          },
+          {
+            "position": 1,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:6d3357119d99a3077f6e0ec1a5c221c13b81667348d323d2ce1ad5ed8e23f741",
+            "file_identity": null
+          },
+          {
+            "position": 2,
+            "kind": "file",
+            "safe_display": "codex-0.144.6-observation.json",
+            "argument_sha256": "sha256:b9e711d12e4eeb90c46ac14f90d2829d6e091309a25a5f67e9bfa72a59e8fffb",
+            "file_identity": {
+              "file_name": "codex-0.144.6-observation.json",
+              "sha256": "sha256:f543183810796b786c02692fc2ae262f26a3f705cf3e28cd382ec91f96da45d5",
+              "byte_length": 3110
+            }
+          }
+        ],
+        "argv_sha256": "sha256:015b717154bfbbd4e4cfba7c743aaaef61056ef01468db94e676c0d1e4dbe3bf",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "cases": [
+    {
+      "case_id": "activation",
+      "assertions": {
+        "forge_invoked_by_argv": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "one_chat_activation_observed": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "versioned_json_preserved": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "forge_cli_json_readback",
+          "start_forge_once_seen"
+        ]
+      }
+    },
+    {
+      "case_id": "canonical-project-root",
+      "assertions": {
+        "ambiguous_roots_rejected": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "exact_existing_root_resolved": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "windows_wsl_bridge_applied_only_when_required": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "platform_boundary_unavailable",
+          "code": "linux_runner_cannot_independently_verify_windows_bridge"
+        },
+        {
+          "kind": "canonical_root_unavailable",
+          "code": "ambiguous_root_rejection_not_exercised"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "canonical_wsl_root_resolved",
+          "windows_unc_project_link_matches_wsl_bytes"
+        ]
+      }
+    },
+    {
+      "case_id": "read-only-guidance",
+      "assertions": {
+        "before_after_state_equal": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "guidance_is_plain_language": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "no_hidden_recovery_or_write": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "plain_language_resume_summary",
+          "resume_state_digest_unchanged"
+        ]
+      }
+    },
+    {
+      "case_id": "conversation-derived-intent",
+      "assertions": {
+        "accepted_intent_read_back": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "agent_proposal_separated": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "human_message_source_preserved": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "objective_revision_2_read_back",
+          "zero_open_objective_uncertainties"
+        ]
+      }
+    },
+    {
+      "case_id": "cooperative-evidence",
+      "assertions": {
+        "admission_result_read_back": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "evidence_source_preserved": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "rejected_evidence_stays_rejected": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "evidence_sequence_10_binding_stale",
+          "evidence_sequence_12_admitted"
+        ]
+      }
+    },
+    {
+      "case_id": "isolated-work",
+      "assertions": {
+        "isolation_exists_and_is_linked": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "missing_isolation_stops": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "ownership_mismatch_stops": {
+          "passed": false,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "isolation_unavailable",
+          "code": "ownership_mismatch_not_exercised_in_host_run"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "isolation_codex_v4_valid",
+          "missing_isolation_rejected"
+        ]
+      }
+    },
+    {
+      "case_id": "governed-promotion",
+      "assertions": {
+        "apply_read_back_matches": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "exact_retry_is_idempotent": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "preview_bound_to_exact_change": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "promotion_exact_retry_already_committed",
+          "promotion_preview_c0c49076_reviewable",
+          "promotion_receipt_84ac081a_readback"
+        ]
+      }
+    },
+    {
+      "case_id": "replacement-agent-recovery",
+      "assertions": {
+        "durable_state_reconstructed": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "fresh_agent_has_no_transcript_dependency": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "recovery_ranked_before_new_work": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "continuity_ready_readback",
+          "fresh_agent_no_history_resume_revision_2"
+        ]
+      }
+    }
+  ]
+}
