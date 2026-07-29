@@ -4,6 +4,9 @@ Forge does not approve an agent app because it recognizes the app's name. Any
 app can connect an adapter to the same public kit. Adding a new app does not
 require a product-name rule in Forge.
 
+Every result applies only to the exact host and adapter versions recorded in
+its bundle. It is not a claim about older or newer versions.
+
 The kit checks eight parts of the solo journey separately:
 
 1. start Forge once for the chat;
@@ -58,7 +61,7 @@ Forge calculates one result for each capability:
 - `unsupported`: none of the applicable required points passed.
 
 This release has no trusted host-native proof verifier. Therefore an adapter
-that simply says “everything passed” can never receive `supported`; Forge adds
+that simply says "everything passed" can never receive `supported`; Forge adds
 `native_authenticity_unavailable` and caps it at `partially_supported`. The
 protocol has a proof-scheme field for a future trusted verifier, but Forge does
 not pretend that feature exists today.
@@ -98,3 +101,20 @@ A clean bundle proves that these exact closed files are complete and unchanged.
 It does not prove the adapter told the truth about the host. An incomplete,
 tampered, or unsafe bundle is invalid; Forge never softens that into
 `unsupported`.
+
+## Codex cooperative adapter
+
+The packaged Codex adapter is
+`contracts/hosts/codex/solo-host-conformance-v1/adapter.py`. It translates one
+closed, same-owner observation from an exact Codex journey into the public
+protocol. It rejects unknown fields and never claims native authenticity.
+
+This is useful for honest dogfood: Forge can bind exact versions, calculate all
+eight results, retain an integrity-checked bundle, and show missing host
+capabilities as typed gaps. It is not proof that Codex enforced the method.
+
+Codex Desktop and the Codex CLI have different versions and must be recorded
+separately. If Codex Desktop runs on Windows while Forge runs inside WSL, the
+Linux runner can verify the canonical WSL project but cannot independently
+observe the Windows side of that bridge. The result must keep that limitation
+visible.
