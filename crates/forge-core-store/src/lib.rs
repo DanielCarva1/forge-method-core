@@ -1780,6 +1780,7 @@ impl RetainedEffectStoreRoot {
             false,
             self.boundary.clone(),
             false,
+            true,
         )?;
         let expected = self
             .root
@@ -3833,7 +3834,33 @@ pub fn acquire_effect_store_lock(
         .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
     let boundary = producer_quiescence::BoundaryLease::from_boundary(&boundary, &state_root)
         .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
-    acquire_effect_store_lock_inner(root, lock_relative_path, false, false, boundary, true)
+    acquire_effect_store_lock_inner(root, lock_relative_path, false, false, boundary, true, true)
+}
+
+/// Acquire an existing effect lock without creating any lock directory or file.
+///
+/// This is the race-safe observer seam for read-only sidecars: the producer
+/// boundary and the requested lock are opened with existing-only semantics.
+#[doc(hidden)]
+pub fn acquire_existing_effect_store_lock(
+    root: impl AsRef<Path>,
+    lock_relative_path: &str,
+) -> Result<EffectStoreLock, EffectStoreLockError> {
+    let root = root.as_ref();
+    let state_root = effect_boundary_state_root(root, lock_relative_path);
+    let boundary = producer_quiescence::admit_existing_effect_producer(&state_root, false)
+        .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
+    let boundary = producer_quiescence::BoundaryLease::from_boundary(&boundary, &state_root)
+        .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
+    acquire_effect_store_lock_inner(
+        root,
+        lock_relative_path,
+        false,
+        false,
+        boundary,
+        true,
+        false,
+    )
 }
 
 /// Acquire an effect authority while retaining an already-held typed producer boundary.
@@ -3848,7 +3875,7 @@ pub fn acquire_effect_store_lock_under_boundary(
     let state_root = effect_boundary_state_root(root, lock_relative_path);
     let boundary = producer_quiescence::BoundaryLease::from_boundary(boundary, &state_root)
         .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
-    acquire_effect_store_lock_inner(root, lock_relative_path, false, true, boundary, true)
+    acquire_effect_store_lock_inner(root, lock_relative_path, false, true, boundary, true, true)
 }
 
 /// Try to acquire an exclusive [`EffectStoreLock`] on `lock_relative_path`
@@ -3880,7 +3907,7 @@ pub fn try_acquire_effect_store_lock(
         })?;
     let boundary = producer_quiescence::BoundaryLease::from_boundary(&boundary, &state_root)
         .map_err(|source| EffectStoreLockError::ProducerBoundary { source })?;
-    acquire_effect_store_lock_inner(root, lock_relative_path, true, false, boundary, true)
+    acquire_effect_store_lock_inner(root, lock_relative_path, true, false, boundary, true, true)
 }
 
 /// Validate and revalidate one file-backed effect while retaining the exact
@@ -8424,6 +8451,7 @@ fn acquire_effect_store_lock_inner(
     allow_reserved_eventlog_lock: bool,
     boundary: producer_quiescence::BoundaryLease,
     validate_namespace_root: bool,
+    create_missing: bool,
 ) -> Result<EffectStoreLock, EffectStoreLockError> {
     let reserved = reserved_state_path(lock_relative_path);
     if let Some(reserved_path) = reserved {
@@ -8501,12 +8529,22 @@ fn acquire_effect_store_lock_inner(
                 path: lock_relative_path.to_string(),
             })?;
     if !parent.as_os_str().is_empty() {
-        state_root
-            .create_dir_all(parent)
-            .map_err(|source| EffectStoreLockError::CreateDir {
-                path: path.parent().unwrap_or(root).to_path_buf(),
-                source: source.to_string(),
+        if create_missing {
+            state_root.create_dir_all(parent).map_err(|source| {
+                EffectStoreLockError::CreateDir {
+                    path: path.parent().unwrap_or(root).to_path_buf(),
+                    source: source.to_string(),
+                }
             })?;
+        } else {
+            let directory = state_root.open_directory(parent).map_err(|source| {
+                EffectStoreLockError::CreateDir {
+                    path: path.parent().unwrap_or(root).to_path_buf(),
+                    source: format!("existing-only observer requires lock parent: {source}"),
+                }
+            })?;
+            drop(directory);
+        }
     }
     if !allow_reserved_eventlog_lock {
         if let Some(reserved) = reserved_state_path(lock_relative_path) {
@@ -8516,12 +8554,15 @@ fn acquire_effect_store_lock_inner(
             });
         }
     }
-    let file = state_root
-        .open_read_write_create(&state_relative)
-        .map_err(|source| EffectStoreLockError::OpenFile {
-            path: path.clone(),
-            source: source.to_string(),
-        })?;
+    let file = if create_missing {
+        state_root.open_read_write_create(&state_relative)
+    } else {
+        state_root.open_read_write(&state_relative)
+    }
+    .map_err(|source| EffectStoreLockError::OpenFile {
+        path: path.clone(),
+        source: source.to_string(),
+    })?;
     if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
         return Err(EffectStoreLockError::OpenFile {
             path,
@@ -8637,6 +8678,61 @@ mod tests {
         ));
         fs::create_dir_all(&root).expect("create temp root");
         root
+    }
+
+    fn byte_state(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        fn visit(root: &Path, current: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
+            let mut entries = fs::read_dir(current)
+                .expect("read byte-state directory")
+                .map(|entry| entry.expect("read byte-state entry"))
+                .collect::<Vec<_>>();
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("byte-state path under root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let metadata = fs::symlink_metadata(&path).expect("byte-state metadata");
+                if metadata.is_dir() {
+                    out.insert(format!("dir:{relative}"), Vec::new());
+                    visit(root, &path, out);
+                } else {
+                    out.insert(
+                        format!("file:{relative}"),
+                        fs::read(&path).expect("read byte-state file"),
+                    );
+                }
+            }
+        }
+        let mut out = BTreeMap::new();
+        visit(root, root, &mut out);
+        out
+    }
+
+    #[test]
+    fn existing_only_effect_lock_never_materializes_missing_state() {
+        let root = temp_root("existing-only-effect-lock");
+        assert!(fs::read_dir(&root)
+            .expect("read empty root")
+            .next()
+            .is_none());
+        assert!(acquire_existing_effect_store_lock(&root, "locks/observer.lock").is_err());
+        assert!(fs::read_dir(&root)
+            .expect("read root after rejection")
+            .next()
+            .is_none());
+
+        let lock = acquire_effect_store_lock(&root, "locks/observer.lock")
+            .expect("initialize exact lock state");
+        drop(lock);
+        let before = byte_state(&root);
+        let observer = acquire_existing_effect_store_lock(&root, "locks/observer.lock")
+            .expect("observe existing lock");
+        drop(observer);
+        let after = byte_state(&root);
+        assert_eq!(before, after);
     }
 
     #[cfg(any(

@@ -49,6 +49,9 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
     if args.get(1).is_some_and(|value| value == "evidence") {
         return crate::workflow_evidence_cmd::run(&args[2..]);
     }
+    if args.get(1).is_some_and(|value| value == "promotion") {
+        return crate::workflow_promotion_cmd::run(&args[2..]);
+    }
     if args.get(1).is_some_and(|value| value == "intent") {
         let want_json = wants_json(args);
         let command = if args

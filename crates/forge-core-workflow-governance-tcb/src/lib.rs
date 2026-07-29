@@ -37,7 +37,10 @@ use forge_core_contracts::{
     WORKFLOW_GOVERNANCE_REBASE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_REPLACEMENT_CONTINUITY_LEDGER_SCHEMA_VERSION,
 };
-use forge_core_store::{acquire_effect_store_lock, EffectStoreLock, EffectStoreLockError};
+use forge_core_store::{
+    acquire_effect_store_lock, acquire_existing_effect_store_lock, EffectStoreLock,
+    EffectStoreLockError,
+};
 use serde_json_canonicalizer::to_vec as to_canonical_json;
 use sha2::{Digest, Sha256};
 #[cfg(test)]
@@ -1585,6 +1588,21 @@ pub fn lock_workflow_governance_ledger_tcb(
     state_root: impl AsRef<Path>,
 ) -> Result<LockedWorkflowGovernanceLedger, WorkflowGovernanceLedgerError> {
     lock_workflow_governance_ledger_internal(state_root)
+}
+
+/// Acquire the pre-existing workflow ledger lock without creating lock state.
+///
+/// Read-only sidecars use this instead of the mutation constructor so a missing
+/// ledger/lock remains observably absent.
+#[doc(hidden)]
+pub fn observe_existing_workflow_governance_ledger(
+    state_root: impl AsRef<Path>,
+) -> Result<LockedWorkflowGovernanceLedger, WorkflowGovernanceLedgerError> {
+    let state_root = trusted_state_root(state_root.as_ref())?;
+    let lock =
+        acquire_existing_effect_store_lock(&state_root, WORKFLOW_GOVERNANCE_LOCK_RELATIVE_PATH)
+            .map_err(lock_error)?;
+    Ok(LockedWorkflowGovernanceLedger { state_root, lock })
 }
 
 /// Strictly recover the ledger under its exclusive lock.

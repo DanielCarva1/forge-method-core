@@ -116,8 +116,9 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
-    AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
-    LockedCoreOnlyDomainPackLifecycleObservation, LockedDomainPackLifecycleObservation,
+    observe_existing_domain_pack_lifecycle_for_project, AdmittedActiveDomainPackGeneration,
+    DomainPackLifecycleStoreError, LockedCoreOnlyDomainPackLifecycleObservation,
+    LockedDomainPackLifecycleObservation,
 };
 use forge_core_store::claim_wal::{
     project_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions, ClaimWalProjectionStopPolicy,
@@ -134,8 +135,9 @@ use forge_core_validate::{
 };
 use forge_core_workflow_governance_tcb::{
     domain_pack_receipt_carryover, lock_workflow_governance_ledger_tcb,
-    LockedWorkflowGovernanceLedger, WorkflowGovernanceLedgerError,
-    WorkflowGovernanceLedgerIdentity, WorkflowGovernanceLedgerProjection,
+    observe_existing_workflow_governance_ledger, LockedWorkflowGovernanceLedger,
+    WorkflowGovernanceLedgerError, WorkflowGovernanceLedgerIdentity,
+    WorkflowGovernanceLedgerProjection,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -759,7 +761,7 @@ pub struct WorkflowGovernanceProjectAdapter {
 /// The workflow digest preserves the persisted v0 regular-file projection while
 /// the Store capability also retains and revalidates the complete directory and
 /// ancestor namespace. The capability is never serialized or returned to callers.
-struct RetainedWorkflowProjectSnapshot {
+pub(super) struct RetainedWorkflowProjectSnapshot {
     tree: RetainedProjectTree,
 }
 
@@ -790,6 +792,10 @@ impl RetainedWorkflowProjectSnapshot {
     fn revalidate(&self) -> Result<(), WorkflowGovernanceAdapterError> {
         self.tree.revalidate()?;
         Ok(())
+    }
+
+    pub(super) const fn tree(&self) -> &RetainedProjectTree {
+        &self.tree
     }
 }
 
@@ -913,6 +919,21 @@ impl LockedWorkflowDomainPackContext {
         state_root: &Path,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
         match observe_domain_pack_lifecycle_for_project(project_root, state_root)? {
+            LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) => {
+                debug_assert!(lifecycle.projection().active_pointer.is_none());
+                Ok(Self::CoreOnly(Box::new(lifecycle)))
+            }
+            LockedDomainPackLifecycleObservation::Active(lifecycle) => {
+                Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
+            }
+        }
+    }
+
+    fn acquire_existing(
+        project_root: &Path,
+        state_root: &Path,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        match observe_existing_domain_pack_lifecycle_for_project(project_root, state_root)? {
             LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) => {
                 debug_assert!(lifecycle.projection().active_pointer.is_none());
                 Ok(Self::CoreOnly(Box::new(lifecycle)))
@@ -1436,6 +1457,46 @@ impl WorkflowGovernanceProjectAdapter {
         let assessment = evaluate_agent_autonomy(&current_binding, &input)?;
         snapshot.revalidate()?;
         Ok(assessment)
+    }
+
+    /// Build a caller-carried, read-only preview for one exact active isolation.
+    ///
+    /// This path performs no reconciliation, ledger append, replay reservation,
+    /// or project write. Every governance and filesystem coordinate is retained
+    /// until the preview has been derived and revalidated.
+    pub fn preview_promotion(
+        &self,
+        isolation_id: &StableId,
+    ) -> Result<forge_core_contracts::GovernedPromotionPreview, WorkflowGovernanceAdapterError>
+    {
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_existing(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        let destination = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &destination,
+        )?;
+        let preview = super::promotion::preview_governed_promotion(
+            &self.binding,
+            isolation_id,
+            &guidance,
+            destination.tree(),
+            now,
+        )?;
+        destination.revalidate()?;
+        Ok(preview)
     }
 
     /// Adjudicate and durably record a same-owner evidence offer. Rejections
@@ -5541,6 +5602,7 @@ pub enum WorkflowGovernanceAdapterError {
     CoordinationCasMismatch,
     CoordinationInvalid(String),
     ClaimProjection(String),
+    PromotionPreview(super::promotion::PromotionPreviewError),
     ReplacementContinuityUnavailable(&'static str),
     FoundationalReceiptRevocation,
     StateVersionOverflow,
@@ -5672,6 +5734,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             Self::ClaimProjection(reason) => {
                 write!(f, "claim WAL projection failed: {reason}")
             }
+            Self::PromotionPreview(error) => {
+                write!(f, "governed promotion preview failed: {error}")
+            }
             Self::ReplacementContinuityUnavailable(reason) => {
                 write!(f, "replacement continuity is unavailable: {reason}")
             }
@@ -5745,6 +5810,12 @@ impl From<WorkflowGovernanceRejection> for WorkflowGovernanceAdapterError {
 impl From<AssuranceProjectionError> for WorkflowGovernanceAdapterError {
     fn from(value: AssuranceProjectionError) -> Self {
         Self::AssuranceProjection(value)
+    }
+}
+
+impl From<super::promotion::PromotionPreviewError> for WorkflowGovernanceAdapterError {
+    fn from(value: super::promotion::PromotionPreviewError) -> Self {
+        Self::PromotionPreview(value)
     }
 }
 

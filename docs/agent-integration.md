@@ -234,3 +234,27 @@ For a `solo_cooperative` objective, an agent may submit `forge-core workflow evi
 The initial route accepts only the kernel-executed current `project_snapshot` scenario and authoritative readback. Callers do not supply an outcome or observation time. Runtime, external-system, human-decision, repository-state substitutes, and unknown/inconclusive assertions fail closed. An admitted record can be `supporting` only for its explicit `cooperative_claim_ref`; it is never projected as a source-policy receipt and therefore leaves the selected source claim unsatisfied, including when that source uses RepresentativeRuntime. It does **not** prove independent semantic review, trusted-runtime separation, tamper resistance, human presence, or enterprise compliance. Rejected and stale records remain visible in `workflow next` but never support either claim.
 
 `/start-forge` activation is once per chat, not once per task. After the objective is accepted, evidence operation is mechanical: inspect each fresh `data.cooperative_evidence_action_packet`; write `offer_template` to a temporary file outside the snapshot; replace only `required_replacements`; execute `argv` as tokens after replacing only `input_file_token`; delete the temporary file; and refresh `workflow next`. Never shell-parse the vector. If the packet is absent, report `data.cooperative_evidence_action_gap`. A `rejected` result is audited non-support, not success.
+
+## Read-only governed promotion preview
+
+When isolated work is ready for inspection, the host may run
+`forge-core workflow promotion preview --root <canonical-project> --isolation-id <id> --json`.
+The source root is derived only from the uniquely selected Active isolation
+contract; callers cannot substitute an ambient path. The source must be an
+exact linked Git worktree registered by the canonical repository, on the
+contract branch, with its common repository and both HEAD identities bound.
+Ordinary directories, different repositories/branches, traversal, aliases, and
+hard links fail closed. The command retains and revalidates both source and
+canonical destination trees and returns domain-separated filesystem/diff/write
+set digests, objective/ledger/evidence/claim bindings, path-to-linked-claim
+attribution, ambient conflicts, destructive deletes, excluded-root metadata,
+created-file metadata and directory/type/mode effects, source-side build/dependency roots that are outside the promotable snapshot, a final observation time, validity boundary, and
+unresolved gaps. A source-side `target` or `node_modules` root is an explicit blocking unsupported effect rather than a silently omitted change; destination-only cache roots are preserved outside promotion scope.
+
+The preview acquires only pre-existing lifecycle, workflow, and claim locks; a
+missing lock or state namespace is rejected without materializing it. Its stable
+preview digest excludes only the volatile observation instant so Ticket 10 can
+re-admit the same still-valid bound candidate. The preview is strictly read-only and caller-carried: `authority` is
+`read_only_candidate_no_apply_authority`, both mutation flags are false, and no
+apply or recovery command exists in this slice. Same-owner cooperative evidence
+remains explicitly unable to satisfy the selected source claim.

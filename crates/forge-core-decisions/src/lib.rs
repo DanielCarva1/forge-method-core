@@ -53,6 +53,7 @@ pub mod isolation;
 pub mod obligation_engine;
 pub mod phase_transition;
 pub mod post_build_verify_episode;
+pub mod promotion;
 pub mod workflow_behavior;
 pub mod workflow_governance;
 pub mod workflow_migration;
@@ -116,6 +117,11 @@ pub use post_build_verify_episode::{
     PostBuildVerifyEpisodeDecisionAuthority, PostBuildVerifyEpisodeDecisionStatus,
     PostBuildVerifyEpisodeIssue, PostBuildVerifyEpisodeIssueCode,
     PostBuildVerifyEpisodeRuntimeRoute, PostBuildVerifyEpisodeRuntimeRouteError,
+};
+pub use promotion::{
+    derive_promotion_diff, evaluate_promotion_readiness, promotion_domain_digest,
+    PromotionDiffProjection, PromotionInventoryDirectory, PromotionInventoryFile,
+    PromotionPlanningError, PromotionReadinessEvaluation, PromotionReadinessInput,
 };
 
 pub use claim_engine::{

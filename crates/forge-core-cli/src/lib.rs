@@ -75,6 +75,7 @@ pub mod workflow_cmd;
 mod workflow_credential_cmd;
 mod workflow_evidence_cmd;
 mod workflow_intent_cmd;
+mod workflow_promotion_cmd;
 
 // Re-export the execute-operation API at the crate root so that the binary
 // entrypoint (`main.rs`) and integration tests (`tests/validate.rs`) keep

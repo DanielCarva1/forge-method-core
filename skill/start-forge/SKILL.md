@@ -103,6 +103,22 @@ or routes a healthy project into agent-native workflow governance.
    agent performs the action and asks `workflow next` again. The human stays in
    chat and never operates Forge commands or edits Forge artifacts.
 
+   When work has been completed in a Forge isolation, preview it by the
+   isolation id rather than by supplying an ambient worktree path:
+
+   ```bash
+   forge-core workflow promotion preview --root "<project-root>" \
+     --isolation-id "<active-isolation-id>" --json
+   ```
+
+   Treat the returned document as a read-only candidate only. Inspect its exact
+   Git worktree/common-repository/branch/HEAD binding,
+   source/destination snapshots, objective and evidence bindings, final
+   observation validity, diff, write set, linked-claim path attribution,
+   ambient conflicts, destructive deletes, excluded roots (including blocking source-side build/dependency caches), unsupported
+   created-file metadata and directory/type/mode effects, and unresolved gaps. A preview grants no apply authority; do not mutate the
+   canonical repository from it or invent an apply command.
+
    A packet whose approval boundary is exactly `cooperative_same_owner` is the
    Solo Cooperative missing-objective lane. It is not human-origin authority.
    Read the packet's dedicated `cooperative_objective` input contract: it

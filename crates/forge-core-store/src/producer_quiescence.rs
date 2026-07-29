@@ -561,6 +561,24 @@ pub fn admit_effect_producer(
     admit_effect_pinned(pin, &NEVER_CANCELLED, deadline, try_only)
 }
 
+/// Admit effect authority only when every producer-boundary artifact already
+/// exists. This observer seam never creates the lock directory or lock files.
+#[doc(hidden)]
+pub fn admit_existing_effect_producer(
+    state_root: &Path,
+    try_only: bool,
+) -> Result<EffectProducerGuard, ProducerBoundaryError> {
+    static NEVER_CANCELLED: AtomicBool = AtomicBool::new(false);
+    let pin = pin_state_root_with_creation(state_root, false)?;
+    let deadline = Instant::now()
+        + if try_only {
+            PRODUCER_DEADLINE
+        } else {
+            EFFECT_DEADLINE
+        };
+    admit_effect_pinned(pin, &NEVER_CANCELLED, deadline, try_only)
+}
+
 /// Close producer admission and drain all already-admitted producers.
 ///
 /// This is hidden from generated API documentation because only trusted
@@ -1203,6 +1221,13 @@ fn check_wait(
 }
 
 fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
+    pin_state_root_with_creation(requested, true)
+}
+
+fn pin_state_root_with_creation(
+    requested: &Path,
+    create_missing: bool,
+) -> Result<RootPin, ProducerBoundaryError> {
     let lexical_metadata = fs::symlink_metadata(requested).map_err(|source| {
         ProducerBoundaryError::StateRootUnavailable {
             path: requested.to_path_buf(),
@@ -1251,6 +1276,7 @@ fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
         &canonical,
         identity,
         PRODUCER_ROOT_AUTHORITY_LOCK,
+        create_missing,
     )?;
     #[cfg(unix)]
     let _authority = open_boundary_lock(
@@ -1258,9 +1284,25 @@ fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
         &canonical,
         identity,
         PRODUCER_ROOT_AUTHORITY_LOCK,
+        create_missing,
     )?;
     let locks = canonical.join("locks");
-    prepare_lock_directory(&locks)?;
+    if create_missing {
+        prepare_lock_directory(&locks)?;
+    } else {
+        let metadata = fs::symlink_metadata(&locks).map_err(|source| {
+            ProducerBoundaryError::CreateLockDirectory {
+                path: locks.clone(),
+                source: format!("existing-only observer requires the lock directory: {source}"),
+            }
+        })?;
+        if metadata_is_link_or_reparse(&metadata) || !metadata.is_dir() {
+            return Err(ProducerBoundaryError::CreateLockDirectory {
+                path: locks.clone(),
+                source: "existing-only observer requires a real lock directory".to_owned(),
+            });
+        }
+    }
     let locks_directory = open_directory_nofollow(&locks).map_err(|source| {
         ProducerBoundaryError::CreateLockDirectory {
             path: locks.clone(),
@@ -1290,12 +1332,14 @@ fn pin_state_root(requested: &Path) -> Result<RootPin, ProducerBoundaryError> {
         &locks,
         locks_identity,
         "producer-admission.gate.lock",
+        create_missing,
     )?;
     let (drain, drain_identity) = open_boundary_lock(
         &locks_directory,
         &locks,
         locks_identity,
         "producer-admission.drain.lock",
+        create_missing,
     )?;
     let pin = RootPin {
         requested: canonical.clone(),
@@ -1322,7 +1366,7 @@ fn validate_boundary_root_pin(
     state_root: &Path,
 ) -> Result<(), ProducerBoundaryError> {
     validate_pin(expected)?;
-    let actual = pin_state_root(state_root)?;
+    let actual = pin_state_root_with_creation(state_root, false)?;
     if actual.identity != expected.identity {
         return Err(ProducerBoundaryError::BoundaryRootMismatch {
             expected: expected.canonical.clone(),
@@ -1432,6 +1476,7 @@ fn open_boundary_lock(
     parent: &Path,
     parent_identity: RootIdentity,
     file_name: &str,
+    create_missing: bool,
 ) -> Result<(File, RootIdentity), ProducerBoundaryError> {
     let path = parent.join(file_name);
     let retained_parent = file_identity(directory);
@@ -1443,11 +1488,14 @@ fn open_boundary_lock(
             path: parent.to_path_buf(),
         });
     }
-    let file = open_lock_nofollow_at(directory, &path, file_name).map_err(|source| {
-        ProducerBoundaryError::OpenLock {
-            path: path.clone(),
-            source: source.to_string(),
-        }
+    let file = if create_missing {
+        open_lock_nofollow_at(directory, &path, file_name)
+    } else {
+        open_existing_lock_nofollow(&path)
+    }
+    .map_err(|source| ProducerBoundaryError::OpenLock {
+        path: path.clone(),
+        source: source.to_string(),
     })?;
     let opened = file
         .metadata()

@@ -1691,3 +1691,214 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
     assert!(!text.contains("--principal-registry"));
     assert!(!text.contains("--workflow"));
 }
+
+#[test]
+fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
+    let consumer = Consumer::new();
+    let run_git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&consumer.app)
+            .args(args)
+            .output()
+            .expect("run Git fixture command");
+        assert!(
+            output.status.success(),
+            "git {:?} failed\nstdout={}\nstderr={}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    run_git(&["init", "-b", "master"]);
+    run_git(&["config", "user.name", "Forge Promotion E2E"]);
+    run_git(&[
+        "config",
+        "user.email",
+        "forge-promotion-e2e@example.invalid",
+    ]);
+    run_git(&["add", "."]);
+    run_git(&["commit", "-m", "initial fixture"]);
+
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "promotion preview objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Preview isolated work before any canonical mutation",
+                "constraints": ["remain host neutral", "derive source from the isolation contract"],
+                "unacceptable_outcomes": ["grant apply authority from a preview"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.promotion-e2e",
+            "host_provenance": {
+                "host_id": "host.promotion-e2e",
+                "host_version": "test",
+                "session_ref": "session.promotion-e2e",
+                "interaction_ref": "turn.promotion-preview",
+                "conversation_digest": format!("sha256:{}", "9".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+
+    let worktree = consumer.parent.join("wt").join("preview");
+    fs::create_dir_all(worktree.parent().expect("worktree parent")).expect("worktree parent");
+    let worktree_text = worktree.display().to_string();
+    run_git(&[
+        "worktree",
+        "add",
+        "-b",
+        "agent/preview",
+        &worktree_text,
+        "master",
+    ]);
+    fs::write(
+        worktree.join("README.md"),
+        "consumer project\npreview change\n",
+    )
+    .expect("write isolated modification");
+    fs::create_dir_all(worktree.join("src")).expect("create isolated source directory");
+    fs::write(worktree.join("src/new.rs"), "pub fn preview_only() {}\n")
+        .expect("write isolated new file");
+    fs::create_dir_all(worktree.join("target")).expect("create excluded source cache");
+    fs::write(
+        worktree.join("target/checked-in.txt"),
+        "must not be hidden\n",
+    )
+    .expect("write excluded source effect");
+
+    let root = consumer.app.display().to_string();
+    let now_unix = now().to_string();
+    let proposed = bin()
+        .args([
+            "isolation",
+            "propose",
+            "--root",
+            &root,
+            "--agent",
+            "agent.promotion-e2e",
+            "--branch",
+            "agent/preview",
+            "--worktree-path",
+            "../wt/preview",
+            "--base-ref",
+            "master",
+            "--id",
+            "isolation.promotion-e2e",
+            "--now-unix",
+            &now_unix,
+            "--json",
+        ])
+        .output()
+        .expect("propose promotion isolation");
+    assert_ok(&proposed);
+    let activated = bin()
+        .args([
+            "isolation",
+            "transition",
+            "--root",
+            &root,
+            "--id",
+            "isolation.promotion-e2e",
+            "--to",
+            "active",
+            "--now-unix",
+            &now_unix,
+            "--json",
+        ])
+        .output()
+        .expect("activate promotion isolation");
+    assert_ok(&activated);
+
+    let canonical_before = state_tree_snapshot(&consumer.app);
+    let forge_state_before = state_tree_snapshot(&consumer.state);
+    let preview_output = bin()
+        .args([
+            "workflow",
+            "promotion",
+            "preview",
+            "--root",
+            &root,
+            "--isolation-id",
+            "isolation.promotion-e2e",
+            "--json",
+        ])
+        .output()
+        .expect("run governed promotion preview");
+    let preview = assert_ok(&preview_output);
+    assert_eq!(preview["command"], "workflow.promotion.preview");
+    assert_eq!(
+        preview["data"]["authority"],
+        "read_only_candidate_no_apply_authority"
+    );
+    assert_eq!(preview["data"]["canonical_mutation_performed"], false);
+    assert_eq!(preview["data"]["forge_state_mutation_performed"], false);
+    assert_eq!(preview["data"]["status"], "blocked");
+    assert_eq!(
+        preview["data"]["source"]["git_worktree"]["branch_ref"],
+        "refs/heads/agent/preview"
+    );
+    assert_eq!(
+        preview["data"]["source"]["declared_worktree_path"],
+        "../wt/preview"
+    );
+
+    let diff = preview["data"]["diff"]
+        .as_array()
+        .expect("promotion diff array");
+    assert!(diff
+        .iter()
+        .any(|entry| { entry["path"] == "README.md" && entry["effect"] == "write_regular_file" }));
+    assert!(diff.iter().any(|entry| {
+        entry["path"] == "src/new.rs" && entry["effect"] == "create_regular_file"
+    }));
+    let unsupported = preview["data"]["unsupported_effects"]
+        .as_array()
+        .expect("typed unsupported effects");
+    assert!(unsupported.iter().any(|effect| {
+        effect["path"] == "target" && effect["kind"] == "excluded_source_root_content"
+    }));
+    let gaps = preview["data"]["unresolved_gaps"]
+        .as_array()
+        .expect("typed unresolved gaps");
+    assert!(gaps
+        .iter()
+        .any(|gap| gap["code"] == "missing_linked_isolation_claim"));
+    assert!(gaps.iter().any(|gap| gap["code"] == "ungoverned_write_set"));
+
+    assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
+    assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
+
+    let repeated_output = bin()
+        .args([
+            "workflow",
+            "promotion",
+            "preview",
+            "--root",
+            &root,
+            "--isolation-id",
+            "isolation.promotion-e2e",
+            "--json",
+        ])
+        .output()
+        .expect("repeat governed promotion preview");
+    let repeated = assert_ok(&repeated_output);
+    assert_eq!(
+        repeated["data"]["preview_digest"], preview["data"]["preview_digest"],
+        "the same retained state must reproduce one stable preview identity"
+    );
+    assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
+    assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
+}

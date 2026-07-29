@@ -25,6 +25,7 @@ use serde::Serialize;
 mod adapter;
 mod domain_pack;
 mod policy;
+mod promotion;
 mod retirement;
 
 pub use adapter::*;
@@ -47,6 +48,7 @@ pub use policy::{
     WORKFLOW_RELEASE_ADMISSION_AUTHORIZATION_REF, WORKFLOW_RELEASE_REVIEWER_REGISTRY_REF,
     WORKFLOW_RELEASE_REVIEW_INDEX_REF,
 };
+pub use promotion::PromotionPreviewError;
 pub use retirement::{
     load_admitted_workflow_retirement_checkpoint, AdmittedWorkflowRetirementCheckpoint,
     AdmittedWorkflowRetirementError, WORKFLOW_RETIREMENT_ADMISSION_EPOCH_UNIX,

@@ -55,6 +55,28 @@ pub struct RetainedProjectTree {
     file_alias_policy: RetainedFileAliasPolicy,
 }
 
+/// Read-only regular-file observation derived from one retained tree.
+///
+/// It contains no ambient path and no mutation handle. Callers must keep the
+/// originating [`RetainedProjectTree`] alive and revalidate it before trusting
+/// a projection assembled from these observations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedProjectRegularFileObservation {
+    pub relative_path: String,
+    pub content_digest: String,
+    pub byte_length: u64,
+    pub metadata_fingerprint: String,
+}
+
+/// Read-only directory observation derived from one retained tree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedProjectDirectoryObservation {
+    pub relative_path: String,
+    pub metadata_fingerprint: String,
+}
+
 /// Store-private binding between a lifecycle lock and the exact governed
 /// project root selected by its trusted caller.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -282,27 +304,27 @@ struct DirectoryEntry {
     object_id: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct FileIdentity {
     platform: PlatformIdentity,
 }
 
 #[cfg(unix)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PlatformIdentity {
     device: u64,
     inode: u64,
 }
 
 #[cfg(windows)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PlatformIdentity {
     volume: u32,
     index: u64,
 }
 
 #[cfg(not(any(unix, windows)))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PlatformIdentity;
 
 /// Failure while retaining or revalidating a sealed project tree.
@@ -535,6 +557,65 @@ impl RetainedProjectTree {
     #[must_use]
     pub fn regular_file_snapshot_digest(&self) -> &str {
         &self.regular_file_snapshot_digest
+    }
+
+    /// Sorted exact regular-file projection for read-only planning.
+    #[must_use]
+    pub fn regular_file_observations(&self) -> Vec<RetainedProjectRegularFileObservation> {
+        let mut observations = self
+            .files
+            .iter()
+            .map(|file| RetainedProjectRegularFileObservation {
+                relative_path: file.relative_path.clone(),
+                content_digest: crate::sha256_content_hash(&file.exact_bytes),
+                byte_length: file.metadata.metadata.len(),
+                metadata_fingerprint: promotion_metadata_fingerprint(&file.metadata),
+            })
+            .collect::<Vec<_>>();
+        observations.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        observations
+    }
+
+    /// Sorted directory projection for empty-directory and mode diagnostics.
+    ///
+    /// The root itself is omitted; every returned path is project-relative.
+    #[must_use]
+    pub fn directory_observations(&self) -> Vec<RetainedProjectDirectoryObservation> {
+        let mut observations = self
+            .directories
+            .iter()
+            .filter(|directory| !directory.relative_path.is_empty())
+            .map(|directory| RetainedProjectDirectoryObservation {
+                relative_path: directory.relative_path.clone(),
+                metadata_fingerprint: promotion_metadata_fingerprint(&directory.metadata),
+            })
+            .collect::<Vec<_>>();
+        observations.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+        observations
+    }
+
+    /// Compare retained root identities without exposing reusable platform ids.
+    pub fn aliases_root(&self, other: &Self) -> Result<bool, RetainedProjectTreeError> {
+        Ok(identity(&self.directories[0].metadata)? == identity(&other.directories[0].metadata)?)
+    }
+
+    /// Detect any exact regular-file object shared across two retained trees.
+    /// Promotion uses this as defense in depth in addition to single-link capture.
+    pub fn shares_regular_file_object_with(
+        &self,
+        other: &Self,
+    ) -> Result<bool, RetainedProjectTreeError> {
+        let left = self
+            .files
+            .iter()
+            .map(|file| identity(&file.metadata))
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        for right in &other.files {
+            if left.contains(&identity(&right.metadata)?) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Build the canonical exact-identity inventory consumed by a Store-owned
@@ -1777,6 +1858,33 @@ fn same_stable_file_metadata(
     _file_alias_policy: RetainedFileAliasPolicy,
 ) -> bool {
     false
+}
+
+#[cfg(unix)]
+fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
+    use std::os::unix::fs::MetadataExt as _;
+    format!(
+        "unix:mode={:o};uid={};gid={}",
+        metadata.metadata.mode(),
+        metadata.metadata.uid(),
+        metadata.metadata.gid()
+    )
+}
+
+#[cfg(windows)]
+fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
+    format!(
+        "windows:attributes={:08x}",
+        metadata.file_information.file_attributes
+    )
+}
+
+#[cfg(not(any(unix, windows)))]
+fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
+    format!(
+        "portable:readonly={}",
+        metadata.metadata.permissions().readonly()
+    )
 }
 
 fn io_error(path: &Path, error: io::Error) -> RetainedProjectTreeError {

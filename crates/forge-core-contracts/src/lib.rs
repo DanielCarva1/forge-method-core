@@ -50,6 +50,7 @@ pub mod product_lifecycle;
 pub mod product_lifecycle_verification;
 pub mod project_link;
 pub mod project_reinitialize;
+pub mod promotion;
 pub mod recovery;
 pub mod request;
 pub mod research;
@@ -212,6 +213,7 @@ pub use phase::Phase;
 pub use post_build_verify_episode::*;
 pub use product_lifecycle::*;
 pub use product_lifecycle_verification::*;
+pub use promotion::*;
 pub use research::{
     ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
     ResearchSource, ResearchSourceKind,

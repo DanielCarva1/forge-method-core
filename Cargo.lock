@@ -1017,6 +1017,7 @@ dependencies = [
  "forge-core-validate",
  "forge-core-workflow-governance-tcb",
  "include_dir",
+ "libc",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",

@@ -961,6 +961,25 @@ pub(crate) fn acquire_claim_wal_retained_lock(
     acquire_claim_wal_retained_lock_under_boundary(&boundary, state_root)
 }
 
+fn acquire_existing_claim_wal_retained_lock_under_boundary(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+) -> Result<ClaimWalRetainedLock, ClaimWalReadError> {
+    let requested_lock_path = claim_wal_lock_path(state_root);
+    acquire_claim_wal_retained_lock_raw_under_boundary_mode(boundary, state_root, false).map_err(
+        |source| match source.kind() {
+            io::ErrorKind::Other => ClaimWalReadError::Lock {
+                path: requested_lock_path.clone(),
+                source: source.to_string(),
+            },
+            _ => ClaimWalReadError::OpenLock {
+                path: requested_lock_path.clone(),
+                source: source.to_string(),
+            },
+        },
+    )
+}
+
 pub(crate) fn acquire_claim_wal_retained_lock_under_boundary(
     boundary: &impl crate::producer_quiescence::ProducerBoundary,
     state_root: &Path,
@@ -1257,6 +1276,45 @@ pub fn project_claim_wal(
     options: &ClaimWalProjectionOptions,
 ) -> Result<ClaimWalProjection, ClaimWalProjectionError> {
     let recovery = recover_claim_wal(state_root, options.repair)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+    if options.stop_policy == ClaimWalProjectionStopPolicy::RequireCleanEof
+        && recovery.stop_reason != ClaimWalStopReason::CleanEof
+    {
+        return Err(ClaimWalProjectionError::RecoveryStopped {
+            stop_reason: recovery.stop_reason,
+            last_good_offset: recovery.last_good_offset,
+            original_len: recovery.original_len,
+        });
+    }
+    Ok(project_claim_wal_recovery(recovery))
+}
+
+/// Project a pre-existing claim WAL without creating producer or claim locks.
+///
+/// `repair` is forbidden because this observer grants no mutation authority.
+pub fn project_existing_claim_wal(
+    state_root: impl AsRef<Path>,
+    options: &ClaimWalProjectionOptions,
+) -> Result<ClaimWalProjection, ClaimWalProjectionError> {
+    if options.repair {
+        return Err(ClaimWalProjectionError::RecoverWal {
+            source: ClaimWalReadError::ReadWal {
+                path: claim_wal_path(state_root.as_ref()),
+                source: "existing-only projection forbids repair".to_owned(),
+            },
+        });
+    }
+    let state_root = state_root.as_ref();
+    let boundary = crate::producer_quiescence::admit_existing_effect_producer(state_root, false)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal {
+            source: ClaimWalReadError::Lock {
+                path: claim_wal_lock_path(state_root),
+                source: source.to_string(),
+            },
+        })?;
+    let guard = acquire_existing_claim_wal_retained_lock_under_boundary(&boundary, state_root)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+    let recovery = recover_claim_wal_under_retained_lock(state_root, &guard, false)
         .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
     if options.stop_policy == ClaimWalProjectionStopPolicy::RequireCleanEof
         && recovery.stop_reason != ClaimWalStopReason::CleanEof
@@ -4056,6 +4114,14 @@ fn acquire_claim_wal_retained_lock_raw_under_boundary(
     boundary: &impl crate::producer_quiescence::ProducerBoundary,
     state_root: &Path,
 ) -> io::Result<ClaimWalRetainedLock> {
+    acquire_claim_wal_retained_lock_raw_under_boundary_mode(boundary, state_root, true)
+}
+
+fn acquire_claim_wal_retained_lock_raw_under_boundary_mode(
+    boundary: &impl crate::producer_quiescence::ProducerBoundary,
+    state_root: &Path,
+    create_missing: bool,
+) -> io::Result<ClaimWalRetainedLock> {
     let boundary = crate::producer_quiescence::BoundaryLease::from_boundary(boundary, state_root)
         .map_err(|source| io::Error::other(source.to_string()))?;
     let state_root = fs::canonicalize(state_root)?;
@@ -4063,8 +4129,14 @@ fn acquire_claim_wal_retained_lock_raw_under_boundary(
         .retained_root()
         .map_err(|source| io::Error::other(source.to_string()))?;
     let relative = Path::new(CLAIM_WAL_LOCK_RELATIVE_PATH);
-    root.create_dir_all(relative.parent().expect("lock has parent"))?;
-    let file = root.open_read_write_create(relative)?;
+    if create_missing {
+        root.create_dir_all(relative.parent().expect("lock has parent"))?;
+    }
+    let file = if create_missing {
+        root.open_read_write_create(relative)
+    } else {
+        root.open_read_write(relative)
+    }?;
     if !file.metadata()?.is_file() {
         return Err(io::Error::other("claim WAL lock is not a regular file"));
     }

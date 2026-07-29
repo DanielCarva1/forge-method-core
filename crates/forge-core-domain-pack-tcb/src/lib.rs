@@ -53,8 +53,8 @@ use forge_core_store::retained_lifecycle::{
 };
 use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
 use forge_core_store::{
-    acquire_effect_store_lock, sha256_content_hash, EffectStoreLockError,
-    RetainedCrashReplaceSession,
+    acquire_effect_store_lock, acquire_existing_effect_store_lock, sha256_content_hash,
+    EffectStoreLockError, RetainedCrashReplaceSession,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -930,9 +930,35 @@ pub fn observe_domain_pack_lifecycle_for_project(
     project_root: impl AsRef<Path>,
     state_root: impl AsRef<Path>,
 ) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
-    let state_root = canonical_state_root(state_root.as_ref())?;
-    let project_root = fs::canonicalize(project_root.as_ref())
-        .map_err(|error| io_error(project_root.as_ref(), error))?;
+    observe_domain_pack_lifecycle_for_project_internal(
+        project_root.as_ref(),
+        state_root.as_ref(),
+        true,
+    )
+}
+
+/// Existing-only observer used by sidecars that must not materialize lifecycle
+/// lock state when the project has not already initialized it.
+#[doc(hidden)]
+pub fn observe_existing_domain_pack_lifecycle_for_project(
+    project_root: impl AsRef<Path>,
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    observe_domain_pack_lifecycle_for_project_internal(
+        project_root.as_ref(),
+        state_root.as_ref(),
+        false,
+    )
+}
+
+fn observe_domain_pack_lifecycle_for_project_internal(
+    project_root: &Path,
+    state_root: &Path,
+    create_missing_lock: bool,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root)?;
+    let project_root =
+        fs::canonicalize(project_root).map_err(|error| io_error(project_root.as_ref(), error))?;
     if !project_root.is_dir() {
         return Err(invalid(
             "project_root",
@@ -946,7 +972,11 @@ pub fn observe_domain_pack_lifecycle_for_project(
             DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_BYTES,
         )?,
     );
-    let lock = acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)?;
+    let lock = if create_missing_lock {
+        acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)
+    } else {
+        acquire_existing_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)
+    }?;
     let store = lock.into_domain_pack_lifecycle_store_for_project(&project_snapshot)?;
     let observation = store.observe_active_pointer(DOMAIN_PACK_MAX_DOCUMENT_BYTES)?;
     if observation.raw_bytes().is_some() {
