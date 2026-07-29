@@ -365,3 +365,15 @@ preview observation. Recovery verifies its opaque self-digested intent, derives
 a fresh candidate with the same semantic preview digest, requires the
 destination to remain exactly unchanged, and records that fresh execution
 without claiming the historical observation was reconstructed.
+
+## Proving a host journey
+
+A host name is never enough to claim support. Use the open eight-part kit in
+[Host conformance](host-conformance.md). Forge runs any adapter through separated
+argv, calculates each result itself, and keeps missing host APIs as visible gaps.
+An adapter-only claim is never enough for `supported`; without trusted native
+proof, the honest ceiling is `partially_supported`.
+
+The Windows-to-WSL check applies only when the chosen Windows host is targeting
+a canonical project root inside WSL. Bundle integrity does not replace native
+host authenticity.

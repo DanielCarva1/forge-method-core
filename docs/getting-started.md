@@ -162,3 +162,9 @@ newer binary never silently migrates project authority; the agent follows
 
 For installation, state ownership, backup, and recovery details, see the
 [Operator guide](operator-guide.md).
+
+## Is my agent host supported?
+
+Do not trust a product-name list. Run the public journey kit described in
+[Host conformance](host-conformance.md). It reports the eight capabilities
+separately, so one missing API does not hide what already works.

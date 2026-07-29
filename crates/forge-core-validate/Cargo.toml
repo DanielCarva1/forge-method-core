@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
 serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
 sha2.workspace = true
 yaml_serde.workspace = true
 tracing.workspace = true
@@ -14,6 +16,7 @@ regex.workspace = true
 [dev-dependencies]
 serde.workspace = true
 yaml_serde.workspace = true
+serde_json.workspace = true
 serde_yaml.workspace = true
 serde_yml.workspace = true
 criterion.workspace = true

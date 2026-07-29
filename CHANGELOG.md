@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Open host-neutral conformance kit for solo developers and agents.** Added
+  the versioned eight-capability `solo_host_conformance_v1` corpus and the
+  public `host-conformance corpus|run|verify` commands. Any adapter runs through
+  separated argv and versioned JSON without a host-name branch. Forge derives
+  `supported`, `partially_supported`, or `unsupported` per capability from
+  complete observations and typed gaps. Adapter assertions alone are capped at
+  `partially_supported`; `supported` requires Forge-verifiable or trusted native
+  proof. Deterministic bundles bind declared labels separately from measured OS,
+  architecture, root hash, Forge and adapter files, separated argument digests,
+  timeout, and corpus; reject unsafe, secret-like, missing, extra, linked,
+  oversized, or changed evidence; and state plainly that integrity is not proof
+  that the host performed the reported action.
 - **Durable replacement-agent continuity for Solo dogfooding.** `workflow
   resume` now preserves the ordinary guidance and adds a versioned,
   host-neutral `replacement_continuity` projection. Fresh processes recover

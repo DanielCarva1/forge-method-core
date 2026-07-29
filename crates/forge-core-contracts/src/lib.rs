@@ -56,6 +56,7 @@ pub mod request;
 pub mod research;
 pub mod reserved_state_paths;
 pub mod runtime;
+pub mod solo_host_conformance;
 pub mod telemetry;
 pub mod tool_effect;
 pub mod verification_goal;
@@ -201,6 +202,7 @@ pub use runtime::{
     RuntimeHandoffContract, RuntimeHandoffContractDocument, RuntimeHandoffStatus, RuntimeKind,
     RuntimeRegistryEntryDocument,
 };
+pub use solo_host_conformance::*;
 pub use telemetry::{TelemetryContract, TelemetryContractDocument};
 pub use tool_effect::{ToolEffectContract, ToolEffectContractDocument};
 pub use verification_goal::{VerificationGoalContract, VerificationGoalContractDocument};

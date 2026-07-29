@@ -10,6 +10,7 @@ pub mod failure;
 pub mod host_conformance;
 pub mod markdown_authority;
 pub mod risk_audit;
+pub mod solo_host_conformance;
 pub mod testkit;
 pub mod workspace_architecture;
 
@@ -2403,3 +2404,5 @@ mod governance_tests {
         assert!(report.diagnostics().is_empty());
     }
 }
+
+pub use solo_host_conformance::*;

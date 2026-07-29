@@ -112,6 +112,21 @@ or routes a healthy project into agent-native workflow governance.
    operated and host-neutral. Its success does **not** claim official conformance
    for Codex, ZCode, Cursor, Claude, OpenCode, pi.dev, or any other host.
 
+### Host support is evidence, not a name
+
+Do not treat recognition of Codex, ZCode, Cursor, Claude, OpenCode, pi.dev, or
+any other host as proof of support. When the user asks whether a host/adapter is
+supported, or when developing one, use `forge-core host-conformance corpus`,
+`run`, and `verify` as documented in `docs/host-conformance.md`. The adapter
+returns closed observations and typed gaps; Forge calculates the three outcomes.
+Do not let an adapter declare its own final support label. Adapter assertions
+alone can reach only `partially_supported`; `supported` requires Forge-verifiable
+or trusted native proof. Start Forge once per chat, not once per task.
+
+Do not run the full kit on every `/start-forge`. Normal chat activation remains
+once per chat. The Windows-to-WSL capability applies only when this Windows host
+is targeting a canonical project root inside WSL. A bundle with matching hashes
+proves integrity, not native host authenticity.
 3. **Run `forge-core start`.** This is the zero-config bootstrap entry point.
    On a fresh repo with no Project Link and an unoccupied, symlink-free target it
    creates the Project Link + sidecar. If linked authority is missing, incomplete,

@@ -45,6 +45,7 @@ pub mod host_adapter_policy_cmd;
 pub(crate) mod host_adapter_projection;
 pub mod host_adapter_verify_cmd;
 pub(crate) mod host_command;
+pub mod host_conformance_cmd;
 pub mod host_support_matrix_cmd;
 pub mod io_util;
 pub mod isolation;

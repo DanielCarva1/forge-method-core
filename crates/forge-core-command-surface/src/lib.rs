@@ -518,6 +518,18 @@ pub const COMMAND_HOST_SUPPORT_MATRIX: CommandSpec = CommandSpec {
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
 };
+/// Open-world solo host journey corpus, adapter runner, and bundle verifier.
+pub const COMMAND_HOST_CONFORMANCE: CommandSpec = CommandSpec {
+    name: "host-conformance",
+    usage_lines: &[
+        "       forge-core host-conformance corpus --output-dir <new-path> [--json|--no-json]",
+        "       forge-core host-conformance run --adapter <program> [--adapter-arg <arg>]... --host-id <id> --host-version <version> --adapter-id <id> --adapter-version <version> --platform-id <id> --environment-id <id> --canonical-root <existing-path> [--timeout-ms <1..300000>] --output-dir <new-path> [--json|--no-json]",
+        "       forge-core host-conformance verify --bundle-dir <path> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
 
 pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
     name: "project",
@@ -882,6 +894,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_RESTORE,
     COMMAND_LIFECYCLE,
     COMMAND_HOST_SUPPORT_MATRIX,
+    COMMAND_HOST_CONFORMANCE,
     COMMAND_PROJECT,
     COMMAND_GRAPH,
     COMMAND_EVAL,

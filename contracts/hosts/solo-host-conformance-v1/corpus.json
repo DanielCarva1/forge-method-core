@@ -1,0 +1,54 @@
+{
+  "schema_version": "solo_host_conformance_v1",
+  "corpus_id": "forge.solo-host.public-corpus.v1",
+  "cases": [
+    {
+      "case_id": "activation",
+      "capability": "activation",
+      "description": "One chat activation discovers Forge and returns usable guidance without hidden host state.",
+      "required_assertions": ["forge_invoked_by_argv", "one_chat_activation_observed", "versioned_json_preserved"]
+    },
+    {
+      "case_id": "canonical-project-root",
+      "capability": "canonical_project_root",
+      "description": "The adapter resolves one existing canonical project root. A Windows to WSL bridge is required only when that canonical root is inside WSL.",
+      "required_assertions": ["exact_existing_root_resolved", "ambiguous_roots_rejected", "windows_wsl_bridge_applied_only_when_required"]
+    },
+    {
+      "case_id": "read-only-guidance",
+      "capability": "read_only_guidance",
+      "description": "Read-only guidance is returned without changing project or Forge state.",
+      "required_assertions": ["before_after_state_equal", "guidance_is_plain_language", "no_hidden_recovery_or_write"]
+    },
+    {
+      "case_id": "conversation-derived-intent",
+      "capability": "conversation_derived_intent",
+      "description": "The adapter carries the human's chat decision into Forge without letting an agent silently impersonate approval.",
+      "required_assertions": ["human_message_source_preserved", "agent_proposal_separated", "accepted_intent_read_back"]
+    },
+    {
+      "case_id": "cooperative-evidence",
+      "capability": "cooperative_evidence",
+      "description": "The adapter records bounded test or review evidence and reads the admitted result back.",
+      "required_assertions": ["evidence_source_preserved", "admission_result_read_back", "rejected_evidence_stays_rejected"]
+    },
+    {
+      "case_id": "isolated-work",
+      "capability": "isolated_work",
+      "description": "Agent work is linked to an existing isolated work area and missing or wrong ownership stops safely.",
+      "required_assertions": ["isolation_exists_and_is_linked", "ownership_mismatch_stops", "missing_isolation_stops"]
+    },
+    {
+      "case_id": "governed-promotion",
+      "capability": "governed_promotion",
+      "description": "A validated change is applied once, read back, and exact retry does not apply it twice.",
+      "required_assertions": ["preview_bound_to_exact_change", "apply_read_back_matches", "exact_retry_is_idempotent"]
+    },
+    {
+      "case_id": "replacement-agent-recovery",
+      "capability": "replacement_agent_recovery",
+      "description": "A fresh agent resumes objective, durable history, ownership, interrupted work, and the next safe action without transcript dependence.",
+      "required_assertions": ["fresh_agent_has_no_transcript_dependency", "durable_state_reconstructed", "recovery_ranked_before_new_work"]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "solo_host_conformance_protocol_v1",
+  "bindings": {
+    "instruction": "COPY_THE_REQUEST_BINDINGS_OBJECT_EXACTLY"
+  },
+  "cases": [
+    {
+      "case_id": "activation",
+      "assertions": {
+        "forge_invoked_by_argv": {"passed": true, "native_proof_claim": null},
+        "one_chat_activation_observed": {"passed": true, "native_proof_claim": null},
+        "versioned_json_preserved": {"passed": true, "native_proof_claim": null}
+      },
+      "gaps": [
+        {"kind": "native_authenticity_unavailable", "code": "example_adapter_only"}
+      ],
+      "evidence": {
+        "fact_codes": ["closed_example_observation", "one_chat_start_seen"]
+      }
+    }
+  ]
+}

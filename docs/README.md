@@ -23,6 +23,8 @@ host agents operate `forge-core`; operators own installation and trust.
 - [Architecture](architecture.md) explains layers and authority flow.
 - [Verification](verification.md) defines Tier 0, focused, platform, and
   cumulative evidence with budgets, triggers, and timing artifacts.
+- [Host conformance](host-conformance.md) defines the open solo journey kit and
+  its integrity-versus-authenticity limit.
 - [Real-host proof](real-host-proof.md) defines the structural-only P7F bundle
   checker boundary.
 - [Generated command surface](generated/command-surface.md) and

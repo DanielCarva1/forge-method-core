@@ -18,6 +18,11 @@ contracts/spec/C1.1-codex-host-capability-decision.yaml
 contracts/spec/C1.1-pi-host-capability-decision.yaml
 contracts/spec/C1.1-opencode-host-capability-decision.yaml
 contracts/spec/host-origin-broker-conformance-v0.yaml
+contracts/hosts/solo-host-conformance-v1/README.md
+contracts/hosts/solo-host-conformance-v1/corpus.json
+contracts/hosts/solo-host-conformance-v1/protocol-contract.json
+contracts/hosts/solo-host-conformance-v1/reference-adapter.py
+contracts/hosts/solo-host-conformance-v1/response.example.json
 contracts/spec/workflow-host-origin-adapter-v0.yaml
 contracts/spec/workflow-action-origin-broker-v0.yaml
 contracts/plan/product-gap-closure-plan.yaml
@@ -34,6 +39,7 @@ contracts/workflow-governance/golden-path-v0.yaml
 docs/README.md
 docs/getting-started.md
 docs/agent-integration.md
+docs/host-conformance.md
 docs/operator-guide.md
 docs/security-model.md
 docs/domain-packs.md

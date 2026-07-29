@@ -387,3 +387,11 @@ Local confinement assumes cooperating processes under the same OS principal.
 Use separate OS principals, permissions/sandboxing, and remote immutable storage
 when another same-user process is hostile. Read [Security model](security-model.md)
 and the repository [security policy](../SECURITY.md) before trusted mutation.
+
+## Host conformance bundles
+
+Use [host-conformance](host-conformance.md) to run or independently verify the
+open solo journey corpus. Keep the declared labels separate from Forge-measured
+OS, architecture, root hash, adapter-file and argument digests. A clean bundle
+proves that its files were not changed. It does not prove native host honesty;
+this release caps adapter-only success at `partially_supported`.
