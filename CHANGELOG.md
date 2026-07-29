@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Strict cooperative Codex conformance adapter.** Version `1.0.0` converts
+  one closed, exact-host dogfood observation into the public eight-part
+  protocol, rejects unknown observation fields and incorrect adapter bindings,
+  and never upgrades same-owner reports to native proof. It is an explicitly
+  invoked post-journey evaluator, not a step run by every `forge start`. The
+  exact Codex CLI `0.144.6` candidate result, partial outcomes, and typed gaps
+  are retained under `contracts/hosts/conformance-results/codex/0.144.6/`.
 - **Open host-neutral conformance kit for solo developers and agents.** Added
   the versioned eight-capability `solo_host_conformance_v1` corpus and the
   public `host-conformance corpus|run|verify` commands. Any adapter runs through
