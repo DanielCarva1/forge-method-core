@@ -261,3 +261,30 @@ This file is the canonical source. Save it wherever your host agent reads skills
 from. Forge does not assume a directory: common conventions include
 `~/.agents/skills/` (Codex, Zed), an MCP tool, or a project-local `.skills/`.
 Pick the location your agent runtime expects.
+
+### Cooperative evidence
+
+Activate this behavior once when `/start-forge` begins the chat; do not ask the
+user to restart Forge for each task.
+
+After an objective is accepted, inspect
+`data.cooperative_evidence_action_packet` on every fresh `workflow next`:
+
+1. If it is absent, report `data.cooperative_evidence_action_gap` exactly. Do
+   not invent a route or fall back to a different policy/claim.
+2. Copy `offer_template` to a temporary file **outside** the project snapshot.
+   Replace only the entries named by `required_replacements` (currently the
+   unique offer id). The outcome and observation time are kernel-derived.
+3. Execute `argv` as an argument vector, replacing only `input_file_token` with
+   the temporary file path. Never join or reinterpret it as a shell command.
+4. Treat `rejected` as audited non-support, not success. Delete the temporary
+   input and immediately refresh `workflow next`; never cache the old binding.
+
+The versioned, default-denied lane is bound to the currently selected
+policy/claim and accepts only the current `project_snapshot` material scenario
+that Forge executes and reads back. Its `supporting` status supports only the
+published `cooperative_claim_ref`; it explicitly leaves the selected source
+claim unsatisfied (including any RepresentativeRuntime claim). Runtime, external-system,
+human-decision, and inconclusive caller assertions fail closed. Never relabel a
+cooperative result as independent review, runtime verification,
+tamper-resistant proof, human presence, or compliance.

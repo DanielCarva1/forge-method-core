@@ -30,6 +30,7 @@ pub mod autonomy_router;
 pub mod catalog;
 pub mod claim_engine;
 pub mod conflict_detection;
+pub mod cooperative_evidence;
 pub mod coordination_eval;
 pub mod domain_pack;
 pub mod domain_pack_acquisition;
@@ -80,6 +81,7 @@ pub use embedded_contracts::{
 
 pub use agent_autonomy::{evaluate_agent_autonomy, AgentAutonomyEvaluationError};
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
+pub use cooperative_evidence::{evaluate_cooperative_evidence, CooperativeEvidenceDecision};
 pub use eval::{
     load_eval_corpus, score_router, CaseScore, EvalCase, EvalCorpusDocument, RouterScore,
 };

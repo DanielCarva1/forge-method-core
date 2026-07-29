@@ -13,6 +13,7 @@ pub mod backup_manifest;
 pub mod bootstrap_recovery;
 pub mod checkpoint;
 pub mod completion;
+pub mod cooperative_evidence;
 pub mod coordination_eval;
 pub mod decision;
 pub mod domain_pack;
@@ -132,6 +133,7 @@ pub use claim::{ClaimContract, ClaimContractDocument};
 pub use command::{CommandContract, CommandContractDocument};
 pub use common::{ClaimId, PrincipalId, RepoPath, ScopeId, SourceId, StableId};
 pub use completion::{CompletionContract, CompletionContractDocument};
+pub use cooperative_evidence::*;
 pub use coordination_eval::{
     CoordinationDimension, CoordinationEvalContract, CoordinationEvalContractDocument,
     CoordinationMetricKind,
@@ -233,10 +235,11 @@ pub use workflow_governance::{
     WorkflowBrokerNativeHostProvenance, WorkflowBrokerOriginProfile, WorkflowCapabilityProbeKind,
     WorkflowCapabilityRequirement, WorkflowClaimPolicy, WorkflowClaimWaiverObservation,
     WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowContentAddressedReference,
-    WorkflowCooperativeAuthorityBasis, WorkflowCooperativeHostProvenance,
-    WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
-    WorkflowCooperativeObjectiveRevisionKind, WorkflowDecisionActivation, WorkflowDecisionRule,
-    WorkflowDisproofPolicy, WorkflowDomainPackGenerationIdentity, WorkflowEffectiveBundleIdentity,
+    WorkflowCooperativeAuthorityBasis, WorkflowCooperativeEvidenceObservedEvent,
+    WorkflowCooperativeHostProvenance, WorkflowCooperativeObjectiveInput,
+    WorkflowCooperativeObjectiveProposal, WorkflowCooperativeObjectiveRevisionKind,
+    WorkflowDecisionActivation, WorkflowDecisionRule, WorkflowDisproofPolicy,
+    WorkflowDomainPackGenerationIdentity, WorkflowEffectiveBundleIdentity,
     WorkflowEvaluatorBinding, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,

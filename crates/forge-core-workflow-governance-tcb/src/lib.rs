@@ -13,6 +13,7 @@ use forge_core_contracts::request::RequestStatus;
 use forge_core_contracts::workflow_governance::{
     WorkflowCooperativeAuthorityBasis, WorkflowCooperativeObjectiveRevisionKind,
     WorkflowReadinessProfile, MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+    WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
@@ -23,12 +24,13 @@ use forge_core_contracts::{
     CoordinationRequestState, CoordinationStateAppliedEvent, CoordinationStateRecord,
     CoreDomainPackRebasedEvent, DomainPackGenerationTransitionedEvent, Phase, PhaseAdvancedEvent,
     PostBuildVerifyEpisodeAppliedEvent, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
-    ReleaseUpgradedEvent, StableId, WorkflowCooperativeObjectiveInput,
-    WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
-    WorkflowRuntimeBundleIdentity, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
-    MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
-    MAX_WORKFLOW_INTENT_TOTAL_BYTES, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    ReleaseUpgradedEvent, StableId, WorkflowCooperativeEvidenceObservedEvent,
+    WorkflowCooperativeObjectiveInput, WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent,
+    WorkflowGovernanceLedgerRecord, WorkflowGovernanceReceiptDocument,
+    WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover, WorkflowRuntimeBundleIdentity,
+    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
+    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION,
@@ -207,6 +209,15 @@ impl WorkflowGovernanceLedgerProjection {
         })
     }
 
+    fn contains_cooperative_evidence(&self) -> bool {
+        self.records.iter().any(|record| {
+            matches!(
+                record.event,
+                WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
+            )
+        })
+    }
+
     fn latest_cooperative_objective(
         &self,
     ) -> Option<&forge_core_contracts::CooperativeObjectiveAcceptedEvent> {
@@ -371,6 +382,14 @@ impl WorkflowGovernanceLedgerBatch<'_> {
                 WorkflowGovernanceLedgerError::CooperativeObjectiveRequiresDedicatedAuthority,
             );
         }
+        if matches!(
+            event,
+            WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
+        ) {
+            return Err(
+                WorkflowGovernanceLedgerError::CooperativeEvidenceRequiresDedicatedAuthority,
+            );
+        }
         if matches!(event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
         }
@@ -451,6 +470,45 @@ impl WorkflowGovernanceLedgerBatch<'_> {
         self.projection.head_digest = Some(record.record_digest.clone());
         self.projection.next_sequence = next_sequence;
         self.projection.next_state_version = next_state_version;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
+    /// Prepare one same-owner evidence admission or rejection. The kernel
+    /// supplies the policy decision; this boundary preserves its audit record
+    /// beneath the exact current ledger head.
+    #[doc(hidden)]
+    pub fn push_cooperative_evidence_unchecked_tcb(
+        &mut self,
+        state_version: u64,
+        event: WorkflowCooperativeEvidenceObservedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        validate_cooperative_evidence_event(
+            &self.projection,
+            &event,
+            self.projection.records.len() + 1,
+        )?;
+        let recorded_at_unix = event.observed_at_unix;
+        let (record, line) = build_record_line_at(
+            &self.projection,
+            &self.identity,
+            state_version,
+            WorkflowGovernanceEvent::CooperativeEvidenceObserved(event),
+            recorded_at_unix,
+        )?;
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        self.projection.next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
         self.projection.records.push(record.clone());
         Ok(record)
     }
@@ -1036,6 +1094,22 @@ impl LockedWorkflowGovernanceLedger {
         Ok(record)
     }
 
+    /// Append one auditable same-owner evidence decision under an exact head
+    /// CAS. Both admitted and rejected offers are durable ledger events.
+    #[doc(hidden)]
+    pub fn record_cooperative_evidence_unchecked_tcb(
+        &mut self,
+        expected_head_digest: &str,
+        identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: WorkflowCooperativeEvidenceObservedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, identity)?;
+        let record = batch.push_cooperative_evidence_unchecked_tcb(state_version, event)?;
+        batch.commit()?;
+        Ok(record)
+    }
+
     /// Append one structurally validated C5.2 episode route. Candidate
     /// validation and gate admission remain kernel-owned; this boundary enforces
     /// exact ledger, release, phase, generation, and event-shape continuity.
@@ -1274,6 +1348,11 @@ pub enum WorkflowGovernanceLedgerError {
         line: Option<usize>,
         reason: &'static str,
     },
+    CooperativeEvidenceRequiresDedicatedAuthority,
+    CooperativeEvidenceInvalid {
+        line: Option<usize>,
+        reason: &'static str,
+    },
     InvalidBrokerActionBinding {
         reason: &'static str,
     },
@@ -1418,6 +1497,15 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
             Self::CooperativeObjectiveInvalid { line, reason } => write!(
                 formatter,
                 "cooperative objective{} is invalid: {reason}",
+                line.map_or_else(String::new, |value| format!(" at ledger line {value}")),
+            ),
+            Self::CooperativeEvidenceRequiresDedicatedAuthority => write!(
+                formatter,
+                "cooperative evidence requires the dedicated same-owner TCB API"
+            ),
+            Self::CooperativeEvidenceInvalid { line, reason } => write!(
+                formatter,
+                "cooperative evidence{} is invalid: {reason}",
                 line.map_or_else(String::new, |value| format!(" at ledger line {value}")),
             ),
             Self::InvalidBrokerActionBinding { reason } => {
@@ -1720,6 +1808,8 @@ fn recover_from_reader(
                 != WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
+            && document.schema_version
+                != WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1756,6 +1846,10 @@ fn recover_from_reader(
             &record.event,
             WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) if event.revision > 1
         );
+        let is_cooperative_evidence = matches!(
+            &record.event,
+            WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
+        );
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -1784,7 +1878,10 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_cooperative_objective_revision
+        let expected_schema = if is_cooperative_evidence || identity_state.cooperative_evidence_seen
+        {
+            WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION
+        } else if is_cooperative_objective_revision
             || identity_state.cooperative_objective_revision_seen
         {
             WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION
@@ -1901,7 +1998,11 @@ struct RecoveredIdentityState {
     readiness_profile: Option<WorkflowReadinessProfile>,
     cooperative_objective_seen: bool,
     cooperative_objective_revision_seen: bool,
+    cooperative_evidence_seen: bool,
     latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
+    latest_cooperative_objective_record_digest: Option<String>,
+    latest_cooperative_objective_record_sequence: Option<u64>,
+    cooperative_offer_by_id: BTreeMap<String, String>,
     current_phase: Option<StableId>,
     last_post_build_verify_episode_by_id: BTreeMap<String, (u64, String)>,
     latest_coordination_request_by_id: BTreeMap<String, CoordinationRequestState>,
@@ -1984,6 +2085,98 @@ fn validate_recovered_semantics(
             });
         }
     }
+    if let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event {
+        if identity.readiness_profile != Some(WorkflowReadinessProfile::SoloCooperative) {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "same-owner evidence requires the solo_cooperative readiness profile",
+            });
+        }
+        if identity.latest_cooperative_objective.is_none() {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "same-owner evidence requires an accepted cooperative objective",
+            });
+        }
+        if record.previous_record_digest.as_deref()
+            != Some(event.admission_ledger_head_digest.as_str())
+            || record.state_version != event.admission_state_version
+            || record.recorded_at_unix != event.observed_at_unix
+        {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "evidence admission coordinates do not match its ledger record",
+            });
+        }
+        if let Some(offer_id) = event.offer_id.as_ref() {
+            match identity.cooperative_offer_by_id.get(&offer_id.0) {
+                Some(original_digest)
+                    if event.disposition
+                        != forge_core_contracts::WorkflowCooperativeEvidenceDisposition::Rejected
+                        || event.rejection
+                            != Some(
+                                forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey,
+                            )
+                        || original_digest == &event.offer_digest =>
+                {
+                    return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                        line: Some(line),
+                        reason: "reused cooperative evidence offer id is not a distinct rejected conflict",
+                    });
+                }
+                None if event.rejection
+                    == Some(
+                        forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey,
+                    ) =>
+                {
+                    return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                        line: Some(line),
+                        reason: "cooperative evidence conflict has no original offer id",
+                    });
+                }
+                Some(_) | None => {}
+            }
+        }
+        if let Some(admitted) = event.admitted_evidence.as_ref() {
+            let Some(objective) = identity.latest_cooperative_objective.as_ref() else {
+                return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                    line: Some(line),
+                    reason: "admitted evidence has no active objective",
+                });
+            };
+            if admitted.binding.objective_id != objective.objective_id
+                || admitted.binding.objective_revision != objective.revision
+                || admitted.binding.objective_digest != objective.objective_digest
+                || admitted.binding.assurance_epoch != objective.assurance_epoch
+                || Some(admitted.binding.accepted_objective_record_digest.as_str())
+                    != identity
+                        .latest_cooperative_objective_record_digest
+                        .as_deref()
+                || Some(admitted.binding.accepted_objective_record_sequence)
+                    != identity.latest_cooperative_objective_record_sequence
+                || admitted.binding.ledger_head_digest != event.admission_ledger_head_digest
+                || admitted.binding.state_version != event.admission_state_version
+                || admitted.binding.snapshot_digest != event.admission_snapshot_digest
+                || identity
+                    .active_effective
+                    .as_ref()
+                    .map(|effective| effective.effective_runtime_bundle.bundle_digest.as_str())
+                    .or_else(|| {
+                        identity
+                            .active
+                            .as_ref()
+                            .map(|active| active.bundle_digest.as_str())
+                    })
+                    != Some(admitted.binding.policy_bundle_digest.as_str())
+            {
+                return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                    line: Some(line),
+                    reason: "admitted evidence is not fully bound to the latest objective and admission coordinates",
+                });
+            }
+        }
+        validate_cooperative_evidence_shape(event, Some(line))?;
+    }
     if matches!(
         &record.event,
         WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
@@ -1994,6 +2187,22 @@ fn validate_recovered_semantics(
         identity.cooperative_objective_seen = true;
         identity.cooperative_objective_revision_seen |= event.revision > 1;
         identity.latest_cooperative_objective = Some(event.clone());
+        identity.latest_cooperative_objective_record_digest = Some(record.record_digest.clone());
+        identity.latest_cooperative_objective_record_sequence = Some(record.sequence);
+    }
+    if matches!(
+        &record.event,
+        WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
+    ) {
+        identity.cooperative_evidence_seen = true;
+    }
+    if let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event {
+        if let Some(offer_id) = event.offer_id.as_ref() {
+            identity
+                .cooperative_offer_by_id
+                .entry(offer_id.0.clone())
+                .or_insert_with(|| event.offer_digest.clone());
+        }
     }
     if matches!(
         &record.event,
@@ -2397,6 +2606,12 @@ fn ledger_wire_schema(
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
     if matches!(
+        event,
+        WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
+    ) || projection.contains_cooperative_evidence()
+    {
+        WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION
+    } else if matches!(
         event,
         WorkflowGovernanceEvent::CooperativeObjectiveAccepted(objective) if objective.revision > 1
     ) || projection.contains_cooperative_objective_revision()
@@ -3419,7 +3634,227 @@ fn validate_record_fields(
     if let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event {
         validate_cooperative_objective_shape(event, line)?;
     }
+    if let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event {
+        validate_cooperative_evidence_shape(event, line)?;
+    }
     Ok(())
+}
+
+fn validate_cooperative_evidence_event(
+    projection: &WorkflowGovernanceLedgerProjection,
+    event: &WorkflowCooperativeEvidenceObservedEvent,
+    line: usize,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
+        return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line: Some(line),
+            reason: "same-owner evidence requires the solo_cooperative readiness profile",
+        });
+    }
+    if projection.latest_cooperative_objective().is_none() {
+        return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line: Some(line),
+            reason: "same-owner evidence requires an accepted cooperative objective",
+        });
+    }
+    if projection.head_digest.as_deref() != Some(event.admission_ledger_head_digest.as_str())
+        || projection.current_state_version() != Some(event.admission_state_version)
+    {
+        return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line: Some(line),
+            reason: "evidence admission coordinates are stale",
+        });
+    }
+    if let Some(offer_id) = event.offer_id.as_ref() {
+        if let Some(previous) = projection.records.iter().find_map(|record| {
+            let WorkflowGovernanceEvent::CooperativeEvidenceObserved(previous) = &record.event
+            else {
+                return None;
+            };
+            (previous.offer_id.as_ref() == Some(offer_id)).then_some(previous)
+        }) {
+            if event.disposition
+                != forge_core_contracts::WorkflowCooperativeEvidenceDisposition::Rejected
+                || event.rejection
+                    != Some(
+                        forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey,
+                    )
+                || previous.offer_digest == event.offer_digest
+            {
+                return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                    line: Some(line),
+                    reason: "reused cooperative evidence offer id is not a distinct rejected conflict",
+                });
+            }
+        } else if event.rejection
+            == Some(
+                forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey,
+            )
+        {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "cooperative evidence conflict has no original offer id",
+            });
+        }
+    }
+    if let Some(admitted) = event.admitted_evidence.as_ref() {
+        let Some(objective_record) = projection.records.iter().rev().find(|record| {
+            matches!(
+                record.event,
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
+            )
+        }) else {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "admitted evidence has no active objective record",
+            });
+        };
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(objective) =
+            &objective_record.event
+        else {
+            unreachable!("predicate guarantees cooperative objective");
+        };
+        let active_bundle_digest = projection
+            .active_effective_bundle_identity()
+            .map(|identity| identity.effective_runtime_bundle.bundle_digest)
+            .or_else(|| {
+                projection
+                    .active_identity()
+                    .map(|identity| identity.bundle_digest)
+            });
+        if admitted.binding.objective_id != objective.objective_id
+            || admitted.binding.objective_revision != objective.revision
+            || admitted.binding.objective_digest != objective.objective_digest
+            || admitted.binding.assurance_epoch != objective.assurance_epoch
+            || admitted.binding.accepted_objective_record_digest != objective_record.record_digest
+            || admitted.binding.accepted_objective_record_sequence != objective_record.sequence
+            || admitted.binding.snapshot_digest != event.admission_snapshot_digest
+            || admitted.binding.ledger_head_digest != event.admission_ledger_head_digest
+            || admitted.binding.state_version != event.admission_state_version
+            || active_bundle_digest.as_deref()
+                != Some(admitted.binding.policy_bundle_digest.as_str())
+        {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line: Some(line),
+                reason: "admitted evidence does not match the current objective, bundle, or admission coordinates",
+            });
+        }
+    }
+    validate_cooperative_evidence_shape(event, Some(line))
+}
+
+fn validate_cooperative_evidence_shape(
+    event: &WorkflowCooperativeEvidenceObservedEvent,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    use forge_core_contracts::WorkflowCooperativeEvidenceDisposition::{Admitted, Rejected};
+
+    if event.observed_at_unix == 0 {
+        return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line,
+            reason: "evidence has no kernel observation time",
+        });
+    }
+    for digest in [
+        event.offer_digest.as_str(),
+        event.admission_snapshot_digest.as_str(),
+        event.admission_ledger_head_digest.as_str(),
+    ] {
+        if !is_lower_sha256(digest) {
+            return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                line,
+                reason: "evidence contains a non-canonical digest",
+            });
+        }
+    }
+    if event.offer_id.as_ref().is_some_and(|offer_id| {
+        offer_id.0.trim().is_empty()
+            || offer_id.0.len() > forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+    }) {
+        return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line,
+            reason: "evidence offer id is not bounded and nonblank",
+        });
+    }
+    match (
+        event.disposition,
+        event.rejection,
+        event.admitted_evidence.as_ref(),
+    ) {
+        (
+            Rejected,
+            Some(forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey),
+            None,
+        ) if event.offer_id.is_some() => Ok(()),
+        (Rejected, Some(reason), None)
+            if reason
+                != forge_core_contracts::WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey =>
+        {
+            Ok(())
+        }
+        (Admitted, None, Some(admitted)) => {
+            let binding = &admitted.binding;
+            let text_fields = [
+                admitted.offer_id.0.as_str(),
+                admitted.policy_version.as_str(),
+                admitted.claim_descriptor_version.as_str(),
+                admitted.policy_ref.0.as_str(),
+                admitted.claim_ref.0.as_str(),
+                admitted.evaluator_ref.0.as_str(),
+                admitted.cooperative_claim_ref.0.as_str(),
+                admitted.cooperative_evaluator_ref.0.as_str(),
+                admitted.producer.0.as_str(),
+                admitted.subject.subject_ref.as_str(),
+            ];
+            if text_fields.iter().any(|value| {
+                value.trim().is_empty()
+                    || value.len()
+                        > forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+            }) || admitted.offer_digest != event.offer_digest
+                || event.offer_id.as_ref() != Some(&admitted.offer_id)
+                || admitted.policy_version
+                    != forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION
+                || admitted.claim_descriptor_version
+                    != forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+                || binding.objective_revision == 0
+                || binding.assurance_epoch == 0
+                || binding.accepted_objective_record_sequence == 0
+                || admitted.execution_observed_at_unix != event.observed_at_unix
+                || admitted.readback_observed_at_unix != event.observed_at_unix
+                || admitted.outcome != forge_core_contracts::WorkflowEvidenceOutcome::Pass
+                || admitted.subject.kind
+                    != forge_core_contracts::WorkflowEvidenceSubjectKind::ProjectSnapshot
+                || admitted.scenario_kind
+                    != forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
+            {
+                return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                    line,
+                    reason: "admitted evidence has invalid bounded fields, subject, or observation times",
+                });
+            }
+            for digest in [
+                binding.objective_digest.as_str(),
+                binding.accepted_objective_record_digest.as_str(),
+                binding.policy_bundle_digest.as_str(),
+                binding.snapshot_digest.as_str(),
+                binding.ledger_head_digest.as_str(),
+                admitted.subject.subject_digest.as_str(),
+                admitted.scenario_digest.as_str(),
+            ] {
+                if !is_lower_sha256(digest) {
+                    return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+                        line,
+                        reason: "admitted evidence contains a non-canonical digest",
+                    });
+                }
+            }
+            Ok(())
+        }
+        _ => Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
+            line,
+            reason: "evidence disposition, rejection, and normalized admission are inconsistent",
+        }),
+    }
 }
 
 fn validate_cooperative_objective_event(

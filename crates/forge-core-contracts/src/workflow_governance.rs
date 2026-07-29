@@ -77,6 +77,8 @@ pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION: &str 
 /// material supersession or additive clarification requires `0.11`, and every
 /// successor record permanently remains on that wire epoch.
 pub const WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION: &str = "0.11";
+/// Ledger records written from the first kernel-adjudicated cooperative evidence offer.
+pub const WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION: &str = "0.12";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs
@@ -423,6 +425,7 @@ pub enum WorkflowGovernanceEvent {
     ProjectImported(ProjectImportedEvent),
     HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
     CooperativeObjectiveAccepted(CooperativeObjectiveAcceptedEvent),
+    CooperativeEvidenceObserved(WorkflowCooperativeEvidenceObservedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     CoreDomainPackRebased(Box<CoreDomainPackRebasedEvent>),
@@ -1211,4 +1214,29 @@ pub enum WorkflowEvidenceOutcome {
 pub enum WorkflowCompletionAssertion {
     NotAsserted,
     Asserted,
+}
+
+/// Durable audit record for a kernel-adjudicated cooperative evidence offer.
+/// A rejected offer is intentionally retained but never contributes support.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeEvidenceObservedEvent {
+    /// Digest of canonical parsed bytes, or of the exact bounded/unparseable
+    /// input. Rejections retain no hostile caller-controlled body.
+    pub offer_digest: String,
+    /// Retained only when the parsed id is bounded and nonblank. This permits
+    /// durable conflicting-reuse detection without retaining the raw offer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offer_id: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admitted_evidence: Option<crate::WorkflowAdmittedCooperativeEvidence>,
+    pub disposition: crate::WorkflowCooperativeEvidenceDisposition,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rejection: Option<crate::WorkflowCooperativeEvidenceRejection>,
+    pub admission_snapshot_digest: String,
+    pub admission_ledger_head_digest: String,
+    pub admission_state_version: u64,
+    /// Kernel readback/append observation. Evidence freshness is evaluated
+    /// from the execution and readback times, never from a later reprojection.
+    pub observed_at_unix: u64,
 }

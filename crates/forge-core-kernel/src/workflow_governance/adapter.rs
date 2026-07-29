@@ -65,11 +65,17 @@ use forge_core_contracts::{
     PostBuildVerifyEpisodeDocument, PostBuildVerifyEpisodeOutcome, PostBuildVerifyGateKind,
     PrincipalId, ProjectImportedEvent, ProjectLinkDocument, ProtectedEffect, ReadinessTarget,
     ReleaseUpgradedEvent, SignalChangedEvent, StableId, UniversalAssuranceLens,
-    WaiverAuthorizedEvent, WorkflowAssuranceClaimRole, WorkflowBrokerCredentialStatus,
-    WorkflowBrokerExternalSetupBlockReason, WorkflowBrokerExternalSetupState,
-    WorkflowBrokerPublicRegistryDocument, WorkflowCapabilityProbeKind,
-    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
-    WorkflowContentAddressedReference, WorkflowCooperativeHostProvenance,
+    WaiverAuthorizedEvent, WorkflowAdmittedCooperativeEvidence, WorkflowAssuranceClaimRole,
+    WorkflowBrokerCredentialStatus, WorkflowBrokerExternalSetupBlockReason,
+    WorkflowBrokerExternalSetupState, WorkflowBrokerPublicRegistryDocument,
+    WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
+    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
+    WorkflowCooperativeEvidenceAssuranceEffect, WorkflowCooperativeEvidenceBinding,
+    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
+    WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceObservedEvent,
+    WorkflowCooperativeEvidenceOffer, WorkflowCooperativeEvidenceProof,
+    WorkflowCooperativeEvidenceRejection, WorkflowCooperativeEvidenceRoute,
+    WorkflowCooperativeHostProvenance, WorkflowCooperativeMaterialScenarioKind,
     WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
@@ -80,26 +86,30 @@ use forge_core_contracts::{
     WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
     WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
+    COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION, COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION,
     MAX_REPRESENTATIVE_SLICE_ITEMS, MAX_REPRESENTATIVE_SLICE_ITEM_BYTES,
     MAX_REPRESENTATIVE_SLICE_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES,
+    MAX_WORKFLOW_COOPERATIVE_EVIDENCE_INPUT_BYTES, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES,
     MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES, MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES,
     MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
     MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES,
     MAX_WORKFLOW_INTENT_TOTAL_BYTES, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
+    SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
     WORKFLOW_GOVERNANCE_SCHEMA_VERSION, WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
-    evaluate_agent_autonomy, evaluate_post_build_verify_episode, evaluate_transition, find_entry,
-    is_live, load_embedded_frozen_legacy_catalog, plan_domain_pack_rebase,
-    project_cooperative_durable_assurance, project_durable_assurance,
+    evaluate_agent_autonomy, evaluate_cooperative_evidence, evaluate_post_build_verify_episode,
+    evaluate_transition, find_entry, is_live, load_embedded_frozen_legacy_catalog,
+    plan_domain_pack_rebase, project_cooperative_durable_assurance, project_durable_assurance,
     project_governed_durable_assurance, project_legacy_workflow_compatibility, rfc3339_to_unix,
     route_post_build_verify_episode, simulate_workflow_governance,
     validate_representative_slice_definition, verify_domain_pack_rebase_plan,
     workflow_cooperative_objective_digest, workflow_cooperative_revision_input_digest,
     workflow_human_intent_digest, AgentAutonomyEvaluationError, AssuranceProjectionError,
-    DomainPackRebasePlanError, GateKind, GovernedAssuranceActionPacketFact,
-    GovernedAssuranceCapabilityFact, GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact,
-    GovernedAssuranceFacts, GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
+    CooperativeEvidenceDecision, DomainPackRebasePlanError, GateKind,
+    GovernedAssuranceActionPacketFact, GovernedAssuranceCapabilityFact,
+    GovernedAssuranceDecisionFact, GovernedAssuranceEvidenceFact, GovernedAssuranceFacts,
+    GovernedAssuranceWaiverFact, LegacyWorkflowGovernanceProjection,
     PostBuildVerifyEpisodeRuntimeRoute, ProvidedGateResult, TransitionDecision, TransitionRequest,
     WorkflowClaimResultStatus, WorkflowGovernanceRejection, WorkflowGovernanceSimulation,
     WorkflowGovernanceStatus,
@@ -1428,6 +1438,192 @@ impl WorkflowGovernanceProjectAdapter {
         Ok(assessment)
     }
 
+    /// Adjudicate and durably record a same-owner evidence offer. Rejections
+    /// are successful audit writes, never support for a claim.
+    pub fn record_cooperative_evidence(
+        &self,
+        raw_offer: &[u8],
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
+        let now = unix_time()?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let mut projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        projection =
+            self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
+        Self::ensure_domain_pack_ready_for_mutation(&effective)?;
+        let identity = self.identity(admitted);
+        validate_identity(&projection, &identity, &self.binding.project_root)?;
+        if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
+            return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
+        }
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let head = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        let objective = active_cooperative_objective_from_ledger(&projection.records)?
+            .ok_or(WorkflowGovernanceAdapterError::AgentAutonomyObjectiveRequired)?;
+        let current = WorkflowCooperativeEvidenceBinding {
+            objective_id: objective.objective_id.clone(),
+            objective_revision: objective.revision,
+            objective_digest: objective.objective_digest.clone(),
+            assurance_epoch: objective.assurance_epoch,
+            accepted_objective_record_digest: objective.accepted_record_digest.clone(),
+            accepted_objective_record_sequence: objective.accepted_sequence,
+            policy_bundle_digest: effective
+                .identity()
+                .effective_runtime_bundle
+                .bundle_digest
+                .clone(),
+            snapshot_digest: snapshot.digest().to_owned(),
+            ledger_head_digest: head.clone(),
+            state_version,
+        };
+        let parsed = if raw_offer.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_INPUT_BYTES {
+            serde_json::from_slice::<WorkflowCooperativeEvidenceOffer>(raw_offer).ok()
+        } else {
+            None
+        };
+        let bounded_offer_id = parsed
+            .as_ref()
+            .and_then(|offer| cooperative_bounded_offer_id(&offer.offer_id));
+        let canonical = parsed
+            .as_ref()
+            .and_then(|offer| serde_json::to_vec(offer).ok());
+        let offer_digest = sha256_content_hash(canonical.as_deref().unwrap_or(raw_offer));
+        if let Some(existing) = projection.records.iter().find(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::CooperativeEvidenceObserved(event)
+                    if event.offer_digest == offer_digest
+            )
+        }) {
+            return Ok(existing.clone());
+        }
+
+        let conflicting_id = bounded_offer_id.as_ref().is_some_and(|offer_id| {
+            projection.records.iter().any(|record| {
+                matches!(
+                    &record.event,
+                    WorkflowGovernanceEvent::CooperativeEvidenceObserved(event)
+                        if event.offer_id.as_ref() == Some(offer_id)
+                            && event.offer_digest != offer_digest
+                )
+            })
+        });
+        let guidance = self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &snapshot,
+        )?;
+        let selected_policy_ref = guidance.selected_policy_ref;
+        let selected_policy = policy_by_id(effective.document(), &selected_policy_ref)?;
+        let selected_claim =
+            selected_cooperative_source_claim(selected_policy, &guidance.simulation);
+        let route = parsed.as_ref().and_then(|offer| {
+            derived_solo_cooperative_evidence_route(
+                selected_policy,
+                selected_claim?,
+                offer,
+                &objective,
+            )
+        });
+        let mut decision = if conflicting_id {
+            CooperativeEvidenceDecision {
+                disposition: WorkflowCooperativeEvidenceDisposition::Rejected,
+                rejection: Some(WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey),
+            }
+        } else if let (Some(offer), Some(route)) = (parsed.as_ref(), route.as_ref()) {
+            if bounded_offer_id.is_none() || !cooperative_offer_text_is_bounded(offer) {
+                CooperativeEvidenceDecision {
+                    disposition: WorkflowCooperativeEvidenceDisposition::Rejected,
+                    rejection: Some(
+                        WorkflowCooperativeEvidenceRejection::MalformedOrOversizedOffer,
+                    ),
+                }
+            } else {
+                evaluate_cooperative_evidence(&current, route, offer, now)
+            }
+        } else {
+            CooperativeEvidenceDecision {
+                disposition: WorkflowCooperativeEvidenceDisposition::Rejected,
+                rejection: Some(if parsed.is_some() {
+                    WorkflowCooperativeEvidenceRejection::PolicyDoesNotPermitCooperation
+                } else {
+                    WorkflowCooperativeEvidenceRejection::MalformedOrOversizedOffer
+                }),
+            }
+        };
+        if decision.disposition == WorkflowCooperativeEvidenceDisposition::Admitted {
+            let subject_is_current = if let Some(offer) = parsed.as_ref() {
+                cooperative_subject_current(
+                    &self.binding.project_root,
+                    snapshot.digest(),
+                    &offer.attestation.subject,
+                )?
+            } else {
+                false
+            };
+            if !subject_is_current {
+                decision = CooperativeEvidenceDecision {
+                    disposition: WorkflowCooperativeEvidenceDisposition::Rejected,
+                    rejection: Some(WorkflowCooperativeEvidenceRejection::SubjectDigestMismatch),
+                };
+            }
+        }
+        let admitted_evidence = if decision.disposition
+            == WorkflowCooperativeEvidenceDisposition::Admitted
+        {
+            parsed
+                .as_ref()
+                .map(|offer| WorkflowAdmittedCooperativeEvidence {
+                    offer_id: offer.offer_id.clone(),
+                    offer_digest: offer_digest.clone(),
+                    policy_version: offer.attestation.policy_version.clone(),
+                    claim_descriptor_version: offer.attestation.claim_descriptor_version.clone(),
+                    binding: offer.attestation.binding.clone(),
+                    policy_ref: offer.attestation.policy_ref.clone(),
+                    claim_ref: offer.attestation.claim_ref.clone(),
+                    evaluator_ref: offer.attestation.evaluator_ref.clone(),
+                    cooperative_claim_ref: offer.attestation.cooperative_claim_ref.clone(),
+                    cooperative_evaluator_ref: offer.attestation.cooperative_evaluator_ref.clone(),
+                    producer: offer.attestation.producer.clone(),
+                    subject: offer.attestation.subject.clone(),
+                    scenario_kind: offer.attestation.scenario_kind,
+                    scenario_digest: offer.attestation.scenario_digest.clone(),
+                    outcome: WorkflowEvidenceOutcome::Pass,
+                    execution_observed_at_unix: now,
+                    readback_observed_at_unix: now,
+                })
+        } else {
+            None
+        };
+        let event = WorkflowCooperativeEvidenceObservedEvent {
+            offer_id: bounded_offer_id,
+            offer_digest,
+            admitted_evidence,
+            disposition: decision.disposition,
+            rejection: decision.rejection,
+            admission_snapshot_digest: snapshot.digest().to_owned(),
+            admission_ledger_head_digest: head.clone(),
+            admission_state_version: state_version,
+            observed_at_unix: now,
+        };
+        snapshot.revalidate()?;
+        ledger
+            .record_cooperative_evidence_unchecked_tcb(&head, &identity, state_version, event)
+            .map_err(WorkflowGovernanceAdapterError::from)
+    }
     /// Project the currently admissible authority-bearing actions without
     /// accepting an answer or constructing a signed authorization request.
     ///
@@ -4602,11 +4798,65 @@ impl WorkflowGovernanceProjectAdapter {
                     },
                 ],
                 current_snapshot_digest: snapshot_digest.clone(),
-                source_ledger_head_digest: assurance_source_head,
+                source_ledger_head_digest: assurance_source_head.clone(),
                 case_digest: assurance_case_digest,
                 projection: None,
             },
         };
+        let cooperative_source_claim =
+            selected_cooperative_source_claim(selected, &verified.simulation);
+        let cooperative_evidence = if readiness_profile == WorkflowReadinessProfile::SoloCooperative
+        {
+            cooperative_evidence_audit(
+                &projection.records,
+                selected,
+                cooperative_source_claim,
+                active_cooperative_objective.as_ref(),
+                &effective.identity().effective_runtime_bundle.bundle_digest,
+                &snapshot_digest,
+                now,
+            )
+        } else {
+            Vec::new()
+        };
+        let cooperative_evidence_action_packet =
+            active_cooperative_objective.as_ref().and_then(|objective| {
+                (readiness_profile == WorkflowReadinessProfile::SoloCooperative)
+                    .then(|| WorkflowCooperativeEvidenceBinding {
+                        objective_id: objective.objective_id.clone(),
+                        objective_revision: objective.revision,
+                        objective_digest: objective.objective_digest.clone(),
+                        assurance_epoch: objective.assurance_epoch,
+                        accepted_objective_record_digest: objective.accepted_record_digest.clone(),
+                        accepted_objective_record_sequence: objective.accepted_sequence,
+                        policy_bundle_digest: effective
+                            .identity()
+                            .effective_runtime_bundle
+                            .bundle_digest
+                            .clone(),
+                        snapshot_digest: snapshot_digest.clone(),
+                        ledger_head_digest: assurance_source_head.clone(),
+                        state_version: projection.current_state_version().unwrap_or_default(),
+                    })
+                    .and_then(|binding| {
+                        cooperative_evidence_action_packet(
+                            selected,
+                            cooperative_source_claim?,
+                            objective,
+                            binding,
+                        )
+                    })
+            });
+        let cooperative_evidence_action_gap = (readiness_profile
+            == WorkflowReadinessProfile::SoloCooperative
+            && active_cooperative_objective.is_some()
+            && cooperative_evidence_action_packet.is_none())
+        .then(|| {
+            format!(
+                "selected policy {} has no current claim with a bound evaluator; cooperative evidence is default-denied and no route was published",
+                selected.id.0
+            )
+        });
         let mut guidance = WorkflowGovernanceGuidance {
             authority: WorkflowGovernanceGuidanceAuthority::VerifiedProjectSnapshot,
             status: guidance_status,
@@ -4640,6 +4890,9 @@ impl WorkflowGovernanceProjectAdapter {
             boundary_rechecks,
             simulation: verified.simulation.clone(),
             active_cooperative_objective,
+            cooperative_evidence,
+            cooperative_evidence_action_packet,
+            cooperative_evidence_action_gap,
             agent_autonomy,
             durable_assurance,
             authorization: WorkflowAuthorizationGuidance {
@@ -5026,6 +5279,12 @@ pub struct WorkflowGovernanceGuidance {
     pub simulation: WorkflowGovernanceSimulation,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_cooperative_objective: Option<WorkflowActiveCooperativeObjective>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cooperative_evidence: Vec<WorkflowCooperativeEvidenceAudit>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cooperative_evidence_action_packet: Option<WorkflowCooperativeEvidenceActionPacket>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cooperative_evidence_action_gap: Option<String>,
     pub agent_autonomy: WorkflowAgentAutonomyGuidance,
     pub durable_assurance: WorkflowDurableAssuranceGuidance,
     pub authorization: WorkflowAuthorizationGuidance,
@@ -5059,6 +5318,46 @@ pub struct WorkflowActiveCooperativeObjective {
     pub accepted_at_unix: u64,
 }
 
+/// Read-only, durable audit projection. `proves` is intentionally narrow;
+/// `does_not_prove` is explicit so consumers cannot relabel cooperative work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeEvidenceAudit {
+    pub record_digest: String,
+    pub offer_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_cooperative_claim_ref: Option<StableId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub does_not_satisfy_source_claim_ref: Option<StableId>,
+    pub historical_disposition: WorkflowCooperativeEvidenceDisposition,
+    pub current_status: WorkflowCooperativeEvidenceCurrentStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rejection: Option<WorkflowCooperativeEvidenceRejection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub admitted_evidence: Option<WorkflowAdmittedCooperativeEvidence>,
+    pub proves: Vec<WorkflowCooperativeEvidenceProof>,
+    pub does_not_prove: Vec<WorkflowCooperativeEvidenceNonProof>,
+}
+
+/// Host-neutral instructions for one closed evidence offer. `argv` is an exact
+/// vector; hosts must substitute the one input-file token, never parse a
+/// display string.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeEvidenceActionPacket {
+    pub argv: Vec<String>,
+    pub input_file_token: String,
+    pub input_file_must_be_outside_project_snapshot: bool,
+    pub offer_schema_version: String,
+    pub attestation_schema_version: String,
+    pub maximum_input_bytes: usize,
+    pub binding: WorkflowCooperativeEvidenceBinding,
+    pub route: WorkflowCooperativeEvidenceRoute,
+    pub offer_template: serde_json::Value,
+    pub required_replacements: Vec<String>,
+    pub kernel_derived_outcome: WorkflowEvidenceOutcome,
+    pub readback_contract: String,
+}
 /// Result of one closed cooperative-objective input. The decision branch has
 /// no workflow state fields because it validates the current packet and state
 /// read-only and performs zero Forge writes.
@@ -5951,6 +6250,10 @@ fn derive_receipts(
                     outcome: event.outcome,
                 });
             }
+            // Same-owner cooperative evidence has a dedicated audit lane. It
+            // never becomes a policy receipt and therefore cannot satisfy the
+            // selected source claim or promote governed assurance.
+            WorkflowGovernanceEvent::CooperativeEvidenceObserved(_) => {}
             WorkflowGovernanceEvent::WaiverAuthorized(event) => {
                 let authority = receipt_trust_root(
                     receipt_records,
@@ -6223,6 +6526,8 @@ fn derive_governed_assurance_facts(
                     representative_slice_definition_digest,
                 });
             }
+            // Cooperative observations are never governed-assurance facts.
+            WorkflowGovernanceEvent::CooperativeEvidenceObserved(_) => {}
             WorkflowGovernanceEvent::CapabilityProbed(event) => {
                 let authority = receipt_trust_root(
                     receipt_records,
@@ -8338,6 +8643,321 @@ fn latest_representative_definition<'a>(
         })
 }
 
+fn selected_cooperative_source_claim<'a>(
+    policy: &'a WorkflowGovernancePolicy,
+    simulation: &WorkflowGovernanceSimulation,
+) -> Option<&'a forge_core_contracts::WorkflowClaimPolicy> {
+    policy
+        .claims
+        .iter()
+        .find(|claim| {
+            !simulation
+                .candidate_claim_results
+                .iter()
+                .find(|result| result.claim_id == claim.id.0)
+                .is_some_and(|result| {
+                    matches!(
+                        result.status,
+                        WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+                    )
+                })
+        })
+        .or_else(|| policy.claims.first())
+}
+
+fn cooperative_evidence_audit(
+    records: &[WorkflowGovernanceLedgerRecord],
+    selected_policy: &WorkflowGovernancePolicy,
+    selected_claim: Option<&forge_core_contracts::WorkflowClaimPolicy>,
+    active_objective: Option<&WorkflowActiveCooperativeObjective>,
+    effective_bundle_digest: &str,
+    snapshot_digest: &str,
+    now: u64,
+) -> Vec<WorkflowCooperativeEvidenceAudit> {
+    let current_route = active_objective.and_then(|objective| {
+        derived_solo_cooperative_evidence_route_for_policy(
+            selected_policy,
+            selected_claim?,
+            objective,
+        )
+    });
+    records
+        .iter()
+        .filter_map(|record| {
+            let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event else {
+                return None;
+            };
+            let current_status = if event.disposition
+                == WorkflowCooperativeEvidenceDisposition::Rejected
+            {
+                WorkflowCooperativeEvidenceCurrentStatus::Rejected
+            } else if event.admitted_evidence.as_ref().is_some_and(|admitted| {
+                let objective_current = active_objective.is_some_and(|objective| {
+                    admitted.binding.objective_id == objective.objective_id
+                        && admitted.binding.objective_revision == objective.revision
+                        && admitted.binding.objective_digest == objective.objective_digest
+                        && admitted.binding.assurance_epoch == objective.assurance_epoch
+                        && admitted.binding.accepted_objective_record_digest
+                            == objective.accepted_record_digest
+                        && admitted.binding.accepted_objective_record_sequence
+                            == objective.accepted_sequence
+                });
+                current_route.as_ref().is_some_and(|route| {
+                    objective_current
+                        && event.offer_id.as_ref() == Some(&admitted.offer_id)
+                        && admitted.offer_digest == event.offer_digest
+                        && event.rejection.is_none()
+                        && record.previous_record_digest.as_deref()
+                            == Some(event.admission_ledger_head_digest.as_str())
+                        && record.state_version == event.admission_state_version
+                        && event.admission_snapshot_digest == snapshot_digest
+                        && event.admission_snapshot_digest == admitted.binding.snapshot_digest
+                        && admitted.binding.policy_bundle_digest == effective_bundle_digest
+                        && admitted.policy_version == route.policy_version
+                        && admitted.claim_descriptor_version == route.claim_descriptor_version
+                        && admitted.policy_ref == route.policy_ref
+                        && admitted.claim_ref == route.claim_ref
+                        && admitted.evaluator_ref == route.evaluator_ref
+                        && admitted.cooperative_claim_ref == route.cooperative_claim_ref
+                        && admitted.cooperative_evaluator_ref == route.cooperative_evaluator_ref
+                        && admitted.producer == route.producer
+                        && admitted.subject.kind == WorkflowEvidenceSubjectKind::ProjectSnapshot
+                        && route.allowed_subject_kinds.contains(&admitted.subject.kind)
+                        && admitted.subject.subject_ref == route.subject_ref
+                        && admitted.subject.subject_digest == snapshot_digest
+                        && admitted.scenario_kind
+                            == WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
+                        && admitted.scenario_digest == route.scenario_digest
+                        && admitted.outcome == WorkflowEvidenceOutcome::Pass
+                        && admitted.execution_observed_at_unix <= now
+                        && admitted.readback_observed_at_unix <= now
+                        && admitted.readback_observed_at_unix == event.observed_at_unix
+                        && admitted.readback_observed_at_unix >= admitted.execution_observed_at_unix
+                        && route.assurance_effect
+                            == WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim
+                        && route.provider == WorkflowEvaluatorProvider::RepositoryInspector
+                        && route.kind == WorkflowEvidenceKind::ArtifactInspection
+                        && route.strength == WorkflowEvidenceStrength::InspectedArtifact
+                        && route.claim_descriptor_version
+                            == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+                        && {
+                        now.saturating_sub(admitted.readback_observed_at_unix)
+                            <= route.max_age_seconds
+                            && admitted
+                                .readback_observed_at_unix
+                                .saturating_sub(admitted.execution_observed_at_unix)
+                                <= route.max_age_seconds
+                        }
+                })
+            }) {
+                WorkflowCooperativeEvidenceCurrentStatus::Supporting
+            } else {
+                WorkflowCooperativeEvidenceCurrentStatus::Stale
+            };
+            let admitted = event.admitted_evidence.as_ref();
+            let mut does_not_prove = vec![
+                WorkflowCooperativeEvidenceNonProof::IndependentSemanticReview,
+                WorkflowCooperativeEvidenceNonProof::TrustedRuntimeSeparation,
+                WorkflowCooperativeEvidenceNonProof::TamperResistance,
+                WorkflowCooperativeEvidenceNonProof::HumanPresence,
+                WorkflowCooperativeEvidenceNonProof::EnterpriseCompliance,
+                WorkflowCooperativeEvidenceNonProof::SelectedSourceClaim,
+            ];
+            if current_route.as_ref().is_some_and(|route| {
+                route.source_provider == WorkflowEvaluatorProvider::RepresentativeRuntime
+            }) {
+                does_not_prove.push(
+                    WorkflowCooperativeEvidenceNonProof::SelectedRepresentativeRuntimeClaim,
+                );
+            }
+            Some(WorkflowCooperativeEvidenceAudit {
+                record_digest: record.record_digest.clone(),
+                offer_digest: event.offer_digest.clone(),
+                supports_cooperative_claim_ref: matches!(
+                    current_status,
+                    WorkflowCooperativeEvidenceCurrentStatus::Supporting
+                )
+                .then(|| admitted.map(|evidence| evidence.cooperative_claim_ref.clone()))
+                .flatten(),
+                does_not_satisfy_source_claim_ref: admitted
+                    .map(|evidence| evidence.claim_ref.clone()),
+                historical_disposition: event.disposition,
+                current_status,
+                rejection: event.rejection,
+                admitted_evidence: event.admitted_evidence.clone(),
+                proves: if current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting {
+                    vec![
+                        WorkflowCooperativeEvidenceProof::SoloCooperativeClaimSatisfied,
+                        WorkflowCooperativeEvidenceProof::KernelExecutedProjectSnapshotScenario,
+                        WorkflowCooperativeEvidenceProof::KernelVerifiedProjectStateReadback,
+                    ]
+                } else {
+                    Vec::new()
+                },
+                does_not_prove,
+            })
+        })
+        .collect()
+}
+fn derived_solo_cooperative_evidence_route(
+    selected_policy: &WorkflowGovernancePolicy,
+    selected_claim: &forge_core_contracts::WorkflowClaimPolicy,
+    offer: &WorkflowCooperativeEvidenceOffer,
+    objective: &WorkflowActiveCooperativeObjective,
+) -> Option<WorkflowCooperativeEvidenceRoute> {
+    let statement = &offer.attestation;
+    let route = derived_solo_cooperative_evidence_route_for_policy(
+        selected_policy,
+        selected_claim,
+        objective,
+    )?;
+    (route.policy_ref == statement.policy_ref
+        && route.claim_ref == statement.claim_ref
+        && route.evaluator_ref == statement.evaluator_ref
+        && route.cooperative_claim_ref == statement.cooperative_claim_ref
+        && route.cooperative_evaluator_ref == statement.cooperative_evaluator_ref)
+        .then_some(route)
+}
+
+fn derived_solo_cooperative_evidence_route_for_policy(
+    policy: &WorkflowGovernancePolicy,
+    claim: &forge_core_contracts::WorkflowClaimPolicy,
+    objective: &WorkflowActiveCooperativeObjective,
+) -> Option<WorkflowCooperativeEvidenceRoute> {
+    let claim = policy
+        .claims
+        .iter()
+        .find(|candidate| candidate.id == claim.id)?;
+    let evaluator = policy
+        .evaluators
+        .iter()
+        .find(|evaluator| evaluator.id == claim.evaluator_ref)?;
+    let source_provider = serde_json::to_string(&evaluator.provider).ok()?;
+    let scenario_material = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
+        SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
+        SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
+        objective.objective_digest,
+        policy.id.0,
+        claim.id.0,
+        evaluator.id.0,
+        source_provider,
+    );
+    let scenario_digest = sha256_content_hash(scenario_material.as_bytes());
+    let descriptor_key = &scenario_digest[7..23];
+    Some(WorkflowCooperativeEvidenceRoute {
+        policy_version: SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION.to_owned(),
+        claim_descriptor_version: SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION.to_owned(),
+        policy_ref: policy.id.clone(),
+        claim_ref: claim.id.clone(),
+        evaluator_ref: evaluator.id.clone(),
+        source_provider: evaluator.provider,
+        cooperative_claim_ref: StableId(format!(
+            "claim.solo-cooperative.project-snapshot.{descriptor_key}"
+        )),
+        cooperative_evaluator_ref: StableId(format!(
+            "evaluator.solo-cooperative.kernel-project-snapshot.{descriptor_key}"
+        )),
+        producer: objective.carrying_principal.clone(),
+        provider: WorkflowEvaluatorProvider::RepositoryInspector,
+        kind: WorkflowEvidenceKind::ArtifactInspection,
+        strength: WorkflowEvidenceStrength::InspectedArtifact,
+        allowed_subject_kinds: vec![WorkflowEvidenceSubjectKind::ProjectSnapshot],
+        subject_ref: "project.current_snapshot".to_owned(),
+        scenario_digest,
+        max_age_seconds: evaluator.max_age_seconds,
+        assurance_effect:
+            WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim,
+    })
+}
+
+fn cooperative_evidence_action_packet(
+    selected_policy: &WorkflowGovernancePolicy,
+    selected_claim: &forge_core_contracts::WorkflowClaimPolicy,
+    objective: &WorkflowActiveCooperativeObjective,
+    binding: WorkflowCooperativeEvidenceBinding,
+) -> Option<WorkflowCooperativeEvidenceActionPacket> {
+    let route = derived_solo_cooperative_evidence_route_for_policy(
+        selected_policy,
+        selected_claim,
+        objective,
+    )?;
+    let input_file_token = "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}".to_owned();
+    let offer_template = serde_json::json!({
+        "schema_version": COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION,
+        "offer_id": "${UNIQUE_OFFER_ID}",
+        "attestation": {
+            "schema_version": COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
+            "policy_version": route.policy_version.clone(),
+            "claim_descriptor_version": route.claim_descriptor_version.clone(),
+            "binding": binding.clone(),
+            "policy_ref": route.policy_ref.clone(),
+            "claim_ref": route.claim_ref.clone(),
+            "evaluator_ref": route.evaluator_ref.clone(),
+            "cooperative_claim_ref": route.cooperative_claim_ref.clone(),
+            "cooperative_evaluator_ref": route.cooperative_evaluator_ref.clone(),
+            "producer": route.producer.clone(),
+            "subject": {
+                "kind": "project_snapshot",
+                "subject_ref": route.subject_ref.clone(),
+                "subject_digest": binding.snapshot_digest.clone(),
+            },
+            "scenario_kind": "kernel_project_snapshot_readback",
+            "scenario_digest": route.scenario_digest.clone(),
+        }
+    });
+    Some(WorkflowCooperativeEvidenceActionPacket {
+        argv: vec![
+            "forge-core".to_owned(),
+            "workflow".to_owned(),
+            "evidence".to_owned(),
+            "admit-cooperative".to_owned(),
+            "--root".to_owned(),
+            ".".to_owned(),
+            "--input-file".to_owned(),
+            input_file_token.clone(),
+            "--json".to_owned(),
+        ],
+        input_file_token,
+        input_file_must_be_outside_project_snapshot: true,
+        offer_schema_version: COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION.to_owned(),
+        attestation_schema_version: COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION.to_owned(),
+        maximum_input_bytes: MAX_WORKFLOW_COOPERATIVE_EVIDENCE_INPUT_BYTES,
+        binding,
+        route,
+        offer_template,
+        required_replacements: vec!["${UNIQUE_OFFER_ID}".to_owned()],
+        kernel_derived_outcome: WorkflowEvidenceOutcome::Pass,
+        readback_contract: "kernel_executes_the_versioned_project_snapshot_scenario_and_recomputes_current_snapshot_readback; the result supports_only_the_derived_solo_cooperative_claim; the_selected_source_claim_remains_unsatisfied_including_representative_runtime; runtime_external_system_and_human_decision_subjects_are_rejected"
+            .to_owned(),
+    })
+}
+
+fn cooperative_offer_text_is_bounded(offer: &WorkflowCooperativeEvidenceOffer) -> bool {
+    let statement = &offer.attestation;
+    [
+        offer.offer_id.0.as_str(),
+        statement.policy_version.as_str(),
+        statement.claim_descriptor_version.as_str(),
+        statement.policy_ref.0.as_str(),
+        statement.claim_ref.0.as_str(),
+        statement.evaluator_ref.0.as_str(),
+        statement.cooperative_claim_ref.0.as_str(),
+        statement.cooperative_evaluator_ref.0.as_str(),
+        statement.producer.0.as_str(),
+        statement.subject.subject_ref.as_str(),
+    ]
+    .into_iter()
+    .all(|value| {
+        !value.trim().is_empty() && value.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+    })
+}
+
+fn cooperative_bounded_offer_id(offer_id: &StableId) -> Option<StableId> {
+    (!offer_id.0.trim().is_empty()
+        && offer_id.0.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES)
+        .then(|| offer_id.clone())
+}
 fn active_cooperative_objective_from_ledger(
     records: &[WorkflowGovernanceLedgerRecord],
 ) -> Result<Option<WorkflowActiveCooperativeObjective>, WorkflowGovernanceAdapterError> {
@@ -9726,6 +10346,22 @@ fn subject_current(
         | WorkflowEvidenceSubjectKind::ExternalSystem
         | WorkflowEvidenceSubjectKind::HumanDecision => Ok(true),
     }
+}
+
+fn cooperative_subject_current(
+    project_root: &Path,
+    snapshot_digest: &str,
+    subject: &WorkflowEvidenceSubject,
+) -> Result<bool, WorkflowGovernanceAdapterError> {
+    if !matches!(
+        subject.kind,
+        WorkflowEvidenceSubjectKind::Artifact
+            | WorkflowEvidenceSubjectKind::RepositoryState
+            | WorkflowEvidenceSubjectKind::ProjectSnapshot
+    ) {
+        return Ok(false);
+    }
+    subject_current(project_root, snapshot_digest, subject)
 }
 
 fn canonical_directory(
@@ -12488,6 +13124,352 @@ mod tests {
     }
 
     #[test]
+    fn cooperative_evidence_is_admitted_recovered_and_projected_honestly() {
+        let (root, state) = temp_project("cooperative-evidence");
+        let project_id = StableId("project.cooperative-evidence".to_owned());
+        let adapter = WorkflowGovernanceProjectAdapter::new(project_id.clone(), &root, &state)
+            .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let objective_packet = adapter
+            .next()
+            .expect("objective guidance")
+            .authorization
+            .action_packets[0]
+            .clone();
+        let accepted = adapter
+            .accept_cooperative_objective(
+                &objective_packet.packet_digest,
+                cooperative_objective_input(),
+            )
+            .expect("accept objective");
+        let WorkflowCooperativeObjectiveAcceptance::Accepted { next, .. } = accepted else {
+            panic!("objective must be accepted");
+        };
+        let packet = next
+            .cooperative_evidence_action_packet
+            .expect("host-neutral cooperative evidence packet");
+        let route_policy_ref = packet.route.policy_ref.clone();
+        let route_claim_ref = packet.route.claim_ref.clone();
+        assert_eq!(
+            packet.argv,
+            [
+                "forge-core",
+                "workflow",
+                "evidence",
+                "admit-cooperative",
+                "--root",
+                ".",
+                "--input-file",
+                "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}",
+                "--json",
+            ]
+        );
+        assert!(packet.input_file_must_be_outside_project_snapshot);
+        assert_eq!(
+            packet.route.provider,
+            WorkflowEvaluatorProvider::RepositoryInspector
+        );
+        assert_eq!(
+            packet.route.source_provider,
+            WorkflowEvaluatorProvider::AuthorizedHuman
+        );
+        assert_eq!(
+            packet.route.assurance_effect,
+            WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim
+        );
+
+        let mut offer_value = packet.offer_template;
+        offer_value["offer_id"] = serde_json::json!("offer.cooperative-evidence.pass");
+        let offer: WorkflowCooperativeEvidenceOffer =
+            serde_json::from_value(offer_value).expect("closed offer template");
+        let raw = serde_json::to_vec(&offer).expect("offer JSON");
+        let admitted = adapter
+            .record_cooperative_evidence(&raw)
+            .expect("admit cooperative evidence");
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(admitted_event) = &admitted.event
+        else {
+            panic!("dedicated cooperative evidence event");
+        };
+        assert_eq!(
+            admitted_event.disposition,
+            WorkflowCooperativeEvidenceDisposition::Admitted
+        );
+        assert!(admitted_event.rejection.is_none());
+        assert_eq!(
+            admitted_event
+                .admitted_evidence
+                .as_ref()
+                .expect("normalized admitted evidence")
+                .outcome,
+            WorkflowEvidenceOutcome::Pass
+        );
+
+        let second_packet = adapter
+            .next()
+            .expect("refreshed evidence guidance")
+            .cooperative_evidence_action_packet
+            .expect("refreshed host-neutral packet");
+        assert_eq!(second_packet.route.policy_ref, route_policy_ref);
+        assert_eq!(second_packet.route.claim_ref, route_claim_ref);
+        let mut second_offer_value = second_packet.offer_template;
+        second_offer_value["offer_id"] = serde_json::json!("offer.cooperative-evidence.pass.2");
+        let second_offer: WorkflowCooperativeEvidenceOffer =
+            serde_json::from_value(second_offer_value).expect("second closed offer template");
+        let second_raw = serde_json::to_vec(&second_offer).expect("second offer JSON");
+        adapter
+            .record_cooperative_evidence(&second_raw)
+            .expect("admit second current observation");
+
+        assert_eq!(
+            adapter
+                .record_cooperative_evidence(&raw)
+                .expect("idempotent retry"),
+            admitted,
+            "an exact retry must not append another event"
+        );
+
+        let projection = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("recovered evidence ledger");
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
+            .expect("admitted release registry");
+        let release = adapter
+            .resolve_active_release(&registry, &projection)
+            .expect("active release");
+        let domain = LockedWorkflowDomainPackContext::acquire(&root, &state)
+            .expect("locked Domain Pack context");
+        let effective = domain.admit_effective(release).expect("effective bundle");
+        let snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&root).expect("current project snapshot");
+        let now = unix_time().expect("clock");
+        let derived = derive_receipts(
+            effective.document(),
+            &projection,
+            &root,
+            snapshot.digest(),
+            now,
+            None,
+            None,
+        )
+        .expect("derive same-owner receipts");
+        let claim_evidence = derived
+            .evidence
+            .iter()
+            .filter(|entry| {
+                entry.claim_ref == route_claim_ref
+                    && entry.freshness == WorkflowEvidenceFreshness::Current
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(
+            claim_evidence.is_empty(),
+            "cooperative audit evidence must never become a source-policy receipt"
+        );
+        let selected_policy = effective
+            .document()
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .find(|policy| policy.id == route_policy_ref)
+            .expect("selected source policy");
+        let active_objective = active_cooperative_objective_from_ledger(&projection.records)
+            .expect("active objective projection")
+            .expect("accepted active objective");
+        let selected_claim = selected_policy
+            .claims
+            .iter()
+            .find(|claim| claim.id == route_claim_ref)
+            .expect("selected source claim");
+        let assert_tamper_stale = |mutate: fn(&mut WorkflowAdmittedCooperativeEvidence)| {
+            let mut tampered = projection.records.clone();
+            let evidence = tampered
+                .iter_mut()
+                .find(|record| record.record_digest == admitted.record_digest)
+                .and_then(|record| {
+                    let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) =
+                        &mut record.event
+                    else {
+                        return None;
+                    };
+                    event.admitted_evidence.as_mut()
+                })
+                .expect("tamper admitted evidence");
+            mutate(evidence);
+            let audit = cooperative_evidence_audit(
+                &tampered,
+                selected_policy,
+                Some(selected_claim),
+                Some(&active_objective),
+                &effective.identity().effective_runtime_bundle.bundle_digest,
+                snapshot.digest(),
+                now,
+            );
+            assert_eq!(
+                audit
+                    .iter()
+                    .find(|entry| entry.record_digest == admitted.record_digest)
+                    .expect("tampered audit entry")
+                    .current_status,
+                WorkflowCooperativeEvidenceCurrentStatus::Stale
+            );
+        };
+        assert_tamper_stale(|evidence| {
+            evidence.producer = PrincipalId("principal.tampered".to_owned());
+        });
+        assert_tamper_stale(|evidence| {
+            evidence.scenario_digest = format!("sha256:{}", "f".repeat(64));
+        });
+        assert_tamper_stale(|evidence| {
+            evidence.policy_ref = StableId("policy.tampered".to_owned());
+        });
+        assert_tamper_stale(|evidence| {
+            evidence.readback_observed_at_unix = u64::MAX;
+        });
+        drop(effective);
+        drop(domain);
+
+        let replacement_adapter = WorkflowGovernanceProjectAdapter::new(project_id, &root, &state)
+            .expect("fresh adapter");
+        let recovered = replacement_adapter.next().expect("fresh-process guidance");
+        let audit = recovered
+            .cooperative_evidence
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("durably recovered audit entry");
+        assert_eq!(
+            audit.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Supporting
+        );
+        assert_eq!(
+            audit.proves,
+            [
+                WorkflowCooperativeEvidenceProof::SoloCooperativeClaimSatisfied,
+                WorkflowCooperativeEvidenceProof::KernelExecutedProjectSnapshotScenario,
+                WorkflowCooperativeEvidenceProof::KernelVerifiedProjectStateReadback,
+            ]
+        );
+        assert_eq!(
+            audit.does_not_satisfy_source_claim_ref.as_ref(),
+            Some(&route_claim_ref)
+        );
+        assert!(audit
+            .does_not_prove
+            .contains(&WorkflowCooperativeEvidenceNonProof::IndependentSemanticReview));
+        assert!(audit
+            .does_not_prove
+            .contains(&WorkflowCooperativeEvidenceNonProof::TrustedRuntimeSeparation));
+        assert!(audit
+            .does_not_prove
+            .contains(&WorkflowCooperativeEvidenceNonProof::HumanPresence));
+        assert!(audit
+            .does_not_prove
+            .contains(&WorkflowCooperativeEvidenceNonProof::EnterpriseCompliance));
+        assert!(audit
+            .does_not_prove
+            .contains(&WorkflowCooperativeEvidenceNonProof::SelectedSourceClaim));
+
+        let mut rejected_offer = adapter
+            .next()
+            .expect("current packet for rejection")
+            .cooperative_evidence_action_packet
+            .expect("cooperative packet")
+            .offer_template;
+        rejected_offer["offer_id"] =
+            serde_json::json!("offer.cooperative-evidence.rejected-idempotency");
+        rejected_offer["attestation"]["subject"]["kind"] = serde_json::json!("runtime");
+        let rejected_raw = serde_json::to_vec(&rejected_offer).expect("rejected offer JSON");
+        let first_rejection = adapter
+            .record_cooperative_evidence(&rejected_raw)
+            .expect("durably reject parseable offer");
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(first_rejected_event) =
+            &first_rejection.event
+        else {
+            panic!("dedicated rejection event");
+        };
+        assert_eq!(
+            first_rejected_event.offer_id.as_ref(),
+            Some(&StableId(
+                "offer.cooperative-evidence.rejected-idempotency".to_owned()
+            ))
+        );
+        assert_eq!(
+            adapter
+                .record_cooperative_evidence(&rejected_raw)
+                .expect("exact rejected retry"),
+            first_rejection
+        );
+
+        let mut conflicting_offer = replacement_adapter
+            .next()
+            .expect("fresh-process packet after rejection")
+            .cooperative_evidence_action_packet
+            .expect("cooperative packet")
+            .offer_template;
+        conflicting_offer["offer_id"] =
+            serde_json::json!("offer.cooperative-evidence.rejected-idempotency");
+        let conflicting_raw =
+            serde_json::to_vec(&conflicting_offer).expect("conflicting offer JSON");
+        let conflict = replacement_adapter
+            .record_cooperative_evidence(&conflicting_raw)
+            .expect("durably reject conflicting reuse after restart");
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(conflict_event) = conflict.event
+        else {
+            panic!("dedicated conflict event");
+        };
+        assert_eq!(
+            conflict_event.rejection,
+            Some(WorkflowCooperativeEvidenceRejection::ConflictingIdempotencyKey)
+        );
+        lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger after conflicting rejected id")
+            .recover()
+            .expect("TCB recovers original and conflict id records");
+
+        let mut inconclusive_offer = adapter
+            .next()
+            .expect("current packet for inconclusive rejection")
+            .cooperative_evidence_action_packet
+            .expect("cooperative packet")
+            .offer_template;
+        inconclusive_offer["offer_id"] =
+            serde_json::json!("offer.cooperative-evidence.inconclusive");
+        inconclusive_offer["attestation"]["outcome"] = serde_json::json!("inconclusive");
+        let inconclusive = adapter
+            .record_cooperative_evidence(
+                &serde_json::to_vec(&inconclusive_offer).expect("inconclusive offer JSON"),
+            )
+            .expect("durably reject caller-supplied inconclusive outcome");
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(inconclusive_event) =
+            inconclusive.event
+        else {
+            panic!("dedicated inconclusive rejection event");
+        };
+        assert_eq!(
+            inconclusive_event.rejection,
+            Some(WorkflowCooperativeEvidenceRejection::MalformedOrOversizedOffer)
+        );
+        assert!(inconclusive_event.admitted_evidence.is_none());
+
+        let malformed = adapter
+            .record_cooperative_evidence(b"{not-json")
+            .expect("durably reject malformed offer");
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(rejected_event) = malformed.event
+        else {
+            panic!("dedicated rejection event");
+        };
+        assert_eq!(
+            rejected_event.disposition,
+            WorkflowCooperativeEvidenceDisposition::Rejected
+        );
+        assert_eq!(
+            rejected_event.rejection,
+            Some(WorkflowCooperativeEvidenceRejection::MalformedOrOversizedOffer)
+        );
+        assert!(rejected_event.admitted_evidence.is_none());
+    }
+
+    #[test]
     fn cooperative_decision_required_returns_without_ledger_write() {
         let (root, state) = temp_project("cooperative-decision");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -12573,11 +13555,12 @@ mod tests {
         strict
             .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
             .expect("initialize strict");
-        let strict_packet = strict
-            .next()
-            .expect("strict packet")
-            .authorization
-            .action_packets[0]
+        let strict_guidance = strict.next().expect("strict packet");
+        assert!(
+            strict_guidance.cooperative_evidence_action_packet.is_none(),
+            "strict external guidance must never offer the same-owner evidence lane"
+        );
+        let strict_packet = strict_guidance.authorization.action_packets[0]
             .packet_digest
             .clone();
         let strict_wal = strict_state
@@ -12588,8 +13571,17 @@ mod tests {
             Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired)
         ));
         assert_eq!(
-            fs::read(&strict_wal).expect("strict WAL after"),
+            fs::read(&strict_wal).expect("strict WAL after objective"),
             strict_before
+        );
+        assert!(matches!(
+            strict.record_cooperative_evidence(b"{}"),
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired)
+        ));
+        assert_eq!(
+            fs::read(&strict_wal).expect("strict WAL after evidence"),
+            strict_before,
+            "profile rejection must not append an evidence audit event"
         );
         fs::remove_dir_all(strict_root.parent().expect("strict fixture root"))
             .expect("cleanup strict fixture");
@@ -12617,7 +13609,7 @@ mod tests {
         let accepted_before = fs::read(&accepted_wal).expect("accepted WAL before decision");
         assert!(matches!(
             accepted.accept_cooperative_objective(&accepted_packet, cooperative_decision_input()),
-            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted)
+            Err(WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict)
         ));
         assert_eq!(
             fs::read(&accepted_wal).expect("accepted WAL after decision"),

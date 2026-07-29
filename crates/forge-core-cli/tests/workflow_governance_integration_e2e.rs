@@ -185,6 +185,22 @@ fn run_cooperative_input(consumer: &Consumer, packet_digest: &str, input_path: &
         .expect("run cooperative objective command")
 }
 
+fn run_cooperative_evidence(consumer: &Consumer, input_path: &Path) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "evidence",
+            "admit-cooperative",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--input-file",
+            &input_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run cooperative evidence command")
+}
+
 fn run_autonomy_assessment(consumer: &Consumer, input_path: &Path) -> Output {
     bin()
         .args([
@@ -723,6 +739,102 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
         "workflow.intent.accept_cooperative"
     );
     assert_eq!(state_tree_snapshot(&consumer.state), before_decision);
+}
+
+#[test]
+fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_restart() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "cooperative evidence objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Admit honest same-owner representative evidence",
+                "constraints": ["remain host neutral"],
+                "unacceptable_outcomes": ["claim independent review"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.cli-e2e",
+                "interaction_ref": "turn.evidence",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet = &next["data"]["cooperative_evidence_action_packet"];
+    assert_eq!(
+        packet["argv"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "evidence",
+            "admit-cooperative",
+            "--root",
+            ".",
+            "--input-file",
+            "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}",
+            "--json"
+        ])
+    );
+    assert_eq!(packet["input_file_must_be_outside_project_snapshot"], true);
+    assert_eq!(
+        packet["route"]["policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    assert_eq!(packet["route"]["source_provider"], "authorized_human");
+    assert_eq!(packet["route"]["provider"], "repository_inspector");
+    assert_eq!(packet["kernel_derived_outcome"], "pass");
+    let mut offer = packet["offer_template"].clone();
+    offer["offer_id"] = serde_json::json!("offer.cli-e2e.pass");
+    let input = consumer.write_json("cooperative evidence offer.json", &offer);
+    let admitted = assert_ok(&run_cooperative_evidence(&consumer, &input));
+    assert_eq!(
+        admitted["data"]["event"]["type"],
+        "cooperative_evidence_observed"
+    );
+    assert_eq!(
+        admitted["data"]["event"]["payload"]["disposition"],
+        "admitted"
+    );
+    assert_eq!(
+        admitted["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
+        "pass"
+    );
+
+    let restarted = assert_ok(&consumer.run(&["next"]));
+    let audit = restarted["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("cooperative evidence audit");
+    assert_eq!(audit.len(), 1);
+    assert_eq!(audit[0]["current_status"], "supporting");
+    assert!(audit[0]["proves"].as_array().is_some_and(|proofs| proofs
+        .iter()
+        .any(|proof| proof == "kernel_verified_project_state_readback")));
+    assert!(audit[0]["does_not_prove"]
+        .as_array()
+        .is_some_and(|limits| limits
+            .iter()
+            .any(|limit| limit == "independent_semantic_review")));
+    assert!(audit[0]["does_not_prove"]
+        .as_array()
+        .is_some_and(|limits| limits.iter().any(|limit| limit == "selected_source_claim")));
 }
 
 #[test]
