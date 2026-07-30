@@ -192,6 +192,12 @@ test identities with `scripts/check-test-inventory.py` and compares them to
 `contracts/test-inventory/expensive-p6d.json`; additions and removals require an
 explicit baseline review rather than disappearing in job topology changes.
 
+## Solo objective grounding checks
+
+The focused CLI integration checks `cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger`, `cooperative_objective_grounding_survives_restart_and_local_writes`, and `cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback` prove exact anchor completion, continued domain-scan after a governed repository edit, restart and `.local` continuity, material supersession reopening, and non-material clarification preserving the current material anchor. The kernel check `solo_objective_grounding_is_material_window_bound_and_not_evaluator_aged` proves that grounding is durable state rather than age-limited evaluator evidence, while still disappearing after `invalidate_all` or anchor revocation. The decisions check `typed_same_owner_grounding_satisfies_a_claim_without_impersonating_its_evaluator` proves grounding and evidence remain distinct in results.
+
+`signed_cli_flow_completes_first_policy_and_resumes_capability_gap` is the paired guard that keeps `strict_external` broker-backed. `internal_fixture_reaches_investigation_then_public_solo_source_command_supersedes_assessments` guards the existing cooperative source-evidence path. These focused checks do not replace the packaged release journey or full release evidence.
+
 ## Release evidence
 
 A release additionally requires exact tag/commit/workspace/CLI agreement,

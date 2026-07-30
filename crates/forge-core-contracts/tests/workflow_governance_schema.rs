@@ -1,8 +1,9 @@
 use forge_core_contracts::{
-    UniversalAssuranceLens, WorkflowAssuranceClaimRole, WorkflowCompletionAssertion,
-    WorkflowDecisionActivation, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
+    PrincipalId, StableId, UniversalAssuranceLens, WorkflowAssuranceClaimRole,
+    WorkflowClaimGroundingKind, WorkflowClaimGroundingObservation, WorkflowCompletionAssertion,
+    WorkflowCooperativeAuthorityBasis, WorkflowDecisionActivation,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
+    WorkflowGovernanceEvent, WorkflowGovernanceLedgerDocument, WorkflowPolicyActivation,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
 use std::{collections::BTreeSet, path::PathBuf};
@@ -132,6 +133,24 @@ fn published_evaluations_round_trip_as_closed_typed_contracts() {
         invented.workflow_governance_evaluation.completion_assertion,
         WorkflowCompletionAssertion::Asserted
     );
+
+    let mut grounded = invented;
+    let anchor = format!("sha256:{}", "a".repeat(64));
+    grounded
+        .workflow_governance_evaluation
+        .groundings
+        .push(WorkflowClaimGroundingObservation {
+            grounding_ref: format!("cooperative-objective:{anchor}"),
+            claim_ref: StableId("claim.requirements".to_owned()),
+            kind: WorkflowClaimGroundingKind::CooperativeSameOwnerObjective,
+            anchor_record_digest: anchor,
+            principal: Some(PrincipalId("principal.agent.same-owner".to_owned())),
+            authority_basis: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+        });
+    let serialized = yaml_serde::to_string(&grounded).expect("serialize typed grounding");
+    let round_trip: WorkflowGovernanceEvaluationDocument =
+        yaml_serde::from_str(&serialized).expect("round-trip typed grounding");
+    assert_eq!(round_trip, grounded);
 }
 
 #[test]

@@ -265,6 +265,7 @@ fn evaluation(
             decision_need_refs: vec![],
             resolved_decision_refs: vec![],
             waivers: vec![],
+            groundings: vec![],
             evidence,
             completion_assertion,
         },

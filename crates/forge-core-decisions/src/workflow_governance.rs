@@ -15,11 +15,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use forge_core_contracts::{
     AdvisoryWorkflowPlaybook, CapabilityGap, CatalogEntry, DecisionRequest, NextAction,
     NextActionKind, ObligationCriticality, ObligationStatus, Phase, ReadinessTarget, StableId,
-    UniversalAssuranceLens, WorkflowAssuranceClaimRole, WorkflowClaimWaiverObservation,
-    WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion, WorkflowDecisionActivation,
-    WorkflowDisproofPolicy, WorkflowEvaluatorBinding, WorkflowEvaluatorProvider,
-    WorkflowEvidenceFreshness, WorkflowEvidenceKind, WorkflowEvidenceObservation,
-    WorkflowEvidenceOutcome, WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
+    UniversalAssuranceLens, WorkflowAssuranceClaimRole, WorkflowClaimGroundingKind,
+    WorkflowClaimGroundingObservation, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
+    WorkflowCompletionAssertion, WorkflowDecisionActivation, WorkflowDisproofPolicy,
+    WorkflowEvaluatorBinding, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
+    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
+    WorkflowFreshnessRequirement, WorkflowGovernanceBundleDocument,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernancePolicy, WorkflowPolicyActivation,
     WorkflowPrerequisiteRequirement, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
 };
@@ -104,6 +105,8 @@ pub struct WorkflowClaimResult {
     pub statement: String,
     pub status: WorkflowClaimResultStatus,
     pub accepted_evidence_refs: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub accepted_grounding_refs: Vec<String>,
     pub rejected_evidence_refs: Vec<String>,
 }
 
@@ -560,6 +563,7 @@ pub fn simulate_workflow_governance(
     let claim_results = evaluate_claims(
         policy,
         &input.evidence,
+        &input.groundings,
         &input.waivers,
         input.target,
         input.observed_at_unix,
@@ -1091,6 +1095,14 @@ fn validate_dependency_graph(
     }
 }
 
+fn is_lower_sha256_text(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value.as_bytes()[7..]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+}
+
 fn validate_evaluation_input(
     bundle_document: &WorkflowGovernanceBundleDocument,
     evaluation_document: &WorkflowGovernanceEvaluationDocument,
@@ -1281,6 +1293,59 @@ fn validate_evaluation_input(
             &waiver.authorization_intent_digest,
         );
     }
+    let mut grounding_refs = BTreeSet::new();
+    for (index, grounding) in input.groundings.iter().enumerate() {
+        let path = format!("workflow_governance_evaluation.groundings[{index}]");
+        require_nonblank(
+            &mut issues,
+            format!("{path}.grounding_ref"),
+            &grounding.grounding_ref,
+        );
+        if !grounding_refs.insert(grounding.grounding_ref.as_str()) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::DuplicateIdentifier,
+                format!("{path}.grounding_ref"),
+                "grounding ref occurs more than once",
+            );
+        }
+        if !claims.contains_key(grounding.claim_ref.0.as_str()) {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::DanglingReference,
+                format!("{path}.claim_ref"),
+                "grounding references an unknown claim",
+            );
+        }
+        let expected_ref = match grounding.kind {
+            WorkflowClaimGroundingKind::CooperativeSameOwnerObjective => {
+                format!("cooperative-objective:{}", grounding.anchor_record_digest)
+            }
+        };
+        if !is_lower_sha256_text(&grounding.anchor_record_digest)
+            || grounding.grounding_ref != expected_ref
+        {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::EvidenceBindingMismatch,
+                &path,
+                "grounding must bind its exact lowercase sha256 ledger anchor",
+            );
+        }
+        if grounding
+            .principal
+            .as_ref()
+            .is_some_and(|principal| principal.0.trim().is_empty())
+        {
+            issue(
+                &mut issues,
+                WorkflowGovernanceIssueCode::BlankRequiredField,
+                format!("{path}.principal"),
+                "grounding principal must not be blank when present",
+            );
+        }
+    }
+
     let evaluators = policy
         .evaluators
         .iter()
@@ -1331,6 +1396,7 @@ fn validate_evaluation_input(
 fn evaluate_claims(
     policy: &WorkflowGovernancePolicy,
     evidence: &[WorkflowEvidenceObservation],
+    groundings: &[WorkflowClaimGroundingObservation],
     waivers: &[WorkflowClaimWaiverObservation],
     target: ReadinessTarget,
     observed_at_unix: u64,
@@ -1354,6 +1420,7 @@ fn evaluate_claims(
                 claim,
                 evaluator,
                 evidence,
+                groundings,
                 waiver,
                 target,
                 observed_at_unix,
@@ -1367,6 +1434,7 @@ fn evaluate_claim(
     claim: &forge_core_contracts::WorkflowClaimPolicy,
     evaluator: &WorkflowEvaluatorBinding,
     evidence: &[WorkflowEvidenceObservation],
+    groundings: &[WorkflowClaimGroundingObservation],
     waiver: Option<&WorkflowClaimWaiverObservation>,
     target: ReadinessTarget,
     observed_at_unix: u64,
@@ -1440,6 +1508,13 @@ fn evaluate_claim(
             }
         }
     }
+    let mut accepted_groundings = groundings
+        .iter()
+        .filter(|grounding| grounding.claim_ref == claim.id)
+        .map(|grounding| grounding.grounding_ref.clone())
+        .collect::<Vec<_>>();
+    accepted_groundings.sort();
+    accepted_groundings.dedup();
     accepted.sort();
     accepted.dedup();
     rejected.extend(disproofs.iter().cloned());
@@ -1449,7 +1524,8 @@ fn evaluate_claim(
     let enough_observations = accepted.len() >= evaluator.minimum_passing_observations;
     let enough_principal_diversity =
         accepted_principals.len() >= evaluator.minimum_distinct_principals;
-    if enough_observations && !enough_principal_diversity {
+    let grounded = !accepted_groundings.is_empty();
+    if !grounded && enough_observations && !enough_principal_diversity {
         issue(
             issues,
             WorkflowGovernanceIssueCode::InsufficientPrincipalDiversity,
@@ -1461,7 +1537,10 @@ fn evaluate_claim(
             ),
         );
     }
-    let enough_support = enough_observations && enough_principal_diversity;
+    // Grounding is durable project-direction state, not an evaluator
+    // observation. It therefore does not borrow the evaluator's provider,
+    // freshness window, observation count, or principal-diversity claims.
+    let enough_support = grounded || (enough_observations && enough_principal_diversity);
     let mut status = match (
         enough_support,
         disproofs.is_empty(),
@@ -1493,6 +1572,7 @@ fn evaluate_claim(
         statement: claim.statement.clone(),
         status,
         accepted_evidence_refs: accepted,
+        accepted_grounding_refs: accepted_groundings,
         rejected_evidence_refs: rejected,
     }
 }

@@ -1,6 +1,7 @@
 use forge_core_contracts::{
     CatalogEntry, NextActionKind, ObligationStatus, PrincipalId, ReadinessTarget, RepoPath,
-    StableId, WorkflowClaimWaiverObservation, WorkflowDecisionActivation,
+    StableId, WorkflowClaimGroundingKind, WorkflowClaimGroundingObservation,
+    WorkflowClaimWaiverObservation, WorkflowCooperativeAuthorityBasis, WorkflowDecisionActivation,
     WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluationDocument,
     WorkflowPrerequisiteRequirement,
 };
@@ -92,6 +93,38 @@ fn caller_authored_complete_input_remains_simulation_only() {
     assert!(simulation.candidate_next_actions[0]
         .description
         .contains("trusted Project Snapshot evaluation"));
+}
+
+#[test]
+fn typed_same_owner_grounding_satisfies_a_claim_without_impersonating_its_evaluator() {
+    let bundle = bundle();
+    let mut input = evaluation("missing-evidence");
+    let policy = bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .find(|policy| policy.id == input.workflow_governance_evaluation.policy_id)
+        .expect("selected policy");
+    let claim_policy = policy.claims.first().expect("claim");
+    let anchor = format!("sha256:{}", "a".repeat(64));
+    let grounding_ref = format!("cooperative-objective:{anchor}");
+    input
+        .workflow_governance_evaluation
+        .groundings
+        .push(WorkflowClaimGroundingObservation {
+            grounding_ref: grounding_ref.clone(),
+            claim_ref: claim_policy.id.clone(),
+            kind: WorkflowClaimGroundingKind::CooperativeSameOwnerObjective,
+            anchor_record_digest: anchor,
+            principal: Some(PrincipalId("principal.agent.same-owner".to_owned())),
+            authority_basis: WorkflowCooperativeAuthorityBasis::CooperativeSameOwner,
+        });
+
+    let simulation = simulate_workflow_governance(&bundle, &input).expect("typed grounding");
+    let grounded = claim(&simulation, &claim_policy.id.0);
+    assert_eq!(grounded.status, WorkflowClaimResultStatus::Verified);
+    assert!(grounded.accepted_evidence_refs.is_empty());
+    assert_eq!(grounded.accepted_grounding_refs, vec![grounding_ref]);
 }
 
 #[test]

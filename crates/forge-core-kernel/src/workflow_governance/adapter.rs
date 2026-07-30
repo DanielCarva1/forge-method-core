@@ -70,19 +70,20 @@ use forge_core_contracts::{
     WorkflowAdmittedCooperativeSourceAssessment, WorkflowAssuranceClaimRole,
     WorkflowBrokerCredentialStatus, WorkflowBrokerExternalSetupBlockReason,
     WorkflowBrokerExternalSetupState, WorkflowBrokerPublicRegistryDocument,
-    WorkflowCapabilityProbeKind, WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy,
-    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
-    WorkflowCooperativeEvidenceAssuranceEffect, WorkflowCooperativeEvidenceBinding,
-    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
-    WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceObservedEvent,
-    WorkflowCooperativeEvidenceOffer, WorkflowCooperativeEvidenceProof,
-    WorkflowCooperativeEvidenceRejection, WorkflowCooperativeEvidenceRoute,
-    WorkflowCooperativeHostProvenance, WorkflowCooperativeMaterialScenarioKind,
-    WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
-    WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
-    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    WorkflowCapabilityProbeKind, WorkflowClaimGroundingKind, WorkflowClaimGroundingObservation,
+    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
+    WorkflowContentAddressedReference, WorkflowCooperativeEvidenceAssuranceEffect,
+    WorkflowCooperativeEvidenceBinding, WorkflowCooperativeEvidenceCurrentStatus,
+    WorkflowCooperativeEvidenceDisposition, WorkflowCooperativeEvidenceNonProof,
+    WorkflowCooperativeEvidenceObservedEvent, WorkflowCooperativeEvidenceOffer,
+    WorkflowCooperativeEvidenceProof, WorkflowCooperativeEvidenceRejection,
+    WorkflowCooperativeEvidenceRoute, WorkflowCooperativeHostProvenance,
+    WorkflowCooperativeMaterialScenarioKind, WorkflowCooperativeObjectiveInput,
+    WorkflowCooperativeObjectiveProposal, WorkflowEffectiveBundleIdentity,
+    WorkflowEvaluatorProvider, WorkflowEvidenceFreshness, WorkflowEvidenceKind,
+    WorkflowEvidenceObservation, WorkflowEvidenceOutcome, WorkflowEvidenceProvenance,
+    WorkflowEvidenceStrength, WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
+    WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
     WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
     WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
     WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
@@ -176,6 +177,11 @@ const MIN_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES: usize = 2;
 const MAX_WORKFLOW_COOPERATIVE_DECISION_ALTERNATIVES: usize = 8;
 const MAX_WORKFLOW_COOPERATIVE_DECISION_CONSEQUENCES: usize = 8;
 const UNIVERSAL_ASSURANCE_POLICY_ID: &str = "policy.workflow.universal-assurance";
+const DISCOVER_INTENT_POLICY_ID: &str = "policy.workflow.discover-intent";
+const DISCOVER_INTENT_CLAIM_ID: &str = "claim.workflow.discover-intent.intent-grounded";
+const DISCOVER_INTENT_EVALUATOR_ID: &str = "evaluator.workflow.discover-intent.intent-review";
+const DISCOVER_INTENT_GROUNDING_SUBJECT_REF: &str =
+    "grounding.workflow.discover-intent.cooperative-objective";
 const DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH: &str = "domain-packs/rebase-plan.yaml";
 const DOMAIN_PACK_REBASE_PLAN_LOCK_RELATIVE_PATH: &str = "locks/domain-packs.rebase-plan.lock";
 #[cfg(test)]
@@ -4668,7 +4674,7 @@ impl WorkflowGovernanceProjectAdapter {
             })
             .collect::<BTreeSet<_>>();
         if let Some(cooperative_digests) = current_receipts
-            .current_cooperative_evidence_receipt_digests
+            .current_solo_evidence_receipt_digests
             .get(&fresh.selected_policy_ref)
         {
             evidence_receipt_digests.extend(cooperative_digests.iter().cloned());
@@ -4686,19 +4692,36 @@ impl WorkflowGovernanceProjectAdapter {
             .filter(|capability| capability.blocks_before.rank() > fresh.target.rank())
             .map(|capability| capability.id.clone())
             .collect();
+        let grounding_anchor_digests = current_receipts
+            .current_solo_grounding_anchor_digests
+            .get(&fresh.selected_policy_ref)
+            .map(|digests| digests.iter().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let subject = if fresh.selected_policy_ref.0 == DISCOVER_INTENT_POLICY_ID
+            && grounding_anchor_digests.len() == 1
+        {
+            WorkflowEvidenceSubject {
+                kind: WorkflowEvidenceSubjectKind::Artifact,
+                subject_ref: DISCOVER_INTENT_GROUNDING_SUBJECT_REF.to_owned(),
+                subject_digest: grounding_anchor_digests[0].clone(),
+            }
+        } else {
+            WorkflowEvidenceSubject {
+                kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
+                subject_ref: self.binding.project_id.0.clone(),
+                subject_digest: fresh.snapshot_digest.clone(),
+            }
+        };
         let event = WorkflowGovernanceEvent::PolicyCompleted(PolicyCompletedEvent {
             policy_ref: fresh.selected_policy_ref.clone(),
             target: fresh.target,
             phase: StableId(fresh.current_phase.clone()),
             snapshot_digest: fresh.snapshot_digest.clone(),
             ledger_head_digest: fresh.ledger_head_digest.clone(),
-            subject: WorkflowEvidenceSubject {
-                kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
-                subject_ref: self.binding.project_id.0.clone(),
-                subject_digest: fresh.snapshot_digest.clone(),
-            },
+            subject,
             dependency_receipt_digests,
             evidence_receipt_digests,
+            grounding_anchor_digests,
             unresolved_deferred_obligation_refs,
             unresolved_deferred_capability_refs,
             completed_at_unix: now,
@@ -5441,6 +5464,17 @@ impl WorkflowGovernanceProjectAdapter {
                     })
                     .cloned()
                     .collect(),
+                groundings: derived
+                    .groundings
+                    .iter()
+                    .filter(|grounding| {
+                        selected
+                            .claims
+                            .iter()
+                            .any(|claim| claim.id == grounding.claim_ref)
+                    })
+                    .cloned()
+                    .collect(),
                 evidence: derived
                     .evidence
                     .iter()
@@ -5613,6 +5647,20 @@ impl WorkflowGovernanceProjectAdapter {
         };
         let cooperative_source_claim =
             selected_cooperative_source_claim(selected, &verified.simulation);
+        let cooperative_source_claim_requires_evidence =
+            cooperative_source_claim.is_some_and(|claim| {
+                !verified
+                    .simulation
+                    .candidate_claim_results
+                    .iter()
+                    .find(|result| result.claim_id == claim.id.0)
+                    .is_some_and(|result| {
+                        matches!(
+                            result.status,
+                            WorkflowClaimResultStatus::Verified | WorkflowClaimResultStatus::Waived
+                        )
+                    })
+            });
         let cooperative_evidence = if readiness_profile == WorkflowReadinessProfile::SoloCooperative
         {
             cooperative_evidence_audit(
@@ -5633,6 +5681,7 @@ impl WorkflowGovernanceProjectAdapter {
         let cooperative_evidence_action_packet =
             active_cooperative_objective.as_ref().and_then(|objective| {
                 (readiness_profile == WorkflowReadinessProfile::SoloCooperative
+                    && cooperative_source_claim_requires_evidence
                     && !cooperative_evidence_support_is_current)
                     .then(|| WorkflowCooperativeEvidenceBinding {
                         objective_id: objective.objective_id.clone(),
@@ -5662,6 +5711,7 @@ impl WorkflowGovernanceProjectAdapter {
         let cooperative_evidence_action_gap = (readiness_profile
             == WorkflowReadinessProfile::SoloCooperative
             && active_cooperative_objective.is_some()
+            && cooperative_source_claim_requires_evidence
             && !cooperative_evidence_support_is_current
             && cooperative_evidence_action_packet.is_none())
         .then(|| {
@@ -6881,8 +6931,10 @@ struct DerivedReceipts {
     available_capability_refs: BTreeSet<StableId>,
     decision_need_refs: BTreeSet<StableId>,
     resolved_decision_refs: BTreeSet<StableId>,
+    groundings: Vec<WorkflowClaimGroundingObservation>,
     evidence: Vec<WorkflowEvidenceObservation>,
-    current_cooperative_evidence_receipt_digests: BTreeMap<StableId, BTreeSet<String>>,
+    current_solo_evidence_receipt_digests: BTreeMap<StableId, BTreeSet<String>>,
+    current_solo_grounding_anchor_digests: BTreeMap<StableId, BTreeSet<String>>,
     waivers: Vec<WorkflowClaimWaiverObservation>,
 }
 
@@ -7022,7 +7074,8 @@ fn derive_receipts(
     trusted_registry_digest: Option<&str>,
     trusted_broker_registry_digest: Option<&str>,
 ) -> Result<DerivedReceipts, WorkflowGovernanceAdapterError> {
-    let receipt_records = &projection.records[receipt_window_start(projection)..];
+    let receipt_window_start = receipt_window_start(projection);
+    let receipt_records = &projection.records[receipt_window_start..];
     let snapshot_digest = project_snapshot.digest();
     let latest_cooperative_source_assessments =
         latest_cooperative_source_assessment_records(receipt_records);
@@ -7050,6 +7103,46 @@ fn derive_receipts(
     .transpose()?
     .flatten();
     let mut current_evidence_receipt_digests = BTreeSet::new();
+    if let Some(objective) = active_cooperative_objective.as_ref() {
+        // The accepted objective is durable project-direction state, not an
+        // observation by the policy's AuthorizedHuman evaluator. Only the
+        // canonical Solo Cooperative discover-intent claim may consume this
+        // grounding, and only while its material anchor remains inside the
+        // current receipt window and is not revoked.
+        let policy_and_claim = bundle
+            .workflow_governance_bundle
+            .policies
+            .iter()
+            .find(|policy| policy.id.0 == DISCOVER_INTENT_POLICY_ID)
+            .and_then(|policy| {
+                let claim = policy.claims.iter().find(|claim| {
+                    claim.id.0 == DISCOVER_INTENT_CLAIM_ID
+                        && claim.evaluator_ref.0 == DISCOVER_INTENT_EVALUATOR_ID
+                })?;
+                Some((policy, claim))
+            });
+        let grounding_anchor = current_cooperative_objective_grounding_anchor(
+            &projection.records,
+            receipt_window_start,
+            objective,
+        );
+        if let (Some((policy, claim)), Some(anchor)) = (policy_and_claim, grounding_anchor) {
+            let grounding_ref = format!("cooperative-objective:{anchor}");
+            derived.groundings.push(WorkflowClaimGroundingObservation {
+                grounding_ref,
+                claim_ref: claim.id.clone(),
+                kind: WorkflowClaimGroundingKind::CooperativeSameOwnerObjective,
+                anchor_record_digest: anchor.to_owned(),
+                principal: Some(objective.carrying_principal.clone()),
+                authority_basis: objective.authority_basis,
+            });
+            derived
+                .current_solo_grounding_anchor_digests
+                .entry(policy.id.clone())
+                .or_default()
+                .insert(anchor.to_owned());
+        }
+    }
     let mut signal_states =
         BTreeMap::<WorkflowGovernanceSignal, (bool, StableId, u64, String, bool)>::new();
     for (index, record) in receipt_records.iter().enumerate() {
@@ -7127,8 +7220,12 @@ fn derive_receipts(
             WorkflowGovernanceEvent::PolicyCompleted(event)
                 if record.previous_record_digest.as_deref()
                     == Some(event.ledger_head_digest.as_str())
-                    && event.snapshot_digest == snapshot_digest
-                    && subject_current(project_root, snapshot_digest, &event.subject)?
+                    && policy_completion_binding_is_current(
+                        event,
+                        project_root,
+                        snapshot_digest,
+                        &derived.current_solo_grounding_anchor_digests,
+                    )?
                     && event
                         .dependency_receipt_digests
                         .iter()
@@ -7424,7 +7521,7 @@ fn derive_receipts(
                 if admitted.outcome == WorkflowEvidenceOutcome::Pass {
                     current_evidence_receipt_digests.insert(record.record_digest.clone());
                     derived
-                        .current_cooperative_evidence_receipt_digests
+                        .current_solo_evidence_receipt_digests
                         .entry(policy.id.clone())
                         .or_default()
                         .insert(record.record_digest.clone());
@@ -8019,6 +8116,17 @@ fn boundary_rechecks(
                             .claims
                             .iter()
                             .any(|claim| claim.id == waiver.claim_ref)
+                    })
+                    .cloned()
+                    .collect(),
+                groundings: derived
+                    .groundings
+                    .iter()
+                    .filter(|grounding| {
+                        policy
+                            .claims
+                            .iter()
+                            .any(|claim| claim.id == grounding.claim_ref)
                     })
                     .cloned()
                     .collect(),
@@ -10728,17 +10836,12 @@ fn replacement_objective_history(
     ),
     WorkflowGovernanceAdapterError,
 > {
-    let active_cooperative = (readiness_profile == WorkflowReadinessProfile::SoloCooperative)
-        .then(|| {
-            records.iter().rev().find_map(|record| {
-                matches!(
-                    &record.event,
-                    WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
-                )
-                .then_some(record.record_digest.as_str())
-            })
-        })
-        .flatten();
+    let active_cooperative = if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
+        active_cooperative_objective_from_ledger(records)?
+            .map(|objective| objective.accepted_record_digest)
+    } else {
+        None
+    };
     let active_human = (readiness_profile == WorkflowReadinessProfile::StrictExternal)
         .then(|| {
             records.iter().rev().find_map(|record| {
@@ -10757,7 +10860,7 @@ fn replacement_objective_history(
     for record in records {
         match &record.event {
             WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) => {
-                let active = active_cooperative == Some(record.record_digest.as_str());
+                let active = active_cooperative.as_deref() == Some(record.record_digest.as_str());
                 let objective = WorkflowActiveCooperativeObjective {
                     objective_id: event.objective_id.clone(),
                     revision: event.revision,
@@ -10989,36 +11092,84 @@ fn replacement_ranked_actions(
     actions
 }
 
+fn receipt_record_is_revoked(
+    records: &[WorkflowGovernanceLedgerRecord],
+    candidate: &WorkflowGovernanceLedgerRecord,
+) -> bool {
+    records.iter().any(|record| {
+        matches!(
+            &record.event,
+            WorkflowGovernanceEvent::ReceiptRevoked(event)
+                if event.revoked_record_id == candidate.record_id
+                    && event.revoked_record_digest == candidate.record_digest
+        )
+    })
+}
+
+fn current_cooperative_objective_grounding_anchor<'a>(
+    records: &'a [WorkflowGovernanceLedgerRecord],
+    receipt_window_start: usize,
+    active_objective: &WorkflowActiveCooperativeObjective,
+) -> Option<&'a str> {
+    let active_index = records.iter().position(|record| {
+        record.record_digest == active_objective.accepted_record_digest
+            && matches!(
+                record.event,
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
+            )
+    })?;
+    if active_index < receipt_window_start {
+        return None;
+    }
+    let anchor = records[receipt_window_start..=active_index]
+        .iter()
+        .rev()
+        .find(|record| {
+            matches!(
+                &record.event,
+                WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event)
+                    if event.objective_id == active_objective.objective_id
+                        && event.revision_kind
+                            != WorkflowCooperativeObjectiveRevisionKind::NonMaterialClarification
+            )
+        })?;
+    (!receipt_record_is_revoked(records, anchor)).then_some(anchor.record_digest.as_str())
+}
+
 fn active_cooperative_objective_from_ledger(
     records: &[WorkflowGovernanceLedgerRecord],
 ) -> Result<Option<WorkflowActiveCooperativeObjective>, WorkflowGovernanceAdapterError> {
-    let mut active = None;
-    for record in records {
+    let Some((record, event)) = records.iter().rev().find_map(|record| {
         let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
-            continue;
+            return None;
         };
-        active = Some(WorkflowActiveCooperativeObjective {
-            objective_id: event.objective_id.clone(),
-            revision: event.revision,
-            assurance_epoch: event.assurance_epoch,
-            proposal: event.proposal.clone(),
-            objective_digest: event.objective_digest.clone(),
-            previous_objective_digest: event.previous_objective_digest.clone(),
-            revision_kind: event.revision_kind,
-            revision_reason: event.revision_reason.clone(),
-            accepted_record_digest: record.record_digest.clone(),
-            accepted_sequence: record.sequence,
-            accepted_state_version: record.state_version,
-            snapshot_digest_at_acceptance: event.snapshot_digest.clone(),
-            ledger_head_before_acceptance: event.ledger_head_digest.clone(),
-            acceptance_action_packet_digest: event.acceptance_action_packet_digest.clone(),
-            carrying_principal: event.carrying_principal.clone(),
-            host_provenance: event.host_provenance.clone(),
-            authority_basis: event.authority_basis,
-            accepted_at_unix: event.accepted_at_unix,
-        });
+        Some((record, event))
+    }) else {
+        return Ok(None);
+    };
+    if receipt_record_is_revoked(records, record) {
+        return Ok(None);
     }
-    Ok(active)
+    Ok(Some(WorkflowActiveCooperativeObjective {
+        objective_id: event.objective_id.clone(),
+        revision: event.revision,
+        assurance_epoch: event.assurance_epoch,
+        proposal: event.proposal.clone(),
+        objective_digest: event.objective_digest.clone(),
+        previous_objective_digest: event.previous_objective_digest.clone(),
+        revision_kind: event.revision_kind,
+        revision_reason: event.revision_reason.clone(),
+        accepted_record_digest: record.record_digest.clone(),
+        accepted_sequence: record.sequence,
+        accepted_state_version: record.state_version,
+        snapshot_digest_at_acceptance: event.snapshot_digest.clone(),
+        ledger_head_before_acceptance: event.ledger_head_digest.clone(),
+        acceptance_action_packet_digest: event.acceptance_action_packet_digest.clone(),
+        carrying_principal: event.carrying_principal.clone(),
+        host_provenance: event.host_provenance.clone(),
+        authority_basis: event.authority_basis,
+        accepted_at_unix: event.accepted_at_unix,
+    }))
 }
 
 fn accepted_cooperative_objective_record(
@@ -12351,6 +12502,33 @@ fn policy_by_id<'a>(
         .iter()
         .find(|policy| policy.id == *id)
         .ok_or_else(|| WorkflowGovernanceAdapterError::UnknownPolicy(id.0.clone()))
+}
+
+fn policy_completion_binding_is_current(
+    event: &PolicyCompletedEvent,
+    project_root: &Path,
+    snapshot_digest: &str,
+    current_grounding_anchors: &BTreeMap<StableId, BTreeSet<String>>,
+) -> Result<bool, WorkflowGovernanceAdapterError> {
+    if event.policy_ref.0 == DISCOVER_INTENT_POLICY_ID && !event.grounding_anchor_digests.is_empty()
+    {
+        let Some(anchor) = event.grounding_anchor_digests.first() else {
+            return Ok(false);
+        };
+        let exact_anchor = event.grounding_anchor_digests.len() == 1
+            && current_grounding_anchors
+                .get(&event.policy_ref)
+                .is_some_and(|current| current.len() == 1 && current.contains(anchor));
+        return Ok(exact_anchor
+            && event.subject.kind == WorkflowEvidenceSubjectKind::Artifact
+            && event.subject.subject_ref == DISCOVER_INTENT_GROUNDING_SUBJECT_REF
+            && event.subject.subject_digest == *anchor);
+    }
+    if !event.grounding_anchor_digests.is_empty() {
+        return Ok(false);
+    }
+    Ok(event.snapshot_digest == snapshot_digest
+        && subject_current(project_root, snapshot_digest, &event.subject)?)
 }
 
 // A Result keeps all receipt-derivation predicates uniform and leaves room for
@@ -14467,6 +14645,149 @@ mod tests {
     }
 
     #[test]
+    fn solo_objective_grounding_is_material_window_bound_and_not_evaluator_aged() {
+        let (root, state) = temp_project("solo-grounding-window");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.solo-grounding-window".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let packet = adapter
+            .next()
+            .expect("objective guidance")
+            .authorization
+            .action_packets[0]
+            .clone();
+        adapter
+            .accept_cooperative_objective(&packet.packet_digest, cooperative_objective_input())
+            .expect("accept objective");
+        let projection = lock_workflow_governance_ledger_tcb(&state)
+            .expect("ledger")
+            .recover()
+            .expect("projection");
+        let objective_record = projection
+            .records
+            .iter()
+            .rev()
+            .find(|record| {
+                matches!(
+                    record.event,
+                    WorkflowGovernanceEvent::CooperativeObjectiveAccepted(_)
+                )
+            })
+            .expect("objective record")
+            .clone();
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(initial_event) =
+            &objective_record.event
+        else {
+            unreachable!();
+        };
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
+            .expect("registry");
+        let bundle = registry.latest_release().document();
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&root).expect("snapshot");
+        let derive = |projection: &WorkflowGovernanceLedgerProjection, now| {
+            derive_receipts(bundle, projection, &root, &snapshot, now, None, None)
+                .expect("derive receipts")
+        };
+
+        let current = derive(&projection, u64::MAX);
+        assert_eq!(current.groundings.len(), 1);
+        assert_eq!(
+            current.groundings[0].anchor_record_digest,
+            objective_record.record_digest,
+            "active objective state is not evaluator evidence and does not expire by evaluator max_age"
+        );
+        assert!(current.evidence.iter().all(|evidence| {
+            evidence.evidence_ref
+                != format!("cooperative-objective:{}", objective_record.record_digest)
+        }));
+
+        let equivalent_policy_set = format!("sha256:{}", "1".repeat(64));
+        let mut preserved = projection.clone();
+        preserved.records.push(release_record(
+            WorkflowReceiptCarryover::PreservePolicyEquivalent,
+            &equivalent_policy_set,
+            &equivalent_policy_set,
+        ));
+        assert_eq!(
+            derive(&preserved, u64::MAX).groundings[0].anchor_record_digest,
+            objective_record.record_digest,
+            "exact policy-equivalent carryover preserves the material grounding anchor"
+        );
+
+        let mut invalidated = projection.clone();
+        let invalidation = release_record(
+            WorkflowReceiptCarryover::InvalidateAll,
+            &equivalent_policy_set,
+            &equivalent_policy_set,
+        );
+        invalidated.records.push(invalidation.clone());
+        let mut clarification_event = initial_event.clone();
+        clarification_event.revision = clarification_event.revision.saturating_add(1);
+        clarification_event.assurance_epoch = clarification_event.assurance_epoch.saturating_add(1);
+        clarification_event.previous_objective_digest =
+            Some(initial_event.objective_digest.clone());
+        clarification_event.revision_kind =
+            WorkflowCooperativeObjectiveRevisionKind::NonMaterialClarification;
+        clarification_event.revision_reason = Some("detail only".to_owned());
+        clarification_event.snapshot_digest = snapshot.digest().to_owned();
+        clarification_event.ledger_head_digest = invalidation.record_digest.clone();
+        let clarification_record = WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.objective.clarification-after-invalidation".to_owned()),
+            sequence: invalidated.records.len() as u64,
+            project_id: objective_record.project_id.clone(),
+            bundle_id: objective_record.bundle_id.clone(),
+            bundle_digest: objective_record.bundle_digest.clone(),
+            state_version: objective_record.state_version.saturating_add(1),
+            previous_record_digest: Some(invalidation.record_digest),
+            record_digest: format!("sha256:{}", "e".repeat(64)),
+            recorded_at_unix: 20,
+            event: WorkflowGovernanceEvent::CooperativeObjectiveAccepted(clarification_event),
+        };
+        invalidated.records.push(clarification_record);
+        assert!(
+            derive(&invalidated, u64::MAX).groundings.is_empty(),
+            "a clarification inside a new receipt window must not revive an out-of-window material anchor"
+        );
+
+        let mut revoked = projection.clone();
+        let prior_head = revoked
+            .records
+            .last()
+            .expect("objective head")
+            .record_digest
+            .clone();
+        revoked.records.push(WorkflowGovernanceLedgerRecord {
+            record_id: StableId("record.objective.revocation".to_owned()),
+            sequence: revoked.records.len() as u64,
+            project_id: objective_record.project_id.clone(),
+            bundle_id: objective_record.bundle_id.clone(),
+            bundle_digest: objective_record.bundle_digest.clone(),
+            state_version: objective_record.state_version.saturating_add(1),
+            previous_record_digest: Some(prior_head),
+            record_digest: format!("sha256:{}", "f".repeat(64)),
+            recorded_at_unix: 30,
+            event: WorkflowGovernanceEvent::ReceiptRevoked(
+                forge_core_contracts::ReceiptRevokedEvent {
+                    revoked_record_id: objective_record.record_id.clone(),
+                    revoked_record_digest: objective_record.record_digest.clone(),
+                    principal: PrincipalId("principal.agent.codex".to_owned()),
+                    authority_scope: StableId("authority.workflow.objective".to_owned()),
+                    reason: "objective withdrawn".to_owned(),
+                    revoked_at_unix: 30,
+                },
+            ),
+        });
+        assert!(active_cooperative_objective_from_ledger(&revoked.records)
+            .expect("active objective projection")
+            .is_none());
+        assert!(derive(&revoked, u64::MAX).groundings.is_empty());
+    }
+
+    #[test]
     fn domain_epoch_invalidates_receipts_unless_runtime_and_context_are_exact() {
         let runtime = WorkflowRuntimeBundleIdentity {
             bundle_id: StableId("bundle.test".to_owned()),
@@ -15999,7 +16320,7 @@ mod tests {
         }));
         assert_eq!(
             derived
-                .current_cooperative_evidence_receipt_digests
+                .current_solo_evidence_receipt_digests
                 .get(&policy.id),
             Some(&BTreeSet::from([record.record_digest.clone()])),
             "the exact current passing source record is completion-bindable"
@@ -16028,6 +16349,7 @@ mod tests {
                 },
                 dependency_receipt_digests: Vec::new(),
                 evidence_receipt_digests: vec![record.record_digest.clone()],
+                grounding_anchor_digests: Vec::new(),
                 unresolved_deferred_obligation_refs: Vec::new(),
                 unresolved_deferred_capability_refs: Vec::new(),
                 completed_at_unix: 20,
@@ -16065,7 +16387,7 @@ mod tests {
         .expect("derive expired evidence-bound completion");
         assert!(!expired.completed_policy_refs.contains(&policy.id));
         assert!(expired
-            .current_cooperative_evidence_receipt_digests
+            .current_solo_evidence_receipt_digests
             .get(&policy.id)
             .is_none_or(BTreeSet::is_empty));
 
@@ -18760,6 +19082,7 @@ mod tests {
                     },
                     dependency_receipt_digests: Vec::new(),
                     evidence_receipt_digests: Vec::new(),
+                    grounding_anchor_digests: Vec::new(),
                     unresolved_deferred_obligation_refs: Vec::new(),
                     unresolved_deferred_capability_refs: Vec::new(),
                     completed_at_unix: 10,

@@ -164,6 +164,28 @@ fn assert_ok(output: &Output) -> Value {
     envelope
 }
 
+fn assert_full_resume_preserves_next(
+    resumed: &Value,
+    next: &Value,
+    expected_readiness_profile: &str,
+) {
+    let mut resumed_base = resumed["data"].clone();
+    let replacement = resumed_base
+        .as_object_mut()
+        .expect("resume data object")
+        .remove("replacement_continuity")
+        .expect("full resume replacement continuity");
+    assert_eq!(
+        resumed_base, next["data"],
+        "full resume must preserve ordinary guidance and add continuity separately"
+    );
+    assert_eq!(replacement["status"], "ready");
+    assert_eq!(
+        replacement["binding"]["readiness_profile"],
+        expected_readiness_profile
+    );
+}
+
 fn run_profile(consumer: &Consumer, action: &str, tail: &[String]) -> Output {
     let mut args = vec![
         "workflow".to_owned(),
@@ -275,6 +297,7 @@ fn append_test_policy_completion(consumer: &Consumer, next: &Value) {
                 },
                 dependency_receipt_digests: Vec::new(),
                 evidence_receipt_digests: Vec::new(),
+                grounding_anchor_digests: Vec::new(),
                 unresolved_deferred_obligation_refs: Vec::new(),
                 unresolved_deferred_capability_refs: Vec::new(),
                 completed_at_unix: 1,
@@ -1204,6 +1227,39 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
         fresh["data"]["active_cooperative_objective"]["objective_digest"],
         accepted["data"]["active_objective"]["objective_digest"]
     );
+    assert_eq!(
+        fresh["data"]["selected_policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    assert_eq!(
+        fresh["data"]["status"], "ready_to_complete",
+        "the already accepted same-owner objective must ground discover-intent without a redundant evidence command"
+    );
+    assert!(
+        fresh["data"]["simulation"]["candidate_claim_results"]
+            .as_array()
+            .is_some_and(|claims| claims.iter().all(|claim| claim["status"] == "verified")),
+        "the accepted objective must satisfy the discover-intent claim"
+    );
+    assert!(
+        fresh["data"]["cooperative_evidence_action_packet"].is_null(),
+        "Forge must not ask the agent to re-submit project-snapshot evidence for intent it already accepted"
+    );
+    assert!(
+        fresh["data"]["cooperative_evidence_action_gap"].is_null(),
+        "an accepted objective is not a missing-evidence gap"
+    );
+    let objective_record_digest = accepted["data"]["objective_record"]["record_digest"]
+        .as_str()
+        .expect("accepted objective record digest")
+        .to_owned();
+    assert_eq!(
+        fresh["data"]["simulation"]["candidate_claim_results"][0]["accepted_grounding_refs"],
+        serde_json::json!([format!(
+            "cooperative-objective:{objective_record_digest}"
+        )]),
+        "the claim audit must identify the exact same-owner objective record, not imply broker proof"
+    );
 
     let decision =
         consumer.write_json("decision after accepted.json", &cooperative_decision_json());
@@ -1215,10 +1271,50 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
         "workflow.intent.accept_cooperative"
     );
     assert_eq!(state_tree_snapshot(&consumer.state), before_decision);
+
+    let completion_snapshot = fresh["data"]["snapshot_digest"]
+        .as_str()
+        .expect("ready completion snapshot");
+    let completed = assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        completion_snapshot,
+        "--principal",
+        "principal.agent.cli-e2e",
+    ]));
+    assert_eq!(
+        completed["data"]["completed_record"]["event"]["payload"]["evidence_receipt_digests"],
+        serde_json::json!([]),
+        "same-owner project direction is grounding, not evaluator evidence"
+    );
+    assert_eq!(
+        completed["data"]["completed_record"]["event"]["payload"]["grounding_anchor_digests"],
+        serde_json::json!([objective_record_digest]),
+        "completion must remain durably bound to the exact material objective anchor"
+    );
+    assert_eq!(
+        completed["data"]["completed_record"]["event"]["payload"]["subject"]["kind"],
+        "artifact"
+    );
+    assert_eq!(
+        completed["data"]["completed_record"]["event"]["payload"]["subject"]["subject_digest"],
+        objective_record_digest
+    );
+
+    fs::write(
+        consumer.app.join("README.md"),
+        "governed edit after discover-intent completion\n",
+    )
+    .expect("governed edit after completion");
+    let after_edit = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(
+        after_edit["data"]["selected_policy_ref"], "policy.workflow.domain-scan",
+        "ordinary project edits must not reopen an objective-anchored completion"
+    );
 }
 
 #[test]
-fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_restart() {
+fn cooperative_objective_grounding_survives_restart_and_local_writes() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
     let next = assert_ok(&consumer.run(&["next"]));
@@ -1227,13 +1323,13 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
         .expect("cooperative objective packet")
         .to_owned();
     let objective = consumer.write_json(
-        "cooperative evidence objective.json",
+        "cooperative grounding objective.json",
         &serde_json::json!({
             "kind": "unambiguous",
             "proposal": {
-                "outcome": "Admit honest same-owner representative evidence",
+                "outcome": "Keep accepted solo intent stable while the agent updates local diagnostics",
                 "constraints": ["remain host neutral"],
-                "unacceptable_outcomes": ["claim independent review"],
+                "unacceptable_outcomes": ["claim verified human origin"],
                 "open_uncertainties": []
             },
             "carrying_principal": "principal.agent.cli-e2e",
@@ -1241,103 +1337,43 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
                 "host_id": "host.cli-e2e",
                 "host_version": "test",
                 "session_ref": "session.cli-e2e",
-                "interaction_ref": "turn.evidence",
+                "interaction_ref": "turn.grounding",
                 "conversation_digest": format!("sha256:{}", "d".repeat(64)),
                 "observed_at_unix": 1
             }
         }),
     );
-    assert_ok(&run_cooperative_input(
+    let accepted = assert_ok(&run_cooperative_input(
         &consumer,
         &packet_digest,
         &objective,
     ));
+    let objective_record_digest = accepted["data"]["objective_record"]["record_digest"]
+        .as_str()
+        .expect("accepted objective record digest")
+        .to_owned();
 
     fs::create_dir_all(consumer.app.join(".local")).expect("create local-only state directory");
     fs::write(
         consumer.app.join(".local/resume.json"),
         "first local-only resume report\n",
     )
-    .expect("write local-only resume report before evidence admission");
+    .expect("write local-only resume report");
 
-    let next = assert_ok(&consumer.run(&["next"]));
-    let packet = &next["data"]["cooperative_evidence_action_packet"];
+    let grounded = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(grounded["data"]["status"], "ready_to_complete");
+    assert!(grounded["data"]["cooperative_evidence_action_packet"].is_null());
+    assert!(grounded["data"]["cooperative_evidence_action_gap"].is_null());
     assert_eq!(
-        packet["argv"],
-        serde_json::json!([
-            "forge-core",
-            "workflow",
-            "evidence",
-            "admit-cooperative",
-            "--root",
-            ".",
-            "--input-file",
-            "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}",
-            "--json"
-        ])
+        grounded["data"]["simulation"]["candidate_claim_results"][0]["accepted_grounding_refs"],
+        serde_json::json!([format!("cooperative-objective:{objective_record_digest}")])
     );
-    assert_eq!(packet["input_file_must_be_outside_project_snapshot"], true);
-    assert_eq!(
-        packet["route"]["policy_ref"],
-        "policy.workflow.discover-intent"
-    );
-    assert_eq!(packet["route"]["source_provider"], "authorized_human");
-    assert_eq!(packet["route"]["provider"], "repository_inspector");
-    assert_eq!(packet["kernel_derived_outcome"], "pass");
-    let mut offer = packet["offer_template"].clone();
-    offer["offer_id"] = serde_json::json!("offer.cli-e2e.pass");
-    let input = consumer.write_json("cooperative evidence offer.json", &offer);
-    let admitted = assert_ok(&run_cooperative_evidence(&consumer, &input));
-    assert_eq!(
-        admitted["data"]["event"]["type"],
-        "cooperative_evidence_observed"
-    );
-    assert_eq!(
-        admitted["data"]["event"]["payload"]["disposition"],
-        "admitted"
-    );
-    assert_eq!(
-        admitted["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
-        "pass"
-    );
+    let supporting_snapshot = grounded["data"]["snapshot_digest"].clone();
 
     let restarted = assert_ok(&consumer.run(&["resume", "--full"]));
-    let audit = restarted["data"]["cooperative_evidence"]
-        .as_array()
-        .expect("cooperative evidence audit");
-    assert_eq!(audit.len(), 1);
-    assert_eq!(audit[0]["current_status"], "supporting");
-    let valid_through = audit[0]["valid_through_unix"]
-        .as_u64()
-        .expect("supporting evidence validity");
-    assert!(
-        valid_through
-            >= admitted["data"]["event"]["payload"]["admitted_evidence"]
-                ["readback_observed_at_unix"]
-                .as_u64()
-                .expect("readback observation time")
-    );
-    assert!(
-        restarted["data"]["cooperative_evidence_action_packet"].is_null(),
-        "current supporting evidence must not offer another admission"
-    );
-    assert!(
-        restarted["data"]["cooperative_evidence_action_gap"].is_null(),
-        "current supporting evidence is satisfied, not a route gap"
-    );
-    assert!(audit[0]["proves"].as_array().is_some_and(|proofs| proofs
-        .iter()
-        .any(|proof| proof == "kernel_verified_project_state_readback")));
-    assert!(audit[0]["does_not_prove"]
-        .as_array()
-        .is_some_and(|limits| limits
-            .iter()
-            .any(|limit| limit == "independent_semantic_review")));
-    assert!(audit[0]["does_not_prove"]
-        .as_array()
-        .is_some_and(|limits| limits.iter().any(|limit| limit == "selected_source_claim")));
+    assert_eq!(restarted["data"]["status"], "ready_to_complete");
+    assert!(restarted["data"]["cooperative_evidence_action_packet"].is_null());
 
-    let supporting_snapshot = restarted["data"]["snapshot_digest"].clone();
     fs::write(
         consumer.app.join(".local/resume.json"),
         "updated local-only resume report\n",
@@ -1348,37 +1384,23 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
         local_updated["data"]["snapshot_digest"],
         supporting_snapshot
     );
-    let local_updated_audit = local_updated["data"]["cooperative_evidence"]
-        .as_array()
-        .expect("cooperative evidence after local-only update");
-    assert_eq!(local_updated_audit.len(), 1);
-    assert_eq!(local_updated_audit[0]["current_status"], "supporting");
-    assert!(
-        local_updated["data"]["cooperative_evidence_action_packet"].is_null(),
-        "local-only content changes must not rearm admission"
-    );
-    assert!(
-        local_updated["data"]["cooperative_evidence_action_gap"].is_null(),
-        "local-only content changes must not create a route gap"
-    );
+    assert_eq!(local_updated["data"]["status"], "ready_to_complete");
+    assert!(local_updated["data"]["cooperative_evidence_action_packet"].is_null());
 
     fs::write(
         consumer.app.join("README.md"),
         "consumer project snapshot changed\n",
     )
     .expect("change governed project snapshot");
-    let stale = assert_ok(&consumer.run(&["next"]));
-    let stale_audit = stale["data"]["cooperative_evidence"]
-        .as_array()
-        .expect("stale cooperative evidence audit");
-    assert_eq!(stale_audit.len(), 1);
-    assert_eq!(stale_audit[0]["current_status"], "stale");
-    assert!(stale_audit[0]["valid_through_unix"].is_null());
-    assert!(
-        stale["data"]["cooperative_evidence_action_packet"].is_object(),
-        "snapshot drift must rearm cooperative evidence"
+    let changed = assert_ok(&consumer.run(&["next"]));
+    assert_ne!(changed["data"]["snapshot_digest"], supporting_snapshot);
+    assert_eq!(changed["data"]["status"], "ready_to_complete");
+    assert_eq!(
+        changed["data"]["simulation"]["candidate_claim_results"][0]["accepted_grounding_refs"],
+        grounded["data"]["simulation"]["candidate_claim_results"][0]["accepted_grounding_refs"],
+        "project edits must not erase the still-active accepted objective"
     );
-    assert!(stale["data"]["cooperative_evidence_action_gap"].is_null());
+    assert!(changed["data"]["cooperative_evidence_action_packet"].is_null());
 }
 
 #[test]
@@ -1748,8 +1770,25 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
         .as_str()
         .expect("initial digest")
         .to_owned();
-    let material_packet = initial["data"]["next"]["authorization"]["objective_management_packet"]
-        ["packet_digest"]
+    let initial_completion_snapshot = initial["data"]["next"]["snapshot_digest"]
+        .as_str()
+        .expect("initial ready snapshot")
+        .to_owned();
+    assert_eq!(initial["data"]["next"]["status"], "ready_to_complete");
+    assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        &initial_completion_snapshot,
+        "--principal",
+        "principal.agent.cli-e2e",
+    ]));
+    let after_initial_completion = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(
+        after_initial_completion["data"]["selected_policy_ref"],
+        "policy.workflow.domain-scan"
+    );
+    let material_packet = after_initial_completion["data"]["authorization"]
+        ["objective_management_packet"]["packet_digest"]
         .as_str()
         .expect("material packet")
         .to_owned();
@@ -1793,8 +1832,45 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
         material["data"]["active_objective"]["revision_reason"],
         "The owner narrowed the immediate product direction"
     );
+    assert_eq!(
+        material["data"]["next"]["selected_policy_ref"], "policy.workflow.discover-intent",
+        "a new material objective must invalidate the completion bound to the prior revision"
+    );
+    assert_eq!(
+        material["data"]["next"]["status"], "ready_to_complete",
+        "the replacement objective itself must immediately reground discover-intent"
+    );
+    assert!(
+        material["data"]["next"]["cooperative_evidence_action_packet"].is_null(),
+        "a replacement objective must not create a redundant evidence step"
+    );
 
-    let clarification_packet = material["data"]["next"]["authorization"]
+    let material_record_digest = material["data"]["objective_record"]["record_digest"]
+        .as_str()
+        .expect("material objective record")
+        .to_owned();
+    let material_completion_snapshot = material["data"]["next"]["snapshot_digest"]
+        .as_str()
+        .expect("material completion snapshot")
+        .to_owned();
+    let material_completed = assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        &material_completion_snapshot,
+        "--principal",
+        "principal.agent.cli-e2e",
+    ]));
+    assert_eq!(
+        material_completed["data"]["completed_record"]["event"]["payload"]
+            ["grounding_anchor_digests"],
+        serde_json::json!([material_record_digest])
+    );
+    let after_material_completion = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(
+        after_material_completion["data"]["selected_policy_ref"],
+        "policy.workflow.domain-scan"
+    );
+    let clarification_packet = after_material_completion["data"]["authorization"]
         ["objective_management_packet"]["packet_digest"]
         .as_str()
         .expect("clarification packet")
@@ -1838,6 +1914,11 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
             .expect("constraints")
             .iter()
             .any(|value| value == "use focused verification per ticket")
+    );
+    assert_eq!(
+        clarified["data"]["next"]["selected_policy_ref"],
+        "policy.workflow.domain-scan",
+        "a non-material clarification must preserve the material anchor and not reopen discover-intent"
     );
 
     let before_stale = state_tree_snapshot(&consumer.state);
@@ -2494,7 +2575,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     let ready = assert_ok(&consumer.run(&["next"]));
     assert_eq!(ready["data"]["status"], "ready_to_complete");
     let resumed_ready = assert_ok(&consumer.run(&["resume", "--full"]));
-    assert_eq!(resumed_ready["data"], ready["data"]);
+    assert_full_resume_preserves_next(&resumed_ready, &ready, "strict_external");
 
     let completion_snapshot = required_str(&ready["data"], "snapshot_digest").to_owned();
     assert_ok(&consumer.run(&[
@@ -2512,7 +2593,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     );
     assert_eq!(applicability["data"]["status"], "applicability_required");
     let resumed_applicability = assert_ok(&consumer.run(&["resume", "--full"]));
-    assert_eq!(resumed_applicability["data"], applicability["data"]);
+    assert_full_resume_preserves_next(&resumed_applicability, &applicability, "strict_external");
 
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
     let applicability_packet = action_packet(&packet_set, "applicability");
@@ -2551,7 +2632,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
                 .any(|action| action["kind"] == "acquire_capability"))
     );
     let resumed_gap = assert_ok(&consumer.run(&["resume", "--full"]));
-    assert_eq!(resumed_gap["data"], capability_gap["data"]);
+    assert_full_resume_preserves_next(&resumed_gap, &capability_gap, "strict_external");
 }
 
 #[test]

@@ -16,11 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.10` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.11` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Fixed
+- **An accepted Solo Cooperative objective now grounds the first discovery step directly.** Forge no longer asks a solo owner and agent to resubmit the already accepted project direction as weaker evidence. The typed `cooperative_same_owner` grounding is durable project state, not an evaluator observation, proof of human authorship, or independent review. It stays current only while its exact material objective anchor is in the active receipt window and has not been revoked; an exact idempotent objective retry, a policy-equivalent release transition, and a non-material clarification preserve that anchor, while a material supersession reopens discovery on a new anchor and `invalidate_all` requires a new material acceptance. Completion binds the exact grounding anchor instead of the repository snapshot, so later project edits do not reopen discovery. `strict_external` remains broker-backed and unchanged.
 - **Local dogfood reports no longer invalidate current solo evidence.** Workflow
   evidence snapshots now omit only an already-existing top-level .local
   directory, so updating local reports does not stale accepted evidence. The

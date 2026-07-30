@@ -98,6 +98,7 @@ fn governance_input(
                 decision_need_refs: Vec::new(),
                 resolved_decision_refs: Vec::new(),
                 waivers: Vec::new(),
+                groundings: Vec::new(),
                 evidence: Vec::new(),
                 completion_assertion: WorkflowCompletionAssertion::NotAsserted,
             },

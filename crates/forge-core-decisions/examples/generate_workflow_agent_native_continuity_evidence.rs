@@ -916,6 +916,7 @@ fn evaluation(
                     .collect()
             },
             waivers: Vec::new(),
+            groundings: Vec::new(),
             evidence,
             completion_assertion,
         },

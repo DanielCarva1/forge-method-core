@@ -1118,6 +1118,10 @@ pub struct PolicyCompletedEvent {
     pub subject: WorkflowEvidenceSubject,
     pub dependency_receipt_digests: Vec<String>,
     pub evidence_receipt_digests: Vec<String>,
+    /// Exact durable state anchors used for non-evidence grounding. Historical
+    /// records omit this field and remain snapshot-bound.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grounding_anchor_digests: Vec<String>,
     pub unresolved_deferred_obligation_refs: Vec<StableId>,
     pub unresolved_deferred_capability_refs: Vec<StableId>,
     pub completed_at_unix: u64,
@@ -1180,9 +1184,39 @@ pub struct WorkflowGovernanceEvaluation {
     pub resolved_decision_refs: Vec<StableId>,
     #[serde(default)]
     pub waivers: Vec<WorkflowClaimWaiverObservation>,
+    /// Typed state grounding supplied by a trusted adapter. In raw evaluation
+    /// documents this remains simulation-only, just like caller-authored
+    /// evidence; it becomes authoritative only after kernel derivation from a
+    /// current, non-revoked ledger anchor.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groundings: Vec<WorkflowClaimGroundingObservation>,
     #[serde(default)]
     pub evidence: Vec<WorkflowEvidenceObservation>,
     pub completion_assertion: WorkflowCompletionAssertion,
+}
+
+/// A claim grounded by current durable project direction rather than by an
+/// evaluator observation. Grounding carries no human-origin, independent
+/// review, or evaluator-provider assertion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowClaimGroundingObservation {
+    pub grounding_ref: String,
+    pub claim_ref: StableId,
+    pub kind: WorkflowClaimGroundingKind,
+    pub anchor_record_digest: String,
+    #[serde(default)]
+    pub principal: Option<PrincipalId>,
+    pub authority_basis: WorkflowCooperativeAuthorityBasis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowClaimGroundingKind {
+    /// The same owner and carrying agent asserted that the objective was
+    /// unambiguous enough to guide work. This is not independent semantic
+    /// review and does not verify that a human authored the text.
+    CooperativeSameOwnerObjective,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
