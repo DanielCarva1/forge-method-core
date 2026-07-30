@@ -165,6 +165,7 @@ pub enum AgentAutonomyWork {
 }
 
 impl AgentAutonomyWork {
+    #[must_use]
     pub fn summary(&self) -> &str {
         match self {
             Self::AgentOwned { summary, .. } | Self::HumanDecision { summary, .. } => summary,

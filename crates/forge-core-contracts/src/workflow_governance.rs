@@ -472,6 +472,7 @@ pub enum WorkflowCooperativeObjectiveRevisionKind {
     NonMaterialClarification,
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde's predicate API passes the field by reference.
 fn cooperative_revision_kind_is_initial(value: &WorkflowCooperativeObjectiveRevisionKind) -> bool {
     *value == WorkflowCooperativeObjectiveRevisionKind::Initial
 }

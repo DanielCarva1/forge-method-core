@@ -3857,7 +3857,7 @@ fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, PromotionPreviewEr
                 path: path.to_path_buf(),
                 source: error.to_string(),
             })?;
-    if !opened_metadata.is_file() || !metadata_has_single_link(&opened_metadata) {
+    if !opened_metadata.is_file() || !metadata_has_single_link(&file, &opened_metadata) {
         return Err(PromotionPreviewError::IsolationDocument {
             path: path.to_path_buf(),
             source: "opened document must be a single-link no-follow regular file".to_owned(),
@@ -3890,7 +3890,7 @@ fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, PromotionPreviewEr
                 path: path.to_path_buf(),
                 source: format!("document changed during retained read: {error}"),
             })?;
-    if !same_file_identity(&opened_metadata, &reopened_metadata) {
+    if !same_file_identity(&file, &opened_metadata, &reopened, &reopened_metadata) {
         return Err(PromotionPreviewError::IsolationDocument {
             path: path.to_path_buf(),
             source: "document identity changed during retained read".to_owned(),
@@ -3900,38 +3900,227 @@ fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, PromotionPreviewEr
 }
 
 #[cfg(unix)]
-fn metadata_has_single_link(metadata: &std::fs::Metadata) -> bool {
+fn metadata_has_single_link(_file: &File, metadata: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     metadata.nlink() == 1
 }
 
 #[cfg(windows)]
-fn metadata_has_single_link(metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    metadata.number_of_links() == Some(1)
+fn metadata_has_single_link(file: &File, _metadata: &std::fs::Metadata) -> bool {
+    matches!(windows_file_link_count(file), Ok(1))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn metadata_has_single_link(_metadata: &std::fs::Metadata) -> bool {
+fn metadata_has_single_link(_file: &File, _metadata: &std::fs::Metadata) -> bool {
     true
 }
 
 #[cfg(unix)]
-fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+fn same_file_identity(
+    _left_file: &File,
+    left: &std::fs::Metadata,
+    _right_file: &File,
+    right: &std::fs::Metadata,
+) -> bool {
     use std::os::unix::fs::MetadataExt as _;
     left.dev() == right.dev() && left.ino() == right.ino()
 }
 
 #[cfg(windows)]
-fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt as _;
-    left.volume_serial_number() == right.volume_serial_number()
-        && left.file_index() == right.file_index()
+fn same_file_identity(
+    left_file: &File,
+    _left: &std::fs::Metadata,
+    right_file: &File,
+    _right: &std::fs::Metadata,
+) -> bool {
+    match (
+        windows_file_identity(left_file),
+        windows_file_identity(right_file),
+    ) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
-fn same_file_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+fn same_file_identity(
+    _left_file: &File,
+    left: &std::fs::Metadata,
+    _right_file: &File,
+    right: &std::fs::Metadata,
+) -> bool {
     left.len() == right.len() && left.modified().ok() == right.modified().ok()
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WindowsFileIdentity {
+    volume_serial: u64,
+    file_id: [u8; 16],
+}
+
+#[cfg(windows)]
+fn windows_file_identity(file: &File) -> std::io::Result<WindowsFileIdentity> {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle as _;
+
+    const FILE_ID_INFO_CLASS: i32 = 18;
+
+    #[repr(C)]
+    struct FileIdInformation {
+        volume_serial: u64,
+        file_id: [u8; 16],
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetFileInformationByHandleEx(
+            file: *mut c_void,
+            information_class: i32,
+            information: *mut c_void,
+            information_size: u32,
+        ) -> i32;
+    }
+
+    let mut information = std::mem::MaybeUninit::<FileIdInformation>::uninit();
+    let information_size = u32::try_from(std::mem::size_of::<FileIdInformation>())
+        .expect("FILE_ID_INFO size fits in DWORD");
+    let result = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FILE_ID_INFO_CLASS,
+            information.as_mut_ptr().cast(),
+            information_size,
+        )
+    };
+    if result == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let information = unsafe { information.assume_init() };
+    Ok(WindowsFileIdentity {
+        volume_serial: information.volume_serial,
+        file_id: information.file_id,
+    })
+}
+
+#[cfg(windows)]
+fn windows_file_link_count(file: &File) -> std::io::Result<u32> {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle as _;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+
+    #[repr(C)]
+    struct ByHandleFileInformation {
+        attributes: u32,
+        creation_time: FileTime,
+        access_time: FileTime,
+        write_time: FileTime,
+        volume_serial: u32,
+        size_high: u32,
+        size_low: u32,
+        links: u32,
+        index_high: u32,
+        index_low: u32,
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetFileInformationByHandle(
+            file: *mut c_void,
+            information: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+
+    let mut information = std::mem::MaybeUninit::<ByHandleFileInformation>::uninit();
+    let result =
+        unsafe { GetFileInformationByHandle(file.as_raw_handle(), information.as_mut_ptr()) };
+    if result == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let information = unsafe { information.assume_init() };
+    Ok(information.links)
+}
+
+#[cfg(all(test, windows))]
+mod windows_file_identity_tests {
+    use super::{metadata_has_single_link, same_file_identity};
+    use std::fs::{self, File};
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn create(test_name: &str) -> Self {
+            let id = NEXT_DIRECTORY_ID.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "forge-promotion-{test_name}-{}-{id}",
+                std::process::id()
+            ));
+            fs::create_dir(&path).expect("create isolated Windows test directory");
+            Self(path)
+        }
+
+        fn join(&self, path: impl AsRef<Path>) -> PathBuf {
+            self.0.join(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn regular_file_has_single_link() {
+        let directory = TestDirectory::create("single-link");
+        let path = directory.join("document.json");
+        fs::write(&path, b"{}\n").expect("write regular file");
+        let file = File::open(&path).expect("open regular file");
+        let metadata = file.metadata().expect("read regular file metadata");
+
+        assert!(metadata_has_single_link(&file, &metadata));
+    }
+
+    #[test]
+    fn hard_link_is_not_single_link() {
+        let directory = TestDirectory::create("hard-link");
+        let path = directory.join("document.json");
+        let alias = directory.join("document-alias.json");
+        fs::write(&path, b"{}\n").expect("write regular file");
+        fs::hard_link(&path, alias).expect("create hard link");
+        let file = File::open(&path).expect("open hard-linked file");
+        let metadata = file.metadata().expect("read hard-linked file metadata");
+
+        assert!(!metadata_has_single_link(&file, &metadata));
+    }
+
+    #[test]
+    fn separate_handles_for_same_file_have_equal_identity() {
+        let directory = TestDirectory::create("same-identity");
+        let path = directory.join("document.json");
+        fs::write(&path, b"{}\n").expect("write regular file");
+        let left = File::open(&path).expect("open first handle");
+        let right = File::open(&path).expect("open second handle");
+        let left_metadata = left.metadata().expect("read first handle metadata");
+        let right_metadata = right.metadata().expect("read second handle metadata");
+
+        assert!(same_file_identity(
+            &left,
+            &left_metadata,
+            &right,
+            &right_metadata
+        ));
+    }
 }
 
 fn canonical_directory(path: &Path, field: &'static str) -> Result<PathBuf, PromotionPreviewError> {
