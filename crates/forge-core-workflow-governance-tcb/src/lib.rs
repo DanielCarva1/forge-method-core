@@ -3977,6 +3977,22 @@ fn validate_cooperative_evidence_event(
     validate_cooperative_evidence_shape(event, Some(line))
 }
 
+fn cooperative_source_basis_path_is_normalized(path: &str) -> bool {
+    let mut components = path.split('/');
+    let Some(first) = components.next() else {
+        return false;
+    };
+    !path.starts_with('/')
+        && !path.starts_with('\\')
+        && !path.contains('\\')
+        && !first.is_empty()
+        && !matches!(
+            first,
+            "." | ".." | ".git" | ".forge-method" | "target" | "node_modules"
+        )
+        && components.all(|component| !component.is_empty() && !matches!(component, "." | ".."))
+}
+
 fn validate_cooperative_evidence_shape(
     event: &WorkflowCooperativeEvidenceObservedEvent,
     line: Option<usize>,
@@ -4040,26 +4056,67 @@ fn validate_cooperative_evidence_shape(
                 admitted.producer.0.as_str(),
                 admitted.subject.subject_ref.as_str(),
             ];
+            let legacy_shape = admitted.policy_version
+                == forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1
+                && admitted.claim_descriptor_version
+                    == forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1
+                && admitted.scenario_kind
+                    == forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
+                && admitted.source_assessment.is_none()
+                && admitted.outcome == forge_core_contracts::WorkflowEvidenceOutcome::Pass;
+            let source_shape = admitted.policy_version
+                == forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION
+                && admitted.claim_descriptor_version
+                    == forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+                && admitted.scenario_kind
+                    == forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::AgentRepositoryInspectionWithContentAddressedBasis
+                && admitted.source_assessment.as_ref().is_some_and(|assessment| {
+                    let text_is_bounded = !assessment.summary.trim().is_empty()
+                        && assessment.summary.len()
+                            <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                        && assessment.limitations.len()
+                            <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_LIMITATIONS
+                        && assessment.limitations.iter().all(|limitation| {
+                            !limitation.trim().is_empty()
+                                && limitation.len()
+                                    <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                        });
+                    let basis_is_bounded = !assessment.basis.is_empty()
+                        && assessment.basis.len()
+                            <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
+                        && assessment.basis.windows(2).all(|pair| {
+                            pair[0].subject_ref < pair[1].subject_ref
+                                || (pair[0].subject_ref == pair[1].subject_ref
+                                    && pair[0].subject_digest < pair[1].subject_digest)
+                        })
+                        && assessment.basis.iter().all(|reference| {
+                            cooperative_source_basis_path_is_normalized(&reference.subject_ref)
+                                && reference.subject_ref.len()
+                                    <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                                && is_lower_sha256(&reference.subject_digest)
+                        })
+                        && is_lower_sha256(&assessment.basis_digest)
+                        && to_canonical_json(&assessment.basis).is_ok_and(|canonical| {
+                            format_sha256(Sha256::digest(canonical)) == assessment.basis_digest
+                        });
+                    text_is_bounded
+                        && basis_is_bounded
+                        && admitted.outcome == assessment.outcome
+                });
             if text_fields.iter().any(|value| {
                 value.trim().is_empty()
                     || value.len()
                         > forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
             }) || admitted.offer_digest != event.offer_digest
                 || event.offer_id.as_ref() != Some(&admitted.offer_id)
-                || admitted.policy_version
-                    != forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION
-                || admitted.claim_descriptor_version
-                    != forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+                || (!legacy_shape && !source_shape)
                 || binding.objective_revision == 0
                 || binding.assurance_epoch == 0
                 || binding.accepted_objective_record_sequence == 0
                 || admitted.execution_observed_at_unix != event.observed_at_unix
                 || admitted.readback_observed_at_unix != event.observed_at_unix
-                || admitted.outcome != forge_core_contracts::WorkflowEvidenceOutcome::Pass
                 || admitted.subject.kind
                     != forge_core_contracts::WorkflowEvidenceSubjectKind::ProjectSnapshot
-                || admitted.scenario_kind
-                    != forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
             {
                 return Err(WorkflowGovernanceLedgerError::CooperativeEvidenceInvalid {
                     line,

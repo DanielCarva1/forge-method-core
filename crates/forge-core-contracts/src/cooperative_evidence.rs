@@ -5,21 +5,33 @@
 //! resistance, human presence, or compliance authority.
 
 use crate::{
-    PrincipalId, StableId, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
-    WorkflowEvidenceOutcome, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind,
+    PrincipalId, StableId, WorkflowContentAddressedReference, WorkflowEvaluatorProvider,
+    WorkflowEvidenceKind, WorkflowEvidenceOutcome, WorkflowEvidenceStrength,
+    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION: &str = "cooperative_evidence_offer_v1";
-pub const COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION: &str =
+pub const COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1: &str = "cooperative_evidence_offer_v1";
+pub const COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1: &str =
     "cooperative_evidence_attestation_v1";
-pub const SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION: &str = "solo_cooperative_project_snapshot_v1";
-pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION: &str =
+pub const SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1: &str =
+    "solo_cooperative_project_snapshot_v1";
+pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1: &str =
     "solo_cooperative_project_snapshot_claim_v1";
+pub const COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION: &str = "cooperative_evidence_offer_v2";
+pub const COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION: &str =
+    "cooperative_evidence_attestation_v2";
+pub const SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION: &str =
+    "solo_cooperative_repository_inspection_v1";
+pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION: &str =
+    "solo_cooperative_repository_source_claim_v1";
 pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_INPUT_BYTES: usize = 128 * 1024;
-pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES: usize = 512;
+pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES: usize = 2 * 1024;
+pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS: usize = 16;
+pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES: usize = 1024 * 1024;
+pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_TOTAL_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_WORKFLOW_COOPERATIVE_EVIDENCE_LIMITATIONS: usize = 16;
 
 /// Exact current coordinates published by `workflow next` and rechecked by the
 /// kernel immediately before append.
@@ -67,12 +79,35 @@ pub struct WorkflowCooperativeEvidenceRoute {
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowCooperativeEvidenceAssuranceEffect {
     CooperativeClaimOnlyDoesNotSatisfySourceClaim,
+    SoloSourceClaimSatisfiedByAgentInspection,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowCooperativeMaterialScenarioKind {
     KernelProjectSnapshotReadback,
+    AgentRepositoryInspectionWithContentAddressedBasis,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeSourceAssessmentOffer {
+    pub outcome: WorkflowEvidenceOutcome,
+    pub summary: String,
+    pub basis_paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowAdmittedCooperativeSourceAssessment {
+    pub outcome: WorkflowEvidenceOutcome,
+    pub summary: String,
+    pub basis: Vec<WorkflowContentAddressedReference>,
+    pub basis_digest: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
 }
 
 /// Closed same-owner statement carried in the offer. The kernel derives the
@@ -93,6 +128,8 @@ pub struct WorkflowCooperativeEvidenceAttestation {
     pub subject: WorkflowEvidenceSubject,
     pub scenario_kind: WorkflowCooperativeMaterialScenarioKind,
     pub scenario_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_assessment: Option<WorkflowCooperativeSourceAssessmentOffer>,
 }
 
 /// Agent-produced offer. `offer_id` is the idempotency key; reusing it for
@@ -129,6 +166,7 @@ pub enum WorkflowCooperativeEvidenceRejection {
     FabricatedOrMalformedReceipt,
     EvidenceExpired,
     ConflictingIdempotencyKey,
+    InvalidAssessmentBasis,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -136,6 +174,7 @@ pub enum WorkflowCooperativeEvidenceRejection {
 pub enum WorkflowCooperativeEvidenceCurrentStatus {
     Supporting,
     Disproving,
+    Inconclusive,
     Stale,
     Rejected,
 }
@@ -146,6 +185,8 @@ pub enum WorkflowCooperativeEvidenceProof {
     SoloCooperativeClaimSatisfied,
     KernelExecutedProjectSnapshotScenario,
     KernelVerifiedProjectStateReadback,
+    SoloSourceClaimSatisfiedByAgentInspection,
+    KernelVerifiedContentAddressedBasis,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -158,6 +199,7 @@ pub enum WorkflowCooperativeEvidenceNonProof {
     EnterpriseCompliance,
     SelectedSourceClaim,
     SelectedRepresentativeRuntimeClaim,
+    IndependentRepositoryInspection,
 }
 
 /// Bounded normalized content retained only for admitted offers.
@@ -178,6 +220,8 @@ pub struct WorkflowAdmittedCooperativeEvidence {
     pub subject: WorkflowEvidenceSubject,
     pub scenario_kind: WorkflowCooperativeMaterialScenarioKind,
     pub scenario_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_assessment: Option<WorkflowAdmittedCooperativeSourceAssessment>,
     pub outcome: WorkflowEvidenceOutcome,
     pub execution_observed_at_unix: u64,
     pub readback_observed_at_unix: u64,

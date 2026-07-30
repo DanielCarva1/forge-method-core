@@ -12,15 +12,16 @@ use forge_core_authority::{
     WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    workflow_broker_expected_audience, GovernedPromotionReceipt, PhaseAdvancedEvent, PrincipalId,
-    ProjectImportedEvent, RuntimeKind, StableId, WorkflowBrokerBoundOperation,
-    WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
-    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
-    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
-    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
-    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
-    WorkflowGovernanceEvent, WorkflowGovernanceReceiptDocument,
-    WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+    workflow_broker_expected_audience, GovernedPromotionReceipt, PhaseAdvancedEvent,
+    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ReadinessTarget, RuntimeKind,
+    StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
+    WorkflowBrokerCredentialPurpose, WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind,
+    WorkflowBrokerHostBinding, WorkflowBrokerHostInteractionKind,
+    WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
+    WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
+    WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
+    WorkflowGovernanceReceiptDocument, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerIdentity,
@@ -210,6 +211,87 @@ fn replace_with_legacy_profileless_genesis(consumer: &Consumer) {
             }),
         )
         .expect("write canonical profile-less genesis");
+}
+
+fn upgrade_to_latest(consumer: &Consumer) {
+    for _ in 0..8 {
+        let status = assert_ok(&consumer.run(&["release-status"]));
+        if status["data"]["available_successor"].is_null() {
+            assert_eq!(
+                status["data"]["active"]["release"]["release_id"],
+                "workflow-governance.release.universal-assurance-v0"
+            );
+            return;
+        }
+        let argv = status["data"]["upgrade_argv"]
+            .as_array()
+            .expect("release upgrade argv");
+        assert_ok(&execute_structured_argv(argv));
+    }
+    panic!("release chain did not converge");
+}
+
+fn append_test_policy_completion(consumer: &Consumer, next: &Value) {
+    let mut ledger =
+        lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock fixture ledger");
+    let projection = ledger.recover().expect("recover fixture ledger");
+    let head = projection.head_digest.clone().expect("fixture head");
+    let identity = projection
+        .active_identity()
+        .expect("fixture identity")
+        .clone();
+    let policy_ref = StableId(
+        next["data"]["selected_policy_ref"]
+            .as_str()
+            .expect("selected policy")
+            .to_owned(),
+    );
+    let target: ReadinessTarget =
+        serde_json::from_value(next["data"]["target"].clone()).expect("typed readiness target");
+    let snapshot = next["data"]["snapshot_digest"]
+        .as_str()
+        .expect("snapshot")
+        .to_owned();
+    ledger
+        .append_unchecked_tcb_event(
+            &head,
+            &identity,
+            projection.next_state_version,
+            WorkflowGovernanceEvent::PolicyCompleted(PolicyCompletedEvent {
+                policy_ref,
+                target,
+                phase: StableId(
+                    next["data"]["current_phase"]
+                        .as_str()
+                        .expect("phase")
+                        .to_owned(),
+                ),
+                snapshot_digest: snapshot.clone(),
+                ledger_head_digest: head.clone(),
+                subject: forge_core_contracts::WorkflowEvidenceSubject {
+                    kind: WorkflowEvidenceSubjectKind::ProjectSnapshot,
+                    subject_ref: "project.current_snapshot".to_owned(),
+                    subject_digest: snapshot,
+                },
+                dependency_receipt_digests: Vec::new(),
+                evidence_receipt_digests: Vec::new(),
+                unresolved_deferred_obligation_refs: Vec::new(),
+                unresolved_deferred_capability_refs: Vec::new(),
+                completed_at_unix: 1,
+            }),
+        )
+        .expect("append fixture-only policy completion");
+}
+
+fn advance_fixture_to_policy(consumer: &Consumer, target_policy: &str) -> Value {
+    for _ in 0..80 {
+        let next = assert_ok(&consumer.run(&["next"]));
+        if next["data"]["selected_policy_ref"] == target_policy {
+            return next;
+        }
+        append_test_policy_completion(consumer, &next);
+    }
+    panic!("fixture did not reach {target_policy}");
 }
 
 fn execute_structured_argv(argv: &[Value]) -> Output {
@@ -1267,6 +1349,331 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
     assert!(stale["data"]["cooperative_evidence_action_gap"].is_null());
 }
 
+#[test]
+#[allow(clippy::too_many_lines)]
+fn internal_fixture_reaches_investigation_then_public_solo_source_command_supersedes_assessments() {
+    let strict = Consumer::new_with_prefix("forge-workflow-strict-source-e2e");
+    let strict_initialized =
+        assert_ok(&strict.run(&["init", "--readiness-profile", "strict_external"]));
+    assert_eq!(
+        strict_initialized["data"]["readiness_profile"],
+        "strict_external"
+    );
+    let strict_next = assert_ok(&strict.run(&["next"]));
+    assert!(strict_next["data"]["cooperative_evidence_action_packet"].is_null());
+
+    let consumer = Consumer::new_with_prefix("forge-workflow-solo-source-e2e");
+    let initialized = assert_ok(&consumer.run(&["init"]));
+    assert_eq!(initialized["data"]["readiness_profile"], "solo_cooperative");
+    upgrade_to_latest(&consumer);
+
+    let objective_next = assert_ok(&consumer.run(&["next"]));
+    assert!(objective_next["data"]["authorization"]["setup_gaps"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert_eq!(
+        objective_next["data"]["authorization"]["action_packets"][0]["required_authority"]
+            ["approval_boundary"],
+        "cooperative_same_owner"
+    );
+    let packet_digest = objective_next["data"]["authorization"]["action_packets"][0]
+        ["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "source evidence objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Use agent inspection as honest solo evidence",
+                "constraints": ["keep external authority optional"],
+                "unacceptable_outcomes": ["claim independent review"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.source-e2e",
+            "host_provenance": {
+                "host_id": "host.source-e2e",
+                "host_version": "test",
+                "session_ref": "session.source-e2e",
+                "interaction_ref": "turn.source-e2e",
+                "conversation_digest": format!("sha256:{}", "e".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+
+    // The fixture advances prior policies only. Every source assessment below
+    // is submitted through the public CLI against the selected investigation policy.
+    let mut next = advance_fixture_to_policy(&consumer, "policy.workflow.investigation");
+    let claim_count = next["data"]["simulation"]["candidate_claim_results"]
+        .as_array()
+        .expect("investigation claims")
+        .len();
+    assert_eq!(claim_count, 4);
+
+    for (relative, contents) in [
+        (".git/HEAD", "ref: refs/heads/main\n"),
+        (".forge-method/state.json", "{}\n"),
+        ("target/output.txt", "generated\n"),
+        ("node_modules/pkg/index.js", "module.exports = {};\n"),
+    ] {
+        let path = consumer.app.join(relative);
+        fs::create_dir_all(path.parent().expect("excluded basis parent"))
+            .expect("create excluded basis parent");
+        fs::write(path, contents).expect("write excluded basis fixture");
+    }
+    next = assert_ok(&consumer.run(&["next"]));
+
+    for (suffix, basis_path) in [
+        ("escape", "../README.md"),
+        ("missing", "docs/does-not-exist.md"),
+        ("git", ".git/HEAD"),
+        ("state", ".forge-method/state.json"),
+        ("target", "target/output.txt"),
+        ("dependencies", "node_modules/pkg/index.js"),
+    ] {
+        let mut invalid_offer =
+            next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+        invalid_offer["offer_id"] = serde_json::json!(format!("offer.source-e2e.{suffix}"));
+        invalid_offer["attestation"]["source_assessment"] = serde_json::json!({
+            "outcome": "pass",
+            "summary": "This assessment must be rejected because its basis is invalid",
+            "basis_paths": [basis_path],
+            "limitations": []
+        });
+        let input = consumer.write_json(
+            &format!("invalid source evidence {suffix}.json"),
+            &invalid_offer,
+        );
+        let rejected_output = run_cooperative_evidence(&consumer, &input);
+        assert_eq!(rejected_output.status.code(), Some(2));
+        let rejected = json(&rejected_output);
+        assert_eq!(rejected["ok"], false);
+        assert_eq!(
+            rejected["data"]["event"]["payload"]["disposition"],
+            "rejected"
+        );
+        assert_eq!(
+            rejected["data"]["event"]["payload"]["rejection"],
+            "invalid_assessment_basis"
+        );
+        next = assert_ok(&consumer.run(&["next"]));
+        assert!(next["data"]["cooperative_evidence_action_packet"].is_object());
+    }
+
+    let failing_packet = &next["data"]["cooperative_evidence_action_packet"];
+    let first_claim_ref = failing_packet["route"]["claim_ref"]
+        .as_str()
+        .expect("selected source claim")
+        .to_owned();
+    assert_eq!(failing_packet["route"]["kind"], "artifact_inspection");
+    assert_eq!(failing_packet["route"]["strength"], "inspected_artifact");
+    let mut failing_offer = failing_packet["offer_template"].clone();
+    failing_offer["offer_id"] = serde_json::json!("offer.source-e2e.fail");
+    failing_offer["attestation"]["source_assessment"] = serde_json::json!({
+        "outcome": "fail",
+        "summary": "The selected claim is not supported by the inspected artifact",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner agent inspection, not independent review"]
+    });
+    let failing_input = consumer.write_json("failing source evidence.json", &failing_offer);
+    let admitted_failure = assert_ok(&run_cooperative_evidence(&consumer, &failing_input));
+    assert_eq!(
+        admitted_failure["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
+        "fail"
+    );
+    next = assert_ok(&consumer.run(&["next"]));
+    let failure_audit = next["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("source audit")
+        .iter()
+        .find(|audit| audit["admitted_evidence"]["offer_id"] == "offer.source-e2e.fail")
+        .expect("failure audit");
+    assert_eq!(failure_audit["current_status"], "disproving");
+    assert_eq!(
+        failure_audit["does_not_satisfy_source_claim_ref"],
+        first_claim_ref
+    );
+    assert!(failure_audit["supports_cooperative_claim_ref"].is_null());
+    assert!(failure_audit["proves"].as_array().is_some_and(|proofs| {
+        proofs.len() == 1 && proofs[0] == "kernel_verified_content_addressed_basis"
+    }));
+    assert!(next["data"]["cooperative_evidence_action_packet"].is_object());
+
+    // A rejected event cannot supersede the latest admitted source assessment.
+    let mut rejected_after_failure =
+        next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+    rejected_after_failure["offer_id"] = serde_json::json!("offer.source-e2e.rejected-after-fail");
+    rejected_after_failure["attestation"]["source_assessment"] = serde_json::json!({
+        "outcome": "pass",
+        "summary": "Rejected traversal must not hide the admitted failure",
+        "basis_paths": ["../README.md"],
+        "limitations": []
+    });
+    let rejected_after_failure_input = consumer.write_json(
+        "rejected source evidence after fail.json",
+        &rejected_after_failure,
+    );
+    assert_eq!(
+        run_cooperative_evidence(&consumer, &rejected_after_failure_input)
+            .status
+            .code(),
+        Some(2)
+    );
+    next = assert_ok(&consumer.run(&["next"]));
+    let failure_after_rejection = next["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("source audit after rejection")
+        .iter()
+        .find(|audit| audit["admitted_evidence"]["offer_id"] == "offer.source-e2e.fail")
+        .expect("failure remains auditable");
+    assert_eq!(failure_after_rejection["current_status"], "disproving");
+
+    let mut pass_record_digests = Vec::new();
+    for index in 0..claim_count {
+        let packet = &next["data"]["cooperative_evidence_action_packet"];
+        assert_eq!(
+            packet["route"]["assurance_effect"],
+            "solo_source_claim_satisfied_by_agent_inspection"
+        );
+        assert_eq!(packet["route"]["source_provider"], "repository_inspector");
+        assert_eq!(packet["route"]["kind"], "artifact_inspection");
+        assert_eq!(packet["route"]["strength"], "inspected_artifact");
+        assert!(packet["kernel_derived_outcome"].is_null());
+
+        if index == 1 {
+            let mut inconclusive_offer = packet["offer_template"].clone();
+            inconclusive_offer["offer_id"] = serde_json::json!("offer.source-e2e.inconclusive");
+            inconclusive_offer["attestation"]["source_assessment"] = serde_json::json!({
+                "outcome": "inconclusive",
+                "summary": "The inspected artifact does not establish this claim yet",
+                "basis_paths": ["README.md"],
+                "limitations": ["insufficient repository evidence"]
+            });
+            let inconclusive_input =
+                consumer.write_json("inconclusive source evidence.json", &inconclusive_offer);
+            let admitted_inconclusive =
+                assert_ok(&run_cooperative_evidence(&consumer, &inconclusive_input));
+            assert_eq!(
+                admitted_inconclusive["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
+                "inconclusive"
+            );
+            next = assert_ok(&consumer.run(&["next"]));
+            let audit = next["data"]["cooperative_evidence"]
+                .as_array()
+                .expect("inconclusive audit")
+                .iter()
+                .find(|audit| {
+                    audit["admitted_evidence"]["offer_id"] == "offer.source-e2e.inconclusive"
+                })
+                .expect("inconclusive audit record");
+            assert_eq!(audit["current_status"], "inconclusive");
+            assert!(audit["does_not_satisfy_source_claim_ref"].is_string());
+            assert!(audit["supports_cooperative_claim_ref"].is_null());
+            assert!(audit["proves"].as_array().is_some_and(|proofs| {
+                proofs.len() == 1 && proofs[0] == "kernel_verified_content_addressed_basis"
+            }));
+        }
+
+        let packet = &next["data"]["cooperative_evidence_action_packet"];
+        let mut offer = packet["offer_template"].clone();
+        offer["offer_id"] = serde_json::json!(format!("offer.source-e2e.{index}"));
+        offer["attestation"]["source_assessment"] = serde_json::json!({
+            "outcome": "pass",
+            "summary": format!("Claim {index} is supported by the inspected project artifact"),
+            "basis_paths": ["README.md"],
+            "limitations": ["same-owner agent inspection, not independent review"]
+        });
+        let input = consumer.write_json(&format!("source evidence {index}.json"), &offer);
+        let admitted = assert_ok(&run_cooperative_evidence(&consumer, &input));
+        assert_eq!(
+            admitted["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
+            "pass"
+        );
+        assert!(
+            admitted["data"]["event"]["payload"]["admitted_evidence"]["source_assessment"]
+                ["basis_digest"]
+                .as_str()
+                .is_some_and(|digest| digest.starts_with("sha256:"))
+        );
+        pass_record_digests.push(
+            admitted["data"]["record_digest"]
+                .as_str()
+                .expect("admitted source record digest")
+                .to_owned(),
+        );
+        next = assert_ok(&consumer.run(&["next"]));
+
+        if index == 0 {
+            let failure = next["data"]["cooperative_evidence"]
+                .as_array()
+                .expect("superseded failure audit")
+                .iter()
+                .find(|audit| audit["admitted_evidence"]["offer_id"] == "offer.source-e2e.fail")
+                .expect("superseded failure remains auditable");
+            assert_eq!(failure["current_status"], "stale");
+        }
+        if index == 1 {
+            let inconclusive = next["data"]["cooperative_evidence"]
+                .as_array()
+                .expect("superseded inconclusive audit")
+                .iter()
+                .find(|audit| {
+                    audit["admitted_evidence"]["offer_id"] == "offer.source-e2e.inconclusive"
+                })
+                .expect("superseded inconclusive remains auditable");
+            assert_eq!(inconclusive["current_status"], "stale");
+        }
+    }
+
+    assert_eq!(
+        next["data"]["selected_policy_ref"],
+        "policy.workflow.investigation"
+    );
+    assert_eq!(next["data"]["applicability"], true);
+    assert_eq!(next["data"]["status"], "ready_to_complete");
+    assert!(next["data"]["simulation"]["candidate_capability_gaps"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    assert!(next["data"]["simulation"]["candidate_claim_results"]
+        .as_array()
+        .is_some_and(|claims| claims.iter().all(|claim| claim["status"] == "verified")));
+    assert_eq!(
+        next["data"]["durable_assurance"]["blockers"]
+            .as_array()
+            .map(Vec::len),
+        Some(8),
+        "release assurance stays visible without blocking ordinary solo execution"
+    );
+
+    let completion_snapshot = next["data"]["snapshot_digest"]
+        .as_str()
+        .expect("ready completion snapshot")
+        .to_owned();
+    let completed = assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        &completion_snapshot,
+        "--principal",
+        "principal.agent.source-e2e",
+    ]));
+    let mut bound_source_digests = completed["data"]["completed_record"]["event"]["payload"]
+        ["evidence_receipt_digests"]
+        .as_array()
+        .expect("completion evidence receipt bindings")
+        .iter()
+        .map(|value| value.as_str().expect("bound digest").to_owned())
+        .collect::<Vec<_>>();
+    pass_record_digests.sort();
+    bound_source_digests.sort();
+    assert_eq!(bound_source_digests, pass_record_digests);
+}
 #[test]
 fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback() {
     let consumer = Consumer::new();

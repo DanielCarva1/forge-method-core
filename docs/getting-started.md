@@ -73,9 +73,10 @@ start
   -> workflow release-status
   -> exact returned upgrade_argv, if present
   -> workflow next
-  -> if requested, discuss intent in chat and let the agent record the
-     externally broker-signed closed intent
-  -> perform/verify/record the governed action
+  -> if requested, discuss the objective in chat; in `solo_cooperative` the
+     agent records the agreed objective through the returned cooperative packet,
+     while `strict_external` uses the separately broker-signed intent path
+  -> perform, verify, and record the governed action
   -> workflow next
 ```
 
@@ -95,14 +96,22 @@ exists. `workflow next` may correctly return obligations, evidence/capability
 gaps, a gated human decision, a Domain Pack requirement, or a rebase/upgrade
 requirement. These are useful outcomes, not installation failures.
 
-After intent is accepted, `workflow next` always exposes all eight universal
-quality lenses and their current `unknown`, `supported`, `verified`,
-`disproven`, or `waived` state. The agent is responsible for proposing the
-method and a representative slice, including scenarios, falsifiers,
-environment, and failure modes. The human is not expected to know or author
-those development details. Independent review must accept the exact slice
-definition before a separately originated runtime execution can verify it;
-files, plans, research, or partial scenario runs do not silently become proof.
+After the objective is accepted, `workflow next` always exposes all eight
+universal quality lenses and their current `unknown`, `supported`, `verified`,
+`disproven`, or `waived` state. In `solo_cooperative`, unresolved universal
+lenses stay visible throughout development but block the final `release`
+boundary rather than every ordinary step. `strict_external` keeps the stricter
+blocking behavior.
+
+The agent is responsible for proposing the method and representative checks,
+including scenarios, ways the idea could be wrong, environment, and failure
+modes. The human is not expected to author those technical details. When the
+selected claim explicitly calls for repository inspection, the solo agent may
+record its assessment plus project-relative basis files; Forge confines, reads,
+and hashes those exact files before admitting the result. This is useful
+same-owner technical evidence, not independent review, human presence,
+representative runtime execution, or enterprise compliance. Those stronger
+claims still require their own matching evidence. Basis is read only from exact regular-file handles in the retained project snapshot; links, outside paths, and excluded roots (`.git`, `.forge-method`, `target`, and `node_modules`) are rejected. For one objective/snapshot/route, the newest admitted assessment supersedes the previous one, but a rejected offer does not. Only a current pass supplies source satisfaction and is bound by exact record digest into completion; fail and inconclusive remain honest non-support, and expiry, supersession, or snapshot/basis drift removes completion validity. This exact retained read/hash route can establish applicability and an executable `LocalCommand` alternative, but never independent review or runtime separation.
 
 Forge can describe only a write that passed its claim/gate, verified-principal,
 Admission, WAL/recovery, and receipt path as **Forge-mediated**. A host agent's

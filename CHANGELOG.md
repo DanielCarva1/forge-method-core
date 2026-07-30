@@ -16,11 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.8` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.9` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Added
+- **Honest same-owner repository evidence for Solo Cooperative work.** When a
+  selected claim explicitly calls for repository inspection, the agent can now
+  submit `pass`, `fail`, or `inconclusive` through the public cooperative
+  evidence command with a bounded project-relative file basis. Forge reads and
+  hashes those exact retained snapshot bytes, rejects excluded or escaping
+  paths, keeps only the latest admitted assessment current, and binds current
+  passing evidence into policy completion. This proves same-owner artifact
+  inspection only; it does not claim an independent reviewer, human presence,
+  representative runtime, or enterprise compliance.
+- **Release-bound universal assurance in Solo Cooperative.** The eight final
+  quality lenses remain visible throughout the journey but stop blocking
+  ordinary development steps before release. `strict_external` remains
+  unchanged and strict.
 - **Packaged Solo Dogfood release gate.** Every native archive must now complete
   a fresh, synthetic Solo Cooperative journey through one chat activation,
   objective and evidence admission, exact Git-isolated promotion, canonical
