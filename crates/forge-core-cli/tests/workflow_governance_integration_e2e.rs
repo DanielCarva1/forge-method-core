@@ -860,7 +860,50 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         ])
     );
 
-    let resumed = assert_ok(&consumer.run(&["resume"]));
+    let summary_output = consumer.run(&["resume"]);
+    let summary = assert_ok(&summary_output);
+    assert_eq!(
+        summary["data"]["schema_version"],
+        "workflow_resume_summary_v1"
+    );
+    assert_eq!(summary["data"]["detail_level"], "summary");
+    assert_eq!(
+        summary["data"]["forge_core_version"],
+        env!("CARGO_PKG_VERSION")
+    );
+    for field in [
+        "bundle_id",
+        "bundle_digest",
+        "effective",
+        "selected_policy_ref",
+        "compatibility_workflow_id",
+    ] {
+        assert_eq!(summary["data"][field], next["data"][field], "{field}");
+    }
+    assert_eq!(
+        summary["data"]["detail_argv"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "resume",
+            "--root",
+            consumer.app.display().to_string(),
+            "--full",
+            "--json"
+        ])
+    );
+    assert!(
+        summary["data"].get("simulation").is_none()
+            && summary["data"].get("replacement_continuity").is_none(),
+        "the default activation view must not repeat the full audit"
+    );
+
+    let resumed_output = consumer.run(&["resume", "--full"]);
+    let resumed = assert_ok(&resumed_output);
+    assert!(
+        summary_output.stdout.len() * 2 < resumed_output.stdout.len(),
+        "the activation view must be materially smaller than the full audit"
+    );
     for field in [
         "readiness_profile",
         "selected_policy_ref",
@@ -908,7 +951,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         continuity["ranked_next_actions"][0]["governed_action"],
         next["data"]["simulation"]["candidate_next_actions"][0]
     );
-    let second_process = assert_ok(&consumer.run(&["resume"]));
+    let second_process = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(
         second_process["data"]["replacement_continuity"]["ranked_action_digest"],
         continuity["ranked_action_digest"],
@@ -977,7 +1020,7 @@ fn workflow_resume_does_not_create_a_missing_domain_pack_lock() {
     fs::remove_file(&lock).expect("remove existing lifecycle lock");
     let before = state_tree_snapshot(&consumer.state);
 
-    let resumed = consumer.run(&["resume"]);
+    let resumed = consumer.run(&["resume", "--full"]);
     assert!(
         !resumed.status.success(),
         "read-only resume must stop when its existing lock is absent"
@@ -1169,7 +1212,7 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
         "pass"
     );
 
-    let restarted = assert_ok(&consumer.run(&["resume"]));
+    let restarted = assert_ok(&consumer.run(&["resume", "--full"]));
     let audit = restarted["data"]["cooperative_evidence"]
         .as_array()
         .expect("cooperative evidence audit");
@@ -1381,7 +1424,15 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
         before_stale,
         "stale objective-management packets must not alter WAL or state"
     );
-    let replacement = assert_ok(&consumer.run(&["resume"]));
+    let summary = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        summary["data"]["omitted_history"]["superseded_objective_revisions"], 2,
+        "the separately exposed active objective is not omitted history"
+    );
+    assert!(summary["data"]["omitted_history"]
+        .get("objective_revisions")
+        .is_none());
+    let replacement = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(
         replacement["data"]["active_cooperative_objective"]["revision"],
         3
@@ -2001,7 +2052,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     // equality proves operational recovery rather than digest-only continuity.
     let ready = assert_ok(&consumer.run(&["next"]));
     assert_eq!(ready["data"]["status"], "ready_to_complete");
-    let resumed_ready = assert_ok(&consumer.run(&["resume"]));
+    let resumed_ready = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(resumed_ready["data"], ready["data"]);
 
     let completion_snapshot = required_str(&ready["data"], "snapshot_digest").to_owned();
@@ -2019,7 +2070,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
         "policy.workflow.domain-scan"
     );
     assert_eq!(applicability["data"]["status"], "applicability_required");
-    let resumed_applicability = assert_ok(&consumer.run(&["resume"]));
+    let resumed_applicability = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(resumed_applicability["data"], applicability["data"]);
 
     let packet_set = assert_ok(&consumer.run(&["action-packets"]));
@@ -2058,7 +2109,7 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
                 .iter()
                 .any(|action| action["kind"] == "acquire_capability"))
     );
-    let resumed_gap = assert_ok(&consumer.run(&["resume"]));
+    let resumed_gap = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(resumed_gap["data"], capability_gap["data"]);
 }
 
@@ -2073,7 +2124,7 @@ fn project_snapshot_digest_excludes_sidecar_ledger_but_tracks_project_changes() 
         .to_owned();
 
     // A read-only resume and the sidecar WAL do not change project identity.
-    let resumed = assert_ok(&consumer.run(&["resume"]));
+    let resumed = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(resumed["data"]["snapshot_digest"], before_digest);
 
     fs::write(consumer.app.join("README.md"), "material project change\n").expect("change project");
@@ -2093,7 +2144,7 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
         "workflow init [--root <path>] [--readiness-profile <solo_cooperative|strict_external>]"
     ));
     assert!(text.contains("workflow next"));
-    assert!(text.contains("workflow resume"));
+    assert!(text.contains("workflow resume [--root <path>] [--full]"));
     assert!(text.contains("workflow action authorize"));
     assert!(text.contains("workflow action apply"));
     assert!(text.contains("workflow intent record"));
@@ -2505,7 +2556,7 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
 
     run_git(&["worktree", "remove", "--force", &worktree_text]);
     let state_before_resume = state_tree_snapshot(&consumer.state);
-    let replacement = assert_ok(&consumer.run(&["resume"]));
+    let replacement = assert_ok(&consumer.run(&["resume", "--full"]));
     let continuity = &replacement["data"]["replacement_continuity"];
     assert_eq!(continuity["status"], "blocked");
     assert!(continuity["gaps"].as_array().is_some_and(|gaps| {
@@ -2794,7 +2845,39 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         retry["data"]["receipt"]["receipt_digest"],
         applied["data"]["receipt"]["receipt_digest"]
     );
-    let replacement = assert_ok(&consumer.run(&["resume"]));
+    assert_ok(
+        &bin()
+            .args([
+                "claim",
+                "release",
+                "--root",
+                &root,
+                "--id",
+                &claim_id,
+                "--agent",
+                "agent.promotion-apply-e2e",
+                "--now-unix",
+                &now_unix,
+                "--json",
+            ])
+            .output()
+            .expect("release completed promotion claim"),
+    );
+    let replacement = assert_ok(&consumer.run(&["resume", "--full"]));
+    assert_eq!(
+        replacement["data"]["replacement_continuity"]["status"], "ready",
+        "a stale claim linked only to a completed promotion must not block new work"
+    );
+    let completed_claim_gap = replacement["data"]["replacement_continuity"]["gaps"]
+        .as_array()
+        .expect("continuity gaps")
+        .iter()
+        .find(|gap| {
+            gap["isolation_id"] == "isolation.promotion-apply-e2e"
+                && gap["code"] == "linked_claim_inactive"
+        })
+        .expect("completed promotion retains non-blocking claim history");
+    assert_eq!(completed_claim_gap["blocking"], false);
     let completed = replacement["data"]["replacement_continuity"]["promotions"]
         .as_array()
         .expect("promotion continuity")
@@ -2817,7 +2900,7 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         "later independent project change\n",
     )
     .expect("later project change");
-    let after_drift = assert_ok(&consumer.run(&["resume"]));
+    let after_drift = assert_ok(&consumer.run(&["resume", "--full"]));
     let historical = after_drift["data"]["replacement_continuity"]["promotions"]
         .as_array()
         .expect("historical promotion continuity")
@@ -2855,7 +2938,7 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     )
     .expect("write tampered receipt");
     let state_before_tampered_resume = state_tree_snapshot(&consumer.state);
-    let tampered_resume = assert_ok(&consumer.run(&["resume"]));
+    let tampered_resume = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(
         tampered_resume["data"]["replacement_continuity"]["status"],
         "blocked"
@@ -2909,7 +2992,7 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         .set_len(consume.offset)
         .expect("truncate exact consume frame");
     let state_before_replay_resume = state_tree_snapshot(&consumer.state);
-    let replay_resume = assert_ok(&consumer.run(&["resume"]));
+    let replay_resume = assert_ok(&consumer.run(&["resume", "--full"]));
     assert_eq!(
         replay_resume["data"]["replacement_continuity"]["status"],
         "blocked"
@@ -3271,7 +3354,7 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
     .expect("install exact v1 intent fixture");
 
     let state_before_resume = state_tree_snapshot(&fixture.consumer.state);
-    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let resumed = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     let legacy = resumed["data"]["replacement_continuity"]["promotions"]
         .as_array()
         .expect("legacy promotion continuity")
@@ -3657,7 +3740,7 @@ fn replacement_agent_ranks_exact_spaced_root_recovery_then_observes_completion()
     assert_eq!(crashed.status.code(), Some(86));
     let state_before = state_tree_snapshot(&fixture.consumer.state);
 
-    let replacement = assert_ok(&fixture.consumer.run(&["resume"]));
+    let replacement = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     let continuity = &replacement["data"]["replacement_continuity"];
     let promotion = continuity["promotions"]
         .as_array()
@@ -3693,7 +3776,7 @@ fn replacement_agent_ranks_exact_spaced_root_recovery_then_observes_completion()
 
     let argv = expected_argv.as_array().expect("structured recovery argv");
     assert_ok(&execute_structured_argv(argv));
-    let completed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let completed = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     let promotion = completed["data"]["replacement_continuity"]["promotions"]
         .as_array()
         .expect("completed promotion continuity")
@@ -3723,7 +3806,7 @@ fn replacement_agent_blocks_tampered_intent_without_repairing_it() {
     fs::write(&intent, &bytes).expect("tamper intent");
     let before = state_tree_snapshot(&fixture.consumer.state);
 
-    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let resumed = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     assert_eq!(
         resumed["data"]["replacement_continuity"]["status"],
         "blocked"
@@ -3743,7 +3826,7 @@ fn replacement_agent_blocks_tampered_intent_without_repairing_it() {
 #[test]
 fn replacement_agent_blocks_missing_wrong_owner_and_released_linked_claims() {
     let fixture = PromotionRecoveryFixture::new();
-    let live = assert_ok(&fixture.consumer.run(&["resume"]));
+    let live = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     let live_continuity = &live["data"]["replacement_continuity"];
     assert_eq!(live_continuity["claims"][0]["liveness"], "live");
     assert!(!live_continuity["gaps"].as_array().is_some_and(|gaps| {
@@ -3774,7 +3857,7 @@ fn replacement_agent_blocks_missing_wrong_owner_and_released_linked_claims() {
         original_contract.replace(&fixture.claim_id, "claim.missing.replacement-e2e"),
     )
     .expect("point isolation at missing claim");
-    let missing = assert_ok(&fixture.consumer.run(&["resume"]));
+    let missing = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     assert!(missing["data"]["replacement_continuity"]["gaps"]
         .as_array()
         .is_some_and(|gaps| gaps.iter().any(|gap| {
@@ -3791,7 +3874,7 @@ fn replacement_agent_blocks_missing_wrong_owner_and_released_linked_claims() {
         ),
     )
     .expect("point isolation at a different owner");
-    let wrong_owner = assert_ok(&fixture.consumer.run(&["resume"]));
+    let wrong_owner = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     assert!(wrong_owner["data"]["replacement_continuity"]["gaps"]
         .as_array()
         .is_some_and(|gaps| gaps.iter().any(|gap| {
@@ -3819,7 +3902,7 @@ fn replacement_agent_blocks_missing_wrong_owner_and_released_linked_claims() {
         .expect("release linked claim");
     assert_ok(&released);
 
-    let resumed = assert_ok(&fixture.consumer.run(&["resume"]));
+    let resumed = assert_ok(&fixture.consumer.run(&["resume", "--full"]));
     let continuity = &resumed["data"]["replacement_continuity"];
     assert_eq!(continuity["status"], "blocked");
     assert!(continuity["gaps"].as_array().is_some_and(|gaps| {

@@ -112,6 +112,24 @@ or routes a healthy project into agent-native workflow governance.
    operated and host-neutral. Its success does **not** claim official conformance
    for Codex, ZCode, Cursor, Claude, OpenCode, pi.dev, or any other host.
 
+   Record the selected binary's exact `forge-core --version` output. When the
+   selected project is the Forge Core source repository itself, detect that
+   identity only from its root `Cargo.toml`: it must declare the canonical
+   `forge-method-core` repository URL and include `crates/forge-core-cli` as a
+   workspace member. Read `[workspace.package].version` directly; do not run
+   Cargo just to discover it. If the installed runtime and source versions
+   differ, say plainly: "Forge instalado: X; código atual: Y." This is a
+   development-version warning, not proof that Forge is inactive. Continue
+   read-only activation for an already-linked healthy project, but never claim
+   that uninstalled source behavior was dogfooded. A matching version string is
+   also not proof that the installed binary came from this checkout or contains
+   the same build. For the Forge Core source repository, run the read-only
+   `git status --porcelain` check; when it is non-empty, say plainly that the
+   source checkout has uncommitted changes. Do not invent commit, build, or
+   binary provenance from a version match or a dirty/clean status. Do not build
+   or install silently during `/start-forge`; update the runtime only after the
+   relevant source block has been tested and accepted.
+
 ### Host support is evidence, not a name
 
 Do not treat recognition of Codex, ZCode, Cursor, Claude, OpenCode, pi.dev, or
@@ -198,14 +216,34 @@ proves integrity, not native host authenticity.
    without refreshing status.
 
    Then run **`forge-core workflow resume --root "<project-root>" --json`**.
-   `/start-forge` is run once per chat, not once per task. `resume` contains
-   the ordinary current guidance plus `data.replacement_continuity`, rebuilt
-   without relying on an earlier chat. Inspect its typed gaps, checked
-   worktrees, promotion statuses, and `ranked_next_actions` before doing new
-   work. Execute a published recovery argv as tokens before lower-ranked work;
-   never shell-parse it. `completed` promotions must not be applied or
-   recovered again. After any operation in this same chat, refresh with
-   `workflow next` as usual.
+   `/start-forge` is run once per chat, not once per task. Treat this call as a
+   capability probe even when the installed and source version strings match.
+   The concise capability is present only when `data.schema_version` equals
+   `workflow_resume_summary_v1` and `data.detail_argv` is a string argv shaped
+   exactly as `forge-core workflow resume --root <same-project-root> --full
+   --json`. Validate the root and every token. With a direct runtime, execute it
+   verbatim; with the retained WSL bridge, replace only argv element zero with
+   the proven packaged/runtime binary and preserve all later elements.
+
+   A capable summary exposes the current Domain Pack effective identity,
+   objective, autonomy boundary, human decisions, blockers and warnings, ranked
+   actions, active isolations, recoverable promotions, current evidence, and
+   honest counts of omitted history. It is rebuilt without relying on an
+   earlier chat. Inspect those current fields before doing new work. Execute
+   `data.detail_argv` only when a blocker, recovery, integrity question, or
+   explicit audit needs the historical records; never reconstruct it from
+   display text.
+
+   If the default response lacks that schema/detail argv but contains the
+   historical full guidance fields, report plainly that this installed runtime
+   is an older/incompatible build without the concise resume capability and use
+   that default legacy full response as the compatibility audit. Use an
+   explicit `--full` only if the installed command help advertises it. Do not
+   infer the new capability from a matching version, silently rebuild an argv,
+   or claim that uninstalled source behavior ran. Execute a published recovery
+   argv as tokens before lower-ranked work;
+   `completed` promotions must not be applied or recovered again. After any
+   operation in this same chat, refresh with `workflow next` as usual.
 
    `durable_pending_decisions` contains only decision events actually recorded
    in the ledger. A question under `simulation.candidate_decision_requests` was

@@ -195,12 +195,17 @@ explicit baseline review rather than disappearing in job topology changes.
 ## Release evidence
 
 A release additionally requires exact tag/commit/workspace/CLI agreement,
-manifested payload verification, packaged native Linux, Windows, Intel macOS,
-and Apple Silicon macOS install smoke,
-per-asset checksum and Sigstore verification, schema-validated release-level
-CycloneDX SBOM, release-note/docs agreement, and residual limitations. Those are
-P7E release gates; publication is evidenced only by their successful matching
-tag run and independently verified assets.
+manifested payload verification, the complete packaged Solo Dogfood journey on
+native Linux, Windows, Intel macOS, and Apple Silicon macOS, three consecutive
+fresh reference runs on x86_64 Linux, retained result evidence, per-asset
+checksum and Sigstore verification, a schema-validated release-level CycloneDX
+SBOM, release-note/docs agreement, and residual limitations. The packaged
+journey uses synthetic cooperative objective input and proves post-commit
+`recover`/`apply` idempotence plus final isolation cleanup; it does not prove a
+real conversation admission or an injected crash-recovery window. It proves
+runtime behavior, not authenticity of any named chat host. Those
+are P7E release gates; publication is evidenced only by their successful
+matching tag run and independently verified assets.
 
 ## Evidence report
 

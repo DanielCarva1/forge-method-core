@@ -149,13 +149,14 @@ newer binary never silently migrates project authority; the agent follows
   Link and an unoccupied, symlink-free target state path; preexisting sidecar
   state is preserved for explicit inspection.
 - Use `workflow resume` once at the start of a new chat or after agent/process
-  replacement. It returns the normal guidance plus durable objective history,
-  recorded decision history, evidence, claims, checked worktrees, promotion
-  recovery state, typed gaps, and the same ranked next action. Questions
-  calculated now stay in the normal simulation fields and are not called
-  recovered decisions. `resume` does not use the old chat, create missing locks,
-  finish a release rebase, reconcile a generation, or repair inconsistent
-  state.
+  replacement. Its default summary returns the current objective, decisions,
+  blockers and warnings, active work, recovery work, evidence, and ranked next
+  action without repeating the full history. Execute its exact `detail_argv`
+  only when a blocker, recovery, integrity question, or audit needs
+  `workflow resume --full --json`. Questions calculated now remain separate
+  from recovered decisions. `resume` does not use the old chat, create missing
+  locks, finish a release rebase, reconcile a generation, or repair
+  inconsistent state.
 - Use `domain-pack status` and `domain-pack recover` for lifecycle recovery.
 - Do not delete the sidecar to fix an integrity error; preserve and inspect it.
 

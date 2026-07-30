@@ -49,8 +49,8 @@ class Job(NamedTuple):
 # of the byte commitment, complete semantic manifest, and independently modeled
 # graph edges. Authorizing candidate byte/graph digests cannot bypass the fixed
 # manifest governed below.
-EXPECTED_WORKFLOW_SHA256 = "f59bc4d9933827529217a966c971f6a2f6acaa75ed32d4042ab7ba2f44a05a24"
-EXPECTED_GRAPH_SHA256 = "5abf8438e61cfa7fb9f0b8a208f91da202b136e0c87c0337db4888b6afcb483d"
+EXPECTED_WORKFLOW_SHA256 = "94f8bba4a3ab0cc20fa1d463ec4fe82c33af432a9e56e088f0766b5a0211c7b6"
+EXPECTED_GRAPH_SHA256 = "688fbf12a3bf6beb6a15474d1d9f312b8da7554aef6e9b6cb4571c225d435200"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
@@ -63,6 +63,19 @@ SBOM_WRAPPER_ARGV = (
     "--format", "json", "--manifest-path", "crates/forge-core-cli/Cargo.toml",
     "--override-filename", "forge-core-$VERSION.cdx",
 )
+NATIVE_SOLO_STEP = ("build", "Prove packaged native Solo Dogfood journey")
+NATIVE_SOLO_ARGV = (
+    "python", "scripts/smoke-release-install.py",
+    "--archive", "${{ matrix.archive }}",
+    "--version", "${{ needs.metadata.outputs.version }}",
+    "--binary-name", "${{ matrix.artifact }}",
+    "--wrapper-name", "${{ matrix.wrapper_name }}",
+    "--expected-host-arch", "${{ matrix.expected-arch }}",
+    "--command-timeout-seconds", "60",
+    "--journey-runs", "${{ matrix.journey_runs }}",
+    "--evidence-output", "packaged-solo-evidence/${{ matrix.target }}.json",
+)
+NATIVE_SOLO_EVIDENCE_STEP = ("build", "Retain packaged Solo Dogfood evidence")
 ARM64_SMOKE_STEP = ("arm64-linux-smoke", "Smoke extracted Linux ARM64 release install")
 ARM64_SMOKE_ARGV = (
     "python", "scripts/smoke-release-install.py",
@@ -70,6 +83,12 @@ ARM64_SMOKE_ARGV = (
     "--version", "${{ needs.metadata.outputs.version }}",
     "--binary-name", "forge-core", "--wrapper-name", "forge",
     "--expected-host-arch", "aarch64", "--command-timeout-seconds", "60",
+    "--journey-runs", "1",
+    "--evidence-output", "packaged-solo-evidence/aarch64-unknown-linux-gnu.json",
+)
+ARM64_SOLO_EVIDENCE_STEP = (
+    "arm64-linux-smoke",
+    "Retain Linux ARM64 packaged Solo Dogfood evidence",
 )
 RELEASE_SET_STEP = ("release", "Build and verify deterministic release-set manifest")
 FINAL_RELEASE_SET_STEP = ("release", "Require exact final release asset set")
@@ -88,12 +107,12 @@ RELEASE_SET_ARCHIVE_ARGV = (
 # are included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
-    "scripts/test-release-locking.py": "00c29eecc6f39f72735829ba562fb5f7455a244f7500aed4f064199d4b96b24f",
+    "scripts/test-release-locking.py": "21a19a1eb36251c98d603c1e65227cbfe0d5c6acb7b8f681f20446adadb2d590",
     "scripts/test-release-archive.py": "9fa807099e2dd32181d84a8917fe8739ac6c652ed8fbe92cca22d420c00b3286",
     "distribution/release-payload.txt": "f50f1583ee82148917423632175c73323ce2eeb59bb8a7e4ca3dc17618195fe0",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
-    "scripts/smoke-release-install.py": "a8ef321a1e9289e93d187d5d4fa1a390dfcdcf9a426da5db7b5ecc6891a31be1",
+    "scripts/smoke-release-install.py": "7bc0fec2bc2bce8994418872e342e92c17bff98e921f7082a315da3d652ccf22",
     "scripts/build-release-set-manifest.py": "ca00140321cb565af9694b39729dc7fb3156140b41d4293d910bc5aff1196d83",
     "scripts/test-release-set-manifest.py": "466d73c1a2afafdaa240fbedf777969db58dcad0dd10b4d9ceeb7b0c3d975a7b",
     "distribution/forge": "6b151926a6b69e514d6542ff93974c1251f9a597a246ab49d8c04649f8a5f25b",
@@ -101,7 +120,7 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
-    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "ea314534b96b22592f60710a3f68311ecaafb247ca3c3c00eafd5ab94b1d8dcb",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "45caaa53e1c2c06d2784d7a04eec365ee46c545fbef38ea9159c1d5e5453ec10",
 }
 
 # Only these reviewed release payloads use Git's `text:auto` checkout policy.
@@ -121,7 +140,7 @@ DIRECT_LOCAL_SCRIPTS = {
     ("build", "Build and verify deterministic release archive"): {
         "scripts/build-release-archive.py", "scripts/check-release-archive.py"
     },
-    ("build", "Smoke extracted native release install"): {"scripts/smoke-release-install.py"},
+    NATIVE_SOLO_STEP: {"scripts/smoke-release-install.py"},
     ARM64_SMOKE_STEP: {"scripts/smoke-release-install.py"},
     ("release", "Re-verify archive manifests and checksums"): {"scripts/check-release-archive.py"},
     SBOM_STEP: {"scripts/run-release-locked-sbom.py"},
@@ -975,6 +994,52 @@ def _is_fail_closed(continue_on_error: str | None) -> bool:
     return continue_on_error is None or continue_on_error == "false"
 
 
+def _check_native_solo_journey(source: str, jobs: tuple[Job, ...]) -> None:
+    by_identity = {
+        (step.job, step.name): step
+        for job in jobs
+        for step in job.steps
+    }
+    step = by_identity.get(NATIVE_SOLO_STEP)
+    if step is None or step.run is None:
+        raise ReleaseLockError("packaged native Solo Dogfood journey is missing")
+    if step.condition != "matrix.native_release == true":
+        raise ReleaseLockError(
+            "packaged native Solo Dogfood journey must run for every native release"
+        )
+    if not _is_fail_closed(step.continue_on_error):
+        raise ReleaseLockError(
+            "packaged native Solo Dogfood journey must propagate failure"
+        )
+    if _script_command(step.run, "scripts/smoke-release-install.py") != NATIVE_SOLO_ARGV:
+        raise ReleaseLockError(
+            "packaged native Solo Dogfood journey does not use the exact governed argv"
+        )
+    if source.count("            journey_runs: 3\n") != 1:
+        raise ReleaseLockError(
+            "exactly one native reference package must run three consecutive journeys"
+        )
+    if source.count("            journey_runs: 1\n") != 4:
+        raise ReleaseLockError(
+            "every remaining package boundary must retain one packaged journey"
+        )
+
+    evidence = by_identity.get(NATIVE_SOLO_EVIDENCE_STEP)
+    if (
+        evidence is None
+        or evidence.uses
+        != "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        or evidence.condition != "matrix.native_release == true && always()"
+    ):
+        raise ReleaseLockError(
+            "native packaged Solo Dogfood evidence must be retained even on failure"
+        )
+    if not _is_fail_closed(evidence.continue_on_error):
+        raise ReleaseLockError(
+            "native packaged Solo Dogfood evidence retention must propagate failure"
+        )
+
+
 def _check_arm64_smoke(source: str, jobs: tuple[Job, ...]) -> None:
     matrix_match = re.search(
         r"          - target: aarch64-unknown-linux-gnu\n"
@@ -991,6 +1056,7 @@ def _check_arm64_smoke(source: str, jobs: tuple[Job, ...]) -> None:
         "            archive: forge-core-aarch64-linux.tar.gz",
         "            can_smoke: true # executed after packaging on the bounded native ARM64 smoke runner",
         "            native_release: false",
+        "            journey_runs: 1",
     }
     if not required_matrix <= matrix_lines or any(
         line.strip() == "can_smoke: false" for line in matrix_lines
@@ -1030,6 +1096,20 @@ def _check_arm64_smoke(source: str, jobs: tuple[Job, ...]) -> None:
         raise ReleaseLockError("Linux ARM64 extracted-install smoke step must propagate failure")
     if _script_command(step.run, "scripts/smoke-release-install.py") != ARM64_SMOKE_ARGV:
         raise ReleaseLockError("Linux ARM64 smoke does not use the exact extracted-install source argv")
+    evidence = next(
+        (item for item in smoke_job.steps if (item.job, item.name) == ARM64_SOLO_EVIDENCE_STEP),
+        None,
+    )
+    if (
+        evidence is None
+        or evidence.uses
+        != "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        or evidence.condition != "always()"
+        or not _is_fail_closed(evidence.continue_on_error)
+    ):
+        raise ReleaseLockError(
+            "Linux ARM64 packaged Solo Dogfood evidence must be retained even on failure"
+        )
 
 
 def _check_release_set_step(by_identity: dict[tuple[str, str], Step]) -> None:
@@ -1090,6 +1170,7 @@ def _check_source_bound(
     steps = [step for job in jobs for step in job.steps]
     by_identity = {(step.job, step.name): step for step in steps}
     _check_graph_security(source, jobs)
+    _check_native_solo_journey(source, jobs)
     _check_arm64_smoke(source, jobs)
     _check_release_set_step(by_identity)
 

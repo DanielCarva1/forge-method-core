@@ -2584,7 +2584,10 @@ fn authorize_decision(
 
 fn resume_without_state_mutation(project: &ReferenceProject, guidance: &Value) -> Value {
     let before = snapshot(&project.state);
-    let resumed = ok(&project.workflow("resume", &[]), "workflow.resume");
+    let resumed = ok(
+        &project.workflow("resume", &["--full".to_owned()]),
+        "workflow.resume",
+    );
     assert_eq!(snapshot(&project.state), before);
     for pointer in [
         "/authority",
@@ -3069,6 +3072,16 @@ fn p6d_reference_pack_real_journey() {
         initialized["data"]["effective"]["domain_pack_generation"]["generation"],
         0
     );
+    let installed_summary = ok(&project.workflow("resume", &[]), "workflow.resume summary");
+    assert_eq!(
+        installed_summary["data"]["effective"],
+        initialized["data"]["effective"]
+    );
+    assert_eq!(
+        installed_summary["data"]["bundle_id"],
+        initialized["data"]["bundle_id"]
+    );
+    let installed_effective = installed_summary["data"]["effective"].clone();
     assert_eq!(initialized["data"]["current_phase"], "1-discovery");
     let c1_broker_key = &authority.c1_human;
     let c1_broker_audience = &authority.broker_audience;
@@ -3561,6 +3574,19 @@ fn p6d_reference_pack_real_journey() {
                 .as_str()
                 .is_some_and(|message| !message.is_empty())
     }));
+    let degraded_summary = ok(&project.workflow("resume", &[]), "workflow.resume summary");
+    assert_ne!(
+        degraded_summary["data"]["effective"], installed_effective,
+        "a changed Domain Pack generation must be visible in the concise summary"
+    );
+    assert_eq!(
+        degraded_summary["data"]["effective"]["domain_pack_generation"]["generation"],
+        1
+    );
+    assert_eq!(
+        degraded_summary["data"]["selected_policy_ref"],
+        degraded_next["data"]["selected_policy_ref"]
+    );
     let degraded_next = resume_without_state_mutation(&project, &degraded_next);
 
     let degraded_claim_ref = "claim.workflow.discover-intent.intent-grounded";

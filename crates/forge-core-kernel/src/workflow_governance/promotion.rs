@@ -1531,6 +1531,74 @@ fn load_promotion_intent_under_lock(
     Ok(intent)
 }
 
+#[cfg(test)]
+mod intent_digest_tests {
+    use super::*;
+
+    #[test]
+    fn historical_v2_intent_survives_preview_v3_field_hydration() {
+        let raw = include_str!("fixtures/promotion_intent_v2_before_logical_snapshot.json");
+        let persisted: serde_json::Value =
+            serde_json::from_str(raw).expect("historical intent fixture should be valid JSON");
+        assert!(persisted["preview"]
+            .get("predicted_result_logical_snapshot_digest")
+            .is_none());
+        let intent: PromotionReplayIntent =
+            serde_json::from_str(raw).expect("historical intent should still deserialize");
+        let mut canonical = intent.clone();
+        canonical.replay.intent_digest.clear();
+        let actual = promotion_domain_digest("promotion.intent.v1", &canonical)
+            .expect("historical intent should remain canonicalizable");
+
+        assert_eq!(actual, intent.replay.intent_digest);
+        let roundtrip =
+            serde_json::to_value(intent).expect("historical intent should still serialize");
+        assert!(roundtrip["preview"]
+            .get("predicted_result_logical_snapshot_digest")
+            .is_none());
+    }
+
+    #[test]
+    fn historical_v2_receipt_remains_fully_verifiable() {
+        let receipt: GovernedPromotionReceipt = serde_json::from_str(include_str!(
+            "fixtures/promotion_receipt_v2_before_logical_snapshot.json"
+        ))
+        .expect("historical receipt should still deserialize");
+        let preview_digest = receipt.preview.preview_digest.clone();
+
+        verify_promotion_receipt(&receipt, &preview_digest)
+            .expect("historical receipt should remain fully verifiable");
+    }
+
+    #[test]
+    fn non_empty_logical_snapshot_added_to_v2_remains_tamper_evident() {
+        let mut intent: PromotionReplayIntent = serde_json::from_str(include_str!(
+            "fixtures/promotion_intent_v2_before_logical_snapshot.json"
+        ))
+        .expect("historical intent should still deserialize");
+        intent
+            .preview
+            .as_mut()
+            .expect("v2 intent carries its preview")
+            .predicted_result_logical_snapshot_digest = format!("sha256:{}", "0".repeat(64));
+        let isolation_id = intent
+            .preview
+            .as_ref()
+            .expect("v2 intent carries its preview")
+            .source
+            .isolation_id
+            .clone();
+        let expected_preview_digest = intent.expected_preview_digest.clone();
+
+        let error = validate_intent_request(&intent, &isolation_id, &expected_preview_digest)
+            .expect_err("adding non-empty semantics must invalidate the historical self-binding");
+
+        assert!(error
+            .to_string()
+            .contains("durable intent self-binding digest is invalid"));
+    }
+}
+
 fn validate_intent_request(
     intent: &PromotionReplayIntent,
     isolation_id: &StableId,

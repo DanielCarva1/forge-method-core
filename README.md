@@ -4,7 +4,7 @@ Forge Method Core is a local, model-agnostic governance runtime for agent-led
 product work. A human stays in chat, a host agent drives `forge-core`, and Forge
 persists typed obligations, authority, evidence, and continuity.
 
-The source workspace is the `0.12.0-alpha.7` source candidate.
+The source workspace is the `0.12.0-alpha.8` source candidate.
 `0.12.0-alpha.2` is the published predecessor in project history, but this
 checkout alone proves neither that its assets remain currently available nor
 complete P7 product evidence. Verify the selected GitHub Release, exact asset
@@ -32,8 +32,8 @@ turning prose into runtime authority.
 
 | Identity | Current source fact | How to verify |
 |---|---|---|
-| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.7` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
-| **Published predecessor** | Project history records `0.12.0-alpha.2` before this `0.12.0-alpha.7` source candidate. Current release/asset availability is not inferable from this checkout. | Selected GitHub Release, asset checksum/Sigstore bundle, embedded CLI `--version`, and archive manifest |
+| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.8` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
+| **Published predecessor** | Project history records `0.12.0-alpha.2` before this `0.12.0-alpha.8` source candidate. Current release/asset availability is not inferable from this checkout. | Selected GitHub Release, asset checksum/Sigstore bundle, embedded CLI `--version`, and archive manifest |
 | **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin and may still be on a predecessor. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
 | **Domain Pack effective epoch** | Project-local digest joining the admitted workflow release with the active immutable Domain Pack generation. It has no global package SemVer and does not rewrite core identity. | `workflow next|resume` and `domain-pack status` against the Project Link-resolved state |
 
@@ -100,13 +100,20 @@ See [Real-host proof](docs/real-host-proof.md).
 
 The source release workflow binds requested tag, checked-out commit, workspace
 version, CLI version, archive `release_tag`, and archive `source_commit`.
-Native x86_64 Linux and Windows plus Intel and Apple Silicon macOS archives are
-extracted and smoked through binary/wrapper version plus `start`,
-`workflow init`, `resume`, `release-status`, and `next`. Publication additionally
-re-verifies manifests,
-checksums, Sigstore identities, and a schema-validated release-level CycloneDX
-SBOM. These controls become release evidence only for a matching successful
-tag run and the exact independently verified assets.
+Every native release archive is extracted into a clean installation and must
+complete the packaged Solo Dogfood journey: one `start`, a synthetic cooperative
+objective supplied by the gate (not derived from a real conversation),
+cooperative evidence, exact Git-isolated work, governed promotion and readback,
+post-commit `recover` plus exact `apply` retry idempotence, replacement-process
+continuity, finalized claim/isolation/worktree/branch cleanup, and zero retained
+delete debt. This does not inject or prove a real crash-recovery window. The
+x86_64 Linux reference archive must pass three consecutive fresh
+journeys; machine-readable results are retained. Publication additionally
+re-verifies manifests, checksums, Sigstore identities, and a schema-validated
+release-level CycloneDX SBOM. This proves the packaged runtime, not that Codex,
+Cursor, Claude, or another host performed the journey. These controls become
+release evidence only for a matching successful tag run and the exact
+independently verified assets.
 
 CI separates Tier 0 (120-second static/doc step budgets), focused evidence
 (900-second step budgets), native Linux, Windows, Intel macOS, and Apple Silicon

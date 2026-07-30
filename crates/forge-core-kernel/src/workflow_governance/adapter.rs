@@ -2770,6 +2770,11 @@ impl WorkflowGovernanceProjectAdapter {
             now,
         );
         let workspace_binding = workspace.clone();
+        let promotion_status_by_isolation = workspace
+            .promotions
+            .iter()
+            .map(|promotion| (promotion.isolation_id.clone(), promotion.status))
+            .collect::<BTreeMap<_, _>>();
         let mut gaps = workspace
             .gaps
             .into_iter()
@@ -2920,9 +2925,11 @@ impl WorkflowGovernanceProjectAdapter {
                     isolation.gap_codes.push(code);
                     gaps.push(WorkflowReplacementGap {
                         code,
-                        blocking: matches!(
+                        blocking: linked_claim_liveness_gap_is_blocking(
                             isolation.contract.status,
-                            IsolationStatus::Active | IsolationStatus::Merging
+                            promotion_status_by_isolation
+                                .get(&isolation.contract.id)
+                                .copied(),
                         ),
                         summary,
                         isolation_id: Some(isolation.contract.id.clone()),
@@ -10372,6 +10379,19 @@ fn replacement_projection_digest(
     Ok(sha256_content_hash(&material))
 }
 
+fn linked_claim_liveness_gap_is_blocking(
+    isolation_status: IsolationStatus,
+    promotion_status: Option<super::promotion::ReplacementPromotionStatus>,
+) -> bool {
+    matches!(
+        isolation_status,
+        IsolationStatus::Active | IsolationStatus::Merging
+    ) && matches!(
+        promotion_status,
+        None | Some(super::promotion::ReplacementPromotionStatus::NotStarted)
+    )
+}
+
 fn replacement_ranked_actions(
     promotions: &[WorkflowReplacementPromotionAudit],
     gaps: &[WorkflowReplacementGap],
@@ -12150,6 +12170,46 @@ mod tests {
     };
     use forge_core_store::workflow_action_replay::WorkflowActionReplayState;
     use std::fmt::Write as _;
+
+    #[test]
+    fn durable_promotion_makes_only_stale_claim_liveness_non_blocking() {
+        use super::super::promotion::ReplacementPromotionStatus;
+
+        let cases = [
+            (IsolationStatus::Active, None, true),
+            (
+                IsolationStatus::Merging,
+                Some(ReplacementPromotionStatus::NotStarted),
+                true,
+            ),
+            (
+                IsolationStatus::Active,
+                Some(ReplacementPromotionStatus::Recoverable),
+                false,
+            ),
+            (
+                IsolationStatus::Active,
+                Some(ReplacementPromotionStatus::Completed),
+                false,
+            ),
+            (
+                IsolationStatus::Active,
+                Some(ReplacementPromotionStatus::BlockedCorrupt),
+                false,
+            ),
+            (IsolationStatus::Proposed, None, false),
+            (IsolationStatus::Merged, None, false),
+            (IsolationStatus::Abandoned, None, false),
+        ];
+
+        for (isolation_status, promotion_status, expected) in cases {
+            assert_eq!(
+                linked_claim_liveness_gap_is_blocking(isolation_status, promotion_status),
+                expected,
+                "unexpected policy for {isolation_status:?} with {promotion_status:?}"
+            );
+        }
+    }
 
     fn temp_project(label: &str) -> (PathBuf, PathBuf) {
         let fixture_root =

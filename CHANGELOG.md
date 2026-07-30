@@ -16,11 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.7` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.8` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Added
+- **Packaged Solo Dogfood release gate.** Every native archive must now complete
+  a fresh, synthetic Solo Cooperative journey through one chat activation,
+  objective and evidence admission, exact Git-isolated promotion, canonical
+  readback, post-commit idempotence, replacement-process continuity, and final
+  claim/isolation/worktree cleanup. The x86_64 Linux reference package runs the
+  journey three times. Retained evidence is bounded and excludes raw command
+  output; this proves packaged runtime behavior, not named-host authenticity or
+  an injected crash-recovery window.
+- **Agent-sized workflow resume with an explicit full-audit path.** Ordinary
+  `workflow resume` now returns a concise, Domain-Pack-bound current-state
+  summary and an exact `detail_argv`; `--full` preserves the complete historical
+  audit. Historical v2 promotion intent and receipt digests remain readable
+  after the newer logical-snapshot field was added.
 - **Strict cooperative Codex conformance adapter.** Version `1.0.0` converts
   one closed, exact-host dogfood observation into the public eight-part
   protocol, rejects unknown observation fields and incorrect adapter bindings,

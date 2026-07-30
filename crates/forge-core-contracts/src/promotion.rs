@@ -348,7 +348,7 @@ pub struct GovernedPromotionPreview {
     ///
     /// Historical v2 previews predate this field and deserialize it as empty;
     /// v3 receipt verification requires one valid digest.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub predicted_result_logical_snapshot_digest: String,
     pub objective_coverage: PromotionObjectiveCoverage,
     pub assurance_claim_coverage: Vec<PromotionAssuranceClaimCoverage>,

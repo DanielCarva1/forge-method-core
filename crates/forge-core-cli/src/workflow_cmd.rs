@@ -13,13 +13,28 @@ use forge_core_authority::{
 };
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
-use forge_core_contracts::{CliEnvelope, ExitReason, PrincipalId, StableId};
-use forge_core_decisions::AgentAutonomyEvaluationError;
+use forge_core_contracts::{
+    AgentOwnedWorkClass, CapabilityGap, CliEnvelope, DecisionRequest, DomainPackCompositionGap,
+    ExitReason, HumanDecisionClass, IsolationStatus, NextAction, PrincipalId, ProtectedEffect,
+    ReadinessTarget, StableId, WorkflowCooperativeEvidenceCurrentStatus,
+    WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
+    WorkflowEffectiveBundleIdentity,
+};
+use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceStatus};
 use forge_core_kernel::{
-    load_admitted_workflow_retirement_checkpoint, WorkflowGovernanceAdapterError,
-    WorkflowGovernanceProjectAdapter,
+    load_admitted_workflow_retirement_checkpoint, WorkflowActiveCooperativeObjective,
+    WorkflowAgentAutonomyGuidanceStatus, WorkflowAuthorizationActionPacket,
+    WorkflowAuthorizationRegistrySetup, WorkflowAuthorizationSetupGap,
+    WorkflowDurableAssuranceBlocker, WorkflowDurableAssuranceStatus,
+    WorkflowGovernanceAdapterError, WorkflowGovernanceGuidance, WorkflowGovernanceGuidanceStatus,
+    WorkflowGovernanceProjectAdapter, WorkflowGovernanceReleaseAudit,
+    WorkflowReplacementContinuityStatus, WorkflowReplacementDecisionAudit, WorkflowReplacementGap,
+    WorkflowReplacementIsolationAudit, WorkflowReplacementObjectiveRevision,
+    WorkflowReplacementPromotionAudit, WorkflowReplacementPromotionStatus,
+    WorkflowReplacementRankedAction,
 };
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,6 +45,7 @@ struct WorkflowCliArgs {
     subcommand: String,
     root: PathBuf,
     want_json: bool,
+    full: bool,
     flags: BTreeMap<String, Vec<String>>,
 }
 
@@ -205,9 +221,17 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         "action-packets" => adapter.action_packets().map(|value| {
             serde_json::to_value(value).expect("serializable workflow action packets")
         }),
-        "resume" => adapter
-            .resume()
-            .map(|value| serde_json::to_value(value).expect("serializable guidance")),
+        "resume" => adapter.resume().map(|value| {
+            if parsed.full {
+                serde_json::to_value(value).expect("serializable full guidance")
+            } else {
+                serde_json::to_value(workflow_resume_summary(
+                    &value,
+                    &adapter.binding().project_root,
+                ))
+                .expect("serializable resume summary")
+            }
+        }),
         "release-status" => adapter
             .release_status()
             .map(|value| serde_json::to_value(value).expect("serializable release status")),
@@ -259,6 +283,318 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
         ExitError::Conflict { .. } => ExitReason::Conflict,
         ExitError::EnvConfig { .. } => ExitReason::EnvConfig,
         ExitError::Failed { .. } | ExitError::WithCode { .. } => ExitReason::RejectedByGate,
+    }
+}
+
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v1";
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeSummary<'a> {
+    schema_version: &'static str,
+    detail_level: &'static str,
+    forge_core_version: &'static str,
+    status: WorkflowGovernanceGuidanceStatus,
+    readiness_profile: WorkflowReadinessProfile,
+    project_id: &'a StableId,
+    current_phase: &'a str,
+    target: ReadinessTarget,
+    snapshot_digest: &'a str,
+    ledger_head_digest: &'a str,
+    state_version: u64,
+    release: &'a WorkflowGovernanceReleaseAudit,
+    bundle_id: &'a StableId,
+    bundle_digest: &'a str,
+    effective: &'a WorkflowEffectiveBundleIdentity,
+    selected_policy_ref: &'a StableId,
+    compatibility_workflow_id: &'a StableId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active_objective: Option<&'a WorkflowActiveCooperativeObjective>,
+    agent_autonomy: WorkflowResumeAutonomySummary<'a>,
+    human_decisions: WorkflowResumeHumanDecisionSummary<'a>,
+    blockers: WorkflowResumeBlockerSummary<'a>,
+    actions: WorkflowResumeActionSummary<'a>,
+    active_isolations: Vec<&'a WorkflowReplacementIsolationAudit>,
+    recoverable_promotions: Vec<&'a WorkflowReplacementPromotionAudit>,
+    current_cooperative_evidence: Vec<WorkflowResumeEvidenceSummary<'a>>,
+    authorization: WorkflowResumeAuthorizationSummary<'a>,
+    omitted_history: WorkflowResumeOmittedHistory,
+    detail_argv: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeAutonomySummary<'a> {
+    status: WorkflowAgentAutonomyGuidanceStatus,
+    delegated_work_classes: &'a [AgentOwnedWorkClass],
+    human_decision_classes: &'a [HumanDecisionClass],
+    protected_effects: &'a [ProtectedEffect],
+    assessment_argv: &'a [String],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeHumanDecisionSummary<'a> {
+    calculated_now: &'a [DecisionRequest],
+    recovered_pending: &'a [WorkflowReplacementDecisionAudit],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeBlockerSummary<'a> {
+    domain_pack_degraded: bool,
+    domain_pack_gaps: &'a [DomainPackCompositionGap],
+    candidate_status: WorkflowGovernanceStatus,
+    capability_gaps: &'a [CapabilityGap],
+    durable_assurance_status: WorkflowDurableAssuranceStatus,
+    durable_assurance_blockers: &'a [WorkflowDurableAssuranceBlocker],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuity_status: Option<WorkflowReplacementContinuityStatus>,
+    continuity_blockers: Vec<&'a WorkflowReplacementGap>,
+    continuity_warnings: Vec<&'a WorkflowReplacementGap>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeActionSummary<'a> {
+    continuity_ranked: &'a [WorkflowReplacementRankedAction],
+    governed_candidates: &'a [NextAction],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cooperative_evidence_argv: Option<&'a [String]>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeEvidenceSummary<'a> {
+    record_digest: &'a str,
+    offer_digest: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    supports_cooperative_claim_ref: Option<&'a StableId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    does_not_satisfy_source_claim_ref: Option<&'a StableId>,
+    current_status: WorkflowCooperativeEvidenceCurrentStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    valid_through_unix: Option<u64>,
+    proves: &'a [WorkflowCooperativeEvidenceProof],
+    does_not_prove: &'a [WorkflowCooperativeEvidenceNonProof],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumePacketReference<'a> {
+    packet_id: &'a StableId,
+    packet_digest: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeAuthorizationSummary<'a> {
+    registry_setup: &'a WorkflowAuthorizationRegistrySetup,
+    setup_gaps: &'a [WorkflowAuthorizationSetupGap],
+    action_packets: Vec<WorkflowResumePacketReference<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    objective_management_packet: Option<WorkflowResumePacketReference<'a>>,
+    action_packets_argv: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeOmittedHistory {
+    superseded_objective_revisions: usize,
+    decision_records: usize,
+    governed_evidence_records: usize,
+    claim_records: usize,
+    inactive_isolations: usize,
+    non_recoverable_promotions: usize,
+    non_current_cooperative_evidence: usize,
+}
+
+fn workflow_resume_summary<'a>(
+    guidance: &'a WorkflowGovernanceGuidance,
+    project_root: &Path,
+) -> WorkflowResumeSummary<'a> {
+    let continuity = guidance.replacement_continuity.as_ref();
+    let active_isolations = continuity
+        .into_iter()
+        .flat_map(|continuity| continuity.isolations.iter())
+        .filter(|isolation| {
+            matches!(
+                isolation.contract.status,
+                IsolationStatus::Active | IsolationStatus::Merging
+            )
+        })
+        .collect::<Vec<_>>();
+    let recoverable_promotions = continuity
+        .into_iter()
+        .flat_map(|continuity| continuity.promotions.iter())
+        .filter(|promotion| promotion.status == WorkflowReplacementPromotionStatus::Recoverable)
+        .collect::<Vec<_>>();
+    let current_cooperative_evidence = guidance
+        .cooperative_evidence
+        .iter()
+        .filter(|evidence| {
+            matches!(
+                evidence.current_status,
+                WorkflowCooperativeEvidenceCurrentStatus::Supporting
+                    | WorkflowCooperativeEvidenceCurrentStatus::Disproving
+            )
+        })
+        .map(|evidence| WorkflowResumeEvidenceSummary {
+            record_digest: &evidence.record_digest,
+            offer_digest: &evidence.offer_digest,
+            supports_cooperative_claim_ref: evidence.supports_cooperative_claim_ref.as_ref(),
+            does_not_satisfy_source_claim_ref: evidence.does_not_satisfy_source_claim_ref.as_ref(),
+            current_status: evidence.current_status,
+            valid_through_unix: evidence.valid_through_unix,
+            proves: &evidence.proves,
+            does_not_prove: &evidence.does_not_prove,
+        })
+        .collect::<Vec<_>>();
+    let continuity_blockers = continuity
+        .into_iter()
+        .flat_map(|continuity| continuity.gaps.iter())
+        .filter(|gap| gap.blocking)
+        .collect::<Vec<_>>();
+    let continuity_warnings = continuity
+        .into_iter()
+        .flat_map(|continuity| continuity.gaps.iter())
+        .filter(|gap| !gap.blocking)
+        .collect::<Vec<_>>();
+    let action_packets = guidance
+        .authorization
+        .action_packets
+        .iter()
+        .map(packet_reference)
+        .collect::<Vec<_>>();
+    let project_root = project_root.display().to_string();
+    let omitted_history = WorkflowResumeOmittedHistory {
+        superseded_objective_revisions: continuity.map_or(0, |value| {
+            value
+                .objective_history
+                .iter()
+                .filter(|revision| {
+                    !matches!(
+                        revision,
+                        WorkflowReplacementObjectiveRevision::CooperativeSameOwner {
+                            active: true,
+                            ..
+                        } | WorkflowReplacementObjectiveRevision::HumanIntent { active: true, .. }
+                    )
+                })
+                .count()
+        }),
+        decision_records: continuity.map_or(0, |value| value.decision_history.len()),
+        governed_evidence_records: continuity.map_or(0, |value| value.governed_evidence.len()),
+        claim_records: continuity.map_or(0, |value| value.claims.len()),
+        inactive_isolations: continuity.map_or(0, |value| {
+            value
+                .isolations
+                .len()
+                .saturating_sub(active_isolations.len())
+        }),
+        non_recoverable_promotions: continuity.map_or(0, |value| {
+            value
+                .promotions
+                .len()
+                .saturating_sub(recoverable_promotions.len())
+        }),
+        non_current_cooperative_evidence: guidance
+            .cooperative_evidence
+            .len()
+            .saturating_sub(current_cooperative_evidence.len()),
+    };
+
+    WorkflowResumeSummary {
+        schema_version: WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION,
+        detail_level: "summary",
+        forge_core_version: env!("CARGO_PKG_VERSION"),
+        status: guidance.status,
+        readiness_profile: guidance.readiness_profile,
+        project_id: &guidance.project_id,
+        current_phase: &guidance.current_phase,
+        target: guidance.target,
+        snapshot_digest: &guidance.snapshot_digest,
+        ledger_head_digest: &guidance.ledger_head_digest,
+        state_version: guidance.state_version,
+        release: &guidance.release,
+        bundle_id: &guidance.bundle_id,
+        bundle_digest: &guidance.bundle_digest,
+        effective: &guidance.effective,
+        selected_policy_ref: &guidance.selected_policy_ref,
+        compatibility_workflow_id: &guidance.compatibility_workflow_id,
+        active_objective: guidance.active_cooperative_objective.as_ref(),
+        agent_autonomy: WorkflowResumeAutonomySummary {
+            status: guidance.agent_autonomy.status,
+            delegated_work_classes: &guidance.agent_autonomy.delegated_work_classes,
+            human_decision_classes: &guidance.agent_autonomy.human_decision_classes,
+            protected_effects: &guidance.agent_autonomy.protected_effects,
+            assessment_argv: &guidance.agent_autonomy.assessment_argv,
+        },
+        human_decisions: WorkflowResumeHumanDecisionSummary {
+            calculated_now: &guidance.simulation.candidate_decision_requests,
+            recovered_pending: continuity
+                .map_or(&[], |continuity| &continuity.durable_pending_decisions),
+        },
+        blockers: WorkflowResumeBlockerSummary {
+            domain_pack_degraded: guidance.domain_pack_degraded,
+            domain_pack_gaps: &guidance.domain_pack_gaps,
+            candidate_status: guidance.simulation.candidate_status,
+            capability_gaps: &guidance.simulation.candidate_capability_gaps,
+            durable_assurance_status: guidance.durable_assurance.status,
+            durable_assurance_blockers: &guidance.durable_assurance.blockers,
+            continuity_status: continuity.map(|continuity| continuity.status),
+            continuity_blockers,
+            continuity_warnings,
+        },
+        actions: WorkflowResumeActionSummary {
+            continuity_ranked: continuity
+                .map_or(&[], |continuity| continuity.ranked_next_actions.as_slice()),
+            governed_candidates: &guidance.simulation.candidate_next_actions,
+            cooperative_evidence_argv: guidance
+                .cooperative_evidence_action_packet
+                .as_ref()
+                .map(|packet| packet.argv.as_slice()),
+        },
+        active_isolations,
+        recoverable_promotions,
+        current_cooperative_evidence,
+        authorization: WorkflowResumeAuthorizationSummary {
+            registry_setup: &guidance.authorization.registry_setup,
+            setup_gaps: &guidance.authorization.setup_gaps,
+            action_packets,
+            objective_management_packet: guidance
+                .authorization
+                .objective_management_packet
+                .as_ref()
+                .map(packet_reference),
+            action_packets_argv: vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "action-packets".to_owned(),
+                "--root".to_owned(),
+                project_root.clone(),
+                "--json".to_owned(),
+            ],
+        },
+        omitted_history,
+        detail_argv: vec![
+            "forge-core".to_owned(),
+            "workflow".to_owned(),
+            "resume".to_owned(),
+            "--root".to_owned(),
+            project_root,
+            "--full".to_owned(),
+            "--json".to_owned(),
+        ],
+    }
+}
+
+fn packet_reference(
+    packet: &WorkflowAuthorizationActionPacket,
+) -> WorkflowResumePacketReference<'_> {
+    WorkflowResumePacketReference {
+        packet_id: &packet.packet_id,
+        packet_digest: &packet.packet_digest,
     }
 }
 
@@ -604,11 +940,13 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             subcommand: "help".to_owned(),
             root: PathBuf::from("."),
             want_json: true,
+            full: false,
             flags: BTreeMap::new(),
         });
     }
     let mut root = PathBuf::from(".");
     let mut want_json = true;
+    let mut full = false;
     let mut flags = BTreeMap::<String, Vec<String>>::new();
     let mut index = 2usize;
     while index < args.len() {
@@ -616,6 +954,8 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
         match flag {
             "--json" => want_json = true,
             "--no-json" => want_json = false,
+            "--full" if full => return Err("--full may be supplied only once".to_owned()),
+            "--full" => full = true,
             "--policy" | "--phase" | "--bundle" | "--bundle-file" | "--bundle-path"
             | "--registry" | "--registry-file" | "--registry-path" | "--manifest"
             | "--manifest-file" | "--manifest-path" | "--batch" | "--batch-file"
@@ -656,6 +996,7 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
                     subcommand: "help".to_owned(),
                     root,
                     want_json,
+                    full,
                     flags,
                 });
             }
@@ -672,6 +1013,7 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
         subcommand,
         root,
         want_json,
+        full,
         flags,
     })
 }
@@ -710,6 +1052,12 @@ fn requested_readiness_profile(
 }
 
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
+    if args.full && args.subcommand != "resume" {
+        return Err(format!(
+            "--full is valid only for workflow resume, not workflow {}",
+            args.subcommand
+        ));
+    }
     if let Some(flag) = ["request-file", "attestation-file"]
         .iter()
         .find(|flag| args.flags.contains_key(**flag))
@@ -948,6 +1296,27 @@ mod tests {
     fn trusted_clock_override_is_not_accepted() {
         let args = argv(&["workflow", "next", "--now-unix", "9999999999"]);
         assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn full_detail_is_explicit_single_use_and_resume_only() {
+        let summary =
+            parse_args(&argv(&["workflow", "resume"])).expect("summary resume arguments parse");
+        validate_release_args(&summary).expect("summary resume validates");
+        assert!(!summary.full);
+
+        let full = parse_args(&argv(&["workflow", "resume", "--full"]))
+            .expect("full resume arguments parse");
+        validate_release_args(&full).expect("full resume validates");
+        assert!(full.full);
+
+        let duplicate = parse_args(&argv(&["workflow", "resume", "--full", "--full"]))
+            .expect_err("full detail may be requested only once");
+        assert_eq!(duplicate, "--full may be supplied only once");
+
+        let other = parse_args(&argv(&["workflow", "next", "--full"]))
+            .expect("generic parser recognizes full before command validation");
+        assert!(validate_release_args(&other).is_err());
     }
 
     #[test]

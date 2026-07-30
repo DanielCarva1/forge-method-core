@@ -67,12 +67,19 @@ Expand-Archive .\forge-core-x86_64-windows.zip -DestinationPath $destination -Fo
 
 Each binary archive is accompanied by its own `.sha256` and `.sigstore` files.
 Older releases may omit an SBOM. Current source requires one schema-validated
-release-level CycloneDX SBOM before publication. It also extracts native
-x86_64 Linux/Windows and Intel/Apple Silicon macOS archives into clean temporary
-roots and runs binary and wrapper `--version` plus `start`, `workflow init`,
-`workflow resume`, `workflow release-status`, and `workflow next` against a
-consumer path with a space. This packaged-install smoke is a future tag gate, not proof that
-`0.12.0` has been published.
+release-level CycloneDX SBOM before publication. It also extracts every native
+archive into a clean temporary installation and runs the complete packaged Solo
+Dogfood journey against a Git consumer path with a space. The journey includes
+one `start`, a synthetic gate-supplied cooperative objective and evidence,
+isolated work, exact promotion and readback, post-commit `recover` plus exact
+`apply` retry idempotence, replacement-process continuity, and final proof that
+claims and isolations are inactive, the temporary worktree/branch are gone, and
+only the promoted README remains modified. It does not derive objective
+admission from a real conversation or inject/prove a crash-recovery window. The
+x86_64 Linux reference package must pass three fresh consecutive
+runs, and their machine-readable evidence is retained. This is packaged-runtime
+proof, not proof that a named chat host performed the work, and it is a future
+tag gate rather than proof that `0.12.0` has been published.
 
 ## Install the host skill
 
@@ -356,7 +363,10 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
-For a replacement agent, inspect `data.replacement_continuity`. Run a
+For a replacement agent, inspect the default `workflow_resume_summary_v1`
+response first. It carries the current blockers, warnings, active work,
+recoverable promotions, and ranked actions. Execute `data.detail_argv` only
+when the full `replacement_continuity` audit is necessary. Run a
 `recover_promotion` argv before new work, preserving every array element
 exactly. A `completed` promotion has no recovery argv. A blocking gap means
 stop and explain the plain-language summary; `resume` is read-only and will not

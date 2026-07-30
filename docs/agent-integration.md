@@ -229,18 +229,28 @@ prior chat context. If durable state cannot reconstruct release, effective
 Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
-`workflow resume` keeps the ordinary `workflow next` fields and adds the
-versioned `replacement_continuity` block. That block is rebuilt from durable
-project state only: objective history, decision events actually present in the
-ledger, evidence history, claims, isolation ownership and real Git worktree
-validation, promotion state, typed gaps, and a ranked next action. A question
-calculated by the current policy remains under
-`simulation.candidate_decision_requests`; it is not described as a decision
-recovered from an earlier chat. Recovery commands are argv arrays, not shell
-text; keep paths with spaces as one element. Recoverable promotions rank before
-new work. Completed promotions never offer apply or recovery again. Missing,
-mismatched, expired, released, or tampered state blocks automatic continuation
-and is never silently repaired by resume.
+By default, `workflow resume` returns the concise, versioned
+`workflow_resume_summary_v1` activation view. It carries the current objective,
+autonomy boundary, decisions, blockers and warnings, ranked actions, active
+isolations, recoverable promotions, current cooperative evidence, and counts of
+history omitted from the activation response. Its exact `detail_argv` retrieves
+the full audit with `workflow resume --full --json`.
+
+The full audit keeps the ordinary `workflow next` fields and adds the versioned
+`replacement_continuity` block. That block is rebuilt from durable project
+state only: objective history, decision events actually present in the ledger,
+evidence history, claims, isolation ownership and real Git worktree validation,
+promotion state, typed gaps, and a ranked next action. A question calculated by
+the current policy remains under `simulation.candidate_decision_requests`; it
+is not described as a decision recovered from an earlier chat. Recovery
+commands are argv arrays, not shell text; keep paths with spaces as one element.
+Recoverable promotions rank before new work. Completed promotions never offer
+apply or recovery again. Missing or mismatched linked claims remain blocking
+for active work. An expired or released claim blocks a promotion that has not
+started, but remains visible as a non-blocking historical warning after a
+durable recoverable, completed, or corrupt promotion record exists. Corrupt or
+tampered promotion state remains blocking in its own right and is never
+silently repaired by resume.
 
 The format does not depend on a particular agent host. Compatibility with
 Codex, ZCode, Claude, Cursor, OpenCode, pi.dev, or another host remains a

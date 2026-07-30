@@ -179,6 +179,7 @@ jobs:
             archive: forge-core-x86_64-linux.tar.gz
             can_smoke: true
             native_release: true
+            journey_runs: 3
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             expected-arch: x86_64
@@ -188,6 +189,7 @@ jobs:
             archive: forge-core-aarch64-linux.tar.gz
             can_smoke: true # executed after packaging on the bounded native ARM64 smoke runner
             native_release: false
+            journey_runs: 1
           - target: x86_64-apple-darwin
             runner: macos-15-intel
             expected-arch: x86_64
@@ -197,6 +199,7 @@ jobs:
             archive: forge-core-x86_64-macos.tar.gz
             can_smoke: true
             native_release: true
+            journey_runs: 1
           - target: aarch64-apple-darwin
             runner: macos-15
             expected-arch: arm64
@@ -206,6 +209,7 @@ jobs:
             archive: forge-core-aarch64-macos.tar.gz
             can_smoke: true
             native_release: true
+            journey_runs: 1
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             expected-arch: amd64
@@ -215,6 +219,7 @@ jobs:
             archive: forge-core-x86_64-windows.zip
             can_smoke: true
             native_release: true
+            journey_runs: 1
 
     steps:
       - name: Checkout the validated immutable commit
@@ -310,25 +315,30 @@ jobs:
             --payload-manifest distribution/release-payload.txt \
             --require-checksum
 
-      - name: Smoke extracted native release install
+      - name: Prove packaged native Solo Dogfood journey
         if: matrix.native_release == true
-        # ALPHA-ONLY (0.12.0-alpha.1): smoke crash-replace fails on macOS
-        # GH runners because tempdir resolves under /var (symlink to
-        # /private/var), and Forge lifecycle I/O correctly rejects symlink
-        # path components. The archive is still built and signed; only the
-        # post-build smoke fails. Do not block the alpha publish on a known
-        # platform-specific smoke failure. Re-enable hard-fail once #24 lands.
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p packaged-solo-evidence
           python scripts/smoke-release-install.py \
             --archive "${{ matrix.archive }}" \
             --version "${{ needs.metadata.outputs.version }}" \
             --binary-name "${{ matrix.artifact }}" \
             --wrapper-name "${{ matrix.wrapper_name }}" \
             --expected-host-arch "${{ matrix.expected-arch }}" \
-            --command-timeout-seconds 60
+            --command-timeout-seconds 60 \
+            --journey-runs "${{ matrix.journey_runs }}" \
+            --evidence-output "packaged-solo-evidence/${{ matrix.target }}.json"
+
+      - name: Retain packaged Solo Dogfood evidence
+        if: matrix.native_release == true && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: solo-dogfood-evidence-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 30
+          path: packaged-solo-evidence/${{ matrix.target }}.json
 
       - name: Sign archive (Sigstore keyless)
         env:
@@ -383,13 +393,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p packaged-solo-evidence
           python scripts/smoke-release-install.py \
             --archive arm64-release-assets/forge-core-aarch64-linux.tar.gz \
             --version "${{ needs.metadata.outputs.version }}" \
             --binary-name forge-core \
             --wrapper-name forge \
             --expected-host-arch aarch64 \
-            --command-timeout-seconds 60
+            --command-timeout-seconds 60 \
+            --journey-runs 1 \
+            --evidence-output packaged-solo-evidence/aarch64-unknown-linux-gnu.json
+
+      - name: Retain Linux ARM64 packaged Solo Dogfood evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: solo-dogfood-evidence-aarch64-unknown-linux-gnu
+          if-no-files-found: error
+          retention-days: 30
+          path: packaged-solo-evidence/aarch64-unknown-linux-gnu.json
 
   release:
     name: Publish GitHub Release
@@ -407,9 +429,10 @@ jobs:
           ref: ${{ needs.metadata.outputs.commit_sha }}
           persist-credentials: false
 
-      - name: Download all build artifacts
+      - name: Download validated release assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          pattern: forge-core-*
           path: release-assets
           merge-multiple: true
 

@@ -34,6 +34,19 @@ def load_checker():
 checker = load_checker()
 
 
+def load_smoke():
+    path = ROOT / "scripts/smoke-release-install.py"
+    spec = importlib.util.spec_from_file_location("forge_release_install_smoke", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+smoke_module = load_smoke()
+
+
 def load_runner():
     path = ROOT / "scripts/run-release-locked-sbom.py"
     spec = importlib.util.spec_from_file_location("forge_release_sbom_runner", path)
@@ -231,6 +244,77 @@ class ReleaseLockingTests(unittest.TestCase):
         for name, mutated in mutations.items():
             with self.subTest(name=name):
                 self.assert_semantic_rejected(mutated)
+
+    def test_retained_smoke_diagnostics_never_include_raw_secret_like_output(self) -> None:
+        secrets = [
+            "sk-proj-release-gate-super-secret",
+            "ghp_0123456789abcdefghijklmnop",
+            "Authorization: Bearer release-token-value",
+        ]
+        console_message = "\n".join(secrets)
+        error = smoke_module.InstallSmokeError(
+            f"workflow resume failed\nstdout:\n{console_message}",
+            safe_message="workflow resume failed",
+            stage="workflow resume",
+            exit_code=17,
+        )
+        retained = smoke_module.evidence_diagnostic(error, "journey 1")
+        encoded = json.dumps(retained, sort_keys=True)
+        self.assertEqual(
+            set(retained),
+            {"stage", "message", "exit_code"},
+            "persisted failures have a deliberately closed diagnostic shape",
+        )
+        self.assertEqual(retained["exit_code"], 17)
+        self.assertLessEqual(len(retained["message"]), 240)
+        self.assertIn(secrets[0], str(error), "console detail must remain diagnosable")
+        for secret in secrets:
+            self.assertNotIn(secret, encoded)
+        self.assertNotIn("stdout", encoded.casefold())
+        self.assertNotIn("stderr", encoded.casefold())
+
+        unexpected = smoke_module.evidence_diagnostic(
+            ValueError("password=hunter2-secret-value"),
+            "build evidence base",
+        )
+        self.assertNotIn("hunter2-secret-value", json.dumps(unexpected))
+
+    def test_native_solo_journey_cannot_be_weakened_or_hidden(self) -> None:
+        source = WORKFLOW.read_text(encoding="utf-8")
+        mutations = {
+            "allowed-failure": source.replace(
+                "      - name: Prove packaged native Solo Dogfood journey\n"
+                "        if: matrix.native_release == true\n"
+                "        shell: bash",
+                "      - name: Prove packaged native Solo Dogfood journey\n"
+                "        if: matrix.native_release == true\n"
+                "        continue-on-error: true\n"
+                "        shell: bash",
+                1,
+            ),
+            "only-one-reference-run": source.replace(
+                "            journey_runs: 3",
+                "            journey_runs: 1",
+                1,
+            ),
+            "wrong-argv-run-count": source.replace(
+                '            --journey-runs "${{ matrix.journey_runs }}" \\',
+                "            --journey-runs 1 \\",
+                1,
+            ),
+            "evidence-only-on-success": source.replace(
+                "        if: matrix.native_release == true && always()",
+                "        if: matrix.native_release == true",
+                1,
+            ),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assert_semantic_rejected(mutated)
+                with self.assertRaises(checker.ReleaseLockError):
+                    checker._check_native_solo_journey(
+                        mutated, checker.parse_graph(mutated)
+                    )
 
     def test_arm64_smoke_removal_disable_and_bypass_are_rejected(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
