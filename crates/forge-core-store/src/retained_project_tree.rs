@@ -1784,6 +1784,24 @@ fn digest_entries_digest(entries: &[(String, String)]) -> Result<String, Retaine
     Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
 }
 
+/// Derive the same sorted path/content digest used by a retained project's
+/// regular-file snapshot.
+///
+/// Promotion planning uses this to bind the exact logical result before any
+/// write occurs. Callers must provide one sorted, duplicate-free projection.
+pub fn retained_regular_file_projection_digest(
+    entries: &[(String, String)],
+) -> Result<String, RetainedProjectTreeError> {
+    if entries.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
+        return Err(RetainedProjectTreeError::InvalidRoot {
+            path: PathBuf::from("<retained-project-tree-projection>"),
+            reason: "regular-file projection must be strictly path-sorted and duplicate-free"
+                .to_owned(),
+        });
+    }
+    digest_entries_digest(entries)
+}
+
 fn project_capability_nonce(path: &Path) -> Result<String, RetainedProjectTreeError> {
     let mut nonce = [0_u8; PROJECT_CAPABILITY_NONCE_BYTES];
     getrandom::fill(&mut nonce).map_err(|error| RetainedProjectTreeError::Io {

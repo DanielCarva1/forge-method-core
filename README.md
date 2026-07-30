@@ -4,7 +4,7 @@ Forge Method Core is a local, model-agnostic governance runtime for agent-led
 product work. A human stays in chat, a host agent drives `forge-core`, and Forge
 persists typed obligations, authority, evidence, and continuity.
 
-The source workspace is the `0.12.0-alpha.6` source candidate.
+The source workspace is the `0.12.0-alpha.7` source candidate.
 `0.12.0-alpha.2` is the published predecessor in project history, but this
 checkout alone proves neither that its assets remain currently available nor
 complete P7 product evidence. Verify the selected GitHub Release, exact asset
@@ -32,8 +32,8 @@ turning prose into runtime authority.
 
 | Identity | Current source fact | How to verify |
 |---|---|---|
-| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.6` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
-| **Published predecessor** | Project history records `0.12.0-alpha.2` before this `0.12.0-alpha.6` source candidate. Current release/asset availability is not inferable from this checkout. | Selected GitHub Release, asset checksum/Sigstore bundle, embedded CLI `--version`, and archive manifest |
+| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.7` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
+| **Published predecessor** | Project history records `0.12.0-alpha.2` before this `0.12.0-alpha.7` source candidate. Current release/asset availability is not inferable from this checkout. | Selected GitHub Release, asset checksum/Sigstore bundle, embedded CLI `--version`, and archive manifest |
 | **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin and may still be on a predecessor. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
 | **Domain Pack effective epoch** | Project-local digest joining the admitted workflow release with the active immutable Domain Pack generation. It has no global package SemVer and does not rewrite core identity. | `workflow next|resume` and `domain-pack status` against the Project Link-resolved state |
 

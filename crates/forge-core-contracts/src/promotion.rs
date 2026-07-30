@@ -13,7 +13,7 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION: &str = "governed_promotion_preview_v2";
+pub const GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION: &str = "governed_promotion_preview_v3";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -343,6 +343,13 @@ pub struct GovernedPromotionPreview {
     pub diff_digest: String,
     pub write_set_digest: String,
     pub predicted_result_regular_file_set_digest: String,
+    /// Complete logical result binding: canonical root, accepted file and
+    /// directory namespace/metadata, and excluded-root metadata.
+    ///
+    /// Historical v2 previews predate this field and deserialize it as empty;
+    /// v3 receipt verification requires one valid digest.
+    #[serde(default)]
+    pub predicted_result_logical_snapshot_digest: String,
     pub objective_coverage: PromotionObjectiveCoverage,
     pub assurance_claim_coverage: Vec<PromotionAssuranceClaimCoverage>,
     pub carried_assurance_gaps: Vec<PromotionCarriedAssuranceGap>,

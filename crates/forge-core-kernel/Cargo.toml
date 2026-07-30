@@ -20,6 +20,7 @@ forge-core-store = { path = "../forge-core-store" }
 forge-core-workflow-governance-tcb = { path = "../forge-core-workflow-governance-tcb" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
+getrandom.workspace = true
 include_dir.workspace = true
 serde.workspace = true
 serde_json.workspace = true

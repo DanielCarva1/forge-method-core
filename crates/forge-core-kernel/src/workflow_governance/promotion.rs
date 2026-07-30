@@ -17,27 +17,28 @@ use forge_core_contracts::tool_effect::{
     InverseMetadata, InverseSource, RepairStrategy,
 };
 use forge_core_contracts::{
-    ClaimId, GovernedPromotionApplication, GovernedPromotionApplyStatus, GovernedPromotionPreview,
-    GovernedPromotionPreviewAuthority, GovernedPromotionReceipt, PrincipalId,
-    PromotionAppliedFileBinding, PromotionApplyEligibility, PromotionAssuranceClaimCoverage,
-    PromotionAssuranceClaimStatus, PromotionCarriedAssuranceGap, PromotionClaimConflict,
-    PromotionClaimSetBinding, PromotionDestinationBinding, PromotionDiffEffect,
-    PromotionEvidenceRecordBinding, PromotionEvidenceSetBinding, PromotionExcludedRootBinding,
-    PromotionExcludedRootKind, PromotionGitWorktreeBinding, PromotionGovernanceBinding,
-    PromotionObjectiveBinding, PromotionObjectiveCoverage, PromotionObjectiveCoverageStatus,
-    PromotionPathClaimAttribution, PromotionRecoveryExecutionBinding, PromotionReplayBinding,
-    PromotionSnapshotBinding, PromotionSourceBinding, PromotionUnsupportedEffect,
-    PromotionUnsupportedEffectKind, PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus,
-    RepoPath, StableId, ToolEffectContract, ToolEffectContractDocument,
-    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
-    WorkflowReadinessProfile, GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION,
-    GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
+    ClaimContract, ClaimId, GovernedPromotionApplication, GovernedPromotionApplyStatus,
+    GovernedPromotionPreview, GovernedPromotionPreviewAuthority, GovernedPromotionReceipt,
+    PrincipalId, PromotionAppliedFileBinding, PromotionApplyEligibility,
+    PromotionAssuranceClaimCoverage, PromotionAssuranceClaimStatus, PromotionCarriedAssuranceGap,
+    PromotionClaimConflict, PromotionClaimSetBinding, PromotionDestinationBinding,
+    PromotionDiffEffect, PromotionEvidenceRecordBinding, PromotionEvidenceSetBinding,
+    PromotionExcludedRootBinding, PromotionExcludedRootKind, PromotionGitWorktreeBinding,
+    PromotionGovernanceBinding, PromotionObjectiveBinding, PromotionObjectiveCoverage,
+    PromotionObjectiveCoverageStatus, PromotionPathClaimAttribution,
+    PromotionRecoveryExecutionBinding, PromotionReplayBinding, PromotionSnapshotBinding,
+    PromotionSourceBinding, PromotionUnsupportedEffect, PromotionUnsupportedEffectKind,
+    PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus, RepoPath, StableId,
+    ToolEffectContract, ToolEffectContractDocument, WorkflowCooperativeEvidenceCurrentStatus,
+    WorkflowCooperativeEvidenceDisposition, WorkflowReadinessProfile,
+    GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION, GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     check_write_against_claims, derive_promotion_diff, detect_isolation_conflict,
     evaluate_promotion_readiness, is_live, promotion_domain_digest, rfc3339_to_unix,
-    validate_isolation_contract, PromotionInventoryDirectory, PromotionInventoryFile,
-    PromotionPlanningError, PromotionReadinessInput, WorkflowClaimResultStatus, WriteCheck,
+    validate_isolation_contract, PromotionDiffProjection, PromotionInventoryDirectory,
+    PromotionInventoryFile, PromotionPlanningError, PromotionReadinessInput,
+    WorkflowClaimResultStatus, WriteCheck,
 };
 use forge_core_store::claim_wal::{
     project_existing_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions,
@@ -49,7 +50,9 @@ use forge_core_store::replay_wal::{
     reserve_replay_nonce_under_effect_lock, verify_consumed_replay_key_hash_under_effect_lock,
     ReplayReservationState, ReplayWalError,
 };
-use forge_core_store::retained_project_tree::{RetainedProjectTree, RetainedProjectTreeError};
+use forge_core_store::retained_project_tree::{
+    retained_regular_file_projection_digest, RetainedProjectTree, RetainedProjectTreeError,
+};
 use forge_core_store::{
     acquire_existing_effect_store_lock, append_effect_replay_completion_under_lock,
     apply_existing_file_effect_transaction_to_retained_project_tree,
@@ -64,6 +67,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const MAX_PROMOTION_SNAPSHOT_ENTRIES: usize = 200_000;
 const MAX_PROMOTION_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
@@ -72,6 +77,10 @@ const MAX_ISOLATION_DOCUMENT_BYTES: u64 = 1024 * 1024;
 const MAX_ISOLATION_DOCUMENT_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_PROMOTION_STATE_DOCUMENTS: usize = 4_096;
 const MAX_PROMOTION_STATE_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_PROMOTION_GIT_OUTPUT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES: usize = 64 * 1024;
+const MAX_PROMOTION_GIT_INPUT_BYTES: usize = 32 * 1024 * 1024;
+const PROMOTION_GIT_TIMEOUT: Duration = Duration::from_secs(30);
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
 pub(super) const PROMOTION_EFFECT_LOCK_RELATIVE_PATH: &str = "promotion/apply.lock";
 const PROMOTION_EFFECT_WAL_RELATIVE_PATH: &str = "promotion/effects.ndjson";
@@ -394,6 +403,21 @@ fn derive_governed_promotion(
         &destination_root,
         &isolation.contract.branch_name,
     )?;
+    let git_change_set = observe_promotion_git_change_set(
+        &source_root,
+        &git_observation.common_git_dir,
+        &git_observation.worktree_git_dir,
+        &git_observation.binding.head_oid,
+        &git_observation.binding.canonical_repository_head_oid,
+    )?;
+    let mut promotion_git_binding = git_observation.binding.clone();
+    promotion_git_binding.observation_digest = promotion_domain_digest(
+        "promotion.git.promotion_observation.v2",
+        &(
+            &git_observation.binding.observation_digest,
+            &git_change_set.observation_digest,
+        ),
+    )?;
     let source_tree = RetainedProjectTree::capture(
         &source_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
@@ -411,30 +435,6 @@ fn derive_governed_promotion(
     let destination_directories = inventory_directories(destination_tree);
     let source_excluded_roots = excluded_root_bindings(&source_root)?;
     let destination_excluded_roots = excluded_root_bindings(&destination_root)?;
-    let mut diff = derive_promotion_diff(
-        &source_files,
-        &destination_files,
-        &source_directories,
-        &destination_directories,
-    )?;
-    for excluded in &source_excluded_roots {
-        if excluded.present && excluded.kind == PromotionExcludedRootKind::BuildOrDependencyCache {
-            diff.unsupported_effects.push(PromotionUnsupportedEffect {
-                path: RepoPath(excluded.name.clone()),
-                kind: PromotionUnsupportedEffectKind::ExcludedSourceRootContent,
-                detail: format!(
-                    "source root {} is deliberately outside the promotable snapshot; remove or relocate it before apply authority can be prepared",
-                    excluded.name
-                ),
-            });
-        }
-    }
-    diff.unsupported_effects.sort_by(|left, right| {
-        left.path
-            .0
-            .cmp(&right.path.0)
-            .then_with(|| left.kind.cmp(&right.kind))
-    });
 
     source_tree.revalidate()?;
     destination_tree.revalidate()?;
@@ -446,6 +446,18 @@ fn derive_governed_promotion(
     {
         return Err(PromotionPreviewError::GitWorktree(
             "Git worktree metadata changed during retained capture".to_owned(),
+        ));
+    }
+    if observe_promotion_git_change_set(
+        &source_root,
+        &git_observation.common_git_dir,
+        &git_observation.worktree_git_dir,
+        &git_observation.binding.head_oid,
+        &git_observation.binding.canonical_repository_head_oid,
+    )? != git_change_set
+    {
+        return Err(PromotionPreviewError::GitWorktree(
+            "Git promotion change set changed during retained capture".to_owned(),
         ));
     }
 
@@ -523,6 +535,39 @@ fn derive_governed_promotion(
         .and_then(|claim| claim.claim.claimant_principal_id.clone());
     let linked_claim_valid_through = linked_claim_contract.as_ref().and_then(|claim| {
         rfc3339_to_unix(&claim.lease.expires_at).and_then(|value| u64::try_from(value).ok())
+    });
+    let (mut diff, selected_paths, predicted_result_files, predicted_result_directories) =
+        derive_git_selected_promotion_diff(
+            &source_files,
+            &destination_files,
+            &source_directories,
+            &destination_directories,
+            &git_change_set,
+            linked_claim_contract.as_ref(),
+        )?;
+    for excluded in &source_excluded_roots {
+        let explicitly_selected = selected_paths.iter().any(|path| {
+            path == &excluded.name
+                || path
+                    .strip_prefix(&excluded.name)
+                    .is_some_and(|suffix| suffix.starts_with('/'))
+        });
+        if explicitly_selected {
+            diff.unsupported_effects.push(PromotionUnsupportedEffect {
+                path: RepoPath(excluded.name.clone()),
+                kind: PromotionUnsupportedEffectKind::ExcludedSourceRootContent,
+                detail: format!(
+                    "selected Git change under {} is outside the retained promotion snapshot",
+                    excluded.name
+                ),
+            });
+        }
+    }
+    diff.unsupported_effects.sort_by(|left, right| {
+        left.path
+            .0
+            .cmp(&right.path.0)
+            .then_with(|| left.kind.cmp(&right.kind))
     });
     let current_claims = claim_projection
         .as_ref()
@@ -740,6 +785,18 @@ fn derive_governed_promotion(
         destination_tree,
         destination_excluded_roots,
     )?;
+    let predicted_result_snapshot_digest = promotion_domain_digest(
+        "promotion.filesystem_snapshot.v1",
+        &(
+            predicted_result_files.as_slice(),
+            predicted_result_directories.as_slice(),
+        ),
+    )?;
+    let predicted_result_logical_snapshot_digest = promotion_logical_snapshot_digest(
+        &destination_snapshot.canonical_root_digest,
+        &predicted_result_snapshot_digest,
+        &destination_snapshot.excluded_roots,
+    )?;
     let source = PromotionSourceBinding {
         isolation_id: isolation.contract.id.clone(),
         isolation_contract_digest: isolation.raw_digest.clone(),
@@ -749,7 +806,7 @@ fn derive_governed_promotion(
         linked_claim_id: linked_claim_id.clone(),
         linked_claim_principal_id: linked_claim_principal_id.clone(),
         declared_worktree_path: isolation.contract.worktree_path.clone(),
-        git_worktree: git_observation.binding.clone(),
+        git_worktree: promotion_git_binding,
         snapshot: source_snapshot,
     };
     let destination = PromotionDestinationBinding {
@@ -812,6 +869,7 @@ fn derive_governed_promotion(
         diff_digest: diff.diff_digest,
         write_set_digest: diff.write_set_digest,
         predicted_result_regular_file_set_digest: diff.predicted_result_regular_file_set_digest,
+        predicted_result_logical_snapshot_digest,
         objective_coverage,
         assurance_claim_coverage,
         carried_assurance_gaps,
@@ -839,6 +897,18 @@ fn derive_governed_promotion(
     {
         return Err(PromotionPreviewError::GitWorktree(
             "Git worktree metadata changed during preview".to_owned(),
+        ));
+    }
+    if observe_promotion_git_change_set(
+        &source_root,
+        &git_observation.common_git_dir,
+        &git_observation.worktree_git_dir,
+        &git_observation.binding.head_oid,
+        &git_observation.binding.canonical_repository_head_oid,
+    )? != git_change_set
+    {
+        return Err(PromotionPreviewError::GitWorktree(
+            "Git promotion change set changed during preview".to_owned(),
         ));
     }
     let current_isolation = load_active_isolation(&binding.state_root, isolation_id)?;
@@ -1044,7 +1114,7 @@ pub(super) fn recover_promotion_under_lock(
     if inspection.is_none() {
         validate_pre_begin_destination_exact(binding, destination_tree, &prepared.preview)?;
     }
-    validate_recovery_destination(destination_tree, &prepared.source_tree, &prepared.preview)?;
+    validate_recovery_destination(binding, destination_tree, &prepared.preview)?;
     let (effect, payloads, applied_files) = promotion_effect_and_payloads(&prepared)?;
     let legacy_v1_pre_begin =
         intent.schema_version == "governed_promotion_intent_v1" && inspection.is_none();
@@ -1345,7 +1415,7 @@ pub(super) fn recover_promotion_under_lock(
             "recovered canonical readback failed: {error}"
         ))
     })?;
-    verify_logical_result_matches_source(destination_tree, &prepared.source_tree)
+    verify_logical_result_matches_prediction(binding, destination_tree, &prepared.preview)
         .map_err(PromotionApplyError::RecoveryRequired)?;
     let committed_at_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1599,10 +1669,26 @@ fn prepare_recovery_from_stored_preview(
                 .to_owned(),
         ));
     }
-    let git_observation = observe_git_worktree(
+    let mut git_observation = observe_git_worktree(
         &source_root,
         &destination_root,
         &isolation.contract.branch_name,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let git_change_set = observe_promotion_git_change_set(
+        &source_root,
+        &git_observation.common_git_dir,
+        &git_observation.worktree_git_dir,
+        &git_observation.binding.head_oid,
+        &git_observation.binding.canonical_repository_head_oid,
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    git_observation.binding.observation_digest = promotion_domain_digest(
+        "promotion.git.promotion_observation.v2",
+        &(
+            &git_observation.binding.observation_digest,
+            &git_change_set.observation_digest,
+        ),
     )
     .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
     if git_observation.binding != preview.source.git_worktree {
@@ -1636,12 +1722,8 @@ fn validate_recovery_preview_identity(
             "stored preview is not the exact approved local-reversible candidate".to_owned(),
         ));
     }
-    let mut canonical = preview.clone();
-    canonical.preview_id = StableId(String::new());
-    canonical.preview_digest.clear();
-    canonical.observed_at_unix = 0;
-    let actual = promotion_domain_digest("promotion.preview.v1", &canonical)
-        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let actual = canonical_promotion_preview_digest(preview)
+        .map_err(PromotionApplyError::RecoveryRequired)?;
     if actual != expected_preview_digest
         || preview.preview_id
             != StableId(format!(
@@ -1656,66 +1738,148 @@ fn validate_recovery_preview_identity(
     Ok(())
 }
 
+fn canonical_promotion_preview_digest(
+    preview: &GovernedPromotionPreview,
+) -> Result<String, String> {
+    let mut canonical = preview.clone();
+    canonical.preview_id = StableId(String::new());
+    canonical.preview_digest.clear();
+    canonical.observed_at_unix = 0;
+    if canonical.schema_version == "governed_promotion_preview_v2" {
+        let mut legacy = serde_json::to_value(&canonical).map_err(|error| error.to_string())?;
+        legacy
+            .as_object_mut()
+            .ok_or_else(|| "promotion preview did not serialize as an object".to_owned())?
+            .remove("predicted_result_logical_snapshot_digest");
+        promotion_domain_digest("promotion.preview.v1", &legacy).map_err(|error| error.to_string())
+    } else {
+        promotion_domain_digest("promotion.preview.v1", &canonical)
+            .map_err(|error| error.to_string())
+    }
+}
+
 fn validate_recovery_destination(
+    binding: &WorkflowGovernanceProjectBinding,
     destination_tree: &RetainedProjectTree,
-    source_tree: &RetainedProjectTree,
     preview: &GovernedPromotionPreview,
 ) -> Result<(), PromotionApplyError> {
-    let destination_files = inventory_files(destination_tree);
-    let source_files = inventory_files(source_tree);
-    if inventory_directories(destination_tree) != inventory_directories(source_tree)
-        || destination_files.len() != source_files.len()
+    let destination_root = canonical_directory(&binding.project_root, "recovery destination root")
+        .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    if destination_root.to_string_lossy().as_ref()
+        != preview.destination.snapshot.canonical_root.as_str()
+        || excluded_root_bindings(&destination_root)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?
+            != preview.destination.snapshot.excluded_roots
     {
         return Err(PromotionApplyError::RecoveryRequired(
-            "canonical destination namespace or directory metadata is incompatible with recovery"
+            "canonical destination root or excluded-root metadata differs from the approved destination"
                 .to_owned(),
         ));
     }
-    for source in &source_files {
-        let current = destination_files
-            .iter()
-            .find(|candidate| candidate.relative_path == source.relative_path)
-            .ok_or_else(|| {
-                PromotionApplyError::RecoveryRequired(format!(
-                    "{} disappeared from the canonical destination",
-                    source.relative_path
-                ))
-            })?;
-        if current.metadata_fingerprint != source.metadata_fingerprint {
+    let mut reconstructed_files = inventory_files(destination_tree)
+        .into_iter()
+        .map(|file| (file.relative_path.clone(), file))
+        .collect::<BTreeMap<_, _>>();
+    for diff in &preview.diff {
+        if diff.effect != PromotionDiffEffect::WriteRegularFile || diff.destructive {
             return Err(PromotionApplyError::RecoveryRequired(format!(
-                "{} metadata differs from the approved source/destination",
-                source.relative_path
+                "{} is not a recoverable existing-file write",
+                diff.path.0
             )));
         }
-        let diff = preview
-            .diff
-            .iter()
-            .find(|entry| entry.path.0 == source.relative_path);
-        if let Some(diff) = diff {
-            let old_digest = diff.before_content_digest.as_deref().ok_or_else(|| {
+        let before_content_digest = diff.before_content_digest.as_ref().ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "{} approved diff lacks old content",
+                diff.path.0
+            ))
+        })?;
+        let before_byte_length = diff.before_byte_length.ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "{} approved diff lacks old length",
+                diff.path.0
+            ))
+        })?;
+        let before_metadata_fingerprint =
+            diff.before_metadata_fingerprint.as_ref().ok_or_else(|| {
                 PromotionApplyError::RecoveryRequired(format!(
-                    "{} approved diff lacks old content",
-                    source.relative_path
+                    "{} approved diff lacks old metadata",
+                    diff.path.0
                 ))
             })?;
-            let new_digest = diff.after_content_digest.as_deref().ok_or_else(|| {
+        let after_content_digest = diff.after_content_digest.as_ref().ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "{} approved diff lacks new content",
+                diff.path.0
+            ))
+        })?;
+        let after_byte_length = diff.after_byte_length.ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "{} approved diff lacks new length",
+                diff.path.0
+            ))
+        })?;
+        let after_metadata_fingerprint =
+            diff.after_metadata_fingerprint.as_ref().ok_or_else(|| {
                 PromotionApplyError::RecoveryRequired(format!(
-                    "{} approved diff lacks new content",
-                    source.relative_path
+                    "{} approved diff lacks new metadata",
+                    diff.path.0
                 ))
             })?;
-            if current.content_digest != old_digest && current.content_digest != new_digest {
-                return Err(PromotionApplyError::RecoveryRequired(format!(
-                    "{} contains neither the recorded old nor exact new bytes",
-                    source.relative_path
-                )));
-            }
-        } else if current != source {
+        let current = reconstructed_files.get_mut(&diff.path.0).ok_or_else(|| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "{} disappeared from the canonical destination",
+                diff.path.0
+            ))
+        })?;
+        let matches_before = current.content_digest == *before_content_digest
+            && current.byte_length == before_byte_length
+            && current.metadata_fingerprint == *before_metadata_fingerprint;
+        let matches_after = current.content_digest == *after_content_digest
+            && current.byte_length == after_byte_length
+            && current.metadata_fingerprint == *after_metadata_fingerprint;
+        if !matches_before && !matches_after {
             return Err(PromotionApplyError::RecoveryRequired(format!(
-                "{} changed outside the approved promotion write set",
-                source.relative_path
+                "{} contains neither the recorded old nor exact new state",
+                diff.path.0
             )));
         }
+        current.content_digest.clone_from(before_content_digest);
+        current.byte_length = before_byte_length;
+        current
+            .metadata_fingerprint
+            .clone_from(before_metadata_fingerprint);
+    }
+    let reconstructed_files = reconstructed_files.into_values().collect::<Vec<_>>();
+    let current_directories = inventory_directories(destination_tree);
+    let reconstructed_snapshot_digest = promotion_domain_digest(
+        "promotion.filesystem_snapshot.v1",
+        &(
+            reconstructed_files.as_slice(),
+            current_directories.as_slice(),
+        ),
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let reconstructed_regular_file_digest = retained_regular_file_projection_digest(
+        &reconstructed_files
+            .iter()
+            .map(|file| (file.relative_path.clone(), file.content_digest.clone()))
+            .collect::<Vec<_>>(),
+    )
+    .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+    let reconstructed_bytes = reconstructed_files
+        .iter()
+        .try_fold(0_u64, |total, file| total.checked_add(file.byte_length));
+    let approved = &preview.destination.snapshot;
+    if reconstructed_snapshot_digest != approved.snapshot_digest
+        || reconstructed_regular_file_digest != approved.regular_file_set_digest
+        || reconstructed_files.len() != approved.file_count
+        || current_directories.len() != approved.directory_count
+        || reconstructed_bytes != Some(approved.total_regular_file_bytes)
+    {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "canonical destination state outside the approved writes no longer matches the approved destination snapshot"
+                .to_owned(),
+        ));
     }
     Ok(())
 }
@@ -2098,7 +2262,7 @@ pub(super) fn apply_prepared_promotion_under_lock(
             "exact retained canonical readback failed: {error}"
         ))
     })?;
-    verify_logical_result_matches_source(destination_tree, &prepared.source_tree)
+    verify_logical_result_matches_prediction(binding, destination_tree, &prepared.preview)
         .map_err(PromotionApplyError::RecoveryRequired)?;
     let result_root = canonical_directory(&binding.project_root, "result root")
         .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
@@ -2162,33 +2326,48 @@ pub(super) fn apply_prepared_promotion_under_lock(
     })
 }
 
-fn verify_logical_result_matches_source(
+fn verify_logical_result_matches_prediction(
+    binding: &WorkflowGovernanceProjectBinding,
     result_tree: &RetainedProjectTree,
-    source_tree: &RetainedProjectTree,
+    preview: &GovernedPromotionPreview,
 ) -> Result<(), String> {
-    let mut source = inventory_files(source_tree)
+    let result = inventory_files(result_tree)
         .into_iter()
         .map(|file| (file.relative_path, file.content_digest, file.byte_length))
         .collect::<Vec<_>>();
-    source.sort();
-    let result = inventory_files(result_tree);
-    let mut logical_result = result
-        .into_iter()
-        .map(|file| (file.relative_path, file.content_digest, file.byte_length))
+    let projection = result
+        .iter()
+        .map(|(path, digest, _)| (path.clone(), digest.clone()))
         .collect::<Vec<_>>();
-    logical_result.sort();
-    if logical_result != source {
-        let source_paths = source
-            .iter()
-            .map(|(path, _, _)| path.as_str())
-            .collect::<Vec<_>>();
-        let result_paths = logical_result
-            .iter()
-            .map(|(path, _, _)| path.as_str())
-            .collect::<Vec<_>>();
+    let actual =
+        retained_regular_file_projection_digest(&projection).map_err(|error| error.to_string())?;
+    if actual != preview.predicted_result_regular_file_set_digest {
         return Err(format!(
-            "canonical logical readback differs from the predicted exact result: source_paths={source_paths:?}, result_paths={result_paths:?}"
+            "canonical logical readback differs from the Git-selected predicted result: expected={}, actual={actual}",
+            preview.predicted_result_regular_file_set_digest
         ));
+    }
+    if preview.schema_version != "governed_promotion_preview_v2" {
+        let result_root = canonical_directory(&binding.project_root, "promotion result root")
+            .map_err(|error| error.to_string())?;
+        let result_snapshot = snapshot_binding(
+            &result_root,
+            result_tree,
+            excluded_root_bindings(&result_root).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let actual_logical = promotion_logical_snapshot_digest(
+            &result_snapshot.canonical_root_digest,
+            &result_snapshot.snapshot_digest,
+            &result_snapshot.excluded_roots,
+        )
+        .map_err(|error| error.to_string())?;
+        if actual_logical != preview.predicted_result_logical_snapshot_digest {
+            return Err(format!(
+                "canonical namespace, metadata, or bytes differ from the exact predicted logical result: expected={}, actual={actual_logical}",
+                preview.predicted_result_logical_snapshot_digest
+            ));
+        }
     }
     Ok(())
 }
@@ -2404,7 +2583,10 @@ fn verify_promotion_receipt(
         ));
     }
     let preview = &receipt.preview;
-    if preview.status != forge_core_contracts::GovernedPromotionPreviewStatus::Reviewable
+    let legacy_full_source_result = preview.schema_version == "governed_promotion_preview_v2";
+    if (!legacy_full_source_result
+        && preview.schema_version != GOVERNED_PROMOTION_PREVIEW_SCHEMA_VERSION)
+        || preview.status != forge_core_contracts::GovernedPromotionPreviewStatus::Reviewable
         || preview.apply_eligibility != PromotionApplyEligibility::EligibleLocalReversible
         || preview.authority != GovernedPromotionPreviewAuthority::ReadOnlyCandidateNoApplyAuthority
         || preview.canonical_mutation_performed
@@ -2419,12 +2601,8 @@ fn verify_promotion_receipt(
             "derived principal differs from the exact linked claim".to_owned(),
         ));
     }
-    let mut canonical_preview = preview.clone();
-    canonical_preview.preview_id = StableId(String::new());
-    canonical_preview.preview_digest.clear();
-    canonical_preview.observed_at_unix = 0;
-    let actual_preview_digest = promotion_domain_digest("promotion.preview.v1", &canonical_preview)
-        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+    let actual_preview_digest =
+        canonical_promotion_preview_digest(preview).map_err(PromotionApplyError::ReceiptInvalid)?;
     let actual_preview_id = StableId(format!(
         "promotion.preview.{}",
         actual_preview_digest.trim_start_matches("sha256:")
@@ -2454,6 +2632,9 @@ fn verify_promotion_receipt(
         &receipt.replay.key_hash,
         &receipt.replay.intent_digest,
         &receipt.replay.commit_digest,
+        &receipt.result_snapshot.snapshot_digest,
+        &receipt.result_snapshot.retained_tree_digest,
+        &receipt.result_snapshot.regular_file_set_digest,
         &receipt.result_snapshot_digest,
         &receipt.receipt_digest,
     ] {
@@ -2462,6 +2643,13 @@ fn verify_promotion_receipt(
                 "receipt contains a malformed content digest".to_owned(),
             ));
         }
+    }
+    if !legacy_full_source_result
+        && !is_sha256_digest(&preview.predicted_result_logical_snapshot_digest)
+    {
+        return Err(PromotionApplyError::ReceiptInvalid(
+            "receipt preview contains a malformed predicted logical snapshot digest".to_owned(),
+        ));
     }
     if let Some(recovery) = &receipt.recovery_execution {
         if recovery.schema_version != PROMOTION_RECOVERY_EXECUTION_SCHEMA_VERSION
@@ -2671,38 +2859,74 @@ fn verify_promotion_receipt(
         ));
     }
     let source = &preview.source.snapshot;
+    let destination = &preview.destination.snapshot;
     let result = &receipt.result_snapshot;
     let mut snapshot_mismatches = Vec::new();
-    if result.canonical_root != preview.destination.snapshot.canonical_root {
+    if result.canonical_root != destination.canonical_root {
         snapshot_mismatches.push("canonical_root");
     }
-    if result.canonical_root_digest != preview.destination.snapshot.canonical_root_digest {
+    if result.canonical_root_digest != destination.canonical_root_digest {
         snapshot_mismatches.push("canonical_root_digest");
     }
-    if result.excluded_roots != preview.destination.snapshot.excluded_roots {
+    if result.excluded_roots != destination.excluded_roots {
         snapshot_mismatches.push("excluded_roots");
     }
-    if result.snapshot_digest != source.snapshot_digest {
-        snapshot_mismatches.push("snapshot_digest");
-    }
-    if result.retained_tree_digest != source.retained_tree_digest {
-        snapshot_mismatches.push("retained_tree_digest");
-    }
-    if result.regular_file_set_digest != source.regular_file_set_digest {
-        snapshot_mismatches.push("regular_file_set_digest");
-    }
-    if result.file_count != source.file_count {
-        snapshot_mismatches.push("file_count");
-    }
-    if result.directory_count != source.directory_count {
-        snapshot_mismatches.push("directory_count");
-    }
-    if result.total_regular_file_bytes != source.total_regular_file_bytes {
-        snapshot_mismatches.push("total_regular_file_bytes");
+    if legacy_full_source_result {
+        if result.snapshot_digest != source.snapshot_digest {
+            snapshot_mismatches.push("snapshot_digest");
+        }
+        if result.retained_tree_digest != source.retained_tree_digest {
+            snapshot_mismatches.push("retained_tree_digest");
+        }
+        if result.regular_file_set_digest != source.regular_file_set_digest {
+            snapshot_mismatches.push("regular_file_set_digest");
+        }
+        if result.file_count != source.file_count {
+            snapshot_mismatches.push("file_count");
+        }
+        if result.directory_count != source.directory_count {
+            snapshot_mismatches.push("directory_count");
+        }
+        if result.total_regular_file_bytes != source.total_regular_file_bytes {
+            snapshot_mismatches.push("total_regular_file_bytes");
+        }
+    } else {
+        let expected_bytes =
+            preview
+                .diff
+                .iter()
+                .try_fold(destination.total_regular_file_bytes, |total, entry| {
+                    total
+                        .checked_sub(entry.before_byte_length.unwrap_or_default())
+                        .and_then(|value| {
+                            value.checked_add(entry.after_byte_length.unwrap_or_default())
+                        })
+                });
+        if result.regular_file_set_digest != preview.predicted_result_regular_file_set_digest {
+            snapshot_mismatches.push("regular_file_set_digest");
+        }
+        if result.file_count != destination.file_count {
+            snapshot_mismatches.push("file_count");
+        }
+        if result.directory_count != destination.directory_count {
+            snapshot_mismatches.push("directory_count");
+        }
+        if expected_bytes != Some(result.total_regular_file_bytes) {
+            snapshot_mismatches.push("total_regular_file_bytes");
+        }
+        let actual_logical = promotion_logical_snapshot_digest(
+            &result.canonical_root_digest,
+            &result.snapshot_digest,
+            &result.excluded_roots,
+        )
+        .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+        if actual_logical != preview.predicted_result_logical_snapshot_digest {
+            snapshot_mismatches.push("logical_snapshot_digest");
+        }
     }
     if !snapshot_mismatches.is_empty() {
         return Err(PromotionApplyError::ReceiptInvalid(format!(
-            "receipt result snapshot differs from the exact predicted source result: {}",
+            "receipt result snapshot differs from the exact predicted promotion result: {}",
             snapshot_mismatches.join(", ")
         )));
     }
@@ -3627,7 +3851,7 @@ fn validate_recoverable_promotion(
     if inspection.is_none() {
         validate_pre_begin_destination_exact(binding, &destination_tree, &prepared.preview)?;
     }
-    validate_recovery_destination(&destination_tree, &prepared.source_tree, &prepared.preview)?;
+    validate_recovery_destination(binding, &destination_tree, &prepared.preview)?;
     let (effect, _payloads, _applied_files) = promotion_effect_and_payloads(&prepared)?;
     let original_provenance = promotion_provenance_from_intent(intent, &prepared.preview, &effect)?;
     let legacy_v1_pre_begin =
@@ -4182,6 +4406,167 @@ fn inventory_directories(tree: &RetainedProjectTree) -> Vec<PromotionInventoryDi
         .collect()
 }
 
+fn derive_git_selected_promotion_diff(
+    source_files: &[PromotionInventoryFile],
+    destination_files: &[PromotionInventoryFile],
+    source_directories: &[PromotionInventoryDirectory],
+    destination_directories: &[PromotionInventoryDirectory],
+    git: &PromotionGitChangeSetObservation,
+    linked_claim: Option<&ClaimContract>,
+) -> Result<
+    (
+        PromotionDiffProjection,
+        BTreeSet<String>,
+        Vec<PromotionInventoryFile>,
+        Vec<PromotionInventoryDirectory>,
+    ),
+    PromotionPreviewError,
+> {
+    let source_by_path = source_files
+        .iter()
+        .map(|file| (file.relative_path.as_str(), file))
+        .collect::<BTreeMap<_, _>>();
+    let destination_by_path = destination_files
+        .iter()
+        .map(|file| (file.relative_path.as_str(), file))
+        .collect::<BTreeMap<_, _>>();
+    let mut selected_paths = git.changed_tracked_paths.clone();
+
+    // An untracked file is promotable only when the live linked claim names
+    // that exact file. Directory/root claims still govern writes, but they do
+    // not turn arbitrary ignored or generated files into intended changes.
+    if let Some(claim) = linked_claim {
+        for claimed in &claim.scope.paths {
+            let path = claimed.0.as_str();
+            if git.tracked_paths.contains(path)
+                || git.tracked_deletion_paths.contains(path)
+                || !git.untracked_not_ignored_paths.contains(path)
+            {
+                continue;
+            }
+            let Some(source) = source_by_path.get(path) else {
+                continue;
+            };
+            let differs = destination_by_path.get(path).is_none_or(|destination| {
+                source.content_digest != destination.content_digest
+                    || source.byte_length != destination.byte_length
+                    || source.metadata_fingerprint != destination.metadata_fingerprint
+            });
+            if differs {
+                selected_paths.insert(path.to_owned());
+            }
+        }
+    }
+
+    let selected_source_files = source_files
+        .iter()
+        .filter(|file| {
+            selected_paths.contains(&file.relative_path)
+                && !git.tracked_deletion_paths.contains(&file.relative_path)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_destination_files = destination_files
+        .iter()
+        .filter(|file| selected_paths.contains(&file.relative_path))
+        .cloned()
+        .collect::<Vec<_>>();
+    let relevant_directories = selected_paths
+        .iter()
+        .flat_map(|path| {
+            let mut ancestors = Vec::new();
+            let mut current = path.as_str();
+            while let Some((parent, _)) = current.rsplit_once('/') {
+                ancestors.push(parent.to_owned());
+                current = parent;
+            }
+            ancestors
+        })
+        .collect::<BTreeSet<_>>();
+    let selected_source_directories = source_directories
+        .iter()
+        .filter(|directory| relevant_directories.contains(&directory.relative_path))
+        .cloned()
+        .collect::<Vec<_>>();
+    let selected_destination_directories = destination_directories
+        .iter()
+        .filter(|directory| relevant_directories.contains(&directory.relative_path))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut projection = derive_promotion_diff(
+        &selected_source_files,
+        &selected_destination_files,
+        &selected_source_directories,
+        &selected_destination_directories,
+    )?;
+
+    let mut predicted_files = destination_files
+        .iter()
+        .map(|file| (file.relative_path.clone(), file.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for path in &selected_paths {
+        match source_by_path
+            .get(path.as_str())
+            .filter(|_| !git.tracked_deletion_paths.contains(path))
+        {
+            Some(source) => {
+                predicted_files.insert(path.clone(), (*source).clone());
+            }
+            None => {
+                predicted_files.remove(path);
+            }
+        }
+    }
+    let predicted_files = predicted_files.into_values().collect::<Vec<_>>();
+    let predicted_regular_files = predicted_files
+        .iter()
+        .map(|file| (file.relative_path.clone(), file.content_digest.clone()))
+        .collect::<Vec<_>>();
+    projection.predicted_result_regular_file_set_digest =
+        retained_regular_file_projection_digest(&predicted_regular_files)?;
+
+    let source_directory_by_path = source_directories
+        .iter()
+        .map(|directory| (directory.relative_path.as_str(), directory))
+        .collect::<BTreeMap<_, _>>();
+    let mut predicted_directories = destination_directories
+        .iter()
+        .map(|directory| (directory.relative_path.clone(), directory.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for path in &relevant_directories {
+        match source_directory_by_path.get(path.as_str()) {
+            Some(directory) => {
+                predicted_directories.insert(path.clone(), (*directory).clone());
+            }
+            None => {
+                predicted_directories.remove(path);
+            }
+        }
+    }
+    Ok((
+        projection,
+        selected_paths,
+        predicted_files,
+        predicted_directories.into_values().collect(),
+    ))
+}
+
+fn promotion_logical_snapshot_digest(
+    canonical_root_digest: &str,
+    filesystem_snapshot_digest: &str,
+    excluded_roots: &[PromotionExcludedRootBinding],
+) -> Result<String, PromotionPreviewError> {
+    promotion_domain_digest(
+        "promotion.logical_snapshot.v1",
+        &(
+            canonical_root_digest,
+            filesystem_snapshot_digest,
+            excluded_roots,
+        ),
+    )
+    .map_err(Into::into)
+}
+
 fn snapshot_binding(
     canonical_root: &Path,
     tree: &RetainedProjectTree,
@@ -4218,6 +4603,153 @@ fn snapshot_binding(
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GitWorktreeObservation {
     binding: PromotionGitWorktreeBinding,
+    common_git_dir: PathBuf,
+    worktree_git_dir: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PromotionGitChangeSetObservation {
+    changed_tracked_paths: BTreeSet<String>,
+    tracked_paths: BTreeSet<String>,
+    untracked_not_ignored_paths: BTreeSet<String>,
+    tracked_deletion_paths: BTreeSet<String>,
+    observation_digest: String,
+}
+
+struct SyntheticGitObservation {
+    git_dir: PathBuf,
+    index_file: PathBuf,
+    object_directory: PathBuf,
+    canonical_head_oid: String,
+    safe_core_settings_digest: String,
+    repository_index_path: PathBuf,
+    repository_index_bytes: Vec<u8>,
+    repository_info_exclude_path: PathBuf,
+    repository_info_exclude_bytes: Option<Vec<u8>>,
+}
+
+fn default_safe_core_settings() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (
+            "core.filemode".to_owned(),
+            if cfg!(unix) { "true" } else { "false" }.to_owned(),
+        ),
+        ("core.autocrlf".to_owned(), "false".to_owned()),
+        ("core.safecrlf".to_owned(), "false".to_owned()),
+    ])
+}
+
+fn apply_safe_core_settings(
+    bytes: &[u8],
+    settings: &mut BTreeMap<String, String>,
+) -> Result<bool, PromotionPreviewError> {
+    if !bytes.is_empty() && bytes.last() != Some(&0) {
+        return Err(PromotionPreviewError::GitWorktree(
+            "private Git config observation is not NUL terminated".to_owned(),
+        ));
+    }
+    let mut worktree_config_enabled = false;
+    for entry in bytes
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+    {
+        let Some(separator) = entry.iter().position(|byte| *byte == b'\n') else {
+            return Err(PromotionPreviewError::GitWorktree(
+                "private Git config observation has an invalid entry".to_owned(),
+            ));
+        };
+        let key = std::str::from_utf8(&entry[..separator])
+            .map_err(|_| {
+                PromotionPreviewError::GitWorktree(
+                    "private Git config observation has a non-UTF-8 key".to_owned(),
+                )
+            })?
+            .to_ascii_lowercase();
+        let relevant = matches!(
+            key.as_str(),
+            "core.filemode"
+                | "core.autocrlf"
+                | "core.safecrlf"
+                | "core.eol"
+                | "core.ignorecase"
+                | "core.precomposeunicode"
+                | "core.symlinks"
+                | "extensions.worktreeconfig"
+        );
+        if !relevant {
+            continue;
+        }
+        let value = std::str::from_utf8(&entry[separator + 1..])
+            .map_err(|_| {
+                PromotionPreviewError::GitWorktree(format!("safe Git setting {key} is not UTF-8"))
+            })?
+            .trim()
+            .to_ascii_lowercase();
+        let normalized = match key.as_str() {
+            "core.autocrlf" if value == "input" => value,
+            "core.autocrlf" => normalize_safe_git_boolean(&key, &value)?,
+            "core.safecrlf" if value == "warn" => value,
+            "core.safecrlf" => normalize_safe_git_boolean(&key, &value)?,
+            "core.eol" => normalize_safe_git_enum(&key, &value, &["lf", "crlf", "native"])?,
+            "core.filemode"
+            | "core.ignorecase"
+            | "core.precomposeunicode"
+            | "core.symlinks"
+            | "extensions.worktreeconfig" => normalize_safe_git_boolean(&key, &value)?,
+            _ => unreachable!("relevant Git setting"),
+        };
+        if key == "extensions.worktreeconfig" {
+            worktree_config_enabled = normalized == "true";
+        } else {
+            settings.insert(key, normalized);
+        }
+    }
+    Ok(worktree_config_enabled)
+}
+
+fn normalize_safe_git_boolean(key: &str, value: &str) -> Result<String, PromotionPreviewError> {
+    match value {
+        "" | "true" | "yes" | "on" | "1" => Ok("true".to_owned()),
+        "false" | "no" | "off" | "0" => Ok("false".to_owned()),
+        _ => Err(PromotionPreviewError::GitWorktree(format!(
+            "safe Git setting {key} has unsupported boolean value {value:?}"
+        ))),
+    }
+}
+
+fn normalize_safe_git_enum(
+    key: &str,
+    value: &str,
+    admitted: &[&str],
+) -> Result<String, PromotionPreviewError> {
+    if admitted.contains(&value) {
+        Ok(value.to_owned())
+    } else {
+        Err(PromotionPreviewError::GitWorktree(format!(
+            "safe Git setting {key} has unsupported value {value:?}"
+        )))
+    }
+}
+
+fn render_safe_core_settings(settings: &BTreeMap<String, String>) -> String {
+    let mut rendered = String::from("\n[core]\n");
+    for (key, value) in settings {
+        let name = key
+            .strip_prefix("core.")
+            .expect("safe settings contain only core keys");
+        rendered.push('\t');
+        rendered.push_str(name);
+        rendered.push_str(" = ");
+        rendered.push_str(value);
+        rendered.push('\n');
+    }
+    rendered
+}
+
+impl Drop for SyntheticGitObservation {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.git_dir);
+    }
 }
 
 fn declared_worktree_candidate(
@@ -4392,7 +4924,683 @@ fn observe_git_worktree(
             canonical_repository_head_oid,
             observation_digest,
         },
+        common_git_dir,
+        worktree_git_dir,
     })
+}
+
+fn observe_promotion_git_change_set(
+    source_root: &Path,
+    common_git_dir: &Path,
+    worktree_git_dir: &Path,
+    source_head_oid: &str,
+    canonical_head_oid: &str,
+) -> Result<PromotionGitChangeSetObservation, PromotionPreviewError> {
+    validate_git_oid(source_head_oid)?;
+    validate_git_oid(canonical_head_oid)?;
+    if source_head_oid.len() != canonical_head_oid.len() {
+        return Err(PromotionPreviewError::GitWorktree(
+            "source and canonical Git object formats differ".to_owned(),
+        ));
+    }
+    let synthetic = SyntheticGitObservation::create(
+        source_root,
+        common_git_dir,
+        worktree_git_dir,
+        canonical_head_oid,
+    )?;
+    let merge_base = run_bounded_git(
+        source_root,
+        &synthetic,
+        &["merge-base", canonical_head_oid, source_head_oid],
+        "promotion ancestry",
+    )?;
+    if std::str::from_utf8(&merge_base).map(str::trim).ok() != Some(canonical_head_oid) {
+        return Err(PromotionPreviewError::GitWorktree(
+            "canonical HEAD is not an ancestor of the isolation branch HEAD; rebase or recreate the isolation before promotion"
+                .to_owned(),
+        ));
+    }
+    let changed = run_bounded_git(
+        source_root,
+        &synthetic,
+        &[
+            "diff",
+            "--name-status",
+            "-z",
+            "--no-renames",
+            "--ignore-submodules=all",
+            "--no-ext-diff",
+            "--no-textconv",
+            canonical_head_oid,
+            "--",
+        ],
+        "tracked promotion diff",
+    )?;
+    let tracked = run_bounded_git(
+        source_root,
+        &synthetic,
+        &["ls-files", "-z", "--cached", "--"],
+        "tracked promotion inventory",
+    )?;
+    let untracked = run_bounded_git(
+        source_root,
+        &synthetic,
+        &["ls-files", "-z", "--others", "--exclude-standard", "--"],
+        "untracked promotion inventory",
+    )?;
+    let (changed_tracked_paths, tracked_deletion_paths) =
+        parse_nul_git_name_status(&changed, "tracked promotion diff")?;
+    let tracked_paths = parse_nul_git_paths(&tracked, "tracked promotion inventory")?;
+    let untracked_not_ignored_paths =
+        parse_nul_git_paths(&untracked, "untracked promotion inventory")?;
+    let attribute_input = changed_tracked_paths
+        .iter()
+        .flat_map(|path| path.as_bytes().iter().copied().chain(std::iter::once(0)))
+        .collect::<Vec<_>>();
+    let attributes = if attribute_input.is_empty() {
+        Vec::new()
+    } else {
+        run_bounded_git_with_input(
+            source_root,
+            &synthetic,
+            &[
+                "check-attr",
+                "-z",
+                "--stdin",
+                "filter",
+                "working-tree-encoding",
+                "ident",
+            ],
+            &attribute_input,
+            "tracked promotion attributes",
+        )?
+    };
+    reject_external_or_ambiguous_git_conversions(&attributes)?;
+    synthetic.revalidate_repository_inputs()?;
+    let observation_digest = promotion_domain_digest(
+        "promotion.git.change_set_observation.v2",
+        &(
+            source_head_oid,
+            canonical_head_oid,
+            sha256_content_hash(&changed),
+            sha256_content_hash(&tracked),
+            sha256_content_hash(&untracked),
+            sha256_content_hash(&attributes),
+            sha256_content_hash(&synthetic.repository_index_bytes),
+            &synthetic.safe_core_settings_digest,
+            synthetic
+                .repository_info_exclude_bytes
+                .as_deref()
+                .map(sha256_content_hash),
+            &changed_tracked_paths,
+            &tracked_paths,
+            &untracked_not_ignored_paths,
+            &tracked_deletion_paths,
+        ),
+    )?;
+    Ok(PromotionGitChangeSetObservation {
+        changed_tracked_paths,
+        tracked_paths,
+        untracked_not_ignored_paths,
+        tracked_deletion_paths,
+        observation_digest,
+    })
+}
+
+impl SyntheticGitObservation {
+    fn create(
+        source_root: &Path,
+        common_git_dir: &Path,
+        worktree_git_dir: &Path,
+        canonical_head_oid: &str,
+    ) -> Result<Self, PromotionPreviewError> {
+        let object_directory =
+            canonical_no_follow_directory(&common_git_dir.join("objects"), "Git object directory")?;
+        match fs::symlink_metadata(object_directory.join("info").join("alternates")) {
+            Ok(_) => {
+                return Err(PromotionPreviewError::GitWorktree(
+                    "Git object alternates are not admitted for promotion observation".to_owned(),
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(PromotionPreviewError::GitWorktree(format!(
+                    "Git object alternates could not be inspected safely: {error}"
+                )));
+            }
+        }
+        let repository_index_path =
+            canonical_no_follow_regular_file(&worktree_git_dir.join("index"), "worktree index")?;
+        let repository_index_bytes =
+            read_git_regular_file(&repository_index_path, MAX_PROMOTION_GIT_INPUT_BYTES as u64)?;
+        let repository_info_exclude_path = common_git_dir.join("info").join("exclude");
+        let repository_info_exclude_bytes =
+            read_optional_git_regular_file(&repository_info_exclude_path, 1024 * 1024)?;
+        let repository_config_bytes =
+            read_git_regular_file(&common_git_dir.join("config"), 1024 * 1024)?;
+        let worktree_config_bytes =
+            read_optional_git_regular_file(&worktree_git_dir.join("config.worktree"), 1024 * 1024)?;
+        let temporary_parent = fs::canonicalize(std::env::temp_dir()).map_err(|error| {
+            PromotionPreviewError::GitWorktree(format!(
+                "Git observation temporary root is unavailable: {error}"
+            ))
+        })?;
+        let parent_metadata = fs::symlink_metadata(&temporary_parent).map_err(|error| {
+            PromotionPreviewError::GitWorktree(format!(
+                "Git observation temporary root is unavailable: {error}"
+            ))
+        })?;
+        if !parent_metadata.is_dir() || parent_metadata.file_type().is_symlink() {
+            return Err(PromotionPreviewError::GitWorktree(
+                "Git observation temporary root is not a no-follow directory".to_owned(),
+            ));
+        }
+        let mut git_dir = None;
+        for _ in 0..16 {
+            let mut nonce = [0_u8; 16];
+            getrandom::fill(&mut nonce).map_err(|error| {
+                PromotionPreviewError::GitWorktree(format!(
+                    "Git observation nonce generation failed: {error}"
+                ))
+            })?;
+            let name = format!(
+                "forge-promotion-git-{}-{}",
+                std::process::id(),
+                nonce
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>()
+            );
+            let candidate = temporary_parent.join(name);
+            let mut builder = fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt as _;
+                builder.mode(0o700);
+            }
+            match builder.create(&candidate) {
+                Ok(()) => {
+                    git_dir = Some(candidate);
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => {
+                    return Err(PromotionPreviewError::GitWorktree(format!(
+                        "Git observation directory could not be created: {error}"
+                    )));
+                }
+            }
+        }
+        let git_dir = git_dir.ok_or_else(|| {
+            PromotionPreviewError::GitWorktree(
+                "Git observation directory could not be allocated".to_owned(),
+            )
+        })?;
+        let setup = (|| {
+            fs::create_dir(git_dir.join("refs"))?;
+            fs::create_dir(git_dir.join("info"))?;
+            let object_format = match canonical_head_oid.len() {
+                40 => "",
+                64 => "\n[extensions]\n\tobjectFormat = sha256",
+                _ => unreachable!("validated Git oid length"),
+            };
+            let repository_format = if canonical_head_oid.len() == 64 { 1 } else { 0 };
+            let file_mode = if cfg!(unix) { "true" } else { "false" };
+            let config = format!(
+                "[core]\n\trepositoryFormatVersion = {repository_format}\n\tbare = false\n\tfileMode = {file_mode}\n\tautoCrlf = false\n\tsafeCrlf = false{object_format}\n"
+            );
+            let mut config_file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(git_dir.join("config"))?;
+            std::io::Write::write_all(&mut config_file, config.as_bytes())?;
+            config_file.sync_all()?;
+            let mut head_file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(git_dir.join("HEAD"))?;
+            std::io::Write::write_all(&mut head_file, b"ref: refs/heads/forge-observation\n")?;
+            head_file.sync_all()?;
+            if let Some(bytes) = &repository_info_exclude_bytes {
+                let mut exclude_file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(git_dir.join("info").join("exclude"))?;
+                std::io::Write::write_all(&mut exclude_file, bytes)?;
+                exclude_file.sync_all()?;
+            }
+            let mut index_file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(git_dir.join("index"))?;
+            std::io::Write::write_all(&mut index_file, &repository_index_bytes)?;
+            index_file.sync_all()?;
+            let mut repository_config_file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(git_dir.join("observed-common-config"))?;
+            std::io::Write::write_all(&mut repository_config_file, &repository_config_bytes)?;
+            repository_config_file.sync_all()?;
+            if let Some(bytes) = &worktree_config_bytes {
+                let mut worktree_config_file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(git_dir.join("observed-worktree-config"))?;
+                std::io::Write::write_all(&mut worktree_config_file, bytes)?;
+                worktree_config_file.sync_all()?;
+            }
+            Ok::<(), std::io::Error>(())
+        })();
+        if let Err(error) = setup {
+            let _ = fs::remove_dir_all(&git_dir);
+            return Err(PromotionPreviewError::GitWorktree(format!(
+                "Git observation directory setup failed: {error}"
+            )));
+        }
+        let mut observation = Self {
+            index_file: git_dir.join("index"),
+            git_dir,
+            object_directory,
+            canonical_head_oid: canonical_head_oid.to_owned(),
+            safe_core_settings_digest: String::new(),
+            repository_index_path,
+            repository_index_bytes,
+            repository_info_exclude_path,
+            repository_info_exclude_bytes,
+        };
+        let common_config_path = observation.git_dir.join("observed-common-config");
+        let common_config_path = common_config_path.to_str().ok_or_else(|| {
+            PromotionPreviewError::GitWorktree(
+                "private Git config path is not valid UTF-8".to_owned(),
+            )
+        })?;
+        let common_config = run_bounded_git(
+            source_root,
+            &observation,
+            &[
+                "config",
+                "--no-includes",
+                "--null",
+                "--file",
+                common_config_path,
+                "--list",
+            ],
+            "safe repository Git config observation",
+        )?;
+        let mut safe_core_settings = default_safe_core_settings();
+        let worktree_config_enabled =
+            apply_safe_core_settings(&common_config, &mut safe_core_settings)?;
+        if worktree_config_enabled {
+            if worktree_config_bytes.is_some() {
+                let worktree_config_path = observation.git_dir.join("observed-worktree-config");
+                let worktree_config_path = worktree_config_path.to_str().ok_or_else(|| {
+                    PromotionPreviewError::GitWorktree(
+                        "private worktree Git config path is not valid UTF-8".to_owned(),
+                    )
+                })?;
+                let worktree_config = run_bounded_git(
+                    source_root,
+                    &observation,
+                    &[
+                        "config",
+                        "--no-includes",
+                        "--null",
+                        "--file",
+                        worktree_config_path,
+                        "--list",
+                    ],
+                    "safe worktree Git config observation",
+                )?;
+                apply_safe_core_settings(&worktree_config, &mut safe_core_settings)?;
+            }
+        }
+        let safe_core_config = render_safe_core_settings(&safe_core_settings);
+        let mut config_file = fs::OpenOptions::new()
+            .append(true)
+            .open(observation.git_dir.join("config"))
+            .map_err(|error| {
+                PromotionPreviewError::GitWorktree(format!(
+                    "private Git config could not be extended safely: {error}"
+                ))
+            })?;
+        std::io::Write::write_all(&mut config_file, safe_core_config.as_bytes()).map_err(
+            |error| {
+                PromotionPreviewError::GitWorktree(format!(
+                    "private Git config could not be extended safely: {error}"
+                ))
+            },
+        )?;
+        config_file.sync_all().map_err(|error| {
+            PromotionPreviewError::GitWorktree(format!(
+                "private Git config could not be synchronized: {error}"
+            ))
+        })?;
+        observation.safe_core_settings_digest =
+            promotion_domain_digest("promotion.git.safe_core_settings.v1", &safe_core_settings)?;
+        Ok(observation)
+    }
+
+    fn revalidate_repository_inputs(&self) -> Result<(), PromotionPreviewError> {
+        let current_index = read_git_regular_file(
+            &self.repository_index_path,
+            MAX_PROMOTION_GIT_INPUT_BYTES as u64,
+        )?;
+        if current_index != self.repository_index_bytes {
+            return Err(PromotionPreviewError::GitWorktree(
+                "worktree index changed during promotion observation".to_owned(),
+            ));
+        }
+        let current =
+            read_optional_git_regular_file(&self.repository_info_exclude_path, 1024 * 1024)?;
+        if current != self.repository_info_exclude_bytes {
+            return Err(PromotionPreviewError::GitWorktree(
+                "repository info/exclude changed during promotion observation".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn run_bounded_git(
+    source_root: &Path,
+    synthetic: &SyntheticGitObservation,
+    args: &[&str],
+    label: &str,
+) -> Result<Vec<u8>, PromotionPreviewError> {
+    run_bounded_git_with_input(source_root, synthetic, args, &[], label)
+}
+
+fn run_bounded_git_with_input(
+    source_root: &Path,
+    synthetic: &SyntheticGitObservation,
+    args: &[&str],
+    input: &[u8],
+    label: &str,
+) -> Result<Vec<u8>, PromotionPreviewError> {
+    if input.len() > MAX_PROMOTION_GIT_INPUT_BYTES {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} exceeds the bounded {MAX_PROMOTION_GIT_INPUT_BYTES} byte input limit"
+        )));
+    }
+    let mut command = Command::new("git");
+    command
+        .arg("--no-optional-locks")
+        .arg("--no-replace-objects")
+        .arg("--no-pager")
+        .args([
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.untrackedCache=false",
+            "-c",
+            "submodule.recurse=false",
+        ])
+        .args(args)
+        .current_dir(source_root)
+        .env("GIT_DIR", &synthetic.git_dir)
+        .env("GIT_WORK_TREE", source_root)
+        .env("GIT_INDEX_FILE", &synthetic.index_file)
+        .env("GIT_OBJECT_DIRECTORY", &synthetic.object_directory)
+        .env("GIT_ATTR_SOURCE", &synthetic.canonical_head_oid)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env(
+            "GIT_CONFIG_GLOBAL",
+            if cfg!(windows) { "NUL" } else { "/dev/null" },
+        )
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .env("GIT_PAGER", "")
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+        .env_remove("GIT_NAMESPACE")
+        .env_remove("GIT_PREFIX")
+        .env_remove("GIT_CONFIG")
+        .env_remove("GIT_CONFIG_COUNT")
+        .env_remove("GIT_CONFIG_PARAMETERS")
+        .env_remove("GIT_EXTERNAL_DIFF")
+        .env_remove("GIT_DIFF_OPTS")
+        .stdin(if input.is_empty() {
+            Stdio::null()
+        } else {
+            Stdio::piped()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|error| {
+        PromotionPreviewError::GitWorktree(format!("{label} could not start Git: {error}"))
+    })?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        PromotionPreviewError::GitWorktree(format!("{label} did not expose Git stdout"))
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        PromotionPreviewError::GitWorktree(format!("{label} did not expose Git stderr"))
+    })?;
+    let input_writer = if input.is_empty() {
+        None
+    } else {
+        let mut stdin = child.stdin.take().ok_or_else(|| {
+            PromotionPreviewError::GitWorktree(format!("{label} did not expose Git stdin"))
+        })?;
+        let input = input.to_vec();
+        Some(std::thread::spawn(move || {
+            std::io::Write::write_all(&mut stdin, &input)
+        }))
+    };
+    let stdout_reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout
+            .take((MAX_PROMOTION_GIT_OUTPUT_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map(|_| bytes)
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr
+            .take((MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map(|_| bytes)
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < PROMOTION_GIT_TIMEOUT => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                if let Some(writer) = input_writer {
+                    let _ = writer.join();
+                }
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(PromotionPreviewError::GitWorktree(format!(
+                    "{label} exceeded the finite {} second Git observation timeout",
+                    PROMOTION_GIT_TIMEOUT.as_secs()
+                )));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                if let Some(writer) = input_writer {
+                    let _ = writer.join();
+                }
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(PromotionPreviewError::GitWorktree(format!(
+                    "{label} Git wait failed: {error}"
+                )));
+            }
+        }
+    };
+    if let Some(writer) = input_writer {
+        writer
+            .join()
+            .map_err(|_| {
+                PromotionPreviewError::GitWorktree(format!("{label} stdin writer failed"))
+            })?
+            .map_err(|error| {
+                PromotionPreviewError::GitWorktree(format!("{label} stdin failed: {error}"))
+            })?;
+    }
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| PromotionPreviewError::GitWorktree(format!("{label} stdout reader failed")))?
+        .map_err(|error| {
+            PromotionPreviewError::GitWorktree(format!("{label} stdout failed: {error}"))
+        })?;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| PromotionPreviewError::GitWorktree(format!("{label} stderr reader failed")))?
+        .map_err(|error| {
+            PromotionPreviewError::GitWorktree(format!("{label} stderr failed: {error}"))
+        })?;
+    if stdout.len() > MAX_PROMOTION_GIT_OUTPUT_BYTES {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} exceeds the bounded {} byte output limit",
+            MAX_PROMOTION_GIT_OUTPUT_BYTES
+        )));
+    }
+    if stderr.len() > MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} diagnostics exceed the bounded {} byte limit",
+            MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES
+        )));
+    }
+    if !status.success() {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} failed with status {status}: {}",
+            String::from_utf8_lossy(&stderr)
+        )));
+    }
+    Ok(stdout)
+}
+
+fn parse_nul_git_name_status(
+    bytes: &[u8],
+    label: &str,
+) -> Result<(BTreeSet<String>, BTreeSet<String>), PromotionPreviewError> {
+    if bytes.is_empty() {
+        return Ok((BTreeSet::new(), BTreeSet::new()));
+    }
+    if bytes.last() != Some(&0) {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} is not NUL terminated"
+        )));
+    }
+    let fields = bytes[..bytes.len() - 1]
+        .split(|byte| *byte == 0)
+        .collect::<Vec<_>>();
+    if fields.len() % 2 != 0 {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} has an incomplete status/path pair"
+        )));
+    }
+    let mut changed = BTreeSet::new();
+    let mut deleted = BTreeSet::new();
+    for pair in fields.chunks_exact(2) {
+        let status = std::str::from_utf8(pair[0]).map_err(|_| {
+            PromotionPreviewError::GitWorktree(format!("{label} contains a non-UTF-8 status"))
+        })?;
+        if !matches!(status, "A" | "M" | "D" | "T") {
+            return Err(PromotionPreviewError::GitWorktree(format!(
+                "{label} contains unsupported status {status:?}"
+            )));
+        }
+        let path = parse_one_git_path(pair[1], label)?;
+        if status == "D" {
+            deleted.insert(path.clone());
+        }
+        changed.insert(path);
+    }
+    Ok((changed, deleted))
+}
+
+fn reject_external_or_ambiguous_git_conversions(bytes: &[u8]) -> Result<(), PromotionPreviewError> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    if bytes.last() != Some(&0) {
+        return Err(PromotionPreviewError::GitWorktree(
+            "tracked promotion attributes are not NUL terminated".to_owned(),
+        ));
+    }
+    let fields = bytes[..bytes.len() - 1]
+        .split(|byte| *byte == 0)
+        .collect::<Vec<_>>();
+    if fields.len() % 3 != 0 {
+        return Err(PromotionPreviewError::GitWorktree(
+            "tracked promotion attributes have an incomplete path/name/value tuple".to_owned(),
+        ));
+    }
+    for tuple in fields.chunks_exact(3) {
+        let path = parse_one_git_path(tuple[0], "tracked promotion attributes")?;
+        let attribute = std::str::from_utf8(tuple[1]).map_err(|_| {
+            PromotionPreviewError::GitWorktree(
+                "tracked promotion attributes contain a non-UTF-8 name".to_owned(),
+            )
+        })?;
+        let value = std::str::from_utf8(tuple[2]).map_err(|_| {
+            PromotionPreviewError::GitWorktree(
+                "tracked promotion attributes contain a non-UTF-8 value".to_owned(),
+            )
+        })?;
+        let inactive = matches!(value, "unspecified" | "unset");
+        if (attribute == "filter" || attribute == "working-tree-encoding") && !inactive {
+            return Err(PromotionPreviewError::GitWorktree(format!(
+                "{path} requires Git {attribute} conversion; promotion refuses to execute or approximate repository-configured conversion programs"
+            )));
+        }
+        if attribute == "ident" && !inactive {
+            return Err(PromotionPreviewError::GitWorktree(format!(
+                "{path} requires Git ident conversion; promotion refuses an ambiguous byte projection"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn parse_nul_git_paths(
+    bytes: &[u8],
+    label: &str,
+) -> Result<BTreeSet<String>, PromotionPreviewError> {
+    if bytes.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    if bytes.last() != Some(&0) {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} is not NUL terminated"
+        )));
+    }
+    bytes[..bytes.len() - 1]
+        .split(|byte| *byte == 0)
+        .map(|raw| parse_one_git_path(raw, label))
+        .collect()
+}
+
+fn parse_one_git_path(raw: &[u8], label: &str) -> Result<String, PromotionPreviewError> {
+    let path = std::str::from_utf8(raw).map_err(|_| {
+        PromotionPreviewError::GitWorktree(format!("{label} contains a non-UTF-8 path"))
+    })?;
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.starts_with('\\')
+        || path.contains('\\')
+        || path
+            .split('/')
+            .any(|component| component.is_empty() || matches!(component, "." | ".."))
+    {
+        return Err(PromotionPreviewError::GitWorktree(format!(
+            "{label} contains an invalid repository path {path:?}"
+        )));
+    }
+    Ok(path.to_owned())
 }
 
 fn canonical_no_follow_directory(
@@ -4461,6 +5669,28 @@ fn read_git_regular_file(path: &Path, maximum: u64) -> Result<Vec<u8>, Promotion
         )));
     }
     Ok(bytes)
+}
+
+fn read_optional_git_regular_file(
+    path: &Path,
+    maximum: u64,
+) -> Result<Option<Vec<u8>>, PromotionPreviewError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                return Err(PromotionPreviewError::GitWorktree(format!(
+                    "{} must be a no-follow regular file",
+                    path.display()
+                )));
+            }
+            read_git_regular_file(path, maximum).map(Some)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(PromotionPreviewError::GitWorktree(format!(
+            "{}: {error}",
+            path.display()
+        ))),
+    }
 }
 
 #[cfg(unix)]

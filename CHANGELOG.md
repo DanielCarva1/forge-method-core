@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.6` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.7` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
@@ -480,6 +480,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The official `rmcp` client proof now initializes the generated operation-wide server, lists and invokes `execute-operation`, commits two sidecar outputs in one WAL transaction, preserves both effect ids and the verified principal in evidence, consumes replay, advances the external anchor, and creates no consumer-local `.forge-method`.
 
 ### Changed
+- **Git-aware governed promotion.** Promotion now selects tracked Git changes
+  plus only explicitly claimed, non-ignored new files. It excludes local,
+  generated, cache, unclaimed, and line-ending-only noise; preserves tracked
+  deletions; rejects branch rollback and unsafe Git conversions; observes Git
+  through isolated configuration without running repository-defined programs;
+  binds the complete predicted result; and recovers interrupted writes against
+  that exact approved result.
 - Contract-family inventory and generated schema views now include workflow
   governance releases, migration batches, and retirement authorization
   proposals. `FamilyKind` gains the corresponding variants; exhaustive Rust

@@ -24,7 +24,7 @@ Active implementation plan:
 `contracts/plan/agent-native-guidance-plan.yaml`.
 
 Local source candidate checkpoint: the Rust workspace package version is
-`0.12.0-alpha.6`; this does not establish a pullable commit, tag, or prebuilt.
+`0.12.0-alpha.7`; this does not establish a pullable commit, tag, or prebuilt.
 Local formatting, static/contract validation, MSRV trust-root tests, and
 focused Rust checks pass for this checkpoint. A full `cargo test --workspace`
 run still reproduces six Domain Pack lifecycle failures identically on this

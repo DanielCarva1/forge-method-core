@@ -2109,6 +2109,21 @@ fn workflow_help_exposes_agent_surface_without_human_workflow_selection() {
 #[test]
 fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     let consumer = Consumer::new();
+    fs::write(
+        consumer.app.join(".gitignore"),
+        ".local/\ngenerated/\ntarget/\n",
+    )
+    .expect("write promotion ignore rules");
+    fs::write(
+        consumer.app.join(".gitattributes"),
+        "LINE_ENDINGS.txt text eol=lf\nEVIL.txt filter=evil\n",
+    )
+    .expect("write promotion line-ending rules");
+    fs::write(consumer.app.join("LINE_ENDINGS.txt"), "stable\n")
+        .expect("write normalized tracked fixture");
+    fs::write(consumer.app.join("EVIL.txt"), "stable\n").expect("write filter fixture");
+    fs::write(consumer.app.join("DELETE_ME.txt"), "tracked deletion\n")
+        .expect("write deletion fixture");
     let run_git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .arg("-C")
@@ -2133,6 +2148,25 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     ]);
     run_git(&["add", "."]);
     run_git(&["commit", "-m", "initial fixture"]);
+    fs::write(
+        consumer.app.join(".git").join("info").join("exclude"),
+        "info-only.tmp\n",
+    )
+    .expect("write repository-local ignore");
+    #[cfg(unix)]
+    let evil_filter_marker = {
+        let marker = std::env::temp_dir().join(format!(
+            "forge-promotion-filter-marker-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker);
+        run_git(&[
+            "config",
+            "filter.evil.clean",
+            &format!("touch {} && cat", marker.display()),
+        ]);
+        marker
+    };
 
     assert_ok(&consumer.run(&["init"]));
     let next = assert_ok(&consumer.run(&["next"]));
@@ -2186,6 +2220,48 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     fs::create_dir_all(worktree.join("src")).expect("create isolated source directory");
     fs::write(worktree.join("src/new.rs"), "pub fn preview_only() {}\n")
         .expect("write isolated new file");
+    fs::write(worktree.join("LINE_ENDINGS.txt"), b"stable\r\n")
+        .expect("write checkout-only line ending");
+    fs::create_dir_all(worktree.join(".local")).expect("create ignored local journal directory");
+    fs::write(
+        worktree.join(".local/journal.md"),
+        "must remain outside promotion\n",
+    )
+    .expect("write ignored local journal");
+    fs::create_dir_all(worktree.join("generated")).expect("create ignored generated directory");
+    fs::write(
+        worktree.join("generated/output.rs"),
+        "must remain outside promotion\n",
+    )
+    .expect("write ignored generated artifact");
+    fs::write(worktree.join("untracked.tmp"), "unclaimed untracked file\n")
+        .expect("write unclaimed untracked file");
+    fs::write(
+        worktree.join("info-only.tmp"),
+        "repository-locally ignored\n",
+    )
+    .expect("write info/exclude fixture");
+    fs::write(
+        worktree.join("EVIL.txt"),
+        "changed without running filter\n",
+    )
+    .expect("write malicious filter candidate");
+    let staged_delete = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&worktree)
+        .args(["rm", "--cached", "DELETE_ME.txt"])
+        .output()
+        .expect("stage tracked deletion");
+    assert!(
+        staged_delete.status.success(),
+        "stage deletion failed: {}",
+        String::from_utf8_lossy(&staged_delete.stderr)
+    );
+    fs::write(
+        worktree.join("DELETE_ME.txt"),
+        "untracked replacement must not erase deletion status\n",
+    )
+    .expect("write deletion replacement");
     fs::create_dir_all(worktree.join("target")).expect("create excluded source cache");
     fs::write(
         worktree.join("target/checked-in.txt"),
@@ -2195,6 +2271,41 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
 
     let root = consumer.app.display().to_string();
     let now_unix = now().to_string();
+    let claim = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--root",
+            &root,
+            "--scope",
+            "story",
+            "--id",
+            "promotion-preview-e2e",
+            "--agent",
+            "agent.promotion-e2e",
+            "--principal-id",
+            "principal.agent.promotion-e2e",
+            "--path",
+            "README.md",
+            "--path",
+            "src/new.rs",
+            "--path",
+            "generated/output.rs",
+            "--path",
+            "info-only.tmp",
+            "--path",
+            "DELETE_ME.txt",
+            "--now-unix",
+            &now_unix,
+            "--json",
+        ])
+        .output()
+        .expect("acquire promotion preview claim");
+    let claim = assert_ok(&claim);
+    let claim_id = claim["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_owned();
     let proposed = bin()
         .args([
             "isolation",
@@ -2209,6 +2320,8 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
             "../wt/preview",
             "--base-ref",
             "master",
+            "--claim",
+            &claim_id,
             "--id",
             "isolation.promotion-e2e",
             "--now-unix",
@@ -2235,6 +2348,34 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
         .output()
         .expect("activate promotion isolation");
     assert_ok(&activated);
+
+    #[cfg(unix)]
+    {
+        let refused_filter = bin()
+            .args([
+                "workflow",
+                "promotion",
+                "preview",
+                "--root",
+                &root,
+                "--isolation-id",
+                "isolation.promotion-e2e",
+                "--json",
+            ])
+            .output()
+            .expect("refuse repository-configured filter");
+        assert!(!refused_filter.status.success());
+        let refused_filter = json(&refused_filter);
+        assert!(
+            refused_filter.to_string().contains("refuses to execute"),
+            "unexpected filter refusal: {refused_filter}"
+        );
+        assert!(
+            !evil_filter_marker.exists(),
+            "promotion observation executed a repository-configured clean filter"
+        );
+        fs::write(worktree.join("EVIL.txt"), "stable\n").expect("restore filter fixture");
+    }
 
     let canonical_before = state_tree_snapshot(&consumer.app);
     let forge_state_before = state_tree_snapshot(&consumer.state);
@@ -2272,25 +2413,37 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     let diff = preview["data"]["diff"]
         .as_array()
         .expect("promotion diff array");
-    assert!(diff
+    let diff_paths = diff
         .iter()
-        .any(|entry| { entry["path"] == "README.md" && entry["effect"] == "write_regular_file" }));
-    assert!(diff.iter().any(|entry| {
-        entry["path"] == "src/new.rs" && entry["effect"] == "create_regular_file"
-    }));
+        .map(|entry| entry["path"].as_str().expect("diff path"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        diff_paths,
+        vec!["DELETE_ME.txt", "README.md", "src/new.rs"],
+        "only Git-tracked changes and exactly claimed new files are promotable"
+    );
+    assert_eq!(
+        diff[0]["effect"], "delete_regular_file",
+        "a staged deletion must win over an untracked same-name replacement"
+    );
+    assert_eq!(diff[1]["effect"], "write_regular_file");
+    assert_eq!(diff[2]["effect"], "create_regular_file");
     let unsupported = preview["data"]["unsupported_effects"]
         .as_array()
         .expect("typed unsupported effects");
-    assert!(unsupported.iter().any(|effect| {
-        effect["path"] == "target" && effect["kind"] == "excluded_source_root_content"
-    }));
+    assert!(
+        !unsupported
+            .iter()
+            .any(|effect| effect["kind"] == "excluded_source_root_content"),
+        "an unclaimed cache must stay outside the preview instead of blocking it"
+    );
     let gaps = preview["data"]["unresolved_gaps"]
         .as_array()
         .expect("typed unresolved gaps");
-    assert!(gaps
+    assert!(!gaps
         .iter()
         .any(|gap| gap["code"] == "missing_linked_isolation_claim"));
-    assert!(gaps.iter().any(|gap| gap["code"] == "ungoverned_write_set"));
+    assert!(!gaps.iter().any(|gap| gap["code"] == "ungoverned_write_set"));
 
     assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
     assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
@@ -2315,6 +2468,40 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
     );
     assert_eq!(state_tree_snapshot(&consumer.app), canonical_before);
     assert_eq!(state_tree_snapshot(&consumer.state), forge_state_before);
+
+    fs::write(
+        consumer.app.join("CANONICAL_ADVANCE.txt"),
+        "canonical branch advanced\n",
+    )
+    .expect("advance canonical fixture");
+    run_git(&["add", "CANONICAL_ADVANCE.txt"]);
+    run_git(&["commit", "-m", "advance canonical fixture"]);
+    let diverged_before = state_tree_snapshot(&consumer.app);
+    let state_before_diverged_preview = state_tree_snapshot(&consumer.state);
+    let diverged = bin()
+        .args([
+            "workflow",
+            "promotion",
+            "preview",
+            "--root",
+            &root,
+            "--isolation-id",
+            "isolation.promotion-e2e",
+            "--json",
+        ])
+        .output()
+        .expect("reject isolation behind canonical head");
+    assert!(!diverged.status.success());
+    let diverged = json(&diverged);
+    assert!(
+        diverged.to_string().contains("not an ancestor"),
+        "unexpected canonical-advance refusal: {diverged}"
+    );
+    assert_eq!(state_tree_snapshot(&consumer.app), diverged_before);
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_diverged_preview
+    );
 
     run_git(&["worktree", "remove", "--force", &worktree_text]);
     let state_before_resume = state_tree_snapshot(&consumer.state);
@@ -2341,6 +2528,15 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
 #[allow(clippy::too_many_lines)]
 fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     let consumer = Consumer::new();
+    fs::write(consumer.app.join(".gitignore"), ".local/\ntarget/\n")
+        .expect("write apply ignore rules");
+    fs::write(
+        consumer.app.join(".gitattributes"),
+        "LINE_ENDINGS.txt text eol=lf\n",
+    )
+    .expect("write apply line-ending rules");
+    fs::write(consumer.app.join("LINE_ENDINGS.txt"), "stable\n")
+        .expect("write apply normalized fixture");
     let run_git = |args: &[&str]| {
         let output = std::process::Command::new("git")
             .arg("-C")
@@ -2446,6 +2642,13 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         "consumer project\ngoverned apply\n",
     )
     .expect("write isolated modification");
+    fs::write(worktree.join("LINE_ENDINGS.txt"), b"stable\r\n")
+        .expect("write apply checkout-only line ending");
+    fs::create_dir_all(worktree.join(".local")).expect("create ignored apply journal");
+    fs::write(worktree.join(".local/journal.md"), "must not be promoted\n")
+        .expect("write ignored apply journal");
+    fs::write(worktree.join("untracked.tmp"), "must not be promoted\n")
+        .expect("write unclaimed apply artifact");
     assert_ok(
         &bin()
             .args([
@@ -2522,6 +2725,11 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         preview["data"]["apply_eligibility"], "eligible_local_reversible",
         "promotion preview: {preview}"
     );
+    assert_eq!(
+        preview["data"]["write_set"],
+        serde_json::json!(["README.md"]),
+        "checkout normalization and unclaimed files must stay outside apply"
+    );
     assert!(!preview["data"]["carried_assurance_gaps"]
         .as_array()
         .expect("carried assurance gaps")
@@ -2554,6 +2762,13 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         fs::read_to_string(consumer.app.join("README.md")).expect("canonical readback"),
         "consumer project\ngoverned apply\n"
     );
+    assert_eq!(
+        fs::read(consumer.app.join("LINE_ENDINGS.txt")).expect("line ending readback"),
+        b"stable\n",
+        "Git-clean checkout line endings must not overwrite canonical bytes"
+    );
+    assert!(!consumer.app.join(".local/journal.md").exists());
+    assert!(!consumer.app.join("untracked.tmp").exists());
     assert!(!consumer.app.join(".forge-method").exists());
 
     let retry = assert_ok(
