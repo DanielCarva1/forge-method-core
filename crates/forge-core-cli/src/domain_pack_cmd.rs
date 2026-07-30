@@ -61,9 +61,10 @@ use forge_core_decisions::{
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, derive_domain_pack_capability_demands,
     domain_pack_project_snapshot_digest, lock_domain_pack_lifecycle,
-    lock_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
-    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
-    DomainPackLifecycleStoreError, LockedDomainPackLifecycle, DOMAIN_PACK_MAX_DOCUMENT_BYTES,
+    lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle,
+    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
+    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
+    LockedDomainPackLifecycle, DOMAIN_PACK_MAX_DOCUMENT_BYTES,
 };
 use forge_core_store::{
     acquire_effect_store_lock, backup::BackupExpectedMember,
@@ -2259,14 +2260,14 @@ fn run_lifecycle_state(args: &[String], recover: bool) -> Result<(), ExitError> 
         },
         &mut want_json,
     )?;
-    let locked = lock_domain_pack_lifecycle(&state_root).map_err(|error| {
+    let observed = observe_domain_pack_lifecycle(&state_root).map_err(|error| {
         ExitError::failed(format!(
             "domain-pack: cannot inspect lifecycle state '{}': {error}",
             state_root.display()
         ))
     })?;
-    let projection = locked.projection();
-    let recovery_report = locked.recovery_report();
+    let projection = observed.projection();
+    let recovery_report = observed.recovery_report();
     let payload = DomainPackLifecycleStatusPayload {
         state_root: std::fs::canonicalize(&state_root)
             .unwrap_or(state_root)

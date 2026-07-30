@@ -1711,7 +1711,7 @@ fn lifecycle_status_and_recover_emit_integrity_checked_empty_state() {
     let state_root = temp.join(".forge-method");
     fs::create_dir(&state_root).expect("create canonical state root");
 
-    for subcommand in ["status", "recover"] {
+    let run_lifecycle = |subcommand: &str| {
         let stdout = Command::cargo_bin("forge-core")
             .expect("forge-core binary")
             .current_dir(&temp)
@@ -1752,6 +1752,35 @@ fn lifecycle_status_and_recover_emit_integrity_checked_empty_state() {
             .as_str()
             .expect("state root")
             .ends_with("/.forge-method"));
+    };
+    let assert_no_cleanup_debt = |tree: &BTreeMap<String, String>, phase: &str| {
+        let cleanup_debt = tree
+            .keys()
+            .filter(|path| {
+                path.split('/').any(|component| {
+                    component.starts_with(".forge-retained-delete-")
+                        || component.starts_with(".forge-crash-absence-claim-")
+                })
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            cleanup_debt.is_empty(),
+            "{phase} accumulated retained lifecycle cleanup debt: {cleanup_debt:?}"
+        );
+    };
+
+    run_lifecycle("status");
+    let initialized = snapshot(&state_root);
+    assert_no_cleanup_debt(&initialized, "initial status");
+
+    for subcommand in ["status", "recover", "status", "recover"] {
+        run_lifecycle(subcommand);
+        let after = snapshot(&state_root);
+        assert_no_cleanup_debt(&after, subcommand);
+        assert_eq!(
+            after, initialized,
+            "clean lifecycle {subcommand} changed retained state after initialization"
+        );
     }
 
     fs::remove_dir_all(temp).expect("cleanup lifecycle state fixture");

@@ -18,10 +18,11 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, lock_domain_pack_lifecycle,
-    lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
-    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
-    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
-    LockedDomainPackLifecycleObservation, DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
+    lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle,
+    observe_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
+    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
+    DomainPackLifecycleStoreError, LockedDomainPackLifecycleObservation,
+    DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -3735,9 +3736,26 @@ fn read_only_observation_preserves_active_generation_admission() {
     let root = temp_state_root("read-only-active-generation");
     commit_integrated_install(&root, &fixture, &raw);
 
-    let observed =
-        observe_domain_pack_lifecycle_for_project(root.parent().expect("project root"), &root)
-            .expect("observe active lifecycle");
+    let observed = observe_domain_pack_lifecycle(&root).expect("observe active lifecycle");
+    let recovery_report = observed.recovery_report();
+    assert_eq!(
+        recovery_report.domain_pack_recovery_report.status,
+        DomainPackRecoveryStatus::Clean
+    );
+    assert!(
+        recovery_report
+            .domain_pack_recovery_report
+            .active_state
+            .is_some(),
+        "active read-only observation must report the admitted active generation"
+    );
+    assert!(
+        recovery_report
+            .domain_pack_recovery_report
+            .repaired_artifact_refs
+            .is_empty(),
+        "clean active observation must not claim a repair"
+    );
     let LockedDomainPackLifecycleObservation::Active(lifecycle) = observed else {
         panic!("installed generation must remain active");
     };

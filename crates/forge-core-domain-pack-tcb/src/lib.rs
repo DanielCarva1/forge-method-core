@@ -336,6 +336,26 @@ pub enum LockedDomainPackLifecycleObservation {
     Active(LockedDomainPackLifecycle),
 }
 
+impl LockedDomainPackLifecycleObservation {
+    #[must_use]
+    pub fn projection(&self) -> &DomainPackLifecycleStateProjection {
+        match self {
+            Self::CoreOnly(observation) => observation.projection(),
+            Self::Active(lifecycle) => lifecycle.projection(),
+        }
+    }
+
+    /// Typed non-authoritative account of pointer recovery performed while
+    /// acquiring this retained read-only observation.
+    #[must_use]
+    pub fn recovery_report(&self) -> DomainPackRecoveryReportDocument {
+        match self {
+            Self::CoreOnly(observation) => observation.recovery_report(),
+            Self::Active(lifecycle) => lifecycle.recovery_report(),
+        }
+    }
+}
+
 impl fmt::Debug for LockedDomainPackLifecycleObservation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -352,6 +372,7 @@ pub struct LockedCoreOnlyDomainPackLifecycleObservation {
     project_snapshot: Arc<RetainedProjectTree>,
     state: DomainPackLifecycleStateProjection,
     active_pointer_absence: RetainedDomainPackObservedActivePointerAbsence,
+    recovery: CrashReplaceRecovery,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -886,6 +907,26 @@ pub fn lock_domain_pack_lifecycle(
     lock_domain_pack_lifecycle_for_canonical_project(project_root, &state_root)
 }
 
+/// Observe the lifecycle without preparing compare-and-swap mutation state.
+///
+/// Clean absence remains unclaimed, while a present pointer still receives
+/// the same retained validation and crash-recovery checks as the strong
+/// lifecycle session.
+///
+/// # Errors
+///
+/// Returns a typed lock, recovery, confinement, integrity, or I/O error when
+/// the state root or retained lifecycle state cannot be proven complete.
+pub fn observe_domain_pack_lifecycle(
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root.as_ref())?;
+    let project_root = state_root
+        .parent()
+        .ok_or_else(|| invalid("state_root", "canonical state root has no project parent"))?;
+    observe_domain_pack_lifecycle_for_project_internal(project_root, &state_root, true)
+}
+
 /// Acquire the fixed lifecycle lock while binding project evidence to an
 /// explicit governed project root.
 ///
@@ -1034,6 +1075,7 @@ fn observe_domain_pack_lifecycle_for_project_internal(
             },
         ));
     }
+    let recovery = observation.recovery().clone();
     let active_pointer_absence = store.consume_observed_active_pointer_absence(observation)?;
     let state =
         load_core_only_state_under_observation(&store, &project_snapshot, &active_pointer_absence)?;
@@ -1043,6 +1085,7 @@ fn observe_domain_pack_lifecycle_for_project_internal(
             project_snapshot,
             state,
             active_pointer_absence,
+            recovery,
         },
     ))
 }
@@ -1096,10 +1139,62 @@ fn load_core_only_state_under_observation(
     })
 }
 
+fn domain_pack_recovery_report(
+    recovery: &CrashReplaceRecovery,
+    state: &DomainPackLifecycleStateProjection,
+) -> DomainPackRecoveryReportDocument {
+    let status = match recovery.action {
+        CrashReplaceRecoveryAction::Noop => DomainPackRecoveryStatus::Clean,
+        CrashReplaceRecoveryAction::RemovedUncommittedNext
+        | CrashReplaceRecoveryAction::AbortedToPrevious
+        | CrashReplaceRecoveryAction::RestoredPrevious => DomainPackRecoveryStatus::RecoveredPrior,
+        CrashReplaceRecoveryAction::CommittedInitial
+        | CrashReplaceRecoveryAction::CleanedCommitted => DomainPackRecoveryStatus::RecoveredTarget,
+        _ => DomainPackRecoveryStatus::BlockedAmbiguous,
+    };
+    let repaired_artifact_refs = if status == DomainPackRecoveryStatus::Clean {
+        Vec::new()
+    } else {
+        vec![DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH.to_owned()]
+    };
+    DomainPackRecoveryReportDocument {
+        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
+        domain_pack_recovery_report: DomainPackRecoveryReport {
+            authority: DomainPackCandidateAuthority::CandidateOnly,
+            status,
+            active_state: state
+                .active_pointer
+                .as_ref()
+                .map(|pointer| pointer.domain_pack_active_pointer.clone()),
+            lifecycle_head_digest: state.active_pointer.as_ref().map(|pointer| {
+                pointer
+                    .domain_pack_active_pointer
+                    .lifecycle_head_digest
+                    .clone()
+            }),
+            operator_source_binding_digest: state.active_pointer.as_ref().map(|pointer| {
+                pointer
+                    .domain_pack_active_pointer
+                    .operator_source_binding_digest
+                    .clone()
+            }),
+            repaired_artifact_refs,
+            issues: Vec::new(),
+        },
+    }
+}
+
 impl LockedCoreOnlyDomainPackLifecycleObservation {
     #[must_use]
     pub fn projection(&self) -> &DomainPackLifecycleStateProjection {
         &self.state
+    }
+
+    /// Typed non-authoritative account of pointer recovery performed while
+    /// acquiring this retained core-only observation.
+    #[must_use]
+    pub fn recovery_report(&self) -> DomainPackRecoveryReportDocument {
+        domain_pack_recovery_report(&self.recovery, &self.state)
     }
 
     /// Revalidate core-only state while retaining the lifecycle OS lock.
@@ -1261,50 +1356,7 @@ impl LockedDomainPackLifecycle {
     /// acquiring this retained lifecycle lock.
     #[must_use]
     pub fn recovery_report(&self) -> DomainPackRecoveryReportDocument {
-        let status = match self.recovery.action {
-            CrashReplaceRecoveryAction::Noop => DomainPackRecoveryStatus::Clean,
-            CrashReplaceRecoveryAction::RemovedUncommittedNext
-            | CrashReplaceRecoveryAction::AbortedToPrevious
-            | CrashReplaceRecoveryAction::RestoredPrevious => {
-                DomainPackRecoveryStatus::RecoveredPrior
-            }
-            CrashReplaceRecoveryAction::CommittedInitial
-            | CrashReplaceRecoveryAction::CleanedCommitted => {
-                DomainPackRecoveryStatus::RecoveredTarget
-            }
-            _ => DomainPackRecoveryStatus::BlockedAmbiguous,
-        };
-        let repaired_artifact_refs = if status == DomainPackRecoveryStatus::Clean {
-            Vec::new()
-        } else {
-            vec![DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH.to_owned()]
-        };
-        DomainPackRecoveryReportDocument {
-            schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
-            domain_pack_recovery_report: DomainPackRecoveryReport {
-                authority: DomainPackCandidateAuthority::CandidateOnly,
-                status,
-                active_state: self
-                    .state
-                    .active_pointer
-                    .as_ref()
-                    .map(|pointer| pointer.domain_pack_active_pointer.clone()),
-                lifecycle_head_digest: self.state.active_pointer.as_ref().map(|pointer| {
-                    pointer
-                        .domain_pack_active_pointer
-                        .lifecycle_head_digest
-                        .clone()
-                }),
-                operator_source_binding_digest: self.state.active_pointer.as_ref().map(|pointer| {
-                    pointer
-                        .domain_pack_active_pointer
-                        .operator_source_binding_digest
-                        .clone()
-                }),
-                repaired_artifact_refs,
-                issues: Vec::new(),
-            },
-        }
+        domain_pack_recovery_report(&self.recovery, &self.state)
     }
 
     /// Bind one high-level initialized-project intent to the exact active
