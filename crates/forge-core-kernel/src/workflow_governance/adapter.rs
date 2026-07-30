@@ -5375,7 +5375,7 @@ impl WorkflowGovernanceProjectAdapter {
             trusted_broker_registry.digest.as_deref(),
         )?;
         let phase = current_phase(projection)?;
-        let selected = select_policy(effective.document(), &derived, &phase)?;
+        let selected = select_policy(effective.document(), &derived, &phase, readiness_profile)?;
         let evaluation_phase =
             if selected.eligible_phases.iter().any(|tag| {
                 Phase::tag_eligible(&tag.0, Phase::parse(&phase.0).expect("parsed phase"))
@@ -5393,6 +5393,7 @@ impl WorkflowGovernanceProjectAdapter {
         let boundary_rechecks = boundary_rechecks(
             effective.document(),
             &derived,
+            readiness_profile,
             projection.current_state_version().unwrap_or_default(),
             now,
             selected.routing.readiness_target,
@@ -5904,6 +5905,9 @@ impl WorkflowGovernanceProjectAdapter {
         if project_snapshot.digest() != snapshot {
             return Ok(false);
         }
+        let readiness_profile = projection
+            .readiness_profile()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
         let derived = derive_receipts(
             effective.document(),
             projection,
@@ -5913,46 +5917,14 @@ impl WorkflowGovernanceProjectAdapter {
             trusted_registry_digest.as_deref(),
             trusted_broker_registry_digest.as_deref(),
         )?;
-        let phase_done = effective
-            .document()
-            .workflow_governance_bundle
-            .policies
-            .iter()
-            .filter(|policy| {
-                policy
-                    .eligible_phases
-                    .iter()
-                    .any(|tag| Phase::tag_eligible(&tag.0, current_phase_value))
-            })
-            .filter(|policy| {
-                policy.routing.activation != WorkflowPolicyActivation::OnSignal
-                    || policy
-                        .routing
-                        .signals
-                        .iter()
-                        .any(|signal| derived.active_signals.contains(signal))
-            })
-            .all(|policy| {
-                derived.completed_policy_refs.contains(&policy.id)
-                    || derived.not_applicable_policy_refs.contains(&policy.id)
-            });
-        let boundary_target = effective
-            .document()
-            .workflow_governance_bundle
-            .policies
-            .iter()
-            .filter(|policy| {
-                policy
-                    .eligible_phases
-                    .iter()
-                    .any(|tag| Phase::tag_eligible(&tag.0, current_phase_value))
-            })
-            .map(|policy| policy.routing.readiness_target)
-            .max_by_key(|target| target.rank())
-            .unwrap_or(ReadinessTarget::Explore);
-        let readiness_profile = projection
-            .readiness_profile()
-            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let phase_done = phase_policies_complete(
+            effective.document(),
+            &derived,
+            current_phase_value,
+            readiness_profile,
+        );
+        let boundary_target =
+            phase_boundary_target(effective.document(), current_phase_value, readiness_profile);
         let strict_assurance = project_durable_assurance(&projection.records)?;
         let cooperative_assurance = project_cooperative_durable_assurance(&projection.records)?;
         let base_assurance = match readiness_profile {
@@ -8033,9 +8005,62 @@ fn receipt_window_start(projection: &WorkflowGovernanceLedgerProjection) -> usiz
     start
 }
 
+fn phase_policies_complete(
+    bundle: &WorkflowGovernanceBundleDocument,
+    derived: &DerivedReceipts,
+    current_phase: Phase,
+    readiness_profile: WorkflowReadinessProfile,
+) -> bool {
+    bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .filter(|policy| policy_applies_to_readiness_profile(policy, readiness_profile))
+        .filter(|policy| {
+            policy
+                .eligible_phases
+                .iter()
+                .any(|tag| Phase::tag_eligible(&tag.0, current_phase))
+        })
+        .filter(|policy| {
+            policy.routing.activation != WorkflowPolicyActivation::OnSignal
+                || policy
+                    .routing
+                    .signals
+                    .iter()
+                    .any(|signal| derived.active_signals.contains(signal))
+        })
+        .all(|policy| {
+            derived.completed_policy_refs.contains(&policy.id)
+                || derived.not_applicable_policy_refs.contains(&policy.id)
+        })
+}
+
+fn phase_boundary_target(
+    bundle: &WorkflowGovernanceBundleDocument,
+    current_phase: Phase,
+    readiness_profile: WorkflowReadinessProfile,
+) -> ReadinessTarget {
+    bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .filter(|policy| policy_applies_to_readiness_profile(policy, readiness_profile))
+        .filter(|policy| {
+            policy
+                .eligible_phases
+                .iter()
+                .any(|tag| Phase::tag_eligible(&tag.0, current_phase))
+        })
+        .map(|policy| policy.routing.readiness_target)
+        .max_by_key(|target| target.rank())
+        .unwrap_or(ReadinessTarget::Explore)
+}
+
 fn boundary_rechecks(
     bundle: &WorkflowGovernanceBundleDocument,
     derived: &DerivedReceipts,
+    readiness_profile: WorkflowReadinessProfile,
     state_version: u64,
     observed_at_unix: u64,
     requested_target: ReadinessTarget,
@@ -8045,7 +8070,8 @@ fn boundary_rechecks(
     }
     let mut rechecks = Vec::new();
     for policy in &bundle.workflow_governance_bundle.policies {
-        if !derived.completed_policy_refs.contains(&policy.id)
+        if !policy_applies_to_readiness_profile(policy, readiness_profile)
+            || !derived.completed_policy_refs.contains(&policy.id)
             || derived.not_applicable_policy_refs.contains(&policy.id)
         {
             continue;
@@ -8168,6 +8194,7 @@ fn select_policy<'a>(
     bundle: &'a WorkflowGovernanceBundleDocument,
     derived: &DerivedReceipts,
     phase: &StableId,
+    readiness_profile: WorkflowReadinessProfile,
 ) -> Result<&'a WorkflowGovernancePolicy, WorkflowGovernanceAdapterError> {
     let parsed = Phase::parse(&phase.0)
         .ok_or_else(|| WorkflowGovernanceAdapterError::InvalidPhase(phase.0.clone()))?;
@@ -8175,6 +8202,7 @@ fn select_policy<'a>(
         .workflow_governance_bundle
         .policies
         .iter()
+        .filter(|policy| policy_applies_to_readiness_profile(policy, readiness_profile))
         .filter(|policy| {
             !derived.completed_policy_refs.contains(&policy.id)
                 && !derived.not_applicable_policy_refs.contains(&policy.id)
@@ -8226,6 +8254,7 @@ fn select_policy<'a>(
         .workflow_governance_bundle
         .policies
         .iter()
+        .filter(|policy| policy_applies_to_readiness_profile(policy, readiness_profile))
         .filter(|policy| derived.completed_policy_refs.contains(&policy.id))
         .filter(|policy| {
             policy
@@ -8247,6 +8276,17 @@ fn select_policy<'a>(
         .into_iter()
         .next_back()
         .ok_or(WorkflowGovernanceAdapterError::NoEligiblePolicy)
+}
+
+fn policy_applies_to_readiness_profile(
+    policy: &WorkflowGovernancePolicy,
+    readiness_profile: WorkflowReadinessProfile,
+) -> bool {
+    // Solo Cooperative keeps the durable assurance lenses and their release
+    // blockers, but does not route ordinary execution through the strict
+    // independent-review policy. Strict External continues to select it.
+    readiness_profile != WorkflowReadinessProfile::SoloCooperative
+        || policy.id.0 != UNIVERSAL_ASSURANCE_POLICY_ID
 }
 
 fn project_replacement_continuity(
@@ -17062,6 +17102,93 @@ mod tests {
     }
 
     #[test]
+    fn solo_phase_completion_ignores_strict_universal_policy_but_strict_does_not() {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
+            .expect("embedded registry");
+        let mut bundle = registry.latest_release().document().clone();
+        bundle.workflow_governance_bundle.policies.retain(|policy| {
+            matches!(
+                policy.id.0.as_str(),
+                "policy.workflow.discover-intent" | UNIVERSAL_ASSURANCE_POLICY_ID
+            )
+        });
+        let mut derived = DerivedReceipts::default();
+        derived
+            .completed_policy_refs
+            .insert(StableId("policy.workflow.discover-intent".to_owned()));
+
+        assert!(phase_policies_complete(
+            &bundle,
+            &derived,
+            Phase::Discovery,
+            WorkflowReadinessProfile::SoloCooperative,
+        ));
+        assert!(!phase_policies_complete(
+            &bundle,
+            &derived,
+            Phase::Discovery,
+            WorkflowReadinessProfile::StrictExternal,
+        ));
+        assert_eq!(
+            phase_boundary_target(
+                &bundle,
+                Phase::Discovery,
+                WorkflowReadinessProfile::SoloCooperative,
+            ),
+            ReadinessTarget::Explore,
+            "a strict-only policy must not raise the Solo boundary target"
+        );
+        assert_eq!(
+            phase_boundary_target(
+                &bundle,
+                Phase::Discovery,
+                WorkflowReadinessProfile::StrictExternal,
+            ),
+            ReadinessTarget::Execute
+        );
+    }
+
+    #[test]
+    fn solo_boundary_recheck_ignores_strict_universal_history_but_strict_does_not() {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()
+            .expect("embedded registry");
+        let bundle = registry.latest_release().document();
+        let mut derived = DerivedReceipts::default();
+        derived
+            .completed_policy_refs
+            .insert(StableId(UNIVERSAL_ASSURANCE_POLICY_ID.to_owned()));
+
+        let solo = boundary_rechecks(
+            bundle,
+            &derived,
+            WorkflowReadinessProfile::SoloCooperative,
+            1,
+            1_800_000_000,
+            ReadinessTarget::Release,
+        )
+        .expect("solo boundary rechecks");
+        assert!(
+            solo.is_empty(),
+            "historical strict assurance completion must not be reintroduced into Solo"
+        );
+
+        let strict = boundary_rechecks(
+            bundle,
+            &derived,
+            WorkflowReadinessProfile::StrictExternal,
+            1,
+            1_800_000_000,
+            ReadinessTarget::Release,
+        )
+        .expect("strict boundary rechecks");
+        assert_eq!(strict.len(), 1);
+        assert_eq!(
+            strict[0].policy_ref.0, UNIVERSAL_ASSURANCE_POLICY_ID,
+            "Strict External must continue rechecking the universal assurance policy"
+        );
+    }
+
+    #[test]
     fn unknown_assurance_blocks_phase_even_when_legacy_phase_is_otherwise_done() {
         let (root, state) = temp_project("unknown-assurance-phase-boundary");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -17266,6 +17393,7 @@ mod tests {
         guidance.boundary_rechecks = boundary_rechecks(
             &bundle,
             &derived,
+            WorkflowReadinessProfile::StrictExternal,
             guidance.state_version,
             1_800_000_000,
             ReadinessTarget::Release,

@@ -16,11 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.11` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.12` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Fixed
+- **Solo Cooperative development no longer dead-ends on strict-only universal
+  assurance.** The Strict External independent-review policy is now excluded
+  consistently from Solo policy selection, phase completion, boundary-target
+  calculation, and historical completion rechecks. The eight assurance lenses
+  remain visible throughout Solo work and still block at the release boundary;
+  Strict External selection and enforcement remain unchanged.
 - **An accepted Solo Cooperative objective now grounds the first discovery step directly.** Forge no longer asks a solo owner and agent to resubmit the already accepted project direction as weaker evidence. The typed `cooperative_same_owner` grounding is durable project state, not an evaluator observation, proof of human authorship, or independent review. It stays current only while its exact material objective anchor is in the active receipt window and has not been revoked; an exact idempotent objective retry, a policy-equivalent release transition, and a non-material clarification preserve that anchor, while a material supersession reopens discovery on a new anchor and `invalidate_all` requires a new material acceptance. Completion binds the exact grounding anchor instead of the repository snapshot, so later project edits do not reopen discovery. `strict_external` remains broker-backed and unchanged.
 - **Local dogfood reports no longer invalidate current solo evidence.** Workflow
   evidence snapshots now omit only an already-existing top-level .local

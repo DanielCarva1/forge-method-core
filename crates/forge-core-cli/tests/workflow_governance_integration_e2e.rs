@@ -4499,3 +4499,83 @@ fn promotion_recover_refuses_changed_destination_before_effect_begin() {
         "refusal must happen before effect Begin or any other durable write"
     );
 }
+
+#[test]
+fn latest_release_routes_strict_universal_assurance_away_from_solo_execution() {
+    let solo = Consumer::new_with_prefix("forge-solo-universal-routing-e2e");
+    assert_ok(&solo.run(&["init", "--readiness-profile", "solo_cooperative"]));
+    upgrade_to_latest(&solo);
+
+    let discover = advance_fixture_to_policy(&solo, "policy.workflow.discover-intent");
+    assert_eq!(
+        discover["data"]["selected_policy_ref"],
+        "policy.workflow.discover-intent"
+    );
+    let packet_digest = discover["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("solo objective packet")
+        .to_owned();
+    let objective = solo.write_json(
+        "solo universal routing objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Improve Forge through ordinary solo development with agents",
+                "constraints": ["keep strict external assurance additive and later"],
+                "unacceptable_outcomes": ["require an unavailable independent reviewer before ordinary implementation"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.same-owner.routing-e2e",
+            "host_provenance": {
+                "host_id": "host.routing-e2e",
+                "host_version": "test",
+                "session_ref": "session.routing-e2e",
+                "interaction_ref": "turn.routing-e2e",
+                "conversation_digest": format!("sha256:{}", "7".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let accepted = assert_ok(&run_cooperative_input(&solo, &packet_digest, &objective));
+    assert_eq!(accepted["data"]["next"]["status"], "ready_to_complete");
+    let snapshot = accepted["data"]["next"]["snapshot_digest"]
+        .as_str()
+        .expect("discover completion snapshot")
+        .to_owned();
+    assert_ok(&solo.run(&[
+        "complete",
+        "--if-snapshot",
+        &snapshot,
+        "--principal",
+        "principal.same-owner.routing-e2e",
+    ]));
+
+    let solo_next = assert_ok(&solo.run(&["next"]));
+    assert_eq!(
+        solo_next["data"]["selected_policy_ref"], "policy.workflow.domain-scan",
+        "the strict independent-review policy must not dead-end ordinary solo execution"
+    );
+    assert!(
+        solo_next["data"]["durable_assurance"]["projection"]["lenses"]
+            .as_array()
+            .is_some_and(|lenses| lenses.len() == 8),
+        "release assurance must remain visible rather than being erased"
+    );
+
+    let strict = Consumer::new_with_prefix("forge-strict-universal-routing-e2e");
+    assert_ok(&strict.run(&["init", "--readiness-profile", "strict_external"]));
+    upgrade_to_latest(&strict);
+    let strict_next = advance_fixture_to_policy(&strict, "policy.workflow.universal-assurance");
+    assert_eq!(
+        strict_next["data"]["selected_policy_ref"], "policy.workflow.universal-assurance",
+        "strict external assurance must remain unchanged"
+    );
+    assert!(
+        strict_next["data"]["simulation"]["candidate_capability_gaps"]
+            .as_array()
+            .is_some_and(|gaps| gaps.iter().any(|gap| {
+                gap["id"] == "capability.workflow.universal-assurance.independent-review"
+                    && gap["blocking"] == true
+            }))
+    );
+}
