@@ -18,10 +18,25 @@ use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
 
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
+const WORKFLOW_LOCAL_ROOT_NAME: &str = ".local";
 const DIRECTORY_DIGEST_MARKER: &str = "directory";
 const MAX_RETAINED_PROJECT_DEPTH: usize = 256;
 const PROJECT_CAPABILITY_NONCE_BYTES: usize = 32;
 const RETAINED_PROJECT_ANCHOR_SCHEMA_VERSION: &str = "forge-retained-project-anchors-v1";
+
+#[derive(Debug, Clone, Copy)]
+enum RetainedProjectCapturePolicy {
+    Generic,
+    WorkflowLocalRootExcluded,
+}
+
+impl RetainedProjectCapturePolicy {
+    fn includes_root_name(self, name: &str) -> bool {
+        !EXCLUDED_ROOT_NAMES.contains(&name)
+            && !(matches!(self, Self::WorkflowLocalRootExcluded)
+                && name == WORKFLOW_LOCAL_ROOT_NAME)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 enum RetainedFileAliasPolicy {
@@ -52,6 +67,7 @@ pub struct RetainedProjectTree {
     files: Vec<RetainedTreeFile>,
     snapshot_digest: String,
     regular_file_snapshot_digest: String,
+    capture_policy: RetainedProjectCapturePolicy,
     file_alias_policy: RetainedFileAliasPolicy,
 }
 
@@ -405,6 +421,7 @@ impl RetainedProjectTree {
             maximum_entries,
             None,
             maximum_bytes,
+            RetainedProjectCapturePolicy::Generic,
             RetainedFileAliasPolicy::SingleLink,
         )
     }
@@ -426,6 +443,30 @@ impl RetainedProjectTree {
             maximum_entries,
             Some(maximum_files),
             maximum_bytes,
+            RetainedProjectCapturePolicy::Generic,
+            RetainedFileAliasPolicy::StableAliases,
+        )
+    }
+
+    /// Capture a workflow-governance project observation while excluding an
+    /// already-existing top-level `.local` directory from retained content.
+    ///
+    /// This policy is intentionally narrower than the generic Store projection:
+    /// nested `.local` directories remain governed. Creating or removing the
+    /// top-level entry after capture still changes the retained root directory
+    /// metadata and therefore fails revalidation.
+    pub fn capture_workflow_snapshot_allowing_stable_file_aliases(
+        project_root: impl AsRef<Path>,
+        maximum_entries: usize,
+        maximum_files: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, RetainedProjectTreeError> {
+        Self::capture_with_file_alias_policy(
+            project_root.as_ref(),
+            maximum_entries,
+            Some(maximum_files),
+            maximum_bytes,
+            RetainedProjectCapturePolicy::WorkflowLocalRootExcluded,
             RetainedFileAliasPolicy::StableAliases,
         )
     }
@@ -447,6 +488,7 @@ impl RetainedProjectTree {
             maximum_entries,
             None,
             maximum_bytes,
+            RetainedProjectCapturePolicy::Generic,
             RetainedFileAliasPolicy::StoreOwnedAnchorMutation,
         )
     }
@@ -456,6 +498,7 @@ impl RetainedProjectTree {
         maximum_entries: usize,
         maximum_files: Option<usize>,
         maximum_bytes: u64,
+        capture_policy: RetainedProjectCapturePolicy,
         file_alias_policy: RetainedFileAliasPolicy,
     ) -> Result<Self, RetainedProjectTreeError> {
         if maximum_entries == 0 {
@@ -506,6 +549,7 @@ impl RetainedProjectTree {
             files: Vec::new(),
             snapshot_digest: String::new(),
             regular_file_snapshot_digest: String::new(),
+            capture_policy,
             file_alias_policy,
         };
         let mut digest_entries = Vec::new();
@@ -1217,6 +1261,7 @@ impl RetainedProjectTree {
             &parent_display,
         )?;
         let initial = included_entries(
+            self.capture_policy,
             directory_index == 0,
             read_directory_entries(&parent_handle, &parent_display)?,
         );
@@ -1337,6 +1382,7 @@ impl RetainedProjectTree {
             }
         }
         let after = included_entries(
+            self.capture_policy,
             directory_index == 0,
             read_directory_entries(&parent_handle, &parent_display)?,
         );
@@ -1416,6 +1462,7 @@ impl RetainedProjectTree {
                 }
             }
             let actual = included_entries(
+                self.capture_policy,
                 directory_index == 0,
                 read_directory_entries(&directory.handle, &display_path)?,
             );
@@ -1675,7 +1722,11 @@ fn read_directory_entries(
     Ok(entries)
 }
 
-fn included_entries(root: bool, entries: Vec<DirectoryEntry>) -> Vec<DirectoryEntry> {
+fn included_entries(
+    capture_policy: RetainedProjectCapturePolicy,
+    root: bool,
+    entries: Vec<DirectoryEntry>,
+) -> Vec<DirectoryEntry> {
     if !root {
         return entries;
     }
@@ -1685,7 +1736,7 @@ fn included_entries(root: bool, entries: Vec<DirectoryEntry>) -> Vec<DirectoryEn
             entry
                 .name
                 .to_str()
-                .is_none_or(|name| !EXCLUDED_ROOT_NAMES.contains(&name))
+                .is_none_or(|name| capture_policy.includes_root_name(name))
         })
         .collect()
 }
@@ -2569,6 +2620,126 @@ mod tests {
                 maximum: 8,
             })
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generic_capture_governs_top_level_local_content() {
+        let root = project_root("generic-local-root");
+        fs::create_dir_all(root.join(".local")).unwrap();
+        fs::write(root.join("README.md"), b"governed\n").unwrap();
+        fs::write(root.join(".local/resume.json"), b"first local report\n").unwrap();
+
+        let first = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+        assert_eq!(
+            first
+                .exact_regular_file_bytes(".local/resume.json")
+                .unwrap()
+                .as_deref(),
+            Some(b"first local report\n".as_slice())
+        );
+        let first_digest = first.regular_file_snapshot_digest().to_owned();
+        drop(first);
+
+        fs::write(root.join(".local/resume.json"), b"updated local report\n").unwrap();
+        let second = RetainedProjectTree::capture(&root, 16, 1024).unwrap();
+        assert_ne!(second.regular_file_snapshot_digest(), first_digest);
+
+        drop(second);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn workflow_capture_ignores_preexisting_top_level_local_content() {
+        let root = project_root("workflow-local-root");
+        fs::create_dir_all(root.join(".local")).unwrap();
+        fs::write(root.join("README.md"), b"governed\n").unwrap();
+        fs::write(root.join(".local/resume.json"), b"first local report\n").unwrap();
+
+        let retained = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+            &root, 16, 16, 1024,
+        )
+        .unwrap();
+        let digest = retained.regular_file_snapshot_digest().to_owned();
+        assert_eq!(
+            retained
+                .exact_regular_file_bytes(".local/resume.json")
+                .unwrap(),
+            None,
+            "top-level local state must not become workflow evidence"
+        );
+
+        fs::write(root.join(".local/resume.json"), b"updated local report\n").unwrap();
+        retained
+            .revalidate()
+            .expect("updating pre-existing local state must not stale workflow evidence");
+        let recaptured =
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 16, 16, 1024,
+            )
+            .unwrap();
+        assert_eq!(recaptured.regular_file_snapshot_digest(), digest);
+
+        drop(recaptured);
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn workflow_capture_governs_nested_local_content() {
+        let root = project_root("workflow-nested-local");
+        fs::create_dir_all(root.join("src/.local")).unwrap();
+        fs::write(root.join("src/.local/config.json"), b"governed\n").unwrap();
+
+        let retained = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+            &root, 16, 16, 1024,
+        )
+        .unwrap();
+        assert_eq!(
+            retained
+                .exact_regular_file_bytes("src/.local/config.json")
+                .unwrap()
+                .as_deref(),
+            Some(b"governed\n".as_slice())
+        );
+        fs::write(root.join("src/.local/config.json"), b"changed!\n").unwrap();
+        assert!(retained.revalidate().is_err());
+
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn workflow_capture_rejects_top_level_local_namespace_creation_and_removal() {
+        let root = project_root("workflow-local-namespace");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("README.md"), b"governed\n").unwrap();
+
+        let without_local =
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 16, 16, 1024,
+            )
+            .unwrap();
+        fs::create_dir(root.join(".local")).unwrap();
+        assert!(
+            without_local.revalidate().is_err(),
+            "creating the top-level local namespace after capture remains drift"
+        );
+        drop(without_local);
+
+        fs::write(root.join(".local/resume.json"), b"local\n").unwrap();
+        let with_local =
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 16, 16, 1024,
+            )
+            .unwrap();
+        fs::remove_dir_all(root.join(".local")).unwrap();
+        assert!(
+            with_local.revalidate().is_err(),
+            "removing the top-level local namespace after capture remains drift"
+        );
+
+        drop(with_local);
         fs::remove_dir_all(root).unwrap();
     }
 

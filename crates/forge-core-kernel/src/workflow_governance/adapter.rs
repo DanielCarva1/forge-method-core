@@ -798,7 +798,7 @@ impl RetainedWorkflowProjectSnapshot {
         maximum_bytes: u64,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
         let maximum_entries = maximum_files.saturating_mul(2).min(MAX_SNAPSHOT_ENTRIES);
-        let tree = RetainedProjectTree::capture_allowing_stable_file_aliases(
+        let tree = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
             root,
             maximum_entries,
             maximum_files,

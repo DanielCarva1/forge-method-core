@@ -111,7 +111,16 @@ record its assessment plus project-relative basis files; Forge confines, reads,
 and hashes those exact files before admitting the result. This is useful
 same-owner technical evidence, not independent review, human presence,
 representative runtime execution, or enterprise compliance. Those stronger
-claims still require their own matching evidence. Basis is read only from exact regular-file handles in the retained project snapshot; links, outside paths, and excluded roots (`.git`, `.forge-method`, `target`, and `node_modules`) are rejected. For one objective/snapshot/route, the newest admitted assessment supersedes the previous one, but a rejected offer does not. Only a current pass supplies source satisfaction and is bound by exact record digest into completion; fail and inconclusive remain honest non-support, and expiry, supersession, or snapshot/basis drift removes completion validity. This exact retained read/hash route can establish applicability and an executable `LocalCommand` alternative, but never independent review or runtime separation.
+claims still require their own matching evidence. Basis is read only from exact regular-file handles in the retained project snapshot; links, outside paths, and excluded roots (`.git`, `.forge-method`, top-level `.local`, `target`, and `node_modules`) are rejected. For one objective/snapshot/route, the newest admitted assessment supersedes the previous one, but a rejected offer does not. Only a current pass supplies source satisfaction and is bound by exact record digest into completion; fail and inconclusive remain honest non-support, and expiry, supersession, or snapshot/basis drift removes completion validity. This exact retained read/hash route can establish applicability and an executable `LocalCommand` alternative, but never independent review or runtime separation.
+
+A top-level `.local` directory is local-only only when it already exists before
+workflow evidence capture. Changes to files inside that existing directory do not
+change the workflow snapshot, while nested paths such as `src/.local` remain
+governed. Creating or removing top-level `.local` after capture changes the root
+namespace, stales the evidence, and requires a fresh admission; create the
+directory before admitting evidence. Evidence admitted before alpha10 while a
+top-level `.local` existed becomes stale once under this corrected projection and
+must be re-admitted, but its historical ledger record remains structurally valid.
 
 Forge can describe only a write that passed its claim/gate, verified-principal,
 Admission, WAL/recovery, and receipt path as **Forge-mediated**. A host agent's

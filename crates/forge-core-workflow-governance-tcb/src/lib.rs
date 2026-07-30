@@ -5221,6 +5221,13 @@ mod replacement_protocol_tests {
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
+    #[test]
+    fn historical_source_basis_allows_normalized_top_level_local_path() {
+        assert!(cooperative_source_basis_path_is_normalized(
+            ".local/journal.md"
+        ));
+    }
+
     fn test_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
             "forge-wal-replacement-{name}-{}-{}",

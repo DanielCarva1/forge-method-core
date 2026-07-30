@@ -1253,6 +1253,13 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
         &objective,
     ));
 
+    fs::create_dir_all(consumer.app.join(".local")).expect("create local-only state directory");
+    fs::write(
+        consumer.app.join(".local/resume.json"),
+        "first local-only resume report\n",
+    )
+    .expect("write local-only resume report before evidence admission");
+
     let next = assert_ok(&consumer.run(&["next"]));
     let packet = &next["data"]["cooperative_evidence_action_packet"];
     assert_eq!(
@@ -1329,6 +1336,31 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
     assert!(audit[0]["does_not_prove"]
         .as_array()
         .is_some_and(|limits| limits.iter().any(|limit| limit == "selected_source_claim")));
+
+    let supporting_snapshot = restarted["data"]["snapshot_digest"].clone();
+    fs::write(
+        consumer.app.join(".local/resume.json"),
+        "updated local-only resume report\n",
+    )
+    .expect("update pre-existing local-only resume report");
+    let local_updated = assert_ok(&consumer.run(&["resume", "--full"]));
+    assert_eq!(
+        local_updated["data"]["snapshot_digest"],
+        supporting_snapshot
+    );
+    let local_updated_audit = local_updated["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("cooperative evidence after local-only update");
+    assert_eq!(local_updated_audit.len(), 1);
+    assert_eq!(local_updated_audit[0]["current_status"], "supporting");
+    assert!(
+        local_updated["data"]["cooperative_evidence_action_packet"].is_null(),
+        "local-only content changes must not rearm admission"
+    );
+    assert!(
+        local_updated["data"]["cooperative_evidence_action_gap"].is_null(),
+        "local-only content changes must not create a route gap"
+    );
 
     fs::write(
         consumer.app.join("README.md"),
@@ -1420,6 +1452,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     for (relative, contents) in [
         (".git/HEAD", "ref: refs/heads/main\n"),
         (".forge-method/state.json", "{}\n"),
+        (".local/journal.md", "local-only\n"),
         ("target/output.txt", "generated\n"),
         ("node_modules/pkg/index.js", "module.exports = {};\n"),
     ] {
@@ -1435,6 +1468,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
         ("missing", "docs/does-not-exist.md"),
         ("git", ".git/HEAD"),
         ("state", ".forge-method/state.json"),
+        ("local", ".local/journal.md"),
         ("target", "target/output.txt"),
         ("dependencies", "node_modules/pkg/index.js"),
     ] {

@@ -16,9 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.9` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.10` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
+
+### Fixed
+- **Local dogfood reports no longer invalidate current solo evidence.** Workflow
+  evidence snapshots now omit only an already-existing top-level .local
+  directory, so updating local reports does not stale accepted evidence. The
+  generic project tree used by promotion and Domain Packs remains unchanged,
+  historical .local basis records remain readable, nested .local paths stay
+  governed, and creating or removing the top-level directory still requires
+  re-admission.
 
 ### Added
 - **Honest same-owner repository evidence for Solo Cooperative work.** When a
