@@ -600,10 +600,6 @@ fn derive_governed_promotion(
         path_attribution,
     };
 
-    let cooperative_max_age_seconds = guidance
-        .cooperative_evidence_action_packet
-        .as_ref()
-        .map(|packet| packet.route.max_age_seconds);
     let mut latest_supporting_evidence_valid_through: Option<u64> = None;
     let mut evidence_records = guidance
         .cooperative_evidence
@@ -612,13 +608,7 @@ fn derive_governed_promotion(
             evidence.historical_disposition == WorkflowCooperativeEvidenceDisposition::Admitted
         })
         .map(|evidence| {
-            let evidence_valid_through = evidence
-                .admitted_evidence
-                .as_ref()
-                .zip(cooperative_max_age_seconds)
-                .and_then(|(admitted, max_age)| {
-                    admitted.readback_observed_at_unix.checked_add(max_age)
-                });
+            let evidence_valid_through = evidence.valid_through_unix;
             let current_status = if evidence.current_status
                 == WorkflowCooperativeEvidenceCurrentStatus::Supporting
                 && evidence_valid_through.is_some_and(|valid_through| final_now <= valid_through)

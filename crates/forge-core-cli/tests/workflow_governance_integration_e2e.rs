@@ -1169,12 +1169,30 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
         "pass"
     );
 
-    let restarted = assert_ok(&consumer.run(&["next"]));
+    let restarted = assert_ok(&consumer.run(&["resume"]));
     let audit = restarted["data"]["cooperative_evidence"]
         .as_array()
         .expect("cooperative evidence audit");
     assert_eq!(audit.len(), 1);
     assert_eq!(audit[0]["current_status"], "supporting");
+    let valid_through = audit[0]["valid_through_unix"]
+        .as_u64()
+        .expect("supporting evidence validity");
+    assert!(
+        valid_through
+            >= admitted["data"]["event"]["payload"]["admitted_evidence"]
+                ["readback_observed_at_unix"]
+                .as_u64()
+                .expect("readback observation time")
+    );
+    assert!(
+        restarted["data"]["cooperative_evidence_action_packet"].is_null(),
+        "current supporting evidence must not offer another admission"
+    );
+    assert!(
+        restarted["data"]["cooperative_evidence_action_gap"].is_null(),
+        "current supporting evidence is satisfied, not a route gap"
+    );
     assert!(audit[0]["proves"].as_array().is_some_and(|proofs| proofs
         .iter()
         .any(|proof| proof == "kernel_verified_project_state_readback")));
@@ -1186,6 +1204,24 @@ fn cooperative_evidence_cli_executes_the_workflow_next_packet_and_survives_resta
     assert!(audit[0]["does_not_prove"]
         .as_array()
         .is_some_and(|limits| limits.iter().any(|limit| limit == "selected_source_claim")));
+
+    fs::write(
+        consumer.app.join("README.md"),
+        "consumer project snapshot changed\n",
+    )
+    .expect("change governed project snapshot");
+    let stale = assert_ok(&consumer.run(&["next"]));
+    let stale_audit = stale["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("stale cooperative evidence audit");
+    assert_eq!(stale_audit.len(), 1);
+    assert_eq!(stale_audit[0]["current_status"], "stale");
+    assert!(stale_audit[0]["valid_through_unix"].is_null());
+    assert!(
+        stale["data"]["cooperative_evidence_action_packet"].is_object(),
+        "snapshot drift must rearm cooperative evidence"
+    );
+    assert!(stale["data"]["cooperative_evidence_action_gap"].is_null());
 }
 
 #[test]

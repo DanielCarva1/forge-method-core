@@ -5553,9 +5553,13 @@ impl WorkflowGovernanceProjectAdapter {
         } else {
             Vec::new()
         };
+        let cooperative_evidence_support_is_current = cooperative_evidence.iter().any(|evidence| {
+            evidence.current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting
+        });
         let cooperative_evidence_action_packet =
             active_cooperative_objective.as_ref().and_then(|objective| {
-                (readiness_profile == WorkflowReadinessProfile::SoloCooperative)
+                (readiness_profile == WorkflowReadinessProfile::SoloCooperative
+                    && !cooperative_evidence_support_is_current)
                     .then(|| WorkflowCooperativeEvidenceBinding {
                         objective_id: objective.objective_id.clone(),
                         objective_revision: objective.revision,
@@ -5584,6 +5588,7 @@ impl WorkflowGovernanceProjectAdapter {
         let cooperative_evidence_action_gap = (readiness_profile
             == WorkflowReadinessProfile::SoloCooperative
             && active_cooperative_objective.is_some()
+            && !cooperative_evidence_support_is_current
             && cooperative_evidence_action_packet.is_none())
         .then(|| {
             format!(
@@ -6321,6 +6326,8 @@ pub struct WorkflowCooperativeEvidenceAudit {
     pub does_not_satisfy_source_claim_ref: Option<StableId>,
     pub historical_disposition: WorkflowCooperativeEvidenceDisposition,
     pub current_status: WorkflowCooperativeEvidenceCurrentStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valid_through_unix: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rejection: Option<WorkflowCooperativeEvidenceRejection>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -9864,14 +9871,14 @@ fn cooperative_evidence_audit(
                         && route.strength == WorkflowEvidenceStrength::InspectedArtifact
                         && route.claim_descriptor_version
                             == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
-                        && {
-                        now.saturating_sub(admitted.readback_observed_at_unix)
-                            <= route.max_age_seconds
-                            && admitted
-                                .readback_observed_at_unix
-                                .saturating_sub(admitted.execution_observed_at_unix)
-                                <= route.max_age_seconds
-                        }
+                        && admitted
+                            .readback_observed_at_unix
+                            .checked_add(route.max_age_seconds)
+                            .is_some_and(|valid_through| now <= valid_through)
+                        && admitted
+                            .readback_observed_at_unix
+                            .checked_sub(admitted.execution_observed_at_unix)
+                            .is_some_and(|elapsed| elapsed <= route.max_age_seconds)
                 })
             }) {
                 WorkflowCooperativeEvidenceCurrentStatus::Supporting
@@ -9879,6 +9886,17 @@ fn cooperative_evidence_audit(
                 WorkflowCooperativeEvidenceCurrentStatus::Stale
             };
             let admitted = event.admitted_evidence.as_ref();
+            let valid_through_unix =
+                (current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting)
+                    .then_some(())
+                    .and_then(|()| admitted)
+                    .and_then(|evidence| {
+                        current_route.as_ref().and_then(|route| {
+                            evidence
+                                .readback_observed_at_unix
+                                .checked_add(route.max_age_seconds)
+                        })
+                    });
             let mut does_not_prove = vec![
                 WorkflowCooperativeEvidenceNonProof::IndependentSemanticReview,
                 WorkflowCooperativeEvidenceNonProof::TrustedRuntimeSeparation,
@@ -9907,6 +9925,7 @@ fn cooperative_evidence_audit(
                     .map(|evidence| evidence.claim_ref.clone()),
                 historical_disposition: event.disposition,
                 current_status,
+                valid_through_unix,
                 rejection: event.rejection,
                 admitted_evidence: event.admitted_evidence.clone(),
                 proves: if current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting {
@@ -14737,6 +14756,7 @@ mod tests {
             .expect("host-neutral cooperative evidence packet");
         let route_policy_ref = packet.route.policy_ref.clone();
         let route_claim_ref = packet.route.claim_ref.clone();
+        let route_max_age_seconds = packet.route.max_age_seconds;
         assert_eq!(
             packet.argv,
             [
@@ -14791,21 +14811,35 @@ mod tests {
             WorkflowEvidenceOutcome::Pass
         );
 
-        let second_packet = adapter
-            .next()
-            .expect("refreshed evidence guidance")
-            .cooperative_evidence_action_packet
-            .expect("refreshed host-neutral packet");
-        assert_eq!(second_packet.route.policy_ref, route_policy_ref);
-        assert_eq!(second_packet.route.claim_ref, route_claim_ref);
-        let mut second_offer_value = second_packet.offer_template;
-        second_offer_value["offer_id"] = serde_json::json!("offer.cooperative-evidence.pass.2");
-        let second_offer: WorkflowCooperativeEvidenceOffer =
-            serde_json::from_value(second_offer_value).expect("second closed offer template");
-        let second_raw = serde_json::to_vec(&second_offer).expect("second offer JSON");
-        adapter
-            .record_cooperative_evidence(&second_raw)
-            .expect("admit second current observation");
+        let current = adapter.next().expect("refreshed evidence guidance");
+        assert!(
+            current.cooperative_evidence_action_packet.is_none(),
+            "current supporting evidence must satisfy the cooperative lane without another offer"
+        );
+        assert!(
+            current.cooperative_evidence_action_gap.is_none(),
+            "current supporting evidence is satisfied, not an unavailable route"
+        );
+        let current_audit = current
+            .cooperative_evidence
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("current cooperative audit");
+        assert_eq!(
+            current_audit.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Supporting
+        );
+        let expected_valid_through = current_audit
+            .valid_through_unix
+            .expect("supporting evidence validity");
+        assert!(
+            expected_valid_through
+                >= admitted_event
+                    .admitted_evidence
+                    .as_ref()
+                    .expect("admitted evidence")
+                    .readback_observed_at_unix
+        );
 
         assert_eq!(
             adapter
@@ -14913,6 +14947,127 @@ mod tests {
         assert_tamper_stale(|evidence| {
             evidence.readback_observed_at_unix = u64::MAX;
         });
+
+        let set_observation_times = |records: &mut [WorkflowGovernanceLedgerRecord],
+                                     observed_at_unix: u64| {
+            let event = records
+                .iter_mut()
+                .find_map(|record| {
+                    (record.record_digest == admitted.record_digest).then_some(&mut record.event)
+                })
+                .and_then(|event| {
+                    let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = event else {
+                        return None;
+                    };
+                    Some(event)
+                })
+                .expect("cooperative evidence event");
+            event.observed_at_unix = observed_at_unix;
+            let evidence = event
+                .admitted_evidence
+                .as_mut()
+                .expect("admitted cooperative evidence");
+            evidence.execution_observed_at_unix = observed_at_unix;
+            evidence.readback_observed_at_unix = observed_at_unix;
+        };
+
+        let observed_at_unix = 42_u64;
+        let valid_through_unix = observed_at_unix
+            .checked_add(route_max_age_seconds)
+            .expect("bounded route validity");
+        let mut boundary_records = projection.records.clone();
+        set_observation_times(&mut boundary_records, observed_at_unix);
+        let at_boundary = cooperative_evidence_audit(
+            &boundary_records,
+            selected_policy,
+            Some(selected_claim),
+            Some(&active_objective),
+            &effective.identity().effective_runtime_bundle.bundle_digest,
+            snapshot.digest(),
+            valid_through_unix,
+        );
+        let at_boundary = at_boundary
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("boundary cooperative audit");
+        assert_eq!(
+            at_boundary.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Supporting,
+            "evidence remains supporting through the inclusive validity boundary"
+        );
+        assert_eq!(at_boundary.valid_through_unix, Some(valid_through_unix));
+        let after_boundary = cooperative_evidence_audit(
+            &boundary_records,
+            selected_policy,
+            Some(selected_claim),
+            Some(&active_objective),
+            &effective.identity().effective_runtime_bundle.bundle_digest,
+            snapshot.digest(),
+            valid_through_unix
+                .checked_add(1)
+                .expect("test time after validity boundary"),
+        );
+        let after_boundary = after_boundary
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("expired cooperative audit");
+        assert_eq!(
+            after_boundary.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Stale
+        );
+        assert!(after_boundary.valid_through_unix.is_none());
+
+        let overflow_observed_at_unix = u64::MAX
+            .checked_sub(route_max_age_seconds)
+            .and_then(|value| value.checked_add(1))
+            .expect("overflow test observation time");
+        let mut overflow_records = projection.records.clone();
+        set_observation_times(&mut overflow_records, overflow_observed_at_unix);
+        let overflow = cooperative_evidence_audit(
+            &overflow_records,
+            selected_policy,
+            Some(selected_claim),
+            Some(&active_objective),
+            &effective.identity().effective_runtime_bundle.bundle_digest,
+            snapshot.digest(),
+            u64::MAX,
+        );
+        let overflow = overflow
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("overflow cooperative audit");
+        assert_eq!(
+            overflow.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Stale,
+            "an unrepresentable validity boundary must fail closed"
+        );
+        assert!(overflow.valid_through_unix.is_none());
+
+        let mut rebound_objective = active_objective.clone();
+        rebound_objective.revision = rebound_objective
+            .revision
+            .checked_add(1)
+            .expect("next objective revision");
+        let rebound = cooperative_evidence_audit(
+            &projection.records,
+            selected_policy,
+            Some(selected_claim),
+            Some(&rebound_objective),
+            &effective.identity().effective_runtime_bundle.bundle_digest,
+            snapshot.digest(),
+            now,
+        );
+        let rebound = rebound
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("rebound cooperative audit");
+        assert_eq!(
+            rebound.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Stale,
+            "evidence bound to the previous objective revision must not carry forward"
+        );
+        assert!(rebound.valid_through_unix.is_none());
+
         drop(effective);
         drop(domain);
 
@@ -14955,12 +15110,27 @@ mod tests {
         assert!(audit
             .does_not_prove
             .contains(&WorkflowCooperativeEvidenceNonProof::SelectedSourceClaim));
+        assert_eq!(audit.valid_through_unix, Some(expected_valid_through));
+        assert!(recovered.cooperative_evidence_action_packet.is_none());
+        assert!(recovered.cooperative_evidence_action_gap.is_none());
 
-        let mut rejected_offer = adapter
-            .next()
-            .expect("current packet for rejection")
+        fs::write(root.join("README.md"), b"project snapshot changed\n")
+            .expect("make supporting cooperative evidence stale");
+        let stale = adapter.next().expect("stale evidence guidance");
+        let stale_audit = stale
+            .cooperative_evidence
+            .iter()
+            .find(|entry| entry.record_digest == admitted.record_digest)
+            .expect("stale cooperative audit");
+        assert_eq!(
+            stale_audit.current_status,
+            WorkflowCooperativeEvidenceCurrentStatus::Stale
+        );
+        assert!(stale_audit.valid_through_unix.is_none());
+        assert!(stale.cooperative_evidence_action_gap.is_none());
+        let mut rejected_offer = stale
             .cooperative_evidence_action_packet
-            .expect("cooperative packet")
+            .expect("snapshot drift must rearm the cooperative packet")
             .offer_template;
         rejected_offer["offer_id"] =
             serde_json::json!("offer.cooperative-evidence.rejected-idempotency");

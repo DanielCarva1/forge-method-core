@@ -443,18 +443,29 @@ Pick the location your agent runtime expects.
 Activate this behavior once when `/start-forge` begins the chat; do not ask the
 user to restart Forge for each task.
 
-After an objective is accepted, inspect
-`data.cooperative_evidence_action_packet` on every fresh `workflow next`:
+After an objective is accepted, inspect `data.cooperative_evidence` before the
+action fields on every fresh `workflow resume` or `workflow next` response:
 
-1. If it is absent, report `data.cooperative_evidence_action_gap` exactly. Do
-   not invent a route or fall back to a different policy/claim.
-2. Copy `offer_template` to a temporary file **outside** the project snapshot.
+1. If a record has `current_status=supporting` and a
+   `valid_through_unix`, the cooperative evidence obligation is currently
+   satisfied. The action packet and gap are intentionally absent; do not offer
+   or admit the same evidence again.
+2. Without current supporting evidence, inspect
+   `data.cooperative_evidence_action_packet`. If it is absent, report
+   `data.cooperative_evidence_action_gap` exactly. Do not invent a route or
+   fall back to a different policy/claim.
+3. Copy `offer_template` to a temporary file **outside** the project snapshot.
    Replace only the entries named by `required_replacements` (currently the
    unique offer id). The outcome and observation time are kernel-derived.
-3. Execute `argv` as an argument vector, replacing only `input_file_token` with
+4. Execute `argv` as an argument vector, replacing only `input_file_token` with
    the temporary file path. Never join or reinterpret it as a shell command.
-4. Treat `rejected` as audited non-support, not success. Delete the temporary
+5. Treat `rejected` as audited non-support, not success. Delete the temporary
    input and immediately refresh `workflow next`; never cache the old binding.
+
+When current support expires or becomes stale because the snapshot, objective,
+or selected policy/claim/evaluator route binding changed, a fresh
+`workflow resume` or `workflow next` response re-publishes a newly bound packet
+when the route remains available. Use only that packet.
 
 The versioned, default-denied lane is bound to the currently selected
 policy/claim and accepts only the current `project_snapshot` material scenario
