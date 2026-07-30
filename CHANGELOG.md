@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Source candidate version advanced to `0.12.0-alpha.6` for `master`.** This
+  does not claim hosted CI, an exact tag, or a GitHub Release; those release
+  proofs remain pending.
+
 ### Added
 - **Strict cooperative Codex conformance adapter.** Version `1.0.0` converts
   one closed, exact-host dogfood observation into the public eight-part
