@@ -335,55 +335,58 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 ## Cooperative evidence admission
 
-For a `solo_cooperative` objective, an agent may submit
-`forge-core workflow evidence admit-cooperative` with the closed offer published
-under `workflow_resume_summary_v2.actions.cooperative_evidence_packet`. The offer
-is bound to the active objective revision/digest, assurance epoch, accepted
-record, effective bundle, snapshot, ledger head, and state version. The kernel
-records admitted offers and bounded normalized rejections. The versioned solo
-descriptor is default-denied and is derived only from the currently selected
-policy's current unsatisfied claim and its bound evaluator; it never scans for
-a convenient claim in another policy. Frozen release artifacts and
-strict/profileless output are not mutated.
+For a `solo_cooperative` objective, agents use the one existing public command,
+`forge-core workflow evidence admit-cooperative`, with the closed packet from
+`workflow_resume_summary_v2.actions.cooperative_evidence_packet`. The offer is
+bound to the active objective, accepted record, effective bundle, project
+snapshot, ledger head, state version, carrying principal, selected policy,
+claim, evaluator, subject, and scenario. `strict_external` and profileless
+projects never publish this same-owner lane.
 
-Two deliberately different solo routes exist. Historical v1 records remain kernel-derived snapshot readback: callers do not supply their outcome, they support only the cooperative claim, and they never satisfy the selected source claim. When the selected evaluator is exactly `RepositoryInspector` with artifact-inspection strength, the current v2 packet instead asks the agent for a pass, fail, or inconclusive assessment, a bounded summary, project-relative basis paths, and bounded limitations. Forge rejects traversal, absolute, missing, duplicate, symlink-escaping, oversized, or unreadable basis; it confines and reads the accepted regular files, stores their normalized content hashes and combined digest, and makes the evidence stale when the objective, policy route, ledger, snapshot, subject, time, or basis bytes change.
+The packet's typed `route.target` separates two meanings without adding another
+command, event, ledger, or admission subsystem:
 
-A current v2 `pass` becomes ordinary source evidence only for the exact selected repository-inspection claim. A `fail` is admitted honestly as disproving evidence; `inconclusive` remains inconclusive. Neither becomes a verified claim. For the same objective, snapshot, and exact route, only the newest **admitted** v2 assessment is current: a newer admitted pass/fail/inconclusive supersedes the previous assessment, while a rejected offer does not. Superseded records stay visible as stale audit history.
+- `policy_applicability` asks whether the selected `when_applicable` policy
+  applies to the current project. The same-owner agent supplies `applicable`,
+  `not_applicable`, or `inconclusive`, a bounded summary, project-relative basis
+  paths, and bounded limitations. `applicable` keeps the policy selected;
+  `not_applicable` skips it while its basis remains current; `inconclusive`
+  leaves progression at `applicability_required`. This result is routing only:
+  it cannot satisfy a policy claim or capability and cannot stand for a human
+  judgment or independent review.
+- `source_claim` assesses the exact selected repository-inspection claim.
+  Current v2 packets accept `pass`, `fail`, or `inconclusive`; only a current
+  pass becomes supporting source evidence. Historical v1 records remain the
+  kernel-derived cooperative snapshot route. A missing target is interpreted
+  only as this legacy `source_claim` behavior.
 
-Basis bytes come only from exact regular-file handles in the retained project snapshot used for the admission. Absolute/traversal paths, links, files outside that snapshot, and excluded roots such as `.git`, `.forge-method`, top-level `.local`, `target`, and `node_modules` cannot become basis. The audit publishes source-satisfaction proof only for a current pass; current fail and inconclusive records publish only the kernel-verified content-addressed-basis proof. A completion binds the exact current pass record digests, and expiry, supersession, snapshot/basis drift, or another freshness loss invalidates that completion rather than falling back to an older assessment.
+Both current agent-assessed routes reuse the same producer, evaluator, subject,
+idempotency, bounded input, content-addressed basis, rejection audit, ledger,
+and TCB checks. Forge rejects absolute, traversing, missing, duplicate,
+symlink-escaping, oversized, or unreadable basis paths. Reusing an offer id with
+identical canonical bytes is idempotent; reusing it for different bytes is a
+closed conflict. Rejected offers never supersede admitted ones.
 
-Top-level `.local` is workflow-local only when the directory already exists before evidence capture. The retained workflow policy omits its contents, so later file-content changes inside that existing directory do not stale evidence; nested paths such as `src/.local` remain governed. The retained root directory metadata is still security-relevant: creating or removing top-level `.local` after capture changes the root namespace, stales the evidence, and requires re-admission. Agents that need `.local` must create it before admitting evidence. On alpha10 adoption, evidence admitted before alpha10 while top-level `.local` existed becomes stale once under the corrected snapshot projection and must be re-admitted; replay remains structurally valid and the ledger is not corrupt or invalid.
+Applicability is deliberately basis-scoped. Changes outside its admitted basis
+do not invalidate the routing result; changed or missing basis bytes do. Only
+the newest admitted applicability result for the exact objective, policy,
+producer, and bundle is current, so restoring old bytes cannot revive a
+superseded result. Source-claim evidence retains its stricter evidence
+freshness and completion-binding rules. Neither route proves independent
+semantic review, trusted-runtime separation, human presence, representative
+runtime behavior, tamper resistance, official host support, or enterprise
+compliance.
 
-The exact v2 retained-file read/hash route makes a `when_applicable`
-repository-inspection policy applicable and proves the executable
-`LocalCommand` capability alternative where a policy permits independent
-**or** executable inspection. It does not prove an independent reviewer, human
-presence, representative runtime, or process separation. No route is relabeled
-for AuthorizedHuman, IndependentReviewer, RepresentativeRuntime, or another
-provider, and `strict_external` is unchanged. Historical v1 semantics remain
-unchanged. V1 and v2 records do **not** prove independent semantic review,
-trusted-runtime separation, human presence, representative runtime behavior,
-tamper resistance, or enterprise compliance. Rejected and stale records remain
-visible in the full audit but never support a claim.
-
-`/start-forge` activation is once per chat, not once per task. After the
-objective is accepted, evidence operation is mechanical: inspect
-`data.current_cooperative_evidence` first on every fresh v2 resume response. A
-current `supporting` record satisfies the cooperative obligation through its
-published validity boundary, so
-`data.actions.cooperative_evidence_packet` and
-`data.actions.cooperative_evidence_gap` are both absent and the agent must not
-admit it again. Without current support, inspect the packet; write
-`offer_template` to a temporary file outside the snapshot; replace only
-`required_replacements`; execute `argv` as tokens after replacing only
-`input_file_token`; delete the temporary file; and refresh default
-`workflow resume`. Never shell-parse the vector. If neither current support nor
-a packet exists, report `data.actions.cooperative_evidence_gap`. A `rejected`
-result is audited non-support, not success. Expiry or a changed snapshot,
-objective, or selected policy/claim/evaluator route makes the old record stale.
-A fresh response publishes a newly bound packet only when that cooperative
-route remains available. V1 or full legacy responses use only their documented
-fields; an absent v2-only field in v1 is never treated as an absent obligation.
+Operation is mechanical. On each fresh default `workflow resume`, inspect the
+packet target, copy `offer_template` to a temporary file outside the project,
+replace every `required_replacements` token, set the selected assessment's
+`basis_paths` and bounded `limitations`, and leave all binding/route/schema
+fields unchanged. Execute the published `argv` as tokens: its `--root` is the
+exact project root, and the host replaces only `input_file_token` with the
+external temporary-file path. Delete that file and refresh default resume after
+every admission or rejection. Do not shell-parse, rebuild, cache, or repair an
+old vector. When no packet exists, report
+`data.actions.cooperative_evidence_gap` exactly.
 
 ## Governed promotion preview, exact-CAS apply, and recovery
 

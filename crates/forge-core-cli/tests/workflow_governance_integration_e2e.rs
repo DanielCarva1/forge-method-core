@@ -329,6 +329,28 @@ fn execute_structured_argv(argv: &[Value]) -> Output {
         .expect("execute exact argv")
 }
 
+fn execute_cooperative_packet(packet: &Value, input_path: &Path) -> Output {
+    let input_token = packet["input_file_token"]
+        .as_str()
+        .expect("cooperative input token");
+    let mut argv = packet["argv"]
+        .as_array()
+        .expect("cooperative packet argv")
+        .clone();
+    let mut replacements = 0;
+    for token in &mut argv {
+        if token.as_str() == Some(input_token) {
+            *token = Value::String(input_path.display().to_string());
+            replacements += 1;
+        }
+    }
+    assert_eq!(
+        replacements, 1,
+        "hosts replace only the published input token"
+    );
+    execute_structured_argv(&argv)
+}
+
 fn append_test_phase(consumer: &Consumer) {
     let mut ledger =
         lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock concurrent ledger");
@@ -1462,6 +1484,224 @@ fn cooperative_objective_grounding_survives_restart_and_local_writes() {
 
 #[test]
 #[allow(clippy::too_many_lines)]
+fn solo_applicability_assessment_is_public_honest_and_basis_scoped() {
+    let strict = Consumer::new_with_prefix("forge-workflow-strict-applicability-e2e");
+    assert_ok(&strict.run(&["init", "--readiness-profile", "strict_external"]));
+    assert!(
+        assert_ok(&strict.run(&["next"]))["data"]["cooperative_evidence_action_packet"].is_null()
+    );
+
+    let consumer = Consumer::new_with_prefix("forge-workflow-solo-applicability-e2e");
+    assert_ok(&consumer.run(&["init"]));
+    upgrade_to_latest(&consumer);
+    let objective_next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = objective_next["data"]["authorization"]["action_packets"][0]
+        ["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "applicability objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Assess policy applicability honestly from repository evidence",
+                "constraints": ["same-owner agent only"],
+                "unacceptable_outcomes": ["claim human or independent authority"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.applicability-e2e",
+            "host_provenance": {
+                "host_id": "host.applicability-e2e",
+                "host_version": "test",
+                "session_ref": "session.applicability-e2e",
+                "interaction_ref": "turn.applicability-e2e",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+
+    let original_policy = "policy.workflow.investigation";
+    let mut next = advance_fixture_to_policy(&consumer, original_policy);
+    assert_eq!(next["data"]["status"], "applicability_required");
+    let first_packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    assert_eq!(first_packet["route"]["target"], "policy_applicability");
+    let argv = first_packet["argv"].as_array().expect("published argv");
+    let root_index = argv
+        .iter()
+        .position(|value| value == "--root")
+        .expect("explicit root flag");
+    let published_root = PathBuf::from(
+        argv[root_index + 1]
+            .as_str()
+            .expect("published project root"),
+    );
+    assert!(published_root.is_absolute());
+    assert_eq!(published_root, consumer.app);
+    assert!(next["data"]["authorization"]["action_packets"]
+        .as_array()
+        .is_some_and(Vec::is_empty));
+
+    let malformed = consumer.parent.join("malformed applicability.json");
+    fs::write(&malformed, b"{}").expect("malformed offer");
+    let rejected = execute_cooperative_packet(&first_packet, &malformed);
+    assert_eq!(rejected.status.code(), Some(2));
+    assert_eq!(
+        json(&rejected)["data"]["event"]["payload"]["rejection"],
+        "malformed_or_oversized_offer"
+    );
+
+    let mut stale_offer = first_packet["offer_template"].clone();
+    stale_offer["offer_id"] = serde_json::json!("offer.applicability.stale");
+    stale_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "inconclusive",
+        "summary": "The available basis is not sufficient",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner inspection"]
+    });
+    let stale_input = consumer.write_json("stale applicability.json", &stale_offer);
+    let stale = execute_cooperative_packet(&first_packet, &stale_input);
+    assert_eq!(stale.status.code(), Some(2));
+    assert_eq!(
+        json(&stale)["data"]["event"]["payload"]["rejection"],
+        "binding_stale"
+    );
+
+    next = assert_ok(&consumer.run(&["resume"]));
+    let inconclusive_packet = next["data"]["actions"]["cooperative_evidence_packet"].clone();
+    let mut inconclusive_offer = inconclusive_packet["offer_template"].clone();
+    inconclusive_offer["offer_id"] = serde_json::json!("offer.applicability.inconclusive");
+    inconclusive_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "inconclusive",
+        "summary": "Repository evidence is presently inconclusive",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner inspection, not a human judgment"]
+    });
+    let inconclusive_input =
+        consumer.write_json("inconclusive applicability.json", &inconclusive_offer);
+    let admitted_inconclusive = assert_ok(&execute_cooperative_packet(
+        &inconclusive_packet,
+        &inconclusive_input,
+    ));
+    assert_eq!(
+        admitted_inconclusive["data"]["event"]["payload"]["admitted_evidence"]
+            ["applicability_assessment"]["outcome"],
+        "inconclusive"
+    );
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let wal_len = fs::metadata(&wal).expect("WAL metadata").len();
+    assert_ok(&execute_cooperative_packet(
+        &inconclusive_packet,
+        &inconclusive_input,
+    ));
+    assert_eq!(fs::metadata(&wal).expect("WAL metadata").len(), wal_len);
+
+    let mut conflicting_offer = inconclusive_offer.clone();
+    conflicting_offer["attestation"]["applicability_assessment"]["outcome"] =
+        serde_json::json!("applicable");
+    let conflicting_input =
+        consumer.write_json("conflicting applicability.json", &conflicting_offer);
+    let conflict = execute_cooperative_packet(&inconclusive_packet, &conflicting_input);
+    assert_eq!(conflict.status.code(), Some(2));
+    assert_eq!(
+        json(&conflict)["data"]["event"]["payload"]["rejection"],
+        "conflicting_idempotency_key"
+    );
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(next["data"]["status"], "applicability_required");
+
+    let not_applicable_packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    let mut not_applicable_offer = not_applicable_packet["offer_template"].clone();
+    not_applicable_offer["offer_id"] = serde_json::json!("offer.applicability.not-applicable");
+    not_applicable_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "not_applicable",
+        "summary": "The selected policy does not apply to this project",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner inspection"]
+    });
+    let not_applicable_input = consumer.write_json("not applicable.json", &not_applicable_offer);
+    assert_ok(&execute_cooperative_packet(
+        &not_applicable_packet,
+        &not_applicable_input,
+    ));
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_ne!(next["data"]["selected_policy_ref"], original_policy);
+
+    fs::write(
+        consumer.app.join("UNRELATED.md"),
+        "not part of the assessment basis\n",
+    )
+    .expect("non-basis edit");
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_ne!(next["data"]["selected_policy_ref"], original_policy);
+
+    fs::write(consumer.app.join("README.md"), "changed assessment basis\n").expect("basis drift");
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(next["data"]["selected_policy_ref"], original_policy);
+    assert_eq!(next["data"]["status"], "applicability_required");
+
+    let applicable_packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    let mut applicable_offer = applicable_packet["offer_template"].clone();
+    applicable_offer["offer_id"] = serde_json::json!("offer.applicability.applicable");
+    applicable_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "applicable",
+        "summary": "The selected policy applies to the current project",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner inspection, no independent authority"]
+    });
+    let applicable_input = consumer.write_json("applicable.json", &applicable_offer);
+    assert_ok(&execute_cooperative_packet(
+        &applicable_packet,
+        &applicable_input,
+    ));
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(next["data"]["selected_policy_ref"], original_policy);
+    assert_eq!(next["data"]["applicability"], true);
+    let applicability_audit = next["data"]["cooperative_evidence"]
+        .as_array()
+        .expect("cooperative evidence audit")
+        .iter()
+        .find(|audit| audit["admitted_evidence"]["offer_id"] == "offer.applicability.applicable")
+        .expect("applicability audit");
+    assert!(applicability_audit["supports_cooperative_claim_ref"].is_null());
+    assert_eq!(applicability_audit["applicability_outcome"], "applicable");
+    assert!(applicability_audit["does_not_prove"]
+        .as_array()
+        .is_some_and(
+            |items| items.iter().any(|item| item == "policy_claim_satisfaction")
+                && items.iter().any(|item| item == "capability_satisfaction")
+                && items
+                    .iter()
+                    .any(|item| item == "human_applicability_judgment")
+        ));
+    assert!(next["data"]["simulation"]["candidate_claim_results"]
+        .as_array()
+        .is_some_and(|claims| claims.iter().all(|claim| claim["status"] != "verified")));
+    assert!(next["data"]["simulation"]["candidate_capability_gaps"]
+        .as_array()
+        .is_some_and(|gaps| !gaps.is_empty()));
+
+    fs::write(consumer.app.join("README.md"), "consumer project\n")
+        .expect("restore old basis bytes");
+    let no_old_outcome_revival = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        no_old_outcome_revival["data"]["selected_policy_ref"],
+        original_policy
+    );
+    assert_eq!(
+        no_old_outcome_revival["data"]["status"],
+        "applicability_required"
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
 fn internal_fixture_reaches_investigation_then_public_solo_source_command_supersedes_assessments() {
     let strict = Consumer::new_with_prefix("forge-workflow-strict-source-e2e");
     let strict_initialized =
@@ -1525,6 +1765,30 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     assert!(
         next["data"]["cooperative_evidence_action_packet"].is_object(),
         "the investigation fixture must expose a live cooperative evidence packet"
+    );
+    assert_eq!(
+        next["data"]["cooperative_evidence_action_packet"]["route"]["target"],
+        "policy_applicability"
+    );
+    let applicability_packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    let mut applicability_offer = applicability_packet["offer_template"].clone();
+    applicability_offer["offer_id"] = serde_json::json!("offer.source-e2e.applicability");
+    applicability_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "applicable",
+        "summary": "The repository investigation policy applies to this fixture",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner agent applicability assessment"]
+    });
+    let applicability_input =
+        consumer.write_json("source applicability.json", &applicability_offer);
+    assert_ok(&execute_cooperative_packet(
+        &applicability_packet,
+        &applicability_input,
+    ));
+    next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(
+        next["data"]["cooperative_evidence_action_packet"]["route"]["target"],
+        "source_claim"
     );
     let activation = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(

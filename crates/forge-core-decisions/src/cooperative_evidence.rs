@@ -4,13 +4,17 @@ use forge_core_contracts::{
     WorkflowCooperativeEvidenceAssuranceEffect, WorkflowCooperativeEvidenceBinding,
     WorkflowCooperativeEvidenceDisposition, WorkflowCooperativeEvidenceOffer,
     WorkflowCooperativeEvidenceRejection, WorkflowCooperativeEvidenceRoute,
-    WorkflowCooperativeMaterialScenarioKind, WorkflowEvaluatorProvider, WorkflowEvidenceKind,
-    WorkflowEvidenceStrength, WorkflowEvidenceSubjectKind,
+    WorkflowCooperativeEvidenceTarget, WorkflowCooperativeMaterialScenarioKind,
+    WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceStrength,
+    WorkflowEvidenceSubjectKind, COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
+    COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1, COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS,
-    SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1,
-    SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1,
+    SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
+    SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
+    SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
+    SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,12 +35,17 @@ pub fn evaluate_cooperative_evidence(
         rejection: Some(reason),
     };
     let statement = &offer.attestation;
+    let statement_target = statement
+        .target
+        .unwrap_or(WorkflowCooperativeEvidenceTarget::SourceClaim);
     let legacy_route = offer.schema_version == COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1
         && statement.schema_version == COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1
         && statement.policy_version == SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1
         && statement.claim_descriptor_version == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1
         && route.policy_version == SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1
         && route.claim_descriptor_version == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1
+        && route.target == WorkflowCooperativeEvidenceTarget::SourceClaim
+        && statement_target == WorkflowCooperativeEvidenceTarget::SourceClaim
         && route.assurance_effect
             == WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim;
     let source_route = offer.schema_version == COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION
@@ -45,9 +54,24 @@ pub fn evaluate_cooperative_evidence(
         && statement.claim_descriptor_version == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
         && route.policy_version == SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION
         && route.claim_descriptor_version == SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+        && route.target == WorkflowCooperativeEvidenceTarget::SourceClaim
+        && statement_target == WorkflowCooperativeEvidenceTarget::SourceClaim
         && route.assurance_effect
             == WorkflowCooperativeEvidenceAssuranceEffect::SoloSourceClaimSatisfiedByAgentInspection;
-    if !legacy_route && !source_route {
+    let applicability_route =
+        offer.schema_version == COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION
+            && statement.schema_version == COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION
+            && statement.policy_version == SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION
+            && statement.claim_descriptor_version
+                == SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION
+            && route.policy_version == SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION
+            && route.claim_descriptor_version
+                == SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION
+            && route.target == WorkflowCooperativeEvidenceTarget::PolicyApplicability
+            && statement_target == WorkflowCooperativeEvidenceTarget::PolicyApplicability
+            && route.assurance_effect
+                == WorkflowCooperativeEvidenceAssuranceEffect::SoloPolicyApplicabilityAssessedByAgentInspection;
+    if !legacy_route && !source_route && !applicability_route {
         return reject(WorkflowCooperativeEvidenceRejection::UnsupportedSchema);
     }
     if route.provider != WorkflowEvaluatorProvider::RepositoryInspector
@@ -88,16 +112,31 @@ pub fn evaluate_cooperative_evidence(
         && ((legacy_route
             && statement.scenario_kind
                 == WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
-            && statement.source_assessment.is_none())
+            && statement.source_assessment.is_none()
+            && statement.applicability_assessment.is_none())
             || (source_route
                 && statement.scenario_kind
                     == WorkflowCooperativeMaterialScenarioKind::AgentRepositoryInspectionWithContentAddressedBasis
+                && statement.applicability_assessment.is_none()
                 && statement.source_assessment.as_ref().is_some_and(|assessment| {
                     !assessment.summary.trim().is_empty()
                         && !assessment.basis_paths.is_empty()
                         && assessment.basis_paths.len()
                             <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
-                })));
+                }))
+            || (applicability_route
+                && statement.scenario_kind
+                    == WorkflowCooperativeMaterialScenarioKind::AgentPolicyApplicabilityInspectionWithContentAddressedBasis
+                && statement.source_assessment.is_none()
+                && statement
+                    .applicability_assessment
+                    .as_ref()
+                    .is_some_and(|assessment| {
+                        !assessment.summary.trim().is_empty()
+                            && !assessment.basis_paths.is_empty()
+                            && assessment.basis_paths.len()
+                                <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
+                    })));
     if !scenario_valid {
         return reject(WorkflowCooperativeEvidenceRejection::WrongScenario);
     }
@@ -147,6 +186,7 @@ mod tests {
         WorkflowCooperativeEvidenceRoute {
             policy_version: SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1.to_owned(),
             claim_descriptor_version: SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1.to_owned(),
+            target: WorkflowCooperativeEvidenceTarget::SourceClaim,
             policy_ref: StableId("policy.solo".to_owned()),
             claim_ref: StableId("claim.solo".to_owned()),
             evaluator_ref: StableId("evaluator.solo".to_owned()),
@@ -174,6 +214,7 @@ mod tests {
                 schema_version: COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1.to_owned(),
                 policy_version: SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1.to_owned(),
                 claim_descriptor_version: SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1.to_owned(),
+                target: None,
                 binding: binding(),
                 policy_ref: StableId("policy.solo".to_owned()),
                 claim_ref: StableId("claim.solo".to_owned()),
@@ -190,6 +231,7 @@ mod tests {
                     WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback,
                 scenario_digest: DIGEST.to_owned(),
                 source_assessment: None,
+                applicability_assessment: None,
             },
         }
     }

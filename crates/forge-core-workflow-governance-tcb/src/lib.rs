@@ -4060,14 +4060,24 @@ fn validate_cooperative_evidence_shape(
                 == forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1
                 && admitted.claim_descriptor_version
                     == forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1
+                && admitted
+                    .target
+                    .unwrap_or(forge_core_contracts::WorkflowCooperativeEvidenceTarget::SourceClaim)
+                    == forge_core_contracts::WorkflowCooperativeEvidenceTarget::SourceClaim
                 && admitted.scenario_kind
                     == forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
                 && admitted.source_assessment.is_none()
+                && admitted.applicability_assessment.is_none()
                 && admitted.outcome == forge_core_contracts::WorkflowEvidenceOutcome::Pass;
             let source_shape = admitted.policy_version
                 == forge_core_contracts::SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION
                 && admitted.claim_descriptor_version
                     == forge_core_contracts::SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION
+                && admitted
+                    .target
+                    .unwrap_or(forge_core_contracts::WorkflowCooperativeEvidenceTarget::SourceClaim)
+                    == forge_core_contracts::WorkflowCooperativeEvidenceTarget::SourceClaim
+                && admitted.applicability_assessment.is_none()
                 && admitted.scenario_kind
                     == forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::AgentRepositoryInspectionWithContentAddressedBasis
                 && admitted.source_assessment.as_ref().is_some_and(|assessment| {
@@ -4103,13 +4113,67 @@ fn validate_cooperative_evidence_shape(
                         && basis_is_bounded
                         && admitted.outcome == assessment.outcome
                 });
+            let applicability_shape = admitted.policy_version
+                == forge_core_contracts::SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION
+                && admitted.claim_descriptor_version
+                    == forge_core_contracts::SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION
+                && admitted.target
+                    == Some(forge_core_contracts::WorkflowCooperativeEvidenceTarget::PolicyApplicability)
+                && admitted.source_assessment.is_none()
+                && admitted.scenario_kind
+                    == forge_core_contracts::WorkflowCooperativeMaterialScenarioKind::AgentPolicyApplicabilityInspectionWithContentAddressedBasis
+                && admitted
+                    .applicability_assessment
+                    .as_ref()
+                    .is_some_and(|assessment| {
+                        let text_is_bounded = !assessment.summary.trim().is_empty()
+                            && assessment.summary.len()
+                                <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                            && assessment.limitations.len()
+                                <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_LIMITATIONS
+                            && assessment.limitations.iter().all(|limitation| {
+                                !limitation.trim().is_empty()
+                                    && limitation.len()
+                                        <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                            });
+                        let basis_is_bounded = !assessment.basis.is_empty()
+                            && assessment.basis.len()
+                                <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
+                            && assessment.basis.windows(2).all(|pair| {
+                                pair[0].subject_ref < pair[1].subject_ref
+                                    || (pair[0].subject_ref == pair[1].subject_ref
+                                        && pair[0].subject_digest < pair[1].subject_digest)
+                            })
+                            && assessment.basis.iter().all(|reference| {
+                                cooperative_source_basis_path_is_normalized(&reference.subject_ref)
+                                    && reference.subject_ref.len()
+                                        <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+                                    && is_lower_sha256(&reference.subject_digest)
+                            })
+                            && is_lower_sha256(&assessment.basis_digest)
+                            && to_canonical_json(&assessment.basis).is_ok_and(|canonical| {
+                                format_sha256(Sha256::digest(canonical)) == assessment.basis_digest
+                            });
+                        let expected_outcome = match assessment.outcome {
+                            forge_core_contracts::WorkflowCooperativeApplicabilityOutcome::Applicable => {
+                                forge_core_contracts::WorkflowEvidenceOutcome::Pass
+                            }
+                            forge_core_contracts::WorkflowCooperativeApplicabilityOutcome::NotApplicable => {
+                                forge_core_contracts::WorkflowEvidenceOutcome::Fail
+                            }
+                            forge_core_contracts::WorkflowCooperativeApplicabilityOutcome::Inconclusive => {
+                                forge_core_contracts::WorkflowEvidenceOutcome::Inconclusive
+                            }
+                        };
+                        text_is_bounded && basis_is_bounded && admitted.outcome == expected_outcome
+                    });
             if text_fields.iter().any(|value| {
                 value.trim().is_empty()
                     || value.len()
                         > forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
             }) || admitted.offer_digest != event.offer_digest
                 || event.offer_id.as_ref() != Some(&admitted.offer_id)
-                || (!legacy_shape && !source_shape)
+                || (!legacy_shape && !source_shape && !applicability_shape)
                 || binding.objective_revision == 0
                 || binding.assurance_epoch == 0
                 || binding.accepted_objective_record_sequence == 0

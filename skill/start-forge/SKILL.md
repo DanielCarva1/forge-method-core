@@ -505,42 +505,48 @@ Pick the location your agent runtime expects.
 Activate this behavior once when `/start-forge` begins the chat; do not ask the
 user to restart Forge for each task.
 
-After an objective is accepted, inspect
-`data.current_cooperative_evidence` before the action fields on every v2
-`workflow resume` response. A v1 summary also publishes this field; a legacy
-full response uses `data.cooperative_evidence` instead. Never treat a field that
-v1 does not publish as proof that no obligation exists:
+After an objective is accepted, always inspect the fresh v2
+`data.actions.cooperative_evidence_packet`. The packet's `route.target` decides
+what the agent must assess; a missing `target` is legacy `source_claim`:
 
-1. If a record has `current_status=supporting` and a
-   `valid_through_unix`, the cooperative evidence obligation is currently
-   satisfied. The action packet and gap are intentionally absent; do not offer
-   or admit the same evidence again.
-2. Without current supporting evidence in v2, inspect
-   `data.actions.cooperative_evidence_packet`. If it is absent, report
-   `data.actions.cooperative_evidence_gap` exactly. V1 does not publish the
-   complete packet or gap: execute its validated `detail_argv`, then inspect the
-   equivalent top-level full fields. Its older
-   `data.actions.cooperative_evidence_argv` is not a replacement for the typed
-   packet and gap. Do not invent a route or fall back to a different
-   policy/claim.
-3. Copy `offer_template` to a temporary file **outside** the project snapshot.
-   Replace only the entries named by `required_replacements` (currently the
-   unique offer id). The outcome and observation time are kernel-derived.
-4. Execute `argv` as an argument vector, replacing only `input_file_token` with
-   the temporary file path. Never join or reinterpret it as a shell command.
-5. Treat `rejected` as audited non-support, not success. Delete the temporary
-   input and immediately refresh the workflow; never cache the old binding.
+1. For `policy_applicability`, inspect the repository evidence named in the
+   assessment basis and choose exactly one honest result:
+   - `applicable`: the policy remains selected and Forge may next publish a
+     `source_claim` packet;
+   - `not_applicable`: Forge skips that policy while the content-addressed basis
+     remains current;
+   - `inconclusive`: progression stays at `applicability_required` and a fresh
+     packet is required after more evidence exists.
+   This is a technical same-owner assessment by the agent. Do not ask the human
+   to read a diff or make this technical judgment unless the result exposes a
+   genuinely material product, trade-off, risk, external, or irreversible
+   decision. It never satisfies a policy claim or capability and never proves a
+   human or independent review.
+2. For `source_claim`, use the packet's declared assessment contract. A current
+   supporting source-claim record can suppress another source packet; an
+   applicability record cannot. `pass`, `fail`, and `inconclusive` must describe
+   what the retained repository basis actually supports.
+3. If no packet is present, inspect
+   `data.actions.cooperative_evidence_gap` exactly. Do not invent a route or fall
+   back to a different policy, claim, evaluator, or broker path. V1 does not
+   publish the complete packet or gap: execute its validated `detail_argv` and
+   inspect the equivalent full fields.
+4. Copy `offer_template` to a temporary file **outside** the project snapshot.
+   Replace every token named by `required_replacements` with an honest bounded
+   value. For the selected assessment object, replace `basis_paths` with one or
+   more project-relative regular-file paths and set `limitations` to any known
+   bounded limitations. Do not edit its binding, route identity, producer,
+   subject, schema, or scenario fields.
+5. Execute the published `argv` as tokens. Its `--root` is already the exact
+   project root; replace only `input_file_token` with the temporary file path.
+   Never join, shell-parse, or reconstruct the vector.
+6. Delete the temporary input and immediately run default `workflow resume`.
+   Treat `rejected` as audited non-support, not success. Use only the new packet
+   after any rejection, inconclusive result, expiry, objective/policy change, or
+   basis drift; never edit and retry a stale binding.
 
-When current support expires or becomes stale because the snapshot, objective,
-or selected policy/claim/evaluator route binding changed, a fresh
-`workflow resume` response re-publishes a newly bound packet
-when the route remains available. Use only that packet.
-
-The versioned, default-denied lane is bound to the currently selected
-policy/claim and accepts only the current `project_snapshot` material scenario
-that Forge executes and reads back. Its `supporting` status supports only the
-published `cooperative_claim_ref`; it explicitly leaves the selected source
-claim unsatisfied (including any RepresentativeRuntime claim). Runtime, external-system,
-human-decision, and inconclusive caller assertions fail closed. Never relabel a
-cooperative result as independent review, runtime verification,
-tamper-resistant proof, human presence, or compliance.
+Applicability validity is scoped to its content-addressed basis: unrelated
+project changes do not invalidate it, a changed basis does, and a superseded old
+answer never revives merely because earlier bytes return. Same-owner admission
+must never be relabeled as independent review, trusted-runtime separation,
+human presence, tamper-resistant proof, official host support, or compliance.
