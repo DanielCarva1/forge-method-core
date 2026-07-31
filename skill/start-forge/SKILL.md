@@ -218,53 +218,76 @@ proves integrity, not native host authenticity.
    Then run **`forge-core workflow resume --root "<project-root>" --json`**.
    `/start-forge` is run once per chat, not once per task. Treat this call as a
    capability probe even when the installed and source version strings match.
-   The concise capability is present only when `data.schema_version` equals
-   `workflow_resume_summary_v1` and `data.detail_argv` is a string argv shaped
-   exactly as `forge-core workflow resume --root <same-project-root> --full
-   --json`. Validate the root and every token. With a direct runtime, execute it
-   verbatim; with the retained WSL bridge, replace only argv element zero with
-   the proven packaged/runtime binary and preserve all later elements.
+   The preferred alpha.13 capability is present only when
+   `data.schema_version=workflow_resume_summary_v2` and `data.detail_argv` is an
+   argv array shaped exactly as `forge-core workflow resume --root
+   <same-project-root> --full --json`. Validate the root and every token. With a
+   direct runtime, execute it verbatim; with the retained WSL bridge, replace
+   only argv element zero with the proven packaged/runtime binary and preserve
+   all later elements.
 
-   A capable summary exposes the current Domain Pack effective identity,
-   objective, autonomy boundary, human decisions, blockers and warnings, ranked
-   actions, active isolations, recoverable promotions, current evidence, and
-   honest counts of omitted history. It is rebuilt without relying on an
-   earlier chat. Inspect those current fields before doing new work. Execute
-   `data.detail_argv` only when a blocker, recovery, integrity question, or
-   explicit audit needs the historical records; never reconstruct it from
-   display text.
+   V2 exposes all information needed for the current agent step: the effective
+   Domain Pack identity, objective, the complete autonomy projection (including
+   binding and input contract), the complete current evaluation, every current
+   boundary recheck, human decisions, blockers and warnings, ranked actions,
+   active isolations, recoverable promotions, current evidence, complete
+   authorization packets, and the complete cooperative packet or exact gap. Its
+   omitted-history counts refer only to older audit records, not hidden current
+   obligations. Inspect those current fields before doing new work.
 
-   If the default response lacks that schema/detail argv but contains the
-   historical full guidance fields, report plainly that this installed runtime
-   is an older/incompatible build without the concise resume capability and use
-   that default legacy full response as the compatibility audit. Use an
-   explicit `--full` only if the installed command help advertises it. Do not
-   infer the new capability from a matching version, silently rebuild an argv,
-   or claim that uninstalled source behavior ran. Execute a published recovery
-   argv as tokens before lower-ranked work;
-   `completed` promotions must not be applied or recovered again. After any
-   operation in this same chat, refresh with `workflow next` as usual.
+   `workflow_resume_summary_v1` is an explicit alpha.12 legacy response. Validate
+   its exact same-root `detail_argv`, use only fields that v1 actually publishes,
+   and never treat a v2-only field's absence as proof that no obligation exists.
+   Execute its `detail_argv` only when v1 lacks information needed to decide or
+   act. If the default response lacks either summary schema but contains the
+   historical full guidance fields, use it as a legacy compatibility audit.
+   Never silently search for v2 fields in v1, reconstruct missing data, infer a
+   capability from a matching version, or claim that uninstalled source behavior
+   ran.
 
-   `durable_pending_decisions` contains only decision events actually recorded
-   in the ledger. A question under `simulation.candidate_decision_requests` was
-   calculated now; do not tell the user it came from the previous chat.
+   After **every** Forge operation in this same chat, even when its receipt
+   embeds a `next` projection, refresh continuity with:
+
+   ```bash
+   forge-core workflow resume --root "<project-root>" --json
+   ```
+
+   Prefer v2. Use `data.detail_argv` only for an explicit audit or when the
+   concise/legacy response lacks information needed for the next safe action or
+   reports a blocker that it cannot explain. Execute a published recovery argv
+   as tokens before lower-ranked work; `completed` promotions must not be
+   applied or recovered again. In the rest of this skill, "refresh workflow"
+   means this same-root default `workflow resume` call.
+
+   In v2, `data.human_decisions.recovered_pending` contains only decision events
+   actually recorded in the ledger. A question under
+   `data.current_evaluation.candidate_decision_requests` was calculated now; do
+   not tell the user it came from the previous chat. V1 publishes the same
+   distinction as `human_decisions.recovered_pending` versus
+   `human_decisions.calculated_now`; the full audit uses
+   `replacement_continuity.durable_pending_decisions` versus
+   `simulation.candidate_decision_requests`.
 
    Any unexpected healthy-state argv, integrity, binding, snapshot, ledger, or
    environment error fails closed. Report it; do not erase state, reinitialize
    over an error, reconstruct argv from the display command, or fall back to
    caller-selected routing.
 
-   Read obligations, evidence/capability gaps, Decision Requests, ranked next
-   actions, and `data.authorization` from the workflow response. Its action
-   packets are read-only, current-state authority offers; they are not
-   permission to act. `forge-core workflow action-packets --root
-   "<project-root>" --json` exposes the packet set and registry status as an
-   optional standalone diagnostic. Select only the packet that matches the
-   governed next action, satisfy its evidence work, and provide only the
-   packet's closed semantic input. Never supply policy, phase, evaluator,
-   target, registry, request, attestation, or digest fields yourself. The host
-   agent performs the action and asks `workflow next` again. The human stays in
-   chat and never operates Forge commands or edits Forge artifacts.
+   In v2, read obligations, evidence/capability gaps, Decision Requests, issues,
+   and ranked next actions from `data.current_evaluation`, then read continuity
+   recovery from `data.actions` and authority from `data.authorization`. Its
+   action packets are read-only, current-state authority offers; they are not
+   permission to act. V2 publishes the complete packet set. Legacy v1 publishes
+   only packet references and an exact `action_packets_argv`; execute that argv
+   when the selected governed action needs a packet, rather than treating a
+   reference as the packet. `forge-core workflow action-packets --root
+   "<project-root>" --json` remains an optional standalone diagnostic for v2
+   and full responses. Select only the packet that matches the governed next
+   action, satisfy its evidence work, and provide only the packet's closed
+   semantic input. Never supply policy, phase, evaluator, target, registry,
+   request, attestation, or digest fields yourself. The host agent performs the
+   action and refreshes the workflow again. The human stays in chat and never
+   operates Forge commands or edits Forge artifacts.
 
    When work has been completed in a Forge isolation, preview it by the
    isolation id rather than by supplying an ambient worktree path:
@@ -346,7 +369,7 @@ proves integrity, not native host authenticity.
 
    Delete the temporary host file after Forge has read it. An exact retry is
    idempotent; a changed payload or stale packet must fail closed. On either
-   `accepted` or a later chat answer, run a fresh `workflow next`; never cache
+   `accepted` or a later chat answer, refresh the workflow; never cache
    the pre-acceptance packet. Never describe this lane as verified human
    presence, a signature, external origin, reviewer independence, or
    `strict_external` satisfaction.
@@ -358,12 +381,13 @@ proves integrity, not native host authenticity.
    detail-only clarification uses `non_material_clarification`; provide only
    additions, because Forge preserves the outcome and all prior lists. Neither
    packet replaces the governed ranked next action. After acceptance refresh
-   `workflow next`: prior head/digest-bound authority is stale, while immutable
+   the workflow: prior head/digest-bound authority is stale, while immutable
    historical records remain auditable. On replacement, report the active
    objective's revision, `revision_kind`, `revision_reason`, and predecessor
    digest before continuing.
 
-   With an active objective, read `data.agent_autonomy` from `workflow next`.
+   With an active objective, read `data.agent_autonomy` from the v2 workflow
+   resume response (or the legacy full response when v2 is unavailable).
    Its binding is read-only and exact to the current objective revision/digest,
    assurance epoch, project snapshot, ledger head, and state version. The agent
    now owns research, analysis, planning, strategy, reversible local edits,
@@ -424,7 +448,7 @@ proves integrity, not native host authenticity.
    `workflow broker trust|rotate|revoke` unless the operator explicitly asks
    and performs the out-of-agent trust decision.
 
-   After authorize/apply, run `workflow next` again. An exact broker-event retry
+   After authorize/apply, refresh the workflow again. An exact broker-event retry
    can recover a reserved or already-recorded event, but any stale packet or
    changed state requires fresh guidance; do not edit and resubmit an old
    envelope.
@@ -481,28 +505,35 @@ Pick the location your agent runtime expects.
 Activate this behavior once when `/start-forge` begins the chat; do not ask the
 user to restart Forge for each task.
 
-After an objective is accepted, inspect `data.cooperative_evidence` before the
-action fields on every fresh `workflow resume` or `workflow next` response:
+After an objective is accepted, inspect
+`data.current_cooperative_evidence` before the action fields on every v2
+`workflow resume` response. A v1 summary also publishes this field; a legacy
+full response uses `data.cooperative_evidence` instead. Never treat a field that
+v1 does not publish as proof that no obligation exists:
 
 1. If a record has `current_status=supporting` and a
    `valid_through_unix`, the cooperative evidence obligation is currently
    satisfied. The action packet and gap are intentionally absent; do not offer
    or admit the same evidence again.
-2. Without current supporting evidence, inspect
-   `data.cooperative_evidence_action_packet`. If it is absent, report
-   `data.cooperative_evidence_action_gap` exactly. Do not invent a route or
-   fall back to a different policy/claim.
+2. Without current supporting evidence in v2, inspect
+   `data.actions.cooperative_evidence_packet`. If it is absent, report
+   `data.actions.cooperative_evidence_gap` exactly. V1 does not publish the
+   complete packet or gap: execute its validated `detail_argv`, then inspect the
+   equivalent top-level full fields. Its older
+   `data.actions.cooperative_evidence_argv` is not a replacement for the typed
+   packet and gap. Do not invent a route or fall back to a different
+   policy/claim.
 3. Copy `offer_template` to a temporary file **outside** the project snapshot.
    Replace only the entries named by `required_replacements` (currently the
    unique offer id). The outcome and observation time are kernel-derived.
 4. Execute `argv` as an argument vector, replacing only `input_file_token` with
    the temporary file path. Never join or reinterpret it as a shell command.
 5. Treat `rejected` as audited non-support, not success. Delete the temporary
-   input and immediately refresh `workflow next`; never cache the old binding.
+   input and immediately refresh the workflow; never cache the old binding.
 
 When current support expires or becomes stale because the snapshot, objective,
 or selected policy/claim/evaluator route binding changed, a fresh
-`workflow resume` or `workflow next` response re-publishes a newly bound packet
+`workflow resume` response re-publishes a newly bound packet
 when the route remains available. Use only that packet.
 
 The versioned, default-denied lane is bound to the currently selected

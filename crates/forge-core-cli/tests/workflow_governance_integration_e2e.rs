@@ -969,7 +969,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v1"
+        "workflow_resume_summary_v2"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
@@ -977,11 +977,22 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         env!("CARGO_PKG_VERSION")
     );
     for field in [
+        "authority",
+        "status",
+        "readiness_profile",
+        "project_id",
+        "current_phase",
+        "target",
+        "snapshot_digest",
+        "ledger_head_digest",
+        "state_version",
+        "release",
         "bundle_id",
         "bundle_digest",
         "effective",
         "selected_policy_ref",
         "compatibility_workflow_id",
+        "applicability",
     ] {
         assert_eq!(summary["data"][field], next["data"][field], "{field}");
     }
@@ -1002,12 +1013,32 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
             && summary["data"].get("replacement_continuity").is_none(),
         "the default activation view must not repeat the full audit"
     );
+    assert_eq!(
+        summary["data"]["agent_autonomy"], next["data"]["agent_autonomy"],
+        "resume v2 must retain the complete current autonomy contract"
+    );
+    assert_eq!(
+        summary["data"]["current_evaluation"], next["data"]["simulation"],
+        "resume v2 must retain every current verdict, gap, decision, issue, and next action"
+    );
+    assert_eq!(
+        summary["data"]["boundary_rechecks"], next["data"]["boundary_rechecks"],
+        "resume v2 must retain every current boundary recheck"
+    );
+    assert_eq!(
+        summary["data"]["authorization"], next["data"]["authorization"],
+        "resume v2 must retain complete current action packets and setup gaps"
+    );
+    assert_ne!(
+        summary["data"]["schema_version"], "workflow_resume_summary_v1",
+        "the changed wire contract must never be emitted as v1"
+    );
 
     let resumed_output = consumer.run(&["resume", "--full"]);
     let resumed = assert_ok(&resumed_output);
     assert!(
-        summary_output.stdout.len() * 2 < resumed_output.stdout.len(),
-        "the activation view must be materially smaller than the full audit"
+        summary_output.stdout.len() < resumed_output.stdout.len(),
+        "the activation view must remain smaller than the full audit"
     );
     for field in [
         "readiness_profile",
@@ -1115,6 +1146,32 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
         .is_some_and(|message| {
             message.contains("unrecognized workflow argument '--principal-registry'")
         }));
+}
+
+#[test]
+fn workflow_next_keeps_its_full_contract_and_rejects_resume_detail_flags() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    assert!(
+        next["data"]["simulation"].is_object()
+            && next["data"]["agent_autonomy"].is_object()
+            && next["data"]["authorization"].is_object()
+            && next["data"]["boundary_rechecks"].is_array(),
+        "workflow next must remain the existing complete current-state projection"
+    );
+
+    let summary = consumer.run(&["next", "--summary"]);
+    assert_eq!(summary.status.code(), Some(3));
+    assert!(json(&summary)["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("unrecognized workflow argument '--summary'")));
+
+    let full = consumer.run(&["next", "--full"]);
+    assert_eq!(full.status.code(), Some(3));
+    assert!(json(&full)["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("--full is valid only for workflow resume")));
 }
 
 #[test]
@@ -1465,6 +1522,31 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     // The fixture advances prior policies only. Every source assessment below
     // is submitted through the public CLI against the selected investigation policy.
     let mut next = advance_fixture_to_policy(&consumer, "policy.workflow.investigation");
+    assert!(
+        next["data"]["cooperative_evidence_action_packet"].is_object(),
+        "the investigation fixture must expose a live cooperative evidence packet"
+    );
+    let activation = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        activation["data"]["agent_autonomy"], next["data"]["agent_autonomy"],
+        "resume v2 must retain binding and input contract after objective acceptance"
+    );
+    assert!(activation["data"]["agent_autonomy"]["binding"].is_object());
+    assert!(activation["data"]["agent_autonomy"]["input_contract"].is_object());
+    assert_eq!(
+        activation["data"]["actions"]["cooperative_evidence_packet"],
+        next["data"]["cooperative_evidence_action_packet"],
+        "resume v2 must retain the complete current cooperative packet"
+    );
+    assert_eq!(
+        activation["data"]["actions"]["cooperative_evidence_gap"],
+        next["data"]["cooperative_evidence_action_gap"],
+        "resume v2 must retain the current cooperative gap alternative"
+    );
+    assert_eq!(
+        activation["data"]["boundary_rechecks"], next["data"]["boundary_rechecks"],
+        "resume v2 must retain the complete boundary-recheck projection without filtering"
+    );
     let claim_count = next["data"]["simulation"]["candidate_claim_results"]
         .as_array()
         .expect("investigation claims")

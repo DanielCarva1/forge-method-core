@@ -14,19 +14,19 @@ use forge_core_authority::{
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{
-    AgentOwnedWorkClass, CapabilityGap, CliEnvelope, DecisionRequest, DomainPackCompositionGap,
-    ExitReason, HumanDecisionClass, IsolationStatus, NextAction, PrincipalId, ProtectedEffect,
+    CliEnvelope, DomainPackCompositionGap, ExitReason, IsolationStatus, PrincipalId,
     ReadinessTarget, StableId, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowEffectiveBundleIdentity,
 };
-use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceStatus};
+use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceSimulation};
 use forge_core_kernel::{
     load_admitted_workflow_retirement_checkpoint, WorkflowActiveCooperativeObjective,
-    WorkflowAgentAutonomyGuidanceStatus, WorkflowAuthorizationActionPacket,
-    WorkflowAuthorizationRegistrySetup, WorkflowAuthorizationSetupGap,
-    WorkflowDurableAssuranceBlocker, WorkflowDurableAssuranceStatus,
-    WorkflowGovernanceAdapterError, WorkflowGovernanceGuidance, WorkflowGovernanceGuidanceStatus,
+    WorkflowAgentAutonomyGuidance, WorkflowAuthorizationGuidance,
+    WorkflowCooperativeEvidenceActionPacket, WorkflowDurableAssuranceBlocker,
+    WorkflowDurableAssuranceStatus, WorkflowGovernanceAdapterError,
+    WorkflowGovernanceBoundaryRecheck, WorkflowGovernanceGuidance,
+    WorkflowGovernanceGuidanceAuthority, WorkflowGovernanceGuidanceStatus,
     WorkflowGovernanceProjectAdapter, WorkflowGovernanceReleaseAudit,
     WorkflowReplacementContinuityStatus, WorkflowReplacementDecisionAudit, WorkflowReplacementGap,
     WorkflowReplacementIsolationAudit, WorkflowReplacementObjectiveRevision,
@@ -286,7 +286,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v1";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v2";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -294,6 +294,7 @@ struct WorkflowResumeSummary<'a> {
     schema_version: &'static str,
     detail_level: &'static str,
     forge_core_version: &'static str,
+    authority: WorkflowGovernanceGuidanceAuthority,
     status: WorkflowGovernanceGuidanceStatus,
     readiness_profile: WorkflowReadinessProfile,
     project_id: &'a StableId,
@@ -308,34 +309,26 @@ struct WorkflowResumeSummary<'a> {
     effective: &'a WorkflowEffectiveBundleIdentity,
     selected_policy_ref: &'a StableId,
     compatibility_workflow_id: &'a StableId,
+    applicability: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     active_objective: Option<&'a WorkflowActiveCooperativeObjective>,
-    agent_autonomy: WorkflowResumeAutonomySummary<'a>,
+    agent_autonomy: &'a WorkflowAgentAutonomyGuidance,
+    current_evaluation: &'a WorkflowGovernanceSimulation,
+    boundary_rechecks: &'a [WorkflowGovernanceBoundaryRecheck],
     human_decisions: WorkflowResumeHumanDecisionSummary<'a>,
     blockers: WorkflowResumeBlockerSummary<'a>,
     actions: WorkflowResumeActionSummary<'a>,
     active_isolations: Vec<&'a WorkflowReplacementIsolationAudit>,
     recoverable_promotions: Vec<&'a WorkflowReplacementPromotionAudit>,
     current_cooperative_evidence: Vec<WorkflowResumeEvidenceSummary<'a>>,
-    authorization: WorkflowResumeAuthorizationSummary<'a>,
+    authorization: &'a WorkflowAuthorizationGuidance,
     omitted_history: WorkflowResumeOmittedHistory,
     detail_argv: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
-struct WorkflowResumeAutonomySummary<'a> {
-    status: WorkflowAgentAutonomyGuidanceStatus,
-    delegated_work_classes: &'a [AgentOwnedWorkClass],
-    human_decision_classes: &'a [HumanDecisionClass],
-    protected_effects: &'a [ProtectedEffect],
-    assessment_argv: &'a [String],
-}
-
-#[derive(Debug, Serialize)]
-#[serde(deny_unknown_fields)]
 struct WorkflowResumeHumanDecisionSummary<'a> {
-    calculated_now: &'a [DecisionRequest],
     recovered_pending: &'a [WorkflowReplacementDecisionAudit],
 }
 
@@ -344,8 +337,6 @@ struct WorkflowResumeHumanDecisionSummary<'a> {
 struct WorkflowResumeBlockerSummary<'a> {
     domain_pack_degraded: bool,
     domain_pack_gaps: &'a [DomainPackCompositionGap],
-    candidate_status: WorkflowGovernanceStatus,
-    capability_gaps: &'a [CapabilityGap],
     durable_assurance_status: WorkflowDurableAssuranceStatus,
     durable_assurance_blockers: &'a [WorkflowDurableAssuranceBlocker],
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -358,9 +349,10 @@ struct WorkflowResumeBlockerSummary<'a> {
 #[serde(deny_unknown_fields)]
 struct WorkflowResumeActionSummary<'a> {
     continuity_ranked: &'a [WorkflowReplacementRankedAction],
-    governed_candidates: &'a [NextAction],
     #[serde(skip_serializing_if = "Option::is_none")]
-    cooperative_evidence_argv: Option<&'a [String]>,
+    cooperative_evidence_packet: Option<&'a WorkflowCooperativeEvidenceActionPacket>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cooperative_evidence_gap: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -377,24 +369,6 @@ struct WorkflowResumeEvidenceSummary<'a> {
     valid_through_unix: Option<u64>,
     proves: &'a [WorkflowCooperativeEvidenceProof],
     does_not_prove: &'a [WorkflowCooperativeEvidenceNonProof],
-}
-
-#[derive(Debug, Serialize)]
-#[serde(deny_unknown_fields)]
-struct WorkflowResumePacketReference<'a> {
-    packet_id: &'a StableId,
-    packet_digest: &'a str,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(deny_unknown_fields)]
-struct WorkflowResumeAuthorizationSummary<'a> {
-    registry_setup: &'a WorkflowAuthorizationRegistrySetup,
-    setup_gaps: &'a [WorkflowAuthorizationSetupGap],
-    action_packets: Vec<WorkflowResumePacketReference<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    objective_management_packet: Option<WorkflowResumePacketReference<'a>>,
-    action_packets_argv: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -460,12 +434,6 @@ fn workflow_resume_summary<'a>(
         .flat_map(|continuity| continuity.gaps.iter())
         .filter(|gap| !gap.blocking)
         .collect::<Vec<_>>();
-    let action_packets = guidance
-        .authorization
-        .action_packets
-        .iter()
-        .map(packet_reference)
-        .collect::<Vec<_>>();
     let project_root = project_root.display().to_string();
     let omitted_history = WorkflowResumeOmittedHistory {
         superseded_objective_revisions: continuity.map_or(0, |value| {
@@ -508,6 +476,7 @@ fn workflow_resume_summary<'a>(
         schema_version: WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION,
         detail_level: "summary",
         forge_core_version: env!("CARGO_PKG_VERSION"),
+        authority: guidance.authority,
         status: guidance.status,
         readiness_profile: guidance.readiness_profile,
         project_id: &guidance.project_id,
@@ -522,24 +491,18 @@ fn workflow_resume_summary<'a>(
         effective: &guidance.effective,
         selected_policy_ref: &guidance.selected_policy_ref,
         compatibility_workflow_id: &guidance.compatibility_workflow_id,
+        applicability: guidance.applicability,
         active_objective: guidance.active_cooperative_objective.as_ref(),
-        agent_autonomy: WorkflowResumeAutonomySummary {
-            status: guidance.agent_autonomy.status,
-            delegated_work_classes: &guidance.agent_autonomy.delegated_work_classes,
-            human_decision_classes: &guidance.agent_autonomy.human_decision_classes,
-            protected_effects: &guidance.agent_autonomy.protected_effects,
-            assessment_argv: &guidance.agent_autonomy.assessment_argv,
-        },
+        agent_autonomy: &guidance.agent_autonomy,
+        current_evaluation: &guidance.simulation,
+        boundary_rechecks: &guidance.boundary_rechecks,
         human_decisions: WorkflowResumeHumanDecisionSummary {
-            calculated_now: &guidance.simulation.candidate_decision_requests,
             recovered_pending: continuity
                 .map_or(&[], |continuity| &continuity.durable_pending_decisions),
         },
         blockers: WorkflowResumeBlockerSummary {
             domain_pack_degraded: guidance.domain_pack_degraded,
             domain_pack_gaps: &guidance.domain_pack_gaps,
-            candidate_status: guidance.simulation.candidate_status,
-            capability_gaps: &guidance.simulation.candidate_capability_gaps,
             durable_assurance_status: guidance.durable_assurance.status,
             durable_assurance_blockers: &guidance.durable_assurance.blockers,
             continuity_status: continuity.map(|continuity| continuity.status),
@@ -549,33 +512,13 @@ fn workflow_resume_summary<'a>(
         actions: WorkflowResumeActionSummary {
             continuity_ranked: continuity
                 .map_or(&[], |continuity| continuity.ranked_next_actions.as_slice()),
-            governed_candidates: &guidance.simulation.candidate_next_actions,
-            cooperative_evidence_argv: guidance
-                .cooperative_evidence_action_packet
-                .as_ref()
-                .map(|packet| packet.argv.as_slice()),
+            cooperative_evidence_packet: guidance.cooperative_evidence_action_packet.as_ref(),
+            cooperative_evidence_gap: guidance.cooperative_evidence_action_gap.as_deref(),
         },
         active_isolations,
         recoverable_promotions,
         current_cooperative_evidence,
-        authorization: WorkflowResumeAuthorizationSummary {
-            registry_setup: &guidance.authorization.registry_setup,
-            setup_gaps: &guidance.authorization.setup_gaps,
-            action_packets,
-            objective_management_packet: guidance
-                .authorization
-                .objective_management_packet
-                .as_ref()
-                .map(packet_reference),
-            action_packets_argv: vec![
-                "forge-core".to_owned(),
-                "workflow".to_owned(),
-                "action-packets".to_owned(),
-                "--root".to_owned(),
-                project_root.clone(),
-                "--json".to_owned(),
-            ],
-        },
+        authorization: &guidance.authorization,
         omitted_history,
         detail_argv: vec![
             "forge-core".to_owned(),
@@ -586,15 +529,6 @@ fn workflow_resume_summary<'a>(
             "--full".to_owned(),
             "--json".to_owned(),
         ],
-    }
-}
-
-fn packet_reference(
-    packet: &WorkflowAuthorizationActionPacket,
-) -> WorkflowResumePacketReference<'_> {
-    WorkflowResumePacketReference {
-        packet_id: &packet.packet_id,
-        packet_digest: &packet.packet_digest,
     }
 }
 
@@ -1317,6 +1251,10 @@ mod tests {
         let other = parse_args(&argv(&["workflow", "next", "--full"]))
             .expect("generic parser recognizes full before command validation");
         assert!(validate_release_args(&other).is_err());
+
+        let summary = parse_args(&argv(&["workflow", "next", "--summary"]))
+            .expect_err("workflow does not expose a second summary surface");
+        assert_eq!(summary, "unrecognized workflow argument '--summary'");
     }
 
     #[test]

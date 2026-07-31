@@ -11,8 +11,8 @@ preserving the distinction between advice, evidence, and admitted authority.
 3. Execute only structured argv returned by Forge.
 4. Initialize or resume workflow governance.
 5. Check the durable release and perform only an exact returned upgrade.
-6. Call `workflow next` without caller-selected phase, policy, bundle, or
-   readiness target.
+6. Call default `workflow resume` without caller-selected phase, policy, bundle,
+   or readiness target.
 7. If Forge returns a missing-objective packet in `solo_cooperative`, materialize
    the unambiguous chat outcome through `workflow intent accept-cooperative`.
    If one irreducible choice remains, send the closed `decision_required` input
@@ -22,7 +22,8 @@ preserving the distinction between advice, evidence, and admitted authority.
 8. Perform the highest-ranked feasible action.
 9. Collect evidence from the tool/runtime/human named by the evaluator; never
    self-upgrade artifact presence into representative proof.
-10. Record observations through an authorized surface and call `workflow next`.
+10. Record observations through an authorized surface and call default
+    `workflow resume` again, even if the receipt embeds a next projection.
 11. Stop and explain typed gaps when authority or capability is unavailable.
 
 The canonical bootstrap procedure is
@@ -97,7 +98,7 @@ the lane from that packet without reading Forge source:
    packet-derived `workflow intent accept-cooperative` argv.
 3. Keep the human chat-only. For `decision_required`, ask the returned question;
    Forge has validated the current packet/state read-only and written nothing.
-4. Remove the temporary host file, then obtain a fresh `workflow next`.
+4. Remove the temporary host file, then obtain a fresh default `workflow resume`.
 
 Exact accepted-input retries return the same durable receipt without appending.
 Changed payloads, strict-profile use, consumed or stale packets, and changed
@@ -128,11 +129,12 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow next` exposes an active `agent_autonomy.binding`, ordinary work
-inside the accepted objective proceeds autonomously. The binding contains the
-objective id/revision/digest and assurance epoch plus current project snapshot,
-ledger head, and state version. It becomes stale after objective supersession or
-any bound state change. Strict-external readiness reports
+Once `workflow_resume_summary_v2` exposes an active
+`agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
+autonomously. The binding contains the objective id/revision/digest and
+assurance epoch plus current project snapshot, ledger head, and state version.
+It becomes stale after objective supersession or any bound state change.
+Strict-external readiness reports
 `unsupported_profile`; it never misreports a missing cooperative objective.
 
 The delegated classes are research/analysis, planning/strategy, reversible
@@ -155,12 +157,12 @@ Publication, remote push/merge, deployment, production mutation, secret use,
 and destructive external effects are protected. Local git staging/commit is
 local reversible work; a remote push is protected.
 
-`workflow next` publishes structured assessment argv and a machine-readable
-input contract: schema version, byte bounds, the complete enum lists,
-unknown-fields policy, and the requirement to place the temporary input outside
-the project snapshot. `workflow autonomy assess` is an optional read-only
-validator at an actual semantic/effect boundary, not an authorization step and
-never a per-edit/per-task command. It returns exactly one tagged branch:
+The v2 resume projection publishes structured assessment argv and a
+machine-readable input contract: schema version, byte bounds, the complete enum
+lists, unknown-fields policy, and the requirement to place the temporary input
+outside the project snapshot. `workflow autonomy assess` is an optional
+read-only validator at an actual semantic/effect boundary, not an authorization
+step and never a per-edit/per-task command. It returns exactly one tagged branch:
 `proceed_autonomously` or `decision_required`, whose concrete request preserves
 the proposed-work summary, two alternatives beyond the recommendation, and
 non-empty consequences. Assessment never writes the workflow ledger, replay
@@ -229,12 +231,25 @@ prior chat context. If durable state cannot reconstruct release, effective
 Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
-By default, `workflow resume` returns the concise, versioned
-`workflow_resume_summary_v1` activation view. It carries the current objective,
-autonomy boundary, decisions, blockers and warnings, ranked actions, active
-isolations, recoverable promotions, current cooperative evidence, and counts of
-history omitted from the activation response. Its exact `detail_argv` retrieves
-the full audit with `workflow resume --full --json`.
+In `0.12.0-alpha.13`, `workflow resume` returns the concise, versioned
+`workflow_resume_summary_v2` activation view by default. V2 is the complete
+current-state contract for the agent: it carries the current objective; the
+full autonomy projection, including its binding and input contract; every
+current evaluation with its verdicts, claims, obligations, decisions, gaps,
+issues, and next actions; every current boundary recheck; current blockers,
+warnings, active isolations, recoverable promotions, cooperative evidence, and
+complete authorization packets, plus the complete current cooperative packet
+or its exact gap. Counts identify only older audit history omitted from the
+activation view; a missing v2 field must never be interpreted as proof that an
+obligation does not exist. Its exact `detail_argv` retrieves the full audit
+with `workflow resume --full --json`.
+
+`workflow_resume_summary_v1` is the legacy alpha.12 activation view. A host may
+continue from it, but must not silently look for v2-only fields or treat their
+absence as an absent obligation. Validate its same-root `detail_argv`, use the
+fields v1 actually publishes, and execute that argv when v1 lacks information
+needed to decide or act. Do not reconstruct missing data or downgrade an
+uncertain boundary to autonomous work.
 
 The full audit keeps the ordinary `workflow next` fields and adds the versioned
 `replacement_continuity` block. That block is rebuilt from durable project
@@ -251,6 +266,13 @@ started, but remains visible as a non-blocking historical warning after a
 durable recoverable, completed, or corrupt promotion record exists. Corrupt or
 tampered promotion state remains blocking in its own right and is never
 silently repaired by resume.
+
+After every Forge operation in the same chat, refresh through the default
+`workflow resume --root <same-root> --json` contract. Use `--full` only for an
+explicit audit or when a legacy/concise response cannot explain a blocker or
+provide the information needed for the next safe action. `workflow next`
+remains the complete current guidance projection; it has no separate summary
+flag and is not the chat-continuity refresh surface.
 
 The format does not depend on a particular agent host. Compatibility with
 Codex, ZCode, Claude, Cursor, OpenCode, pi.dev, or another host remains a
@@ -313,7 +335,16 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 ## Cooperative evidence admission
 
-For a `solo_cooperative` objective, an agent may submit `forge-core workflow evidence admit-cooperative` with the closed offer published by `workflow next`. The offer is bound to the active objective revision/digest, assurance epoch, accepted record, effective bundle, snapshot, ledger head, and state version. The kernel records admitted offers and bounded normalized rejections. The versioned solo descriptor is default-denied and is derived only from the currently selected policy's current unsatisfied claim and its bound evaluator; it never scans for a convenient claim in another policy. Frozen release artifacts and strict/profileless output are not mutated.
+For a `solo_cooperative` objective, an agent may submit
+`forge-core workflow evidence admit-cooperative` with the closed offer published
+under `workflow_resume_summary_v2.actions.cooperative_evidence_packet`. The offer
+is bound to the active objective revision/digest, assurance epoch, accepted
+record, effective bundle, snapshot, ledger head, and state version. The kernel
+records admitted offers and bounded normalized rejections. The versioned solo
+descriptor is default-denied and is derived only from the currently selected
+policy's current unsatisfied claim and its bound evaluator; it never scans for
+a convenient claim in another policy. Frozen release artifacts and
+strict/profileless output are not mutated.
 
 Two deliberately different solo routes exist. Historical v1 records remain kernel-derived snapshot readback: callers do not supply their outcome, they support only the cooperative claim, and they never satisfy the selected source claim. When the selected evaluator is exactly `RepositoryInspector` with artifact-inspection strength, the current v2 packet instead asks the agent for a pass, fail, or inconclusive assessment, a bounded summary, project-relative basis paths, and bounded limitations. Forge rejects traversal, absolute, missing, duplicate, symlink-escaping, oversized, or unreadable basis; it confines and reads the accepted regular files, stores their normalized content hashes and combined digest, and makes the evidence stale when the objective, policy route, ledger, snapshot, subject, time, or basis bytes change.
 
@@ -323,9 +354,36 @@ Basis bytes come only from exact regular-file handles in the retained project sn
 
 Top-level `.local` is workflow-local only when the directory already exists before evidence capture. The retained workflow policy omits its contents, so later file-content changes inside that existing directory do not stale evidence; nested paths such as `src/.local` remain governed. The retained root directory metadata is still security-relevant: creating or removing top-level `.local` after capture changes the root namespace, stales the evidence, and requires re-admission. Agents that need `.local` must create it before admitting evidence. On alpha10 adoption, evidence admitted before alpha10 while top-level `.local` existed becomes stale once under the corrected snapshot projection and must be re-admitted; replay remains structurally valid and the ledger is not corrupt or invalid.
 
-The exact v2 retained-file read/hash route makes a `when_applicable` repository-inspection policy applicable and proves the executable `LocalCommand` capability alternative where a policy permits independent **or** executable inspection. It does not prove an independent reviewer, human presence, representative runtime, or process separation. No route is relabeled for AuthorizedHuman, IndependentReviewer, RepresentativeRuntime, or another provider, and `strict_external` is unchanged. Historical v1 semantics remain unchanged. V1 and v2 records do **not** prove independent semantic review, trusted-runtime separation, human presence, representative runtime behavior, tamper resistance, or enterprise compliance. Rejected and stale records remain visible in `workflow next` but never support a claim.
+The exact v2 retained-file read/hash route makes a `when_applicable`
+repository-inspection policy applicable and proves the executable
+`LocalCommand` capability alternative where a policy permits independent
+**or** executable inspection. It does not prove an independent reviewer, human
+presence, representative runtime, or process separation. No route is relabeled
+for AuthorizedHuman, IndependentReviewer, RepresentativeRuntime, or another
+provider, and `strict_external` is unchanged. Historical v1 semantics remain
+unchanged. V1 and v2 records do **not** prove independent semantic review,
+trusted-runtime separation, human presence, representative runtime behavior,
+tamper resistance, or enterprise compliance. Rejected and stale records remain
+visible in the full audit but never support a claim.
 
-`/start-forge` activation is once per chat, not once per task. After the objective is accepted, evidence operation is mechanical: inspect `data.cooperative_evidence` first on every fresh `workflow resume` or `workflow next` response. A current `supporting` record satisfies the cooperative obligation through its published validity boundary, so `cooperative_evidence_action_packet` and `cooperative_evidence_action_gap` are both absent and the agent must not admit it again. Without current support, inspect the packet; write `offer_template` to a temporary file outside the snapshot; replace only `required_replacements`; execute `argv` as tokens after replacing only `input_file_token`; delete the temporary file; and refresh `workflow next`. Never shell-parse the vector. If neither current support nor a packet exists, report `data.cooperative_evidence_action_gap`. A `rejected` result is audited non-support, not success. Expiry or a changed snapshot, objective, or selected policy/claim/evaluator route makes the old record stale. A fresh response publishes a newly bound packet only when that cooperative route remains available.
+`/start-forge` activation is once per chat, not once per task. After the
+objective is accepted, evidence operation is mechanical: inspect
+`data.current_cooperative_evidence` first on every fresh v2 resume response. A
+current `supporting` record satisfies the cooperative obligation through its
+published validity boundary, so
+`data.actions.cooperative_evidence_packet` and
+`data.actions.cooperative_evidence_gap` are both absent and the agent must not
+admit it again. Without current support, inspect the packet; write
+`offer_template` to a temporary file outside the snapshot; replace only
+`required_replacements`; execute `argv` as tokens after replacing only
+`input_file_token`; delete the temporary file; and refresh default
+`workflow resume`. Never shell-parse the vector. If neither current support nor
+a packet exists, report `data.actions.cooperative_evidence_gap`. A `rejected`
+result is audited non-support, not success. Expiry or a changed snapshot,
+objective, or selected policy/claim/evaluator route makes the old record stale.
+A fresh response publishes a newly bound packet only when that cooperative
+route remains available. V1 or full legacy responses use only their documented
+fields; an absent v2-only field in v1 is never treated as an absent obligation.
 
 ## Governed promotion preview, exact-CAS apply, and recovery
 

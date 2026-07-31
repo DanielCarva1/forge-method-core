@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.12` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.13` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-admission.
 
 ### Added
+- **Agent-complete concise continuity refresh.** Default `workflow resume` now
+  emits `workflow_resume_summary_v2`: it keeps the complete current evaluation,
+  autonomy binding and input contract, boundary rechecks, authorization,
+  cooperative evidence packet or gap, active isolations, recoverable promotions,
+  and ranked recovery actions while omitting only older audit history. The
+  start skill refreshes this read-only view after every Forge operation in the
+  chat. The alpha.12 v1 response is handled explicitly as legacy, `--full`
+  preserves the complete audit, and `workflow next` keeps its existing contract
+  without a second summary surface.
 - **Honest same-owner repository evidence for Solo Cooperative work.** When a
   selected claim explicitly calls for repository inspection, the agent can now
   submit `pass`, `fail`, or `inconclusive` through the public cooperative
