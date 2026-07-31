@@ -5755,6 +5755,9 @@ impl WorkflowGovernanceProjectAdapter {
                         .target
                         .unwrap_or(WorkflowCooperativeEvidenceTarget::SourceClaim)
                         == WorkflowCooperativeEvidenceTarget::SourceClaim
+                        && admitted.source_assessment.is_some()
+                        && cooperative_source_claim
+                            .is_some_and(|claim| admitted.claim_ref == claim.id)
                 })
         });
         let cooperative_target =
@@ -16102,6 +16105,11 @@ mod tests {
     #[test]
     fn cooperative_evidence_is_admitted_recovered_and_projected_honestly() {
         let (root, state) = temp_project("cooperative-evidence");
+        fs::write(
+            root.join("APPLICABILITY.md"),
+            b"the selected policy applies to this fixture\n",
+        )
+        .expect("applicability basis");
         let project_id = StableId("project.cooperative-evidence".to_owned());
         let adapter = WorkflowGovernanceProjectAdapter::new(project_id.clone(), &root, &state)
             .expect("adapter");
@@ -16121,7 +16129,47 @@ mod tests {
         let WorkflowCooperativeObjectiveAcceptance::Accepted { next, .. } = accepted else {
             panic!("objective must be accepted");
         };
-        let packet = next
+        assert_eq!(
+            next.status,
+            WorkflowGovernanceGuidanceStatus::ReadyToComplete
+        );
+        let prepared = adapter
+            .prepare_completion()
+            .expect("accepted objective grounds discover-intent completion");
+        adapter
+            .consume_completion(
+                prepared,
+                PrincipalId("principal.agent.cooperative-evidence".to_owned()),
+            )
+            .expect("complete grounded discover-intent policy");
+
+        let applicability_packet = adapter
+            .next()
+            .expect("applicability guidance")
+            .cooperative_evidence_action_packet
+            .expect("host-neutral applicability packet");
+        assert_eq!(
+            applicability_packet.route.target,
+            WorkflowCooperativeEvidenceTarget::PolicyApplicability
+        );
+        let mut applicability_offer = applicability_packet.offer_template;
+        applicability_offer["offer_id"] =
+            serde_json::json!("offer.cooperative-evidence.applicable");
+        applicability_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+            "outcome": "applicable",
+            "summary": "The selected policy applies to this test project",
+            "basis_paths": ["APPLICABILITY.md"],
+            "limitations": ["same-owner test inspection"]
+        });
+        adapter
+            .record_cooperative_evidence(
+                &serde_json::to_vec(&applicability_offer).expect("applicability offer JSON"),
+            )
+            .expect("admit applicability assessment");
+
+        let packet = adapter
+            .next()
+            .expect("source evidence guidance")
             .cooperative_evidence_action_packet
             .expect("host-neutral cooperative evidence packet");
         let route_policy_ref = packet.route.policy_ref.clone();
@@ -16130,15 +16178,15 @@ mod tests {
         assert_eq!(
             packet.argv,
             [
-                "forge-core",
-                "workflow",
-                "evidence",
-                "admit-cooperative",
-                "--root",
-                ".",
-                "--input-file",
-                "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}",
-                "--json",
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "evidence".to_owned(),
+                "admit-cooperative".to_owned(),
+                "--root".to_owned(),
+                root.to_string_lossy().into_owned(),
+                "--input-file".to_owned(),
+                "${FORGE_COOPERATIVE_EVIDENCE_INPUT_FILE}".to_owned(),
+                "--json".to_owned(),
             ]
         );
         assert!(packet.input_file_must_be_outside_project_snapshot);
@@ -16148,7 +16196,7 @@ mod tests {
         );
         assert_eq!(
             packet.route.source_provider,
-            WorkflowEvaluatorProvider::AuthorizedHuman
+            WorkflowEvaluatorProvider::ExternalAuthority
         );
         assert_eq!(
             packet.route.assurance_effect,
@@ -16182,13 +16230,18 @@ mod tests {
         );
 
         let current = adapter.next().expect("refreshed evidence guidance");
-        assert!(
-            current.cooperative_evidence_action_packet.is_none(),
-            "current supporting evidence must satisfy the cooperative lane without another offer"
+        let current_packet = current
+            .cooperative_evidence_action_packet
+            .as_ref()
+            .expect("legacy evidence must not hide the still-pending source claim");
+        assert_eq!(
+            current_packet.route.target,
+            WorkflowCooperativeEvidenceTarget::SourceClaim
         );
+        assert_eq!(current_packet.route.claim_ref, route_claim_ref);
         assert!(
             current.cooperative_evidence_action_gap.is_none(),
-            "current supporting evidence is satisfied, not an unavailable route"
+            "the pending source claim has a published route, not an unavailable-route gap"
         );
         let current_audit = current
             .cooperative_evidence
@@ -16486,7 +16539,15 @@ mod tests {
             .does_not_prove
             .contains(&WorkflowCooperativeEvidenceNonProof::SelectedSourceClaim));
         assert_eq!(audit.valid_through_unix, Some(expected_valid_through));
-        assert!(recovered.cooperative_evidence_action_packet.is_none());
+        let recovered_packet = recovered
+            .cooperative_evidence_action_packet
+            .as_ref()
+            .expect("recovery must retain the packet for the still-pending source claim");
+        assert_eq!(
+            recovered_packet.route.target,
+            WorkflowCooperativeEvidenceTarget::SourceClaim
+        );
+        assert_eq!(recovered_packet.route.claim_ref, route_claim_ref);
         assert!(recovered.cooperative_evidence_action_gap.is_none());
 
         fs::write(root.join("README.md"), b"project snapshot changed\n")
