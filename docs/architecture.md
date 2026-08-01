@@ -2,22 +2,19 @@
 
 ## System boundary
 
-Forge separates consumer content, runtime state, cooperative operator material,
-and external trust authority:
+Forge's current Solo Cooperative boundary separates consumer content from
+durable runtime state:
 
 ```text
 consumer project/              product source + .forge-method.yaml pointer
 forge-<project>/.forge-method/ runtime ledger, receipts, evidence, generations
-forge-<project>/operator/      cooperative registries and local credential secrets
-external operator/host roots   replay/trust anchors and external broker private keys
 ```
 
-The project is not the authority store. The sidecar contains runtime state and
-cooperative same-principal operator material, so it must be protected and
-backed up as sensitive data. External broker private keys, Domain Pack trust
-roots, and replay anchors remain outside project and state roots. A local
-credential secret in the sidecar is only a cooperative operator proxy; its
-location cannot prove human presence or independent review.
+The project is not the authority store. The sidecar contains sensitive runtime
+continuity and must be protected and backed up. Current solo operation uses
+same-owner chat provenance and does not require an external origin broker, FIDO
+device, or independently administered identity. Those additional trust domains
+belong to a later enterprise architecture profile.
 
 ## Layering
 
@@ -25,7 +22,7 @@ location cannot prove human presence or independent review.
 |---|---|---|
 | Contracts | Closed typed wire vocabulary | Grant runtime authority |
 | Decisions | Pure deterministic evaluation/projection | Perform mutation |
-| Authority/TCB crates | Verify signatures, anchors, typestate and transitions | Trust caller-shaped audit output |
+| Authority/TCB crates | Verify bindings, typestate and transitions required by the active profile | Trust caller-shaped audit output |
 | Kernel | Join admitted authority, derive gates and persist state | Accept caller-selected workflow/phase |
 | CLI/MCP adapters | Parse host input and expose envelopes | Reimplement kernel policy |
 | Skills/host integrations | Drive the loop and translate chat | Forge receipts or bypass gaps |
@@ -38,8 +35,7 @@ The exact crate dependency map is generated at
 ```text
 typed candidate
   -> pure validation/evaluation
-  -> verified external/operator authority
-  -> opaque admitted capability
+  -> profile-appropriate admitted evidence or authority
   -> kernel-derived transition
   -> append-only receipt/ledger
   -> new guidance projection
@@ -59,13 +55,11 @@ core upgrade with an active pack requires coordinated rebase rather than an
 unsafe cross-store partial transaction.
 
 Human intent, its monotonic assurance epoch, all eight universal-lens states,
-and the representative-slice projection are derived from that same workflow
-ledger. A slice definition is ordinary content-addressed evidence until a
-Reviewer-origin evaluator observation admits its exact bytes. Representative
-execution is another existing evidence observation, from a Runtime origin in a
-different configured separation domain, and must bind the latest definition
-and every scenario. There is deliberately no second evidence store or special
-representative-slice mutation log.
+and evidence projections are derived from that same workflow ledger. Solo
+Cooperative admits bounded same-owner evidence only for claims whose policy
+allows it and never relabels that evidence as independent review, verified human
+presence, or enterprise compliance. Stronger profiles may later add separated
+actors without changing the solo core loop.
 
 ## Persistence
 

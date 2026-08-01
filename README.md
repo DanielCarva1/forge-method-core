@@ -4,13 +4,23 @@ Forge Method Core is a local, model-agnostic governance runtime for agent-led
 product work. A human stays in chat, a host agent drives `forge-core`, and Forge
 persists typed obligations, authority, evidence, and continuity.
 
-The source workspace is the `0.12.0-alpha.13` source candidate.
-`0.12.0-alpha.2` is the published predecessor in project history, but this
-checkout alone proves neither that its assets remain currently available nor
-complete P7 product evidence. Verify the selected GitHub Release, exact asset
-sidecars, and matching CI run before relying on a prebuilt. See the
-[security model](docs/security-model.md) for the protected-properties and
-platform-support statement.
+The active source line is **`0.12.0-alpha.15`**. `Cargo.toml` is the single
+package-version authority; live documentation does not use older prerelease
+numbers to describe the current product. Historical versions remain only in
+`CHANGELOG.md` and retained audit evidence. Verify the selected executable with
+`forge-core --version` and the checkout with Git before relying on either.
+
+## Current product scope
+
+The active milestone is **Solo Dogfood Ready**: one developer working through
+chat with one or more cooperative host agents. The typed authority is
+[`contracts/spec/solo-dogfood-readiness-v0.yaml`](contracts/spec/solo-dogfood-readiness-v0.yaml).
+
+External human-origin brokers, FIDO-backed presence, independent-reviewer
+custody, and compliance-grade signing belong to a later enterprise profile.
+They are not part of normal installation, `/start forge`, everyday local work,
+or Solo Dogfood closure, and their absence must not block `solo_cooperative`.
+Release-asset verification is a separate software-supply-chain concern.
 
 ## Choose one guide
 
@@ -32,13 +42,13 @@ turning prose into runtime authority.
 
 | Identity | Current source fact | How to verify |
 |---|---|---|
-| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.13` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
-| **Published predecessor** | Project history records `0.12.0-alpha.2` before this `0.12.0-alpha.13` source candidate. Current release/asset availability is not inferable from this checkout. | Selected GitHub Release, asset checksum/Sigstore bundle, embedded CLI `--version`, and archive manifest |
-| **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin and may still be on a predecessor. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
+| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.15` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
+| **Installed executable** | The binary actually selected by `PATH`; it may differ from the checkout until reinstalled. | `command -v forge-core` and `forge-core --version` |
+| **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
 | **Domain Pack effective epoch** | Project-local digest joining the admitted workflow release with the active immutable Domain Pack generation. It has no global package SemVer and does not rewrite core identity. | `workflow next|resume` and `domain-pack status` against the Project Link-resolved state |
 
-This is the canonical identity table. Package SemVer, a published asset, a
-project's workflow pin, and its effective epoch answer different questions.
+This is the canonical identity table. Source SemVer, the executable on `PATH`,
+a project's workflow pin, and its effective epoch answer different questions.
 
 ## Install and start
 
@@ -73,11 +83,9 @@ With the default project id, Forge uses these exact locations:
 |---|---|
 | Consumer source and pointer | `<project>/` and `<project>/.forge-method.yaml` |
 | Runtime sidecar and state | `<project-parent>/forge-<project-id>/` and `<project-parent>/forge-<project-id>/.forge-method/` |
-| Workflow public trust registries | `<sidecar>/operator/workflow-principal-registry.yaml` and `<sidecar>/operator/workflow-broker-registry.yaml` |
-| Cooperative local credential secrets | `<sidecar>/operator/workflow-secrets/<sha256-of-credential-id>.ed25519` |
+| Solo Cooperative runtime state | Ledger, receipts, evidence, WAL/recovery material, and immutable generations remain under the sidecar/state root; no external-origin broker is required. |
 | Domain Pack candidate package bytes | Operator/host-selected `--artifact-root`; admitted copies live under `<state-root>/domain-packs/objects/` and immutable generation records under `<state-root>/domain-packs/generations/` |
-| External broker private keys, Domain Pack trust roots, replay anchors | Operator-selected storage outside project and state roots; Forge does not choose or print those private paths |
-| Release assets | The operator's download/install directory; inside each new-format archive, binary/wrapper and `RELEASE-MANIFEST.json` are at archive root and shipped guides retain repository-relative paths |
+| Release assets | The operator's download/install directory; inside each new-format archive, binary/wrapper and `RELEASE-MANIFEST.json` are at archive root |
 
 A custom Project Link can change sidecar/state paths while preserving the same
 separation rules. Use returned paths as authority; never create
@@ -85,11 +93,13 @@ separation rules. Use returned paths as authority; never create
 
 ## Mutation and evidence boundary
 
-Forge can govern only **Forge-mediated writes** that pass claims/gates,
-verified principal and Admission checks, WAL/recovery, and receipt persistence.
-An editor, shell command, host plugin, or other process can write directly to
-the filesystem; those writes are **direct/ungoverned** unless a Forge-mediated
-transaction covers them. Filesystem access is not evidence of governance.
+Forge can govern only **Forge-mediated writes** that pass the applicable
+Solo Cooperative claims/gates, WAL/recovery, and receipt path. This is a
+promotion boundary, not a signature or approval ceremony for every local edit.
+An editor, shell command, host plugin, or other process can still write directly
+to the filesystem; those writes are **direct/ungoverned** unless a
+Forge-mediated transaction covers them. Filesystem access is not evidence of
+governance.
 
 The P7F bundle checker validates only closed structure, path safety, sizes, and
 SHA-256 bindings. It does not certify a production host, chat-only behavior,

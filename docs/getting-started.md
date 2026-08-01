@@ -20,9 +20,8 @@ The host agent must have the `forge-core` executable and canonical
 Download one archive for the host platform from the selected GitHub Release
 and place both `forge-core` and its `forge` wrapper on `PATH`. Verify its
 checksum, Sigstore bundle, embedded version, and `RELEASE-MANIFEST.json` as
-described in the [root README](../README.md#install-and-start). `v0.4.0` is the
-historical prebuilt predecessor to the `0.12.0` candidate, not a source-derived
-availability answer.
+described in the [root README](../README.md#install-and-start). Never use a
+historical version label in a live guide as evidence of current availability.
 
 New-format archives bind package version, exact release tag, exact source
 commit, canonical skill, selected guides, and every payload file. Inspect the
@@ -46,16 +45,16 @@ select an exact source commit/tag, and verify `forge-core --version`.
 ## Install the host skill
 
 Copy `skill/start-forge/SKILL.md` to a location recognized by the host agent.
-For Codex-compatible runtimes this is commonly:
+Common locations include:
 
 ```text
-~/.agents/skills/start-forge/SKILL.md
+Pi:              ~/.pi/agent/skills/start-forge/SKILL.md
+Codex-compatible: ~/.agents/skills/start-forge/SKILL.md
 ```
 
 Other hosts use different skill/plugin locations. Forge does not silently
-write there because that would cross a host-owned trust boundary. The host
-agent should confirm both the skill path and binary version before claiming
-readiness.
+write there because that would cross a host-owned boundary. The host agent
+confirms both the skill path and binary version before claiming readiness.
 
 ## Start or resume a project
 
@@ -69,39 +68,41 @@ It executes returned structured argv—not the display string—then follows:
 
 ```text
 start
-  -> workflow init (first time) or workflow resume
-  -> workflow release-status
-  -> exact returned upgrade_argv, if present
-  -> workflow next
-  -> if requested, discuss the objective in chat; in `solo_cooperative` the
-     agent records the agreed objective through the returned cooperative packet,
-     while `strict_external` uses the separately broker-signed intent path
-  -> perform, verify, and record the governed action
-  -> workflow next
+  -> workflow init
+  -> workflow release-status and exact returned upgrade_argv, if any
+  -> workflow profile status
+  -> workflow resume
+  -> explain the project and current next-best action in plain language
+  -> record an agreed missing objective through the cooperative packet, if needed
+  -> perform and verify the highest-ranked feasible action
+  -> workflow resume
 ```
+
+The current onboarding target is `solo_cooperative`. External-origin brokers,
+FIDO-backed presence, independent identities, and compliance signing are
+enterprise-profile work and are not part of this loop.
 
 The consumer repository receives only `.forge-method.yaml`. Default runtime
 state is `<project-parent>/forge-<project-id>/.forge-method/`, inside the sibling
 sidecar `<project-parent>/forge-<project-id>/`. Never create a consumer-local
-`.forge-method/` manually. Current-source `preflight init` follows the Project
-Link and stores its profile as `<state-root>/preflight.yaml`; older binaries
-must not be used to justify local consumer state. Exact trust, secret, package,
-and release locations are in the [Operator guide](operator-guide.md#state-and-ownership).
+`.forge-method/` manually. `preflight init` follows the Project Link and stores
+its profile as `<state-root>/preflight.yaml`. Advanced state and recovery
+locations are documented in the [Operator guide](operator-guide.md#state-and-ownership).
 
 ## What healthy output means
 
 Healthy bootstrap proves that Project Link and sidecar resolve. It does not
-prove every product capability, domain method, credential, or piece of evidence
-exists. `workflow next` may correctly return obligations, evidence/capability
-gaps, a gated human decision, a Domain Pack requirement, or a rebase/upgrade
-requirement. These are useful outcomes, not installation failures.
+prove every product capability, domain method, or piece of evidence exists.
+`workflow resume` may correctly return obligations, evidence/capability gaps, a
+gated product decision, a Domain Pack requirement, or a rebase/upgrade
+requirement. Missing enterprise broker/signature setup is not a Solo
+Cooperative gap.
 
-After the objective is accepted, `workflow next` always exposes all eight
-universal quality lenses and their current `unknown`, `supported`, `verified`,
-`disproven`, or `waived` state. In `solo_cooperative`, unresolved universal
-lenses stay visible throughout development but block the final `release`
-boundary rather than every ordinary step. `strict_external` keeps the stricter
-blocking behavior.
+After the objective is accepted, `workflow resume` exposes all eight universal
+quality lenses and their current `unknown`, `supported`, `verified`, `disproven`,
+or `waived` state. In `solo_cooperative`, unresolved lenses stay visible
+throughout development but block only the final boundary that actually requires
+them, rather than every ordinary development step.
 
 The agent is responsible for proposing the method and representative checks,
 including scenarios, ways the idea could be wrong, environment, and failure
@@ -118,9 +119,9 @@ workflow evidence capture. Changes to files inside that existing directory do no
 change the workflow snapshot, while nested paths such as `src/.local` remain
 governed. Creating or removing top-level `.local` after capture changes the root
 namespace, stales the evidence, and requires a fresh admission; create the
-directory before admitting evidence. Evidence admitted before alpha10 while a
-top-level `.local` existed becomes stale once under this corrected projection and
-must be re-admitted, but its historical ledger record remains structurally valid.
+Evidence admitted under an older snapshot projection may become stale after the
+projection is corrected and must then be re-admitted; its historical ledger
+record remains structurally valid.
 
 Forge can describe only a write that passed its claim/gate, verified-principal,
 Admission, WAL/recovery, and receipt path as **Forge-mediated**. A host agent's

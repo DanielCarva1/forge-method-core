@@ -425,6 +425,9 @@ pub struct WorkflowAuthorizationActionPacketSet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowAuthorizationRegistrySetupStatus {
+    /// External trust registries are outside the active readiness profile and
+    /// their absence is neither a setup gap nor a readiness blocker.
+    NotApplicable,
     Missing,
     /// A frozen legacy registry remains admissible only for exact replay repair;
     /// it cannot authorize a new workflow mutation.
@@ -5851,9 +5854,18 @@ impl WorkflowGovernanceProjectAdapter {
             agent_autonomy,
             durable_assurance,
             authorization: WorkflowAuthorizationGuidance {
-                registry_setup: WorkflowAuthorizationRegistrySetup {
-                    principal_registry: registry_setup_status(trusted_registry_digest.as_deref()),
-                    broker_registry: trusted_broker_registry.setup,
+                registry_setup: if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
+                    WorkflowAuthorizationRegistrySetup {
+                        principal_registry: WorkflowAuthorizationRegistrySetupStatus::NotApplicable,
+                        broker_registry: WorkflowAuthorizationRegistrySetupStatus::NotApplicable,
+                    }
+                } else {
+                    WorkflowAuthorizationRegistrySetup {
+                        principal_registry: registry_setup_status(
+                            trusted_registry_digest.as_deref(),
+                        ),
+                        broker_registry: trusted_broker_registry.setup,
+                    }
                 },
                 setup_gaps: Vec::new(),
                 action_packets: Vec::new(),
@@ -12852,6 +12864,7 @@ fn authorization_setup_gaps(
     packets: &[WorkflowAuthorizationActionPacket],
 ) -> Vec<WorkflowAuthorizationSetupGap> {
     let (code, state_label) = match broker_status {
+        WorkflowAuthorizationRegistrySetupStatus::NotApplicable => return Vec::new(),
         WorkflowAuthorizationRegistrySetupStatus::Missing => (
             WorkflowAuthorizationSetupGapCode::BrokerRegistryMissing,
             "the project has no external workflow broker registry",
@@ -16087,7 +16100,7 @@ mod tests {
                 &format!("sha256:{}", "f".repeat(64)),
                 cooperative_objective_input()
             ),
-            Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch)
+            Err(WorkflowGovernanceAdapterError::StaleCooperativeObjectiveManagementPacket)
         ));
         let projection = lock_workflow_governance_ledger_tcb(&state)
             .expect("ledger")
@@ -17984,6 +17997,31 @@ mod tests {
                 .expect("canonical packet digest")
             );
         }
+    }
+
+    #[test]
+    fn solo_profile_marks_enterprise_registries_not_applicable() {
+        let (root, state) = temp_project("solo-enterprise-registry-na");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.solo-enterprise-registry-na".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::SoloCooperative))
+            .expect("initialize solo profile");
+
+        let guidance = adapter.next().expect("solo guidance");
+        assert_eq!(
+            guidance.authorization.registry_setup.principal_registry,
+            WorkflowAuthorizationRegistrySetupStatus::NotApplicable
+        );
+        assert_eq!(
+            guidance.authorization.registry_setup.broker_registry,
+            WorkflowAuthorizationRegistrySetupStatus::NotApplicable
+        );
+        assert!(guidance.authorization.setup_gaps.is_empty());
     }
 
     #[test]

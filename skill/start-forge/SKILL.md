@@ -11,6 +11,10 @@ or routes a healthy project into agent-native workflow governance.
 
 ## Core rules
 
+- The current product target is `solo_cooperative` dogfooding by one developer
+  using agents. External-origin brokers, FIDO-backed presence, independent actor
+  custody, and compliance signing are later enterprise concerns. Do not provision,
+  request, or present them as blockers in the Solo Cooperative journey.
 - Use the `forge-core` binary. Never create `.forge-method/` manually inside a
   Consumer Project Repo. Consumer repos get only a `.forge-method.yaml` pointer;
   runtime state belongs in the sibling Forge Runtime Sidecar created by
@@ -27,6 +31,47 @@ or routes a healthy project into agent-native workflow governance.
   never run `project init` as repair. Preserve all roots. Only the typed
   `choices.inspect` action is currently available and read-only; restore and
   reinitialize-as-new are deferred and intentionally expose no apply argv.
+
+### Guided activation contract
+
+<!-- guided-activation-contract:start -->
+Starting the runtime is not the user-facing outcome. Before asking the human
+for project facts or a decision, inspect the repository using narrow read-only
+queries and, when available, reconcile that evidence with Forge continuity.
+Classify the entry without asking the human to choose a mode:
+
+- `greenfield`: no meaningful implementation, product documentation, or project
+  history exists yet;
+- `brownfield_unmanaged`: meaningful project evidence exists but no healthy
+  Forge continuity is available;
+- `brownfield_managed`: meaningful project evidence and healthy Forge
+  continuity both exist.
+
+For either brownfield mode, activation is not complete until the agent can
+explain, in plain language:
+
+1. **What this project is**
+2. **Where it is now**
+3. **What happened recently**
+4. **What is already planned**
+5. **What is missing or uncertain**
+6. **The next best step**
+7. **Why this step is recommended**
+
+Use authoritative evidence in this order: current repository and runtime truth,
+durable Forge state, project documentation, Git history, then chat context. Mark
+inferences and absence of evidence explicitly. Do not ask the human to
+reconstruct information the agent can discover. If evidence is insufficient,
+continue inspecting the repository; if the missing fact is genuinely a product
+choice, explain the context, options, consequences, and recommendation before
+asking one concise question.
+
+For greenfield, say plainly that no established project was found, summarize
+any seed material that does exist, and then ask what outcome the human wants to
+create. A Forge setup or bridge failure does not waive orientation: provide the
+best read-only project explanation available, label Forge continuity as
+unavailable, and separate the setup repair from the recommended project step.
+<!-- guided-activation-contract:end -->
 
 ## Workflow
 
@@ -204,21 +249,20 @@ proves integrity, not native host authenticity.
    - If status says `already_adopted` or `already_solo`, continue silently
      without another write. `already_solo` means the project started in Solo
      Cooperative and needs no migration. If it is `ineligible`, explain the
-     returned reason plainly and do not invent a migration; an explicit
-     `strict_external` project remains strict.
+     returned reason plainly and do not invent a migration. A project explicitly
+     configured for a non-solo profile is outside the current dogfood scope.
 
    After a successful adoption, run profile status once more and require
    `data.current_profile=solo_cooperative` with no adoption argv. The durable
-   transition records cooperative same-owner provenance only; it never claims
-   verified human presence, an independent reviewer, a signature, a broker, or
-   enterprise compliance. Never rebuild the adoption command from display
-   text, never change either CAS digest, and never retry a stale/tampered error
-   without refreshing status.
+   transition records same-owner provenance only; it never claims verified
+   human presence, actor independence, or enterprise compliance. Never rebuild
+   the adoption command from display text, change either CAS digest, or retry a
+   stale/tampered error without refreshing status.
 
    Then run **`forge-core workflow resume --root "<project-root>" --json`**.
    `/start-forge` is run once per chat, not once per task. Treat this call as a
    capability probe even when the installed and source version strings match.
-   The preferred alpha.13 capability is present only when
+   The current capability is present only when
    `data.schema_version=workflow_resume_summary_v2` and `data.detail_argv` is an
    argv array shaped exactly as `forge-core workflow resume --root
    <same-project-root> --full --json`. Validate the root and every token. With a
@@ -235,15 +279,12 @@ proves integrity, not native host authenticity.
    omitted-history counts refer only to older audit records, not hidden current
    obligations. Inspect those current fields before doing new work.
 
-   `workflow_resume_summary_v1` is an explicit alpha.12 legacy response. Validate
-   its exact same-root `detail_argv`, use only fields that v1 actually publishes,
-   and never treat a v2-only field's absence as proof that no obligation exists.
-   Execute its `detail_argv` only when v1 lacks information needed to decide or
-   act. If the default response lacks either summary schema but contains the
-   historical full guidance fields, use it as a legacy compatibility audit.
-   Never silently search for v2 fields in v1, reconstruct missing data, infer a
-   capability from a matching version, or claim that uninstalled source behavior
-   ran.
+   `workflow_resume_summary_v1` is a legacy compatibility response. Validate its
+   exact same-root `detail_argv`, use only fields it actually publishes, and
+   never treat a v2-only field's absence as proof that no obligation exists.
+   Execute its `detail_argv` only when information needed to decide or act is
+   unavailable. Never reconstruct missing data, infer capability from matching
+   version text, or claim that uninstalled source behavior ran.
 
    After **every** Forge operation in this same chat, even when its receipt
    embeds a `next` projection, refresh continuity with:
@@ -371,8 +412,7 @@ proves integrity, not native host authenticity.
    idempotent; a changed payload or stale packet must fail closed. On either
    `accepted` or a later chat answer, refresh the workflow; never cache
    the pre-acceptance packet. Never describe this lane as verified human
-   presence, a signature, external origin, reviewer independence, or
-   `strict_external` satisfaction.
+   presence, external origin, reviewer independence, or enterprise compliance.
 
    Once an objective is active, do not treat routine task changes as objective
    changes. A later material correction from chat uses the separate
@@ -418,44 +458,18 @@ proves integrity, not native host authenticity.
    ledger-head, or state-version change. Local staging/commit stays autonomous;
    remote push is protected. Assessment performs zero Forge state writes.
 
-   A packet whose approval boundary is exactly `operator_credential_broker`
-   may use the cooperative local one-call lane. The host materializes the
-   packet's closed input without asking the human to edit JSON, then runs:
+   Enterprise-origin authorization, hardware-backed presence, independent
+   reviewer/runtime custody, and compliance signing are outside the current Solo
+   Cooperative skill path. Do not run credential, broker, trust, rotation,
+   revocation, external-envelope, or signing commands during ordinary solo
+   activation or work. Missing enterprise registries are non-blocking metadata
+   under `readiness_profile=solo_cooperative`. If Forge reports one as a blocking
+   solo setup gap, report product/profile drift and stop rather than asking the
+   developer to provision enterprise infrastructure.
 
-   ```bash
-   forge-core workflow action authorize --root "<project-root>" \
-     --packet-digest "<packet-sha256>" --input-file "<closed-input.json>" \
-     --credential-id "<operator-credential-id>" --json
-   ```
-
-   Never use that lane for a human, independent-reviewer, or trusted-runtime
-   packet; Forge rejects those boundaries before local signing.
-
-   For a human Decision Request, ask the irreducible question in chat after its
-   prerequisites are verified. For human/reviewer/runtime authority, the host
-   must authenticate the inbound subject outside the governed agent process,
-   sign an origin envelope for that exact packet, and invoke:
-
-   ```bash
-   forge-core workflow action apply --root "<project-root>" \
-     --origin-envelope-file "<host-created-signed-event.json>" --json
-   ```
-
-   The host, not the model, creates that signed event. Never self-assert a
-   human/reviewer/runtime identity, obtain the broker private key, or silently
-   fall back to a cooperative local credential. A missing or revoked broker is
-   a typed setup gap: report its registry setup status and stop. Do not run
-   `workflow broker trust|rotate|revoke` unless the operator explicitly asks
-   and performs the out-of-agent trust decision.
-
-   After authorize/apply, refresh the workflow again. An exact broker-event retry
-   can recover a reserved or already-recorded event, but any stale packet or
-   changed state requires fresh guidance; do not edit and resubmit an old
-   envelope.
-
-5. **Fallback for an older binary without the `workflow` command.** Use this
-   only when command discovery proves the installed binary does not implement
-   `workflow`; do not treat an ordinary workflow error as version fallback.
+5. **Fallback for a binary without the `workflow` command.** Use this only when
+   command discovery proves the selected executable lacks workflow governance;
+   do not treat an ordinary workflow error as a version fallback.
 
    - Report that executable P5 workflow governance is unavailable and recommend
      upgrading Forge Core.
@@ -467,12 +481,14 @@ proves integrity, not native host authenticity.
    - Do not invent an authoritative workflow choice from legacy output. Stop
      before authority-bearing work and tell the user what capability is absent.
 
-6. **Keep output practical.** Show the exact executable plus argv used, the
-   bootstrap `state`, workflow initialization status, active release/upgrade
-   result when supported, and the governed status/next action or blocking gap.
-   Mention Project Link or sidecar paths created. Do not expose private
-   attestation material, present a legacy recommendation as authority, or ask
-   the human to select a workflow or release.
+6. **Keep output useful to the project owner.** Lead with the guided activation
+   explanation above, not Forge internals. Include a short **Forge status** after
+   the project orientation: active, unavailable, or blocked, plus the material
+   consequence. Show executable argv, release identifiers, bootstrap states,
+   Project Link paths, and sidecar paths only when the user asks for diagnostics
+   or when one of those details is necessary to repair a failure. Do not expose
+   private attestation material, present a legacy recommendation as authority,
+   or ask the human to select a workflow or release.
 
 ## Safety checks
 
@@ -487,18 +503,17 @@ proves integrity, not native host authenticity.
   bundle, or release-path selectors to agent-native workflow commands. A
   release id is permitted only inside the exact CAS-bound `upgrade_argv`
   returned by `release-status`.
-- Treat broker enrollment as operator-owned trust configuration. Do not create
-  enrollment records, public-key files, or origin envelopes by hand; do not
-  read, request, copy, or store an external broker private key.
+- Do not provision or invoke deferred enterprise trust/signing infrastructure
+  from the Solo Cooperative skill path.
 - Do not initialize inside system folders, package caches, or temporary folders
   unless the user explicitly selected that root.
 
 ## Installing this skill
 
-This file is the canonical source. Save it wherever your host agent reads skills
-from. Forge does not assume a directory: common conventions include
-`~/.agents/skills/` (Codex, Zed), an MCP tool, or a project-local `.skills/`.
-Pick the location your agent runtime expects.
+This file is the canonical source. Save it wherever your host agent reads skills.
+Common conventions include `~/.pi/agent/skills/` (Pi),
+`~/.agents/skills/` (Codex-compatible hosts), an MCP tool, or a project-local
+`.skills/`. Pick the location your agent runtime expects.
 
 ### Cooperative evidence
 
@@ -528,9 +543,9 @@ what the agent must assess; a missing `target` is legacy `source_claim`:
    what the retained repository basis actually supports.
 3. If no packet is present, inspect
    `data.actions.cooperative_evidence_gap` exactly. Do not invent a route or fall
-   back to a different policy, claim, evaluator, or broker path. V1 does not
-   publish the complete packet or gap: execute its validated `detail_argv` and
-   inspect the equivalent full fields.
+   back to a different policy, claim, or evaluator. V1 does not publish the
+   complete packet or gap: execute its validated `detail_argv` and inspect the
+   equivalent full fields.
 4. Copy `offer_template` to a temporary file **outside** the project snapshot.
    Replace every token named by `required_replacements` with an honest bounded
    value. For the selected assessment object, replace `basis_paths` with one or

@@ -13,26 +13,26 @@ preserving the distinction between advice, evidence, and admitted authority.
 5. Check the durable release and perform only an exact returned upgrade.
 6. Call default `workflow resume` without caller-selected phase, policy, bundle,
    or readiness target.
-7. If Forge returns a missing-objective packet in `solo_cooperative`, materialize
-   the unambiguous chat outcome through `workflow intent accept-cooperative`.
-   If one irreducible choice remains, send the closed `decision_required` input
-   and ask the returned question; that branch performs no Forge state write. In
-   `strict_external`, continue to admit the externally signed human input
-   through `workflow intent record`. Never ask the human to design the method.
+7. If Forge returns a missing-objective packet, materialize the unambiguous
+   chat outcome through `workflow intent accept-cooperative`. If one irreducible
+   choice remains, send the closed `decision_required` input and ask the
+   returned question; that branch performs no Forge state write. Never ask the
+   human to design the method.
 8. Perform the highest-ranked feasible action.
-9. Collect evidence from the tool/runtime/human named by the evaluator; never
-   self-upgrade artifact presence into representative proof.
-10. Record observations through an authorized surface and call default
+9. Collect honest evidence from the named tool/runtime or bounded repository
+   inspection without upgrading same-owner evidence into an independent claim.
+10. Record observations through the typed cooperative surface and call default
     `workflow resume` again, even if the receipt embeds a next projection.
-11. Stop and explain typed gaps when authority or capability is unavailable.
+11. Stop and explain genuine capability gaps. Enterprise broker/signature setup
+    is not a `solo_cooperative` capability gap.
 
 The canonical bootstrap procedure is
 [`skill/start-forge/SKILL.md`](../skill/start-forge/SKILL.md). The generated
 [command surface](generated/command-surface.md) is the flag-level reference.
 
-Before claiming readiness, report the four identities separately: installed
-binary/source checkpoint, selected prebuilt asset, durable workflow release pin,
-and Domain Pack effective epoch. Use the canonical
+Before claiming readiness, report the four identities separately: source
+checkpoint, executable selected by `PATH`, durable workflow release pin, and
+Domain Pack effective epoch. Use the canonical
 [identity table](../README.md#four-identitiesdo-not-collapse-them); never infer
 one from another.
 
@@ -64,30 +64,26 @@ drive, or repository is built into this contract.
 - Preserve argv boundaries. Never shell-evaluate display command strings.
 - Bind mutating follow-up to returned snapshot/head/CAS digests.
 - Do not cache guidance across mutation; ask Forge again.
-- Redact private keys and secret material; audit projections are not authority.
+- Never expose secret material; audit projections are not authority.
 
-The normal `workflow next` response embeds `authorization.action_packets`,
-registry setup state, and typed setup gaps. The standalone
-`workflow action-packets` command exposes the same packets and registry status
-for read-only diagnostics. Authority-bearing observations use those
-Forge-derived packets and the external origin-broker bridge described in the
-[operator guide](operator-guide.md). The host signs a minimal closed answer
-bound to the returned packet; `workflow action apply` derives, verifies, and
-records the exact request without exposing an intermediate attestation. Never
-manufacture request, registry, ledger, or receipt documents in the host.
+The normal `workflow resume` response embeds typed action packets and setup
+gaps. In the current `solo_cooperative` profile, the host uses the dedicated
+cooperative objective/evidence paths and must not provision or invoke an
+external-origin broker. Missing enterprise registries are non-blocking profile
+metadata, not onboarding work. Never manufacture request, registry, ledger, or
+receipt documents in the host.
 
 A `cooperative_same_owner` objective packet is a separate authority boundary,
 not a weaker spelling of human approval. The host supplies only bounded outcome,
 constraints, unacceptable outcomes, open uncertainties, carrying principal,
 and generic host/session coordinates. Forge derives objective identity,
 revision, assurance epoch, project snapshot, ledger head, packet binding, and
-commit time. The resulting provenance supports same-owner continuity but never
-claims a signature, verified human origin, independent identity, or satisfaction
-of the `strict_external` boundary.
+commit time. The resulting provenance supports same-owner continuity while
+making no claim of a signature, verified human origin, independent identity,
+or enterprise compliance.
 
-The packet's `input_contract.kind` is `cooperative_objective`, not the strict
-broker `intent_revision` shape. It publishes both closed JSON templates,
-`utf8_json_file` encoding, every relevant byte/item bound, denial of unknown
+The packet's `input_contract.kind` is `cooperative_objective`. It publishes both
+closed JSON templates, `utf8_json_file` encoding, every relevant byte/item
 fields, and a structured argv template. A generic host must be able to execute
 the lane from that packet without reading Forge source:
 
@@ -134,8 +130,8 @@ Once `workflow_resume_summary_v2` exposes an active
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
 It becomes stale after objective supersession or any bound state change.
-Strict-external readiness reports
-`unsupported_profile`; it never misreports a missing cooperative objective.
+Profiles that require separated external authority are outside the current
+integration target and must not silently alter the Solo Cooperative loop.
 
 The delegated classes are research/analysis, planning/strategy, reversible
 local editing, testing/verification, documentation, changes of tactic/file/work
@@ -169,16 +165,12 @@ non-empty consequences. Assessment never writes the workflow ledger, replay
 WAL, or Forge state; it supplements rather than replaces the governed ranked
 next action.
 
-`workflow action authorize` is a cooperative local one-call lane only for a
-packet marked `operator_credential_broker`. Forge rejects that lane before
-signing for human, independent-reviewer, and trusted-runtime broker packets.
-
-The local signing bridge proves key possession only inside Forge's cooperative
-same-OS-principal model. It does not prove human presence or reviewer
-independence. An agent must never self-provision or use a `human`, `reviewer`, or
-`runtime` local profile as evidence of a distinct actor. The external broker
-vouches for the signed origin subject and separation domain; Forge does not
-infer physical presence from those labels.
+External-origin authorization, hardware-backed presence, independent reviewer
+custody, and compliance signing are deferred enterprise integration concerns.
+A Solo Cooperative host must not provision, rotate, request, or invoke them.
+If the runtime reports one as blocking under `readiness_profile=solo_cooperative`,
+the host reports product/profile drift instead of asking the developer to
+perform a trust ceremony.
 
 ## Mediated versus direct writes
 
@@ -190,39 +182,33 @@ Log/disclose direct writes rather than laundering them through a transcript.
 
 ## Human attention
 
-Ask the human only for an irreducible decision returned by the admitted
-workflow, consent to an operator-owned trust ceremony, or information the agent
-cannot obtain. Translate the decision into natural chat. Never ask the human to
-select a workflow or edit internal YAML.
+Ask the human only for an irreducible product decision, material risk
+acceptance, an irreversible/external effect, or information the agent cannot
+obtain. Translate the decision into natural chat. Never ask the human to select
+a workflow, edit internal YAML, or operate enterprise trust infrastructure.
 
 The agent owns method discovery. It drafts representative journeys, falsifiers,
-environment expectations, scenarios, and failure modes, then obtains the
-required independent review. The human supplies desired outcomes, constraints,
-preferences, unacceptable outcomes, uncertainties, and irreducible value
-choices; ignorance of a development method must not become human homework.
+environment expectations, scenarios, and failure modes, then runs the strongest
+feasible checks for the current solo claim. Stronger independent review is
+required only when a later claim explicitly promises independence. Ignorance of
+a development method must not become human homework.
 
 ## Evidence discipline
 
 - A file is not automatically working behavior.
-- A self-report is not an independent review.
+- A self-report is same-owner evidence, never independent review.
 - A mocked execution is not a representative session.
-- A second agent is independent only when principal and evidence are distinct.
-- External/runtime capability must be verified by corresponding authority.
-- A representative-slice manifest is a proposal until an independent Reviewer
-  origin admits its exact bytes through the evaluator-observation lane.
-- Runtime evidence must come from a separately configured origin domain and
-  match the latest definition, exact runtime subject, current intent/snapshot/
-  effective epoch, and every declared scenario.
+- Cooperative evidence must remain bound to its exact claim, subject, basis,
+  producer, snapshot, and freshness window.
 - Partial execution is only `supported`; current failure is `disproven`; a
   later accepted definition supersedes prior definitions.
-- Use the existing evidence/action-packet lane. Do not invent a second slice
-  store, mutation event, or caller-authored epistemic state.
-
+- Stronger claims such as independent review, trusted-runtime execution, human
+  presence, publication, or enterprise compliance require their own later
+  evidence and must not block unrelated solo development.
 - P7F bundle-checker success means structural/content-integrity validity only;
-  it cannot prove a production host, chat-only behavior, semantics, actor or
-  reviewer independence, publication, or P7F passage.
-If authority is not provisioned, the correct result is a blocked gap. Never
-hand-author a registry, signature, receipt, or ledger record to advance.
+  it cannot prove a production host, semantics, actor independence, publication,
+  or P7F passage.
+- Never hand-author a receipt or ledger record to advance.
 
 ## Replacement agents
 
@@ -231,25 +217,19 @@ prior chat context. If durable state cannot reconstruct release, effective
 Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
-In `0.12.0-alpha.13`, `workflow resume` returns the concise, versioned
+The current executable returns the concise, versioned
 `workflow_resume_summary_v2` activation view by default. V2 is the complete
 current-state contract for the agent: it carries the current objective; the
-full autonomy projection, including its binding and input contract; every
-current evaluation with its verdicts, claims, obligations, decisions, gaps,
-issues, and next actions; every current boundary recheck; current blockers,
-warnings, active isolations, recoverable promotions, cooperative evidence, and
-complete authorization packets, plus the complete current cooperative packet
-or its exact gap. Counts identify only older audit history omitted from the
-activation view; a missing v2 field must never be interpreted as proof that an
-obligation does not exist. Its exact `detail_argv` retrieves the full audit
-with `workflow resume --full --json`.
+full autonomy projection; every current evaluation, blocker, warning, active
+isolation, recoverable promotion, cooperative evidence item, authorization
+packet, and exact gap. Counts identify only older audit history omitted from
+the activation view. Its exact `detail_argv` retrieves the full audit with
+`workflow resume --full --json`.
 
-`workflow_resume_summary_v1` is the legacy alpha.12 activation view. A host may
-continue from it, but must not silently look for v2-only fields or treat their
-absence as an absent obligation. Validate its same-root `detail_argv`, use the
-fields v1 actually publishes, and execute that argv when v1 lacks information
-needed to decide or act. Do not reconstruct missing data or downgrade an
-uncertain boundary to autonomous work.
+`workflow_resume_summary_v1` is a legacy compatibility view. A host may
+continue from fields it actually publishes but must not infer that omitted v2
+fields represent absent obligations. Use its same-root `detail_argv` when
+information required for the next safe action is unavailable.
 
 The full audit keeps the ordinary `workflow next` fields and adds the versioned
 `replacement_continuity` block. That block is rebuilt from durable project
@@ -282,28 +262,16 @@ add its own review policy; Forge does not impose a universal two-reviewer rule.
 ## Legacy profile adoption
 
 `forge-core workflow profile status --root <path> --json` is the read-only,
-host-neutral check for historical ledgers that predate readiness profiles. A
-legacy project remains `strict_external` until this command reports
-`solo_adoption=eligible` and publishes `data.adopt_solo_argv`. Eligibility is
-intentionally narrow: the genesis `project_imported` must omit
-`readiness_profile`, and the history before adoption may contain only that
-import plus kernel-admitted `release_upgraded` records. Workflow decisions,
-evidence, claims, coordination, intent, broker origin, and every other
-authority-bearing event make the first adoption route ineligible.
+host-neutral check for ledgers created before readiness profiles. When it
+publishes an exact `data.adopt_solo_argv` and this chat has selected solo
+dogfooding, the host executes that argv without reconstructing it.
 
-The host executes the returned argv only after the ordinary chat has clearly
-chosen Solo Cooperative. The command rechecks both the exact ledger head and
-the exact project snapshot while retaining the workflow lock. It appends one
-`legacy_solo_profile_adopted` record with `cooperative_same_owner` provenance;
-it does not rewrite the historical genesis or claim a verified human presence,
-signature, reviewer separation, or broker event. An exact retry returns
-`already_adopted` without another record even if project files changed after the
-original transition; the retry receipt still identifies the original snapshot.
-A later ledger record makes the old adoption argv a conflict rather than a
-second write. A project whose genesis already selected `solo_cooperative`
-reports `already_solo` and needs no migration. Explicit `strict_external`, stale,
-tampered, reverse, conflicting, or unsupported history fails closed without a
-write. `start` and `workflow init` never perform this transition silently.
+Adoption appends one `legacy_solo_profile_adopted` record with
+`cooperative_same_owner` provenance. It does not rewrite history or claim
+verified human presence, reviewer separation, or enterprise authority. Exact
+retries are idempotent; stale, tampered, conflicting, or unsupported history
+fails closed. A project already created or adopted as `solo_cooperative` needs
+no migration. `start` and `workflow init` never perform adoption silently.
 
 ## Compatibility surfaces
 
@@ -316,14 +284,14 @@ not select authoritative P5/P6 workflow. New integrations use
 - Fresh and existing projects bootstrap idempotently.
 - Paths with spaces remain one argv element.
 - A stale snapshot/head is rejected and retried from new guidance.
-- A consumed host event is idempotent and cannot authorize another packet.
-- Broker absence/revocation blocks without falling back to a local human label.
-- Missing evidence cannot complete a policy.
-- Human questions appear only after prerequisite claims are verified.
+- A consumed cooperative packet is idempotent and cannot authorize another input.
+- Missing enterprise broker/signature setup does not block Solo Cooperative.
+- Missing required evidence cannot complete a policy.
+- Human questions appear only for the closed irreducible decision classes.
 - Replacement process returns the same durable epoch and next action.
 - Every write claimed as governed has the complete mediated evidence chain;
   direct host/editor/shell writes are explicitly classified ungoverned.
-- No private key, opaque capability, or operator anchor is exposed in chat.
+- No secret or opaque capability is exposed in chat.
 
 ## Accepted objective as the solo discovery source
 
@@ -331,7 +299,7 @@ In `solo_cooperative`, the active objective accepted through the typed objective
 
 The grounding is current only while that material anchor is inside the active receipt window and has not been revoked. An exact idempotent objective retry, a policy-equivalent release transition, and a `non_material_clarification` preserve the material anchor. A `material_supersession` creates a new anchor and reopens discovery until the replacement is completed. `invalidate_all` starts a new receipt window, so an old anchor cannot be revived by a clarification; a new material acceptance is required. Revoking the anchor also removes the grounding.
 
-Completing discovery records the exact grounding anchor in `grounding_anchor_digests` and binds the completion subject to that anchor, not to the repository snapshot. Later governed project edits or updates inside an already-existing top-level `.local` directory therefore do not reopen discovery. A missing or invalid grounding does not suppress the normal evidence packet or capability gap. This route means only that the same owner and carrying agent established the direction Forge should follow; it is not proof of human identity, a second actor, independent review, or enterprise separation. The route exists only in `solo_cooperative`; `strict_external` continues to require its broker-backed intent and evidence path.
+Completing discovery records the exact grounding anchor in `grounding_anchor_digests` and binds the completion subject to that anchor, not to the repository snapshot. Later governed project edits or updates inside an already-existing top-level `.local` directory therefore do not reopen discovery. A missing or invalid grounding does not suppress the normal evidence packet or capability gap. This route means only that the same owner and carrying agent established the direction Forge should follow; it is not proof of human identity, a second actor, independent review, or enterprise separation. Enterprise-origin intent is a later profile concern.
 
 ## Cooperative evidence admission
 
@@ -340,8 +308,8 @@ For a `solo_cooperative` objective, agents use the one existing public command,
 `workflow_resume_summary_v2.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
-claim, evaluator, subject, and scenario. `strict_external` and profileless
-projects never publish this same-owner lane.
+claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this
+same-owner lane.
 
 The packet's typed `route.target` separates two meanings without adding another
 command, event, ledger, or admission subsystem:
@@ -418,10 +386,10 @@ that exact observation with
 `forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> --json`.
 Forge re-derives the live isolation, linked claim principal, objective, ledger,
 evidence, claims, source, destination, effect, and payload under retained locks.
-This solo-cooperative lane supports only metadata-stable writes to existing
-regular files and does not require the strict-external broker. `unknown` and
-`supported` source assurance claims remain explicit `carried_assurance_gaps`;
-`disproven` and `contradictory` claims remain blocking.
+This Solo Cooperative lane supports only metadata-stable writes to existing
+regular files and uses same-owner profile authority. `unknown` and `supported`
+source assurance claims remain explicit `carried_assurance_gaps`; `disproven`
+and `contradictory` claims remain blocking.
 
 Success includes a durable self-digested receipt and fresh canonical readback.
 An exact retry returns `already_committed` after verifying the receipt, exact

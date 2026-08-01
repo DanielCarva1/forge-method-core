@@ -1,7 +1,8 @@
 # Forge documentation
 
-Forge is a local agent-first governance runtime. Humans normally stay in chat;
-host agents operate `forge-core`; operators own installation and trust.
+Forge is a local agent-first governance runtime. The current product milestone
+is Solo Dogfood Ready: humans stay in chat and host agents operate `forge-core`
+under the `solo_cooperative` profile. Enterprise trust operation is deferred.
 
 ## One guide per audience
 
@@ -9,7 +10,7 @@ host agents operate `forge-core`; operators own installation and trust.
 |---|---|
 | Human using Forge through chat | [Getting started](getting-started.md) |
 | Host-agent or tool integrator | [Agent integration](agent-integration.md) |
-| Installation, trust, state, or recovery operator | [Operator guide](operator-guide.md) |
+| Advanced state/recovery or future enterprise trust operator | [Operator guide](operator-guide.md) |
 | Domain Pack author/operator | [Domain Packs](domain-packs.md) |
 | Contributor | [Contributing](contributing.md) |
 | Security or promise reviewer | [Security model](security-model.md) |
@@ -42,7 +43,10 @@ host agents operate `forge-core`; operators own installation and trust.
 5. Fixtures are examples/adversarial evidence, not trusted merely because copied.
 
 When prose and a machine-checked surface disagree, fail closed and report drift.
-The source workspace is `0.12.0`; `v0.4.0` is its historical prebuilt
-predecessor, while current availability must be checked on GitHub Releases. No page
-in this set claims a published `0.12.0`, a completed real-host run, actor
-independence, or full P7 completion.
+The [root README](../README.md) alone owns the current source-version statement;
+`Cargo.toml` and `forge-core --version` remain the executable facts. Historical
+version numbers belong in the changelog, not copied across live guides.
+
+External-origin brokers, FIDO-backed presence, independent actor custody, and
+compliance signing are later enterprise concerns. Their absence is not a Solo
+Cooperative onboarding or progression gap.
