@@ -146,6 +146,16 @@ effect boundaries. The only human decision classes are product-objective
 change, material trade-off, material risk acceptance, and
 irreversible/external effect.
 
+The host does not wait for the human to request research. When a doubt may
+change the accepted outcome, expose an unacceptable outcome, alter material
+risk, or make the next action unsafe, it first checks authoritative local
+project evidence and then performs proportionate read-only external research
+when needed. It compares competing hypotheses, contrary evidence, source
+freshness, applicability, and limitations; explains the result and product
+impact in the human's language; and continues with the next safe action. A
+trivial reversible uncertainty does not justify broad research, and only a
+remaining human-decision class returns to the human.
+
 Every assessment input also carries a required closed effect descriptor. The
 host derives it from the selected tool and concrete operation boundary,
 independently of the model-declared work class, never from free-form task text

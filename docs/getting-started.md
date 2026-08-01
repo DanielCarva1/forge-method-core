@@ -97,6 +97,15 @@ It does not stop after announcing a future action. When a decision is genuinely
 required, it explains the context, options, consequences, and recommendation,
 then asks exactly one concise question.
 
+During ordinary development, the human does not need to tell the agent to
+research. If a doubt could change the desired outcome, expose an unacceptable
+outcome, alter material risk, or make the next action unsafe, the agent performs
+proportionate read-only research on its own. It checks project evidence first,
+uses credible external sources when needed, compares competing explanations and
+contrary evidence, explains the result and its practical impact, and keeps
+working. It returns to the human only if a real product, trade-off, risk, or
+external-effect decision remains.
+
 The current onboarding target is `solo_cooperative`. External-origin brokers,
 FIDO-backed presence, independent identities, and compliance signing are
 enterprise-profile work and are not part of this loop.

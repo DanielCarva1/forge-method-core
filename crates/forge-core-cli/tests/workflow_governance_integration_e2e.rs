@@ -1811,11 +1811,25 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
         activation["data"]["boundary_rechecks"], next["data"]["boundary_rechecks"],
         "resume v2 must retain the complete boundary-recheck projection without filtering"
     );
-    let claim_count = next["data"]["simulation"]["candidate_claim_results"]
+    let claims = next["data"]["simulation"]["candidate_claim_results"]
         .as_array()
-        .expect("investigation claims")
-        .len();
+        .expect("investigation claims");
+    let claim_count = claims.len();
     assert_eq!(claim_count, 4);
+    let mut claim_ids = claims
+        .iter()
+        .map(|claim| claim["claim_id"].as_str().expect("investigation claim id"))
+        .collect::<Vec<_>>();
+    claim_ids.sort_unstable();
+    assert_eq!(
+        claim_ids,
+        vec![
+            "claim.workflow.investigation.conclusion-calibrated",
+            "claim.workflow.investigation.hypotheses-probed",
+            "claim.workflow.investigation.next-action-safe",
+            "claim.workflow.investigation.symptom-bounded",
+        ]
+    );
 
     for (relative, contents) in [
         (".git/HEAD", "ref: refs/heads/main\n"),

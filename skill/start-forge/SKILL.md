@@ -477,6 +477,39 @@ proves integrity, not native host authenticity.
    Do not ask the human to approve those implementation choices and do not
    create an authorization packet per edit, test, or task.
 
+   <!-- uncertainty-driven-research:start -->
+   Consequential uncertainty is active agent work, not a reason to wait for a
+   research instruction. Do not wait for the human to tell you to research.
+   During implementation, planning, debugging, review, or product development:
+
+   1. Detect a meaningful doubt, conflicting signal, unfamiliar domain,
+      unsupported assumption, failed check, or missing locally authoritative fact.
+   2. Decide whether the uncertainty is consequential to the accepted outcome,
+      an unacceptable outcome, a material risk, or the safety of the next action.
+      Keep the response proportionate; trivial reversible details do not justify
+      broad research.
+   3. If it is consequential, research autonomously. Inspect authoritative local
+      project evidence first, then use read-only external research when local
+      knowledge is not authoritative or sufficient. No human permission is needed
+      for this research.
+   4. Research multiple credible and independent sources when appropriate;
+      compare competing hypotheses, contrary evidence, source freshness,
+      applicability, and known limitations instead of collecting only support for
+      the first plausible answer.
+   5. Use the smallest representative probe, test, or vertical slice that can
+      disprove the current assumption when executable evidence is available.
+   6. Explain the result and its product impact in the human's language, pairing
+      technical evidence with practical meaning and marking remaining uncertainty.
+   7. Continue with the next safe action when the result supports one. Ask the
+      human only when the remainder is a product-objective change, material
+      trade-off, material risk acceptance, or irreversible/external effect.
+
+   When Forge exposes a current investigation or policy-applicability packet,
+   assess it from current evidence and follow the fresh governed route. Do not
+   bypass that route, turn technical uncertainty into human homework, or treat the
+   absence of an exact research script as permission to skip research.
+   <!-- uncertainty-driven-research:end -->
+
    Ask the human only for one of the four closed classes:
    `product_objective_change`, `material_tradeoff`,
    `material_risk_acceptance`, or `irreversible_or_external_effect`. Publication,

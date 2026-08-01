@@ -11,6 +11,18 @@ SKILL = ROOT / "skill" / "start-forge" / "SKILL.md"
 GETTING_STARTED = ROOT / "docs" / "getting-started.md"
 AGENT_INTEGRATION = ROOT / "docs" / "agent-integration.md"
 SOLO_SPEC = ROOT / "contracts" / "spec" / "solo-dogfood-readiness-v0.yaml"
+PRODUCT_CONSTITUTION = (
+    ROOT / "contracts" / "policies" / "agent-native-product-constitution.yaml"
+)
+ASSURANCE_ARCHITECTURE = (
+    ROOT / "contracts" / "spec" / "agent-native-assurance-architecture.yaml"
+)
+RUNTIME_BUNDLE = (
+    ROOT
+    / "contracts"
+    / "workflow-governance"
+    / "runtime-universal-assurance-candidate-v0.yaml"
+)
 START_E2E = ROOT / "crates" / "forge-core-cli" / "tests" / "start_cli_e2e.rs"
 
 
@@ -28,6 +40,15 @@ def marked_section(text: str, name: str) -> str:
 
 def normalized(text: str) -> str:
     return " ".join(text.split()).casefold()
+
+def yaml_policy_block(text: str, policy_id: str) -> str:
+    marker = f"  - id: {policy_id}"
+    start = text.find(marker)
+    if start < 0:
+        raise AssertionError(f"policy is missing: {policy_id}")
+    end = text.find("\n  - id: ", start + len(marker))
+    return text[start:] if end < 0 else text[start:end]
+
 
 
 class GuidedActivationContractTests(unittest.TestCase):
@@ -121,6 +142,61 @@ class GuidedActivationContractTests(unittest.TestCase):
             self.assertIn("same turn", document)
         self.assertIn("exactly one concise question", getting_started)
 
+    def test_consequential_uncertainty_drives_autonomous_research(self) -> None:
+        research = normalized(
+            marked_section(self.skill, "uncertainty-driven-research")
+        )
+        for expected in (
+            "do not wait for the human to tell you to research",
+            "decide whether the uncertainty is consequential",
+            "research autonomously",
+            "multiple credible and independent sources",
+            "competing hypotheses",
+            "contrary evidence",
+            "explain the result and its product impact",
+            "continue with the next safe action",
+            "ask the human only",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, research)
+        integration = normalized(AGENT_INTEGRATION.read_text(encoding="utf-8"))
+        for expected in (
+            "does not wait for the human to request research",
+            "compares competing hypotheses, contrary evidence",
+            "continues with the next safe action",
+        ):
+            with self.subTest(integration=expected):
+                self.assertIn(expected, integration)
+        getting_started = normalized(GETTING_STARTED.read_text(encoding="utf-8"))
+        for expected in (
+            "does not need to tell the agent to research",
+            "compares competing explanations and contrary evidence",
+            "keeps working",
+        ):
+            with self.subTest(getting_started=expected):
+                self.assertIn(expected, getting_started)
+        constitution = normalized(
+            PRODUCT_CONSTITUTION.read_text(encoding="utf-8")
+        )
+        architecture = normalized(
+            ASSURANCE_ARCHITECTURE.read_text(encoding="utf-8")
+        )
+        runtime_policy = normalized(
+            yaml_policy_block(
+                RUNTIME_BUNDLE.read_text(encoding="utf-8"),
+                "policy.workflow.investigation",
+            )
+        )
+        self.assertIn("research and competence acquisition", constitution)
+        self.assertIn("consequential uncertainty must be researched", constitution)
+        self.assertIn(
+            "research multiple credible and independent sources", architecture
+        )
+        self.assertIn("competing hypotheses", runtime_policy)
+        self.assertIn("contrary evidence", runtime_policy)
+        self.assertIn("remaining uncertainty", runtime_policy)
+
+
     def test_product_readiness_spec_requires_primary_guided_journeys(self) -> None:
         specification = normalized(SOLO_SPEC.read_text(encoding="utf-8"))
         required_scenarios = (
@@ -131,6 +207,10 @@ class GuidedActivationContractTests(unittest.TestCase):
             "runtime or host-bridge failure",
             "human-facing prose stays in the human's language",
             "material ambiguity produces one concise decision request",
+            (
+                "consequential uncertainty triggers autonomous research without "
+                "waiting for a human instruction"
+            ),
             "agent-autonomous reversible action proceeds without human confirmation",
         )
         for scenario in required_scenarios:

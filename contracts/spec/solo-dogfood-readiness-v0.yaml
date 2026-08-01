@@ -382,6 +382,13 @@ implementation_decisions:
         Ask exactly one concise question only for a genuine product choice,
         material trade-off, material risk acceptance, or irreversible/external
         effect; otherwise continue without asking.
+      uncertainty_research_rule: >-
+        During development, the agent identifies consequential uncertainty,
+        researches it autonomously without waiting for a human instruction,
+        compares competing hypotheses and contrary evidence, explains the
+        product impact, and continues with the next safe action. Only a remaining
+        product choice, material trade-off, material risk acceptance, or
+        irreversible/external effect returns to the human.
   conversation_derived_intent:
     reuse: >-
       Extend the existing packet-bound local authorization seam rather than
@@ -577,6 +584,7 @@ testing_decisions:
     - "existing managed project resumes with recent work, plan, gap, and next step"
     - "state-loss or integrity failure preserves prior records and explains one safe repair path"
     - "runtime or host-bridge failure still provides read-only project orientation"
+    - "consequential uncertainty triggers autonomous research without waiting for a human instruction"
     - "human-facing prose stays in the human's language and pairs technical facts with practical meaning"
     - "no second start across task and phase changes in one chat"
     - "idempotent repeated start"

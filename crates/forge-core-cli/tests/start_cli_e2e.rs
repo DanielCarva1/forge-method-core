@@ -376,6 +376,12 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         "Technical detail is welcome, but it must never be the whole explanation",
         "Orientation is a checkpoint, not a stopping point",
         "Ask exactly one concise question",
+        "<!-- uncertainty-driven-research:start -->",
+        "Do not wait for the human to tell you to research.",
+        "If it is consequential, research autonomously.",
+        "compare competing hypotheses, contrary evidence, source freshness,",
+        "Explain the result and its product impact in the human's language",
+        "Continue with the next safe action when the result supports one.",
     ] {
         assert!(
             skill.contains(behavior),
