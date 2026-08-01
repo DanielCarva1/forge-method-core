@@ -78,6 +78,25 @@ start
   -> workflow resume
 ```
 
+The human-facing response is not a dump of those internal steps. The agent keeps
+its explanation in the language already used by the human, without alternating
+languages in ordinary prose. Exact commands and identifiers may keep their
+source spelling, but useful technical detail is paired with its practical meaning
+in plain language.
+
+A healthy orientation normally answers four things compactly:
+
+1. what the project is and whether it is healthy now;
+2. what changed recently and what is already planned;
+3. what remains, what the next step is, and why;
+4. whether the agent needs one decision from the human.
+
+When no genuine human decision is needed, the agent continues with the safest
+highest-ranked feasible action in the same turn and reports the verified result.
+It does not stop after announcing a future action. When a decision is genuinely
+required, it explains the context, options, consequences, and recommendation,
+then asks exactly one concise question.
+
 The current onboarding target is `solo_cooperative`. External-origin brokers,
 FIDO-backed presence, independent identities, and compliance signing are
 enterprise-profile work and are not part of this loop.

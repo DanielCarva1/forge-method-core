@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression check for Start Forge's user-facing activation contract."""
+"""Regression checks for Start Forge's user-facing activation journeys."""
 
 from pathlib import Path
 import re
@@ -8,22 +8,42 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skill" / "start-forge" / "SKILL.md"
+GETTING_STARTED = ROOT / "docs" / "getting-started.md"
+AGENT_INTEGRATION = ROOT / "docs" / "agent-integration.md"
+SOLO_SPEC = ROOT / "contracts" / "spec" / "solo-dogfood-readiness-v0.yaml"
+START_E2E = ROOT / "crates" / "forge-core-cli" / "tests" / "start_cli_e2e.rs"
+
+
+def marked_section(text: str, name: str) -> str:
+    match = re.search(
+        rf"<!-- {re.escape(name)}:start -->(.*?)"
+        rf"<!-- {re.escape(name)}:end -->",
+        text,
+        flags=re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError(f"{name} section is missing")
+    return match.group(1)
+
+
+def normalized(text: str) -> str:
+    return " ".join(text.split()).casefold()
 
 
 class GuidedActivationContractTests(unittest.TestCase):
-    def test_skill_requires_evidence_backed_project_orientation(self) -> None:
-        text = SKILL.read_text(encoding="utf-8")
-        match = re.search(
-            r"<!-- guided-activation-contract:start -->(.*?)"
-            r"<!-- guided-activation-contract:end -->",
-            text,
-            flags=re.DOTALL,
-        )
-        self.assertIsNotNone(match, "guided activation contract is missing")
-        contract = match.group(1)
-        normalized = " ".join(contract.split()).casefold()
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skill = SKILL.read_text(encoding="utf-8")
+        cls.contract = marked_section(cls.skill, "guided-activation-contract")
+        cls.contract_normalized = normalized(cls.contract)
 
-        required_terms = (
+    def assert_contract_contains(self, *terms: str) -> None:
+        for term in terms:
+            with self.subTest(term=term):
+                self.assertIn(term.casefold(), self.contract_normalized)
+
+    def test_orientation_is_evidence_backed_and_complete(self) -> None:
+        self.assert_contract_contains(
             "greenfield",
             "brownfield_unmanaged",
             "brownfield_managed",
@@ -34,14 +54,100 @@ class GuidedActivationContractTests(unittest.TestCase):
             "What is missing or uncertain",
             "The next best step",
             "Why this step is recommended",
+            "inspect the repository",
+            "before asking the human",
+            "Do not ask the human to reconstruct",
         )
-        for term in required_terms:
-            with self.subTest(term=term):
-                self.assertIn(term.casefold(), normalized)
 
-        self.assertIn("inspect the repository", normalized)
-        self.assertIn("before asking the human", normalized)
-        self.assertIn("do not ask the human to reconstruct", normalized)
+    def test_language_and_technical_detail_are_balanced(self) -> None:
+        self.assert_contract_contains(
+            "language already used by the human",
+            "keep all explanatory prose consistently in that language",
+            "Do not alternate languages",
+            "Technical detail is welcome",
+            "must never be the whole explanation",
+            "practical meaning",
+            "Literal commands, paths, source identifiers, and product names",
+        )
+
+    def test_orientation_does_not_replace_action_or_create_fake_questions(self) -> None:
+        self.assert_contract_contains(
+            "Orientation is a checkpoint, not a stopping point",
+            "perform and verify it in the same turn",
+            "instead of merely announcing",
+            "ask exactly one concise question",
+            "If no human input is needed, say so plainly and continue",
+        )
+
+    def test_all_primary_activation_journeys_have_closed_behavior(self) -> None:
+        matrix = marked_section(self.contract, "guided-activation-journeys")
+        rows: dict[str, tuple[str, str, str]] = {}
+        for line in matrix.splitlines():
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) != 4 or not cells[0].startswith("`"):
+                continue
+            journey = cells[0].strip("`")
+            self.assertNotIn(journey, rows, f"duplicate journey row: {journey}")
+            rows[journey] = (cells[1], cells[2], cells[3])
+
+        expected = {
+            "greenfield",
+            "brownfield_unmanaged",
+            "brownfield_managed",
+            "state_loss_or_integrity_failure",
+            "runtime_or_bridge_unavailable",
+            "human_decision_required",
+            "autonomous_action_available",
+        }
+        self.assertEqual(set(rows), expected)
+        for journey, cells in rows.items():
+            with self.subTest(journey=journey):
+                self.assertTrue(all(cells), f"incomplete journey row: {journey}")
+
+        self.assertIn("Ask one concise outcome question", rows["greenfield"][2])
+        self.assertIn("highest-ranked feasible safe action", rows["brownfield_managed"][2])
+        self.assertIn("nothing will be recreated", rows["state_loss_or_integrity_failure"][1])
+        self.assertIn("Do not initialize or switch roots", rows["runtime_or_bridge_unavailable"][2])
+        self.assertIn("Ask exactly one concise question", rows["human_decision_required"][2])
+        self.assertIn("Execute in the same turn", rows["autonomous_action_available"][2])
+
+    def test_human_and_integrator_guides_preserve_the_same_experience(self) -> None:
+        getting_started = normalized(GETTING_STARTED.read_text(encoding="utf-8"))
+        agent_integration = normalized(AGENT_INTEGRATION.read_text(encoding="utf-8"))
+        for document in (getting_started, agent_integration):
+            self.assertIn("language already used", document)
+            self.assertIn("technical", document)
+            self.assertIn("practical meaning", document)
+            self.assertIn("same turn", document)
+        self.assertIn("exactly one concise question", getting_started)
+
+    def test_product_readiness_spec_requires_primary_guided_journeys(self) -> None:
+        specification = normalized(SOLO_SPEC.read_text(encoding="utf-8"))
+        required_scenarios = (
+            "greenfield orientation",
+            "existing unmanaged project",
+            "existing managed project",
+            "state-loss or integrity failure",
+            "runtime or host-bridge failure",
+            "human-facing prose stays in the human's language",
+            "material ambiguity produces one concise decision request",
+            "agent-autonomous reversible action proceeds without human confirmation",
+        )
+        for scenario in required_scenarios:
+            with self.subTest(scenario=scenario):
+                self.assertIn(scenario, specification)
+
+    def test_fresh_start_e2e_uses_current_solo_objective_status(self) -> None:
+        source = START_E2E.read_text(encoding="utf-8")
+        match = re.search(
+            r"fn fresh_start_handoff_initializes_and_resumes_solo_profile\(\).*?\n}\n",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match, "fresh Start Forge journey test is missing")
+        journey = match.group(0)
+        self.assertIn('"missing_objective"', journey)
+        self.assertNotIn('"missing_human_intent"', journey)
 
 
 if __name__ == "__main__":

@@ -365,6 +365,23 @@ implementation_decisions:
       During the alpha, the human explicitly invokes the start skill once in
       each new chat. Automatic host activation is not required.
     repeated_invocation: "idempotent resume; never a new authority epoch by itself"
+    guided_orientation:
+      language_rule: >-
+        Keep explanatory prose in the language already used by the human. Exact
+        commands and identifiers may retain their source spelling, but the agent
+        does not alternate languages in the surrounding explanation.
+      explanation_rule: >-
+        Technical details remain available and are paired with their practical
+        meaning so that a non-technical project owner can understand project
+        health, the next step, and whether human input is needed.
+      continuation_rule: >-
+        Orientation is not a stopping point. When a safe highest-ranked action is
+        feasible within agent autonomy, the agent performs and verifies it in the
+        same turn rather than merely announcing future work.
+      question_rule: >-
+        Ask exactly one concise question only for a genuine product choice,
+        material trade-off, material risk acceptance, or irreversible/external
+        effect; otherwise continue without asking.
   conversation_derived_intent:
     reuse: >-
       Extend the existing packet-bound local authorization seam rather than
@@ -555,6 +572,12 @@ testing_decisions:
         preserving free agent iteration.
   required_scenarios:
     - "fresh chat activation and healthy resume"
+    - "greenfield orientation summarizes seed material and asks one outcome question"
+    - "existing unmanaged project is explained before Forge setup repair"
+    - "existing managed project resumes with recent work, plan, gap, and next step"
+    - "state-loss or integrity failure preserves prior records and explains one safe repair path"
+    - "runtime or host-bridge failure still provides read-only project orientation"
+    - "human-facing prose stays in the human's language and pairs technical facts with practical meaning"
     - "no second start across task and phase changes in one chat"
     - "idempotent repeated start"
     - "unambiguous acceptance from ordinary chat"

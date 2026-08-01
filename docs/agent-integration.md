@@ -13,17 +13,21 @@ preserving the distinction between advice, evidence, and admitted authority.
 5. Check the durable release and perform only an exact returned upgrade.
 6. Call default `workflow resume` without caller-selected phase, policy, bundle,
    or readiness target.
-7. If Forge returns a missing-objective packet, materialize the unambiguous
-   chat outcome through `workflow intent accept-cooperative`. If one irreducible
-   choice remains, send the closed `decision_required` input and ask the
-   returned question; that branch performs no Forge state write. Never ask the
-   human to design the method.
-8. Perform the highest-ranked feasible action.
-9. Collect honest evidence from the named tool/runtime or bounded repository
-   inspection without upgrading same-owner evidence into an independent claim.
-10. Record observations through the typed cooperative surface and call default
+7. Inspect repository evidence and orient the human in the language already used
+   in the conversation. Pair useful technical facts with their practical meaning;
+   do not alternate languages or dump raw Forge status as the explanation.
+8. If Forge returns a missing-objective packet, materialize the unambiguous chat
+   outcome through `workflow intent accept-cooperative`. If one irreducible choice
+   remains, send the closed `decision_required` input and ask the returned
+   question; that branch performs no Forge state write. Never ask the human to
+   design the method.
+9. Perform the highest-ranked feasible action in the same turn instead of ending
+   after orientation.
+10. Collect honest evidence from the named tool/runtime or bounded repository
+    inspection without upgrading same-owner evidence into an independent claim.
+11. Record observations through the typed cooperative surface and call default
     `workflow resume` again, even if the receipt embeds a next projection.
-11. Stop and explain genuine capability gaps. Enterprise broker/signature setup
+12. Stop and explain genuine capability gaps. Enterprise broker/signature setup
     is not a `solo_cooperative` capability gap.
 
 The canonical bootstrap procedure is

@@ -355,6 +355,33 @@ fn state_one_no_link_bootstraps_the_project_in_one_command() {
 
 #[test]
 fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
+    let skill_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skill/start-forge/SKILL.md");
+    let skill = fs::read_to_string(&skill_path).expect("read canonical Start Forge skill");
+    for journey in [
+        "greenfield",
+        "brownfield_unmanaged",
+        "brownfield_managed",
+        "state_loss_or_integrity_failure",
+        "runtime_or_bridge_unavailable",
+        "human_decision_required",
+        "autonomous_action_available",
+    ] {
+        assert!(
+            skill.contains(&format!("| `{journey}` |")),
+            "canonical skill must cover guided activation journey {journey}"
+        );
+    }
+    for behavior in [
+        "keep all explanatory prose consistently in that language",
+        "Technical detail is welcome, but it must never be the whole explanation",
+        "Orientation is a checkpoint, not a stopping point",
+        "Ask exactly one concise question",
+    ] {
+        assert!(
+            skill.contains(behavior),
+            "canonical skill must preserve guided behavior: {behavior}"
+        );
+    }
     let parent = FreshParent::new("solo-workflow-handoff");
     let app = parent.path.join("app");
     fs::create_dir_all(&app).expect("create app");
@@ -406,11 +433,13 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     assert_eq!(next["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(
         next["data"]["durable_assurance"]["status"],
-        "missing_human_intent"
+        "missing_objective"
     );
-    assert!(next["data"]["authorization"]["action_packets"]
-        .as_array()
-        .is_some_and(Vec::is_empty));
+    assert_eq!(
+        next["data"]["authorization"]["action_packets"][0]["required_authority"]
+            ["approval_boundary"],
+        "cooperative_same_owner"
+    );
     assert!(next["data"]["authorization"]["setup_gaps"]
         .as_array()
         .is_some_and(Vec::is_empty));

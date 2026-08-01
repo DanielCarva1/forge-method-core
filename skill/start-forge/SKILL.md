@@ -47,6 +47,20 @@ Classify the entry without asking the human to choose a mode:
 - `brownfield_managed`: meaningful project evidence and healthy Forge
   continuity both exist.
 
+These labels are internal routing terms. Do not show them unless the human asks
+for diagnostics. Follow the language already used by the human in the current
+conversation and keep all explanatory prose consistently in that language. Do
+not alternate languages inside the explanation. Literal commands, paths, source
+identifiers, and product names may retain their exact spelling, but introduce or
+explain them in the human's language when they matter.
+
+Technical detail is welcome, but it must never be the whole explanation. Lead
+with the practical meaning for the project owner, then pair any relevant
+technical fact with that meaning. Do not make a non-technical reader decode raw
+status names, policy ids, release ids, registry values, ledger terminology, or
+Forge directory layout to understand whether the project is healthy and what
+happens next.
+
 For either brownfield mode, activation is not complete until the agent can
 explain, in plain language:
 
@@ -58,19 +72,44 @@ explain, in plain language:
 6. **The next best step**
 7. **Why this step is recommended**
 
+These are required information, not seven required headings. In the normal
+healthy case, synthesize them into a short natural orientation: what the project
+is and its current condition; recent and planned work; what remains; the next
+step and why; and whether the human is needed. Expand only when risk, failure,
+ambiguity, or a diagnostic request makes more detail useful.
+
 Use authoritative evidence in this order: current repository and runtime truth,
 durable Forge state, project documentation, Git history, then chat context. Mark
 inferences and absence of evidence explicitly. Do not ask the human to
 reconstruct information the agent can discover. If evidence is insufficient,
-continue inspecting the repository; if the missing fact is genuinely a product
-choice, explain the context, options, consequences, and recommendation before
-asking one concise question.
+continue inspecting the repository.
+
+Orientation is a checkpoint, not a stopping point. When the highest-ranked safe
+action is feasible under the active autonomy boundary, perform and verify it in
+the same turn instead of merely announcing that it should happen later. Ask the
+human only when the missing fact is a genuine product choice, material trade-off,
+material risk acceptance, or irreversible/external effect. Before asking,
+explain the context, options, consequences, and recommendation, then ask exactly
+one concise question. If no human input is needed, say so plainly and continue.
 
 For greenfield, say plainly that no established project was found, summarize
 any seed material that does exist, and then ask what outcome the human wants to
 create. A Forge setup or bridge failure does not waive orientation: provide the
 best read-only project explanation available, label Forge continuity as
-unavailable, and separate the setup repair from the recommended project step.
+unavailable in ordinary language, and separate the setup repair from the
+recommended project step.
+
+<!-- guided-activation-journeys:start -->
+| journey | evidence condition | user-facing result | interaction |
+|---|---|---|---|
+| `greenfield` | No meaningful implementation, documentation, or history. | Explain that no established project was found and summarize any seed material. | Ask one concise outcome question. |
+| `brownfield_unmanaged` | Meaningful project evidence exists, but healthy Forge continuity does not. | Explain the project from repository evidence and state plainly that Forge cannot yet resume it. | Continue read-only orientation; ask only for a genuine product decision. |
+| `brownfield_managed` | Meaningful project evidence and healthy Forge continuity both exist. | Explain current state, recent work, plan, gap, and recommended next step without exposing internal routing labels. | Continue with the highest-ranked feasible safe action. |
+| `state_loss_or_integrity_failure` | A Project Link exists but its authority is missing, incomplete, inaccessible, or substituted. | Explain that prior Forge records cannot be trusted or reached and that nothing will be recreated over them. | Perform only published read-only inspection; otherwise stop safely with one repair path. |
+| `runtime_or_bridge_unavailable` | The executable, exact root, or required host bridge cannot be proven. | Still orient from repository evidence and explain the setup problem separately. | Do not initialize or switch roots; provide one concrete repair step. |
+| `human_decision_required` | The next safe step requires a product choice, material trade-off, material risk acceptance, or irreversible/external effect. | Explain context, options, consequences, and the recommended option in the human's language. | Ask exactly one concise question and wait. |
+| `autonomous_action_available` | A safe, reversible, highest-ranked action is feasible without human authority. | Briefly explain what will be done and why, then report the verified result. | Execute in the same turn; do not stop after orientation. |
+<!-- guided-activation-journeys:end -->
 <!-- guided-activation-contract:end -->
 
 ## Workflow
@@ -482,13 +521,15 @@ proves integrity, not native host authenticity.
      before authority-bearing work and tell the user what capability is absent.
 
 6. **Keep output useful to the project owner.** Lead with the guided activation
-   explanation above, not Forge internals. Include a short **Forge status** after
-   the project orientation: active, unavailable, or blocked, plus the material
-   consequence. Show executable argv, release identifiers, bootstrap states,
-   Project Link paths, and sidecar paths only when the user asks for diagnostics
-   or when one of those details is necessary to repair a failure. Do not expose
-   private attestation material, present a legacy recommendation as authority,
-   or ask the human to select a workflow or release.
+   explanation above, not Forge internals. Keep explanatory prose in the human's
+   language and pair useful technical facts with their practical meaning. Include
+   a short **Forge status** after the project orientation: active, unavailable,
+   or blocked, plus the material consequence. Show executable argv, release
+   identifiers, bootstrap states, Project Link paths, and sidecar paths only when
+   the human asks for diagnostics or when one of those details is necessary to
+   repair a failure. Do not expose private attestation material, present a legacy
+   recommendation as authority, ask the human to select a workflow or release,
+   or end a healthy activation before a feasible autonomous next action is done.
 
 ## Safety checks
 
