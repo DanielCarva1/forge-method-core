@@ -11,11 +11,14 @@ use crate::retained_dir::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::{File, Metadata};
 use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::thread;
 
 const EXCLUDED_ROOT_NAMES: &[&str] = &[".git", ".forge-method", "target", "node_modules"];
 const WORKFLOW_LOCAL_ROOT_NAME: &str = ".local";
@@ -23,11 +26,15 @@ const DIRECTORY_DIGEST_MARKER: &str = "directory";
 const MAX_RETAINED_PROJECT_DEPTH: usize = 256;
 const PROJECT_CAPABILITY_NONCE_BYTES: usize = 32;
 const RETAINED_PROJECT_ANCHOR_SCHEMA_VERSION: &str = "forge-retained-project-anchors-v1";
+const MAX_GIT_IGNORED_PATH_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+const MAX_GIT_DIAGNOSTIC_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy)]
 enum RetainedProjectCapturePolicy {
     Generic,
+    ProjectSnapshot,
     WorkflowLocalRootExcluded,
+    StoreOwnedProjectSnapshot,
 }
 
 impl RetainedProjectCapturePolicy {
@@ -35,6 +42,15 @@ impl RetainedProjectCapturePolicy {
         !EXCLUDED_ROOT_NAMES.contains(&name)
             && !(matches!(self, Self::WorkflowLocalRootExcluded)
                 && name == WORKFLOW_LOCAL_ROOT_NAME)
+    }
+
+    const fn honors_git_ignored_paths(self) -> bool {
+        matches!(
+            self,
+            Self::ProjectSnapshot
+                | Self::WorkflowLocalRootExcluded
+                | Self::StoreOwnedProjectSnapshot
+        )
     }
 }
 
@@ -69,6 +85,7 @@ pub struct RetainedProjectTree {
     regular_file_snapshot_digest: String,
     capture_policy: RetainedProjectCapturePolicy,
     file_alias_policy: RetainedFileAliasPolicy,
+    git_ignored_paths: BTreeSet<String>,
 }
 
 /// Read-only regular-file observation derived from one retained tree.
@@ -425,6 +442,25 @@ impl RetainedProjectTree {
             RetainedFileAliasPolicy::SingleLink,
         )
     }
+    /// Capture a strict Project Snapshot with Git-aware content selection.
+    ///
+    /// Existing ignored and untracked paths are excluded before no-follow traversal;
+    /// tracked paths and relevant links remain governed. This is the shared selection
+    /// used by promotion, workflow governance, and Domain Pack lifecycle capture.
+    pub fn capture_project_snapshot(
+        project_root: impl AsRef<Path>,
+        maximum_entries: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, RetainedProjectTreeError> {
+        Self::capture_with_file_alias_policy(
+            project_root.as_ref(),
+            maximum_entries,
+            None,
+            maximum_bytes,
+            RetainedProjectCapturePolicy::ProjectSnapshot,
+            RetainedFileAliasPolicy::SingleLink,
+        )
+    }
 
     /// Capture a read-only project observation that may already have file aliases.
     ///
@@ -448,13 +484,14 @@ impl RetainedProjectTree {
         )
     }
 
-    /// Capture a workflow-governance project observation while excluding an
-    /// already-existing top-level `.local` directory from retained content.
+    /// Capture a workflow-governance Project Snapshot.
     ///
-    /// This policy is intentionally narrower than the generic Store projection:
-    /// nested `.local` directories remain governed. Creating or removing the
-    /// top-level entry after capture still changes the retained root directory
-    /// metadata and therefore fails revalidation.
+    /// In a Git repository, existing ignored and untracked paths are classified
+    /// before no-follow traversal and excluded. A tracked path is never excluded,
+    /// even when an ignore pattern matches it. Without a root `.git` control entry,
+    /// capture remains conservative and governs the complete accepted tree. The
+    /// already-existing top-level `.local` namespace is also excluded; nested
+    /// `.local` directories remain governed.
     pub fn capture_workflow_snapshot_allowing_stable_file_aliases(
         project_root: impl AsRef<Path>,
         maximum_entries: usize,
@@ -471,13 +508,14 @@ impl RetainedProjectTree {
         )
     }
 
-    /// Capture a lifecycle project that may already carry Store-owned lifetime
-    /// anchor links from an earlier committed completion.
+    /// Capture a Domain Pack Project Snapshot that may already carry Store-owned
+    /// lifetime anchor links from an earlier committed completion.
     ///
-    /// This constructor does not itself accept those links as authority. The
-    /// lifecycle reader must immediately cross-bind the returned exact handles to
-    /// the independently selected persisted project anchor set. Strict callers
-    /// should continue to use [`Self::capture`].
+    /// Git-aware selection is identical to the workflow snapshot: ignored untracked
+    /// paths are excluded before traversal, while tracked paths remain governed.
+    /// This constructor does not itself accept existing anchor links as authority;
+    /// the lifecycle reader must cross-bind the returned exact handles to the
+    /// independently selected persisted project anchor set.
     pub fn capture_allowing_store_owned_file_anchors(
         project_root: impl AsRef<Path>,
         maximum_entries: usize,
@@ -488,7 +526,7 @@ impl RetainedProjectTree {
             maximum_entries,
             None,
             maximum_bytes,
-            RetainedProjectCapturePolicy::Generic,
+            RetainedProjectCapturePolicy::StoreOwnedProjectSnapshot,
             RetainedFileAliasPolicy::StoreOwnedAnchorMutation,
         )
     }
@@ -533,6 +571,11 @@ impl RetainedProjectTree {
             .map_err(|error| io_error(&display_root, error))?;
         let root_metadata = RetainedMetadata::capture(&root_handle, &display_root)?;
         validate_directory_metadata(&root_metadata, &display_root)?;
+        let git_ignored_paths = if capture_policy.honors_git_ignored_paths() {
+            discover_git_ignored_paths(&display_root)?
+        } else {
+            BTreeSet::new()
+        };
         let root_capability_nonce = project_capability_nonce(&display_root)?;
         let mut tree = Self {
             display_root,
@@ -551,6 +594,7 @@ impl RetainedProjectTree {
             regular_file_snapshot_digest: String::new(),
             capture_policy,
             file_alias_policy,
+            git_ignored_paths,
         };
         let mut digest_entries = Vec::new();
         let mut accepted_entries = 0usize;
@@ -1263,6 +1307,8 @@ impl RetainedProjectTree {
         let initial = included_entries(
             self.capture_policy,
             directory_index == 0,
+            &parent_relative,
+            &self.git_ignored_paths,
             read_directory_entries(&parent_handle, &parent_display)?,
         );
         let mut retained_entries = Vec::with_capacity(initial.len());
@@ -1384,6 +1430,8 @@ impl RetainedProjectTree {
         let after = included_entries(
             self.capture_policy,
             directory_index == 0,
+            &parent_relative,
+            &self.git_ignored_paths,
             read_directory_entries(&parent_handle, &parent_display)?,
         );
         if after != initial {
@@ -1464,6 +1512,8 @@ impl RetainedProjectTree {
             let actual = included_entries(
                 self.capture_policy,
                 directory_index == 0,
+                &directory.relative_path,
+                &self.git_ignored_paths,
                 read_directory_entries(&directory.handle, &display_path)?,
             );
             let expected = directory
@@ -1722,21 +1772,207 @@ fn read_directory_entries(
     Ok(entries)
 }
 
+fn discover_git_ignored_paths(root: &Path) -> Result<BTreeSet<String>, RetainedProjectTreeError> {
+    let git_entry = root.join(".git");
+    let metadata = match std::fs::symlink_metadata(&git_entry) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) => return Err(io_error(&git_entry, error)),
+    };
+    if metadata.file_type().is_symlink() || !(metadata.is_dir() || metadata.is_file()) {
+        return Err(RetainedProjectTreeError::Identity {
+            path: git_entry,
+            reason: "Git control entry must be a regular file or directory, never a link or special object"
+                .to_owned(),
+        });
+    }
+
+    let null_device = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let mut command = Command::new("git");
+    command
+        .arg("--no-optional-locks")
+        .arg("--no-replace-objects")
+        .arg("--no-pager")
+        .args(["-c", "core.fsmonitor=false"])
+        .args(["-c", "core.untrackedCache=false"])
+        .args(["-c", "submodule.recurse=false"])
+        .arg("-c")
+        .arg(format!("core.excludesFile={null_device}"))
+        .args([
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "--no-empty-directory",
+            "-z",
+        ])
+        .current_dir(root)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", null_device)
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .env("GIT_PAGER", "")
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+        .env_remove("GIT_NAMESPACE")
+        .env_remove("GIT_PREFIX")
+        .env_remove("GIT_CONFIG")
+        .env_remove("GIT_CONFIG_COUNT")
+        .env_remove("GIT_CONFIG_PARAMETERS")
+        .stdin(Stdio::null());
+    let output = run_bounded_git_command(&mut command, root)?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: format!(
+                "Git ignored-path discovery failed with status {:?}: {}",
+                output.status.code(),
+                stderr.trim()
+            ),
+        });
+    }
+    if output.stdout.len() > MAX_GIT_IGNORED_PATH_OUTPUT_BYTES {
+        return Err(RetainedProjectTreeError::ResourceLimit {
+            resource: "Git ignored-path output bytes",
+            maximum: MAX_GIT_IGNORED_PATH_OUTPUT_BYTES as u64,
+        });
+    }
+
+    let mut paths = BTreeSet::new();
+    for raw in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|raw| !raw.is_empty())
+    {
+        let value =
+            std::str::from_utf8(raw).map_err(|error| RetainedProjectTreeError::InvalidRoot {
+                path: root.to_path_buf(),
+                reason: format!("Git ignored path is not UTF-8: {error}"),
+            })?;
+        let value = value.trim_end_matches('/');
+        let path = Path::new(value);
+        if value.is_empty()
+            || path.is_absolute()
+            || !path
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)))
+        {
+            return Err(RetainedProjectTreeError::InvalidRoot {
+                path: root.join(path),
+                reason: "Git returned a non-normalized ignored project path".to_owned(),
+            });
+        }
+        paths.insert(value.to_owned());
+    }
+    Ok(paths)
+}
+fn run_bounded_git_command(
+    command: &mut Command,
+    root: &Path,
+) -> Result<std::process::Output, RetainedProjectTreeError> {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: format!("Git ignored-path discovery could not start: {error}"),
+        })?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: "Git ignored-path discovery has no stdout pipe".to_owned(),
+        })?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: "Git ignored-path discovery has no stderr pipe".to_owned(),
+        })?;
+    let stdout_reader =
+        thread::spawn(move || read_bounded_stream(stdout, MAX_GIT_IGNORED_PATH_OUTPUT_BYTES));
+    let stderr_reader =
+        thread::spawn(move || read_bounded_stream(stderr, MAX_GIT_DIAGNOSTIC_OUTPUT_BYTES));
+    let status = child.wait().map_err(|error| RetainedProjectTreeError::Io {
+        path: root.to_path_buf(),
+        reason: format!("Git ignored-path discovery wait failed: {error}"),
+    })?;
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: "Git ignored-path stdout reader panicked".to_owned(),
+        })?
+        .map_err(|error| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: format!("Git ignored-path stdout read failed: {error}"),
+        })?;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: "Git ignored-path stderr reader panicked".to_owned(),
+        })?
+        .map_err(|error| RetainedProjectTreeError::Io {
+            path: root.to_path_buf(),
+            reason: format!("Git ignored-path stderr read failed: {error}"),
+        })?;
+    if stdout.len() > MAX_GIT_IGNORED_PATH_OUTPUT_BYTES {
+        return Err(RetainedProjectTreeError::ResourceLimit {
+            resource: "Git ignored-path output bytes",
+            maximum: MAX_GIT_IGNORED_PATH_OUTPUT_BYTES as u64,
+        });
+    }
+    if stderr.len() > MAX_GIT_DIAGNOSTIC_OUTPUT_BYTES {
+        return Err(RetainedProjectTreeError::ResourceLimit {
+            resource: "Git diagnostic output bytes",
+            maximum: MAX_GIT_DIAGNOSTIC_OUTPUT_BYTES as u64,
+        });
+    }
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn read_bounded_stream(mut stream: impl io::Read, maximum_bytes: usize) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    stream
+        .by_ref()
+        .take(maximum_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
 fn included_entries(
     capture_policy: RetainedProjectCapturePolicy,
     root: bool,
+    parent_relative: &str,
+    git_ignored_paths: &BTreeSet<String>,
     entries: Vec<DirectoryEntry>,
 ) -> Vec<DirectoryEntry> {
-    if !root {
-        return entries;
-    }
     entries
         .into_iter()
         .filter(|entry| {
-            entry
-                .name
-                .to_str()
-                .is_none_or(|name| capture_policy.includes_root_name(name))
+            let Some(name) = entry.name.to_str() else {
+                return true;
+            };
+            if root && !capture_policy.includes_root_name(name) {
+                return false;
+            }
+            !git_ignored_paths.contains(&join_relative(parent_relative, name))
         })
         .collect()
 }
@@ -2588,6 +2824,21 @@ mod tests {
             std::process::id()
         ))
     }
+    #[cfg(unix)]
+    fn git(root: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .output()
+            .expect("git command starts");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     #[test]
     fn regular_file_snapshot_digest_preserves_file_only_contract_and_exact_limit() {
@@ -2683,6 +2934,97 @@ mod tests {
         drop(recaptured);
         drop(retained);
         fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn workflow_capture_excludes_git_ignored_symlinks_but_never_tracked_files() {
+        use std::os::unix::fs::symlink;
+
+        let root = project_root("workflow-git-ignored-symlink");
+        let cache_target = project_root("workflow-git-ignored-cache-target");
+        fs::create_dir_all(root.join("fuzz")).unwrap();
+        fs::create_dir_all(root.join("generated")).unwrap();
+        fs::create_dir_all(&cache_target).unwrap();
+        fs::write(root.join(".gitignore"), b"fuzz/target\ngenerated/\n").unwrap();
+        fs::write(root.join("README.md"), b"governed\n").unwrap();
+        fs::write(root.join("generated/keep.txt"), b"tracked despite ignore\n").unwrap();
+        fs::write(root.join("generated/cache.bin"), b"ignored cache\n").unwrap();
+        symlink(&cache_target, root.join("fuzz/target")).unwrap();
+
+        git(&root, &["init", "-q", "-b", "master"]);
+        git(&root, &["add", ".gitignore", "README.md"]);
+        git(&root, &["add", "-f", "generated/keep.txt"]);
+        assert!(
+            RetainedProjectTree::capture(&root, 32, 4096).is_err(),
+            "generic retained trees must not silently adopt project-snapshot exclusions"
+        );
+
+        let retained = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+            &root, 32, 32, 4096,
+        )
+        .expect("ignored cache symlink must be classified before no-follow traversal");
+        assert_eq!(
+            retained
+                .exact_regular_file_bytes("generated/keep.txt")
+                .unwrap()
+                .as_deref(),
+            Some(b"tracked despite ignore\n".as_slice()),
+            "Git-tracked content must remain governed even when an ignore rule matches"
+        );
+        assert_eq!(
+            retained
+                .exact_regular_file_bytes("generated/cache.bin")
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            retained.exact_regular_file_bytes("fuzz/target").unwrap(),
+            None
+        );
+
+        let workflow_digest = retained.regular_file_snapshot_digest().to_owned();
+        fs::write(cache_target.join("incremental.bin"), b"volatile\n").unwrap();
+        fs::write(root.join("generated/cache.bin"), b"updated ignored cache\n").unwrap();
+        retained.revalidate().expect(
+            "changes to ignored files or behind ignored cache symlinks must not stale the snapshot",
+        );
+        drop(retained);
+        let recaptured =
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 32, 32, 4096,
+            )
+            .unwrap();
+        assert_eq!(recaptured.regular_file_snapshot_digest(), workflow_digest);
+        drop(recaptured);
+        let domain_pack_snapshot =
+            RetainedProjectTree::capture_allowing_store_owned_file_anchors(&root, 32, 4096)
+                .expect("Domain Pack project snapshots must share Git-aware selection");
+        assert_eq!(
+            domain_pack_snapshot
+                .exact_regular_file_bytes("generated/keep.txt")
+                .unwrap()
+                .as_deref(),
+            Some(b"tracked despite ignore\n".as_slice())
+        );
+        assert_eq!(
+            domain_pack_snapshot
+                .exact_regular_file_bytes("generated/cache.bin")
+                .unwrap(),
+            None
+        );
+        drop(domain_pack_snapshot);
+
+        symlink(&cache_target, root.join("fuzz/relevant-link")).unwrap();
+        assert!(
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 32, 32, 4096
+            )
+            .is_err(),
+            "a relevant non-ignored symlink must continue to fail closed"
+        );
+
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(cache_target).unwrap();
     }
 
     #[test]

@@ -418,7 +418,7 @@ fn derive_governed_promotion(
             &git_change_set.observation_digest,
         ),
     )?;
-    let source_tree = RetainedProjectTree::capture(
+    let source_tree = RetainedProjectTree::capture_project_snapshot(
         &source_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
         MAX_PROMOTION_SNAPSHOT_BYTES,
@@ -1707,7 +1707,7 @@ fn prepare_recovery_from_stored_preview(
             .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
     let source_root = canonical_directory(&declared_source, "recovery isolation worktree")
         .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
-    let source_tree = RetainedProjectTree::capture(
+    let source_tree = RetainedProjectTree::capture_project_snapshot(
         &source_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
         MAX_PROMOTION_SNAPSHOT_BYTES,
@@ -3053,7 +3053,7 @@ fn verify_committed_receipt_readback(
     binding: &WorkflowGovernanceProjectBinding,
     receipt: &GovernedPromotionReceipt,
 ) -> Result<(), PromotionApplyError> {
-    let tree = RetainedProjectTree::capture(
+    let tree = RetainedProjectTree::capture_project_snapshot(
         &binding.project_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
         MAX_PROMOTION_SNAPSHOT_BYTES,
@@ -3668,7 +3668,7 @@ fn reconstruct_legacy_v1_previews(
     now: u64,
     selections: &[IsolationSelection],
 ) -> Result<BTreeMap<String, GovernedPromotionPreview>, PromotionApplyError> {
-    let destination = RetainedProjectTree::capture(
+    let destination = RetainedProjectTree::capture_project_snapshot(
         &binding.project_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
         MAX_PROMOTION_SNAPSHOT_BYTES,
@@ -3902,7 +3902,7 @@ fn validate_recoverable_promotion(
 ) -> Result<(), PromotionApplyError> {
     let isolation_id = preview.source.isolation_id.clone();
     validate_intent_request(intent, &isolation_id, expected_preview_digest)?;
-    let destination_tree = RetainedProjectTree::capture(
+    let destination_tree = RetainedProjectTree::capture_project_snapshot(
         &binding.project_root,
         MAX_PROMOTION_SNAPSHOT_ENTRIES,
         MAX_PROMOTION_SNAPSHOT_BYTES,

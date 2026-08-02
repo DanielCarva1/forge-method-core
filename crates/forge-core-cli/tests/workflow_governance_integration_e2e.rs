@@ -2995,6 +2995,38 @@ fn signed_cli_flow_completes_first_policy_and_resumes_capability_gap() {
     assert_full_resume_preserves_next(&resumed_gap, &capability_gap, "strict_external");
 }
 
+#[cfg(unix)]
+#[test]
+fn workflow_init_ignores_gitignored_nested_build_cache_symlink() {
+    let consumer = Consumer::new_with_prefix("forge-workflow-ignored-cache-e2e");
+    fs::create_dir_all(consumer.app.join("fuzz")).expect("fuzz directory");
+    fs::write(consumer.app.join("fuzz/.gitignore"), "target\n").expect("nested cache ignore rule");
+
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&consumer.app)
+            .args(args)
+            .output()
+            .expect("run Git fixture command");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed\nstdout={}\nstderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    git(&["init", "-b", "master"]);
+    git(&["add", "README.md", ".forge-method.yaml", "fuzz/.gitignore"]);
+
+    let external_cache = consumer.parent.join("external-fuzz-target");
+    fs::create_dir(&external_cache).expect("external cache directory");
+    std::os::unix::fs::symlink(&external_cache, consumer.app.join("fuzz/target"))
+        .expect("ignored nested cache symlink");
+    git(&["check-ignore", "--quiet", "fuzz/target"]);
+
+    assert_ok(&consumer.run(&["init"]));
+}
 #[test]
 fn project_snapshot_digest_excludes_sidecar_ledger_but_tracks_project_changes() {
     let consumer = Consumer::new();
@@ -3167,6 +3199,14 @@ fn promotion_preview_is_read_only_and_binds_a_real_linked_worktree_diff() {
         "must remain outside promotion\n",
     )
     .expect("write ignored generated artifact");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        let cache = consumer.parent.join("promotion-cache");
+        fs::create_dir_all(&cache).expect("create external promotion cache");
+        symlink(cache, worktree.join("generated/cache-link"))
+            .expect("create ignored promotion cache symlink");
+    }
     fs::write(worktree.join("untracked.tmp"), "unclaimed untracked file\n")
         .expect("write unclaimed untracked file");
     fs::write(
