@@ -314,6 +314,7 @@ struct RetainedTreeFile {
     relative_path: String,
     parent: usize,
     name_in_parent: OsString,
+    content_digest: String,
     exact_bytes: Vec<u8>,
 }
 
@@ -611,16 +612,11 @@ impl RetainedProjectTree {
             &mut digest_entries,
         )?;
         tree.validate_ancestry()?;
-        tree.validate_namespace_pass()?;
+        tree.validate_namespace_pass(tree.file_alias_policy)?;
         let mut regular_file_entries = tree
             .files
             .iter()
-            .map(|file| {
-                (
-                    file.relative_path.clone(),
-                    crate::sha256_content_hash(&file.exact_bytes),
-                )
-            })
+            .map(|file| (file.relative_path.clone(), file.content_digest.clone()))
             .collect::<Vec<_>>();
         regular_file_entries.sort();
         tree.regular_file_snapshot_digest = digest_entries_digest(&regular_file_entries)?;
@@ -655,7 +651,7 @@ impl RetainedProjectTree {
             .iter()
             .map(|file| RetainedProjectRegularFileObservation {
                 relative_path: file.relative_path.clone(),
-                content_digest: crate::sha256_content_hash(&file.exact_bytes),
+                content_digest: file.content_digest.clone(),
                 byte_length: file.metadata.metadata.len(),
                 metadata_fingerprint: promotion_metadata_fingerprint(&file.metadata),
             })
@@ -863,15 +859,13 @@ impl RetainedProjectTree {
     }
 
     fn refresh_snapshot_digests(&mut self) -> Result<(), RetainedProjectTreeError> {
+        for file in &mut self.files {
+            file.content_digest = crate::sha256_content_hash(&file.exact_bytes);
+        }
         let mut regular = self
             .files
             .iter()
-            .map(|file| {
-                (
-                    file.relative_path.clone(),
-                    crate::sha256_content_hash(&file.exact_bytes),
-                )
-            })
+            .map(|file| (file.relative_path.clone(), file.content_digest.clone()))
             .collect::<Vec<_>>();
         regular.sort();
         self.regular_file_snapshot_digest = digest_entries_digest(&regular)?;
@@ -979,7 +973,7 @@ impl RetainedProjectTree {
                     relative_path: file.relative_path.clone(),
                     object_kind: "file".to_owned(),
                     object_capability_nonce: file.capability_nonce.clone(),
-                    content_digest: crate::sha256_content_hash(&file.exact_bytes),
+                    content_digest: file.content_digest.clone(),
                     byte_length: u64::try_from(file.exact_bytes.len()).unwrap_or(u64::MAX),
                 })
             }))
@@ -1194,10 +1188,17 @@ impl RetainedProjectTree {
     /// extra accepted entries, byte changes, byte-identical replacement, metadata
     /// drift, links, special objects, or descriptor-relative I/O failure.
     pub fn revalidate(&self) -> Result<(), RetainedProjectTreeError> {
+        self.revalidate_with_file_alias_policy(self.file_alias_policy)
+    }
+
+    fn revalidate_with_file_alias_policy(
+        &self,
+        file_alias_policy: RetainedFileAliasPolicy,
+    ) -> Result<(), RetainedProjectTreeError> {
         self.validate_ancestry()?;
-        self.validate_namespace_pass()?;
-        let mut digest_entries = self.revalidate_files()?;
-        self.validate_namespace_pass()?;
+        self.validate_namespace_pass(file_alias_policy)?;
+        let mut digest_entries = self.revalidate_files(file_alias_policy)?;
+        self.validate_namespace_pass(file_alias_policy)?;
         self.validate_ancestry()?;
         digest_entries.sort();
         let actual_regular_file_digest = digest_entries_digest(&digest_entries)?;
@@ -1230,19 +1231,7 @@ impl RetainedProjectTree {
     pub fn revalidate_without_store_owned_file_anchors(
         &self,
     ) -> Result<(), RetainedProjectTreeError> {
-        self.revalidate()?;
-        for file in &self.files {
-            let display_path = self
-                .display_root
-                .join(relative_path_to_path(&file.relative_path));
-            let metadata = RetainedMetadata::capture(&file.handle, &display_path)?;
-            validate_file_metadata(
-                &metadata,
-                &display_path,
-                RetainedFileAliasPolicy::SingleLink,
-            )?;
-        }
-        self.revalidate()
+        self.revalidate_with_file_alias_policy(RetainedFileAliasPolicy::SingleLink)
     }
 
     #[must_use]
@@ -1400,10 +1389,8 @@ impl RetainedProjectTree {
                     ));
                 }
                 let file_index = self.files.len();
-                digest_entries.push((
-                    relative_path.clone(),
-                    crate::sha256_content_hash(&exact_bytes),
-                ));
+                let content_digest = crate::sha256_content_hash(&exact_bytes);
+                digest_entries.push((relative_path.clone(), content_digest.clone()));
                 self.files.push(RetainedTreeFile {
                     handle,
                     metadata,
@@ -1411,6 +1398,7 @@ impl RetainedProjectTree {
                     relative_path,
                     parent: directory_index,
                     name_in_parent: entry.name.clone(),
+                    content_digest,
                     exact_bytes,
                 });
                 retained_entries.push(RetainedTreeEntry {
@@ -1491,7 +1479,10 @@ impl RetainedProjectTree {
         Ok(())
     }
 
-    fn validate_namespace_pass(&self) -> Result<(), RetainedProjectTreeError> {
+    fn validate_namespace_pass(
+        &self,
+        file_alias_policy: RetainedFileAliasPolicy,
+    ) -> Result<(), RetainedProjectTreeError> {
         for (directory_index, directory) in self.directories.iter().enumerate() {
             let display_path = self.directory_display_path(directory_index);
             validate_stable_directory(&directory.handle, &directory.metadata, &display_path)?;
@@ -1555,11 +1546,11 @@ impl RetainedProjectTree {
                         }
                     }
                     RetainedTreeEntryKind::File => {
-                        validate_file_metadata(&metadata, &child_display, self.file_alias_policy)?;
+                        validate_file_metadata(&metadata, &child_display, file_alias_policy)?;
                         if !same_stable_file_metadata(
                             &self.files[entry.witness_index].metadata,
                             &metadata,
-                            self.file_alias_policy,
+                            file_alias_policy,
                         ) {
                             return Err(identity_error(
                                 &child_display,
@@ -1573,66 +1564,103 @@ impl RetainedProjectTree {
         Ok(())
     }
 
-    fn revalidate_files(&self) -> Result<Vec<(String, String)>, RetainedProjectTreeError> {
-        let mut digest_entries = Vec::with_capacity(self.files.len());
-        for file in &self.files {
-            let display_path = self
-                .display_root
-                .join(relative_path_to_path(&file.relative_path));
-            validate_stable_file(
-                &file.handle,
-                &file.metadata,
-                &display_path,
-                self.file_alias_policy,
-            )?;
-            let parent = &self.directories[file.parent];
-            let rebound = platform::open_child(&parent.handle, &file.name_in_parent)
-                .map_err(|error| io_error(&display_path, error))?;
-            let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
-            validate_file_metadata(&rebound_metadata, &display_path, self.file_alias_policy)?;
-            if !same_stable_file_metadata(&file.metadata, &rebound_metadata, self.file_alias_policy)
-            {
-                return Err(identity_error(
-                    &display_path,
-                    "file namespace no longer names the retained file",
-                ));
+    fn revalidate_files(
+        &self,
+        file_alias_policy: RetainedFileAliasPolicy,
+    ) -> Result<Vec<(String, String)>, RetainedProjectTreeError> {
+        const MAX_WORKERS: usize = 8;
+        const MIN_FILES_PER_WORKER: usize = 64;
+
+        let available_workers = std::thread::available_parallelism().map_or(1, usize::from);
+        let useful_workers = self.files.len().div_ceil(MIN_FILES_PER_WORKER).max(1);
+        let worker_count = available_workers.min(MAX_WORKERS).min(useful_workers);
+        self.revalidate_files_with_worker_count(file_alias_policy, worker_count)
+    }
+
+    fn revalidate_files_with_worker_count(
+        &self,
+        file_alias_policy: RetainedFileAliasPolicy,
+        worker_count: usize,
+    ) -> Result<Vec<(String, String)>, RetainedProjectTreeError> {
+        let worker_count = worker_count.max(1).min(self.files.len().max(1));
+        let chunk_size = self.files.len().div_ceil(worker_count).max(1);
+        std::thread::scope(|scope| {
+            let workers = self
+                .files
+                .chunks(chunk_size)
+                .map(|chunk| {
+                    scope.spawn(move || {
+                        chunk
+                            .iter()
+                            .map(|file| self.revalidate_file(file, file_alias_policy))
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                })
+                .collect::<Vec<_>>();
+            let mut digest_entries = Vec::with_capacity(self.files.len());
+            for worker in workers {
+                let result = match worker.join() {
+                    Ok(result) => result,
+                    Err(payload) => std::panic::resume_unwind(payload),
+                }?;
+                digest_entries.extend(result);
             }
-            let bytes = read_retained_file(
-                &file.handle,
-                u64::try_from(file.exact_bytes.len()).unwrap_or(u64::MAX),
+            Ok(digest_entries)
+        })
+    }
+
+    fn revalidate_file(
+        &self,
+        file: &RetainedTreeFile,
+        file_alias_policy: RetainedFileAliasPolicy,
+    ) -> Result<(String, String), RetainedProjectTreeError> {
+        let display_path = self
+            .display_root
+            .join(relative_path_to_path(&file.relative_path));
+        validate_stable_file(
+            &file.handle,
+            &file.metadata,
+            &display_path,
+            file_alias_policy,
+        )?;
+        let parent = &self.directories[file.parent];
+        let rebound = platform::open_child(&parent.handle, &file.name_in_parent)
+            .map_err(|error| io_error(&display_path, error))?;
+        let rebound_metadata = RetainedMetadata::capture(&rebound, &display_path)?;
+        validate_file_metadata(&rebound_metadata, &display_path, file_alias_policy)?;
+        if !same_stable_file_metadata(&file.metadata, &rebound_metadata, file_alias_policy) {
+            return Err(identity_error(
                 &display_path,
-            )?;
-            if bytes != file.exact_bytes {
-                return Err(identity_error(
-                    &display_path,
-                    "retained file bytes differ from the admitted snapshot",
-                ));
-            }
-            validate_stable_file(
-                &file.handle,
-                &file.metadata,
-                &display_path,
-                self.file_alias_policy,
-            )?;
-            let rebound_after = platform::open_child(&parent.handle, &file.name_in_parent)
-                .map_err(|error| io_error(&display_path, error))?;
-            let rebound_after_metadata = RetainedMetadata::capture(&rebound_after, &display_path)?;
-            if !same_stable_file_metadata(
-                &file.metadata,
-                &rebound_after_metadata,
-                self.file_alias_policy,
-            ) {
-                return Err(identity_error(
-                    &display_path,
-                    "file namespace changed while rehashing retained bytes",
-                ));
-            }
-            digest_entries.push((
-                file.relative_path.clone(),
-                crate::sha256_content_hash(&bytes),
+                "file namespace no longer names the retained file",
             ));
         }
-        Ok(digest_entries)
+        let bytes = read_retained_file(
+            &file.handle,
+            u64::try_from(file.exact_bytes.len()).unwrap_or(u64::MAX),
+            &display_path,
+        )?;
+        if bytes != file.exact_bytes {
+            return Err(identity_error(
+                &display_path,
+                "retained file bytes differ from the admitted snapshot",
+            ));
+        }
+        validate_stable_file(
+            &file.handle,
+            &file.metadata,
+            &display_path,
+            file_alias_policy,
+        )?;
+        let rebound_after = platform::open_child(&parent.handle, &file.name_in_parent)
+            .map_err(|error| io_error(&display_path, error))?;
+        let rebound_after_metadata = RetainedMetadata::capture(&rebound_after, &display_path)?;
+        if !same_stable_file_metadata(&file.metadata, &rebound_after_metadata, file_alias_policy) {
+            return Err(identity_error(
+                &display_path,
+                "file namespace changed while rehashing retained bytes",
+            ));
+        }
+        Ok((file.relative_path.clone(), file.content_digest.clone()))
     }
 
     fn directory_display_path(&self, index: usize) -> PathBuf {
@@ -2840,6 +2868,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn parallel_file_revalidation_checks_every_retained_handle() {
+        let root = project_root("parallel-file-revalidation");
+        fs::create_dir_all(&root).unwrap();
+        for index in 0..130 {
+            fs::write(root.join(format!("file-{index:03}.txt")), b"before").unwrap();
+        }
+        let retained = RetainedProjectTree::capture(&root, 256, 4096).unwrap();
+        let entries = retained
+            .revalidate_files_with_worker_count(retained.file_alias_policy, 4)
+            .expect("unchanged retained files revalidate in parallel");
+        assert_eq!(entries.len(), 130);
+
+        fs::write(root.join("file-129.txt"), b"after!").unwrap();
+        assert!(retained
+            .revalidate_files_with_worker_count(retained.file_alias_policy, 4)
+            .is_err());
+
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn regular_file_snapshot_digest_preserves_file_only_contract_and_exact_limit() {
         let root = project_root("regular-file-digest");

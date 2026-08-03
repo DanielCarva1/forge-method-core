@@ -798,6 +798,7 @@ pub struct WorkflowGovernanceProjectAdapter {
 /// ancestor namespace. The capability is never serialized or returned to callers.
 pub(super) struct RetainedWorkflowProjectSnapshot {
     tree: RetainedProjectTree,
+    regular_files: BTreeMap<String, (String, u64)>,
 }
 
 impl RetainedWorkflowProjectSnapshot {
@@ -817,11 +818,30 @@ impl RetainedWorkflowProjectSnapshot {
             maximum_files,
             maximum_bytes,
         )?;
-        Ok(Self { tree })
+        let regular_files = tree
+            .regular_file_observations()
+            .into_iter()
+            .map(|observation| {
+                (
+                    observation.relative_path,
+                    (observation.content_digest, observation.byte_length),
+                )
+            })
+            .collect();
+        Ok(Self {
+            tree,
+            regular_files,
+        })
     }
 
     fn digest(&self) -> &str {
         self.tree.regular_file_snapshot_digest()
+    }
+
+    fn regular_file_observation(&self, path: &str) -> Option<(&str, u64)> {
+        self.regular_files
+            .get(path)
+            .map(|(digest, byte_length)| (digest.as_str(), *byte_length))
     }
 
     fn revalidate(&self) -> Result<(), WorkflowGovernanceAdapterError> {
@@ -5932,6 +5952,10 @@ impl WorkflowGovernanceProjectAdapter {
             &action_packets,
         );
         guidance.authorization.action_packets = action_packets;
+        // Every consumer above reads only retained observations. Revalidate once at
+        // the operation boundary so ambient namespace or content drift still fails
+        // closed without multiplying full-tree I/O by each evidence basis path.
+        snapshot.revalidate()?;
         guidance.authorization.objective_management_packet = objective_management_packet;
         Ok((guidance, verified))
     }
@@ -6065,6 +6089,7 @@ impl WorkflowGovernanceProjectAdapter {
         } else {
             None
         };
+        project_snapshot.revalidate()?;
         Ok(phase_advance_allowed_by_assurance(
             governed_assurance.as_ref(),
             phase_done,
@@ -10427,22 +10452,25 @@ fn cooperative_content_addressed_basis_current(
     if basis.is_empty() || basis.len() > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS {
         return Ok(false);
     }
-    let mut total_bytes = 0_usize;
+    // The retained observations contain bytes captured through exact handles. The
+    // enclosing governance operation revalidates the complete retained tree at its
+    // trust boundaries; revalidating once per basis path would turn this bounded
+    // lookup into O(basis paths × project entries) descriptor I/O.
+    let mut total_bytes = 0_u64;
     for reference in basis {
-        let Some(bytes) = snapshot
-            .tree()
-            .exact_regular_file_bytes(&reference.subject_ref)?
+        let Some((content_digest, byte_length)) =
+            snapshot.regular_file_observation(&reference.subject_ref)
         else {
             return Ok(false);
         };
-        if bytes.len() > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES {
+        if byte_length > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES as u64 {
             return Ok(false);
         }
         total_bytes = total_bytes
-            .checked_add(bytes.len())
+            .checked_add(byte_length)
             .ok_or(WorkflowGovernanceAdapterError::CompletionDrift)?;
-        if total_bytes > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_TOTAL_BYTES
-            || sha256_content_hash(&bytes) != reference.subject_digest
+        if total_bytes > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_TOTAL_BYTES as u64
+            || content_digest != reference.subject_digest
         {
             return Ok(false);
         }
@@ -11189,20 +11217,20 @@ fn bounded_cooperative_basis_from_paths(
         return None;
     }
     snapshot.revalidate().ok()?;
-    let mut total_bytes = 0_usize;
+    let mut total_bytes = 0_u64;
     let mut basis = Vec::with_capacity(paths.len());
     for path in paths {
-        let bytes = snapshot.tree().exact_regular_file_bytes(path).ok()??;
-        if bytes.len() > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES {
+        let (content_digest, byte_length) = snapshot.regular_file_observation(path)?;
+        if byte_length > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES as u64 {
             return None;
         }
-        total_bytes = total_bytes.checked_add(bytes.len())?;
-        if total_bytes > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_TOTAL_BYTES {
+        total_bytes = total_bytes.checked_add(byte_length)?;
+        if total_bytes > MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_TOTAL_BYTES as u64 {
             return None;
         }
         basis.push(WorkflowContentAddressedReference {
             subject_ref: path.clone(),
-            subject_digest: sha256_content_hash(&bytes),
+            subject_digest: content_digest.to_owned(),
         });
     }
     snapshot.revalidate().ok()?;
@@ -15430,6 +15458,36 @@ mod tests {
         assert!(resume.contains("observe_existing_workflow_governance_ledger"));
         assert!(resume.contains("require_effective_epoch_current"));
         assert!(resume.contains("snapshot.revalidate()"));
+    }
+
+    #[test]
+    fn cooperative_basis_checks_do_not_revalidate_the_project_per_path() {
+        let source = include_str!("adapter.rs");
+        let current_start = source
+            .find("fn cooperative_content_addressed_basis_current(")
+            .expect("current basis function source");
+        let current_end = source[current_start..]
+            .find("fn cooperative_source_evidence_is_current(")
+            .map(|offset| current_start + offset)
+            .expect("current basis function boundary");
+        let current = &source[current_start..current_end];
+        assert!(!current.contains("exact_regular_file_bytes("));
+        assert!(current.contains("regular_file_observation("));
+
+        let bounded_start = source
+            .find("fn bounded_cooperative_basis_from_paths(")
+            .expect("bounded basis function source");
+        let bounded_end = source[bounded_start..]
+            .find("fn cooperative_bounded_offer_id(")
+            .map(|offset| bounded_start + offset)
+            .expect("bounded basis function boundary");
+        let bounded = &source[bounded_start..bounded_end];
+        assert!(!bounded.contains("exact_regular_file_bytes("));
+        assert_eq!(
+            bounded.matches("snapshot.revalidate()").count(),
+            2,
+            "the complete basis should have one validation before projection and one after"
+        );
     }
 
     #[test]
