@@ -285,10 +285,10 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
-/// Trusted P5c workflow-governance runtime. `next`, `resume`, and `shadow` are
-/// read-only; initialization, evidence/applicability recording, human
-/// decisions, waivers, and completion append to the kernel-owned governance
-/// ledger under its exclusive lock.
+/// Trusted P5c workflow-governance runtime. `next`, `resume`, `report`, and
+/// `shadow` are read-only; initialization, evidence/applicability recording,
+/// human decisions, waivers, and completion append to the kernel-owned
+/// governance ledger under its exclusive lock.
 pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
     name: "workflow",
     usage_lines: &[
@@ -304,7 +304,8 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]",
         "       forge-core workflow promotion recover --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]",
         "       forge-core workflow intent record --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
-        "       forge-core workflow resume [--root <path>] [--full] [--json|--no-json]",
+        "       forge-core workflow resume [--root <path>] [--json|--no-json]",
+        "       forge-core workflow report [--root <path>] [--json|--no-json]",
         "       forge-core workflow release-status [--root <path>] [--json|--no-json]",
         "       forge-core workflow profile status [--root <path>] [--json|--no-json]",
         "       forge-core workflow profile adopt-solo [--root <path>] --expected-head-digest <sha256> --expected-snapshot-digest <sha256> [--json|--no-json]",
@@ -1142,7 +1143,10 @@ mod tests {
                 "autonomy",
                 "action",
                 "intent",
+                "evidence",
+                "promotion",
                 "resume",
+                "report",
                 "release-status",
                 "profile",
                 "retirement-status",

@@ -198,12 +198,11 @@ newer binary never silently migrates project authority; the agent follows
 - Use `workflow resume` once at the start of a new chat or after agent/process
   replacement. Its default summary returns the current objective, decisions,
   blockers and warnings, active work, recovery work, evidence, and ranked next
-  action without repeating the full history. Execute its exact `detail_argv`
-  only when a blocker, recovery, integrity question, or audit needs
-  `workflow resume --full --json`. Questions calculated now remain separate
-  from recovered decisions. `resume` does not use the old chat, create missing
-  locks, finish a release rebase, reconcile a generation, or repair
-  inconsistent state.
+  action without repeating older history. Use `workflow report` only when the
+  human explicitly requests a complete history/audit or a continuity diagnosis
+  requires omitted records. Questions calculated now remain separate from
+  recovered decisions. `resume` does not use the old chat, create missing locks,
+  finish a release rebase, reconcile a generation, or repair inconsistent state.
 - Use `domain-pack status` and `domain-pack recover` for lifecycle recovery.
 - Do not delete the sidecar to fix an integrity error; preserve and inspect it.
 

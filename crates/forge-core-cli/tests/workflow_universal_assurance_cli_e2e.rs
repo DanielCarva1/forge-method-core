@@ -476,7 +476,7 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
         "intent-0001",
     );
     apply_envelope(&app_arg, &parent, "intent-0001", &intent);
-    let after_intent = ok(&workflow(&app_arg, &["resume", "--full"]));
+    let after_intent = ok(&workflow(&app_arg, &["report"]));
     let intent_digest = after_intent["data"]["durable_assurance"]["projection"]["binding"]
         ["intent_digest"]
         .as_str()
@@ -625,7 +625,7 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
             nonce: "execution-wrong-domain-0005",
         },
     );
-    let wrong_domain = ok(&workflow(&app_arg, &["resume", "--full"]));
+    let wrong_domain = ok(&workflow(&app_arg, &["report"]));
     assert_eq!(
         claim_state(
             &wrong_domain["data"]["durable_assurance"]["projection"],
@@ -649,7 +649,7 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
             nonce: "execution-partial-0006",
         },
     );
-    let partial = ok(&workflow(&app_arg, &["resume", "--full"]));
+    let partial = ok(&workflow(&app_arg, &["report"]));
     assert_eq!(
         claim_state(
             &partial["data"]["durable_assurance"]["projection"],
@@ -738,7 +738,7 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
         );
     }
 
-    let resumed = ok(&workflow(&app_arg, &["resume", "--full"]));
+    let resumed = ok(&workflow(&app_arg, &["report"]));
     let durable = &resumed["data"]["durable_assurance"];
     assert_eq!(durable["status"], "intent_accepted");
     let projection = &durable["projection"];

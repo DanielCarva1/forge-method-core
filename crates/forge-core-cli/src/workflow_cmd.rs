@@ -45,7 +45,6 @@ struct WorkflowCliArgs {
     subcommand: String,
     root: PathBuf,
     want_json: bool,
-    full: bool,
     flags: BTreeMap<String, Vec<String>>,
 }
 
@@ -222,16 +221,12 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             serde_json::to_value(value).expect("serializable workflow action packets")
         }),
         "resume" => adapter.resume().map(|value| {
-            if parsed.full {
-                serde_json::to_value(value).expect("serializable full guidance")
-            } else {
-                serde_json::to_value(workflow_resume_summary(
-                    &value,
-                    &adapter.binding().project_root,
-                ))
+            serde_json::to_value(workflow_resume_summary(&value))
                 .expect("serializable resume summary")
-            }
         }),
+        "report" => adapter
+            .resume()
+            .map(|value| serde_json::to_value(value).expect("serializable workflow report")),
         "release-status" => adapter
             .release_status()
             .map(|value| serde_json::to_value(value).expect("serializable release status")),
@@ -286,7 +281,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v2";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v3";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -323,7 +318,6 @@ struct WorkflowResumeSummary<'a> {
     current_cooperative_evidence: Vec<WorkflowResumeEvidenceSummary<'a>>,
     authorization: &'a WorkflowAuthorizationGuidance,
     omitted_history: WorkflowResumeOmittedHistory,
-    detail_argv: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -383,10 +377,7 @@ struct WorkflowResumeOmittedHistory {
     non_current_cooperative_evidence: usize,
 }
 
-fn workflow_resume_summary<'a>(
-    guidance: &'a WorkflowGovernanceGuidance,
-    project_root: &Path,
-) -> WorkflowResumeSummary<'a> {
+fn workflow_resume_summary(guidance: &WorkflowGovernanceGuidance) -> WorkflowResumeSummary<'_> {
     let continuity = guidance.replacement_continuity.as_ref();
     let active_isolations = continuity
         .into_iter()
@@ -434,7 +425,6 @@ fn workflow_resume_summary<'a>(
         .flat_map(|continuity| continuity.gaps.iter())
         .filter(|gap| !gap.blocking)
         .collect::<Vec<_>>();
-    let project_root = project_root.display().to_string();
     let omitted_history = WorkflowResumeOmittedHistory {
         superseded_objective_revisions: continuity.map_or(0, |value| {
             value
@@ -520,15 +510,6 @@ fn workflow_resume_summary<'a>(
         current_cooperative_evidence,
         authorization: &guidance.authorization,
         omitted_history,
-        detail_argv: vec![
-            "forge-core".to_owned(),
-            "workflow".to_owned(),
-            "resume".to_owned(),
-            "--root".to_owned(),
-            project_root,
-            "--full".to_owned(),
-            "--json".to_owned(),
-        ],
     }
 }
 
@@ -874,13 +855,11 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             subcommand: "help".to_owned(),
             root: PathBuf::from("."),
             want_json: true,
-            full: false,
             flags: BTreeMap::new(),
         });
     }
     let mut root = PathBuf::from(".");
     let mut want_json = true;
-    let mut full = false;
     let mut flags = BTreeMap::<String, Vec<String>>::new();
     let mut index = 2usize;
     while index < args.len() {
@@ -888,8 +867,6 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
         match flag {
             "--json" => want_json = true,
             "--no-json" => want_json = false,
-            "--full" if full => return Err("--full may be supplied only once".to_owned()),
-            "--full" => full = true,
             "--policy" | "--phase" | "--bundle" | "--bundle-file" | "--bundle-path"
             | "--registry" | "--registry-file" | "--registry-path" | "--manifest"
             | "--manifest-file" | "--manifest-path" | "--batch" | "--batch-file"
@@ -930,7 +907,6 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
                     subcommand: "help".to_owned(),
                     root,
                     want_json,
-                    full,
                     flags,
                 });
             }
@@ -947,7 +923,6 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
         subcommand,
         root,
         want_json,
-        full,
         flags,
     })
 }
@@ -986,12 +961,6 @@ fn requested_readiness_profile(
 }
 
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
-    if args.full && args.subcommand != "resume" {
-        return Err(format!(
-            "--full is valid only for workflow resume, not workflow {}",
-            args.subcommand
-        ));
-    }
     if let Some(flag) = ["request-file", "attestation-file"]
         .iter()
         .find(|flag| args.flags.contains_key(**flag))
@@ -1233,28 +1202,16 @@ mod tests {
     }
 
     #[test]
-    fn full_detail_is_explicit_single_use_and_resume_only() {
-        let summary =
-            parse_args(&argv(&["workflow", "resume"])).expect("summary resume arguments parse");
-        validate_release_args(&summary).expect("summary resume validates");
-        assert!(!summary.full);
+    fn report_is_a_separate_command_and_resume_rejects_the_retired_full_flag() {
+        let resume = parse_args(&argv(&["workflow", "resume"])).expect("resume arguments parse");
+        validate_release_args(&resume).expect("resume validates");
 
-        let full = parse_args(&argv(&["workflow", "resume", "--full"]))
-            .expect("full resume arguments parse");
-        validate_release_args(&full).expect("full resume validates");
-        assert!(full.full);
+        let report = parse_args(&argv(&["workflow", "report"])).expect("report arguments parse");
+        validate_release_args(&report).expect("report validates");
 
-        let duplicate = parse_args(&argv(&["workflow", "resume", "--full", "--full"]))
-            .expect_err("full detail may be requested only once");
-        assert_eq!(duplicate, "--full may be supplied only once");
-
-        let other = parse_args(&argv(&["workflow", "next", "--full"]))
-            .expect("generic parser recognizes full before command validation");
-        assert!(validate_release_args(&other).is_err());
-
-        let summary = parse_args(&argv(&["workflow", "next", "--summary"]))
-            .expect_err("workflow does not expose a second summary surface");
-        assert_eq!(summary, "unrecognized workflow argument '--summary'");
+        let retired = parse_args(&argv(&["workflow", "resume", "--full"]))
+            .expect_err("resume no longer exposes a second detail mode");
+        assert_eq!(retired, "unrecognized workflow argument '--full'");
     }
 
     #[test]

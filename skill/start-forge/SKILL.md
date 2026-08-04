@@ -248,121 +248,95 @@ proves integrity, not native host authenticity.
    flags or commands. Use `data.next_step.command` only when explaining the action
    to a human; agents execute the structured argv.
 
-4. **Enter agent-native workflow governance** when the Project Link and sidecar
-   are healthy.
+4. **Follow the one structured workflow handoff** when the Project Link and
+   sidecar are healthy.
 
-   First verify that the installed binary exposes `forge-core workflow --help`.
-   For a current binary, every healthy `start` response supplies an exact argv
-   shaped as `forge-core workflow init --root <project-root>`. Confirm its root
-   matches `data.project.project_root` and execute that returned argv directly.
-   `workflow init` is idempotent: a fresh ledger returns initialized and an
-   existing ledger returns already initialized without discarding continuity.
+   A current `start` response selects exactly one next command for the exact
+   project root:
 
-   If command discovery exposes `workflow release-status`, run
-   **`forge-core workflow release-status --root "<project-root>" --json`** next.
-   The ledger-derived release is authoritative; the newest installed binary is
-   not. When `data.upgrade_argv` is present, verify it is an argv array shaped
-   as `forge-core workflow release-upgrade --root <same-project-root> ...`, has
-   no registry/manifest/batch/bundle/release path flags, and execute that exact
-   array directly. Do not rebuild it from display text or ask the human to
-   select a release. Repeat `release-status` and require the returned active
-   release to match the upgrade target. If no successor is available, continue
-   without mutation. An older P5c binary that genuinely lacks this subcommand
-   may continue on its existing implicit release; ordinary status/upgrade
-   errors still fail closed rather than triggering fallback.
+   - an existing workflow ledger yields `forge-core workflow resume --root
+     <project-root> --json`;
+   - a project without a workflow ledger yields `forge-core workflow init
+     --root <project-root>`.
 
-   After initialization and the release-status/upgrade check, run
-   **`forge-core workflow profile status --root "<project-root>" --json`**
-   exactly once. This command is read-only. `start` and `workflow init` never
-   silently change an old profile-less project.
+   Validate `data.next_step.argv` as an argv array with one of those exact shapes,
+   require its root to equal `data.project.project_root`, and execute it directly.
+   Never run `workflow init` merely because a new chat started. If `start` routes
+   directly to `resume`, that response is the activation result: do not also run
+   release status, profile status, or a historical report.
 
-   - If `data.solo_adoption=eligible` and this chat has already clearly chosen
-     Solo Cooperative (for example, the user asked to dogfood as a solo
-     developer with agents), verify `data.adopt_solo_argv` is an argv array
-     shaped as `forge-core workflow profile adopt-solo --root
-     <same-project-root> --expected-head-digest <sha256> --expected-snapshot-digest
-     <sha256> --json`, then execute that exact array as tokens.
-   - If the chat has not chosen, ask one short plain-language question: "Este
-     projeto antigo deve passar para o modo solo com agentes?" Do not execute
-     adoption until the answer is clearly yes.
-   - If status says `already_adopted` or `already_solo`, continue silently
-     without another write. `already_solo` means the project started in Solo
-     Cooperative and needs no migration. If it is `ineligible`, explain the
-     returned reason plainly and do not invent a migration. A project explicitly
-     configured for a non-solo profile is outside the current dogfood scope.
+   Only after `start` routes a genuinely uninitialized project to `workflow init`,
+   perform the following one-time setup checks:
 
-   After a successful adoption, run profile status once more and require
-   `data.current_profile=solo_cooperative` with no adoption argv. The durable
-   transition records same-owner provenance only; it never claims verified
-   human presence, actor independence, or enterprise compliance. Never rebuild
-   the adoption command from display text, change either CAS digest, or retry a
-   stale/tampered error without refreshing status.
+   1. Run `forge-core workflow release-status --root "<project-root>" --json`.
+      The ledger-derived release is authoritative. If `data.upgrade_argv` is
+      present, require an argv array shaped as `forge-core workflow
+      release-upgrade --root <same-project-root> ...`, reject registry, manifest,
+      batch, bundle, or release path flags, execute it as tokens, then repeat
+      release status and require the active release to match the target.
+   2. Run `forge-core workflow profile status --root "<project-root>" --json`
+      once. If `data.solo_adoption=eligible` and this chat already chose Solo
+      Cooperative, validate and execute the exact published `adopt_solo_argv`.
+      Otherwise ask the human only when that adoption is a genuine unresolved
+      choice. `already_adopted` and `already_solo` require no action; an explicit
+      non-solo profile remains outside the current dogfood scope. After adoption,
+      repeat profile status once and require `current_profile=solo_cooperative`
+      with no adoption argv.
+   3. Run `forge-core workflow resume --root "<project-root>" --json` exactly
+      once to enter normal operation.
 
-   Then run **`forge-core workflow resume --root "<project-root>" --json`**.
-   `/start-forge` is run once per chat, not once per task. Treat this call as a
-   capability probe even when the installed and source version strings match.
-   The current capability is present only when
-   `data.schema_version=workflow_resume_summary_v2` and `data.detail_argv` is an
-   argv array shaped exactly as `forge-core workflow resume --root
-   <same-project-root> --full --json`. Validate the root and every token. With a
-   direct runtime, execute it verbatim; with the retained WSL bridge, replace
-   only argv element zero with the proven packaged/runtime binary and preserve
-   all later elements.
+   `/start-forge` runs once per chat, not once per task. The current activation
+   capability is present only when resume returns
+   `data.schema_version=workflow_resume_summary_v3`. V3 contains everything
+   needed for the current agent step: effective Domain Pack identity, objective,
+   autonomy projection, current evaluation, boundary rechecks, human decisions,
+   blockers and warnings, ranked actions, active isolations, recoverable
+   promotions, current evidence, authorization packets, and the cooperative
+   packet or exact gap. `data.omitted_history` counts older records only; it does
+   not hide current obligations.
 
-   V2 exposes all information needed for the current agent step: the effective
-   Domain Pack identity, objective, the complete autonomy projection (including
-   binding and input contract), the complete current evaluation, every current
-   boundary recheck, human decisions, blockers and warnings, ranked actions,
-   active isolations, recoverable promotions, current evidence, complete
-   authorization packets, and the complete cooperative packet or exact gap. Its
-   omitted-history counts refer only to older audit records, not hidden current
-   obligations. Inspect those current fields before doing new work.
+   `workflow_resume_summary_v1` and `workflow_resume_summary_v2` are legacy
+   activation responses. Use only fields they actually publish and never infer
+   that a missing current field means no obligation exists. Report that the
+   installed runtime needs updating when those fields are necessary; do not
+   automatically execute `resume --full`.
 
-   `workflow_resume_summary_v1` is a legacy compatibility response. Validate its
-   exact same-root `detail_argv`, use only fields it actually publishes, and
-   never treat a v2-only field's absence as proof that no obligation exists.
-   Execute its `detail_argv` only when information needed to decide or act is
-   unavailable. Never reconstruct missing data, infer capability from matching
-   version text, or claim that uninstalled source behavior ran.
+   `forge-core workflow report --root "<project-root>" --json` is a separate,
+   read-only historical report. Run it only when the human explicitly asks for a
+   complete history/audit or when diagnosing a continuity problem that genuinely
+   requires omitted historical records. Never run it as part of ordinary chat
+   activation.
 
-   After **every** Forge operation in this same chat, even when its receipt
-   embeds a `next` projection, refresh continuity with:
+   During the same chat, ordinary repository inspection and read-only Forge
+   commands do not require another resume. Refresh continuity once after a
+   successful Forge command that changed durable workflow state, or when context
+   was lost and the agent must recover. Do not refresh merely because a status,
+   report, or help command ran. In the rest of this skill, "refresh workflow"
+   means the same-root default `workflow resume` call.
 
-   ```bash
-   forge-core workflow resume --root "<project-root>" --json
-   ```
-
-   Prefer v2. Use `data.detail_argv` only for an explicit audit or when the
-   concise/legacy response lacks information needed for the next safe action or
-   reports a blocker that it cannot explain. Execute a published recovery argv
-   as tokens before lower-ranked work; `completed` promotions must not be
-   applied or recovered again. In the rest of this skill, "refresh workflow"
-   means this same-root default `workflow resume` call.
-
-   In v2, `data.human_decisions.recovered_pending` contains only decision events
+   In v3, `data.human_decisions.recovered_pending` contains only decision events
    actually recorded in the ledger. A question under
    `data.current_evaluation.candidate_decision_requests` was calculated now; do
-   not tell the user it came from the previous chat. V1 publishes the same
-   distinction as `human_decisions.recovered_pending` versus
-   `human_decisions.calculated_now`; the full audit uses
-   `replacement_continuity.durable_pending_decisions` versus
+   not tell the user it came from the previous chat. The historical report keeps
+   the equivalent distinction under
+   `replacement_continuity.durable_pending_decisions` and
    `simulation.candidate_decision_requests`.
 
    Any unexpected healthy-state argv, integrity, binding, snapshot, ledger, or
    environment error fails closed. Report it; do not erase state, reinitialize
-   over an error, reconstruct argv from the display command, or fall back to
+   over an error, reconstruct argv from display text, or fall back to
    caller-selected routing.
 
-   In v2, read obligations, evidence/capability gaps, Decision Requests, issues,
+   In v3, read obligations, evidence/capability gaps, Decision Requests, issues,
    and ranked next actions from `data.current_evaluation`, then read continuity
    recovery from `data.actions` and authority from `data.authorization`. Its
    action packets are read-only, current-state authority offers; they are not
-   permission to act. V2 publishes the complete packet set. Legacy v1 publishes
+   permission to act. V3 publishes the complete packet set. Legacy v1 publishes
    only packet references and an exact `action_packets_argv`; execute that argv
    when the selected governed action needs a packet, rather than treating a
    reference as the packet. `forge-core workflow action-packets --root
-   "<project-root>" --json` remains an optional standalone diagnostic for v2
-   and full responses. Select only the packet that matches the governed next
+   "<project-root>" --json` remains an optional standalone diagnostic for v3
+   and report responses. Select only the packet that matches the governed next
    action, satisfy its evidence work, and provide only the packet's closed
    semantic input. Never supply policy, phase, evaluator, target, registry,
    request, attestation, or digest fields yourself. The host agent performs the
@@ -617,9 +591,9 @@ what the agent must assess; a missing `target` is legacy `source_claim`:
    what the retained repository basis actually supports.
 3. If no packet is present, inspect
    `data.actions.cooperative_evidence_gap` exactly. Do not invent a route or fall
-   back to a different policy, claim, or evaluator. V1 does not publish the
-   complete packet or gap: execute its validated `detail_argv` and inspect the
-   equivalent full fields.
+   back to a different policy, claim, or evaluator. Legacy v1 does not publish
+   the complete packet or gap; update the runtime rather than invoking a second
+   automatic resume mode.
 4. Copy `offer_template` to a temporary file **outside** the project snapshot.
    Replace every token named by `required_replacements` with an honest bounded
    value. For the selected assessment object, replace `basis_paths` with one or

@@ -129,7 +129,7 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow_resume_summary_v2` exposes an active
+Once `workflow_resume_summary_v3` exposes an active
 `agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
@@ -232,41 +232,35 @@ Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
 The current executable returns the concise, versioned
-`workflow_resume_summary_v2` activation view by default. V2 is the complete
+`workflow_resume_summary_v3` activation view by default. V3 is the complete
 current-state contract for the agent: it carries the current objective; the
 full autonomy projection; every current evaluation, blocker, warning, active
 isolation, recoverable promotion, cooperative evidence item, authorization
 packet, and exact gap. Counts identify only older audit history omitted from
-the activation view. Its exact `detail_argv` retrieves the full audit with
-`workflow resume --full --json`.
+the activation view.
 
-`workflow_resume_summary_v1` is a legacy compatibility view. A host may
-continue from fields it actually publishes but must not infer that omitted v2
-fields represent absent obligations. Use its same-root `detail_argv` when
-information required for the next safe action is unavailable.
+`workflow_resume_summary_v1` and `workflow_resume_summary_v2` are legacy views.
+A host may continue from fields they actually publish but must not infer that
+omitted v3 fields represent absent obligations. Update the runtime when a
+missing field is required for the next safe action; do not automatically run a
+second resume mode.
 
-The full audit keeps the ordinary `workflow next` fields and adds the versioned
-`replacement_continuity` block. That block is rebuilt from durable project
-state only: objective history, decision events actually present in the ledger,
-evidence history, claims, isolation ownership and real Git worktree validation,
-promotion state, typed gaps, and a ranked next action. A question calculated by
-the current policy remains under `simulation.candidate_decision_requests`; it
-is not described as a decision recovered from an earlier chat. Recovery
-commands are argv arrays, not shell text; keep paths with spaces as one element.
-Recoverable promotions rank before new work. Completed promotions never offer
-apply or recovery again. Missing or mismatched linked claims remain blocking
-for active work. An expired or released claim blocks a promotion that has not
-started, but remains visible as a non-blocking historical warning after a
-durable recoverable, completed, or corrupt promotion record exists. Corrupt or
-tampered promotion state remains blocking in its own right and is never
-silently repaired by resume.
+`workflow report --root <same-root> --json` is the separate historical view. It
+keeps the ordinary current guidance fields and adds the versioned
+`replacement_continuity` block rebuilt from durable project state: objective
+history, decision events actually present in the ledger, evidence history,
+claims, isolation ownership and real Git worktree validation, promotion state,
+typed gaps, and ranked actions. A question calculated by the current policy
+remains under `simulation.candidate_decision_requests`; it is not described as
+a decision recovered from an earlier chat. Run the report only for an explicit
+history/audit request or a continuity diagnosis that requires omitted records.
 
-After every Forge operation in the same chat, refresh through the default
-`workflow resume --root <same-root> --json` contract. Use `--full` only for an
-explicit audit or when a legacy/concise response cannot explain a blocker or
-provide the information needed for the next safe action. `workflow next`
-remains the complete current guidance projection; it has no separate summary
-flag and is not the chat-continuity refresh surface.
+During one chat, read-only Forge commands and ordinary repository work do not
+require another resume. Refresh through `workflow resume --root <same-root>
+--json` once after a successful Forge command changes durable workflow state,
+or when context was lost and must be recovered. `workflow next` remains the
+complete current guidance projection; it is not the chat-continuity refresh
+surface.
 
 The format does not depend on a particular agent host. Compatibility with
 Codex, ZCode, Claude, Cursor, OpenCode, pi.dev, or another host remains a
@@ -319,7 +313,7 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 For a `solo_cooperative` objective, agents use the one existing public command,
 `forge-core workflow evidence admit-cooperative`, with the closed packet from
-`workflow_resume_summary_v2.actions.cooperative_evidence_packet`. The offer is
+`workflow_resume_summary_v3.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
 claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this

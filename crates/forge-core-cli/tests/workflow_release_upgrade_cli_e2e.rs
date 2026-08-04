@@ -193,10 +193,7 @@ fn upgrade_foundation_to_core_assurance(project: &LegacyProject) {
         "0.3.0"
     );
     assert!(core_status["data"]["upgrade_argv"].is_array());
-    let core_resumed = assert_ok(
-        &project.run(&["resume", "--full", "--json"]),
-        "workflow.resume",
-    );
+    let core_resumed = assert_ok(&project.run(&["report", "--json"]), "workflow.report");
     assert_eq!(
         required_string(&core_resumed, "/data/release/release/release_id"),
         "workflow-governance.release.core-assurance-v0"
@@ -269,10 +266,7 @@ fn legacy_project_upgrade_is_opaque_cas_bound_resumable_and_idempotent() {
         1
     );
 
-    let resumed = assert_ok(
-        &project.run(&["resume", "--full", "--json"]),
-        "workflow.resume",
-    );
+    let resumed = assert_ok(&project.run(&["report", "--json"]), "workflow.report");
     assert_eq!(
         required_string(&resumed, "/data/release/release/release_id"),
         target

@@ -17,13 +17,13 @@
 //!
 //! The five states are documented as domain terms. Each maps to one outcome:
 //!
-//! | state                         | outcome                                    |
-//! |-------------------------------|--------------------------------------------|
-//! | `no_link`                     | bootstrap, then `workflow init --root …`   |
-//! | `link_present_no_sidecar`     | fail closed; inspect/restore durable state |
-//! | `sidecar_ready_no_contract`   | `workflow init --root …`                   |
-//! | `contract_present`            | `workflow init --root …`                   |
-//! | `preview_run`                 | `workflow init --root …`                   |
+//! | state                         | outcome                                         |
+//! |-------------------------------|-------------------------------------------------|
+//! | `no_link`                     | bootstrap, then `workflow init --root …`        |
+//! | `link_present_no_sidecar`     | fail closed; inspect/restore durable state      |
+//! | `sidecar_ready_no_contract`   | resume existing workflow, otherwise initialize |
+//! | `contract_present`            | resume existing workflow, otherwise initialize |
+//! | `preview_run`                 | resume existing workflow, otherwise initialize |
 //!
 //! `start` recomputes from the real project on every call. Re-running after a
 //! successful advance jumps to the correct state; re-running after state loss
@@ -39,6 +39,7 @@
 //! and structured handoff is non-trivial behaviour, not a linear
 //! script.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest as _, Sha256};
@@ -298,20 +299,43 @@ fn command_next_step_with_references(
     }
 }
 
-/// Build the default P5 agent-native handoff for every healthy sidecar state.
+const WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH: &str = "wal/workflow-governance.ndjson";
+
+/// Build the P5 handoff for a healthy sidecar.
 ///
-/// `workflow init` is intentionally the single bootstrap handoff: it is
-/// idempotent and returns `AlreadyInitialized` when the ledger already exists.
-/// The immediately following `workflow next` reference uses the same explicit
-/// project root. Legacy operation-contract and preview material may remain as
-/// secondary compatibility references, but never replaces this authority path.
+/// Presence of the workflow ledger routes an existing project directly to the
+/// read-only resume path. Absence routes a fresh project to idempotent
+/// initialization. This is only routing evidence: the selected workflow command
+/// performs the authoritative validation and fails closed on malformed state.
 #[must_use]
-fn workflow_init_next_step(
+fn workflow_next_step(
+    resolved: &ProjectResolvePayload,
     project_root: &Path,
     description: impl Into<String>,
     mut secondary_references: Vec<String>,
 ) -> NextStep {
     let root = project_root.display().to_string();
+    let ledger_path =
+        Path::new(&resolved.state_root).join(WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH);
+    if !matches!(
+        fs::symlink_metadata(ledger_path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    ) {
+        let resume_argv = vec![
+            "forge-core".to_string(),
+            "workflow".to_string(),
+            "resume".to_string(),
+            "--root".to_string(),
+            root,
+            "--json".to_string(),
+        ];
+        return command_next_step_with_references(
+            resume_argv,
+            "Resume existing agent-native workflow governance.",
+            secondary_references,
+        );
+    }
+
     let init_argv = vec![
         "forge-core".to_string(),
         "workflow".to_string(),
@@ -319,18 +343,19 @@ fn workflow_init_next_step(
         "--root".to_string(),
         root.clone(),
     ];
-    let next_argv = vec![
+    let resume_argv = vec![
         "forge-core".to_string(),
         "workflow".to_string(),
-        "next".to_string(),
+        "resume".to_string(),
         "--root".to_string(),
         root,
+        "--json".to_string(),
     ];
     secondary_references.insert(
         0,
         format!(
-            "next: {} — derive the current governed action after idempotent initialization",
-            render_command_for_display(&next_argv)
+            "next: {} — resume current governance after initialization",
+            render_command_for_display(&resume_argv)
         ),
     );
     command_next_step_with_references(init_argv, description, secondary_references)
@@ -673,7 +698,8 @@ fn classify(
         return (
             BootstrapState::PreviewRun,
             "A preview has already been produced; the project is onboarded.".to_string(),
-            Some(workflow_init_next_step(
+            Some(workflow_next_step(
+                resolved,
                 project_root,
                 "Initialize or recover agent-native workflow governance; initialization is idempotent.",
                 vec![
@@ -691,7 +717,8 @@ fn classify(
             BootstrapState::ContractPresent,
             "An operation contract exists; the project is ready for agent-native workflow governance."
                 .to_string(),
-            Some(workflow_init_next_step(
+            Some(workflow_next_step(
+                resolved,
                 project_root,
                 "Initialize or recover agent-native workflow governance; initialization is idempotent.",
                 vec![
@@ -708,7 +735,8 @@ fn classify(
     (
         BootstrapState::SidecarReadyNoContract,
         "State tree is healthy but no operation contract exists yet.".to_string(),
-        Some(workflow_init_next_step(
+        Some(workflow_next_step(
+            resolved,
             project_root,
             "Initialize agent-native workflow governance; initialization is idempotent.",
             vec![
@@ -858,8 +886,18 @@ mod tests {
             root.display().to_string(),
         ]
     }
+    fn expected_workflow_resume_argv(root: &Path) -> Vec<String> {
+        vec![
+            "forge-core".to_string(),
+            "workflow".to_string(),
+            "resume".to_string(),
+            "--root".to_string(),
+            root.display().to_string(),
+            "--json".to_string(),
+        ]
+    }
 
-    fn assert_agent_native_healthy_next_step(next: &NextStep, root: &Path) {
+    fn assert_agent_native_init_next_step(next: &NextStep, root: &Path) {
         let expected = expected_workflow_init_argv(root);
         assert_eq!(next.argv, expected, "healthy start must emit exact argv");
         assert_eq!(
@@ -867,18 +905,19 @@ mod tests {
             Some(render_command_for_display(&expected).as_str()),
             "display command must be rendered from the structured argv"
         );
-        let expected_next = render_command_for_display(&[
+        let expected_resume = render_command_for_display(&[
             "forge-core".to_string(),
             "workflow".to_string(),
-            "next".to_string(),
+            "resume".to_string(),
             "--root".to_string(),
             root.display().to_string(),
+            "--json".to_string(),
         ]);
         assert!(
             next.references
                 .first()
-                .is_some_and(|reference| reference.contains(&expected_next)),
-            "workflow next with the same explicit root must be the immediate reference: {:?}",
+                .is_some_and(|reference| reference.contains(&expected_resume)),
+            "workflow resume with the same explicit root must follow initialization: {:?}",
             next.references
         );
         assert!(
@@ -1088,7 +1127,7 @@ mod tests {
             Some("1-discovery"),
             "start should seed state.yaml with the 1-discovery entry phase"
         );
-        assert_agent_native_healthy_next_step(
+        assert_agent_native_init_next_step(
             payload.next_step.as_ref().expect("workflow handoff"),
             &root,
         );
@@ -1117,7 +1156,7 @@ mod tests {
             root.join(PROJECT_LINK_FILE_NAME).exists(),
             "start should create the Project Link even with a space in the path"
         );
-        assert_agent_native_healthy_next_step(
+        assert_agent_native_init_next_step(
             payload.next_step.as_ref().expect("workflow handoff"),
             &root,
         );
@@ -1218,7 +1257,7 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
         let next = payload.next_step.as_ref().expect("next step");
-        assert_agent_native_healthy_next_step(next, &app);
+        assert_agent_native_init_next_step(next, &app);
         assert!(
             next.references
                 .iter()
@@ -1249,6 +1288,35 @@ mod tests {
     }
 
     #[test]
+    fn existing_workflow_ledger_routes_directly_to_one_resume() {
+        let parent = temp_root("existing-workflow-ledger");
+        let app = parent.join("app");
+        let state = parent.join("forge-app").join(".forge-method");
+        fs::create_dir_all(&app).unwrap();
+        make_state_tree(&state);
+        fs::write(
+            state.join(WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH),
+            b"existing workflow authority\n",
+        )
+        .unwrap();
+        write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+        let env = run_start(&app);
+        let payload = env.data.as_ref().expect("payload on ok");
+        assert!(env.ok);
+        let next = payload.next_step.as_ref().expect("resume handoff");
+        assert_eq!(next.argv, expected_workflow_resume_argv(&app));
+        assert_eq!(
+            next.command.as_deref(),
+            Some(render_command_for_display(&next.argv).as_str())
+        );
+        assert!(
+            next.description.to_ascii_lowercase().contains("resume"),
+            "existing workflow authority must not be sent through init again"
+        );
+    }
+
+    #[test]
     fn contract_present_diagnoses_state_four() {
         // State 4: state tree + an operation-contract-looking file.
         let parent = temp_root("with-contract");
@@ -1265,7 +1333,7 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::ContractPresent);
         let next = payload.next_step.as_ref().expect("next step");
-        assert_agent_native_healthy_next_step(next, &app);
+        assert_agent_native_init_next_step(next, &app);
         // Existing operation material remains secondary compatibility evidence.
         assert!(
             next.references
@@ -1296,7 +1364,7 @@ mod tests {
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::PreviewRun);
         let next = payload.next_step.as_ref().expect("next step");
-        assert_agent_native_healthy_next_step(next, &app);
+        assert_agent_native_init_next_step(next, &app);
         assert!(
             next.references
                 .iter()
@@ -1326,7 +1394,7 @@ mod tests {
             first.data.as_ref().unwrap().next_step,
             second.data.as_ref().unwrap().next_step
         );
-        assert_agent_native_healthy_next_step(
+        assert_agent_native_init_next_step(
             second
                 .data
                 .as_ref()

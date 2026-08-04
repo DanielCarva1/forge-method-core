@@ -289,7 +289,7 @@ fn crash_replace_residue_paths(root: &Path) -> Vec<PathBuf> {
     found
 }
 
-fn assert_agent_native_workflow_handoff(env: &Value, app: &Path, state: &str) {
+fn assert_agent_native_init_handoff(env: &Value, app: &Path, state: &str) {
     let root = app.display().to_string();
     assert_eq!(
         env["data"]["next_step"]["argv"],
@@ -311,10 +311,25 @@ fn assert_agent_native_workflow_handoff(env: &Value, app: &Path, state: &str) {
             .first()
             .and_then(Value::as_str)
             .is_some_and(|reference| {
-                reference.contains("next: forge-core workflow next --root")
+                reference.contains("next: forge-core workflow resume --root")
                     && reference.contains(&app.display().to_string())
             }),
-        "{state} should make workflow next for the same root the first reference"
+        "{state} should make workflow resume for the same root the first reference"
+    );
+}
+
+fn assert_agent_native_resume_handoff(env: &Value, app: &Path, state: &str) {
+    let root = app.display().to_string();
+    assert_eq!(
+        env["data"]["next_step"]["argv"],
+        serde_json::json!(["forge-core", "workflow", "resume", "--root", root, "--json"]),
+        "{state} should route existing workflow authority directly to resume"
+    );
+    assert!(
+        env["data"]["next_step"]["command"]
+            .as_str()
+            .is_some_and(|command| command.starts_with("forge-core workflow resume --root ")),
+        "{state} should not repeat workflow init"
     );
 }
 
@@ -395,7 +410,7 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
 
     let (start_ok, start) = run_start(&app);
     assert!(start_ok);
-    assert_agent_native_workflow_handoff(&start, &app, STATE_SIDECAR_READY);
+    assert_agent_native_init_handoff(&start, &app, STATE_SIDECAR_READY);
 
     let init_output = bin()
         .args(["workflow", "init", "--root"])
@@ -410,23 +425,21 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
 
     let (restart_ok, restart) = run_start(&app);
     assert!(restart_ok);
-    assert_agent_native_workflow_handoff(&restart, &app, STATE_SIDECAR_READY);
-    let repeated_init_output = bin()
-        .args(["workflow", "init", "--root"])
+    assert_agent_native_resume_handoff(&restart, &app, STATE_SIDECAR_READY);
+    let resume_output = bin()
+        .args(["workflow", "resume", "--root"])
         .arg(&app)
         .arg("--json")
         .output()
-        .expect("repeat workflow init handoff");
-    assert!(repeated_init_output.status.success());
-    let repeated: Value = serde_json::from_slice(&repeated_init_output.stdout)
-        .expect("parse repeated initialization envelope");
-    assert_eq!(repeated["data"]["status"], "already_initialized");
-    for field in ["readiness_profile", "head_digest", "state_version"] {
-        assert_eq!(
-            repeated["data"][field], initialized["data"][field],
-            "start -> init -> start -> init must preserve {field}"
-        );
-    }
+        .expect("run direct resume handoff");
+    assert!(resume_output.status.success());
+    let resumed: Value =
+        serde_json::from_slice(&resume_output.stdout).expect("parse resume envelope");
+    assert_eq!(
+        resumed["data"]["schema_version"],
+        "workflow_resume_summary_v3"
+    );
+    assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
 
     let next_output = bin()
         .args(["workflow", "next", "--root"])
@@ -451,13 +464,11 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         .is_some_and(Vec::is_empty));
 
     for _ in 0..3 {
-        for subcommand in ["init", "next", "resume"] {
-            let envelope = run_workflow_json(&app, subcommand);
-            assert_eq!(
-                envelope["data"]["readiness_profile"], "solo_cooperative",
-                "repeated workflow {subcommand} process must retain the solo profile"
-            );
-        }
+        let envelope = run_workflow_json(&app, "resume");
+        assert_eq!(
+            envelope["data"]["readiness_profile"], "solo_cooperative",
+            "repeated workflow resume processes must retain the solo profile"
+        );
     }
 
     let state_root = resolved_state_root(&app);
@@ -994,7 +1005,7 @@ fn state_three_sidecar_ready_points_at_starter_fixtures() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_SIDECAR_READY);
-    assert_agent_native_workflow_handoff(&env, &app, "state 3");
+    assert_agent_native_init_handoff(&env, &app, "state 3");
     let refs = env["data"]["next_step"]["references"]
         .as_array()
         .expect("state 3 references is an array");
@@ -1032,7 +1043,7 @@ fn state_four_contract_present_hands_off_to_workflow() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_CONTRACT_PRESENT);
-    assert_agent_native_workflow_handoff(&env, &app, "state 4");
+    assert_agent_native_init_handoff(&env, &app, "state 4");
     let refs = env["data"]["next_step"]["references"]
         .as_array()
         .expect("state 4 references is an array");
@@ -1063,7 +1074,7 @@ fn state_five_preview_run_keeps_workflow_authority() {
 
     assert!(exit_ok);
     assert_eq!(env["data"]["state"], STATE_PREVIEW_RUN);
-    assert_agent_native_workflow_handoff(&env, &app, "state 5");
+    assert_agent_native_init_handoff(&env, &app, "state 5");
     let refs = env["data"]["next_step"]["references"]
         .as_array()
         .expect("state 5 references is an array");

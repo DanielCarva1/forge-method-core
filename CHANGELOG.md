@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
+### Changed
+- **Existing projects now enter a chat through one continuity read.** `start`
+  routes an existing workflow ledger directly to `workflow resume`; initialization,
+  release, and profile checks remain setup-only. The historical projection moved
+  from `workflow resume --full` to the explicit read-only `workflow report`
+  command, and resume emits `workflow_resume_summary_v3` without advertising a
+  mandatory second pass. Read-only Forge commands no longer trigger another
+  continuity refresh.
 ### Fixed
 - **Solo Cooperative development no longer dead-ends on strict-only universal
   assurance.** The Strict External independent-review policy is now excluded

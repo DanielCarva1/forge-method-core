@@ -2584,10 +2584,7 @@ fn authorize_decision(
 
 fn resume_without_state_mutation(project: &ReferenceProject, guidance: &Value) -> Value {
     let before = snapshot(&project.state);
-    let resumed = ok(
-        &project.workflow("resume", &["--full".to_owned()]),
-        "workflow.resume",
-    );
+    let resumed = ok(&project.workflow("report", &[]), "workflow.report");
     assert_eq!(snapshot(&project.state), before);
     for pointer in [
         "/authority",

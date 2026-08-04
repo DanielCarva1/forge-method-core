@@ -363,17 +363,17 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
-For a replacement agent, inspect the default `workflow_resume_summary_v1`
-response first. It carries the current blockers, warnings, active work,
-recoverable promotions, and ranked actions. Execute `data.detail_argv` only
-when the full `replacement_continuity` audit is necessary. Run a
-`recover_promotion` argv before new work, preserving every array element
-exactly. A `completed` promotion has no recovery argv. A blocking gap means
-stop and explain the plain-language summary; `resume` is read-only and will not
-recreate a worktree, edit a contract, repair a WAL, or reapply completed work.
-It also will not create a missing lock, finish an interrupted release rebase, or
-record a newer Domain Pack generation. Those conditions stop read-only resume
-until an explicit mutating command handles them.
+For a replacement agent, inspect the default `workflow_resume_summary_v3`
+response first. It carries every current blocker, warning, active work item,
+recoverable promotion, and ranked action. Run `workflow report --root <project>
+--json` only when an explicit historical audit or continuity diagnosis needs
+older records. Run a `recover_promotion` argv before new work, preserving every
+array element exactly. A `completed` promotion has no recovery argv. A blocking
+gap means stop and explain the plain-language summary; `resume` is read-only and
+will not recreate a worktree, edit a contract, repair a WAL, or reapply completed
+work. It also will not create a missing lock, finish an interrupted release
+rebase, or record a newer Domain Pack generation. Those conditions stop
+read-only resume until an explicit mutating command handles them.
 
 Preserve evidence before remediation. Never delete or recreate the sidecar,
 truncate a WAL, or provision a new trust root merely to make an integrity or

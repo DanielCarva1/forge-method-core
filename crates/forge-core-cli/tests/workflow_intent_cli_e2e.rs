@@ -392,7 +392,7 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
 
     // A replacement process reconstructs the durable projection from the
     // ledger, without relying on this test's in-memory envelope or chat state.
-    let resumed = ok(&run(&app_arg, &["resume", "--full"]));
+    let resumed = ok(&run(&app_arg, &["report"]));
     assert_eq!(
         resumed["data"]["durable_assurance"]["status"],
         "intent_accepted"
@@ -451,7 +451,7 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
         include_str!("../../../contracts/assurance/artifact-only-progress-assurance.yaml"),
     )
     .expect("proposal-only assurance file");
-    let after_proposal = ok(&run(&app_arg, &["resume", "--full"]));
+    let after_proposal = ok(&run(&app_arg, &["report"]));
     assert_eq!(
         after_proposal["data"]["durable_assurance"]["projection"],
         (*projection).clone()

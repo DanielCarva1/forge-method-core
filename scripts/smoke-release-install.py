@@ -272,14 +272,14 @@ def forge_call(
     return result
 
 
-def resume_summary_and_full(
+def resume_summary_and_report(
     wrapper: Path,
     project: Path,
     timeout_seconds: int,
     timings: dict[str, float],
     label_prefix: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Run the default summary, then its exact packaged detail argv."""
+    """Run normal activation and the separate historical report."""
 
     summary = forge_call(
         wrapper,
@@ -291,39 +291,21 @@ def resume_summary_and_full(
     data = summary.get("data")
     require(isinstance(data, dict), "workflow resume summary lacks data")
     require(
-        data.get("schema_version") == "workflow_resume_summary_v1",
-        "workflow resume default lacks workflow_resume_summary_v1",
+        data.get("schema_version") == "workflow_resume_summary_v3",
+        "workflow resume default lacks workflow_resume_summary_v3",
     )
-    detail_argv = data.get("detail_argv")
     require(
-        isinstance(detail_argv, list)
-        and detail_argv
-        and all(isinstance(token, str) for token in detail_argv),
-        "workflow resume summary lacks a string detail_argv",
+        "detail_argv" not in data,
+        "workflow resume must not advertise a second mandatory detail pass",
     )
-    expected = [
-        "forge-core",
-        "workflow",
-        "resume",
-        "--root",
-        str(project),
-        "--full",
-        "--json",
-    ]
-    require(
-        detail_argv == expected,
-        "workflow resume detail_argv did not preserve the exact project root and full audit shape",
-    )
-    # Only argv[0] is replaced. Every remaining token comes verbatim from the
-    # packaged summary rather than being reconstructed from display text.
-    packaged_argv = [str(wrapper), *detail_argv[1:]]
-    full, duration = timed_ok_json(
-        wrapper_command(Path(packaged_argv[0]), packaged_argv[1:]),
-        f"{label_prefix} full audit",
+    report = forge_call(
+        wrapper,
+        ["workflow", "report", "--root", str(project), "--json"],
+        f"{label_prefix} historical report",
         timeout_seconds,
+        timings,
     )
-    timings[f"{label_prefix} full audit"] = duration
-    return summary, full
+    return summary, report
 
 
 def require_release_status(release_status: dict[str, Any]) -> str:
@@ -656,7 +638,7 @@ def run_solo_journey(args: argparse.Namespace, ordinal: int) -> dict[str, Any]:
             timings,
         )
         admitted_evidence = admitted["data"]["event"]["payload"]["admitted_evidence"]
-        evidence_summary, suppression = resume_summary_and_full(
+        evidence_summary, suppression = resume_summary_and_report(
             wrapper,
             project,
             args.command_timeout_seconds,
@@ -852,7 +834,7 @@ def run_solo_journey(args: argparse.Namespace, ordinal: int) -> dict[str, Any]:
             "an isolation remained active after merge finalization",
         )
 
-        replacement_summary, replacement = resume_summary_and_full(
+        replacement_summary, replacement = resume_summary_and_report(
             wrapper,
             project,
             args.command_timeout_seconds,
