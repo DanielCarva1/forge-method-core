@@ -801,6 +801,12 @@ pub(super) struct RetainedWorkflowProjectSnapshot {
     regular_files: BTreeMap<String, (String, u64)>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkflowProjectSnapshotValidationMode {
+    Standalone,
+    EnclosedByFreshCaptureOperation,
+}
+
 impl RetainedWorkflowProjectSnapshot {
     fn capture(root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
         Self::capture_with_limits(root, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_BYTES)
@@ -2868,7 +2874,7 @@ impl WorkflowGovernanceProjectAdapter {
                 )
             })?;
         let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
-        let mut guidance = self.guidance_from_projection_with_snapshot(
+        let mut guidance = self.guidance_from_projection_with_enclosing_snapshot_validation(
             &registry,
             admitted,
             &effective,
@@ -2876,8 +2882,7 @@ impl WorkflowGovernanceProjectAdapter {
             now,
             &snapshot,
         )?;
-        let continuity = self.replacement_continuity(&guidance, &projection, &snapshot, now)?;
-        snapshot.revalidate()?;
+        let continuity = self.replacement_continuity(&guidance, &projection, now)?;
         let final_projection = ledger.recover()?;
         if final_projection.head_digest != projection.head_digest
             || final_projection.current_state_version() != projection.current_state_version()
@@ -2889,6 +2894,7 @@ impl WorkflowGovernanceProjectAdapter {
                 ),
             );
         }
+        snapshot.revalidate()?;
         guidance.replacement_continuity = Some(continuity);
         Ok(guidance)
     }
@@ -2897,7 +2903,6 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         guidance: &WorkflowGovernanceGuidance,
         projection: &WorkflowGovernanceLedgerProjection,
-        snapshot: &RetainedWorkflowProjectSnapshot,
         now: u64,
     ) -> Result<WorkflowReplacementContinuity, WorkflowGovernanceAdapterError> {
         let head = projection
@@ -3165,7 +3170,6 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let ranked_action_digest =
             replacement_projection_digest("replacement.ranked_actions.v1", &ranked_next_actions)?;
-        snapshot.revalidate()?;
         let final_claims = replacement_claims_from_existing_state(&self.binding.state_root, now)?;
         if final_claims != claims {
             return Err(
@@ -5421,6 +5425,27 @@ impl WorkflowGovernanceProjectAdapter {
         )
     }
 
+    fn guidance_from_projection_with_enclosing_snapshot_validation(
+        &self,
+        registry: &AdmittedWorkflowGovernanceReleaseRegistry,
+        admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+        now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
+    ) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
+        self.verified_from_projection_with_snapshot_validation(
+            registry,
+            admitted,
+            effective,
+            projection,
+            now,
+            snapshot,
+            WorkflowProjectSnapshotValidationMode::EnclosedByFreshCaptureOperation,
+        )
+        .map(|(guidance, _)| guidance)
+    }
+
     fn guidance_from_projection_with_snapshot(
         &self,
         registry: &AdmittedWorkflowGovernanceReleaseRegistry,
@@ -5451,12 +5476,41 @@ impl WorkflowGovernanceProjectAdapter {
         ),
         WorkflowGovernanceAdapterError,
     > {
+        self.verified_from_projection_with_snapshot_validation(
+            registry,
+            admitted,
+            effective,
+            projection,
+            now,
+            snapshot,
+            WorkflowProjectSnapshotValidationMode::Standalone,
+        )
+    }
+
+    fn verified_from_projection_with_snapshot_validation(
+        &self,
+        registry: &AdmittedWorkflowGovernanceReleaseRegistry,
+        admitted: &AdmittedWorkflowGovernanceRelease,
+        effective: &AdmittedEffectiveWorkflowGovernanceBundle,
+        projection: &WorkflowGovernanceLedgerProjection,
+        now: u64,
+        snapshot: &RetainedWorkflowProjectSnapshot,
+        validation_mode: WorkflowProjectSnapshotValidationMode,
+    ) -> Result<
+        (
+            WorkflowGovernanceGuidance,
+            VerifiedWorkflowGovernanceDecision,
+        ),
+        WorkflowGovernanceAdapterError,
+    > {
         let identity = self.identity(admitted);
         validate_identity(projection, &identity, &self.binding.project_root)?;
         let readiness_profile = projection
             .readiness_profile()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
-        snapshot.revalidate()?;
+        if validation_mode == WorkflowProjectSnapshotValidationMode::Standalone {
+            snapshot.revalidate()?;
+        }
         let snapshot_digest = snapshot.digest().to_owned();
         let trusted_registry_digest = self.current_trusted_registry_digest()?;
         let trusted_broker_registry = self.current_trusted_broker_registry_state()?;
@@ -5952,10 +6006,12 @@ impl WorkflowGovernanceProjectAdapter {
             &action_packets,
         );
         guidance.authorization.action_packets = action_packets;
-        // Every consumer above reads only retained observations. Revalidate once at
-        // the operation boundary so ambient namespace or content drift still fails
-        // closed without multiplying full-tree I/O by each evidence basis path.
-        snapshot.revalidate()?;
+        // Standalone consumers require a closing validation. Resume encloses this
+        // derivation between a fresh capture and its own final validation, so it
+        // must not repeat the complete project scan here.
+        if validation_mode == WorkflowProjectSnapshotValidationMode::Standalone {
+            snapshot.revalidate()?;
+        }
         guidance.authorization.objective_management_packet = objective_management_packet;
         Ok((guidance, verified))
     }
@@ -15457,7 +15513,12 @@ mod tests {
         assert!(resume.contains("LockedWorkflowDomainPackContext::acquire_existing"));
         assert!(resume.contains("observe_existing_workflow_governance_ledger"));
         assert!(resume.contains("require_effective_epoch_current"));
-        assert!(resume.contains("snapshot.revalidate()"));
+        assert!(resume.contains("guidance_from_projection_with_enclosing_snapshot_validation"));
+        assert_eq!(
+            resume.matches("snapshot.revalidate()").count(),
+            1,
+            "resume should close its fresh project capture with one final validation"
+        );
     }
 
     #[test]
