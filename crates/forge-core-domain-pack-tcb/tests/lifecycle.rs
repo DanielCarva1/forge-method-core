@@ -19,15 +19,18 @@ use forge_core_decisions::{
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, lock_domain_pack_lifecycle,
     lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle,
-    observe_domain_pack_lifecycle_for_project, verify_domain_pack_project_snapshot,
-    DomainPackImmutableArtifact, DomainPackLifecycleAuthorizationContext,
-    DomainPackLifecycleStoreError, LockedDomainPackLifecycleObservation,
-    DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
+    observe_domain_pack_lifecycle_for_project,
+    observe_existing_domain_pack_lifecycle_for_retained_project,
+    verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
+    DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
+    LockedDomainPackLifecycleObservation, DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH,
 };
+use forge_core_store::retained_project_tree::RetainedProjectTree;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn id(value: &str) -> StableId {
@@ -3695,6 +3698,48 @@ fn read_only_core_observation_leaves_no_absence_claim_or_delete_quarantine() {
 }
 
 #[test]
+fn shared_core_only_observation_validates_the_project_after_the_read_operation() {
+    let root = temp_state_root("shared-core-only-project-observation");
+    let project_root = root.parent().expect("project root");
+    let project_file = project_root.join("README.md");
+    fs::write(&project_file, b"captured\n").expect("write project file");
+
+    drop(
+        observe_domain_pack_lifecycle_for_project(project_root, &root)
+            .expect("initialize the existing-only lifecycle lock"),
+    );
+    let project_snapshot = Arc::new(
+        RetainedProjectTree::capture_allowing_store_owned_file_anchors(project_root, 32, 4096)
+            .expect("capture shared project observation"),
+    );
+    let observed = observe_existing_domain_pack_lifecycle_for_retained_project(
+        Arc::clone(&project_snapshot),
+        &root,
+    )
+    .expect("observe existing lifecycle over shared project handles");
+    let LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) = observed else {
+        panic!("empty lifecycle must remain core-only");
+    };
+
+    let error = lifecycle
+        .with_verified_core_only_view::<(), DomainPackLifecycleStoreError>(|_view| {
+            fs::write(&project_file, b"changed!\n").expect("mutate retained project file");
+            Ok(())
+        })
+        .expect_err("successful output must require final shared-project validation");
+    assert!(matches!(
+        error,
+        DomainPackLifecycleStoreError::InvalidDocument { .. }
+            | DomainPackLifecycleStoreError::Io { .. }
+            | DomainPackLifecycleStoreError::StaleExpectedState { .. }
+    ));
+
+    drop(lifecycle);
+    drop(project_snapshot);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
 fn observed_absence_is_bound_to_one_exact_lifecycle_store_acquisition() {
     let root = temp_state_root("read-only-store-instance-binding");
     let lock_a =
@@ -3764,8 +3809,8 @@ fn read_only_observation_preserves_active_generation_admission() {
         .admit_active_generation()
         .expect("promote exact observed pointer");
     admitted
-        .verified_view()
-        .expect("revalidate active generation");
+        .with_verified_view(|_view| Ok::<(), DomainPackLifecycleStoreError>(()))
+        .expect("close active generation read with stable project aliases");
     fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
 }
 

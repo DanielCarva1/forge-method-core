@@ -129,9 +129,10 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
-    observe_existing_domain_pack_lifecycle_for_project, AdmittedActiveDomainPackGeneration,
-    DomainPackLifecycleStoreError, LockedCoreOnlyDomainPackLifecycleObservation,
-    LockedDomainPackLifecycleObservation,
+    observe_existing_domain_pack_lifecycle_for_project,
+    observe_existing_domain_pack_lifecycle_for_retained_project,
+    AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
+    LockedCoreOnlyDomainPackLifecycleObservation, LockedDomainPackLifecycleObservation,
 };
 use forge_core_store::claim_wal::{
     claim_wal_lock_path, claim_wal_path, project_claim_wal, project_existing_claim_wal,
@@ -162,6 +163,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const INITIAL_PHASE: &str = "1-discovery";
@@ -797,7 +799,8 @@ pub struct WorkflowGovernanceProjectAdapter {
 /// the Store capability also retains and revalidates the complete directory and
 /// ancestor namespace. The capability is never serialized or returned to callers.
 pub(super) struct RetainedWorkflowProjectSnapshot {
-    tree: RetainedProjectTree,
+    tree: Arc<RetainedProjectTree>,
+    digest: String,
     regular_files: BTreeMap<String, (String, u64)>,
 }
 
@@ -812,20 +815,40 @@ impl RetainedWorkflowProjectSnapshot {
         Self::capture_with_limits(root, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_BYTES)
     }
 
+    fn capture_for_resume(root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let tree = Arc::new(
+            RetainedProjectTree::capture_allowing_store_owned_file_anchors(
+                root,
+                MAX_SNAPSHOT_FILES,
+                MAX_SNAPSHOT_BYTES,
+            )?,
+        );
+        Self::from_retained_tree(tree)
+    }
+
     fn capture_with_limits(
         root: &Path,
         maximum_files: usize,
         maximum_bytes: u64,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
         let maximum_entries = maximum_files.saturating_mul(2).min(MAX_SNAPSHOT_ENTRIES);
-        let tree = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
-            root,
-            maximum_entries,
-            maximum_files,
-            maximum_bytes,
-        )?;
+        let tree = Arc::new(
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                root,
+                maximum_entries,
+                maximum_files,
+                maximum_bytes,
+            )?,
+        );
+        Self::from_retained_tree(tree)
+    }
+
+    fn from_retained_tree(
+        tree: Arc<RetainedProjectTree>,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let digest = tree.workflow_regular_file_snapshot_digest()?;
         let regular_files = tree
-            .regular_file_observations()
+            .workflow_regular_file_observations()
             .into_iter()
             .map(|observation| {
                 (
@@ -836,12 +859,13 @@ impl RetainedWorkflowProjectSnapshot {
             .collect();
         Ok(Self {
             tree,
+            digest,
             regular_files,
         })
     }
 
     fn digest(&self) -> &str {
-        self.tree.regular_file_snapshot_digest()
+        &self.digest
     }
 
     fn regular_file_observation(&self, path: &str) -> Option<(&str, u64)> {
@@ -850,17 +874,25 @@ impl RetainedWorkflowProjectSnapshot {
             .map(|(digest, byte_length)| (digest.as_str(), *byte_length))
     }
 
+    fn project_tree_arc(&self) -> Arc<RetainedProjectTree> {
+        Arc::clone(&self.tree)
+    }
+
     fn revalidate(&self) -> Result<(), WorkflowGovernanceAdapterError> {
-        self.tree.revalidate()?;
+        self.tree.revalidate_with_stable_file_aliases()?;
         Ok(())
     }
 
-    pub(super) const fn tree(&self) -> &RetainedProjectTree {
+    pub(super) fn tree(&self) -> &RetainedProjectTree {
         &self.tree
     }
 
-    pub(super) const fn tree_mut(&mut self) -> &mut RetainedProjectTree {
-        &mut self.tree
+    pub(super) fn tree_mut(
+        &mut self,
+    ) -> Result<&mut RetainedProjectTree, WorkflowGovernanceAdapterError> {
+        Arc::get_mut(&mut self.tree).ok_or_else(|| WorkflowGovernanceAdapterError::ProjectBinding {
+            source: "a shared read-only Project Snapshot cannot enter a mutation path".to_owned(),
+        })
     }
 }
 
@@ -983,22 +1015,36 @@ impl LockedWorkflowDomainPackContext {
         project_root: &Path,
         state_root: &Path,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
-        match observe_domain_pack_lifecycle_for_project(project_root, state_root)? {
-            LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) => {
-                debug_assert!(lifecycle.projection().active_pointer.is_none());
-                Ok(Self::CoreOnly(Box::new(lifecycle)))
-            }
-            LockedDomainPackLifecycleObservation::Active(lifecycle) => {
-                Ok(Self::Active(Box::new(lifecycle.admit_active_generation()?)))
-            }
-        }
+        Self::from_observation(observe_domain_pack_lifecycle_for_project(
+            project_root,
+            state_root,
+        )?)
     }
 
     fn acquire_existing(
         project_root: &Path,
         state_root: &Path,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
-        match observe_existing_domain_pack_lifecycle_for_project(project_root, state_root)? {
+        Self::from_observation(observe_existing_domain_pack_lifecycle_for_project(
+            project_root,
+            state_root,
+        )?)
+    }
+
+    fn acquire_existing_with_project_snapshot(
+        project_snapshot: Arc<RetainedProjectTree>,
+        state_root: &Path,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        Self::from_observation(observe_existing_domain_pack_lifecycle_for_retained_project(
+            project_snapshot,
+            state_root,
+        )?)
+    }
+
+    fn from_observation(
+        observation: LockedDomainPackLifecycleObservation,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        match observation {
             LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) => {
                 debug_assert!(lifecycle.projection().active_pointer.is_none());
                 Ok(Self::CoreOnly(Box::new(lifecycle)))
@@ -1063,6 +1109,31 @@ impl LockedWorkflowDomainPackContext {
                     WorkflowDomainPackContextView::Active(view),
                 )?)
             }
+        }
+    }
+
+    fn with_effective_project_observation<T>(
+        &self,
+        core: &AdmittedWorkflowGovernanceRelease,
+        inspect: impl for<'view> FnOnce(
+            AdmittedEffectiveWorkflowGovernanceBundle<'view>,
+        ) -> Result<T, WorkflowGovernanceAdapterError>,
+    ) -> Result<T, WorkflowGovernanceAdapterError> {
+        match self {
+            Self::CoreOnly(lifecycle) => lifecycle.with_verified_core_only_view(|view| {
+                let effective = admit_effective_workflow_governance_bundle(
+                    core,
+                    WorkflowDomainPackContextView::CoreOnly(view),
+                )?;
+                inspect(effective)
+            }),
+            Self::Active(active) => active.with_verified_view(|view| {
+                let effective = admit_effective_workflow_governance_bundle(
+                    core,
+                    WorkflowDomainPackContextView::Active(view),
+                )?;
+                inspect(effective)
+            }),
         }
     }
 }
@@ -1755,7 +1826,7 @@ impl WorkflowGovernanceProjectAdapter {
             &self.binding,
             expected_preview_digest,
             prepared,
-            destination.tree_mut(),
+            destination.tree_mut()?,
             &effect_lock,
             &claim_guard,
         )
@@ -1855,7 +1926,7 @@ impl WorkflowGovernanceProjectAdapter {
             isolation_id,
             expected_preview_digest,
             fallback_prepared,
-            destination.tree_mut(),
+            destination.tree_mut()?,
             &effect_lock,
         )
         .map_err(WorkflowGovernanceAdapterError::PromotionApply)
@@ -2859,44 +2930,45 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn resume(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire_existing(
-            &self.binding.project_root,
+        let snapshot =
+            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire_existing_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
-        let effective = domain.admit_effective(admitted)?;
-        self.require_effective_epoch_current(admitted, &effective, &projection)
-            .map_err(|_| {
-                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
-                    "the Domain Pack generation or pending release rebase requires an explicit mutating workflow command before continuation can be projected",
-                )
-            })?;
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
-        let mut guidance = self.guidance_from_projection_with_enclosing_snapshot_validation(
-            &registry,
-            admitted,
-            &effective,
-            &projection,
-            now,
-            &snapshot,
-        )?;
-        let continuity = self.replacement_continuity(&guidance, &projection, now)?;
-        let final_projection = ledger.recover()?;
-        if final_projection.head_digest != projection.head_digest
-            || final_projection.current_state_version() != projection.current_state_version()
-            || final_projection.records != projection.records
-        {
-            return Err(
-                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
-                    "durable workflow state changed during read-only replacement inspection",
-                ),
-            );
-        }
-        snapshot.revalidate()?;
-        guidance.replacement_continuity = Some(continuity);
-        Ok(guidance)
+        domain.with_effective_project_observation(admitted, |effective| {
+            self.require_effective_epoch_current(admitted, &effective, &projection)
+                .map_err(|_| {
+                    WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                        "the Domain Pack generation or pending release rebase requires an explicit mutating workflow command before continuation can be projected",
+                    )
+                })?;
+            let mut guidance = self.guidance_from_projection_with_enclosing_snapshot_validation(
+                &registry,
+                admitted,
+                &effective,
+                &projection,
+                now,
+                &snapshot,
+            )?;
+            let continuity = self.replacement_continuity(&guidance, &projection, now)?;
+            let final_projection = ledger.recover()?;
+            if final_projection.head_digest != projection.head_digest
+                || final_projection.current_state_version() != projection.current_state_version()
+                || final_projection.records != projection.records
+            {
+                return Err(
+                    WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                        "durable workflow state changed during read-only replacement inspection",
+                    ),
+                );
+            }
+            guidance.replacement_continuity = Some(continuity);
+            Ok(guidance)
+        })
     }
 
     fn replacement_continuity(
@@ -15510,14 +15582,16 @@ mod tests {
                 "read-only resume must not use mutating path {forbidden}"
             );
         }
-        assert!(resume.contains("LockedWorkflowDomainPackContext::acquire_existing"));
+        assert!(resume
+            .contains("LockedWorkflowDomainPackContext::acquire_existing_with_project_snapshot"));
+        assert!(resume.contains("RetainedWorkflowProjectSnapshot::capture_for_resume"));
         assert!(resume.contains("observe_existing_workflow_governance_ledger"));
         assert!(resume.contains("require_effective_epoch_current"));
         assert!(resume.contains("guidance_from_projection_with_enclosing_snapshot_validation"));
-        assert_eq!(
-            resume.matches("snapshot.revalidate()").count(),
-            1,
-            "resume should close its fresh project capture with one final validation"
+        assert!(resume.contains("domain.with_effective_project_observation"));
+        assert!(
+            !resume.contains("snapshot.revalidate()"),
+            "the Domain Pack observation must own the shared final project validation"
         );
     }
 

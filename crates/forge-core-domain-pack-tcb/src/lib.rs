@@ -553,6 +553,27 @@ impl AdmittedActiveDomainPackGeneration {
             }
         })
     }
+
+    /// Run one read-only operation against the verified active generation and
+    /// close it by validating the same retained Project Snapshot with stable aliases.
+    ///
+    /// Store-owned completion anchors may remain present, but their link count,
+    /// metadata, namespace, identities, and exact bytes must not drift.
+    pub fn with_verified_view<T, E>(
+        &self,
+        inspect: impl for<'view> FnOnce(AdmittedActiveDomainPackGenerationView<'view>) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        E: From<DomainPackLifecycleStoreError>,
+    {
+        let view = self.verified_view().map_err(E::from)?;
+        let result = inspect(view)?;
+        self.project_snapshot
+            .revalidate_with_stable_file_aliases()
+            .map_err(DomainPackLifecycleStoreError::from)
+            .map_err(E::from)?;
+        Ok(result)
+    }
 }
 
 impl AdmittedActiveDomainPackGenerationView<'_> {
@@ -992,6 +1013,21 @@ pub fn observe_existing_domain_pack_lifecycle_for_project(
     )
 }
 
+/// Existing-only observer over a caller-retained Project Snapshot.
+///
+/// This is the shared-observation seam used when a higher-level read operation
+/// must derive Domain Pack and workflow views from the same exact project handles.
+/// The lifecycle store retains its own `Arc`, so the snapshot remains alive for
+/// the complete locked observation.
+#[doc(hidden)]
+pub fn observe_existing_domain_pack_lifecycle_for_retained_project(
+    project_snapshot: Arc<RetainedProjectTree>,
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root.as_ref())?;
+    observe_domain_pack_lifecycle_with_snapshot_internal(project_snapshot, &state_root, false)
+}
+
 fn observe_domain_pack_lifecycle_for_project_internal(
     project_root: &Path,
     state_root: &Path,
@@ -1013,6 +1049,18 @@ fn observe_domain_pack_lifecycle_for_project_internal(
             DOMAIN_PACK_MAX_PROJECT_SNAPSHOT_BYTES,
         )?,
     );
+    observe_domain_pack_lifecycle_with_snapshot_internal(
+        project_snapshot,
+        &state_root,
+        create_missing_lock,
+    )
+}
+
+fn observe_domain_pack_lifecycle_with_snapshot_internal(
+    project_snapshot: Arc<RetainedProjectTree>,
+    state_root: &Path,
+    create_missing_lock: bool,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
     let lock = if create_missing_lock {
         acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)
     } else {
@@ -1077,8 +1125,12 @@ fn observe_domain_pack_lifecycle_for_project_internal(
     }
     let recovery = observation.recovery().clone();
     let active_pointer_absence = store.consume_observed_active_pointer_absence(observation)?;
-    let state =
-        load_core_only_state_under_observation(&store, &project_snapshot, &active_pointer_absence)?;
+    let state = load_core_only_state_under_observation(
+        &store,
+        &project_snapshot,
+        &active_pointer_absence,
+        CoreOnlyProjectValidation::Required,
+    )?;
     Ok(LockedDomainPackLifecycleObservation::CoreOnly(
         LockedCoreOnlyDomainPackLifecycleObservation {
             store,
@@ -1115,13 +1167,22 @@ fn lock_domain_pack_lifecycle_for_canonical_project(
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CoreOnlyProjectValidation {
+    Required,
+    DeferredToOperationClose,
+}
+
 fn load_core_only_state_under_observation(
     store: &RetainedDomainPackLifecycleStore,
     project_snapshot: &RetainedProjectTree,
     active_pointer_absence: &RetainedDomainPackObservedActivePointerAbsence,
+    project_validation: CoreOnlyProjectValidation,
 ) -> Result<DomainPackLifecycleStateProjection, DomainPackLifecycleStoreError> {
     store.revalidate_observed_active_pointer_absence(active_pointer_absence)?;
-    project_snapshot.revalidate_without_store_owned_file_anchors()?;
+    if project_validation == CoreOnlyProjectValidation::Required {
+        project_snapshot.revalidate_without_store_owned_file_anchors()?;
+    }
     for directory in ["ledger", "generations", "receipts", "objects", "staging"] {
         let path = Path::new(DOMAIN_PACK_STATE_RELATIVE_ROOT).join(directory);
         if store.directory_exists(&path)? {
@@ -1205,10 +1266,42 @@ impl LockedCoreOnlyDomainPackLifecycleObservation {
     pub fn verified_core_only_view(
         &self,
     ) -> Result<AdmittedCoreOnlyDomainPackLifecycleView<'_>, DomainPackLifecycleStoreError> {
+        self.core_only_view(CoreOnlyProjectValidation::Required)
+    }
+
+    /// Run one read-only operation against the observed core-only view and close
+    /// the operation with a strict validation of the same retained Project Snapshot.
+    ///
+    /// The callback cannot return a successful result without the final project
+    /// validation succeeding. This lets a higher-level operation reuse the exact
+    /// project handles without weakening the lifecycle's fail-closed guarantee.
+    pub fn with_verified_core_only_view<T, E>(
+        &self,
+        inspect: impl for<'view> FnOnce(AdmittedCoreOnlyDomainPackLifecycleView<'view>) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        E: From<DomainPackLifecycleStoreError>,
+    {
+        let view = self
+            .core_only_view(CoreOnlyProjectValidation::DeferredToOperationClose)
+            .map_err(E::from)?;
+        let result = inspect(view)?;
+        self.project_snapshot
+            .revalidate_without_store_owned_file_anchors()
+            .map_err(DomainPackLifecycleStoreError::from)
+            .map_err(E::from)?;
+        Ok(result)
+    }
+
+    fn core_only_view(
+        &self,
+        project_validation: CoreOnlyProjectValidation,
+    ) -> Result<AdmittedCoreOnlyDomainPackLifecycleView<'_>, DomainPackLifecycleStoreError> {
         let current = load_core_only_state_under_observation(
             &self.store,
             &self.project_snapshot,
             &self.active_pointer_absence,
+            project_validation,
         )?;
         if current != self.state {
             return Err(stale(

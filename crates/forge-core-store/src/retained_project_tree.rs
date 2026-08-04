@@ -54,6 +54,13 @@ impl RetainedProjectCapturePolicy {
     }
 }
 
+fn is_top_level_workflow_local_path(relative_path: &str) -> bool {
+    relative_path == WORKFLOW_LOCAL_ROOT_NAME
+        || relative_path
+            .strip_prefix(WORKFLOW_LOCAL_ROOT_NAME)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
 #[derive(Debug, Clone, Copy)]
 enum RetainedFileAliasPolicy {
     SingleLink,
@@ -660,6 +667,34 @@ impl RetainedProjectTree {
         observations
     }
 
+    /// Sorted workflow-governance regular-file view of this retained tree.
+    ///
+    /// The complete tree remains retained, but the already-existing top-level
+    /// `.local` namespace is omitted from the persisted workflow snapshot
+    /// projection. Nested `.local` paths remain governed.
+    #[must_use]
+    pub fn workflow_regular_file_observations(&self) -> Vec<RetainedProjectRegularFileObservation> {
+        self.regular_file_observations()
+            .into_iter()
+            .filter(|observation| !is_top_level_workflow_local_path(&observation.relative_path))
+            .collect()
+    }
+
+    /// Digest the workflow-governance regular-file view retained by this tree.
+    ///
+    /// This preserves the persisted workflow v0 digest when the underlying
+    /// capability was captured with the broader Domain Pack project policy.
+    pub fn workflow_regular_file_snapshot_digest(
+        &self,
+    ) -> Result<String, RetainedProjectTreeError> {
+        let entries = self
+            .workflow_regular_file_observations()
+            .into_iter()
+            .map(|observation| (observation.relative_path, observation.content_digest))
+            .collect::<Vec<_>>();
+        retained_regular_file_projection_digest(&entries)
+    }
+
     /// Copy bytes from the already-retained exact file handle for one normalized
     /// project-relative path.
     ///
@@ -1223,6 +1258,16 @@ impl RetainedProjectTree {
             ));
         }
         Ok(())
+    }
+
+    /// Revalidate exact bytes and namespace while permitting only the file aliases
+    /// already present at capture.
+    ///
+    /// Unlike the lifecycle mutation policy, this freezes each retained file's
+    /// link count and change metadata. It is suitable for a shared read-only
+    /// observation consumed by workflow governance.
+    pub fn revalidate_with_stable_file_aliases(&self) -> Result<(), RetainedProjectTreeError> {
+        self.revalidate_with_file_alias_policy(RetainedFileAliasPolicy::StableAliases)
     }
 
     /// Require that no project file relies on the lifecycle-only allowance for
@@ -2984,6 +3029,46 @@ mod tests {
         drop(retained);
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn broader_domain_capture_projects_the_exact_workflow_regular_file_view() {
+        let root = project_root("shared-domain-workflow-view");
+        fs::create_dir_all(root.join(".local")).unwrap();
+        fs::create_dir_all(root.join("src/.local")).unwrap();
+        fs::write(root.join("README.md"), b"governed\n").unwrap();
+        fs::write(root.join(".local/resume.json"), b"local report\n").unwrap();
+        fs::write(root.join("src/.local/config.json"), b"nested governed\n").unwrap();
+
+        let shared =
+            RetainedProjectTree::capture_allowing_store_owned_file_anchors(&root, 32, 4096)
+                .unwrap();
+        let workflow = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+            &root, 32, 32, 4096,
+        )
+        .unwrap();
+
+        assert_eq!(
+            shared.workflow_regular_file_snapshot_digest().unwrap(),
+            workflow.regular_file_snapshot_digest()
+        );
+        let shared_paths = shared
+            .workflow_regular_file_observations()
+            .into_iter()
+            .map(|observation| observation.relative_path)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            shared_paths,
+            vec!["README.md".to_owned(), "src/.local/config.json".to_owned()]
+        );
+        assert!(shared
+            .regular_file_observations()
+            .iter()
+            .any(|observation| observation.relative_path == ".local/resume.json"));
+
+        drop(workflow);
+        drop(shared);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[cfg(unix)]
     #[test]
     fn workflow_capture_excludes_git_ignored_symlinks_but_never_tracked_files() {
@@ -3171,6 +3256,27 @@ mod tests {
         fs::hard_link(&leaf, anchors.join("after")).unwrap();
 
         assert!(retained.revalidate().is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(anchors).unwrap();
+    }
+    #[cfg(unix)]
+    #[test]
+    fn broader_domain_capture_can_close_a_read_only_stable_alias_observation() {
+        let root = project_root("shared-stable-file-aliases");
+        let anchors = project_root("shared-stable-file-aliases-anchor");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&anchors).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"stable").unwrap();
+        fs::hard_link(&leaf, anchors.join("before")).unwrap();
+
+        let retained =
+            RetainedProjectTree::capture_allowing_store_owned_file_anchors(&root, 16, 6).unwrap();
+        retained.revalidate_with_stable_file_aliases().unwrap();
+        fs::hard_link(&leaf, anchors.join("after")).unwrap();
+
+        assert!(retained.revalidate_with_stable_file_aliases().is_err());
         drop(retained);
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(anchors).unwrap();
