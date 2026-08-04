@@ -38,6 +38,11 @@ or routes a healthy project into agent-native workflow governance.
 Starting the runtime is not the user-facing outcome. Before asking the human
 for project facts or a decision, inspect the repository using narrow read-only
 queries and, when available, reconcile that evidence with Forge continuity.
+The `start` response is routing evidence, not project orientation. When it
+publishes a workflow `next_step.argv`, execute that handoff and consume its
+result before classifying the project or explaining where work stands. Never
+describe activation as complete or tell the human to run the published handoff.
+
 Classify the entry without asking the human to choose a mode:
 
 - `greenfield`: no meaningful implementation, product documentation, or project
@@ -261,9 +266,13 @@ proves integrity, not native host authenticity.
 
    Validate `data.next_step.argv` as an argv array with one of those exact shapes,
    require its root to equal `data.project.project_root`, and execute it directly.
-   Never run `workflow init` merely because a new chat started. If `start` routes
-   directly to `resume`, that response is the activation result: do not also run
-   release status, profile status, or a historical report.
+   This handoff is part of activation, not the governed project action that follows
+   activation; read-only or orientation-only operation never justifies skipping it.
+   Never orient from `start.data.state`, `reason`, or compatibility references while
+   the handoff remains unexecuted. Never run `workflow init` merely because a new
+   chat started. If `start` routes directly to `resume`, consume that response as
+   the activation result; do not also run release status, profile status, or a
+   historical report.
 
    Only after `start` routes a genuinely uninitialized project to `workflow init`,
    perform the following one-time setup checks:

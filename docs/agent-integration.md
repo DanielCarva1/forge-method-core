@@ -226,6 +226,10 @@ a development method must not become human homework.
 
 ## Replacement agents
 
+`start` is only the router into that activation: when it publishes a workflow
+argv, the host must execute and consume that handoff before orienting the user.
+A host must not present `start.data.state` or its compatibility reason as the
+recovered workflow state.
 A replacement begins from `start` and `workflow resume`. It must not require
 prior chat context. If durable state cannot reconstruct release, effective
 Domain Pack generation, accepted intent/assurance epoch, all eight lens states,

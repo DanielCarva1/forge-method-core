@@ -301,6 +301,16 @@ fn command_next_step_with_references(
 
 const WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH: &str = "wal/workflow-governance.ndjson";
 
+#[must_use]
+fn workflow_ledger_observed(resolved: &ProjectResolvePayload) -> bool {
+    let ledger_path =
+        Path::new(&resolved.state_root).join(WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH);
+    !matches!(
+        fs::symlink_metadata(ledger_path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
 /// Build the P5 handoff for a healthy sidecar.
 ///
 /// Presence of the workflow ledger routes an existing project directly to the
@@ -315,12 +325,7 @@ fn workflow_next_step(
     mut secondary_references: Vec<String>,
 ) -> NextStep {
     let root = project_root.display().to_string();
-    let ledger_path =
-        Path::new(&resolved.state_root).join(WORKFLOW_GOVERNANCE_LEDGER_RELATIVE_PATH);
-    if !matches!(
-        fs::symlink_metadata(ledger_path),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound
-    ) {
+    if workflow_ledger_observed(resolved) {
         let resume_argv = vec![
             "forge-core".to_string(),
             "workflow".to_string(),
@@ -693,11 +698,16 @@ fn classify(
     // preserved BootstrapState wire value and secondary references.
     let has_preview = preview_has_run(resolved);
     let has_contract = operation_contract_present(project_root);
+    let workflow_exists = workflow_ledger_observed(resolved);
 
     if has_preview {
         return (
             BootstrapState::PreviewRun,
-            "A preview has already been produced; the project is onboarded.".to_string(),
+            if workflow_exists {
+                "Existing workflow continuity is ready to resume; a legacy preview trace remains available as compatibility evidence.".to_string()
+            } else {
+                "A preview has already been produced; workflow governance still needs initialization.".to_string()
+            },
             Some(workflow_next_step(
                 resolved,
                 project_root,
@@ -715,8 +725,11 @@ fn classify(
     if has_contract {
         return (
             BootstrapState::ContractPresent,
-            "An operation contract exists; the project is ready for agent-native workflow governance."
-                .to_string(),
+            if workflow_exists {
+                "Existing workflow continuity is ready to resume; the operation contract remains compatibility evidence.".to_string()
+            } else {
+                "An operation contract exists; workflow governance still needs initialization.".to_string()
+            },
             Some(workflow_next_step(
                 resolved,
                 project_root,
@@ -734,7 +747,12 @@ fn classify(
     // secondary compatibility material and never select workflow or phase.
     (
         BootstrapState::SidecarReadyNoContract,
-        "State tree is healthy but no operation contract exists yet.".to_string(),
+        if workflow_exists {
+            "Existing workflow continuity is ready to resume; no legacy operation contract is present."
+                .to_string()
+        } else {
+            "State tree is healthy but workflow governance still needs initialization.".to_string()
+        },
         Some(workflow_next_step(
             resolved,
             project_root,

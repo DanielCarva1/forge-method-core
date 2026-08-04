@@ -391,6 +391,8 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         "Technical detail is welcome, but it must never be the whole explanation",
         "Orientation is a checkpoint, not a stopping point",
         "Ask exactly one concise question",
+        "The `start` response is routing evidence, not project orientation",
+        "This handoff is part of activation, not the governed project action",
         "<!-- uncertainty-driven-research:start -->",
         "Do not wait for the human to tell you to research.",
         "If it is consequential, research autonomously.",
