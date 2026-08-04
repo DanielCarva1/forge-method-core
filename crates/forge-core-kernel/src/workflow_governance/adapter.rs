@@ -817,8 +817,9 @@ impl RetainedWorkflowProjectSnapshot {
 
     fn capture_for_resume(root: &Path) -> Result<Self, WorkflowGovernanceAdapterError> {
         let tree = Arc::new(
-            RetainedProjectTree::capture_allowing_store_owned_file_anchors(
+            RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
                 root,
+                MAX_SNAPSHOT_FILES,
                 MAX_SNAPSHOT_FILES,
                 MAX_SNAPSHOT_BYTES,
             )?,
@@ -15585,6 +15586,18 @@ mod tests {
         assert!(resume
             .contains("LockedWorkflowDomainPackContext::acquire_existing_with_project_snapshot"));
         assert!(resume.contains("RetainedWorkflowProjectSnapshot::capture_for_resume"));
+        let capture_start = source
+            .find("    fn capture_for_resume(")
+            .expect("resume capture source");
+        let capture_end = source[capture_start..]
+            .find("    fn capture_with_limits(")
+            .map(|offset| capture_start + offset)
+            .expect("resume capture boundary");
+        let resume_capture = &source[capture_start..capture_end];
+        assert!(
+            resume_capture.contains("capture_shared_read_snapshot_allowing_stable_file_aliases")
+        );
+        assert!(!resume_capture.contains("capture_allowing_store_owned_file_anchors"));
         assert!(resume.contains("observe_existing_workflow_governance_ledger"));
         assert!(resume.contains("require_effective_epoch_current"));
         assert!(resume.contains("guidance_from_projection_with_enclosing_snapshot_validation"));

@@ -516,6 +516,28 @@ impl RetainedProjectTree {
         )
     }
 
+    /// Capture one read-only Project Snapshot shared by Domain Pack and workflow
+    /// governance.
+    ///
+    /// The broader Domain Pack path selection is retained, including top-level
+    /// `.local`, while existing file aliases are accepted and frozen. Callers may
+    /// derive the narrower workflow projection from the same exact handles.
+    pub fn capture_shared_read_snapshot_allowing_stable_file_aliases(
+        project_root: impl AsRef<Path>,
+        maximum_entries: usize,
+        maximum_files: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, RetainedProjectTreeError> {
+        Self::capture_with_file_alias_policy(
+            project_root.as_ref(),
+            maximum_entries,
+            Some(maximum_files),
+            maximum_bytes,
+            RetainedProjectCapturePolicy::StoreOwnedProjectSnapshot,
+            RetainedFileAliasPolicy::StableAliases,
+        )
+    }
+
     /// Capture a Domain Pack Project Snapshot that may already carry Store-owned
     /// lifetime anchor links from an earlier committed completion.
     ///
@@ -1268,6 +1290,33 @@ impl RetainedProjectTree {
     /// observation consumed by workflow governance.
     pub fn revalidate_with_stable_file_aliases(&self) -> Result<(), RetainedProjectTreeError> {
         self.revalidate_with_file_alias_policy(RetainedFileAliasPolicy::StableAliases)
+    }
+
+    /// Confirm from the completed capture that every retained file had one link.
+    ///
+    /// This performs no filesystem scan. It is valid only for a read-only capture
+    /// that froze alias metadata during its final namespace pass. A later operation
+    /// must still revalidate the retained tree before returning a successful result.
+    pub fn validate_captured_single_link_files(&self) -> Result<(), RetainedProjectTreeError> {
+        if !matches!(
+            self.file_alias_policy,
+            RetainedFileAliasPolicy::StableAliases
+        ) {
+            return Err(identity_error(
+                &self.display_root,
+                "captured single-link admission requires stable file aliases",
+            ));
+        }
+        for file in &self.files {
+            validate_file_metadata(
+                &file.metadata,
+                &self
+                    .display_root
+                    .join(relative_path_to_path(&file.relative_path)),
+                RetainedFileAliasPolicy::SingleLink,
+            )?;
+        }
+        Ok(())
     }
 
     /// Require that no project file relies on the lifecycle-only allowance for
@@ -3040,8 +3089,10 @@ mod tests {
         fs::write(root.join("src/.local/config.json"), b"nested governed\n").unwrap();
 
         let shared =
-            RetainedProjectTree::capture_allowing_store_owned_file_anchors(&root, 32, 4096)
-                .unwrap();
+            RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+                &root, 32, 32, 4096,
+            )
+            .unwrap();
         let workflow = RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
             &root, 32, 32, 4096,
         )
@@ -3051,6 +3102,7 @@ mod tests {
             shared.workflow_regular_file_snapshot_digest().unwrap(),
             workflow.regular_file_snapshot_digest()
         );
+        shared.validate_captured_single_link_files().unwrap();
         let shared_paths = shared
             .workflow_regular_file_observations()
             .into_iter()
@@ -3272,7 +3324,11 @@ mod tests {
         fs::hard_link(&leaf, anchors.join("before")).unwrap();
 
         let retained =
-            RetainedProjectTree::capture_allowing_store_owned_file_anchors(&root, 16, 6).unwrap();
+            RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+                &root, 16, 1, 6,
+            )
+            .unwrap();
+        assert!(retained.validate_captured_single_link_files().is_err());
         retained.revalidate_with_stable_file_aliases().unwrap();
         fs::hard_link(&leaf, anchors.join("after")).unwrap();
 

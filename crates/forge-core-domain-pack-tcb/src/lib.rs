@@ -1025,7 +1025,12 @@ pub fn observe_existing_domain_pack_lifecycle_for_retained_project(
     state_root: impl AsRef<Path>,
 ) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
     let state_root = canonical_state_root(state_root.as_ref())?;
-    observe_domain_pack_lifecycle_with_snapshot_internal(project_snapshot, &state_root, false)
+    observe_domain_pack_lifecycle_with_snapshot_internal(
+        project_snapshot,
+        &state_root,
+        false,
+        CoreOnlyProjectValidation::CapturedStableAliases,
+    )
 }
 
 fn observe_domain_pack_lifecycle_for_project_internal(
@@ -1053,6 +1058,7 @@ fn observe_domain_pack_lifecycle_for_project_internal(
         project_snapshot,
         &state_root,
         create_missing_lock,
+        CoreOnlyProjectValidation::Required,
     )
 }
 
@@ -1060,6 +1066,7 @@ fn observe_domain_pack_lifecycle_with_snapshot_internal(
     project_snapshot: Arc<RetainedProjectTree>,
     state_root: &Path,
     create_missing_lock: bool,
+    initial_project_validation: CoreOnlyProjectValidation,
 ) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
     let lock = if create_missing_lock {
         acquire_effect_store_lock(&state_root, DOMAIN_PACK_LIFECYCLE_LOCK_RELATIVE_PATH)
@@ -1129,7 +1136,7 @@ fn observe_domain_pack_lifecycle_with_snapshot_internal(
         &store,
         &project_snapshot,
         &active_pointer_absence,
-        CoreOnlyProjectValidation::Required,
+        initial_project_validation,
     )?;
     Ok(LockedDomainPackLifecycleObservation::CoreOnly(
         LockedCoreOnlyDomainPackLifecycleObservation {
@@ -1170,6 +1177,7 @@ fn lock_domain_pack_lifecycle_for_canonical_project(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CoreOnlyProjectValidation {
     Required,
+    CapturedStableAliases,
     DeferredToOperationClose,
 }
 
@@ -1180,8 +1188,14 @@ fn load_core_only_state_under_observation(
     project_validation: CoreOnlyProjectValidation,
 ) -> Result<DomainPackLifecycleStateProjection, DomainPackLifecycleStoreError> {
     store.revalidate_observed_active_pointer_absence(active_pointer_absence)?;
-    if project_validation == CoreOnlyProjectValidation::Required {
-        project_snapshot.revalidate_without_store_owned_file_anchors()?;
+    match project_validation {
+        CoreOnlyProjectValidation::Required => {
+            project_snapshot.revalidate_without_store_owned_file_anchors()?;
+        }
+        CoreOnlyProjectValidation::CapturedStableAliases => {
+            project_snapshot.validate_captured_single_link_files()?;
+        }
+        CoreOnlyProjectValidation::DeferredToOperationClose => {}
     }
     for directory in ["ledger", "generations", "receipts", "objects", "staging"] {
         let path = Path::new(DOMAIN_PACK_STATE_RELATIVE_ROOT).join(directory);

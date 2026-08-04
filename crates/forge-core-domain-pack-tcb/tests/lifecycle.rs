@@ -3709,8 +3709,13 @@ fn shared_core_only_observation_validates_the_project_after_the_read_operation()
             .expect("initialize the existing-only lifecycle lock"),
     );
     let project_snapshot = Arc::new(
-        RetainedProjectTree::capture_allowing_store_owned_file_anchors(project_root, 32, 4096)
-            .expect("capture shared project observation"),
+        RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+            project_root,
+            32,
+            32,
+            4096,
+        )
+        .expect("capture shared project observation"),
     );
     let observed = observe_existing_domain_pack_lifecycle_for_retained_project(
         Arc::clone(&project_snapshot),
@@ -3737,6 +3742,41 @@ fn shared_core_only_observation_validates_the_project_after_the_read_operation()
     drop(lifecycle);
     drop(project_snapshot);
     fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_core_only_observation_rejects_aliases_recorded_during_capture() {
+    let root = temp_state_root("shared-core-only-captured-alias");
+    let project_root = root.parent().expect("project root");
+    let project_file = project_root.join("README.md");
+    let anchors = project_root.with_extension("anchors");
+    fs::create_dir_all(&anchors).expect("create outside anchor directory");
+    fs::write(&project_file, b"captured\n").expect("write project file");
+
+    drop(
+        observe_domain_pack_lifecycle_for_project(project_root, &root)
+            .expect("initialize the existing-only lifecycle lock"),
+    );
+    fs::hard_link(&project_file, anchors.join("README.md")).expect("create existing alias");
+    let project_snapshot = Arc::new(
+        RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+            project_root,
+            32,
+            32,
+            4096,
+        )
+        .expect("capture stable shared observation with an existing alias"),
+    );
+    observe_existing_domain_pack_lifecycle_for_retained_project(
+        Arc::clone(&project_snapshot),
+        &root,
+    )
+    .expect_err("core-only state must reject aliases already proven by the capture");
+
+    drop(project_snapshot);
+    fs::remove_dir_all(project_root).expect("cleanup project");
+    fs::remove_dir_all(anchors).expect("cleanup anchors");
 }
 
 #[test]
@@ -3811,6 +3851,34 @@ fn read_only_observation_preserves_active_generation_admission() {
     admitted
         .with_verified_view(|_view| Ok::<(), DomainPackLifecycleStoreError>(()))
         .expect("close active generation read with stable project aliases");
+    drop(admitted);
+
+    let project_root = root.parent().expect("project root");
+    let shared_snapshot = Arc::new(
+        RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+            project_root,
+            32,
+            32,
+            4096,
+        )
+        .expect("capture active shared project observation"),
+    );
+    let shared = observe_existing_domain_pack_lifecycle_for_retained_project(
+        Arc::clone(&shared_snapshot),
+        &root,
+    )
+    .expect("observe active lifecycle through shared project handles");
+    let LockedDomainPackLifecycleObservation::Active(shared_lifecycle) = shared else {
+        panic!("installed generation must remain active through the shared observation");
+    };
+    let shared_admitted = shared_lifecycle
+        .admit_active_generation()
+        .expect("admit active generation from shared observation");
+    shared_admitted
+        .with_verified_view(|_view| Ok::<(), DomainPackLifecycleStoreError>(()))
+        .expect("close shared active read with stable project aliases");
+    drop(shared_admitted);
+    drop(shared_snapshot);
     fs::remove_dir_all(root.parent().expect("project root")).expect("cleanup");
 }
 
