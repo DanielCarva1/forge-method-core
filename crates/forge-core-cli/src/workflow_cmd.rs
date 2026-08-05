@@ -281,7 +281,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v3";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v4";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -342,11 +342,56 @@ struct WorkflowResumeBlockerSummary<'a> {
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
 struct WorkflowResumeActionSummary<'a> {
-    continuity_ranked: &'a [WorkflowReplacementRankedAction],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recommended: Option<WorkflowResumeActionRecommendation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cooperative_evidence_packet: Option<&'a WorkflowCooperativeEvidenceActionPacket>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cooperative_evidence_gap: Option<&'a str>,
+    continuity_ranked: &'a [WorkflowReplacementRankedAction],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeActionRecommendation {
+    kind: WorkflowResumeActionRecommendationKind,
+    action_ref: &'static str,
+    reason: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum WorkflowResumeActionRecommendationKind {
+    ExecuteCooperativeEvidencePacket,
+    ResolveCooperativeEvidenceGap,
+    ExecuteContinuityRankedAction,
+}
+
+fn recommended_workflow_resume_action(
+    has_cooperative_evidence_packet: bool,
+    has_cooperative_evidence_gap: bool,
+    continuity_ranked: &[WorkflowReplacementRankedAction],
+) -> Option<WorkflowResumeActionRecommendation> {
+    if has_cooperative_evidence_packet {
+        return Some(WorkflowResumeActionRecommendation {
+            kind: WorkflowResumeActionRecommendationKind::ExecuteCooperativeEvidencePacket,
+            action_ref: "actions.cooperative_evidence_packet",
+            reason: "a concrete Solo Cooperative packet is executable before capability acquisition or human escalation",
+        });
+    }
+    if has_cooperative_evidence_gap {
+        return Some(WorkflowResumeActionRecommendation {
+            kind: WorkflowResumeActionRecommendationKind::ResolveCooperativeEvidenceGap,
+            action_ref: "actions.cooperative_evidence_gap",
+            reason:
+                "the Solo Cooperative route gap must be resolved before abstract fallback actions",
+        });
+    }
+    (!continuity_ranked.is_empty()).then_some(WorkflowResumeActionRecommendation {
+        kind: WorkflowResumeActionRecommendationKind::ExecuteContinuityRankedAction,
+        action_ref: "actions.continuity_ranked[0]",
+        reason: "no concrete Solo Cooperative packet or route gap is currently published",
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -499,11 +544,19 @@ fn workflow_resume_summary(guidance: &WorkflowGovernanceGuidance) -> WorkflowRes
             continuity_blockers,
             continuity_warnings,
         },
-        actions: WorkflowResumeActionSummary {
-            continuity_ranked: continuity
-                .map_or(&[], |continuity| continuity.ranked_next_actions.as_slice()),
-            cooperative_evidence_packet: guidance.cooperative_evidence_action_packet.as_ref(),
-            cooperative_evidence_gap: guidance.cooperative_evidence_action_gap.as_deref(),
+        actions: {
+            let continuity_ranked: &[WorkflowReplacementRankedAction] =
+                continuity.map_or(&[], |continuity| continuity.ranked_next_actions.as_slice());
+            WorkflowResumeActionSummary {
+                recommended: recommended_workflow_resume_action(
+                    guidance.cooperative_evidence_action_packet.is_some(),
+                    guidance.cooperative_evidence_action_gap.is_some(),
+                    continuity_ranked,
+                ),
+                cooperative_evidence_packet: guidance.cooperative_evidence_action_packet.as_ref(),
+                cooperative_evidence_gap: guidance.cooperative_evidence_action_gap.as_deref(),
+                continuity_ranked,
+            }
         },
         active_isolations,
         recoverable_promotions,
@@ -1212,6 +1265,27 @@ mod tests {
         let retired = parse_args(&argv(&["workflow", "resume", "--full"]))
             .expect_err("resume no longer exposes a second detail mode");
         assert_eq!(retired, "unrecognized workflow argument '--full'");
+    }
+
+    #[test]
+    fn resume_recommends_concrete_cooperative_packet_before_abstract_actions() {
+        let abstract_actions = [WorkflowReplacementRankedAction {
+            rank: 1,
+            kind: forge_core_kernel::WorkflowReplacementRankedActionKind::GovernedNext,
+            description: "Acquire the missing capability".to_owned(),
+            argv: Vec::new(),
+            governed_action: None,
+        }];
+        let recommended = recommended_workflow_resume_action(true, false, &abstract_actions)
+            .expect("concrete packet must outrank the abstract action");
+        assert_eq!(
+            serde_json::to_value(recommended).expect("recommendation JSON"),
+            serde_json::json!({
+                "kind": "execute_cooperative_evidence_packet",
+                "action_ref": "actions.cooperative_evidence_packet",
+                "reason": "a concrete Solo Cooperative packet is executable before capability acquisition or human escalation"
+            })
+        );
     }
 
     #[test]

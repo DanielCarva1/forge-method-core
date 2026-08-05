@@ -129,7 +129,7 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow_resume_summary_v3` exposes an active
+Once `workflow_resume_summary_v4` exposes an active
 `agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
@@ -236,14 +236,20 @@ Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
 The current executable returns the concise, versioned
-`workflow_resume_summary_v3` activation view by default. V3 is the complete
+`workflow_resume_summary_v4` activation view by default. V4 is the complete
 current-state contract for the agent: it carries the current objective; the
 full autonomy projection; every current evaluation, blocker, warning, active
 isolation, recoverable promotion, cooperative evidence item, authorization
 packet, and exact gap. Counts identify only older audit history omitted from
 the activation view.
 
-`workflow_resume_summary_v1` and `workflow_resume_summary_v2` are legacy views.
+V4 adds `actions.recommended` as the explicit user-journey priority. A published
+Solo Cooperative evidence packet outranks abstract capability acquisition and
+human escalation. The recommendation points at the authoritative packet or gap
+rather than copying it, so the activation response stays small and unambiguous.
+
+`workflow_resume_summary_v1`, `workflow_resume_summary_v2`, and
+`workflow_resume_summary_v3` are legacy views.
 A host may continue from fields they actually publish but must not infer that
 omitted v3 fields represent absent obligations. Update the runtime when a
 missing field is required for the next safe action; do not automatically run a
@@ -322,7 +328,7 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 For a `solo_cooperative` objective, agents use the one existing public command,
 `forge-core workflow evidence admit-cooperative`, with the closed packet from
-`workflow_resume_summary_v3.actions.cooperative_evidence_packet`. The offer is
+`workflow_resume_summary_v4.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
 claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this

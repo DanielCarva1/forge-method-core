@@ -97,7 +97,7 @@ material risk acceptance, or irreversible/external effect. Before asking,
 explain the context, options, consequences, and recommendation, then ask exactly
 one concise question. If no human input is needed, say so plainly and continue.
 
-Treat the current `workflow_resume_summary_v3` as the working continuity view and
+Treat the current `workflow_resume_summary_v4` as the working continuity view and
 reuse the same v3 response until durable workflow state changes. Never run two
 resume commands consecutively: a successful operation that can change workflow
 evaluation must intervene. Do not refresh after repository inspection,
@@ -310,7 +310,7 @@ proves integrity, not native host authenticity.
 
    `/start-forge` runs once per chat, not once per task. The current activation
    capability is present only when resume returns
-   `data.schema_version=workflow_resume_summary_v3`. V3 contains everything
+   `data.schema_version=workflow_resume_summary_v4`. V4 contains everything
    needed for the current agent step: effective Domain Pack identity, objective,
    autonomy projection, current evaluation, boundary rechecks, human decisions,
    blockers and warnings, ranked actions, active isolations, recoverable
@@ -318,7 +318,14 @@ proves integrity, not native host authenticity.
    packet or exact gap. `data.omitted_history` counts older records only; it does
    not hide current obligations.
 
-   `workflow_resume_summary_v1` and `workflow_resume_summary_v2` are legacy
+   Read `data.actions.recommended` before the abstract evaluation ranking. When
+   it points to `actions.cooperative_evidence_packet`, execute that concrete
+   Solo Cooperative packet before capability acquisition or human escalation.
+   The referenced packet or gap remains the executable/detail authority; the
+   recommendation only makes the intended journey order explicit.
+
+   `workflow_resume_summary_v1`, `workflow_resume_summary_v2`, and
+   `workflow_resume_summary_v3` are legacy
    activation responses. Use only fields they actually publish and never infer
    that a missing current field means no obligation exists. Report that the
    installed runtime needs updating when those fields are necessary; do not
@@ -337,7 +344,7 @@ proves integrity, not native host authenticity.
    report, or help command ran. In the rest of this skill, "refresh workflow"
    means the same-root default `workflow resume` call.
 
-   In v3, `data.human_decisions.recovered_pending` contains only decision events
+   In v4, `data.human_decisions.recovered_pending` contains only decision events
    actually recorded in the ledger. A question under
    `data.current_evaluation.candidate_decision_requests` was calculated now; do
    not tell the user it came from the previous chat. The historical report keeps
@@ -350,11 +357,11 @@ proves integrity, not native host authenticity.
    over an error, reconstruct argv from display text, or fall back to
    caller-selected routing.
 
-   In v3, read obligations, evidence/capability gaps, Decision Requests, issues,
+   In v4, read obligations, evidence/capability gaps, Decision Requests, issues,
    and ranked next actions from `data.current_evaluation`, then read continuity
    recovery from `data.actions` and authority from `data.authorization`. Its
    action packets are read-only, current-state authority offers; they are not
-   permission to act. V3 publishes the complete packet set. Legacy v1 publishes
+   permission to act. V4 publishes the complete packet set. Legacy v1 publishes
    only packet references and an exact `action_packets_argv`; execute that argv
    when the selected governed action needs a packet, rather than treating a
    reference as the packet. `forge-core workflow action-packets --root
@@ -591,7 +598,7 @@ Common conventions include `~/.pi/agent/skills/` (Pi),
 Activate this behavior once when `/start-forge` begins the chat; do not ask the
 user to restart Forge for each task.
 
-After an objective is accepted, always inspect the fresh v2
+After an objective is accepted, always inspect the fresh v4
 `data.actions.cooperative_evidence_packet`. The packet's `route.target` decides
 what the agent must assess; a missing `target` is legacy `source_claim`:
 

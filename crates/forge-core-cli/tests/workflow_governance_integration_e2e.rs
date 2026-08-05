@@ -987,7 +987,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v3"
+        "workflow_resume_summary_v4"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
