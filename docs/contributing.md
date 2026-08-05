@@ -167,8 +167,9 @@ unblocked and sized for a single agent session.
   Markdown, since the validator scans the filesystem, not `.gitignore`.
 - Workspace tests: `cargo test --workspace`. (Do not combine `--locked` and
   `--quiet`; that variant is not a real cargo flag combination.)
-- Windows native has known failures in crash-replace (os error 5) and
-  path-normalization paths; WSL2 is the supported Windows environment.
+- Windows-native crash-replace and cross-host path identity have regression
+  coverage, but native durability remains best-effort; use WSL2 when the
+  production-grade durability guarantee is required.
 
 ## Security-sensitive reports
 

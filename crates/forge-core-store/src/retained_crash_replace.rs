@@ -709,10 +709,14 @@ fn revalidate_retained_digest_handle(
             "retained crash-replacement handle changed identity",
         ));
     }
-    if retained_link_count(&retained.file)? != retained.link_count {
+    let actual_link_count = retained_link_count(&retained.file)?;
+    if actual_link_count != retained.link_count {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "retained crash-replacement handle changed link count",
+            format!(
+                "retained crash-replacement handle changed link count (expected {}, found {actual_link_count})",
+                retained.link_count
+            ),
         ));
     }
     if read_retained_digest(&mut retained.file, maximum)? != retained.digest {
@@ -873,6 +877,19 @@ impl RecoveryWitness {
                 "retained recovery target-removal witness is absent",
             )
         })?;
+        #[cfg(windows)]
+        {
+            let link_count = retained_link_count(&retained_target.file)?;
+            if link_count != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "retained recovery target still has {link_count} links after exact removal"
+                    ),
+                ));
+            }
+            retained_target.link_count = 0;
+        }
         revalidate_retained_digest_handle(retained_target, maximum)?;
         target.require_absent(&names.target)?;
         match self.transaction.as_mut() {
@@ -3326,6 +3343,32 @@ mod tests {
         assert_eq!(exact.digest(), sha256_content_hash(new));
         assert_no_sidecars(&root);
         drop(exact);
+        drop(lock);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reconciliation_session_replaces_claimed_absence() {
+        let root = temp_root("session-claimed-absence");
+        let lock = acquire_effect_store_lock(&root, LOCK).expect("lifecycle lock");
+        let content = b"revision: 1\n";
+
+        let session =
+            reconcile_file_crash_safe_under_retained_lock(&lock, Path::new(TARGET), MAX_BYTES)
+                .expect("reconcile clean absence");
+        assert!(session.raw_bytes().is_none());
+
+        let installed = session
+            .replace(content)
+            .expect("replace Store-claimed absence");
+        assert_eq!(installed.raw_bytes(), content);
+        assert_eq!(
+            fs::read(target_path(&root)).expect("installed bytes"),
+            content
+        );
+        assert_no_sidecars(&root);
+
+        drop(installed);
         drop(lock);
         fs::remove_dir_all(root).expect("cleanup");
     }

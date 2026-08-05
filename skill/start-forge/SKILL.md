@@ -97,6 +97,20 @@ material risk acceptance, or irreversible/external effect. Before asking,
 explain the context, options, consequences, and recommendation, then ask exactly
 one concise question. If no human input is needed, say so plainly and continue.
 
+Treat the current `workflow_resume_summary_v3` as the working continuity view and
+reuse the same v3 response until durable workflow state changes. Never run two
+resume commands consecutively: a successful operation that can change workflow
+evaluation must intervene. Do not refresh after repository inspection,
+validation, tests, status, report, or help. A read-only command does not make the
+current response stale.
+
+For Solo Cooperative work, translate the ranked action into the smallest concrete
+executable step compatible with the active objective and begin that work in the
+same turn. Do not treat an abstract capability label as the task itself. Exhaust
+concrete Solo Cooperative packets and reversible local work before escalating to
+the human. The selected project step must not be replaced by an unrelated
+validation command merely because that command is easy to run.
+
 For greenfield, say plainly that no established project was found, summarize
 any seed material that does exist, and then ask what outcome the human wants to
 create. A Forge setup or bridge failure does not waive orientation: provide the

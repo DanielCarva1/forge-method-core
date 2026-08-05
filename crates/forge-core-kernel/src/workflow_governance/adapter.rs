@@ -9268,11 +9268,51 @@ fn validate_identity(
             None
         }
     });
-    let expected_root = expected_project_root.display().to_string();
-    if imported_root != Some(expected_root.as_str()) {
+    if !imported_root.is_some_and(|imported| project_roots_match(imported, expected_project_root)) {
         return Err(WorkflowGovernanceAdapterError::LedgerIdentityMismatch);
     }
     Ok(())
+}
+
+fn project_roots_match(imported_root: &str, expected_project_root: &Path) -> bool {
+    if imported_root == expected_project_root.display().to_string() {
+        return true;
+    }
+
+    cross_host_project_root(imported_root)
+        .and_then(|candidate| candidate.canonicalize().ok())
+        .zip(expected_project_root.canonicalize().ok())
+        .is_some_and(|(imported, expected)| imported == expected)
+}
+
+#[cfg(windows)]
+fn cross_host_project_root(imported_root: &str) -> Option<PathBuf> {
+    let remainder = imported_root.strip_prefix("/mnt/")?;
+    let (drive, tail) = remainder.split_once('/')?;
+    if drive.len() != 1 || !drive.as_bytes()[0].is_ascii_alphabetic() {
+        return None;
+    }
+    Some(PathBuf::from(format!(
+        "{}:\\{}",
+        drive.to_ascii_uppercase(),
+        tail.replace('/', "\\")
+    )))
+}
+
+#[cfg(not(windows))]
+fn cross_host_project_root(imported_root: &str) -> Option<PathBuf> {
+    let raw = imported_root.strip_prefix(r"\\?\").unwrap_or(imported_root);
+    let bytes = raw.as_bytes();
+    if bytes.len() < 3
+        || !bytes[0].is_ascii_alphabetic()
+        || bytes[1] != b':'
+        || !matches!(bytes[2], b'\\' | b'/')
+    {
+        return None;
+    }
+    let drive = (bytes[0] as char).to_ascii_lowercase();
+    let tail = raw[3..].replace('\\', "/");
+    Some(PathBuf::from(format!("/mnt/{drive}/{tail}")))
 }
 
 fn broker_semantic_input_to_closed(
@@ -19997,5 +20037,20 @@ mod tests {
             second.next(),
             Err(WorkflowGovernanceAdapterError::LedgerIdentityMismatch)
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn historical_wsl_root_matches_the_same_native_windows_directory() {
+        let (root, _) = temp_project("wsl-native-root-equivalence");
+        let native = root
+            .to_string_lossy()
+            .strip_prefix(r"\\?\")
+            .unwrap_or(root.to_string_lossy().as_ref())
+            .replace('\\', "/");
+        let (drive, remainder) = native.split_once(':').expect("Windows drive path");
+        let historical_wsl = format!("/mnt/{}/{remainder}", drive.to_ascii_lowercase());
+
+        assert!(project_roots_match(&historical_wsl, &root));
     }
 }

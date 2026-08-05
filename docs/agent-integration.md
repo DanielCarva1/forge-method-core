@@ -266,6 +266,11 @@ or when context was lost and must be recovered. `workflow next` remains the
 complete current guidance projection; it is not the chat-continuity refresh
 surface.
 
+A conforming host never issues two consecutive resume calls. It reuses the
+complete current response until a successful operation capable of changing the
+workflow evaluation has run. Repository inspection, validation, tests, status,
+report, and help are read-only for this rule and do not trigger a refresh.
+
 The format does not depend on a particular agent host. Compatibility with
 Codex, ZCode, Claude, Cursor, OpenCode, pi.dev, or another host remains a
 candidate until that host passes its own end-to-end integration test. A host may

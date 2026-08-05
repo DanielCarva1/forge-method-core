@@ -3009,6 +3009,10 @@ mod platform {
         file_name: [u16; 1],
     }
     #[repr(C)]
+    struct FileDispositionInfoEx {
+        flags: u32,
+    }
+    #[repr(C)]
     struct FileDispositionInfo {
         delete_file: i32,
     }
@@ -3423,14 +3427,41 @@ mod platform {
     }
 
     pub fn remove_exact(source: File) -> io::Result<()> {
+        const FILE_DISPOSITION_INFO_EX_CLASS: u32 = 21;
         const FILE_DISPOSITION_INFO_CLASS: u32 = 4;
-        let info = FileDispositionInfo { delete_file: 1 };
+        const FILE_DISPOSITION_FLAG_DELETE: u32 = 0x1;
+        const FILE_DISPOSITION_FLAG_POSIX_SEMANTICS: u32 = 0x2;
+        let info = FileDispositionInfoEx {
+            flags: FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
+        };
         // SAFETY: source is the live exact-entry handle and info has the documented layout.
         let result = unsafe {
             SetFileInformationByHandle(
                 source.as_raw_handle().cast(),
-                FILE_DISPOSITION_INFO_CLASS,
+                FILE_DISPOSITION_INFO_EX_CLASS,
                 (&raw const info).cast(),
+                u32::try_from(std::mem::size_of::<FileDispositionInfoEx>())
+                    .expect("disposition size"),
+            )
+        };
+        if result != 0 {
+            drop(source);
+            return Ok(());
+        }
+        let extended_error = io::Error::last_os_error();
+        if !matches!(extended_error.raw_os_error(), Some(1 | 50 | 87)) {
+            return Err(extended_error);
+        }
+
+        let fallback = FileDispositionInfo { delete_file: 1 };
+        // SAFETY: older Windows/filesystem combinations may not support
+        // FileDispositionInfoEx. The legacy disposition uses the same exact
+        // DELETE-capable handle.
+        let result = unsafe {
+            SetFileInformationByHandle(
+                source.as_raw_handle().cast(),
+                FILE_DISPOSITION_INFO_CLASS,
+                (&raw const fallback).cast(),
                 u32::try_from(std::mem::size_of::<FileDispositionInfo>())
                     .expect("disposition size"),
             )

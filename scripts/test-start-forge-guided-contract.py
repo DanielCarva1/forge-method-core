@@ -100,6 +100,31 @@ class GuidedActivationContractTests(unittest.TestCase):
             "If no human input is needed, say so plainly and continue",
         )
 
+    def test_resume_refresh_is_bounded_by_real_state_changes(self) -> None:
+        self.assert_contract_contains(
+            "reuse the same v3 response",
+            "Never run two resume commands consecutively",
+            "a successful operation that can change workflow evaluation must intervene",
+            "Do not refresh after repository inspection, validation, tests, status, report, or help",
+        )
+        integration = normalized(AGENT_INTEGRATION.read_text(encoding="utf-8"))
+        for expected in (
+            "never issues two consecutive resume calls",
+            "reuses the complete current response",
+            "operation capable of changing the workflow evaluation",
+        ):
+            with self.subTest(integration=expected):
+                self.assertIn(expected, integration)
+
+    def test_solo_work_uses_concrete_executable_steps_before_human_escalation(self) -> None:
+        self.assert_contract_contains(
+            "compatible with the active objective",
+            "begin that work in the same turn",
+            "do not treat an abstract capability label as the task itself",
+            "exhaust concrete Solo Cooperative packets and reversible local work",
+            "must not be replaced by an unrelated validation command",
+        )
+
     def test_all_primary_activation_journeys_have_closed_behavior(self) -> None:
         matrix = marked_section(self.contract, "guided-activation-journeys")
         rows: dict[str, tuple[str, str, str]] = {}
