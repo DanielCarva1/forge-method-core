@@ -7908,20 +7908,28 @@ fn derive_receipts(
                 // Source assessment is evidence for the selected claim only.
                 // Applicability has its own explicit same-owner assessment target;
                 // that target exits above before any evidence or capability projection.
-                derived.available_capability_refs.extend(
-                    policy
-                        .capability_requirements
-                        .iter()
-                        .filter(|requirement| {
-                            requirement.kind == CapabilityGapKind::Tool
-                                && requirement.probe_kind
-                                    == WorkflowCapabilityProbeKind::LocalCommand
-                                && requirement
-                                    .affected_claim_refs
-                                    .contains(&admitted.claim_ref)
-                        })
-                        .map(|requirement| requirement.id.clone()),
-                );
+                if admitted.outcome == WorkflowEvidenceOutcome::Pass {
+                    derived.available_capability_refs.extend(
+                        policy
+                            .capability_requirements
+                            .iter()
+                            .filter(|requirement| {
+                                let repository_inspector_available = requirement.kind
+                                    == CapabilityGapKind::Tool
+                                    && requirement.probe_kind
+                                        == WorkflowCapabilityProbeKind::LocalCommand;
+                                let executed_environment_available = deterministic_execution
+                                    && requirement.kind == CapabilityGapKind::Environment
+                                    && requirement.probe_kind
+                                        == WorkflowCapabilityProbeKind::RuntimeHandshake;
+                                (repository_inspector_available || executed_environment_available)
+                                    && requirement
+                                        .affected_claim_refs
+                                        .contains(&admitted.claim_ref)
+                            })
+                            .map(|requirement| requirement.id.clone()),
+                    );
+                }
             }
             WorkflowGovernanceEvent::WaiverAuthorized(event) => {
                 let authority = receipt_trust_root(

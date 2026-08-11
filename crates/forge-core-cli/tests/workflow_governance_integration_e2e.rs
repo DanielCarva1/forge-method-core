@@ -2217,10 +2217,33 @@ fn solo_deterministic_policy_publishes_and_executes_a_safe_evidence_packet() {
     );
 
     let after = assert_ok(&consumer.run(&["resume"]));
-    assert_ne!(
-        after["data"]["actions"]["recommended"]["kind"], "resolve_source_claim_gap",
-        "a successful kernel execution must satisfy the selected deterministic source claim"
+    assert_eq!(
+        after["data"]["status"], "ready_to_complete",
+        "a successful kernel execution must satisfy both the selected claim and its proof-environment capability"
     );
+    assert!(
+        after["data"]["current_evaluation"]["candidate_capability_gaps"]
+            .as_array()
+            .is_some_and(Vec::is_empty)
+    );
+
+    let completion_snapshot = after["data"]["snapshot_digest"]
+        .as_str()
+        .expect("deterministic completion snapshot")
+        .to_owned();
+    assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        &completion_snapshot,
+        "--principal",
+        "principal.agent.deterministic-e2e",
+    ]));
+    let advanced = assert_ok(&consumer.run(&["next"]));
+    assert!(advanced["data"]["boundary_rechecks"]
+        .as_array()
+        .is_some_and(|rechecks| rechecks.iter().all(|recheck| {
+            recheck["policy_ref"] != "policy.workflow.technical-feasibility-scan"
+        })), "a completed deterministic feasibility check must not block the next policy by forgetting its proof environment");
 }
 #[test]
 fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback() {
