@@ -37,7 +37,8 @@ use forge_core_contracts::{
 };
 use forge_core_decisions::workflow_release_admission_v2::{
     evaluate_workflow_release_admission_candidate_v2, WorkflowReleaseAdmissionCandidateV2Input,
-    WorkflowReleaseAdmissionV2EvaluationAuthority, WorkflowReleaseAdmissionV2EvaluationStatus,
+    WorkflowReleaseAdmissionV2Evaluation, WorkflowReleaseAdmissionV2EvaluationAuthority,
+    WorkflowReleaseAdmissionV2EvaluationStatus,
 };
 use forge_core_decisions::{
     embedded_text, embedded_yaml_paths, evaluate_workflow_migration,
@@ -77,6 +78,13 @@ struct EmbeddedWorkflowReleaseAdmissionDescriptorV2 {
     evaluator_source: &'static [u8],
     frozen_history: &'static [u8],
 }
+
+type PreparedEmbeddedWorkflowReleaseV2 = (
+    EmbeddedWorkflowReleaseAdmissionDescriptorV2,
+    WorkflowReleaseAdmissionAuthorizationV2Document,
+    WorkflowReleaseAdmissionCandidateV2Input,
+    WorkflowReleaseAdmissionV2Evaluation,
+);
 
 /// V2 releases are appended here only after their signed artifacts exist.
 /// Order is security-sensitive: every descriptor must name the immediate
@@ -482,6 +490,28 @@ pub fn load_admitted_workflow_governance_reviewed_release_registry(
 #[allow(clippy::too_many_lines)]
 fn load_admitted_workflow_governance_reviewed_release_registry_uncached(
 ) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    let (v1_registry, prepared) = std::thread::scope(|scope| {
+        let v1 =
+            scope.spawn(load_admitted_workflow_governance_v1_reviewed_release_registry_uncached);
+        let prepared = scope.spawn(|| {
+            prepare_embedded_v2_release_chain(
+                &EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[..REVIEWED_RELEASE_V2_ADMISSION_COUNT],
+            )
+        });
+        let v1 = v1
+            .join()
+            .map_err(|_| AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)??;
+        let prepared = prepared
+            .join()
+            .map_err(|_| AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)??;
+        Ok::<_, AdmittedWorkflowGovernanceReleaseError>((v1, prepared))
+    })?;
+    admit_prepared_v2_release_chain(v1_registry, prepared)
+}
+
+#[allow(clippy::too_many_lines)]
+fn load_admitted_workflow_governance_v1_reviewed_release_registry_uncached(
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
     let input = load_review_candidate_input()?;
     let evaluation = evaluate_workflow_release_admission_candidate(&input);
     if evaluation.status
@@ -535,11 +565,7 @@ fn load_admitted_workflow_governance_reviewed_release_registry_uncached(
     .map_err(|error| {
         AdmittedWorkflowGovernanceReleaseError::ReviewAuthorizationInvalid(error.to_string())
     })?;
-    let v1_registry = admit_reviewed_registry(input, capability)?;
-    admit_embedded_v2_release_chain(
-        v1_registry,
-        &EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[..REVIEWED_RELEASE_V2_ADMISSION_COUNT],
-    )
+    admit_reviewed_registry(input, capability)
 }
 
 /// Admit the Universal Assurance successor on top of the frozen reviewed
@@ -558,31 +584,78 @@ pub fn load_admitted_workflow_governance_universal_assurance_release_registry(
         Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError>,
     > = OnceLock::new();
     match ADMITTED.get_or_init(|| {
-        let reviewed = load_admitted_workflow_governance_reviewed_release_registry()?;
-        admit_embedded_v2_release_chain(
-            reviewed,
-            &EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2[REVIEWED_RELEASE_V2_ADMISSION_COUNT..],
-        )
+        let (v1_registry, prepared) = std::thread::scope(|scope| {
+            let v1 = scope
+                .spawn(load_admitted_workflow_governance_v1_reviewed_release_registry_uncached);
+            let prepared = scope.spawn(|| {
+                prepare_embedded_v2_release_chain(EMBEDDED_WORKFLOW_RELEASE_ADMISSIONS_V2)
+            });
+            let v1 = v1
+                .join()
+                .map_err(|_| AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)??;
+            let prepared = prepared
+                .join()
+                .map_err(|_| AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)??;
+            Ok::<_, AdmittedWorkflowGovernanceReleaseError>((v1, prepared))
+        })?;
+        admit_prepared_v2_release_chain(v1_registry, prepared)
     }) {
         Ok(registry) => Ok(duplicate_admitted_registry(registry)),
         Err(error) => Err(error.clone()),
     }
 }
 
+#[cfg(test)]
 fn admit_embedded_v2_release_chain(
-    mut accumulated: AdmittedWorkflowGovernanceReleaseRegistry,
+    accumulated: AdmittedWorkflowGovernanceReleaseRegistry,
     descriptors: &[EmbeddedWorkflowReleaseAdmissionDescriptorV2],
 ) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
-    for descriptor in descriptors {
-        // Preflight the signed authority before doing expensive evaluation.
-        // A missing later authorization fails the whole loader; no partially
-        // advanced registry escapes this function.
-        let authorization_raw = required_embedded_text(descriptor.authorization_ref)?;
-        let authorization: WorkflowReleaseAdmissionAuthorizationV2Document =
-            parse_review_artifact(descriptor.authorization_ref, authorization_raw)?;
-        let review_index_raw = required_embedded_text(descriptor.review_index_ref)?;
-        let input = load_review_candidate_input_v2(descriptor, review_index_raw)?;
-        let evaluation = evaluate_workflow_release_admission_candidate_v2(&input);
+    let prepared = prepare_embedded_v2_release_chain(descriptors)?;
+    admit_prepared_v2_release_chain(accumulated, prepared)
+}
+
+fn prepare_embedded_v2_release_chain(
+    descriptors: &[EmbeddedWorkflowReleaseAdmissionDescriptorV2],
+) -> Result<Vec<PreparedEmbeddedWorkflowReleaseV2>, AdmittedWorkflowGovernanceReleaseError> {
+    // Each signed candidate carries its own frozen predecessor history, so the
+    // expensive non-authoritative evaluations are independent. Evaluate them
+    // concurrently, then consume their capabilities in the original release
+    // order so registry admission remains deterministic and append-only.
+    std::thread::scope(|scope| {
+        let handles = descriptors
+            .iter()
+            .copied()
+            .map(|descriptor| {
+                scope.spawn(move || {
+                    // Preflight signed authority inside each worker before its
+                    // expensive evaluation. Missing authority still blocks the
+                    // complete chain; no partial registry can escape.
+                    let authorization_raw = required_embedded_text(descriptor.authorization_ref)?;
+                    let authorization: WorkflowReleaseAdmissionAuthorizationV2Document =
+                        parse_review_artifact(descriptor.authorization_ref, authorization_raw)?;
+                    let review_index_raw = required_embedded_text(descriptor.review_index_ref)?;
+                    let input = load_review_candidate_input_v2(&descriptor, review_index_raw)?;
+                    let evaluation = evaluate_workflow_release_admission_candidate_v2(&input);
+                    Ok((descriptor, authorization, input, evaluation))
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .map_err(|_| AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked)?
+            })
+            .collect::<Result<Vec<_>, _>>()
+    })
+}
+
+fn admit_prepared_v2_release_chain(
+    mut accumulated: AdmittedWorkflowGovernanceReleaseRegistry,
+    prepared: Vec<PreparedEmbeddedWorkflowReleaseV2>,
+) -> Result<AdmittedWorkflowGovernanceReleaseRegistry, AdmittedWorkflowGovernanceReleaseError> {
+    for (descriptor, authorization, input, evaluation) in prepared {
         if evaluation.status
             != WorkflowReleaseAdmissionV2EvaluationStatus::ReadyForIndependentAuthorization
             || evaluation.authority
@@ -594,6 +667,7 @@ fn admit_embedded_v2_release_chain(
         {
             return Err(AdmittedWorkflowGovernanceReleaseError::ReviewEvaluationBlocked);
         }
+        let review_index_raw = required_embedded_text(descriptor.review_index_ref)?;
         let reviewer_raw = required_embedded_text(descriptor.reviewer_registry_ref)?;
         let reviewer_registry: WorkflowReleaseReviewerRegistryDocument =
             parse_review_artifact(descriptor.reviewer_registry_ref, reviewer_raw)?;

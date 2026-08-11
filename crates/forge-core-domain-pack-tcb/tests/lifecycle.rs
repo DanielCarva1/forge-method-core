@@ -19,7 +19,7 @@ use forge_core_decisions::{
 use forge_core_domain_pack_tcb::{
     authorize_prepared_domain_pack_lifecycle, lock_domain_pack_lifecycle,
     lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle,
-    observe_domain_pack_lifecycle_for_project,
+    observe_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_retained_project,
     observe_existing_domain_pack_lifecycle_for_retained_project,
     verify_domain_pack_project_snapshot, DomainPackImmutableArtifact,
     DomainPackLifecycleAuthorizationContext, DomainPackLifecycleStoreError,
@@ -3694,6 +3694,37 @@ fn read_only_core_observation_leaves_no_absence_claim_or_delete_quarantine() {
         !root.join(DOMAIN_PACK_ACTIVE_LOCK_RELATIVE_PATH).exists(),
         "read-only absence must not materialize the active pointer"
     );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn shared_mutating_observation_initializes_clean_lifecycle_state() {
+    let root = temp_state_root("shared-mutating-project-observation");
+    let project_root = root.parent().expect("project root");
+    fs::write(project_root.join("README.md"), b"captured\n").expect("write project file");
+    let project_snapshot = Arc::new(
+        RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+            project_root,
+            32,
+            32,
+            4096,
+        )
+        .expect("capture shared project observation"),
+    );
+
+    let observed =
+        observe_domain_pack_lifecycle_for_retained_project(Arc::clone(&project_snapshot), &root)
+            .expect("initialize lifecycle over shared project handles");
+    let LockedDomainPackLifecycleObservation::CoreOnly(lifecycle) = observed else {
+        panic!("empty lifecycle must remain core-only");
+    };
+    lifecycle
+        .with_verified_core_only_view(|_view| Ok::<(), DomainPackLifecycleStoreError>(()))
+        .expect("complete shared mutating observation");
+    drop(lifecycle);
+
+    observe_existing_domain_pack_lifecycle_for_retained_project(project_snapshot, &root)
+        .expect("initialized lifecycle must be available to existing-only observers");
     fs::remove_dir_all(project_root).expect("cleanup");
 }
 

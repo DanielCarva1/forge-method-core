@@ -137,6 +137,7 @@ use forge_core_decisions::{
 };
 use forge_core_domain_pack_tcb::{
     lock_domain_pack_lifecycle_for_project, observe_domain_pack_lifecycle_for_project,
+    observe_domain_pack_lifecycle_for_retained_project,
     observe_existing_domain_pack_lifecycle_for_project,
     observe_existing_domain_pack_lifecycle_for_retained_project,
     AdmittedActiveDomainPackGeneration, DomainPackLifecycleStoreError,
@@ -1050,6 +1051,16 @@ impl LockedWorkflowDomainPackContext {
         )?)
     }
 
+    fn acquire_with_project_snapshot(
+        project_snapshot: Arc<RetainedProjectTree>,
+        state_root: &Path,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        Self::from_observation(observe_domain_pack_lifecycle_for_retained_project(
+            project_snapshot,
+            state_root,
+        )?)
+    }
+
     fn from_observation(
         observation: LockedDomainPackLifecycleObservation,
     ) -> Result<Self, WorkflowGovernanceAdapterError> {
@@ -1669,8 +1680,10 @@ impl WorkflowGovernanceProjectAdapter {
         self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let snapshot =
+            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -1679,7 +1692,14 @@ impl WorkflowGovernanceProjectAdapter {
         let effective = domain.admit_effective(admitted)?;
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
-        self.guidance_from_projection(&registry, admitted, &effective, &projection, now)
+        self.guidance_from_projection_with_snapshot(
+            &registry,
+            admitted,
+            &effective,
+            &projection,
+            now,
+            &snapshot,
+        )
     }
 
     /// Assess one host-neutral work description against the exact active
@@ -1949,8 +1969,10 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let snapshot =
+            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -1965,7 +1987,6 @@ impl WorkflowGovernanceProjectAdapter {
         if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
             return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
         }
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let head = projection
             .head_digest
             .clone()
@@ -4780,8 +4801,10 @@ impl WorkflowGovernanceProjectAdapter {
         self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            project_snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -4791,8 +4814,6 @@ impl WorkflowGovernanceProjectAdapter {
         projection =
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
-        let project_snapshot =
-            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
         let (guidance, verified) = self.verified_from_projection_with_snapshot(
             &registry,
             admitted,
@@ -4850,8 +4871,9 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let project_snapshot = &prepared.project_snapshot;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            project_snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
@@ -4862,7 +4884,6 @@ impl WorkflowGovernanceProjectAdapter {
             self.reconcile_effective_epoch(&mut ledger, admitted, &effective, projection)?;
         Self::ensure_domain_pack_ready_for_mutation(&effective)?;
         let identity = self.identity(admitted);
-        let project_snapshot = &prepared.project_snapshot;
         let (fresh, verified) = self.verified_from_projection_with_snapshot(
             &registry,
             admitted,

@@ -1513,9 +1513,11 @@ fn unavailable_expired_and_misbound_capabilities_keep_the_gap_visible_across_han
         fixture.root.join(".forge-method"),
     )
     .expect("replacement adapter");
+    let mut resumed = replacement.resume().expect("replacement resume");
+    assert!(resumed.replacement_continuity.is_some());
+    resumed.replacement_continuity = None;
     assert_eq!(
-        serde_json::to_value(replacement.resume().expect("replacement resume"))
-            .expect("resumed guidance JSON"),
+        serde_json::to_value(resumed).expect("resumed guidance JSON"),
         serde_json::to_value(&gap).expect("original guidance JSON")
     );
 
@@ -1747,9 +1749,11 @@ fn replacement_agent_recovers_pending_decision_and_ranked_next_action() {
         fixture.root.join(".forge-method"),
     )
     .expect("replacement adapter");
+    let mut resumed = replacement.resume().expect("replacement decision resume");
+    assert!(resumed.replacement_continuity.is_some());
+    resumed.replacement_continuity = None;
     assert_eq!(
-        serde_json::to_value(replacement.resume().expect("replacement decision resume"))
-            .expect("resumed JSON"),
+        serde_json::to_value(resumed).expect("resumed JSON"),
         serde_json::to_value(pending).expect("pending JSON")
     );
 }

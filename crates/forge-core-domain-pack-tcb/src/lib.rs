@@ -1033,6 +1033,27 @@ pub fn observe_existing_domain_pack_lifecycle_for_retained_project(
     )
 }
 
+/// Lifecycle observer over a caller-retained Project Snapshot, creating the
+/// lifecycle lock when it is cleanly absent.
+///
+/// This is the mutating-command counterpart to
+/// [`observe_existing_domain_pack_lifecycle_for_retained_project`]. It lets a
+/// higher-level transaction reuse one exact project observation instead of
+/// independently capturing the same tree for Domain Pack and workflow checks.
+#[doc(hidden)]
+pub fn observe_domain_pack_lifecycle_for_retained_project(
+    project_snapshot: Arc<RetainedProjectTree>,
+    state_root: impl AsRef<Path>,
+) -> Result<LockedDomainPackLifecycleObservation, DomainPackLifecycleStoreError> {
+    let state_root = canonical_state_root(state_root.as_ref())?;
+    observe_domain_pack_lifecycle_with_snapshot_internal(
+        project_snapshot,
+        &state_root,
+        true,
+        CoreOnlyProjectValidation::CapturedStableAliases,
+    )
+}
+
 fn observe_domain_pack_lifecycle_for_project_internal(
     project_root: &Path,
     state_root: &Path,
