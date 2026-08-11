@@ -97,8 +97,8 @@ material risk acceptance, or irreversible/external effect. Before asking,
 explain the context, options, consequences, and recommendation, then ask exactly
 one concise question. If no human input is needed, say so plainly and continue.
 
-Treat the current `workflow_resume_summary_v4` as the working continuity view and
-reuse the same v3 response until durable workflow state changes. Never run two
+Treat the current `workflow_resume_summary_v6` as the working continuity view and
+reuse the same v6 response until durable workflow state changes. Never run two
 resume commands consecutively: a successful operation that can change workflow
 evaluation must intervene. Do not refresh after repository inspection,
 validation, tests, status, report, or help. A read-only command does not make the
@@ -310,13 +310,14 @@ proves integrity, not native host authenticity.
 
    `/start-forge` runs once per chat, not once per task. The current activation
    capability is present only when resume returns
-   `data.schema_version=workflow_resume_summary_v4`. V4 contains everything
+   `data.schema_version=workflow_resume_summary_v6`. V6 contains everything
    needed for the current agent step: effective Domain Pack identity, objective,
    autonomy projection, current evaluation, boundary rechecks, human decisions,
    blockers and warnings, ranked actions, active isolations, recoverable
-   promotions, current evidence, authorization packets, and the cooperative
-   packet or exact gap. `data.omitted_history` counts older records only; it does
-   not hide current obligations.
+   promotions, current evidence, current selected-policy assessments,
+   authorization packets, and the cooperative packet or exact gap.
+   `data.omitted_history` counts older records only; it does not hide current
+   obligations.
 
    Read `data.actions.recommended` before the abstract evaluation ranking. When
    it points to `actions.cooperative_evidence_packet`, execute that concrete
@@ -324,8 +325,7 @@ proves integrity, not native host authenticity.
    The referenced packet or gap remains the executable/detail authority; the
    recommendation only makes the intended journey order explicit.
 
-   `workflow_resume_summary_v1`, `workflow_resume_summary_v2`, and
-   `workflow_resume_summary_v3` are legacy
+   `workflow_resume_summary_v1` through `workflow_resume_summary_v5` are legacy
    activation responses. Use only fields they actually publish and never infer
    that a missing current field means no obligation exists. Report that the
    installed runtime needs updating when those fields are necessary; do not

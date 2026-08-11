@@ -15,9 +15,10 @@ use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{
     CliEnvelope, DomainPackCompositionGap, ExitReason, IsolationStatus, PrincipalId,
-    ReadinessTarget, StableId, WorkflowCooperativeEvidenceCurrentStatus,
+    ReadinessTarget, StableId, WorkflowContentAddressedReference,
+    WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
-    WorkflowEffectiveBundleIdentity,
+    WorkflowCooperativeEvidenceTarget, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
 };
 use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceSimulation};
 use forge_core_kernel::{
@@ -284,7 +285,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v5";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v6";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -319,6 +320,7 @@ struct WorkflowResumeSummary<'a> {
     active_isolations: Vec<&'a WorkflowReplacementIsolationAudit>,
     recoverable_promotions: Vec<&'a WorkflowReplacementPromotionAudit>,
     current_cooperative_evidence: Vec<WorkflowResumeEvidenceSummary<'a>>,
+    selected_policy_evidence: Vec<WorkflowResumeSelectedPolicyEvidence<'a>>,
     authorization: &'a WorkflowAuthorizationGuidance,
     omitted_history: WorkflowResumeOmittedHistory,
 }
@@ -441,6 +443,57 @@ struct WorkflowResumeEvidenceSummary<'a> {
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
+struct WorkflowResumeSelectedPolicyEvidence<'a> {
+    record_digest: &'a str,
+    target: WorkflowCooperativeEvidenceTarget,
+    claim_ref: &'a StableId,
+    outcome: WorkflowEvidenceOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_assessment: Option<WorkflowResumeSourceAssessment<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    applicability_assessment: Option<WorkflowResumeApplicabilityAssessment<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_assessment: Option<WorkflowResumeExecutionAssessment<'a>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeSourceAssessment<'a> {
+    outcome: WorkflowEvidenceOutcome,
+    summary: &'a str,
+    basis: &'a [WorkflowContentAddressedReference],
+    basis_digest: &'a str,
+    limitations: &'a [String],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeApplicabilityAssessment<'a> {
+    outcome: WorkflowCooperativeApplicabilityOutcome,
+    summary: &'a str,
+    basis: &'a [WorkflowContentAddressedReference],
+    basis_digest: &'a str,
+    limitations: &'a [String],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkflowResumeExecutionAssessment<'a> {
+    summary: &'a str,
+    scenario_ref: &'a str,
+    limitations: &'a [String],
+    command_digest: &'a str,
+    command_id: &'a StableId,
+    executor: forge_core_contracts::command::CommandExecutor,
+    status: forge_core_contracts::WorkflowCooperativeExecutionStatus,
+    exit_code: Option<i32>,
+    timed_out: bool,
+    duration_ms: u64,
+    reasons: &'a [String],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
 struct WorkflowResumeOmittedHistory {
     superseded_objective_revisions: usize,
     decision_records: usize,
@@ -490,6 +543,76 @@ fn workflow_resume_summary<'a>(
             valid_through_unix: evidence.valid_through_unix,
             proves: &evidence.proves,
             does_not_prove: &evidence.does_not_prove,
+        })
+        .collect::<Vec<_>>();
+    let selected_policy_evidence = guidance
+        .cooperative_evidence
+        .iter()
+        .filter(|evidence| {
+            matches!(
+                evidence.current_status,
+                WorkflowCooperativeEvidenceCurrentStatus::Supporting
+                    | WorkflowCooperativeEvidenceCurrentStatus::Disproving
+                    | WorkflowCooperativeEvidenceCurrentStatus::Inconclusive
+            )
+        })
+        .filter_map(|evidence| {
+            let admitted = evidence.admitted_evidence.as_ref()?;
+            if admitted.policy_ref != guidance.selected_policy_ref {
+                return None;
+            }
+            if admitted.source_assessment.is_none()
+                && admitted.applicability_assessment.is_none()
+                && admitted.execution_assessment.is_none()
+            {
+                return None;
+            }
+            let source_assessment = admitted.source_assessment.as_ref().map(|assessment| {
+                WorkflowResumeSourceAssessment {
+                    outcome: assessment.outcome,
+                    summary: &assessment.summary,
+                    basis: &assessment.basis,
+                    basis_digest: &assessment.basis_digest,
+                    limitations: &assessment.limitations,
+                }
+            });
+            let applicability_assessment =
+                admitted
+                    .applicability_assessment
+                    .as_ref()
+                    .map(|assessment| WorkflowResumeApplicabilityAssessment {
+                        outcome: assessment.outcome,
+                        summary: &assessment.summary,
+                        basis: &assessment.basis,
+                        basis_digest: &assessment.basis_digest,
+                        limitations: &assessment.limitations,
+                    });
+            let execution_assessment = admitted.execution_assessment.as_ref().map(|assessment| {
+                WorkflowResumeExecutionAssessment {
+                    summary: &assessment.summary,
+                    scenario_ref: &assessment.scenario_ref,
+                    limitations: &assessment.limitations,
+                    command_digest: &assessment.command_digest,
+                    command_id: &assessment.command_id,
+                    executor: assessment.executor,
+                    status: assessment.status,
+                    exit_code: assessment.exit_code,
+                    timed_out: assessment.timed_out,
+                    duration_ms: assessment.duration_ms,
+                    reasons: &assessment.reasons,
+                }
+            });
+            Some(WorkflowResumeSelectedPolicyEvidence {
+                record_digest: &evidence.record_digest,
+                target: admitted
+                    .target
+                    .unwrap_or(WorkflowCooperativeEvidenceTarget::SourceClaim),
+                claim_ref: &admitted.claim_ref,
+                outcome: admitted.outcome,
+                source_assessment,
+                applicability_assessment,
+                execution_assessment,
+            })
         })
         .collect::<Vec<_>>();
     let continuity_blockers = continuity
@@ -629,6 +752,7 @@ fn workflow_resume_summary<'a>(
         active_isolations,
         recoverable_promotions,
         current_cooperative_evidence,
+        selected_policy_evidence,
         authorization: &guidance.authorization,
         omitted_history,
     }

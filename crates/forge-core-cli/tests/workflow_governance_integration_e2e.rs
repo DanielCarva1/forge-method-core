@@ -987,7 +987,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v5"
+        "workflow_resume_summary_v6"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
@@ -1720,6 +1720,16 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     assert!(strict_next["data"]["cooperative_evidence_action_packet"].is_null());
 
     let consumer = Consumer::new_with_prefix("forge-workflow-solo-source-e2e");
+    let git_init = std::process::Command::new("git")
+        .arg("init")
+        .arg(&consumer.app)
+        .output()
+        .expect("initialize real Git metadata for excluded-basis checks");
+    assert!(
+        git_init.status.success(),
+        "git init failed: {}",
+        String::from_utf8_lossy(&git_init.stderr)
+    );
     let initialized = assert_ok(&consumer.run(&["init"]));
     assert_eq!(initialized["data"]["readiness_profile"], "solo_cooperative");
     upgrade_to_latest(&consumer);
@@ -2074,6 +2084,42 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
         "release assurance stays visible without blocking ordinary solo execution"
     );
 
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        resumed["data"]["schema_version"],
+        "workflow_resume_summary_v6"
+    );
+    let selected_policy_evidence = resumed["data"]["selected_policy_evidence"]
+        .as_array()
+        .expect("resume must retain current selected-policy evidence context");
+    assert_eq!(
+        selected_policy_evidence.len(),
+        claim_count + 1,
+        "resume must retain one applicability assessment and each current source assessment"
+    );
+    let first_source_assessment = selected_policy_evidence
+        .iter()
+        .find(|evidence| {
+            evidence["source_assessment"]["summary"]
+                == "Claim 0 is supported by the inspected project artifact"
+        })
+        .expect("replacement agent must receive the current source assessment summary");
+    assert_eq!(first_source_assessment["target"], "source_claim");
+    assert_eq!(first_source_assessment["outcome"], "pass");
+    assert_eq!(
+        first_source_assessment["source_assessment"]["limitations"],
+        serde_json::json!(["same-owner agent inspection, not independent review"])
+    );
+    assert!(first_source_assessment["source_assessment"]["basis"]
+        .as_array()
+        .is_some_and(|basis| basis.len() == 1));
+    assert!(selected_policy_evidence.iter().all(|evidence| {
+        evidence["source_assessment"]["summary"]
+            != "The selected claim is not supported by the inspected artifact"
+            && evidence["source_assessment"]["summary"]
+                != "The inspected artifact does not establish this claim yet"
+    }));
+
     let completion_snapshot = next["data"]["snapshot_digest"]
         .as_str()
         .expect("ready completion snapshot")
@@ -2226,6 +2272,29 @@ fn solo_deterministic_policy_publishes_and_executes_a_safe_evidence_packet() {
             .as_array()
             .is_some_and(Vec::is_empty)
     );
+    let selected_policy_evidence = after["data"]["selected_policy_evidence"]
+        .as_array()
+        .expect("deterministic resume evidence");
+    let execution = selected_policy_evidence
+        .iter()
+        .find_map(|evidence| evidence["execution_assessment"].as_object())
+        .expect("resume must retain the current deterministic execution assessment");
+    assert_eq!(
+        execution["summary"],
+        "Git starts successfully in the selected project"
+    );
+    assert_eq!(execution["status"], "succeeded");
+    assert_eq!(
+        execution["limitations"],
+        serde_json::json!(["This proves only the selected local command"])
+    );
+    assert!(execution["reasons"].is_array());
+    for omitted in ["stdout", "stderr", "stdout_truncated", "stderr_truncated"] {
+        assert!(
+            !execution.contains_key(omitted),
+            "compact resume must omit deterministic {omitted}"
+        );
+    }
 
     let completion_snapshot = after["data"]["snapshot_digest"]
         .as_str()
