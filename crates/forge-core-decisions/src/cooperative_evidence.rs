@@ -10,11 +10,13 @@ use forge_core_contracts::{
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1, COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION,
-    COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS,
+    COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
+    COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS,
     SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
-    SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1,
+    SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
+    SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,14 +73,30 @@ pub fn evaluate_cooperative_evidence(
             && statement_target == WorkflowCooperativeEvidenceTarget::PolicyApplicability
             && route.assurance_effect
                 == WorkflowCooperativeEvidenceAssuranceEffect::SoloPolicyApplicabilityAssessedByAgentInspection;
-    if !legacy_route && !source_route && !applicability_route {
+    let execution_route = offer.schema_version == COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION
+        && statement.schema_version == COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION
+        && statement.policy_version == SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION
+        && statement.claim_descriptor_version == SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION
+        && route.policy_version == SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION
+        && route.claim_descriptor_version == SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION
+        && route.target == WorkflowCooperativeEvidenceTarget::SourceClaim
+        && statement_target == WorkflowCooperativeEvidenceTarget::SourceClaim
+        && route.assurance_effect
+            == WorkflowCooperativeEvidenceAssuranceEffect::SoloSourceClaimSatisfiedByKernelExecution;
+    if !legacy_route && !source_route && !applicability_route && !execution_route {
         return reject(WorkflowCooperativeEvidenceRejection::UnsupportedSchema);
     }
-    if route.provider != WorkflowEvaluatorProvider::RepositoryInspector
-        || route.kind != WorkflowEvidenceKind::ArtifactInspection
-        || route.strength != WorkflowEvidenceStrength::InspectedArtifact
-        || (source_route && route.source_provider != WorkflowEvaluatorProvider::RepositoryInspector)
-    {
+    let inspection_route_valid = route.provider == WorkflowEvaluatorProvider::RepositoryInspector
+        && route.kind == WorkflowEvidenceKind::ArtifactInspection
+        && route.strength == WorkflowEvidenceStrength::InspectedArtifact
+        && (!source_route
+            || route.source_provider == WorkflowEvaluatorProvider::RepositoryInspector);
+    let execution_route_valid = execution_route
+        && route.source_provider == WorkflowEvaluatorProvider::DeterministicTool
+        && route.provider == WorkflowEvaluatorProvider::DeterministicTool
+        && route.kind == WorkflowEvidenceKind::DeterministicCheck
+        && route.strength == WorkflowEvidenceStrength::DeterministicVerification;
+    if !inspection_route_valid && !execution_route_valid {
         return reject(WorkflowCooperativeEvidenceRejection::PolicyDoesNotPermitCooperation);
     }
     if statement.binding != *current {
@@ -113,11 +131,13 @@ pub fn evaluate_cooperative_evidence(
             && statement.scenario_kind
                 == WorkflowCooperativeMaterialScenarioKind::KernelProjectSnapshotReadback
             && statement.source_assessment.is_none()
-            && statement.applicability_assessment.is_none())
+            && statement.applicability_assessment.is_none()
+            && statement.execution_request.is_none())
             || (source_route
                 && statement.scenario_kind
                     == WorkflowCooperativeMaterialScenarioKind::AgentRepositoryInspectionWithContentAddressedBasis
                 && statement.applicability_assessment.is_none()
+                && statement.execution_request.is_none()
                 && statement.source_assessment.as_ref().is_some_and(|assessment| {
                     !assessment.summary.trim().is_empty()
                         && !assessment.basis_paths.is_empty()
@@ -128,6 +148,7 @@ pub fn evaluate_cooperative_evidence(
                 && statement.scenario_kind
                     == WorkflowCooperativeMaterialScenarioKind::AgentPolicyApplicabilityInspectionWithContentAddressedBasis
                 && statement.source_assessment.is_none()
+                && statement.execution_request.is_none()
                 && statement
                     .applicability_assessment
                     .as_ref()
@@ -136,7 +157,16 @@ pub fn evaluate_cooperative_evidence(
                             && !assessment.basis_paths.is_empty()
                             && assessment.basis_paths.len()
                                 <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
-                    })));
+                    }))
+            || (execution_route
+                && statement.scenario_kind
+                    == WorkflowCooperativeMaterialScenarioKind::KernelDeterministicCommandExecution
+                && statement.source_assessment.is_none()
+                && statement.applicability_assessment.is_none()
+                && statement.execution_request.as_ref().is_some_and(|request| {
+                    !request.summary.trim().is_empty()
+                        && !request.scenario_ref.trim().is_empty()
+                })));
     if !scenario_valid {
         return reject(WorkflowCooperativeEvidenceRejection::WrongScenario);
     }
@@ -232,6 +262,7 @@ mod tests {
                 scenario_digest: DIGEST.to_owned(),
                 source_assessment: None,
                 applicability_assessment: None,
+                execution_request: None,
             },
         }
     }

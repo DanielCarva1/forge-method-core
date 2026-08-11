@@ -987,7 +987,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v4"
+        "workflow_resume_summary_v5"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
@@ -1338,6 +1338,28 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
     let completion_snapshot = fresh["data"]["snapshot_digest"]
         .as_str()
         .expect("ready completion snapshot");
+    let resumed_ready = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        resumed_ready["data"]["actions"]["recommended"]["kind"],
+        "complete_workflow"
+    );
+    assert_eq!(
+        resumed_ready["data"]["actions"]["completion"]["argv"],
+        serde_json::json!([
+            "forge-core",
+            "workflow",
+            "complete",
+            "--root",
+            fs::canonicalize(&consumer.app)
+                .expect("canonical consumer root")
+                .to_string_lossy(),
+            "--if-snapshot",
+            completion_snapshot,
+            "--principal",
+            "principal.agent.cli-e2e",
+            "--json"
+        ])
+    );
     let completed = assert_ok(&consumer.run(&[
         "complete",
         "--if-snapshot",
@@ -2073,6 +2095,132 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     pass_record_digests.sort();
     bound_source_digests.sort();
     assert_eq!(bound_source_digests, pass_record_digests);
+}
+
+#[test]
+fn solo_deterministic_policy_publishes_and_executes_a_safe_evidence_packet() {
+    let consumer = Consumer::new_with_prefix("forge-workflow-solo-deterministic-e2e");
+    assert_ok(&consumer.run(&["init"]));
+    upgrade_to_latest(&consumer);
+
+    let objective_next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = objective_next["data"]["authorization"]["action_packets"][0]
+        ["packet_digest"]
+        .as_str()
+        .expect("cooperative objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "deterministic evidence objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Run concrete technical checks in Solo Cooperative mode",
+                "constraints": ["only safe local commands"],
+                "unacceptable_outcomes": ["claim a check ran when it did not"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.deterministic-e2e",
+            "host_provenance": {
+                "host_id": "host.deterministic-e2e",
+                "host_version": "test",
+                "session_ref": "session.deterministic-e2e",
+                "interaction_ref": "turn.deterministic-e2e",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+
+    let mut next =
+        advance_fixture_to_policy(&consumer, "policy.workflow.technical-feasibility-scan");
+    assert_eq!(next["data"]["status"], "applicability_required");
+    let applicability_packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    let mut applicability_offer = applicability_packet["offer_template"].clone();
+    applicability_offer["offer_id"] = serde_json::json!("offer.deterministic-e2e.applicability");
+    applicability_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+        "outcome": "applicable",
+        "summary": "This fixture needs a concrete technical feasibility check",
+        "basis_paths": ["README.md"],
+        "limitations": ["same-owner applicability assessment"]
+    });
+    let applicability_input =
+        consumer.write_json("deterministic applicability.json", &applicability_offer);
+    assert_ok(&execute_cooperative_packet(
+        &applicability_packet,
+        &applicability_input,
+    ));
+
+    next = assert_ok(&consumer.run(&["resume"]));
+    let packet = &next["data"]["actions"]["cooperative_evidence_packet"];
+    assert_eq!(packet["route"]["source_provider"], "deterministic_tool");
+    assert_eq!(packet["route"]["provider"], "deterministic_tool");
+    assert_eq!(packet["route"]["kind"], "deterministic_check");
+    assert_eq!(packet["route"]["strength"], "deterministic_verification");
+    assert_eq!(
+        packet["route"]["assurance_effect"],
+        "solo_source_claim_satisfied_by_kernel_execution"
+    );
+    assert!(packet["required_replacements"]
+        .as_array()
+        .is_some_and(|items| items.iter().any(|item| item == "${FORGE_COMMAND_CONTRACT}")));
+
+    let mut offer = packet["offer_template"].clone();
+    offer["offer_id"] = serde_json::json!("offer.deterministic-e2e.git-version");
+    offer["attestation"]["execution_request"] = serde_json::json!({
+        "summary": "Git starts successfully in the selected project",
+        "scenario_ref": "technical-feasibility.git-version",
+        "limitations": ["This proves only the selected local command"],
+        "command": {
+            "schema_version": "0.1",
+            "command_contract": {
+                "id": "command.workflow.deterministic-e2e.git-version",
+                "contract_ref": "contracts/commands/workflow-deterministic-check.yaml",
+                "kind": "smoke",
+                "executor": "git",
+                "args": ["--version"],
+                "cwd_policy": "project_root",
+                "side_effect_policy": "read_only",
+                "platforms": ["windows", "macos", "linux"],
+                "timeout_ms": 10000,
+                "env_policy": { "inherit": "minimal", "required": [], "forbidden": [] },
+                "network_policy": "disabled",
+                "output_policy": { "capture": "summary", "max_bytes": 4096 },
+                "authority_required": [],
+                "safety": {
+                    "shell_string_allowed": false,
+                    "writes_files": false,
+                    "publishes": false,
+                    "installs_packages": false
+                }
+            }
+        }
+    });
+    let input = consumer.write_json("deterministic execution.json", &offer);
+    let admitted = assert_ok(&execute_cooperative_packet(packet, &input));
+    assert_eq!(
+        admitted["data"]["event"]["payload"]["admitted_evidence"]["outcome"],
+        "pass"
+    );
+    assert_eq!(
+        admitted["data"]["event"]["payload"]["admitted_evidence"]["execution_assessment"]["status"],
+        "succeeded"
+    );
+    assert_eq!(
+        admitted["data"]["event"]["payload"]["admitted_evidence"]["execution_assessment"]
+            ["exit_code"],
+        0
+    );
+
+    let after = assert_ok(&consumer.run(&["resume"]));
+    assert_ne!(
+        after["data"]["actions"]["recommended"]["kind"], "resolve_source_claim_gap",
+        "a successful kernel execution must satisfy the selected deterministic source claim"
+    );
 }
 #[test]
 fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback() {

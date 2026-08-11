@@ -4,10 +4,11 @@
 //! establish reviewer independence, trusted-runtime separation, tamper
 //! resistance, human presence, or compliance authority.
 
+use crate::command::CommandExecutor;
 use crate::{
-    PrincipalId, StableId, WorkflowContentAddressedReference, WorkflowEvaluatorProvider,
-    WorkflowEvidenceKind, WorkflowEvidenceOutcome, WorkflowEvidenceStrength,
-    WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
+    CommandContractDocument, PrincipalId, StableId, WorkflowContentAddressedReference,
+    WorkflowEvaluatorProvider, WorkflowEvidenceKind, WorkflowEvidenceOutcome,
+    WorkflowEvidenceStrength, WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,10 @@ pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1: &str =
 pub const COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION: &str = "cooperative_evidence_offer_v2";
 pub const COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION: &str =
     "cooperative_evidence_attestation_v2";
+pub const COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION: &str =
+    "cooperative_evidence_execution_offer_v1";
+pub const COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION: &str =
+    "cooperative_evidence_execution_attestation_v1";
 pub const COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION: &str =
     "cooperative_evidence_applicability_offer_v1";
 pub const COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION: &str =
@@ -30,6 +35,10 @@ pub const SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION: &str =
     "solo_cooperative_repository_inspection_v1";
 pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION: &str =
     "solo_cooperative_repository_source_claim_v1";
+pub const SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION: &str =
+    "solo_cooperative_deterministic_execution_v1";
+pub const SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION: &str =
+    "solo_cooperative_deterministic_source_claim_v1";
 pub const SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION: &str =
     "solo_cooperative_policy_applicability_v1";
 pub const SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION: &str =
@@ -105,6 +114,7 @@ pub enum WorkflowCooperativeEvidenceAssuranceEffect {
     CooperativeClaimOnlyDoesNotSatisfySourceClaim,
     SoloSourceClaimSatisfiedByAgentInspection,
     SoloPolicyApplicabilityAssessedByAgentInspection,
+    SoloSourceClaimSatisfiedByKernelExecution,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -113,6 +123,46 @@ pub enum WorkflowCooperativeMaterialScenarioKind {
     KernelProjectSnapshotReadback,
     AgentRepositoryInspectionWithContentAddressedBasis,
     AgentPolicyApplicabilityInspectionWithContentAddressedBasis,
+    KernelDeterministicCommandExecution,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativeExecutionRequest {
+    pub summary: String,
+    pub scenario_ref: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
+    pub command: CommandContractDocument,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCooperativeExecutionStatus {
+    Succeeded,
+    Failed,
+    TimedOut,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowAdmittedCooperativeExecutionAssessment {
+    pub summary: String,
+    pub scenario_ref: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
+    pub command_digest: String,
+    pub command_id: StableId,
+    pub executor: CommandExecutor,
+    pub status: WorkflowCooperativeExecutionStatus,
+    pub exit_code: Option<i32>,
+    pub timed_out: bool,
+    pub duration_ms: u64,
+    pub stdout: String,
+    pub stderr: String,
+    pub stdout_truncated: bool,
+    pub stderr_truncated: bool,
+    pub reasons: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -181,6 +231,8 @@ pub struct WorkflowCooperativeEvidenceAttestation {
     pub source_assessment: Option<WorkflowCooperativeSourceAssessmentOffer>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub applicability_assessment: Option<WorkflowCooperativeApplicabilityAssessmentOffer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_request: Option<WorkflowCooperativeExecutionRequest>,
 }
 
 /// Agent-produced offer. `offer_id` is the idempotency key; reusing it for
@@ -218,6 +270,7 @@ pub enum WorkflowCooperativeEvidenceRejection {
     EvidenceExpired,
     ConflictingIdempotencyKey,
     InvalidAssessmentBasis,
+    UnsafeOrInvalidCommand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -239,6 +292,8 @@ pub enum WorkflowCooperativeEvidenceProof {
     SoloSourceClaimSatisfiedByAgentInspection,
     KernelVerifiedContentAddressedBasis,
     SoloPolicyApplicabilityAssessedByAgentInspection,
+    SoloSourceClaimSatisfiedByKernelExecution,
+    KernelExecutedDeterministicCommand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -281,6 +336,8 @@ pub struct WorkflowAdmittedCooperativeEvidence {
     pub source_assessment: Option<WorkflowAdmittedCooperativeSourceAssessment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub applicability_assessment: Option<WorkflowAdmittedCooperativeApplicabilityAssessment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_assessment: Option<WorkflowAdmittedCooperativeExecutionAssessment>,
     pub outcome: WorkflowEvidenceOutcome,
     pub execution_observed_at_unix: u64,
     pub readback_observed_at_unix: u64,
