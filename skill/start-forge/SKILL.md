@@ -508,6 +508,25 @@ proves integrity, not native host authenticity.
       human only when the remainder is a product-objective change, material
       trade-off, material risk acceptance, or irreversible/external effect.
 
+   Use Forge's research tools only when the research should survive the current
+   turn, support a material decision, be checked or reused by another agent, or
+   retain provenance for governed evidence. Do not register every search result
+   or trivial fact:
+
+   - `forge-core research source add` registers a decision-relevant source, and
+     `forge-core research source list` recovers the registered sources;
+   - `forge-core research cite` checks whether one source id resolves, while
+     `forge-core research check` checks source references in project artifacts;
+   - `forge-core research graph` shows which claims cite sources and
+     helps estimate the impact of changing or retiring a source.
+
+   Registration proves provenance and resolvability, not that a source is true,
+   authoritative, or sufficient. Keep the question, relevant finding, contrary
+   evidence, limitations, and decision impact visible in the closeout or durable
+   evidence that uses the source. These tools document and check the agent's
+   research; they never decide whether research is needed or how broad it should
+   be.
+
    When Forge exposes a current investigation or policy-applicability packet,
    assess it from current evidence and follow the fresh governed route. Do not
    bypass that route, turn technical uncertainty into human homework, or treat the

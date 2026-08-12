@@ -106,6 +106,16 @@ contrary evidence, explains the result and its practical impact, and keeps
 working. It returns to the human only if a real product, trade-off, risk, or
 external-effect decision remains.
 
+Important research can be kept for later agents with the optional
+`forge-core research` commands. Register a source when it supports an important
+decision, needs to be checked later, or should survive the current conversation;
+do not register every search result or small fact. A registered source shows
+where information came from, not that the information is automatically true.
+The agent can list registered sources, check one citation or all citations in
+project artifacts, and see which claims depend on a source. It should also keep
+the useful finding, contrary evidence, limitations, and effect on the product
+decision visible.
+
 The current onboarding target is `solo_cooperative`. External-origin brokers,
 FIDO-backed presence, independent identities, and compliance signing are
 enterprise-profile work and are not part of this loop.

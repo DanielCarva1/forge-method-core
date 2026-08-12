@@ -156,6 +156,19 @@ impact in the human's language; and continues with the next safe action. A
 trivial reversible uncertainty does not justify broad research, and only a
 remaining human-decision class returns to the human.
 
+The research command surface is optional support for durable, decision-relevant
+work; it is not a research trigger or a required wrapper around every search.
+Use `forge-core research source add` when a consulted source should survive the
+current turn, support a material decision, be checked or reused by another
+agent, or retain provenance for governed evidence. `forge-core research source
+list` recovers those sources, `forge-core research cite` resolves one source id,
+`forge-core research check` checks source references in project artifacts, and
+`forge-core research graph` shows which claims cite which sources. Registration
+proves provenance and resolvability, not truth,
+authority, or sufficiency. The closeout or durable evidence using the source
+retains the question, relevant finding, contrary evidence, limitations, and
+decision impact. Do not register every search result or trivial fact.
+
 Every assessment input also carries a required closed effect descriptor. The
 host derives it from the selected tool and concrete operation boundary,
 independently of the model-declared work class, never from free-form task text

@@ -102,7 +102,7 @@ class GuidedActivationContractTests(unittest.TestCase):
 
     def test_resume_refresh_is_bounded_by_real_state_changes(self) -> None:
         self.assert_contract_contains(
-            "reuse the same v3 response",
+            "reuse the same v6 response",
             "Never run two resume commands consecutively",
             "a successful operation that can change workflow evaluation must intervene",
             "Do not refresh after repository inspection, validation, tests, status, report, or help",
@@ -181,6 +181,14 @@ class GuidedActivationContractTests(unittest.TestCase):
             "explain the result and its product impact",
             "continue with the next safe action",
             "ask the human only",
+            "forge-core research source add",
+            "forge-core research source list",
+            "forge-core research cite",
+            "forge-core research check",
+            "forge-core research graph",
+            "do not register every search result or trivial fact",
+            "registration proves provenance and resolvability, not that a source is true",
+            "never decide whether research is needed or how broad it should be",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, research)
@@ -189,6 +197,9 @@ class GuidedActivationContractTests(unittest.TestCase):
             "does not wait for the human to request research",
             "compares competing hypotheses, contrary evidence",
             "continues with the next safe action",
+            "research source add",
+            "registration proves provenance and resolvability, not truth",
+            "do not register every search result or trivial fact",
         ):
             with self.subTest(integration=expected):
                 self.assertIn(expected, integration)
@@ -197,6 +208,8 @@ class GuidedActivationContractTests(unittest.TestCase):
             "does not need to tell the agent to research",
             "compares competing explanations and contrary evidence",
             "keeps working",
+            "do not register every search result or small fact",
+            "not that the information is automatically true",
         ):
             with self.subTest(getting_started=expected):
                 self.assertIn(expected, getting_started)
