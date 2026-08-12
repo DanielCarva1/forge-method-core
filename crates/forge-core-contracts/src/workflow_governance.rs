@@ -83,6 +83,9 @@ pub const WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION: &str =
 /// legacy profile-less project. Frozen history remains byte-identical; the
 /// typed transition and every successor record require this wire epoch.
 pub const WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION: &str = "0.13";
+/// Ledger records written after a source assessment first cites current prior
+/// Solo Cooperative evidence. Frozen `0.12` and `0.13` history remains readable.
+pub const WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION: &str = "0.14";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs

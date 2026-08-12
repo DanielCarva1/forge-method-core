@@ -23,6 +23,9 @@ pub const SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1: &str =
 pub const COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION: &str = "cooperative_evidence_offer_v2";
 pub const COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION: &str =
     "cooperative_evidence_attestation_v2";
+pub const COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION: &str = "cooperative_evidence_offer_v3";
+pub const COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION: &str =
+    "cooperative_evidence_attestation_v3";
 pub const COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION: &str =
     "cooperative_evidence_execution_offer_v1";
 pub const COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION: &str =
@@ -172,6 +175,34 @@ pub struct WorkflowCooperativeSourceAssessmentOffer {
     pub summary: String,
     pub basis_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prior_evidence_record_digests: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limitations: Vec<String>,
+}
+
+/// One earlier Solo Cooperative observation that the kernel confirmed was
+/// current when it admitted a later source assessment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCooperativePriorEvidenceReference {
+    pub record_digest: String,
+    pub observed_at_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_through_unix: Option<u64>,
+}
+
+/// One current prior receipt presented to the agent as an available basis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct WorkflowCooperativePriorEvidenceCandidate {
+    #[serde(flatten)]
+    pub reference: WorkflowCooperativePriorEvidenceReference,
+    pub policy_ref: StableId,
+    pub claim_ref: StableId,
+    pub evaluator_ref: StableId,
+    pub kind: WorkflowEvidenceKind,
+    pub outcome: WorkflowEvidenceOutcome,
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limitations: Vec<String>,
 }
 
@@ -182,6 +213,8 @@ pub struct WorkflowAdmittedCooperativeSourceAssessment {
     pub summary: String,
     pub basis: Vec<WorkflowContentAddressedReference>,
     pub basis_digest: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prior_evidence: Vec<WorkflowCooperativePriorEvidenceReference>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limitations: Vec<String>,
 }

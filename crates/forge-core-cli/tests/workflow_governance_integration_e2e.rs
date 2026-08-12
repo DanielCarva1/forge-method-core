@@ -2261,6 +2261,10 @@ fn solo_deterministic_policy_publishes_and_executes_a_safe_evidence_packet() {
             ["exit_code"],
         0
     );
+    let deterministic_record_digest = admitted["data"]["record_digest"]
+        .as_str()
+        .expect("deterministic evidence record digest")
+        .to_owned();
 
     let after = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
@@ -2313,6 +2317,93 @@ fn solo_deterministic_policy_publishes_and_executes_a_safe_evidence_packet() {
         .is_some_and(|rechecks| rechecks.iter().all(|recheck| {
             recheck["policy_ref"] != "policy.workflow.technical-feasibility-scan"
         })), "a completed deterministic feasibility check must not block the next policy by forgetting its proof environment");
+
+    let mut closeout = advance_fixture_to_policy(&consumer, "policy.workflow.research-closeout");
+    if closeout["data"]["status"] == "applicability_required" {
+        let applicability_packet = closeout["data"]["cooperative_evidence_action_packet"].clone();
+        let mut applicability_offer = applicability_packet["offer_template"].clone();
+        applicability_offer["offer_id"] =
+            serde_json::json!("offer.deterministic-e2e.closeout-applicability");
+        applicability_offer["attestation"]["applicability_assessment"] = serde_json::json!({
+            "outcome": "applicable",
+            "summary": "The completed feasibility check needs an explicit research closeout",
+            "basis_paths": ["README.md"],
+            "limitations": ["same-owner applicability assessment"]
+        });
+        let applicability_input =
+            consumer.write_json("closeout applicability.json", &applicability_offer);
+        assert_ok(&execute_cooperative_packet(
+            &applicability_packet,
+            &applicability_input,
+        ));
+    }
+    closeout = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(closeout["data"]["status"], "blocked");
+    let mut closeout_packet = closeout["data"]["actions"]["cooperative_evidence_packet"].clone();
+    assert!(
+        closeout_packet["available_prior_evidence"]
+            .as_array()
+            .is_some_and(|evidence| evidence.iter().any(|item| {
+                item["record_digest"] == deterministic_record_digest
+                    && item["kind"] == "deterministic_check"
+                    && item["policy_ref"] == "policy.workflow.technical-feasibility-scan"
+            })),
+        "research closeout packet: {closeout_packet:#}"
+    );
+
+    let mut fabricated_offer = closeout_packet["offer_template"].clone();
+    fabricated_offer["offer_id"] = serde_json::json!("offer.deterministic-e2e.closeout-fabricated");
+    fabricated_offer["attestation"]["source_assessment"] = serde_json::json!({
+        "outcome": "pass",
+        "summary": "A fabricated receipt must not support the closeout",
+        "basis_paths": [],
+        "prior_evidence_record_digests": [format!("sha256:{}", "f".repeat(64))],
+        "limitations": ["negative-path fixture"]
+    });
+    let fabricated_input =
+        consumer.write_json("fabricated closeout receipt.json", &fabricated_offer);
+    let rejected = execute_cooperative_packet(&closeout_packet, &fabricated_input);
+    assert_eq!(rejected.status.code(), Some(2));
+    assert_eq!(
+        json(&rejected)["data"]["event"]["payload"]["rejection"],
+        "invalid_assessment_basis"
+    );
+
+    closeout = assert_ok(&consumer.run(&["resume"]));
+    closeout_packet = closeout["data"]["actions"]["cooperative_evidence_packet"].clone();
+    let mut closeout_offer = closeout_packet["offer_template"].clone();
+    closeout_offer["offer_id"] = serde_json::json!("offer.deterministic-e2e.closeout-questions");
+    closeout_offer["attestation"]["source_assessment"] = serde_json::json!({
+        "outcome": "pass",
+        "summary": "The feasibility question was answered by the kernel-executed Git check",
+        "basis_paths": [],
+        "prior_evidence_record_digests": [deterministic_record_digest],
+        "limitations": ["This does not test WSL or network failure"]
+    });
+    let closeout_input = consumer.write_json("closeout questions.json", &closeout_offer);
+    let closeout_admitted = assert_ok(&execute_cooperative_packet(
+        &closeout_packet,
+        &closeout_input,
+    ));
+    assert_eq!(
+        closeout_admitted["data"]["event"]["payload"]["admitted_evidence"]["source_assessment"]
+            ["prior_evidence"][0]["record_digest"],
+        deterministic_record_digest
+    );
+
+    let closeout_after = assert_ok(&consumer.run(&["resume"]));
+    let questions_assessment = closeout_after["data"]["selected_policy_evidence"]
+        .as_array()
+        .expect("research closeout evidence")
+        .iter()
+        .find(|evidence| {
+            evidence["claim_ref"] == "claim.workflow.research-closeout.questions-covered"
+        })
+        .expect("questions-covered assessment");
+    assert_eq!(
+        questions_assessment["source_assessment"]["prior_evidence"][0]["record_digest"],
+        deterministic_record_digest
+    );
 }
 #[test]
 fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback() {

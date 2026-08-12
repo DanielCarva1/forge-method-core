@@ -87,6 +87,7 @@ use forge_core_contracts::{
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativeExecutionStatus,
     WorkflowCooperativeHostProvenance, WorkflowCooperativeMaterialScenarioKind,
     WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
+    WorkflowCooperativePriorEvidenceCandidate, WorkflowCooperativePriorEvidenceReference,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
@@ -98,10 +99,11 @@ use forge_core_contracts::{
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
     COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
-    COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
-    COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1, COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION,
+    COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
-    COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION, MAX_REPRESENTATIVE_SLICE_ITEMS,
+    COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION,
+    COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
+    COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
     MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES,
     MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS,
@@ -2139,16 +2141,35 @@ impl WorkflowGovernanceProjectAdapter {
                         .as_ref()
                         .and_then(|offer| offer.attestation.source_assessment.as_ref())
                         .and_then(|assessment| {
-                            let basis = bounded_cooperative_basis_from_paths(
-                                &snapshot,
-                                &assessment.basis_paths,
-                            )?;
+                            let prior_evidence = assessment
+                                .prior_evidence_record_digests
+                                .iter()
+                                .map(|digest| {
+                                    guidance
+                                        .cooperative_evidence
+                                        .iter()
+                                        .find(|audit| audit.record_digest == *digest)
+                                        .and_then(reusable_prior_cooperative_evidence)
+                                        .map(|candidate| candidate.reference)
+                                })
+                                .collect::<Option<Vec<_>>>()?;
+                            let basis = if assessment.basis_paths.is_empty()
+                                && !prior_evidence.is_empty()
+                            {
+                                Vec::new()
+                            } else {
+                                bounded_cooperative_basis_from_paths(
+                                    &snapshot,
+                                    &assessment.basis_paths,
+                                )?
+                            };
                             let basis_digest = content_addressed_basis_digest(&basis).ok()?;
                             Some(WorkflowAdmittedCooperativeSourceAssessment {
                                 outcome: assessment.outcome,
                                 summary: assessment.summary.clone(),
                                 basis,
                                 basis_digest,
+                                prior_evidence,
                                 limitations: assessment.limitations.clone(),
                             })
                         });
@@ -6072,6 +6093,7 @@ impl WorkflowGovernanceProjectAdapter {
                             binding,
                             cooperative_target,
                             &self.binding.project_root,
+                            &cooperative_evidence,
                         )
                     })
             });
@@ -6847,6 +6869,8 @@ pub struct WorkflowCooperativeEvidenceActionPacket {
     pub maximum_input_bytes: usize,
     pub binding: WorkflowCooperativeEvidenceBinding,
     pub route: WorkflowCooperativeEvidenceRoute,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub available_prior_evidence: Vec<WorkflowCooperativePriorEvidenceCandidate>,
     pub offer_template: serde_json::Value,
     pub required_replacements: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -7884,6 +7908,8 @@ fn derive_receipts(
                 ) || !cooperative_source_evidence_is_current(
                     record,
                     event,
+                    receipt_records,
+                    &latest_cooperative_source_assessments,
                     bundle,
                     objective,
                     project_snapshot,
@@ -10792,9 +10818,82 @@ fn cooperative_content_addressed_basis_current(
     Ok(true)
 }
 
+fn cooperative_prior_evidence_is_current(
+    reference: &WorkflowCooperativePriorEvidenceReference,
+    dependent_record: &WorkflowGovernanceLedgerRecord,
+    records: &[WorkflowGovernanceLedgerRecord],
+    latest: &BTreeMap<CooperativeSourceAssessmentRouteKey, (u64, String)>,
+    bundle: &WorkflowGovernanceBundleDocument,
+    active_objective: &WorkflowActiveCooperativeObjective,
+    snapshot: &RetainedWorkflowProjectSnapshot,
+    now: u64,
+) -> Result<bool, WorkflowGovernanceAdapterError> {
+    let Some(record) = records.iter().find(|record| {
+        record.record_digest == reference.record_digest
+            && record.sequence < dependent_record.sequence
+    }) else {
+        return Ok(false);
+    };
+    let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event else {
+        return Ok(false);
+    };
+    let Some(admitted) = event.admitted_evidence.as_ref() else {
+        return Ok(false);
+    };
+    if admitted
+        .source_assessment
+        .as_ref()
+        .is_some_and(|assessment| !assessment.prior_evidence.is_empty())
+    {
+        return Ok(false);
+    }
+    let Some(evaluator) = bundle
+        .workflow_governance_bundle
+        .policies
+        .iter()
+        .find(|policy| policy.id == admitted.policy_ref)
+        .and_then(|policy| {
+            policy
+                .evaluators
+                .iter()
+                .find(|evaluator| evaluator.id == admitted.evaluator_ref)
+        })
+    else {
+        return Ok(false);
+    };
+    if admitted.execution_assessment.is_none() && admitted.source_assessment.is_none() {
+        return Ok(false);
+    }
+    let current_reference = WorkflowCooperativePriorEvidenceReference {
+        record_digest: record.record_digest.clone(),
+        observed_at_unix: admitted.readback_observed_at_unix,
+        valid_through_unix: admitted
+            .readback_observed_at_unix
+            .checked_add(evaluator.max_age_seconds),
+    };
+    if current_reference != *reference {
+        return Ok(false);
+    }
+    Ok(
+        cooperative_source_assessment_is_latest(record, event, latest)
+            && cooperative_source_evidence_is_current(
+                record,
+                event,
+                records,
+                latest,
+                bundle,
+                active_objective,
+                snapshot,
+                now,
+            )?,
+    )
+}
+
 fn cooperative_source_evidence_is_current(
     record: &WorkflowGovernanceLedgerRecord,
     event: &WorkflowCooperativeEvidenceObservedEvent,
+    records: &[WorkflowGovernanceLedgerRecord],
+    latest: &BTreeMap<CooperativeSourceAssessmentRouteKey, (u64, String)>,
     bundle: &WorkflowGovernanceBundleDocument,
     active_objective: &WorkflowActiveCooperativeObjective,
     snapshot: &RetainedWorkflowProjectSnapshot,
@@ -10842,8 +10941,29 @@ fn cooperative_source_evidence_is_current(
             == active_objective.accepted_sequence
         && record.sequence > active_objective.accepted_sequence;
     let basis_current = if let Some(assessment) = admitted.source_assessment.as_ref() {
-        cooperative_content_addressed_basis_current(snapshot, &assessment.basis)?
+        let prior_evidence_current =
+            assessment
+                .prior_evidence
+                .iter()
+                .try_fold(true, |current, reference| {
+                    Ok::<_, WorkflowGovernanceAdapterError>(
+                        current
+                            && cooperative_prior_evidence_is_current(
+                                reference,
+                                record,
+                                records,
+                                latest,
+                                bundle,
+                                active_objective,
+                                snapshot,
+                                now,
+                            )?,
+                    )
+                })?;
+        (assessment.basis.is_empty()
+            || cooperative_content_addressed_basis_current(snapshot, &assessment.basis)?)
             && content_addressed_basis_digest(&assessment.basis)? == assessment.basis_digest
+            && prior_evidence_current
     } else {
         true
     };
@@ -11096,7 +11216,14 @@ fn cooperative_evidence_audit(
                         event,
                         &latest_source_assessments,
                     ) && cooperative_source_evidence_is_current(
-                        record, event, bundle, objective, snapshot, now,
+                        record,
+                        event,
+                        records,
+                        &latest_source_assessments,
+                        bundle,
+                        objective,
+                        snapshot,
+                        now,
                     )?
                 }
                 WorkflowCooperativeEvidenceTarget::SourceClaim => {
@@ -11174,13 +11301,22 @@ fn cooperative_evidence_audit(
             } else {
                 WorkflowCooperativeEvidenceCurrentStatus::Stale
             };
-        let valid_through_unix = current_admitted.and_then(|evidence| {
-            route.as_ref().and_then(|route| {
-                evidence
-                    .readback_observed_at_unix
-                    .checked_add(route.max_age_seconds)
+        let valid_through_unix = current_admitted
+            .and_then(|evidence| {
+                route.as_ref().and_then(|route| {
+                    evidence
+                        .readback_observed_at_unix
+                        .checked_add(route.max_age_seconds)
+                })
             })
-        });
+            .map(|own_valid_through| {
+                current_admitted
+                    .and_then(|evidence| evidence.source_assessment.as_ref())
+                    .into_iter()
+                    .flat_map(|assessment| assessment.prior_evidence.iter())
+                    .filter_map(|reference| reference.valid_through_unix)
+                    .fold(own_valid_through, u64::min)
+            });
         let is_applicability = target == WorkflowCooperativeEvidenceTarget::PolicyApplicability;
         let is_source_route = admitted.is_some_and(|evidence| {
             (evidence.source_assessment.is_some()
@@ -11428,6 +11564,56 @@ fn derived_solo_cooperative_evidence_route_for_policy(
     })
 }
 
+fn reusable_prior_cooperative_evidence(
+    audit: &WorkflowCooperativeEvidenceAudit,
+) -> Option<WorkflowCooperativePriorEvidenceCandidate> {
+    if audit.current_status != WorkflowCooperativeEvidenceCurrentStatus::Supporting {
+        return None;
+    }
+    let admitted = audit.admitted_evidence.as_ref()?;
+    if admitted
+        .target
+        .unwrap_or(WorkflowCooperativeEvidenceTarget::SourceClaim)
+        != WorkflowCooperativeEvidenceTarget::SourceClaim
+        || admitted.outcome != WorkflowEvidenceOutcome::Pass
+    {
+        return None;
+    }
+    let (kind, summary, limitations) =
+        if let Some(execution) = admitted.execution_assessment.as_ref() {
+            (
+                WorkflowEvidenceKind::DeterministicCheck,
+                execution.summary.clone(),
+                execution.limitations.clone(),
+            )
+        } else if let Some(source) = admitted.source_assessment.as_ref() {
+            if !source.prior_evidence.is_empty() {
+                return None;
+            }
+            (
+                WorkflowEvidenceKind::ArtifactInspection,
+                source.summary.clone(),
+                source.limitations.clone(),
+            )
+        } else {
+            return None;
+        };
+    Some(WorkflowCooperativePriorEvidenceCandidate {
+        reference: WorkflowCooperativePriorEvidenceReference {
+            record_digest: audit.record_digest.clone(),
+            observed_at_unix: admitted.readback_observed_at_unix,
+            valid_through_unix: audit.valid_through_unix,
+        },
+        policy_ref: admitted.policy_ref.clone(),
+        claim_ref: admitted.claim_ref.clone(),
+        evaluator_ref: admitted.evaluator_ref.clone(),
+        kind,
+        outcome: admitted.outcome,
+        summary,
+        limitations,
+    })
+}
+
 fn cooperative_evidence_action_packet(
     selected_policy: &WorkflowGovernancePolicy,
     selected_claim: &forge_core_contracts::WorkflowClaimPolicy,
@@ -11435,6 +11621,7 @@ fn cooperative_evidence_action_packet(
     binding: WorkflowCooperativeEvidenceBinding,
     target: WorkflowCooperativeEvidenceTarget,
     project_root: &Path,
+    cooperative_evidence: &[WorkflowCooperativeEvidenceAudit],
 ) -> Option<WorkflowCooperativeEvidenceActionPacket> {
     let route = derived_solo_cooperative_evidence_route_for_policy(
         selected_policy,
@@ -11447,12 +11634,26 @@ fn cooperative_evidence_action_packet(
     let deterministic_execution = route.assurance_effect
         == WorkflowCooperativeEvidenceAssuranceEffect::SoloSourceClaimSatisfiedByKernelExecution;
     let applicability_assessment = target == WorkflowCooperativeEvidenceTarget::PolicyApplicability;
+    let mut available_prior_evidence = if source_satisfaction {
+        cooperative_evidence
+            .iter()
+            .filter_map(reusable_prior_cooperative_evidence)
+            .take(MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    available_prior_evidence.sort_by(|left, right| {
+        left.reference
+            .record_digest
+            .cmp(&right.reference.record_digest)
+    });
     let offer_schema_version = if applicability_assessment {
         COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION
     } else if deterministic_execution {
         COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION
     } else if source_satisfaction {
-        COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION
+        COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION
     } else {
         COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1
     };
@@ -11461,7 +11662,7 @@ fn cooperative_evidence_action_packet(
     } else if deterministic_execution {
         COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION
     } else if source_satisfaction {
-        COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION
+        COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION
     } else {
         COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1
     };
@@ -11521,17 +11722,33 @@ fn cooperative_evidence_action_packet(
             "${FORGE_COMMAND_CONTRACT}".to_owned(),
         ]);
     } else if source_satisfaction {
-        attestation["source_assessment"] = serde_json::json!({
-            "outcome": "${ASSESSMENT_OUTCOME}",
-            "summary": "${ASSESSMENT_SUMMARY}",
-            "basis_paths": ["${PROJECT_RELATIVE_BASIS_PATH}"],
-            "limitations": [],
-        });
-        required_replacements.extend([
-            "${ASSESSMENT_OUTCOME}".to_owned(),
-            "${ASSESSMENT_SUMMARY}".to_owned(),
-            "${PROJECT_RELATIVE_BASIS_PATH}".to_owned(),
-        ]);
+        if available_prior_evidence.is_empty() {
+            attestation["source_assessment"] = serde_json::json!({
+                "outcome": "${ASSESSMENT_OUTCOME}",
+                "summary": "${ASSESSMENT_SUMMARY}",
+                "basis_paths": ["${PROJECT_RELATIVE_BASIS_PATH}"],
+                "prior_evidence_record_digests": [],
+                "limitations": [],
+            });
+            required_replacements.extend([
+                "${ASSESSMENT_OUTCOME}".to_owned(),
+                "${ASSESSMENT_SUMMARY}".to_owned(),
+                "${PROJECT_RELATIVE_BASIS_PATH}".to_owned(),
+            ]);
+        } else {
+            attestation["source_assessment"] = serde_json::json!({
+                "outcome": "${ASSESSMENT_OUTCOME}",
+                "summary": "${ASSESSMENT_SUMMARY}",
+                "basis_paths": [],
+                "prior_evidence_record_digests": ["${PRIOR_EVIDENCE_RECORD_DIGEST}"],
+                "limitations": [],
+            });
+            required_replacements.extend([
+                "${ASSESSMENT_OUTCOME}".to_owned(),
+                "${ASSESSMENT_SUMMARY}".to_owned(),
+                "${PRIOR_EVIDENCE_RECORD_DIGEST}".to_owned(),
+            ]);
+        }
     }
     let offer_template = serde_json::json!({
         "schema_version": offer_schema_version,
@@ -11557,6 +11774,7 @@ fn cooperative_evidence_action_packet(
         maximum_input_bytes: MAX_WORKFLOW_COOPERATIVE_EVIDENCE_INPUT_BYTES,
         binding,
         route,
+        available_prior_evidence,
         offer_template,
         required_replacements,
         kernel_derived_outcome: (!source_satisfaction
@@ -11567,7 +11785,7 @@ fn cooperative_evidence_action_packet(
             "the_same_owner_agent_assesses_only_whether_the_selected_policy_applies; the_kernel_confines_and_hashes_each_basis_file_against_the_current_project_snapshot; applicable_not_applicable_and_inconclusive_are_preserved; this_does_not_satisfy_any_policy_claim_capability_human_judgment_independent_review_runtime_separation_or_enterprise_compliance"
                 .to_owned()
         } else if source_satisfaction {
-            "the_agent_assesses_the_selected_repository_claim; the_kernel_confines_and_hashes_each_basis_file_against_the_current_project_snapshot; this_is_same_owner_agent_inspection_not_independent_review_human_presence_runtime_separation_or_enterprise_compliance"
+            "the_agent_assesses_the_selected_repository_claim; the_kernel_confines_and_hashes_each_basis_file_against_the_current_project_snapshot; optional_prior_evidence_record_digests_must_name_current_supporting_solo_cooperative_evidence_and_do_not_automatically_satisfy_the_new_claim; this_is_same_owner_agent_inspection_not_independent_review_human_presence_runtime_separation_or_enterprise_compliance"
                 .to_owned()
         } else if deterministic_execution {
             "the_kernel_validates_and_executes_one_direct_bounded_read_only_command_without_a_shell_or_network; pass_fail_or_inconclusive_is_derived_from_the_captured_process_result; this_is_same_owner_local_execution_not_independent_review_human_presence_runtime_separation_or_enterprise_compliance"
@@ -11597,22 +11815,35 @@ fn cooperative_offer_text_is_bounded(offer: &WorkflowCooperativeEvidenceOffer) -
     .all(|value| {
         !value.trim().is_empty() && value.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
     });
-    let assessment_text_is_bounded =
-        |summary: &str, basis_paths: &[String], limitations: &[String]| {
-            !summary.trim().is_empty()
-                && summary.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
-                && !basis_paths.is_empty()
-                && basis_paths.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
-                && limitations.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_LIMITATIONS
-                && basis_paths.iter().all(|path| {
-                    !path.trim().is_empty()
-                        && path.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
-                })
-                && limitations.iter().all(|limitation| {
-                    !limitation.trim().is_empty()
-                        && limitation.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
-                })
-        };
+    let assessment_text_is_bounded = |summary: &str,
+                                      basis_paths: &[String],
+                                      prior_evidence_record_digests: &[String],
+                                      limitations: &[String]| {
+        !summary.trim().is_empty()
+            && summary.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+            && (!basis_paths.is_empty() || !prior_evidence_record_digests.is_empty())
+            && basis_paths.len() + prior_evidence_record_digests.len()
+                <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
+            && limitations.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_LIMITATIONS
+            && basis_paths.iter().all(|path| {
+                !path.trim().is_empty()
+                    && path.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+            })
+            && prior_evidence_record_digests.iter().all(|digest| {
+                digest.len() == 71
+                    && digest.starts_with("sha256:")
+                    && digest.as_bytes()[7..]
+                        .iter()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+            })
+            && prior_evidence_record_digests
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+            && limitations.iter().all(|limitation| {
+                !limitation.trim().is_empty()
+                    && limitation.len() <= MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
+            })
+    };
     fixed_text_is_bounded
         && statement
             .source_assessment
@@ -11621,6 +11852,7 @@ fn cooperative_offer_text_is_bounded(offer: &WorkflowCooperativeEvidenceOffer) -
                 assessment_text_is_bounded(
                     &assessment.summary,
                     &assessment.basis_paths,
+                    &assessment.prior_evidence_record_digests,
                     &assessment.limitations,
                 )
             })
@@ -11631,6 +11863,7 @@ fn cooperative_offer_text_is_bounded(offer: &WorkflowCooperativeEvidenceOffer) -
                 assessment_text_is_bounded(
                     &assessment.summary,
                     &assessment.basis_paths,
+                    &[],
                     &assessment.limitations,
                 )
             })
@@ -17297,6 +17530,7 @@ mod tests {
                     .to_owned(),
                 basis,
                 basis_digest,
+                prior_evidence: Vec::new(),
                 limitations: vec!["Same-owner agent inspection".to_owned()],
             }),
             applicability_assessment: None,

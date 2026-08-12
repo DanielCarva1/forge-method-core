@@ -18,7 +18,8 @@ use forge_core_contracts::{
     ReadinessTarget, StableId, WorkflowContentAddressedReference,
     WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
-    WorkflowCooperativeEvidenceTarget, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
+    WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
+    WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
 };
 use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceSimulation};
 use forge_core_kernel::{
@@ -463,6 +464,7 @@ struct WorkflowResumeSourceAssessment<'a> {
     summary: &'a str,
     basis: &'a [WorkflowContentAddressedReference],
     basis_digest: &'a str,
+    prior_evidence: &'a [WorkflowCooperativePriorEvidenceReference],
     limitations: &'a [String],
 }
 
@@ -573,6 +575,7 @@ fn workflow_resume_summary<'a>(
                     summary: &assessment.summary,
                     basis: &assessment.basis,
                     basis_digest: &assessment.basis_digest,
+                    prior_evidence: &assessment.prior_evidence,
                     limitations: &assessment.limitations,
                 }
             });

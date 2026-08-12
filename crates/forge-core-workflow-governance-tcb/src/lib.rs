@@ -18,6 +18,7 @@ use forge_core_contracts::workflow_governance::{
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION,
 };
@@ -244,6 +245,12 @@ impl WorkflowGovernanceLedgerProjection {
                 WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
             )
         })
+    }
+
+    fn contains_prior_cooperative_evidence(&self) -> bool {
+        self.records
+            .iter()
+            .any(|record| event_contains_prior_cooperative_evidence(&record.event))
     }
 
     fn latest_cooperative_objective(
@@ -1920,6 +1927,7 @@ fn recover_from_reader(
                 != WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1964,6 +1972,8 @@ fn recover_from_reader(
             &record.event,
             WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
         );
+        let is_prior_cooperative_evidence =
+            event_contains_prior_cooperative_evidence(&record.event);
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -1992,8 +2002,11 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_legacy_solo_adoption || identity_state.legacy_solo_adoption_seen
+        let expected_schema = if is_prior_cooperative_evidence
+            || identity_state.prior_cooperative_evidence_seen
         {
+            WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
+        } else if is_legacy_solo_adoption || identity_state.legacy_solo_adoption_seen {
             WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION
         } else if is_cooperative_evidence || identity_state.cooperative_evidence_seen {
             WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION
@@ -2119,6 +2132,7 @@ struct RecoveredIdentityState {
     cooperative_objective_seen: bool,
     cooperative_objective_revision_seen: bool,
     cooperative_evidence_seen: bool,
+    prior_cooperative_evidence_seen: bool,
     latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     latest_cooperative_objective_record_digest: Option<String>,
     latest_cooperative_objective_record_sequence: Option<u64>,
@@ -2347,6 +2361,8 @@ fn validate_recovered_semantics(
     ) {
         identity.cooperative_evidence_seen = true;
     }
+    identity.prior_cooperative_evidence_seen |=
+        event_contains_prior_cooperative_evidence(&record.event);
     if let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event {
         if let Some(offer_id) = event.offer_id.as_ref() {
             identity
@@ -2761,11 +2777,27 @@ fn build_deterministic_broker_record_line(
     Ok((record, line))
 }
 
+fn event_contains_prior_cooperative_evidence(event: &WorkflowGovernanceEvent) -> bool {
+    matches!(
+        event,
+        WorkflowGovernanceEvent::CooperativeEvidenceObserved(observed)
+            if observed
+                .admitted_evidence
+                .as_ref()
+                .and_then(|evidence| evidence.source_assessment.as_ref())
+                .is_some_and(|assessment| !assessment.prior_evidence.is_empty())
+    )
+}
+
 fn ledger_wire_schema(
     projection: &WorkflowGovernanceLedgerProjection,
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
-    if matches!(event, WorkflowGovernanceEvent::LegacySoloProfileAdopted(_))
+    if event_contains_prior_cooperative_evidence(event)
+        || projection.contains_prior_cooperative_evidence()
+    {
+        WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
+    } else if matches!(event, WorkflowGovernanceEvent::LegacySoloProfileAdopted(_))
         || projection.contains_legacy_solo_adoption()
     {
         WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION
@@ -4093,8 +4125,9 @@ fn validate_cooperative_evidence_shape(
                                 && limitation.len()
                                     <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES
                         });
-                    let basis_is_bounded = !assessment.basis.is_empty()
-                        && assessment.basis.len()
+                    let basis_is_bounded = (!assessment.basis.is_empty()
+                        || !assessment.prior_evidence.is_empty())
+                        && assessment.basis.len() + assessment.prior_evidence.len()
                             <= forge_core_contracts::MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS
                         && assessment.basis.windows(2).all(|pair| {
                             pair[0].subject_ref < pair[1].subject_ref
@@ -4110,6 +4143,15 @@ fn validate_cooperative_evidence_shape(
                         && is_lower_sha256(&assessment.basis_digest)
                         && to_canonical_json(&assessment.basis).is_ok_and(|canonical| {
                             format_sha256(Sha256::digest(canonical)) == assessment.basis_digest
+                        })
+                        && assessment.prior_evidence.windows(2).all(|pair| {
+                            pair[0].record_digest < pair[1].record_digest
+                        })
+                        && assessment.prior_evidence.iter().all(|reference| {
+                            is_lower_sha256(&reference.record_digest)
+                                && reference.valid_through_unix.is_none_or(|valid_through| {
+                                    valid_through >= reference.observed_at_unix
+                                })
                         });
                     text_is_bounded
                         && basis_is_bounded

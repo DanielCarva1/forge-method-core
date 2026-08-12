@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-admission.
 
 ### Added
+- **Safe reuse of current Solo Cooperative evidence during research closeout.**
+  A source assessment may now cite an earlier current supporting receipt instead
+  of naming a dummy repository file. Forge still requires a new summary and
+  limitations, rejects unknown or stale receipts, and prevents receipt chains.
+  The bounded reference is stored under workflow-ledger schema `0.14`; older
+  binaries must be upgraded before opening a ledger that has used this feature.
 - **Agent-complete concise continuity refresh.** Default `workflow resume` now
   emits `workflow_resume_summary_v2`: it keeps the complete current evaluation,
   autonomy binding and input contract, boundary rechecks, authorization,
