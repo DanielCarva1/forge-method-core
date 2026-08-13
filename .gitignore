@@ -16,7 +16,6 @@ target-test/
 # Local development state (dev diary, scratch). The repo ships only product
 # + usage docs; development narrative lives here, never committed.
 .local/
-AGENTS.md
 docs/product-status.md
 docs/product-compliance-audit.md
 docs/product-gap-register.md

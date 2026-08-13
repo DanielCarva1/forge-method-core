@@ -1,0 +1,471 @@
+schema_version: "0.1"
+artifact_kind: "product-journey-guidance-specification"
+contract_id: "spec.product-journey-guidance-v0"
+status: "draft"
+created_at: "2026-08-12"
+
+source:
+  discovery: "contracts/discovery/product-journey-recovery-discovery.yaml"
+  research: "docs/research/agent-orchestration-and-proportional-journeys.md"
+  prior_design:
+    - "contracts/plan/slice-2-orchestrator-plan.yaml"
+    - "contracts/spec/engine-architecture.yaml"
+  current_runtime:
+    - "crates/forge-core-contracts/src/phase.rs"
+    - "crates/forge-core-contracts/src/catalog.rs"
+    - "crates/forge-core-contracts/src/guide_decision.rs"
+    - "crates/forge-core-decisions/src/catalog.rs"
+    - "crates/forge-core-decisions/src/funnel_autonomy.rs"
+    - "crates/forge-core-kernel/src/guide_protocol.rs"
+    - "crates/forge-core-cli/src/guide.rs"
+    - "crates/forge-core-cli/src/workflow_cmd.rs"
+
+purpose: >-
+  Reconnect Forge's fixed product-development lifecycle, proportional autonomy
+  funnel, runtime-owned capability catalog, host-agent reasoning, and
+  deterministic governance through the normal start/resume journey without
+  turning guidance into authority or loading the full catalog at startup.
+
+product_contract:
+  human_entry: "start-forge"
+  lifecycle_rule: >-
+    Every greenfield, brownfield, and Evolve cycle visits Analysis and
+    Discovery, Product Planning, Solution Definition, Implementation, and
+    Validation and Delivery. The amount of work in a stage is proportional;
+    the stage is not silently removed.
+  workflow_rule: >-
+    A workflow is a directional practice within a stage. It carries an
+    objective, applicability signals, inputs, suggested activities, outputs,
+    completion conditions, blocked conditions, and handoff context. It does not
+    script the host agent or grant authority.
+  autonomy_rule: >-
+    Human-agent contact is high while intent and product decisions are being
+    formed, then decreases as the product contract becomes settled. New
+    material uncertainty reopens the appropriate human conversation rather
+    than allowing blind execution.
+  evolve_rule: >-
+    Evolve is entered after a stable product when the user wants a material
+    change. It records that trigger and immediately starts a new cycle in
+    Analysis and Discovery using the existing product and feedback as context.
+    No feature development happens inside Evolve.
+
+proportional_cycle_model:
+  rule: >-
+    Forge exposes one Product Lifecycle rather than separate lightweight and
+    heavyweight methods. A clear, bounded, reversible change starts as a Quick
+    Cycle: every lifecycle stage is visited, but its closeout is compressed into
+    one small durable record. Evidence can expand the affected stage without
+    restarting or expanding the whole cycle by default.
+  quick_cycle_record:
+    purpose: "preserve the complete reasoning path for small work without producing a stack of documents"
+    fields:
+      objective: "one user-facing outcome"
+      compactness_reason: "why a compact treatment is currently safe"
+      stage_closeouts:
+        analysis_discovery: "current behavior, problem evidence, relevant uncertainty, and why deeper discovery is unnecessary"
+        product_planning: "desired behavior, success criteria, and non-goals"
+        solution_definition: "affected boundaries, chosen approach, material risks, and why no larger design artifact is needed"
+        implementation: "completed change and meaningful deviations from the plan"
+        validation_delivery: "acceptance evidence, user-journey result, remaining limits, and delivery state"
+      expansion_history: "append-only reasons that caused a stage to grow or the cycle to return"
+    bounds:
+      - "one active user-facing objective"
+      - "closeouts are summaries backed by referenced evidence, not replacements for evidence"
+      - "a stage may close immediately only when the host can explain why additional work cannot reasonably change the decision"
+      - "compactness never removes a required authority, safety, evidence, or release gate"
+  expansion_signals:
+    - id: "unclear-intent"
+      return_to: "analysis-discovery"
+      example: "the requested behavior or affected user is still ambiguous"
+    - id: "multiple-independent-goals"
+      return_to: "analysis-discovery"
+      example: "one request contains changes that can succeed or fail independently"
+    - id: "missing-product-decision"
+      return_to: "product-planning"
+      example: "success criteria, user journey, or non-goal is not settled"
+    - id: "broad-or-unknown-impact"
+      return_to: "solution-definition"
+      example: "the change crosses systems, ownership boundaries, or poorly understood code"
+    - id: "architectural-choice"
+      return_to: "solution-definition"
+      example: "more than one meaningful design has different long-term costs"
+    - id: "material-risk-or-irreversibility"
+      return_to: "the earliest stage that owns the unresolved human or technical decision"
+      example: "security, data, compatibility, money, external publication, or destructive effects are involved"
+    - id: "validation-failure"
+      return_to: "the stage where the failure originated"
+      example: "wrong intent returns to discovery, wrong requirement to planning, wrong design to solution definition, and a local defect to implementation"
+  human_checkpoints:
+    - "clarify intent or make a material product decision while the contract is still forming"
+    - "approve an expanded product or solution contract when the consequences justify explicit review"
+    - "review the resulting user experience and remaining limits before final delivery"
+  agent_autonomy:
+    - "investigate, plan, implement, test, review, and document reversible local work between human checkpoints"
+    - "expand a stage when evidence justifies it; do not ask the human to choose a process label"
+    - "route a failed review back to the stage that introduced the mistake instead of repeatedly patching code"
+    - "record unrelated findings as deferred work rather than silently expanding the active objective"
+
+canonical_stage_mapping:
+  source_of_phase_identity: "forge_core_contracts::Phase"
+  no_second_phase_enum: true
+  stages:
+    - phase: "0-route"
+      stage_id: "bootstrap-route"
+      display_name: "Bootstrap"
+      objective: "recover project identity, durable state, and the correct lifecycle entry"
+      expected_contact_density: "medium"
+      lifecycle_stage: false
+    - phase: "1-discovery"
+      stage_id: "analysis-discovery"
+      display_name: "Analysis and Discovery"
+      objective: "understand the person, problem, product, existing system, uncertainty, and promising directions"
+      expected_contact_density: "high"
+      lifecycle_stage: true
+    - phase: "2-specification"
+      stage_id: "product-planning"
+      display_name: "Product Planning"
+      objective: "turn the chosen direction into an agreed product contract with journeys, requirements, success criteria, and non-goals"
+      expected_contact_density: "high"
+      lifecycle_stage: true
+    - phase: "3-plan"
+      stage_id: "solution-definition"
+      display_name: "Solution Definition"
+      objective: "design the product and technical solution, assess impact, and split it into coherent increments"
+      expected_contact_density: "medium"
+      lifecycle_stage: true
+    - phase: "4-build-verify"
+      stage_id: "implementation"
+      display_name: "Implementation"
+      objective: "build the agreed increments with executable feedback, integration, and focused review"
+      expected_contact_density: "low"
+      lifecycle_stage: true
+    - phase: "5-ready-operate"
+      stage_id: "validation-delivery"
+      display_name: "Validation and Delivery"
+      objective: "prove the intended user journey and leave the product stable, usable, releasable, and observable"
+      expected_contact_density: "low"
+      lifecycle_stage: true
+    - phase: "6-evolve"
+      stage_id: "evolve-trigger"
+      display_name: "Evolve"
+      objective: "capture the user's next material change and reopen the lifecycle at Analysis and Discovery"
+      expected_contact_density: "medium"
+      lifecycle_stage: false
+      transition_only: true
+  validation:
+    - "Every Phase variant has exactly one stage descriptor."
+    - "Every descriptor's contact density equals the accepted funnel-autonomy profile for its Phase."
+    - "Stage descriptors add product meaning but never alter Phase identity, rank, eligibility, or transition authority."
+    - "Evolve is transition-only and cannot contain feature-development work."
+
+module_design:
+  module: "Product Journey Guidance"
+  interface: >-
+    One compact read-only journey_guidance value in workflow resume, plus
+    phase-filtered catalog status and single-capability detail readbacks.
+  implementation: >-
+    An accepted lifecycle descriptor is loaded and validated in
+    forge-core-decisions. A pure composition function joins one canonical Phase,
+    its accepted funnel profile, and the embedded operational catalog. Adapters
+    project the result; the kernel remains owner of gates and authority.
+  depth: >-
+    Callers learn one stage readback and two progressive catalog operations
+    instead of joining Phase, funnel policy, workflow documents, retirement
+    tombstones, and guide validation themselves.
+  seam: "a pure read-only ProductJourneyGuidance derivation in forge-core-decisions"
+  adapters:
+    - "forge-core-cli workflow resume projection"
+    - "forge-core-cli guide status and guide detail"
+    - "start-forge host skill"
+    - "future MCP or native-host adapter using the same contract"
+  leverage: "one runtime-owned journey model serves every host and improves with stronger host agents"
+  locality: "stage meaning and catalog composition change in their owners rather than in every host skill"
+  deletion_test: >-
+    Deleting this module would force every adapter to rediscover the stage map,
+    funnel profile, catalog source, eligibility rules, and progressive commands.
+    It therefore removes real caller complexity rather than wrapping one call.
+
+authority_split:
+  forge_deterministic:
+    - "derive current Phase from durable project state"
+    - "load and validate the accepted lifecycle descriptor"
+    - "load the embedded operational catalog and retirement tombstones"
+    - "filter capability eligibility by Phase"
+    - "publish funnel contact density and exact read-only catalog commands"
+    - "validate a later host recommendation against catalog, Phase, gates, and authority"
+  host_agent_reasoning:
+    - "interpret the latest conversation and repository reality"
+    - "decide whether a stage needs a short or expanded treatment"
+    - "choose which eligible capability is useful"
+    - "choose research method, tools, sources, and depth"
+    - "explain the recommendation simply to the user"
+  human_decision:
+    - "desired outcome and preferences"
+    - "material product tradeoffs"
+    - "risk acceptance and irreversible or external effects"
+    - "whether a stable product should enter a new Evolve cycle"
+  non_authority:
+    - "journey guidance grants no mutation, phase transition, evidence admission, release, signing, trust, or human-origin authority"
+    - "a host recommendation is not proof and cannot satisfy a governance claim"
+    - "selected_policy_ref remains a governance concern and must not be relabeled as the current product-development practice"
+
+resume_interface:
+  containing_schema: "workflow_resume_summary_v7"
+  migration: >-
+    Adding journey_guidance changes the public summary shape, so implementation
+    advances v6 to v7 and updates exact schema consumers. It must not silently
+    add the field while continuing to claim v6.
+  field: "data.journey_guidance"
+  value_schema: "product_journey_guidance_v1"
+  required_shape:
+    schema_version: "product_journey_guidance_v1"
+    authority: "advisory_read_only"
+    phase: "canonical Phase tag"
+    stage:
+      id: "stable stage id from the accepted lifecycle descriptor"
+      display_name: "short agent-facing name"
+      objective: "one bounded directional sentence"
+      contact_density: "accepted funnel-autonomy value"
+    catalog:
+      eligible_count: "count of operational non-retired capabilities eligible in the phase"
+      status_argv: ["forge-core", "guide", "status", "--root", "<resolved-root>", "--phase", "<current-phase>", "--json"]
+      detail_argv:
+        argv: ["forge-core", "guide", "detail", "--workflow", "__FORGE_CAPABILITY_ID__", "--json"]
+        workflow_id_token: "__FORGE_CAPABILITY_ID__"
+    recommendation_owner: "host_agent"
+    recommendation_is_authority: false
+  compactness:
+    - "Do not embed the full workflow catalog, retirement tombstones, active objective, policy simulation, or evidence again."
+    - "Reuse top-level active_objective, current_evaluation, blockers, and actions by reference in host instructions rather than copying their bytes."
+    - "The journey_guidance canonical JSON must remain at or below 2048 bytes for every Phase and valid project root."
+  independence:
+    - "Changing selected_policy_ref while Phase, lifecycle descriptor, funnel policy, and catalog remain equal cannot change journey_guidance."
+    - "Deleting or replacing an advisory workflow's steps cannot change governance simulation, verdicts, gates, claims, or authority."
+
+progressive_catalog_interfaces:
+  status:
+    command: "forge-core guide status --root <root> --phase <phase> --json"
+    before: "eligible rows contain only id and phases"
+    after:
+      schema_version: "guide_routing_payload_v0.3"
+      eligible_row:
+        id: "StableId"
+        phases: "eligible phase tags"
+        summary: "first applicability trigger, bounded"
+      ordering: "ascending capability id"
+      contents: "operational non-retired capabilities eligible in the requested Phase"
+      excludes:
+        - "full workflow steps"
+        - "full inputs, outputs, completion, blocked, and handoff lists"
+        - "retired workflows as eligible candidates"
+    purpose: "give the host enough signal to choose a small candidate set without loading all workflow bodies"
+  detail:
+    command: "forge-core guide detail --workflow <id> --json"
+    schema_version: "guide_capability_detail_v0.1"
+    success_shape:
+      id: "StableId"
+      phases: "phase tags"
+      applicability_signals: "workflow trigger"
+      inputs: "workflow inputs"
+      activities: "workflow steps"
+      outputs: "workflow outputs"
+      done_when: "workflow done_when"
+      blocked_when: "workflow blocked_when"
+      handoff: "workflow handoff"
+      module: "optional workflow module"
+    rules:
+      - "Resolve from the same catalog/workflow-document owner used by guide describe."
+      - "Reject unknown IDs with a typed diagnostic."
+      - "Return a retirement diagnostic, not a routable detail, for a retired ID."
+      - "Never infer applicability or recommend the capability."
+      - "Never mutate project or sidecar state."
+    purpose: "load the complete directional contract only after the host selects a plausible capability"
+
+host_adapter_behavior:
+  start_forge:
+    - "Remain the only ordinary human initialization command."
+    - "Bootstrap and resume exactly once according to the existing durable-state rule."
+    - "Read journey_guidance after resume instead of carrying a copied lifecycle or capability catalog."
+    - "Use contact_density to decide how much human conversation is expected, not to request procedural confirmation during autonomous stages."
+    - "When stage guidance is needed, execute catalog.status_argv, reason over the latest conversation, then request detail only for plausible capabilities."
+    - "Explain the selected practice and why it helps in simple language; do not expose catalog browsing as human work."
+    - "Do not run research merely because a research capability exists. The host chooses it when uncertainty can change the decision."
+    - "Begin with compact stage treatment and expand only when an explicit expansion signal is observed."
+    - "Describe the reason for expansion in product language; do not ask the human to select Quick Cycle or Expanded Cycle."
+    - "When validation finds an upstream mistake, return to the owning stage instead of hiding the problem in implementation patches."
+  stale_or_unsupported_runtime:
+    - "A host that receives workflow_resume_summary_v6 follows the v6 compatibility behavior and may use existing guide diagnostics as a temporary fallback."
+    - "A host must not invent v7 fields or assume the installed catalog matches its skill text."
+
+first_vertical_slice:
+  name: "Discovery guidance through normal resume"
+  scope:
+    - "accepted lifecycle descriptor and typed loader"
+    - "ProductJourneyGuidance pure derivation for 1-discovery"
+    - "workflow_resume_summary_v7 journey_guidance projection"
+    - "guide status summary field"
+    - "guide detail single-workflow readback"
+    - "start-forge v7 consumption"
+  explicit_deferrals:
+    - "durably recording the host-selected capability"
+    - "simplifying GuideDecision validation independently of OperationContract"
+    - "automatic semantic ranking inside Forge core"
+    - "new workflow authoring or restoration of retired workflows"
+    - "Evolve-to-Discovery state transition implementation"
+    - "collaboration lanes and merge coordination"
+  acceptance_journeys:
+    - id: "small-brownfield-fix"
+      setup: "a clear local and reversible correction with an existing product"
+      expected: "Analysis and Discovery is visible but closes after a compact inspection; no forced market or domain research"
+    - id: "medium-feature"
+      setup: "a feature with known audience but product and technical uncertainty"
+      expected: "the host uses status and one or two details, asks focused questions, and records targeted research before Product Planning"
+    - id: "uncertain-product-idea"
+      setup: "a broad idea with unclear audience, problem, or alternatives"
+      expected: "the host selects expanded brainstorming, design-thinking, or market research before proposing Product Planning"
+    - id: "replacement-agent"
+      setup: "a new host agent starts from durable Forge state"
+      expected: "one start/resume tells it the current stage and how to consult the installed catalog without reading this specification"
+    - id: "quick-cycle-expands"
+      setup: "a local-looking change reveals a cross-system or architectural consequence during inspection"
+      expected: "the host records the expansion signal, expands Solution Definition, and preserves the earlier stage closeouts instead of restarting or implementing blindly"
+    - id: "review-returns-upstream"
+      setup: "validation proves that the implementation matches the plan but the plan misunderstood the user's intended behavior"
+      expected: "the cycle returns to Product Planning or Analysis and Discovery; repeated implementation patches are not treated as progress"
+
+verification_strategy:
+  fast_checks_each_slice:
+    target: "under 60 seconds on the developer Windows machine after the target is built"
+    checks:
+      - "contract round-trip and deny-unknown-fields tests for the new typed lifecycle and guidance values"
+      - "pure decisions tests for all seven Phase mappings, funnel equality, eligibility count, stable ordering, and 2048-byte compactness"
+      - "guide unit tests for status summaries, one detail success, unknown ID, and retired ID"
+      - "workflow resume projection unit test proving journey guidance is independent of selected policy"
+      - "start-forge Python contract test for v7 progressive consumption and v6 compatibility"
+  integration_once_at_slice_close:
+    - "one focused CLI journey from start to resume in Discovery"
+    - "one guide status plus guide detail exercise through the installed-style binary"
+    - "one schema-consumer check covering release smoke and shipped start-forge skill"
+  not_each_small_edit:
+    - "workspace-wide Cargo tests"
+    - "full release workflow"
+    - "expensive domain-pack or P6d E2E"
+    - "fuzzing"
+  broader_release_gate:
+    - "cargo fmt --all -- --check"
+    - "relevant crate tests"
+    - "release locking and smoke checks in a supported environment"
+    - "hosted CI before release claims"
+
+implementation_slices:
+  - id: "PJ-001"
+    name: "Canonical lifecycle descriptors"
+    done_when:
+      - "one accepted lifecycle contract covers every canonical Phase"
+      - "decisions loader validates uniqueness, completeness, contact density, and bounds"
+      - "no transition or authority behavior changes"
+  - id: "PJ-002"
+    name: "Progressive catalog readback"
+    depends_on: ["PJ-001"]
+    done_when:
+      - "guide status returns bounded summaries in stable order"
+      - "guide detail returns exactly one operational workflow"
+      - "unknown and retired IDs fail with distinct typed diagnostics"
+  - id: "PJ-003"
+    name: "Journey guidance in resume v7"
+    depends_on: ["PJ-001", "PJ-002"]
+    done_when:
+      - "resume returns the compact stage and exact progressive catalog commands"
+      - "output is independent of selected policy and remains under the size bound"
+      - "v7 schema consumers are updated together"
+  - id: "PJ-004"
+    name: "Single-command host experience"
+    depends_on: ["PJ-003"]
+    done_when:
+      - "start-forge consumes v7 without embedding the catalog"
+      - "v6 compatibility stays honest"
+      - "the four acceptance journeys have focused evidence"
+  - id: "PJ-005"
+    name: "Durable selected-practice continuity"
+    depends_on: ["PJ-004"]
+    deferred_from_first_slice: true
+    objective: "let a replacement agent recover which practice is active without turning the choice into authority"
+  - id: "PJ-006"
+    name: "Evolve reentry"
+    depends_on: ["PJ-004"]
+    deferred_from_first_slice: true
+    objective: "make a user-triggered stable-product change reenter Analysis and Discovery with prior product context"
+  - id: "PJ-007"
+    name: "Collaboration lanes"
+    depends_on: ["PJ-004"]
+    deferred_from_first_slice: true
+    objective: "connect lifecycle work to agent ownership, dependencies, integration, and merge evidence"
+
+compatibility_and_rollout:
+  - "Keep current Phase tags and ranks byte-for-byte stable."
+  - "Do not reinterpret old workflow, ledger, policy, or release records."
+  - "Advance guide routing payload 0.2 to 0.3 because status row meaning changes."
+  - "Advance resume summary v6 to v7 because a required public field is added."
+  - "Update release smoke and its governed hash together with the shipped start-forge consumer."
+  - "Do not edit a content-addressed workflow-governance bundle merely to add advisory journey wording."
+  - "Roll back by removing the new read-only projection and returning adapters to v6; no persisted-data migration is required in the first slice."
+
+success_metrics:
+  product:
+    - "the human still uses one initialization command"
+    - "the host can state the current product stage and its objective after one resume"
+    - "small work is not forced into unnecessary research or large artifacts"
+    - "uncertain work receives useful discovery practices before implementation"
+    - "a replacement host can recover how to continue from runtime readback"
+  efficiency:
+    - "journey_guidance is at most 2048 canonical JSON bytes"
+    - "zero full-catalog payloads during ordinary startup"
+    - "at most one status call and only selected detail calls during a stage decision"
+    - "fast checks remain under the stated local target after build"
+  safety:
+    - "no change to governance verdicts when only lifecycle wording or workflow steps change"
+    - "no recommendation grants mutation or phase authority"
+
+open_decisions_before_implementation:
+  - id: "OD-001"
+    question: "Are the stage display names and objectives in canonical_stage_mapping accepted as the first product wording?"
+    blocking: true
+  - id: "OD-002"
+    question: "Should guide detail use the installed embedded catalog unconditionally, or preserve the current explicit local --catalog-dir developer override?"
+    recommendation: "preserve the explicit developer override while defaulting to the embedded installed catalog"
+    blocking: false
+  - id: "OD-003"
+    question: "Should durable selected-practice continuity extend GuideDecision or use a smaller advisory selection record?"
+    blocking: false
+    deferred_to: "PJ-005"
+  - id: "OD-004"
+    question: "Which admitted transition implements Evolve reentry without weakening ReadyOperate and release gates?"
+    blocking: false
+    deferred_to: "PJ-006"
+  - id: "OD-005"
+    question: "Which existing append-only record should own Quick Cycle closeouts and expansion history without creating a second project-state authority?"
+    blocking: false
+    deferred_to: "a focused persistence design after the read-only guidance slice"
+
+resolved_product_decisions:
+  - id: "PD-001"
+    accepted_at: "2026-08-13"
+    decision: >-
+      Evolve is a short transition after a stable product. It records the
+      user's material-change intent and immediately opens a new Product
+      Lifecycle in Analysis and Discovery. Development does not happen in
+      Evolve.
+  - id: "PD-002"
+    accepted_at: "2026-08-13"
+    decision: >-
+      Forge has one Product Lifecycle with proportional depth. Small work uses
+      a Quick Cycle that compresses every lifecycle stage into one durable
+      record instead of skipping stages. Concrete uncertainty, impact, risk, or
+      review evidence expands only the affected stage by default, and failures
+      return to the stage where the misunderstanding originated.
+
+acceptance_boundary: >-
+  This draft specifies the intended product interface and implementation
+  slices. It grants no implementation authority and makes no claim that the
+  runtime, installed skill, release smoke, or user journeys already implement
+  Product Journey Guidance.

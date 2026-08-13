@@ -88,6 +88,20 @@ as product drift rather than asking the solo developer to provision them.
 - **Evidence**: provenance-bearing observation bound to a claim and subject.
 - **Capability Gap**: explicit inability to complete or verify an obligation.
 - **Decision Request**: concise human question only for an irreducible choice.
+- **Product Lifecycle**: the complete guided path from Analysis and Discovery
+  through Product Planning, Solution Definition, Implementation, and Validation
+  and Delivery. Every greenfield, brownfield, or material-change cycle follows
+  this path with proportional depth.
+- **Quick Cycle**: the compact form of the Product Lifecycle for clear, bounded,
+  reversible work. It visits every lifecycle stage in one small durable record
+  instead of silently skipping stages or creating a document for each one.
+- **Expansion Signal**: evidence that a Quick Cycle is no longer enough, such as
+  unclear intent, broad impact, architectural choice, material risk, or a failed
+  review that exposes an earlier misunderstanding. Only the affected stage is
+  expanded unless the evidence invalidates more of the cycle.
+- **Evolve**: a short user-triggered transition for a stable product. It records
+  the desired material change and immediately opens a new Product Lifecycle in
+  Analysis and Discovery. Feature development never happens inside Evolve.
 - **Phase Projection**: maturity summary derived from obligations, not primary
   authority.
 - **Governed Promotion**: admission of isolated agent work into canonical state

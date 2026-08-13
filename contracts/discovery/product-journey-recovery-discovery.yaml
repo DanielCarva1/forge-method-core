@@ -1,0 +1,210 @@
+schema_version: "0.1"
+artifact_kind: "discovery-closeout"
+status: "accepted"
+created_at: "2026-08-12"
+project: "forge-method-core"
+session: "product-journey-recovery"
+
+source_input:
+  audience:
+    primary: "people building or evolving software through a host agent"
+    mediator: "the host agent that uses Forge"
+  human_intent:
+    - "Forge helps people through agents; it is not a vault whose governance replaces product development."
+    - "Every greenfield, brownfield, and Evolve cycle starts with Analysis and Discovery."
+    - "Discovery and Planning are high-contact stages where human and agent research, explore, and decide together."
+    - "Solution Definition and Implementation form an autonomy funnel: the agent gains autonomy as intent becomes settled."
+    - "Each workflow inside a stage has an objective, useful activities, evidence, and a completion condition."
+    - "Stages are stable good-practice guidance; their depth is dynamic and proportional to the work."
+    - "Evolve is a user-triggered new cycle over a stable product, not autonomous self-evolution."
+    - "Quality, evidence, TDD, adversarial review, authority, and collaboration support the journey; they are not the journey itself."
+
+desired_lifecycle:
+  cycle_entry:
+    stages:
+      - id: "analysis-discovery"
+        human_contact: "high"
+        purpose: "understand the user, problem, product, existing system, uncertainty, and promising directions"
+        example_capabilities:
+          - "brainstorming"
+          - "idea validation"
+          - "market research"
+          - "domain research"
+          - "technical research"
+          - "product brief"
+          - "PRFAQ"
+          - "Working Backwards"
+      - id: "planning"
+        human_contact: "high"
+        purpose: "turn the chosen direction into an agreed product contract"
+        example_capabilities:
+          - "PRD"
+          - "UX design specification"
+          - "requirements"
+          - "user journeys"
+          - "success criteria"
+          - "non-goals"
+      - id: "solution-definition"
+        human_contact: "medium"
+        purpose: "design how the product and codebase will satisfy the agreed product contract"
+        example_capabilities:
+          - "architecture"
+          - "technical design"
+          - "risk and impact analysis"
+          - "epics and slices"
+      - id: "implementation"
+        human_contact: "low"
+        purpose: "build coherent increments with executable feedback and focused review"
+        example_capabilities:
+          - "stories and tasks"
+          - "TDD"
+          - "code review"
+          - "integration"
+      - id: "validation-delivery"
+        human_contact: "low_until_material_decision"
+        purpose: "prove the intended user journey works and leave the product stable and usable"
+        example_capabilities:
+          - "acceptance and regression evidence"
+          - "user-journey validation"
+          - "release readiness"
+          - "operation and feedback capture"
+    evolve:
+      trigger: "the user chooses to expand or materially change a stable product"
+      transition: "start a new cycle at analysis-discovery with the existing product and feedback as context"
+
+workflow_contract_expectation:
+  required_fields:
+    - "purpose and stage objective served"
+    - "signals that make the workflow useful or unnecessary"
+    - "inputs and relevant context"
+    - "suggested activities without scripting the host agent"
+    - "durable output or evidence"
+    - "completion and blocked conditions"
+    - "cost, risk, authority, and side-effect metadata where relevant"
+  proportionality_rule: >-
+    Every stage is visited. Low-impact and well-understood work may close a stage
+    with a short exchange and compact durable output. Uncertain, broad, risky, or
+    irreversible work expands the same stage with deeper research and artifacts.
+
+verified_current_state:
+  - finding: "The operational workflow catalog still exists and is embedded in the binary."
+    evidence:
+      - "crates/forge-core-decisions/src/catalog.rs"
+      - "forge-core guide status --phase 1-discovery lists brainstorming, design-thinking, market-scan, problem-solving, and other eligible workflows"
+  - finding: "The host-reasoned orchestrator contract still exists."
+    evidence:
+      - "crates/forge-core-contracts/src/guide_decision.rs"
+      - "crates/forge-core-kernel/src/guide_protocol.rs"
+      - "crates/forge-core-cli/tests/guide_e2e.rs"
+  - finding: "The accepted autonomy policy already models high contact in discovery/specification and lower contact in build/operate."
+    evidence:
+      - "contracts/policies/funnel-autonomy.yaml"
+  - finding: "The normal start/resume journey does not expose or consult that catalog."
+    evidence:
+      - "skill/start-forge/SKILL.md treats guide commands as legacy diagnostics"
+      - "docs/agent-integration.md routes normal work through workflow resume"
+  - finding: "Workflow governance selects a policy deterministically rather than interpreting the user's semantic intent."
+    evidence:
+      - "crates/forge-core-kernel/src/workflow_governance/adapter.rs select_policy filters phase, activation, signals, and prerequisites, then sorts by priority and id"
+      - "After the corrected dogfood objective was recorded, resume selected policy.workflow.investigation instead of a product-discovery capability"
+  - finding: "The retired workflow set preserved governance replacements but removed richer product guidance from the normal journey."
+    evidence:
+      - "contracts/spec/workflow-governance-retirement-v0.yaml"
+      - "contracts/evidence/workflow-retirement/legacy-catalog/discover-intent.yaml"
+      - "contracts/plan/agent-native-guidance-plan.yaml"
+
+problem_statement: >-
+  Forge has the pieces of the intended product in separate islands. The catalog
+  knows useful development practices. The host agent can reason over user intent.
+  Governance knows durable state, evidence, and safety boundaries. The normal
+  start/resume path exposes governance as if it were the whole journey, so the
+  agent receives a policy claim instead of useful product-development guidance.
+
+architecture_recommendation:
+  module: "Product Journey Guidance"
+  interface: >-
+    A compact, read-only guidance packet available from the normal resume path.
+    It names the current lifecycle stage, the stage objective, contact density,
+    unresolved product questions, a few relevant catalog capabilities, and a way
+    to request details for one capability.
+  implementation: >-
+    Compose the durable objective and workflow-governance readback with the
+    accepted funnel profile and the existing embedded workflow catalog. The host
+    agent reasons over the conversation and proposes a capability. Forge validates
+    stage compatibility, prerequisites, gates, authority, and evidence without
+    treating the recommendation as mutation authority.
+  seam: "workflow resume readback plus the existing GuideDecision validation boundary"
+  adapter: "start-forge remains the single thin host entry and follows links returned by the installed runtime"
+  leverage:
+    - "new host agents gain better guidance without copying the whole catalog into a skill"
+    - "stronger future models can reason better without changing Forge's deterministic safety boundaries"
+    - "the same runtime-owned metadata can serve CLI, MCP, skills, and future hosts"
+  locality:
+    catalog_owner: "forge-core-decisions"
+    semantic_choice_owner: "host agent"
+    compatibility_and_authority_owner: "forge-core-kernel"
+    projection_owner: "host adapters such as forge-core-cli"
+
+options_considered:
+  - id: "restore-retired-workflows-as-authority"
+    decision: "reject"
+    reason: "would create competing authorities and undo signed retirement instead of reconnecting existing parts"
+  - id: "put-the-full-catalog-in-start-forge"
+    decision: "reject_as_destination"
+    reason: "startup context, drift, and host-specific duplication grow with every capability"
+  - id: "only-enrich-policy-playbooks"
+    decision: "reject_as_complete_solution"
+    reason: "better wording cannot fix semantic routing when policy selection still follows phase and priority"
+  - id: "add-a-model-inside-forge-core"
+    decision: "reject"
+    reason: "duplicates the host agent and would age badly as models improve"
+  - id: "reconnect-catalog-host-reasoning-and-governance"
+    decision: "recommend"
+    reason: "restores the original split while reusing implemented and tested boundaries"
+
+first_vertical_slice:
+  name: "Discovery guidance through the normal resume journey"
+  user_story: >-
+    When a person starts Forge with a new or materially changed objective, the
+    host agent can explain the Analysis and Discovery stage, see a small set of
+    relevant capabilities, choose one from the actual conversation, and obtain
+    its details without loading the full catalog or bypassing governance.
+  includes:
+    - "a typed compact guidance readback for the current stage"
+    - "stage objective and funnel contact density"
+    - "a bounded list of eligible capability summaries"
+    - "progressive detail lookup for one capability"
+    - "reuse of GuideDecision validation for host recommendation"
+    - "start-forge consumption of the new runtime-owned readback"
+  excludes:
+    - "restoring all retired workflows"
+    - "automatic semantic classification inside Forge core"
+    - "changing mutation, phase, release, or signing authority"
+    - "designing collaboration lanes in the same slice"
+  journey_proofs:
+    - "small brownfield fix visits discovery briefly and proceeds without a research ceremony"
+    - "medium feature uses targeted discovery and planning capabilities"
+    - "high-uncertainty product idea expands brainstorming and research before planning"
+    - "replacement host agent resumes and understands the current stage without reading the whole catalog"
+  efficiency_measures:
+    - "resume payload size"
+    - "time to first useful user question or action"
+    - "number of irrelevant capabilities shown"
+    - "extra commands needed by the human"
+    - "successful continuation by a replacement agent"
+
+next_stage:
+  phase: "2-specification"
+  objective: "specify the Product Journey Guidance interface and its first Discovery slice"
+  questions_to_close:
+    - "Which lifecycle-stage contract becomes canonical without duplicating the existing Phase enum?"
+    - "Which compact fields from current workflows can be exposed without loading full documents?"
+    - "Should the first packet be composed in the kernel or in a reusable decisions service consumed by adapters?"
+    - "How does a host submit a recommendation without requiring a hand-built OperationContract for facilitation-only workflows?"
+    - "Which focused contract and E2E tests prove usefulness, compactness, and unchanged authority?"
+
+acceptance_boundary: >-
+  This discovery records the product problem, current-system evidence, and a
+  recommended direction accepted by the user on 2026-08-12. It does not
+  authorize implementation, change runtime authority, or claim that the
+  proposed wire contract is specified.
