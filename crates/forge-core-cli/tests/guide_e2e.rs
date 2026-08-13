@@ -5,10 +5,11 @@
 //! is deterministic, machine-readable, and the engine blocks illegal routing
 //! with typed reasons.
 
+use assert_cmd::Command;
 use forge_core_cli::guide::{
-    run_decide, run_describe, run_status, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION,
+    run_decide, run_describe, run_detail, run_status, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION,
 };
-use forge_core_contracts::{CliEnvelope, GuideProtocolDocument, StableId};
+use forge_core_contracts::{CliEnvelope, FunnelContactDensity, GuideProtocolDocument, StableId};
 use std::io::Write;
 
 fn catalog_dir() -> std::path::PathBuf {
@@ -72,9 +73,25 @@ fn e2e_full_agent_loop_describe_status_decide() {
     let s = status.data.as_ref().expect("status payload");
     assert_eq!(s.current_phase, "1-discovery");
     assert_eq!(s.schema_version, GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION);
+    assert_eq!(s.stage.stage_id.0, "analysis-discovery");
+    assert_eq!(s.stage.contact_density, FunnelContactDensity::High);
+    let brainstorming = s
+        .eligible_workflows
+        .iter()
+        .find(|workflow| workflow.id == "brainstorming")
+        .expect("brainstorming summary");
+    assert!(!brainstorming.summary.is_empty());
+    assert!(brainstorming.summary.len() <= 256);
     // grill gate unlocks specification
     assert_eq!(s.pending_gates[0].gate, "grill");
     assert_eq!(s.pending_gates[0].unlocks, "2-specification");
+
+    // STEP 2b: host opens only the capability it wants to inspect in full.
+    let detail = run_detail(Some(&catalog_dir()), "brainstorming");
+    assert!(detail.ok);
+    let capability = detail.data.as_ref().expect("detail payload");
+    assert_eq!(capability.id, "brainstorming");
+    assert!(!capability.activities.is_empty());
 
     // STEP 3a: host proposes a LEGAL operational decision in discovery.
     let legal = decision_file("brainstorming", "1-discovery", None, "begin");
@@ -93,6 +110,41 @@ fn e2e_full_agent_loop_describe_status_decide() {
         "typed reject code expected, got: {code}"
     );
     // The typed code lets the host SELF-CORRECT: it knows to stay in discovery.
+}
+
+#[test]
+fn e2e_real_binary_supports_progressive_status_then_detail() {
+    let status_output = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args([
+            "guide",
+            "status",
+            "--root",
+            env!("CARGO_MANIFEST_DIR"),
+            "--phase",
+            "1-discovery",
+            "--json",
+        ])
+        .output()
+        .expect("run guide status");
+    assert!(status_output.status.success());
+    let status: serde_json::Value =
+        serde_json::from_slice(&status_output.stdout).expect("status JSON");
+    assert_eq!(status["data"]["stage"]["stage_id"], "analysis-discovery");
+    assert!(status["data"].get("retired_workflows").is_none());
+
+    let detail_output = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(["guide", "detail", "--workflow", "brainstorming", "--json"])
+        .output()
+        .expect("run guide detail");
+    assert!(detail_output.status.success());
+    let detail: serde_json::Value =
+        serde_json::from_slice(&detail_output.stdout).expect("detail JSON");
+    assert_eq!(detail["data"]["id"], "brainstorming");
+    assert!(detail["data"]["activities"]
+        .as_array()
+        .is_some_and(|activities| !activities.is_empty()));
 }
 
 #[test]

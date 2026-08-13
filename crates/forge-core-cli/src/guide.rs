@@ -16,11 +16,13 @@ use forge_core_contracts::{
 use forge_core_contracts::{
     FunnelAmbiguityPressure, FunnelAutomaticGate, FunnelContactDensity, FunnelLane,
     FunnelProceduralConfirmation, GuideProtocolDocument, OperationContractDocument,
+    ProductStageDescriptor,
 };
 use forge_core_decisions::{
     evaluate_funnel_phase, evaluate_workflow_migration, evaluate_workflow_release,
-    load_accepted_funnel_autonomy_policy, load_catalog, load_embedded_catalog,
-    load_workflow_documents, project_legacy_workflow_compatibility, simulate_workflow_governance,
+    load_accepted_funnel_autonomy_policy, load_accepted_product_journey, load_catalog,
+    load_embedded_catalog, load_embedded_workflow_documents, load_workflow_documents,
+    project_legacy_workflow_compatibility, project_product_stage, simulate_workflow_governance,
     CatalogLoadReport, LegacyWorkflowGovernanceProjection, WorkflowDocumentLoadReport,
     WorkflowGovernanceSimulation, WorkflowMigrationAudit, WorkflowMigrationAuditStatus,
     WorkflowReleaseEvaluation, WorkflowReleaseEvaluationStatus,
@@ -41,7 +43,10 @@ const DEFAULT_WORKFLOW_MIGRATION_PLAN_REF: &str =
 /// `guide status`. This is intentionally independent of the CLI envelope
 /// version: removing 42 routes changes the meaning of workflow counts and a
 /// 0.1 host must fail closed instead of interpreting 68 as the old 110.
-pub const GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION: &str = "0.2";
+pub const GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION: &str = "0.3";
+pub const GUIDE_CAPABILITY_DETAIL_SCHEMA_VERSION: &str = "guide_capability_detail_v0.1";
+const MAX_WORKFLOW_SUMMARY_BYTES: usize = 256;
+const MAX_STATUS_CATALOG_BYTES: usize = 64 * 1024;
 
 // ============================================================================
 // guide describe — the compact routing surface (R3 token cliff, DD13).
@@ -183,6 +188,22 @@ fn compact_workflow(e: &CatalogEntry) -> DescribeWorkflow {
     }
 }
 
+fn bounded_workflow_summary(entry: &CatalogEntry) -> String {
+    let source = entry
+        .triggers
+        .first()
+        .map_or_else(|| format!("workflow {}", entry.id.0), Clone::clone);
+    let summary = source.trim();
+    if summary.len() <= MAX_WORKFLOW_SUMMARY_BYTES {
+        return summary.to_owned();
+    }
+    let mut end = MAX_WORKFLOW_SUMMARY_BYTES;
+    while !summary.is_char_boundary(end) {
+        end -= 1;
+    }
+    summary[..end].trim_end().to_owned()
+}
+
 /// The static map of which gate is required for which forward transition.
 /// Kept in lockstep with forge-core-decisions::phase_transition::required_gate_for.
 fn gate_table() -> Vec<DescribeGate> {
@@ -222,6 +243,19 @@ fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
             load_catalog(local)
         } else {
             load_embedded_catalog()
+        }
+    }
+}
+
+fn resolve_workflow_documents(catalog_dir: Option<&Path>) -> WorkflowDocumentLoadReport {
+    if let Some(dir) = catalog_dir {
+        load_workflow_documents(dir)
+    } else {
+        let local = Path::new("contracts/workflows");
+        if local.is_dir() {
+            load_workflow_documents(local)
+        } else {
+            load_embedded_workflow_documents()
         }
     }
 }
@@ -830,11 +864,10 @@ pub struct StatusPayload {
     pub schema_version: String,
     /// The phase this status is oriented to.
     pub current_phase: String,
+    /// Product meaning for the current phase. Advisory and read-only.
+    pub stage: ProductStageDescriptor,
     /// Workflows eligible in `current_phase` (id + phases).
     pub eligible_workflows: Vec<StatusWorkflow>,
-    /// Compatibility-only tombstones. These identifiers are never eligible
-    /// and never enter routing candidates.
-    pub retired_workflows: Vec<RetiredWorkflowDiagnostic>,
     /// Gates required to move FORWARD out of this phase, if any.
     pub pending_gates: Vec<StatusGate>,
     /// The phase each pending gate unlocks.
@@ -845,6 +878,22 @@ pub struct StatusPayload {
 pub struct StatusWorkflow {
     pub id: String,
     pub phases: Vec<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct CapabilityDetailPayload {
+    pub schema_version: String,
+    pub id: String,
+    pub phases: Vec<String>,
+    pub applicability_signals: Vec<String>,
+    pub inputs: Vec<String>,
+    pub activities: Vec<String>,
+    pub outputs: Vec<String>,
+    pub done_when: Vec<String>,
+    pub blocked_when: Vec<String>,
+    pub handoff: Vec<String>,
+    pub module: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -885,7 +934,7 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
         Err(error) => return CliEnvelope::err("guide.status", ExitReason::EnvConfig, error),
     };
     let retired_ids = retirement_ids(tombstones);
-    let eligible_workflows = report
+    let mut eligible_workflows = report
         .catalog
         .entries
         .iter()
@@ -898,10 +947,46 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
         .map(|e| StatusWorkflow {
             id: e.id.0.clone(),
             phases: e.phases.iter().map(|p| p.0.clone()).collect(),
+            summary: bounded_workflow_summary(e),
         })
         .collect::<Vec<_>>();
+    eligible_workflows.sort_by(|left, right| left.id.cmp(&right.id));
+    let status_catalog_bytes =
+        serde_json::to_vec(&eligible_workflows).map_or(usize::MAX, |encoded| encoded.len());
+    if status_catalog_bytes > MAX_STATUS_CATALOG_BYTES {
+        let mut envelope = CliEnvelope::err(
+            "guide.status",
+            ExitReason::EnvConfig,
+            format!(
+                "eligible workflow catalog is {status_catalog_bytes} bytes; maximum is {MAX_STATUS_CATALOG_BYTES}"
+            ),
+        );
+        if let Some(error) = envelope.error.as_mut() {
+            error.code.0 = "workflow_catalog_too_large".to_owned();
+        }
+        return envelope;
+    }
 
-    let retired_workflows = retirement_rows(tombstones);
+    let journey = match load_accepted_product_journey() {
+        Ok(journey) => journey,
+        Err(rejection) => {
+            return CliEnvelope::err(
+                "guide.status",
+                ExitReason::EnvConfig,
+                format!("product journey is unavailable: {:?}", rejection.issues),
+            );
+        }
+    };
+    let stage = match project_product_stage(journey, current) {
+        Ok(stage) => stage,
+        Err(rejection) => {
+            return CliEnvelope::err(
+                "guide.status",
+                ExitReason::EnvConfig,
+                format!("product stage is unavailable: {:?}", rejection.issues),
+            );
+        }
+    };
     let (pending_gates, next_phases) = forward_gates_for(current);
 
     CliEnvelope::ok(
@@ -909,10 +994,80 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
         StatusPayload {
             schema_version: GUIDE_ROUTING_PAYLOAD_SCHEMA_VERSION.to_owned(),
             current_phase: current.to_string(),
+            stage,
             eligible_workflows,
-            retired_workflows,
             pending_gates,
             next_phases,
+        },
+    )
+}
+
+#[must_use]
+pub fn run_detail(
+    catalog_dir: Option<&Path>,
+    workflow_id: &str,
+) -> CliEnvelope<CapabilityDetailPayload> {
+    let retired = match retired_workflow(workflow_id) {
+        Ok(retired) => retired,
+        Err(error) => return CliEnvelope::err("guide.detail", ExitReason::EnvConfig, error),
+    };
+    if let Some(retired) = retired {
+        let mut envelope = CliEnvelope::err(
+            "guide.detail",
+            ExitReason::RejectedByGate,
+            format!("workflow '{}' is retired", retired.workflow_id),
+        );
+        if let Some(error) = envelope.error.as_mut() {
+            error.code.0 = "workflow_retired".to_owned();
+        }
+        return envelope;
+    }
+
+    let report = resolve_workflow_documents(catalog_dir);
+    if !report.is_clean() {
+        return CliEnvelope::err(
+            "guide.detail",
+            ExitReason::EnvConfig,
+            format!(
+                "workflow catalog load failed: {} error(s)",
+                report.errors.len()
+            ),
+        );
+    }
+    let Some(loaded) = report
+        .workflows
+        .iter()
+        .find(|loaded| loaded.document.workflow.id.0 == workflow_id)
+    else {
+        let mut envelope = CliEnvelope::err(
+            "guide.detail",
+            ExitReason::InvalidDecisionShape,
+            format!("unknown operational workflow '{workflow_id}'"),
+        );
+        if let Some(error) = envelope.error.as_mut() {
+            error.code.0 = "workflow_unknown".to_owned();
+        }
+        return envelope;
+    };
+    let workflow = &loaded.document.workflow;
+    CliEnvelope::ok(
+        "guide.detail",
+        CapabilityDetailPayload {
+            schema_version: GUIDE_CAPABILITY_DETAIL_SCHEMA_VERSION.to_owned(),
+            id: workflow.id.0.clone(),
+            phases: workflow
+                .phases
+                .iter()
+                .map(|phase| phase.0.clone())
+                .collect(),
+            applicability_signals: workflow.trigger.clone(),
+            inputs: workflow.inputs.clone(),
+            activities: workflow.steps.clone(),
+            outputs: workflow.outputs.clone(),
+            done_when: workflow.done_when.clone(),
+            blocked_when: workflow.blocked_when.clone(),
+            handoff: workflow.handoff.clone(),
+            module: workflow.module.as_ref().map(|module| module.0.clone()),
         },
     )
 }
@@ -966,6 +1121,7 @@ pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
         "describe" => run_guide_describe(&args[2..]),
         "decide" => run_guide_decide(&args[2..]),
         "status" => run_guide_status(&args[2..]),
+        "detail" => run_guide_detail(&args[2..]),
         "migration-audit" => run_guide_migration_audit(&args[2..]),
         "rollout-audit" => run_guide_rollout_audit(&args[2..]),
         "govern-simulate" => run_guide_govern_simulate(&args[2..]),
@@ -1216,6 +1372,46 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
 
     let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
     emit_guide(env, want_json)
+}
+
+/// Runs the read-only `forge-core guide detail` subcommand.
+pub fn run_guide_detail(args: &[String]) -> Result<(), ExitError> {
+    let mut workflow_id = None;
+    let mut catalog_dir = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--workflow" => {
+                idx += 1;
+                workflow_id = Some(require_guide_value(args, idx, "detail", "workflow")?);
+            }
+            "--catalog-dir" => {
+                idx += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "detail",
+                    "catalog-dir",
+                )?));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
+            "--help" | "-h" => {
+                println!("{}", guide_command_surface_usage_line_for("detail"));
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("detail", other)),
+        }
+        idx += 1;
+    }
+    let workflow_id = workflow_id.ok_or_else(|| {
+        ExitError::invalid_value(format!(
+            "forge-core guide detail: --workflow is required\nusage: {}",
+            guide_command_surface_usage_line_for("detail")
+        ))
+    })?;
+    emit_guide(run_detail(catalog_dir.as_deref(), &workflow_id), want_json)
 }
 
 /// Runs the P5a read-only migration audit.
@@ -1852,21 +2048,60 @@ mod tests {
         let p = env.data.as_ref().expect("payload");
         assert_eq!(p.current_phase, "2-specification");
         assert!(!p.eligible_workflows.is_empty());
-        assert_eq!(p.retired_workflows.len(), 42);
         assert!(!p
             .eligible_workflows
             .iter()
             .any(|workflow| workflow.id == "architecture"));
-        // Tombstones remain diagnostics only, never eligible routes.
-        assert!(p
-            .retired_workflows
-            .iter()
-            .any(|workflow| workflow.workflow_id == "adversarial-review"));
+        let json = serde_json::to_string(p).expect("serialize status");
+        assert!(!json.contains("retired_workflows"));
         // the system-design gate unlocks 3-plan
         assert_eq!(p.pending_gates.len(), 1);
         assert_eq!(p.pending_gates[0].gate, "system-design");
         assert_eq!(p.pending_gates[0].unlocks, "3-plan");
         assert_eq!(p.next_phases, vec!["3-plan".to_string()]);
+        assert_eq!(p.stage.display_name, "Product Planning");
+        assert_eq!(p.stage.contact_density, FunnelContactDensity::High);
+        assert!(p
+            .eligible_workflows
+            .windows(2)
+            .all(|pair| pair[0].id < pair[1].id));
+        assert!(p
+            .eligible_workflows
+            .iter()
+            .all(|workflow| !workflow.summary.trim().is_empty()));
+    }
+
+    #[test]
+    fn detail_returns_one_full_operational_workflow() {
+        let env = run_detail(Some(&real_catalog_dir()), "brainstorming");
+        assert!(env.ok, "detail should succeed: {:?}", env.error);
+        let detail = env.data.expect("detail payload");
+        assert_eq!(detail.schema_version, "guide_capability_detail_v0.1");
+        assert_eq!(detail.id, "brainstorming");
+        assert!(!detail.applicability_signals.is_empty());
+        assert!(!detail.activities.is_empty());
+        assert!(!detail.done_when.is_empty());
+    }
+
+    #[test]
+    fn detail_distinguishes_unknown_from_retired_workflows() {
+        let unknown = run_detail(Some(&real_catalog_dir()), "does-not-exist");
+        assert_eq!(
+            unknown.error.expect("unknown error").code.0,
+            "workflow_unknown"
+        );
+
+        let tombstone = embedded_retirement_tombstones()
+            .expect("retirement checkpoint")
+            .workflow_retirement_tombstone_catalog
+            .tombstones
+            .first()
+            .expect("retired workflow");
+        let retired = run_detail(Some(&real_catalog_dir()), &tombstone.workflow_id.0);
+        assert_eq!(
+            retired.error.expect("retired error").code.0,
+            "workflow_retired"
+        );
     }
 
     #[test]
@@ -1935,7 +2170,7 @@ mod tests {
         }
         assert_eq!(
             guide_subcommand_hint(),
-            "describe | decide | status | migration-audit | rollout-audit | govern-simulate"
+            "describe | decide | status | detail | migration-audit | rollout-audit | govern-simulate"
         );
     }
 
@@ -1945,6 +2180,7 @@ mod tests {
             "describe",
             "decide",
             "status",
+            "detail",
             "migration-audit",
             "rollout-audit",
             "govern-simulate",

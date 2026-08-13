@@ -19,6 +19,8 @@ use forge_core_contracts::{Catalog, CatalogEntry, RepoPath, StableId, WorkflowDo
 use std::fs;
 use std::path::Path;
 
+const MAX_OPERATIONAL_WORKFLOW_DOCUMENTS: usize = 256;
+
 /// A per-file load error. `path` is repo-relative; `reason` is human-readable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogFileError {
@@ -128,7 +130,32 @@ pub fn load_workflow_documents(dir: &Path) -> WorkflowDocumentLoadReport {
         }
     }
 
+    validate_workflow_inventory(&mut report);
     report
+}
+
+fn validate_workflow_inventory(report: &mut WorkflowDocumentLoadReport) {
+    if report.workflows.len() > MAX_OPERATIONAL_WORKFLOW_DOCUMENTS {
+        report.errors.push(CatalogFileError {
+            path: RepoPath("contracts/workflows".to_owned()),
+            reason: format!(
+                "workflow catalog contains {} documents; maximum is {}",
+                report.workflows.len(),
+                MAX_OPERATIONAL_WORKFLOW_DOCUMENTS
+            ),
+        });
+    }
+
+    let mut first_path_by_id = std::collections::BTreeMap::new();
+    for workflow in &report.workflows {
+        let id = workflow.document.workflow.id.0.as_str();
+        if let Some(first_path) = first_path_by_id.insert(id, &workflow.workflow_ref.0) {
+            report.errors.push(CatalogFileError {
+                path: workflow.workflow_ref.clone(),
+                reason: format!("duplicate workflow id '{id}' also declared by {first_path}"),
+            });
+        }
+    }
 }
 
 fn load_one_document(path: &Path, dir: &Path) -> Result<LoadedWorkflowDocument, CatalogLoadError> {
@@ -309,6 +336,7 @@ fn load_embedded_documents_from(dir: &Dir<'static>) -> WorkflowDocumentLoadRepor
             }),
         }
     }
+    validate_workflow_inventory(&mut report);
     report
 }
 
@@ -413,6 +441,40 @@ mod tests {
             report.errors.iter().map(|e| &e.reason).collect::<Vec<_>>()
         );
         assert_eq!(report.catalog.len(), 68, "expected 68 operational entries");
+    }
+
+    #[test]
+    fn workflow_inventory_rejects_duplicate_ids() {
+        let loaded = load_embedded_workflow_documents();
+        let workflow = loaded.workflows.first().expect("embedded workflow").clone();
+        let mut report = WorkflowDocumentLoadReport {
+            workflows: vec![workflow.clone(), workflow],
+            errors: Vec::new(),
+        };
+
+        validate_workflow_inventory(&mut report);
+
+        assert!(report
+            .errors
+            .iter()
+            .any(|error| error.reason.contains("duplicate workflow id")));
+    }
+
+    #[test]
+    fn workflow_inventory_rejects_unbounded_catalogs() {
+        let loaded = load_embedded_workflow_documents();
+        let workflow = loaded.workflows.first().expect("embedded workflow").clone();
+        let mut report = WorkflowDocumentLoadReport {
+            workflows: vec![workflow; MAX_OPERATIONAL_WORKFLOW_DOCUMENTS + 1],
+            errors: Vec::new(),
+        };
+
+        validate_workflow_inventory(&mut report);
+
+        assert!(report
+            .errors
+            .iter()
+            .any(|error| error.reason.contains("maximum is 256")));
     }
 
     #[test]

@@ -1,0 +1,49 @@
+schema_version: "0.1"
+artifact_kind: "product_journey"
+status: "accepted"
+product_journey:
+  id: "product-journey.accepted-v0"
+  stages:
+    - phase: "0-route"
+      stage_id: "bootstrap-route"
+      display_name: "Bootstrap"
+      objective: "Recover project identity, durable state, and the correct lifecycle entry."
+      contact_density: "medium"
+      lifecycle_stage: false
+    - phase: "1-discovery"
+      stage_id: "analysis-discovery"
+      display_name: "Analysis and Discovery"
+      objective: "Understand the person, problem, product, existing system, uncertainty, and promising directions."
+      contact_density: "high"
+      lifecycle_stage: true
+    - phase: "2-specification"
+      stage_id: "product-planning"
+      display_name: "Product Planning"
+      objective: "Agree on the user journey, requirements, success criteria, and non-goals."
+      contact_density: "high"
+      lifecycle_stage: true
+    - phase: "3-plan"
+      stage_id: "solution-definition"
+      display_name: "Solution Definition"
+      objective: "Design the product and technical solution, assess impact, and split it into coherent increments."
+      contact_density: "medium"
+      lifecycle_stage: true
+    - phase: "4-build-verify"
+      stage_id: "implementation"
+      display_name: "Implementation"
+      objective: "Build the agreed increments with executable feedback, integration, and focused review."
+      contact_density: "low"
+      lifecycle_stage: true
+    - phase: "5-ready-operate"
+      stage_id: "validation-delivery"
+      display_name: "Validation and Delivery"
+      objective: "Prove the intended user journey and leave the product stable, usable, releasable, and observable."
+      contact_density: "low"
+      lifecycle_stage: true
+    - phase: "6-evolve"
+      stage_id: "evolve-trigger"
+      display_name: "Evolve"
+      objective: "Capture the next material change and reopen the lifecycle at Analysis and Discovery."
+      contact_density: "medium"
+      lifecycle_stage: false
+      transition_only: true
