@@ -228,9 +228,8 @@ fn gate_table() -> Vec<DescribeGate> {
 #[must_use]
 /// Resolve the catalog source:
 /// - `Some(dir)` → load that directory from disk (explicit `--catalog-dir`).
-/// - `None` → fall through: if a local `contracts/workflows/` exists in the
-///   current working directory, use it (brownfield/forge workspace); otherwise
-///   load the catalog embedded in the binary (greenfield, zero-config).
+/// - `None` → use the catalog embedded in the binary, independent of the
+///   caller's current working directory.
 ///
 /// A freshly installed binary carries only the current operational catalog,
 /// so routing never falls back to the frozen legacy retirement subject.
@@ -238,12 +237,7 @@ fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
     if let Some(dir) = catalog_dir {
         load_catalog(dir)
     } else {
-        let local = Path::new("contracts/workflows");
-        if local.is_dir() {
-            load_catalog(local)
-        } else {
-            load_embedded_catalog()
-        }
+        load_embedded_catalog()
     }
 }
 
@@ -251,12 +245,7 @@ fn resolve_workflow_documents(catalog_dir: Option<&Path>) -> WorkflowDocumentLoa
     if let Some(dir) = catalog_dir {
         load_workflow_documents(dir)
     } else {
-        let local = Path::new("contracts/workflows");
-        if local.is_dir() {
-            load_workflow_documents(local)
-        } else {
-            load_embedded_workflow_documents()
-        }
+        load_embedded_workflow_documents()
     }
 }
 

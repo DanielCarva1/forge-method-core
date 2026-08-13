@@ -1,7 +1,9 @@
-use forge_core_contracts::Phase;
+use forge_core_contracts::{Catalog, Phase};
 use forge_core_contracts::{
-    ProductJourneyDocument, ProductStageDescriptor, PRODUCT_JOURNEY_CONTRACT_REF,
-    PRODUCT_JOURNEY_SCHEMA_VERSION,
+    ProductJourneyDetailArgv, ProductJourneyDocument, ProductJourneyGuidance,
+    ProductJourneyGuidanceAuthority, ProductJourneyGuidanceCatalog, ProductJourneyGuidanceStage,
+    ProductJourneyRecommendationOwner, ProductStageDescriptor, PRODUCT_JOURNEY_CONTRACT_REF,
+    PRODUCT_JOURNEY_GUIDANCE_SCHEMA_VERSION, PRODUCT_JOURNEY_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -9,6 +11,7 @@ use std::sync::OnceLock;
 const MAX_STAGE_ID_BYTES: usize = 64;
 const MAX_STAGE_NAME_BYTES: usize = 64;
 const MAX_STAGE_OBJECTIVE_BYTES: usize = 256;
+const MAX_GUIDANCE_JSON_BYTES: usize = 2048;
 
 static ACCEPTED_JOURNEY: OnceLock<Result<ProductJourneyDocument, ProductJourneyRejection>> =
     OnceLock::new();
@@ -37,6 +40,7 @@ pub enum ProductJourneyIssueCode {
     ContactDensityMismatch,
     InvalidStageDescriptor,
     InvalidTransitionStage,
+    GuidanceTooLarge,
 }
 
 pub fn load_accepted_product_journey(
@@ -160,6 +164,73 @@ pub fn project_product_stage(
         })
 }
 
+pub fn derive_product_journey_guidance(
+    document: &ProductJourneyDocument,
+    catalog: &Catalog,
+    phase: Phase,
+    project_root: &str,
+) -> Result<ProductJourneyGuidance, ProductJourneyRejection> {
+    let stage = project_product_stage(document, phase)?;
+    let guidance = ProductJourneyGuidance {
+        schema_version: PRODUCT_JOURNEY_GUIDANCE_SCHEMA_VERSION.to_owned(),
+        authority: ProductJourneyGuidanceAuthority::AdvisoryReadOnly,
+        phase,
+        stage: ProductJourneyGuidanceStage {
+            id: stage.stage_id,
+            display_name: stage.display_name,
+            objective: stage.objective,
+            contact_density: stage.contact_density,
+        },
+        catalog: ProductJourneyGuidanceCatalog {
+            eligible_count: super::eligible_count(catalog, phase),
+            status_argv: vec![
+                "forge-core".to_owned(),
+                "guide".to_owned(),
+                "status".to_owned(),
+                "--root".to_owned(),
+                project_root.to_owned(),
+                "--phase".to_owned(),
+                phase.to_string(),
+                "--json".to_owned(),
+            ],
+            detail_argv: ProductJourneyDetailArgv {
+                argv: vec![
+                    "forge-core".to_owned(),
+                    "guide".to_owned(),
+                    "detail".to_owned(),
+                    "--workflow".to_owned(),
+                    "__FORGE_CAPABILITY_ID__".to_owned(),
+                    "--json".to_owned(),
+                ],
+                workflow_id_token: "__FORGE_CAPABILITY_ID__".to_owned(),
+            },
+        },
+        recommendation_owner: ProductJourneyRecommendationOwner::HostAgent,
+        recommendation_is_authority: false,
+    };
+    let guidance_bytes =
+        serde_json::to_vec(&guidance).map_err(|error| ProductJourneyRejection {
+            issues: vec![ProductJourneyIssue {
+                code: ProductJourneyIssueCode::GuidanceTooLarge,
+                path: "journey_guidance".to_owned(),
+                message: format!("serialize journey guidance: {error}"),
+            }],
+        })?;
+    if guidance_bytes.len() > MAX_GUIDANCE_JSON_BYTES {
+        return Err(ProductJourneyRejection {
+            issues: vec![ProductJourneyIssue {
+                code: ProductJourneyIssueCode::GuidanceTooLarge,
+                path: "journey_guidance".to_owned(),
+                message: format!(
+                    "journey guidance is {} bytes; maximum is {MAX_GUIDANCE_JSON_BYTES}",
+                    guidance_bytes.len()
+                ),
+            }],
+        });
+    }
+    Ok(guidance)
+}
+
 fn validate_stage(stage: &ProductStageDescriptor, issues: &mut Vec<ProductJourneyIssue>) {
     if !bounded(&stage.stage_id.0, MAX_STAGE_ID_BYTES)
         || !bounded(&stage.display_name, MAX_STAGE_NAME_BYTES)
@@ -263,5 +334,58 @@ mod tests {
             .issues
             .iter()
             .any(|issue| issue.code == ProductJourneyIssueCode::InvalidTransitionStage));
+    }
+
+    #[test]
+    fn guidance_is_compact_and_actionable_for_every_phase() {
+        let journey = load_accepted_product_journey().expect("accepted product journey");
+        let catalog = crate::load_embedded_catalog();
+        assert!(catalog.is_clean());
+
+        for phase in Phase::ALL {
+            let guidance =
+                derive_product_journey_guidance(journey, &catalog.catalog, phase, r"D:\product")
+                    .expect("journey guidance");
+            assert_eq!(guidance.phase, phase);
+            assert_eq!(
+                guidance.stage.contact_density,
+                project_product_stage(journey, phase)
+                    .unwrap()
+                    .contact_density
+            );
+            assert_eq!(
+                guidance.catalog.eligible_count,
+                crate::eligible_count(&catalog.catalog, phase)
+            );
+            assert_eq!(guidance.catalog.status_argv[0], "forge-core");
+            assert_eq!(
+                guidance.catalog.detail_argv.workflow_id_token,
+                "__FORGE_CAPABILITY_ID__"
+            );
+            assert!(
+                serde_json::to_vec(&guidance).expect("guidance JSON").len() <= 2048,
+                "{phase} guidance exceeded the compactness budget"
+            );
+        }
+    }
+
+    #[test]
+    fn guidance_rejects_a_project_root_that_breaks_the_compactness_budget() {
+        let journey = load_accepted_product_journey().expect("accepted product journey");
+        let catalog = crate::load_embedded_catalog();
+        let oversized_root = format!("D:\\{}", "nested\\".repeat(300));
+
+        let rejection = derive_product_journey_guidance(
+            journey,
+            &catalog.catalog,
+            Phase::Discovery,
+            &oversized_root,
+        )
+        .expect_err("oversized guidance must fail closed");
+
+        assert_eq!(
+            rejection.issues[0].code,
+            ProductJourneyIssueCode::GuidanceTooLarge
+        );
     }
 }

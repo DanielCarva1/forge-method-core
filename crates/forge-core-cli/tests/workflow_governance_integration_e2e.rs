@@ -987,7 +987,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v6"
+        "workflow_resume_summary_v7"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
@@ -1807,6 +1807,8 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
         "source_claim"
     );
     let activation = assert_ok(&consumer.run(&["resume"]));
+    let investigation_policy = activation["data"]["selected_policy_ref"].clone();
+    let investigation_journey = activation["data"]["journey_guidance"].clone();
     assert_eq!(
         activation["data"]["agent_autonomy"], next["data"]["agent_autonomy"],
         "resume v2 must retain binding and input contract after objective acceptance"
@@ -2087,7 +2089,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v6"
+        "workflow_resume_summary_v7"
     );
     let selected_policy_evidence = resumed["data"]["selected_policy_evidence"]
         .as_array()
@@ -2141,6 +2143,16 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     pass_record_digests.sort();
     bound_source_digests.sort();
     assert_eq!(bound_source_digests, pass_record_digests);
+
+    let after_policy_change = assert_ok(&consumer.run(&["resume"]));
+    assert_ne!(
+        after_policy_change["data"]["selected_policy_ref"],
+        investigation_policy
+    );
+    assert_eq!(
+        after_policy_change["data"]["journey_guidance"], investigation_journey,
+        "changing selected policy within the same phase cannot change journey guidance"
+    );
 }
 
 #[test]

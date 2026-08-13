@@ -120,8 +120,9 @@ pub use post_build_verify_episode::{
     PostBuildVerifyEpisodeRuntimeRoute, PostBuildVerifyEpisodeRuntimeRouteError,
 };
 pub use product_journey::{
-    load_accepted_product_journey, project_product_stage, validate_product_journey,
-    ProductJourneyIssue, ProductJourneyIssueCode, ProductJourneyRejection,
+    derive_product_journey_guidance, load_accepted_product_journey, project_product_stage,
+    validate_product_journey, ProductJourneyIssue, ProductJourneyIssueCode,
+    ProductJourneyRejection,
 };
 pub use promotion::{
     derive_promotion_diff, evaluate_promotion_readiness, promotion_domain_digest,

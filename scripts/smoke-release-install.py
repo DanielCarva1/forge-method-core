@@ -291,12 +291,18 @@ def resume_summary_and_report(
     data = summary.get("data")
     require(isinstance(data, dict), "workflow resume summary lacks data")
     require(
-        data.get("schema_version") == "workflow_resume_summary_v6",
-        "workflow resume default lacks workflow_resume_summary_v6",
+        data.get("schema_version") == "workflow_resume_summary_v7",
+        "workflow resume default lacks workflow_resume_summary_v7",
     )
     require(
         isinstance(data.get("selected_policy_evidence"), list),
-        "workflow resume v6 lacks selected_policy_evidence",
+        "workflow resume v7 lacks selected_policy_evidence",
+    )
+    journey = data.get("journey_guidance")
+    require(isinstance(journey, dict), "workflow resume v7 lacks journey_guidance")
+    require(
+        journey.get("schema_version") == "product_journey_guidance_v1",
+        "workflow resume v7 has unsupported journey guidance",
     )
     require(
         "detail_argv" not in data,

@@ -14,14 +14,17 @@ use forge_core_authority::{
 use forge_core_command_surface::COMMAND_WORKFLOW;
 use forge_core_contracts::workflow_governance::WorkflowReadinessProfile;
 use forge_core_contracts::{
-    CliEnvelope, DomainPackCompositionGap, ExitReason, IsolationStatus, PrincipalId,
-    ReadinessTarget, StableId, WorkflowContentAddressedReference,
+    CliEnvelope, DomainPackCompositionGap, ExitReason, IsolationStatus, Phase, PrincipalId,
+    ProductJourneyGuidance, ReadinessTarget, StableId, WorkflowContentAddressedReference,
     WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
     WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
 };
-use forge_core_decisions::{AgentAutonomyEvaluationError, WorkflowGovernanceSimulation};
+use forge_core_decisions::{
+    derive_product_journey_guidance, load_accepted_product_journey, load_embedded_catalog,
+    AgentAutonomyEvaluationError, WorkflowGovernanceSimulation,
+};
 use forge_core_kernel::{
     load_admitted_workflow_retirement_checkpoint, WorkflowActiveCooperativeObjective,
     WorkflowAgentAutonomyGuidance, WorkflowAuthorizationGuidance,
@@ -209,6 +212,28 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             return emit_failure(&command, ExitReason::EnvConfig, message, parsed.want_json);
         }
     };
+    if parsed.subcommand == "resume" {
+        return match adapter.resume() {
+            Ok(value) => match workflow_resume_summary(&value, &adapter.binding().project_root) {
+                Ok(summary) => emit_envelope(
+                    CliEnvelope::ok(
+                        &command,
+                        serde_json::to_value(summary).expect("serializable resume summary"),
+                    ),
+                    parsed.want_json,
+                ),
+                Err(message) => {
+                    emit_failure(&command, ExitReason::EnvConfig, message, parsed.want_json)
+                }
+            },
+            Err(error) => emit_failure(
+                &command,
+                classify_error(&error),
+                error.to_string(),
+                parsed.want_json,
+            ),
+        };
+    }
     let result = match parsed.subcommand.as_str() {
         "init" => adapter
             .initialize_with_readiness_profile(
@@ -221,13 +246,6 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             .map(|value| serde_json::to_value(value).expect("serializable guidance")),
         "action-packets" => adapter.action_packets().map(|value| {
             serde_json::to_value(value).expect("serializable workflow action packets")
-        }),
-        "resume" => adapter.resume().map(|value| {
-            serde_json::to_value(workflow_resume_summary(
-                &value,
-                &adapter.binding().project_root,
-            ))
-            .expect("serializable resume summary")
         }),
         "report" => adapter
             .resume()
@@ -286,7 +304,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v6";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v7";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -299,6 +317,7 @@ struct WorkflowResumeSummary<'a> {
     readiness_profile: WorkflowReadinessProfile,
     project_id: &'a StableId,
     current_phase: &'a str,
+    journey_guidance: ProductJourneyGuidance,
     target: ReadinessTarget,
     snapshot_digest: &'a str,
     ledger_head_digest: &'a str,
@@ -509,7 +528,38 @@ struct WorkflowResumeOmittedHistory {
 fn workflow_resume_summary<'a>(
     guidance: &'a WorkflowGovernanceGuidance,
     project_root: &std::path::Path,
-) -> WorkflowResumeSummary<'a> {
+) -> Result<WorkflowResumeSummary<'a>, String> {
+    let phase = Phase::parse(&guidance.current_phase).ok_or_else(|| {
+        format!(
+            "kernel published invalid workflow phase '{}'",
+            guidance.current_phase
+        )
+    })?;
+    let journey = load_accepted_product_journey().map_err(|rejection| {
+        format!(
+            "accepted product journey is invalid: {:?}",
+            rejection.issues
+        )
+    })?;
+    let catalog = load_embedded_catalog();
+    if !catalog.is_clean() {
+        return Err(format!(
+            "embedded workflow catalog is invalid: {:?}",
+            catalog.errors
+        ));
+    }
+    let journey_guidance = derive_product_journey_guidance(
+        journey,
+        &catalog.catalog,
+        phase,
+        &project_root.to_string_lossy(),
+    )
+    .map_err(|rejection| {
+        format!(
+            "product journey guidance cannot be derived: {:?}",
+            rejection.issues
+        )
+    })?;
     let continuity = guidance.replacement_continuity.as_ref();
     let active_isolations = continuity
         .into_iter()
@@ -698,7 +748,7 @@ fn workflow_resume_summary<'a>(
             }
         });
 
-    WorkflowResumeSummary {
+    Ok(WorkflowResumeSummary {
         schema_version: WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION,
         detail_level: "summary",
         forge_core_version: env!("CARGO_PKG_VERSION"),
@@ -707,6 +757,7 @@ fn workflow_resume_summary<'a>(
         readiness_profile: guidance.readiness_profile,
         project_id: &guidance.project_id,
         current_phase: &guidance.current_phase,
+        journey_guidance,
         target: guidance.target,
         snapshot_digest: &guidance.snapshot_digest,
         ledger_head_digest: &guidance.ledger_head_digest,
@@ -758,7 +809,7 @@ fn workflow_resume_summary<'a>(
         selected_policy_evidence,
         authorization: &guidance.authorization,
         omitted_history,
-    }
+    })
 }
 
 const RETIREMENT_EVIDENCE_INDEX: &str =

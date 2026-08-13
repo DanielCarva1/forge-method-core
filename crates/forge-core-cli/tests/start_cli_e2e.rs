@@ -439,9 +439,75 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         serde_json::from_slice(&resume_output.stdout).expect("parse resume envelope");
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v6"
+        "workflow_resume_summary_v7"
     );
     assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        resumed["data"]["journey_guidance"]["schema_version"],
+        "product_journey_guidance_v1"
+    );
+    assert_eq!(
+        resumed["data"]["journey_guidance"]["stage"]["id"],
+        "analysis-discovery"
+    );
+    assert_eq!(
+        resumed["data"]["journey_guidance"]["catalog"]["status_argv"][0],
+        "forge-core"
+    );
+
+    // Dogfood the progressive handoff exactly as a replacement agent does:
+    // resume -> compact status -> one selected capability detail. A malformed
+    // catalog in the caller's CWD must not replace the embedded catalog named
+    // by the resume guidance.
+    let decoy = parent.path.join("unrelated-cwd");
+    fs::create_dir_all(decoy.join("contracts/workflows")).expect("create decoy catalog");
+    fs::write(
+        decoy.join("contracts/workflows/not-a-workflow.yaml"),
+        "not: a valid workflow\n",
+    )
+    .expect("write decoy catalog");
+    let status_argv = resumed["data"]["journey_guidance"]["catalog"]["status_argv"]
+        .as_array()
+        .expect("published status argv")
+        .iter()
+        .map(|value| value.as_str().expect("string argv").to_owned())
+        .collect::<Vec<_>>();
+    let status_output = bin()
+        .current_dir(&decoy)
+        .args(&status_argv[1..])
+        .output()
+        .expect("execute published catalog status argv");
+    assert!(status_output.status.success());
+    let status: Value = serde_json::from_slice(&status_output.stdout).expect("parse status");
+    let selected_id = status["data"]["eligible_workflows"][0]["id"]
+        .as_str()
+        .expect("eligible capability id");
+
+    let detail_contract = &resumed["data"]["journey_guidance"]["catalog"]["detail_argv"];
+    let token = detail_contract["workflow_id_token"]
+        .as_str()
+        .expect("workflow token");
+    let detail_argv = detail_contract["argv"]
+        .as_array()
+        .expect("published detail argv")
+        .iter()
+        .map(|value| {
+            let value = value.as_str().expect("string argv");
+            if value == token {
+                selected_id.to_owned()
+            } else {
+                value.to_owned()
+            }
+        })
+        .collect::<Vec<_>>();
+    let detail_output = bin()
+        .current_dir(&decoy)
+        .args(&detail_argv[1..])
+        .output()
+        .expect("execute published catalog detail argv");
+    assert!(detail_output.status.success());
+    let detail: Value = serde_json::from_slice(&detail_output.stdout).expect("parse detail");
+    assert_eq!(detail["data"]["id"], selected_id);
 
     let next_output = bin()
         .args(["workflow", "next", "--root"])
