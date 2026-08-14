@@ -69,6 +69,25 @@ only with an explicit owner, trigger, compile path, and inventory rationale.
 Exact commands and artifacts are in
 [Verification](verification.md).
 
+### Inspect and clean the development build cache
+
+Cargo keeps the reusable `dev` and `release` profiles in the configured target
+directory. Inspect how much regenerable development data would be removed:
+
+```bash
+cargo clean --dry-run --profile dev
+```
+
+When disk space is tight, remove only that development profile:
+
+```bash
+cargo clean --profile dev
+```
+
+Keep `--profile dev` in the command. Running `cargo clean` without a profile
+also removes the release cache. Forge never runs this cleanup automatically as
+part of tests, builds, or installation.
+
 ## Generated material
 
 CI checks at least:
