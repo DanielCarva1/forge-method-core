@@ -6,6 +6,8 @@
 //! release data remains data: this backend neither selects a host nor imports,
 //! persists, or interprets signing, trust, broker, or private-key material.
 
+#[cfg(unix)]
+use crate::retained_dir::RetainedLeafPolicy;
 use crate::{
     crash_replace::CrashReplaceError,
     retained_crash_replace::{
