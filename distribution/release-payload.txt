@@ -14,6 +14,7 @@ LICENSE
 .github/workflows/msrv-policy.yml
 .github/workflows/release-policy.yml
 contracts/plan/agent-native-guidance-plan.yaml
+contracts/spec/solo-dogfood-readiness-v0.yaml
 contracts/spec/C1.1-codex-host-capability-decision.yaml
 contracts/spec/C1.1-pi-host-capability-decision.yaml
 contracts/spec/C1.1-opencode-host-capability-decision.yaml
