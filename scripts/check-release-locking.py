@@ -109,7 +109,7 @@ GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
     "scripts/test-release-locking.py": "21a19a1eb36251c98d603c1e65227cbfe0d5c6acb7b8f681f20446adadb2d590",
     "scripts/test-release-archive.py": "9fa807099e2dd32181d84a8917fe8739ac6c652ed8fbe92cca22d420c00b3286",
-    "distribution/release-payload.txt": "f50f1583ee82148917423632175c73323ce2eeb59bb8a7e4ca3dc17618195fe0",
+    "distribution/release-payload.txt": "55b9ae8e5de1c1df7dde0df5c6c11f7f09e232b670b90ac6b1fce0bb419ee666",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
     "scripts/smoke-release-install.py": "abcf8c901953965751198fdfc9c0fec336a2beafcb61fc6cfb389d8068b36c01",
