@@ -33,14 +33,17 @@ checkout or from tag text alone.
 ```bash
 git clone https://github.com/DanielCarva1/forge-method-core.git
 cd forge-method-core
-cargo install --path crates/forge-core-cli --force
-forge-core --version
+python scripts/install-source-checkpoint.py install
 ```
 
 The workspace package version and latest published binary tag can differ. The
 workflow release pin and Domain Pack effective epoch differ from both. Use the
 canonical [four-identity table](../README.md#four-identitiesdo-not-collapse-them),
-select an exact source commit/tag, and verify `forge-core --version`.
+select an exact source commit/tag, and verify the installed path returned by the
+command. The source-install receipt binds that executable's SHA-256 to the clean
+Git commit and package version. One rollback is retained; installer-owned staging
+and older installer receipts are removed. Set `CARGO_TARGET_DIR` to keep the
+reusable build cache on another drive.
 
 ## Install the host skill
 
@@ -172,9 +175,15 @@ Source installs:
 
 ```bash
 git pull --ff-only
-cargo install --path crates/forge-core-cli --force
-forge-core --version
+python scripts/install-source-checkpoint.py install
 ```
+
+The checkout must be clean. An exact retry is idempotent, while a newer commit
+with the same package version gets a distinct commit-bound receipt even when
+the compiled bytes and binary hash are identical. If this command encounters an
+older unmanaged binary in its exact destination, inspect it first and use
+`--adopt-current` once to preserve that binary as the rollback; the installer
+never deletes unrelated legacy files.
 
 Prebuilt installs must replace binary and wrapper from the same release. A
 newer binary never silently migrates project authority; the agent follows

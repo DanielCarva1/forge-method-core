@@ -57,9 +57,15 @@ For the current source checkpoint:
 ```bash
 git clone https://github.com/DanielCarva1/forge-method-core.git
 cd forge-method-core
-cargo install --path crates/forge-core-cli --force
-forge-core --version
+python scripts/install-source-checkpoint.py install
 ```
+
+The command requires a clean checkout, builds the release binary, and reports
+its exact installed path, Git commit, package version, and SHA-256. It keeps one
+rollback and removes its own staging files instead of accumulating timestamped
+backup copies. Add the reported `bin` directory to `PATH`, then verify with
+`forge-core --version`. Set `CARGO_TARGET_DIR` when the build cache must live on
+another drive.
 
 For a prebuilt, select one verified release and follow
 [Getting started](docs/getting-started.md). Do not infer source features from a
