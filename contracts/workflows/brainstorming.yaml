@@ -13,6 +13,8 @@ workflow:
   - "selection criteria"
   steps:
   - "generate diverse options"
+  - "if ideas stall or converge too early, optionally use inversion, analogy, constraint shift, assumption removal, or random stimulus"
+  - "optionally research an unfamiliar technique when it is likely to improve the session"
   - "cluster related ideas"
   - "mark risky, safe, strange, and promising options"
   - "select candidates for deeper work"

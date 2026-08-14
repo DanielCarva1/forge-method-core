@@ -92,6 +92,11 @@ fn e2e_full_agent_loop_describe_status_decide() {
     let capability = detail.data.as_ref().expect("detail payload");
     assert_eq!(capability.id, "brainstorming");
     assert!(!capability.activities.is_empty());
+    assert!(capability.activities.iter().any(|activity| {
+        activity.contains("inversion")
+            && activity.contains("analogy")
+            && activity.contains("constraint shift")
+    }));
 
     // STEP 3a: host proposes a LEGAL operational decision in discovery.
     let legal = decision_file("brainstorming", "1-discovery", None, "begin");
