@@ -734,6 +734,264 @@ impl RetainedDirectory {
         })
     }
 
+    pub(crate) fn directory_entry_count_bounded(
+        &self,
+        path: &Path,
+        maximum: usize,
+    ) -> io::Result<usize> {
+        let directory = self.open_directory(path)?;
+        Self::validate_directory_handle(&directory.handle)?;
+        let expected = directory.identity()?;
+        let count = platform::directory_entry_count(&directory.handle, maximum)?;
+        if directory.identity()? != expected {
+            return Err(Self::authority_identity_changed(
+                "directory changed during bounded enumeration",
+            ));
+        }
+        Ok(count)
+    }
+
+    fn validate_directory_handle(directory: &File) -> io::Result<()> {
+        let metadata = directory.metadata()?;
+        #[cfg(windows)]
+        let supported = {
+            use std::os::windows::fs::MetadataExt as _;
+            metadata.is_dir() && metadata.file_attributes() & 0x400 != 0x400
+        };
+        #[cfg(not(windows))]
+        let supported = metadata.is_dir();
+        if supported {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "retained directory is not a real, non-reparse directory",
+            ))
+        }
+    }
+
+    fn remove_authority_empty_directory(&self, path: &Path) -> io::Result<()> {
+        let (parent, leaf) = self.open_parent_bound(path, false)?;
+        self.verify_parent_binding(&parent)?;
+        let retained = platform::open_directory_delete(&parent.handle, &leaf)?;
+        Self::validate_directory_handle(&retained)?;
+        let expected = Self::identity_of(&retained)?;
+        let current = platform::open_directory(&parent.handle, &leaf)?;
+        Self::validate_directory_handle(&current)?;
+        if Self::identity_of(&current)? != expected {
+            return Err(Self::authority_identity_changed("empty-directory removal"));
+        }
+
+        #[cfg(unix)]
+        {
+            const QUARANTINE_ATTEMPTS: usize = 32;
+            let nonce = Self::quarantine_nonce()?;
+            let mut quarantine_leaf = None;
+            for attempt in 0..QUARANTINE_ATTEMPTS {
+                let candidate = Self::quarantine_leaf("empty-directory-delete", nonce, attempt);
+                match platform::rename_any_noreplace(
+                    &parent.handle,
+                    &leaf,
+                    &parent.handle,
+                    &candidate,
+                ) {
+                    Ok(()) => {
+                        quarantine_leaf = Some(candidate);
+                        break;
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            let quarantine_leaf = quarantine_leaf.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "retained directory quarantine-name retry exhausted",
+                )
+            })?;
+            let quarantined = platform::open_directory_delete(&parent.handle, &quarantine_leaf)?;
+            Self::validate_directory_handle(&quarantined)?;
+            if Self::identity_of(&quarantined)? != expected {
+                return Err(Self::authority_identity_changed(
+                    "empty-directory quarantine",
+                ));
+            }
+            match platform::open_directory(&parent.handle, &leaf) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Ok(_) => {
+                    return Err(Self::authority_identity_changed(
+                        "empty-directory quarantine source",
+                    ));
+                }
+                Err(error) => return Err(error),
+            }
+            self.sync_parent_binding(&parent)?;
+            if let Err(error) = platform::remove_empty_directory(
+                &parent.handle,
+                &quarantine_leaf,
+                quarantined,
+                &expected,
+            ) {
+                let rollback = match platform::open_directory(&parent.handle, &leaf) {
+                    Err(source_error) if source_error.kind() == io::ErrorKind::NotFound => {
+                        platform::rename_any_noreplace(
+                            &parent.handle,
+                            &quarantine_leaf,
+                            &parent.handle,
+                            &leaf,
+                        )
+                    }
+                    Ok(_) => Err(Self::authority_identity_changed(
+                        "empty-directory rollback destination",
+                    )),
+                    Err(source_error) => Err(source_error),
+                };
+                if let Err(rollback_error) = rollback {
+                    return Err(io::Error::new(
+                        rollback_error.kind(),
+                        format!(
+                            "empty-directory cleanup failed ({error}); quarantine rollback failed ({rollback_error})"
+                        ),
+                    ));
+                }
+                let restored = platform::open_directory(&parent.handle, &leaf)?;
+                Self::validate_directory_handle(&restored)?;
+                if Self::identity_of(&restored)? != expected {
+                    return Err(Self::authority_identity_changed(
+                        "empty-directory rollback result",
+                    ));
+                }
+                self.sync_parent_binding(&parent)?;
+                return Err(error);
+            }
+            for candidate in [&leaf, &quarantine_leaf] {
+                match platform::open_directory(&parent.handle, candidate) {
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Ok(_) => {
+                        return Err(Self::authority_identity_changed(
+                            "empty-directory quarantine final state",
+                        ));
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            self.sync_parent_binding(&parent)?;
+            return Ok(());
+        }
+
+        #[cfg(windows)]
+        {
+            platform::remove_empty_directory(&parent.handle, &leaf, retained, &expected)?;
+            match platform::open_directory(&parent.handle, &leaf) {
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Ok(_) => {
+                    return Err(Self::authority_identity_changed(
+                        "empty-directory removal final state",
+                    ));
+                }
+                Err(error) => return Err(error),
+            }
+            return self.sync_parent_binding(&parent);
+        }
+
+        #[cfg(not(any(unix, windows)))]
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "exact empty-directory deletion is unsupported on this platform",
+        ))
+    }
+
+    fn remove_authority_reclaimable_file<H>(
+        &self,
+        path: &Path,
+        mut before_commit: H,
+    ) -> io::Result<()>
+    where
+        H: FnMut(&Self, &Path) -> io::Result<()>,
+    {
+        let source = self.open_leaf_bound(
+            path,
+            RetainedLeafPolicy::Authority,
+            platform::FileMode::ReadDeleteRename,
+            false,
+        )?;
+        before_commit(self, &source.path)?;
+        self.verify_leaf_binding(&source)?;
+
+        #[cfg(unix)]
+        {
+            let quarantine_path = self.quarantine_named_leaf_noreplace(
+                &source.parent,
+                &source.leaf,
+                &source.file,
+                &source.identity,
+                "reclaimable-file-delete",
+            )?;
+            let (quarantine_parent, quarantine_leaf) =
+                self.open_parent_bound(&quarantine_path, false)?;
+            let quarantined = platform::open_file(
+                &quarantine_parent.handle,
+                &quarantine_leaf,
+                platform::FileMode::ReadDeleteRename,
+            )?;
+            if Self::identity_of(&quarantined)? != source.identity {
+                return Err(Self::authority_identity_changed(
+                    "reclaimable-file quarantine",
+                ));
+            }
+            if let Err(error) = platform::remove_named_file(
+                &quarantine_parent.handle,
+                &quarantine_leaf,
+                quarantined,
+                &source.identity,
+            ) {
+                return Err(self.rollback_noreplace_or_isolate(
+                    &source,
+                    &quarantine_parent,
+                    &quarantine_leaf,
+                    &error,
+                ));
+            }
+            if Self::direct_optional_authority_identity(&source.parent.handle, &source.leaf)?
+                .is_some()
+                || Self::direct_optional_authority_identity(
+                    &quarantine_parent.handle,
+                    &quarantine_leaf,
+                )?
+                .is_some()
+            {
+                return Err(Self::authority_identity_changed(
+                    "reclaimable-file quarantine final state",
+                ));
+            }
+            self.sync_parent_binding(&source.parent)?;
+            return Ok(());
+        }
+
+        #[cfg(windows)]
+        {
+            let parent = source.parent;
+            let leaf = source.leaf;
+            platform::remove_exact(source.file)?;
+            if Self::direct_optional_authority_identity(&parent.handle, &leaf)?.is_some() {
+                return Err(Self::authority_identity_changed(
+                    "handle-bound reclaimable-file delete",
+                ));
+            }
+            self.sync_parent_binding(&parent)?;
+            return Ok(());
+        }
+
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = source;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "exact reclaimable-file deletion is unsupported on this platform",
+            ))
+        }
+    }
+
     pub fn sync_directory(&self, path: &Path) -> io::Result<()> {
         self.open_directory(path)?.handle.sync_all()
     }
@@ -2497,6 +2755,21 @@ impl RetainedAuthorityDirectory<'_> {
         result
     }
 
+    pub(crate) fn move_mutable_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
+        self.validate()?;
+        let source = self.directory.open_leaf_bound(
+            from,
+            RetainedLeafPolicy::MutableAuthority,
+            platform::FileMode::ReadDeleteRename,
+            false,
+        )?;
+        let result =
+            self.directory
+                .move_retained_file_noreplace(from, &source.file, &source.identity, to);
+        self.validate()?;
+        result
+    }
+
     pub(crate) fn remove_file_with_validation<H>(
         &self,
         path: &Path,
@@ -2507,6 +2780,29 @@ impl RetainedAuthorityDirectory<'_> {
     {
         self.validate()?;
         let result = self.directory.remove_authority_file(path, validation);
+        self.validate()?;
+        result
+    }
+
+    pub(crate) fn remove_empty_directory(&self, path: &Path) -> io::Result<()> {
+        self.validate()?;
+        let result = self.directory.remove_authority_empty_directory(path);
+        self.validate()?;
+        result
+    }
+
+    pub(crate) fn remove_reclaimable_file_with_validation<H>(
+        &self,
+        path: &Path,
+        validation: H,
+    ) -> io::Result<()>
+    where
+        H: FnMut(&RetainedDirectory, &Path) -> io::Result<()>,
+    {
+        self.validate()?;
+        let result = self
+            .directory
+            .remove_authority_reclaimable_file(path, validation);
         self.validate()?;
         result
     }
@@ -2667,6 +2963,129 @@ mod platform {
             libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
             0,
         )
+    }
+
+    pub fn open_directory_delete(parent: &File, value: &OsStr) -> io::Result<File> {
+        open_directory(parent, value)
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn clear_readdir_errno() {
+        // SAFETY: the platform accessor returns this thread's errno slot.
+        unsafe { *libc::__errno_location() = 0 };
+    }
+
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    ))]
+    fn clear_readdir_errno() {
+        // SAFETY: the platform accessor returns this thread's errno slot.
+        unsafe { *libc::__error() = 0 };
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd",
+        target_os = "dragonfly",
+        target_os = "openbsd",
+        target_os = "netbsd"
+    )))]
+    fn clear_readdir_errno() {}
+
+    pub fn directory_entry_count(directory: &File, maximum: usize) -> io::Result<usize> {
+        // SAFETY: dup creates an owned descriptor and fdopendir takes ownership.
+        let duplicate = unsafe { libc::dup(directory.as_raw_fd()) };
+        if duplicate < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: duplicate is a newly owned directory descriptor.
+        let stream = unsafe { libc::fdopendir(duplicate) };
+        if stream.is_null() {
+            let error = io::Error::last_os_error();
+            // SAFETY: fdopendir did not take ownership on failure.
+            unsafe { libc::close(duplicate) };
+            return Err(error);
+        }
+        // SAFETY: stream remains valid until closed below.
+        unsafe { libc::rewinddir(stream) };
+        let result = (|| {
+            let mut count = 0_usize;
+            loop {
+                clear_readdir_errno();
+                // SAFETY: stream remains valid for this call.
+                let entry = unsafe { libc::readdir(stream) };
+                if entry.is_null() {
+                    let error = io::Error::last_os_error();
+                    return if error.raw_os_error() == Some(0) {
+                        Ok(count)
+                    } else {
+                        Err(error)
+                    };
+                }
+                // SAFETY: readdir returned a live dirent with a NUL-terminated name.
+                let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+                if name != b"." && name != b".." {
+                    count = count.saturating_add(1);
+                    if count > maximum {
+                        return Ok(count);
+                    }
+                }
+            }
+        })();
+        // SAFETY: closedir releases the stream and duplicated descriptor exactly once.
+        unsafe { libc::closedir(stream) };
+        result
+    }
+
+    pub fn remove_empty_directory(
+        parent: &File,
+        value: &OsStr,
+        retained: File,
+        expected: &RetainedFileIdentity,
+    ) -> io::Result<()> {
+        if RetainedDirectory::identity_of(&retained)? != *expected {
+            return Err(RetainedDirectory::authority_identity_changed(
+                "empty-directory retained handle",
+            ));
+        }
+        let value = name(value)?;
+        // SAFETY: parent and CString remain valid for the descriptor-relative call.
+        let result =
+            unsafe { libc::unlinkat(parent.as_raw_fd(), value.as_ptr(), libc::AT_REMOVEDIR) };
+        if result < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        drop(retained);
+        Ok(())
+    }
+
+    pub fn remove_named_file(
+        parent: &File,
+        value: &OsStr,
+        retained: File,
+        expected: &RetainedFileIdentity,
+    ) -> io::Result<()> {
+        if RetainedDirectory::identity_of(&retained)? != *expected {
+            return Err(RetainedDirectory::authority_identity_changed(
+                "reclaimable-file retained handle",
+            ));
+        }
+        let value = name(value)?;
+        // SAFETY: parent and CString remain valid for the descriptor-relative call.
+        let result = unsafe { libc::unlinkat(parent.as_raw_fd(), value.as_ptr(), 0) };
+        if result < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        drop(retained);
+        Ok(())
     }
 
     pub fn open_or_create_directory(parent: &File, value: &OsStr) -> io::Result<File> {
@@ -3039,6 +3458,20 @@ mod platform {
             length: u32,
             file_information_class: u32,
         ) -> NtStatus;
+        #[allow(clashing_extern_declarations)]
+        fn NtQueryDirectoryFile(
+            file_handle: Handle,
+            event: Handle,
+            apc_routine: *mut std::ffi::c_void,
+            apc_context: *mut std::ffi::c_void,
+            io_status_block: *mut IoStatusBlock,
+            file_information: *mut std::ffi::c_void,
+            length: u32,
+            file_information_class: u32,
+            return_single_entry: u8,
+            file_name: *mut std::ffi::c_void,
+            restart_scan: u8,
+        ) -> NtStatus;
         fn RtlNtStatusToDosError(status: NtStatus) -> u32;
     }
     #[link(name = "kernel32")]
@@ -3140,6 +3573,114 @@ mod platform {
             FILE_OPEN,
             FILE_DIRECTORY_FILE,
         )
+    }
+    pub fn open_directory_delete(parent: &File, value: &OsStr) -> io::Result<File> {
+        relative_open(
+            parent,
+            value,
+            FILE_READ_ATTRIBUTES | GENERIC_READ | GENERIC_WRITE | DELETE_ACCESS,
+            FILE_OPEN,
+            FILE_DIRECTORY_FILE,
+        )
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn directory_entry_count(directory: &File, maximum: usize) -> io::Result<usize> {
+        const STATUS_NO_MORE_FILES: NtStatus = 0x8000_0006_u32 as NtStatus;
+        let mut count = 0_usize;
+        let mut restart = 1_u8;
+        loop {
+            let mut buffer = vec![0_u8; 64 * 1024];
+            let mut io_status = IoStatusBlock {
+                value: IoStatusValue { status: 0 },
+                information: 0,
+            };
+            // SAFETY: all pointers refer to live buffers for the duration of the call.
+            let status = unsafe {
+                NtQueryDirectoryFile(
+                    directory.as_raw_handle(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::addr_of_mut!(io_status),
+                    buffer.as_mut_ptr().cast(),
+                    u32::try_from(buffer.len()).expect("directory buffer fits u32"),
+                    12,
+                    0,
+                    std::ptr::null_mut(),
+                    restart,
+                )
+            };
+            restart = 0;
+            if status == STATUS_NO_MORE_FILES {
+                return Ok(count);
+            }
+            if status < 0 {
+                // SAFETY: pure NTSTATUS conversion.
+                let code = unsafe { RtlNtStatusToDosError(status) };
+                return Err(io::Error::from_raw_os_error(
+                    i32::try_from(code).unwrap_or(i32::MAX),
+                ));
+            }
+            let mut offset = 0_usize;
+            while offset < io_status.information {
+                let record = &buffer[offset..io_status.information];
+                if record.len() < 12 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "truncated directory entry",
+                    ));
+                }
+                let next = u32::from_ne_bytes(record[0..4].try_into().expect("slice length"));
+                let name_bytes = usize::try_from(u32::from_ne_bytes(
+                    record[8..12].try_into().expect("slice length"),
+                ))
+                .expect("u32 fits usize");
+                let end = 12_usize.checked_add(name_bytes).ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "directory entry overflow")
+                })?;
+                if end > record.len() || name_bytes % 2 != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "invalid directory entry name",
+                    ));
+                }
+                let wide = record[12..end]
+                    .chunks_exact(2)
+                    .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+                    .collect::<Vec<_>>();
+                if wide.as_slice() != [u16::from(b'.')]
+                    && wide.as_slice() != [u16::from(b'.'), u16::from(b'.')]
+                {
+                    count = count.saturating_add(1);
+                    if count > maximum {
+                        return Ok(count);
+                    }
+                }
+                if next == 0 {
+                    break;
+                }
+                offset = offset
+                    .checked_add(usize::try_from(next).expect("u32 fits usize"))
+                    .ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::InvalidData, "directory offset overflow")
+                    })?;
+            }
+        }
+    }
+
+    pub fn remove_empty_directory(
+        _parent: &File,
+        _value: &OsStr,
+        retained: File,
+        expected: &RetainedFileIdentity,
+    ) -> io::Result<()> {
+        if RetainedDirectory::identity_of(&retained)? != *expected {
+            return Err(RetainedDirectory::authority_identity_changed(
+                "empty-directory retained handle",
+            ));
+        }
+        remove_exact(retained)
     }
     pub fn open_or_create_directory(parent: &File, value: &OsStr) -> io::Result<File> {
         relative_open(
@@ -3493,6 +4034,20 @@ mod platform {
         ))
     }
     pub fn open_directory(_: &File, _: &OsStr) -> io::Result<File> {
+        unsupported()
+    }
+    pub fn open_directory_delete(_: &File, _: &OsStr) -> io::Result<File> {
+        unsupported()
+    }
+    pub fn directory_entry_count(_: &File, _: usize) -> io::Result<usize> {
+        unsupported()
+    }
+    pub fn remove_empty_directory(
+        _: &File,
+        _: &OsStr,
+        _: File,
+        _: &RetainedFileIdentity,
+    ) -> io::Result<()> {
         unsupported()
     }
     pub fn open_or_create_directory(_: &File, _: &OsStr) -> io::Result<File> {

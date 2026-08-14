@@ -97,12 +97,35 @@ exist.
 - Typed release notes in `status` come from the active generation's retained
   change records.
 
+The steady-state retention policy is **active plus previous**: one generation
+runs now and one remains available for rollback. An update first commits that
+new selection with compare-and-swap, then removes the superseded generation.
+This order means a cleanup failure cannot erase the active or rollback version.
+
+During that cleanup, one extra generation may temporarily remain as cleanup
+debt. Forge removes only files whose bytes still match its exact inventory and
+then removes only empty owned directories. A modified file, unknown file,
+symlink, Windows reparse point, locked path, or interrupted cleanup is preserved
+and reported. Another update must clear that debt before it can add more data,
+so a failure does not turn back into unbounded growth. Retrying is idempotent:
+already-removed exact files count as complete.
+
 ## Status and doctor
 
 `status` reports marker validity, active and previous generation/version, typed
 release notes, and exact host-configuration observations. `selected_host`
 remains `none`; observing a host-targeted asset does not select, support, or
 field-verify that host.
+
+The `storage` observation reports the `active_plus_previous` policy, its limit
+of two, the number of generations in the durable inventory, entries currently
+present below `generations/` and `staging/`, and whether cleanup remains pending.
+Unexpected or interrupted staging is observed and reported, never adopted as an
+active generation. Before another update, Forge reconciles staging that belongs
+to a known generation. Unknown staging blocks the update until an operator
+removes or reconciles it, which prevents repeated failures from accumulating
+more directories. These counts are bounded and read through retained,
+no-follow directory handles rather than by following filesystem links.
 
 `doctor` additionally verifies immutable generation manifests,
 generation-local audit receipts, and the retained asset inventory. Missing,

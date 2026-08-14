@@ -11,7 +11,7 @@ use crate::{
     retained_crash_replace::{
         reconcile_file_crash_safe_at_owned_retained_target, RetainedCrashReplaceTarget,
     },
-    retained_dir::{RetainedDirectory, RetainedLeafPolicy},
+    retained_dir::RetainedDirectory,
     sha256_content_hash, EffectStoreLock,
 };
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,7 @@ const GENERATIONS: &str = "generations";
 const MAX_STATE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RECEIPT_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_ASSET_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TRANSITION_GENERATIONS: usize = 3;
 const SCHEMA: &str = "forge-product-lifecycle-store-v1";
 
 /// Compact Store-owned facade for lifecycle CLI adapters.
@@ -59,6 +60,13 @@ pub struct ProductLifecycleGenerationInput {
     pub release_sha256: String,
     pub receipt: Vec<u8>,
     pub assets: Vec<ProductLifecycleAssetInput>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProductLifecycleStorageInventory {
+    pub generation_directory_entries: usize,
+    pub staging_directory_entries: usize,
+    pub observation_truncated: bool,
 }
 
 /// Durable state selected through the exact crash-replacement state leaf.
@@ -312,6 +320,10 @@ impl ProductLifecycleStore {
         if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_STATE_BYTES {
             return Err(invalid("state exceeds maximum byte length"));
         }
+        let current_generation_count = self
+            .read_state()?
+            .state
+            .map_or(0, |current| current.generations.len());
         let session = self.state_session()?;
         let actual = session.digest().map(str::to_owned);
         if actual.as_deref() != expected_digest {
@@ -319,6 +331,13 @@ impl ProductLifecycleStore {
                 expected: expected_digest.map(str::to_owned),
                 actual,
             });
+        }
+        if state.generations.len() > MAX_TRANSITION_GENERATIONS
+            && state.generations.len() > current_generation_count
+        {
+            return Err(invalid(
+                "state may not grow beyond active, previous, and one cleanup generation",
+            ));
         }
         let installed = session.replace(&bytes)?;
         if installed.digest() != digest(&bytes) {
@@ -329,6 +348,40 @@ impl ProductLifecycleStore {
         }
         self.validate_current()?;
         Ok(installed.digest().to_owned())
+    }
+
+    pub fn storage_inventory(
+        &self,
+        maximum_entries: usize,
+    ) -> Result<ProductLifecycleStorageInventory, ProductLifecycleStoreError> {
+        let generations = self
+            .root
+            .directory_entry_count_bounded(Path::new(GENERATIONS), maximum_entries)
+            .map_err(|error| self.io(Path::new(GENERATIONS), error))?;
+        let staging = self
+            .root
+            .directory_entry_count_bounded(Path::new(STAGING), maximum_entries)
+            .map_err(|error| self.io(Path::new(STAGING), error))?;
+        Ok(ProductLifecycleStorageInventory {
+            generation_directory_entries: generations,
+            staging_directory_entries: staging,
+            observation_truncated: generations > maximum_entries || staging > maximum_entries,
+        })
+    }
+
+    pub fn staging_generation_exists(
+        &self,
+        generation_id: &str,
+    ) -> Result<bool, ProductLifecycleStoreError> {
+        if !safe_generation_id(generation_id) {
+            return Err(invalid("staging generation id is not one safe component"));
+        }
+        let path = Path::new(STAGING).join(generation_id);
+        match self.root.open_directory(&path) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(self.io(&path, error)),
+        }
     }
 
     /// Verify the exact receipt, manifest, and every product-owned asset through
@@ -446,25 +499,42 @@ impl ProductLifecycleStore {
         self.validate_state_shape(state)?;
         let mut report = ProductLifecycleUninstallReport::default();
         for generation in &state.generations {
-            let prefix = Path::new(GENERATIONS).join(&generation.generation_id);
-            for asset in &generation.assets {
-                self.remove_if_exact(
-                    &prefix.join("assets").join(&asset.path),
-                    &asset.sha256,
-                    &mut report,
-                )?;
-            }
-            self.remove_if_exact(
-                &prefix.join(MANIFEST_LEAF),
-                &digest(&canonical_json(generation)?),
-                &mut report,
-            )?;
-            self.remove_if_exact(
-                &prefix.join(RECEIPT_LEAF),
-                &generation.receipt_sha256,
-                &mut report,
-            )?;
+            self.cleanup_generation_at(GENERATIONS, generation, &mut report)?;
         }
+        report.preserved_paths.sort();
+        report.preserved_paths.dedup();
+        Ok(report)
+    }
+
+    /// Reconcile one superseded immutable generation without touching active or
+    /// previous selection. Missing leaves are an idempotent success; changed,
+    /// unknown, unsafe, or non-empty paths are preserved and reported.
+    pub fn cleanup_generation_exact(
+        &self,
+        generation: &ProductLifecycleGeneration,
+    ) -> Result<ProductLifecycleUninstallReport, ProductLifecycleStoreError> {
+        self.validate_current()?;
+        self.verify_owner_marker()?;
+        validate_generation(generation)?;
+        let mut report = ProductLifecycleUninstallReport::default();
+        self.cleanup_generation_at(GENERATIONS, generation, &mut report)?;
+        report.preserved_paths.sort();
+        report.preserved_paths.dedup();
+        Ok(report)
+    }
+
+    /// Remove only completed, exactly-known staging leaves for one published
+    /// generation. Unpublished or foreign staging remains outside this method's
+    /// deletion authority and is therefore preserved.
+    pub fn cleanup_generation_staging_exact(
+        &self,
+        generation: &ProductLifecycleGeneration,
+    ) -> Result<ProductLifecycleUninstallReport, ProductLifecycleStoreError> {
+        self.validate_current()?;
+        self.verify_owner_marker()?;
+        validate_generation(generation)?;
+        let mut report = ProductLifecycleUninstallReport::default();
+        self.cleanup_generation_at(STAGING, generation, &mut report)?;
         report.preserved_paths.sort();
         report.preserved_paths.dedup();
         Ok(report)
@@ -645,22 +715,8 @@ impl ProductLifecycleStore {
             .root
             .retain_authority()
             .map_err(|error| self.io(final_path, error))?;
-        match authority.rename_file_noreplace_with_validation(
-            stage,
-            final_path,
-            |directory, source, destination| {
-                if source != stage || destination != final_path {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "generation publication target changed",
-                    ));
-                }
-                let file = directory.open_leaf_read(source, RetainedLeafPolicy::Authority)?;
-                let identity = RetainedDirectory::identity_of(&file)?;
-                directory.verify_retained_authority_binding(source, &file, &identity)
-            },
-        ) {
-            Ok(_) => Ok(()),
+        match authority.move_mutable_file_noreplace(stage, final_path) {
+            Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 let staged = self.read_exact_required(stage, MAX_ASSET_BYTES)?;
                 let final_bytes = self.read_exact_required(final_path, MAX_ASSET_BYTES)?;
@@ -751,7 +807,7 @@ impl ProductLifecycleStore {
             .retain_authority()
             .map_err(|error| self.io(path, error))?;
         if authority
-            .remove_file_with_validation(path, |directory, target| {
+            .remove_reclaimable_file_with_validation(path, |directory, target| {
                 let bytes = directory.read_authority_bounded(target, MAX_ASSET_BYTES)?;
                 if digest(&bytes) != expected {
                     return Err(io::Error::new(
@@ -763,6 +819,79 @@ impl ProductLifecycleStore {
             })
             .is_err()
         {
+            report.preserved_paths.push(self.display_path(path));
+        }
+        Ok(())
+    }
+
+    fn cleanup_generation_at(
+        &self,
+        namespace: &str,
+        generation: &ProductLifecycleGeneration,
+        report: &mut ProductLifecycleUninstallReport,
+    ) -> Result<(), ProductLifecycleStoreError> {
+        let prefix = Path::new(namespace).join(&generation.generation_id);
+        for asset in &generation.assets {
+            self.remove_if_exact(
+                &prefix.join("assets").join(&asset.path),
+                &asset.sha256,
+                report,
+            )?;
+        }
+        self.remove_if_exact(
+            &prefix.join(MANIFEST_LEAF),
+            &digest(&canonical_json(generation)?),
+            report,
+        )?;
+        self.remove_if_exact(
+            &prefix.join(RECEIPT_LEAF),
+            &generation.receipt_sha256,
+            report,
+        )?;
+
+        let mut directories = BTreeSet::new();
+        directories.insert(prefix.join("assets"));
+        for asset in &generation.assets {
+            let mut parent = Path::new(&asset.path).parent();
+            while let Some(relative) = parent {
+                if !relative.as_os_str().is_empty() {
+                    directories.insert(prefix.join("assets").join(relative));
+                }
+                parent = relative.parent();
+            }
+        }
+        let mut directories = directories.into_iter().collect::<Vec<_>>();
+        directories.sort_by(|left, right| {
+            right
+                .components()
+                .count()
+                .cmp(&left.components().count())
+                .then_with(|| right.cmp(left))
+        });
+        for directory in directories {
+            self.remove_empty_directory_if_present(&directory, report)?;
+        }
+        self.remove_empty_directory_if_present(&prefix, report)
+    }
+
+    fn remove_empty_directory_if_present(
+        &self,
+        path: &Path,
+        report: &mut ProductLifecycleUninstallReport,
+    ) -> Result<(), ProductLifecycleStoreError> {
+        match self.root.open_directory(path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(_) => {
+                report.preserved_paths.push(self.display_path(path));
+                return Ok(());
+            }
+        }
+        let authority = self
+            .root
+            .retain_authority()
+            .map_err(|error| self.io(path, error))?;
+        if authority.remove_empty_directory(path).is_err() {
             report.preserved_paths.push(self.display_path(path));
         }
         Ok(())

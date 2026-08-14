@@ -91,6 +91,18 @@ product_lifecycle_spec:
       Requires an active generation, rejects semantic-version downgrade and
       same-version content drift, and retains the former active generation as
       the previous working generation.
+    retention: >-
+      Steady state retains exactly the active and previous generations. During
+      post-activation reconciliation, at most one additional superseded
+      generation may remain as bounded cleanup debt. A later update must clear
+      that debt or fail closed before publishing another candidate.
+    cleanup_order:
+      - "Publish and verify the immutable candidate generation."
+      - "Compare-and-swap active and previous selection before retiring the superseded generation."
+      - "Delete only exact product-owned leaves, then remove only empty owned directories."
+      - "Preserve and report modified, unknown, linked, reparse, unsafe, or non-empty paths."
+      - "Block a later update while unknown staging remains, so staging cannot grow without bound."
+      - "Retry partial cleanup idempotently without touching active or previous."
     rollback: >-
       Verifies the complete prior generation inventory and metadata before
       swapping active and previous generation identities.
@@ -99,6 +111,10 @@ product_lifecycle_spec:
     status_observations:
       - "ownership marker validity"
       - "active and previous generation/version"
+      - "active-plus-previous retention policy and limit"
+      - "inventoried generation, generation-directory, and staging-entry counts"
+      - "whether bounded cleanup remains pending"
+      - "bounded no-follow observation that never traverses filesystem links"
       - "typed active release notes"
       - "exact, missing, digest-mismatched, or unsafe host-configuration files"
     doctor_additions:

@@ -243,8 +243,12 @@ fn digest(bytes: &[u8]) -> String {
 }
 
 fn next_version() -> String {
+    version_after(1)
+}
+
+fn version_after(patches: u64) -> String {
     let current = Version::parse(env!("CARGO_PKG_VERSION")).expect("package version is semver");
-    Version::new(current.major, current.minor, current.patch + 1).to_string()
+    Version::new(current.major, current.minor, current.patch + patches).to_string()
 }
 
 fn release_file(bundle: &Path, version: &str) -> ReleaseFixture {
@@ -879,7 +883,7 @@ fn interrupted_update(case: &RecoveryCase) {
     assert_eq!(case.category, RecoveryCategory::InterruptedUpdate);
     assert_eq!(
         case.expected_result,
-        "retain_generation-a_as_active; staged_candidate_is_not_active; retry_reverifies_input"
+        "retain_generation-a_as_active; unknown_staging_blocks_growth; operator_cleanup_allows_retry"
     );
     let (fixture, _, installed) = installed_fixture(case);
     let root = fixture.install_root();
@@ -896,15 +900,65 @@ fn interrupted_update(case: &RecoveryCase) {
     assert_observation_only(&doctor, case);
     assert_eq!(doctor["data"]["active_generation"], active);
     assert_ne!(doctor["data"]["active_generation"], "candidate-interrupted");
+    assert_eq!(doctor["data"]["storage"]["staging_directory_entries"], 1);
+    assert_eq!(doctor["data"]["storage"]["cleanup_pending"], true);
+    assert!(doctor["data"]["diagnostics"]
+        .as_array()
+        .expect("doctor diagnostics")
+        .iter()
+        .any(|diagnostic| diagnostic == "staging_cleanup_pending:1"));
     assert!(interrupted_stage.is_dir());
 
     let retry = release_file(&fixture.bundle_root("retry-bundle"), &next_version());
+    let blocked = rejected(
+        &lifecycle_with_release(&root, "update", &retry),
+        "block growth while unknown staging remains",
+    );
+    assert!(blocked["error"]["message"]
+        .as_str()
+        .expect("unknown staging rejection message")
+        .contains("unknown lifecycle staging"));
+    let unchanged = successful(&lifecycle(&root, "status"), "status after blocked growth");
+    assert_eq!(unchanged["data"]["active_generation"], active);
+
+    fs::remove_file(interrupted_stage.join("unverified"))
+        .expect("operator removes unknown staging leaf");
+    fs::remove_dir(&interrupted_stage).expect("operator removes unknown staging directory");
     let updated = successful(
         &lifecycle_with_release(&root, "update", &retry),
-        "retry interrupted update",
+        "retry after explicit unknown staging cleanup",
     );
-    assert_observation_only(&updated, case);
-    assert_ne!(updated["data"]["active_generation"], active);
+    let second = release_file(
+        &fixture.bundle_root("second-update-bundle"),
+        &version_after(2),
+    );
+    let bounded = successful(
+        &lifecycle_with_release(&root, "update", &second),
+        "second update keeps bounded retention",
+    );
+    assert_eq!(
+        bounded["data"]["storage"]["inventoried_generation_count"],
+        2
+    );
+    assert_eq!(
+        bounded["data"]["storage"]["generation_directory_entries"],
+        2
+    );
+    assert_eq!(bounded["data"]["storage"]["staging_directory_entries"], 0);
+    assert_eq!(bounded["data"]["storage"]["cleanup_pending"], false);
+    assert_ne!(
+        bounded["data"]["active_generation"],
+        updated["data"]["active_generation"]
+    );
+
+    let rolled_back = successful(
+        &lifecycle(&root, "rollback"),
+        "rollback after bounded cleanup",
+    );
+    assert_eq!(
+        rolled_back["data"]["active_generation"],
+        updated["data"]["active_generation"]
+    );
 }
 
 fn downgrade(case: &RecoveryCase) {

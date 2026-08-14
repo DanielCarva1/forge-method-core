@@ -48,6 +48,7 @@ const LOCK_FILE: &str = ".lifecycle.lock";
 const STORE_ROOT_DIR: &str = "product-lifecycle";
 const MAX_RELEASE_DOCUMENT_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_ASSET_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_STORAGE_OBSERVATION_ENTRIES: usize = 1_024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +82,10 @@ struct LifecycleReportingState {
     active_generation: Option<String>,
     previous_generation: Option<String>,
     generations: Vec<InstalledGeneration>,
+    inventoried_generation_count: usize,
+    generation_directory_entries: usize,
+    staging_directory_entries: usize,
+    storage_observation_truncated: bool,
 }
 
 impl LifecycleReportingState {
@@ -232,7 +237,18 @@ pub struct ProductLifecycleReport {
     pub release_notes: Vec<ProductLifecycleChange>,
     pub diagnostics: Vec<String>,
     pub preserved_paths: Vec<String>,
+    pub storage: ProductLifecycleStorageObservation,
     pub verification_boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ProductLifecycleStorageObservation {
+    pub retention_policy: String,
+    pub retention_limit: usize,
+    pub inventoried_generation_count: usize,
+    pub generation_directory_entries: usize,
+    pub staging_directory_entries: usize,
+    pub cleanup_pending: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -575,6 +591,104 @@ struct StateInspection {
     host_configurations: Vec<HostConfigurationObservation>,
 }
 
+#[derive(Default)]
+struct RetentionCleanup {
+    diagnostics: Vec<String>,
+    preserved_paths: Vec<String>,
+}
+
+impl RetentionCleanup {
+    fn pending(&self) -> bool {
+        !self.preserved_paths.is_empty()
+    }
+
+    fn extend(&mut self, mut other: Self) {
+        self.diagnostics.append(&mut other.diagnostics);
+        self.preserved_paths.append(&mut other.preserved_paths);
+        self.preserved_paths.sort();
+        self.preserved_paths.dedup();
+    }
+}
+
+fn reconcile_retired_generations(
+    store: &ProductLifecycleStore,
+    state: &mut StoreProductLifecycleState,
+    state_digest: &mut Option<String>,
+) -> Result<RetentionCleanup, LifecycleError> {
+    let selected = [
+        state.active_generation.as_deref(),
+        state.previous_generation.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<BTreeSet<_>>();
+    let retired = state
+        .generations
+        .iter()
+        .filter(|generation| !selected.contains(generation.generation_id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut outcome = RetentionCleanup::default();
+
+    for generation in retired {
+        let report = store
+            .cleanup_generation_exact(&generation)
+            .map_err(store_environment("reconcile retired lifecycle generation"))?;
+        if !report.preserved_paths.is_empty() {
+            outcome.diagnostics.push(format!(
+                "retention_cleanup_pending:{}",
+                generation.generation_id
+            ));
+            outcome.preserved_paths.extend(
+                report
+                    .preserved_paths
+                    .into_iter()
+                    .map(|path| path.display().to_string()),
+            );
+            break;
+        }
+
+        state
+            .generations
+            .retain(|candidate| candidate.generation_id != generation.generation_id);
+        let digest = store
+            .compare_and_swap_state(state_digest.as_deref(), state)
+            .map_err(store_conflict("retire lifecycle Store generation"))?;
+        *state_digest = Some(digest);
+    }
+
+    outcome.preserved_paths.sort();
+    outcome.preserved_paths.dedup();
+    Ok(outcome)
+}
+
+fn reconcile_known_staging(
+    store: &ProductLifecycleStore,
+    state: &StoreProductLifecycleState,
+) -> Result<RetentionCleanup, LifecycleError> {
+    let mut outcome = RetentionCleanup::default();
+    for generation in &state.generations {
+        let report = store
+            .cleanup_generation_staging_exact(generation)
+            .map_err(store_environment("reconcile lifecycle staging"))?;
+        if !report.preserved_paths.is_empty() {
+            outcome.diagnostics.push(format!(
+                "staging_cleanup_pending:{}",
+                generation.generation_id
+            ));
+            outcome.preserved_paths.extend(
+                report
+                    .preserved_paths
+                    .into_iter()
+                    .map(|path| path.display().to_string()),
+            );
+        }
+    }
+    outcome.preserved_paths.sort();
+    outcome.preserved_paths.dedup();
+    Ok(outcome)
+}
+
 fn inspect_state(
     store: &ProductLifecycleStore,
     state: &StoreProductLifecycleState,
@@ -651,6 +765,8 @@ enum PublicationCheckpoint {
     Continue,
     #[cfg(test)]
     InterruptAfterGenerationPublication,
+    #[cfg(test)]
+    InterruptAfterStatePublication,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -767,7 +883,38 @@ fn install_or_update_with_verification(
         .state
         .clone()
         .unwrap_or_else(StoreProductLifecycleState::empty);
-    let mut reporting = load_reporting_state(&store, &store_state)?;
+    let mut state_digest = store_read.digest.clone();
+    let existing_cleanup =
+        reconcile_retired_generations(&store, &mut store_state, &mut state_digest)?;
+    if existing_cleanup.pending() {
+        return Err(LifecycleError::rejected(format!(
+            "retention cleanup is still pending for preserved paths: {}",
+            existing_cleanup.preserved_paths.join(", ")
+        )));
+    }
+    let staging_cleanup = reconcile_known_staging(&store, &store_state)?;
+    if staging_cleanup.pending() {
+        return Err(LifecycleError::rejected(format!(
+            "staging cleanup is still pending for preserved paths: {}",
+            staging_cleanup.preserved_paths.join(", ")
+        )));
+    }
+    let storage = store
+        .storage_inventory(MAX_STORAGE_OBSERVATION_ENTRIES)
+        .map_err(store_environment("observe lifecycle storage"))?;
+    if storage.staging_directory_entries != 0 {
+        let exact_interrupted_candidate = !storage.observation_truncated
+            && storage.staging_directory_entries == 1
+            && store
+                .staging_generation_exists(&loaded.generation_id)
+                .map_err(store_environment("identify interrupted lifecycle staging"))?;
+        if !exact_interrupted_candidate {
+            return Err(LifecycleError::rejected(
+                "unknown lifecycle staging is preserved; remove or reconcile it before publishing another update",
+            ));
+        }
+    }
+    let reporting = load_reporting_state(&store, &store_state)?;
 
     if let Some(existing) = store_state
         .generations
@@ -784,12 +931,28 @@ fn install_or_update_with_verification(
             store
                 .verify_generation(existing)
                 .map_err(store_conflict("verify exact lifecycle Store generation"))?;
+            let staging = store
+                .cleanup_generation_staging_exact(existing)
+                .map_err(store_environment("reconcile exact lifecycle staging"))?;
+            let mut diagnostics =
+                vec!["exact_release_retry_did_not_append_a_generation".to_owned()];
+            let preserved_paths = staging
+                .preserved_paths
+                .into_iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>();
+            if !preserved_paths.is_empty() {
+                diagnostics.push(format!(
+                    "staging_cleanup_pending:{}",
+                    existing.generation_id
+                ));
+            }
             return Ok(report_for_state(
                 root,
                 ProductLifecycleStatus::AlreadyInstalled,
                 Some(reporting),
-                vec!["exact_release_retry_did_not_append_a_generation".to_owned()],
-                Vec::new(),
+                diagnostics,
+                preserved_paths,
             ));
         }
     }
@@ -912,7 +1075,7 @@ fn install_or_update_with_verification(
         }
         Some(_) => {}
         None => {
-            store_state.generations.push(store_generation);
+            store_state.generations.push(store_generation.clone());
             store_state
                 .generations
                 .sort_by(|left, right| left.generation_id.cmp(&right.generation_id));
@@ -920,18 +1083,43 @@ fn install_or_update_with_verification(
     }
     store_state.previous_generation.clone_from(&previous);
     store_state.active_generation = Some(generation.generation_id.clone());
-    store
-        .compare_and_swap_state(store_read.digest.as_deref(), &store_state)
+    let installed_state_digest = store
+        .compare_and_swap_state(state_digest.as_deref(), &store_state)
         .map_err(store_conflict("publish lifecycle Store state"))?;
-
-    if reporting.generation(&generation.generation_id).is_none() {
-        reporting.generations.push(generation.clone());
-        reporting
-            .generations
-            .sort_by(|left, right| left.generation_id.cmp(&right.generation_id));
+    state_digest = Some(installed_state_digest);
+    #[cfg(test)]
+    if checkpoint == PublicationCheckpoint::InterruptAfterStatePublication {
+        return Err(LifecycleError::environment(
+            "lifecycle update interrupted after active state publication",
+        ));
     }
-    reporting.previous_generation = previous;
-    reporting.active_generation = Some(generation.generation_id);
+
+    let mut cleanup = RetentionCleanup::default();
+    match store.cleanup_generation_staging_exact(&store_generation) {
+        Ok(report) if !report.preserved_paths.is_empty() => {
+            cleanup.diagnostics.push(format!(
+                "staging_cleanup_pending:{}",
+                store_generation.generation_id
+            ));
+            cleanup.preserved_paths.extend(
+                report
+                    .preserved_paths
+                    .into_iter()
+                    .map(|path| path.display().to_string()),
+            );
+        }
+        Ok(_) => {}
+        Err(error) => cleanup
+            .diagnostics
+            .push(format!("staging_cleanup_failed:{error}")),
+    }
+    match reconcile_retired_generations(&store, &mut store_state, &mut state_digest) {
+        Ok(outcome) => cleanup.extend(outcome),
+        Err(error) => cleanup
+            .diagnostics
+            .push(format!("retention_cleanup_failed:{}", error.message)),
+    }
+    let reporting = load_reporting_state(&store, &store_state)?;
     Ok(report_for_state(
         root,
         match mode {
@@ -939,8 +1127,8 @@ fn install_or_update_with_verification(
             InstallMode::Update => ProductLifecycleStatus::Updated,
         },
         Some(reporting),
-        Vec::new(),
-        Vec::new(),
+        cleanup.diagnostics,
+        cleanup.preserved_paths,
     ))
 }
 
@@ -1196,8 +1384,19 @@ fn load_reporting_state(
     store: &ProductLifecycleStore,
     state: &StoreProductLifecycleState,
 ) -> Result<LifecycleReportingState, LifecycleError> {
-    let mut generations = Vec::with_capacity(state.generations.len());
-    for stored in &state.generations {
+    let selected = [
+        state.active_generation.as_deref(),
+        state.previous_generation.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<BTreeSet<_>>();
+    let mut generations = Vec::with_capacity(selected.len());
+    for stored in state
+        .generations
+        .iter()
+        .filter(|generation| selected.contains(generation.generation_id.as_str()))
+    {
         let receipt_bytes = store
             .read_generation_receipt(stored)
             .map_err(store_environment("read lifecycle Store receipt"))?;
@@ -1230,10 +1429,17 @@ fn load_reporting_state(
         }
         generations.push(generation);
     }
+    let storage = store
+        .storage_inventory(MAX_STORAGE_OBSERVATION_ENTRIES)
+        .map_err(store_environment("observe lifecycle storage"))?;
     Ok(LifecycleReportingState {
         active_generation: state.active_generation.clone(),
         previous_generation: state.previous_generation.clone(),
         generations,
+        inventoried_generation_count: state.generations.len(),
+        generation_directory_entries: storage.generation_directory_entries,
+        staging_directory_entries: storage.staging_directory_entries,
+        storage_observation_truncated: storage.observation_truncated,
     })
 }
 
@@ -1362,9 +1568,9 @@ fn uninstall(root: &Path) -> Result<ProductLifecycleReport, LifecycleError> {
 
 fn report_for_state(
     root: &Path,
-    status: ProductLifecycleStatus,
+    mut status: ProductLifecycleStatus,
     state: Option<LifecycleReportingState>,
-    diagnostics: Vec<String>,
+    mut diagnostics: Vec<String>,
     preserved_paths: Vec<String>,
 ) -> ProductLifecycleReport {
     let active = state.as_ref().and_then(|state| {
@@ -1379,6 +1585,10 @@ fn report_for_state(
             .as_deref()
             .and_then(|id| state.generation(id))
     });
+    let storage = storage_observation(state.as_ref(), &mut diagnostics);
+    if status == ProductLifecycleStatus::Healthy && !diagnostics.is_empty() {
+        status = ProductLifecycleStatus::Degraded;
+    }
     ProductLifecycleReport {
         status,
         install_root: root.display().to_string(),
@@ -1395,7 +1605,55 @@ fn report_for_state(
         release_notes: active.map_or_else(Vec::new, |generation| generation.changes.clone()),
         diagnostics,
         preserved_paths,
+        storage,
         verification_boundary: verification_boundary().to_owned(),
+    }
+}
+
+fn storage_observation(
+    state: Option<&LifecycleReportingState>,
+    diagnostics: &mut Vec<String>,
+) -> ProductLifecycleStorageObservation {
+    let inventoried_generation_count = state.map_or(0, |state| state.inventoried_generation_count);
+    let generation_directory_entries = state.map_or(0, |state| state.generation_directory_entries);
+    let staging_directory_entries = state.map_or(0, |state| state.staging_directory_entries);
+    let observation_truncated = state.is_some_and(|state| state.storage_observation_truncated);
+    let cleanup_pending = inventoried_generation_count > 2
+        || generation_directory_entries != inventoried_generation_count
+        || staging_directory_entries != 0
+        || observation_truncated;
+    if inventoried_generation_count > 2 {
+        diagnostics.push(format!(
+            "retention_cleanup_pending:{}",
+            inventoried_generation_count - 2
+        ));
+    }
+    if generation_directory_entries != inventoried_generation_count {
+        diagnostics.push(format!(
+            "generation_directory_inventory_mismatch:expected={inventoried_generation_count}:observed={}",
+            generation_directory_entries
+        ));
+    }
+    if staging_directory_entries != 0 {
+        diagnostics.push(format!(
+            "staging_cleanup_pending:{}",
+            staging_directory_entries
+        ));
+    }
+    if observation_truncated {
+        diagnostics.push(format!(
+            "storage_inventory_exceeds_observation_limit:{MAX_STORAGE_OBSERVATION_ENTRIES}"
+        ));
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    ProductLifecycleStorageObservation {
+        retention_policy: "active_plus_previous".to_owned(),
+        retention_limit: 2,
+        inventoried_generation_count,
+        generation_directory_entries,
+        staging_directory_entries,
+        cleanup_pending,
     }
 }
 
@@ -1417,6 +1675,14 @@ fn base_report(
         release_notes: Vec::new(),
         diagnostics: Vec::new(),
         preserved_paths: Vec::new(),
+        storage: ProductLifecycleStorageObservation {
+            retention_policy: "active_plus_previous".to_owned(),
+            retention_limit: 2,
+            inventoried_generation_count: 0,
+            generation_directory_entries: 0,
+            staging_directory_entries: 0,
+            cleanup_pending: false,
+        },
         verification_boundary: verification_boundary().to_owned(),
     }
 }
@@ -1805,6 +2071,231 @@ mod tests {
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(bundle_one);
         let _ = fs::remove_dir_all(bundle_two);
+    }
+
+    #[test]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "tempdir resolves through /var -> /private/var; tracked in issue #24"
+    )]
+    fn repeated_updates_retain_only_active_and_previous_generations() {
+        let root = temp_root("bounded-retention");
+        let bundle_one = temp_root("bounded-retention-one");
+        let bundle_two = temp_root("bounded-retention-two");
+        let bundle_three = temp_root("bounded-retention-three");
+        setup(&root).unwrap();
+
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+        let release_one = write_release(&bundle_one, &current.to_string(), b"one");
+        let release_two = write_release(
+            &bundle_two,
+            &Version::new(current.major, current.minor, current.patch + 1).to_string(),
+            b"two",
+        );
+        let release_three = write_release(
+            &bundle_three,
+            &Version::new(current.major, current.minor, current.patch + 2).to_string(),
+            b"three",
+        );
+
+        install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_one,
+            &release_one,
+            false,
+            InstallMode::Install,
+        )
+        .unwrap();
+        install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_two,
+            &release_two,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap();
+        let updated = install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_three,
+            &release_three,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap();
+        assert_eq!(updated.status, ProductLifecycleStatus::Updated);
+
+        let state = load_state(&root).unwrap();
+        assert_eq!(state.generations.len(), 2);
+        assert_eq!(state.active_generation, updated.active_generation);
+        assert_eq!(state.previous_generation, updated.previous_generation);
+        assert_eq!(updated.storage.retention_policy, "active_plus_previous");
+        assert_eq!(updated.storage.retention_limit, 2);
+        assert_eq!(updated.storage.inventoried_generation_count, 2);
+        assert_eq!(updated.storage.generation_directory_entries, 2);
+        assert_eq!(updated.storage.staging_directory_entries, 0);
+        assert!(!updated.storage.cleanup_pending);
+        assert_eq!(fs::read_dir(root.join(GENERATIONS_DIR)).unwrap().count(), 2);
+        assert_eq!(
+            fs::read_dir(root.join(STORE_ROOT_DIR).join("staging"))
+                .unwrap()
+                .count(),
+            0
+        );
+
+        let rolled_back = rollback(&root).unwrap();
+        assert_eq!(rolled_back.status, ProductLifecycleStatus::RolledBack);
+        assert_eq!(rolled_back.active_generation, updated.previous_generation);
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(bundle_one);
+        let _ = fs::remove_dir_all(bundle_two);
+        let _ = fs::remove_dir_all(bundle_three);
+    }
+
+    #[test]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "tempdir resolves through /var -> /private/var; tracked in issue #24"
+    )]
+    fn modified_retired_generation_is_preserved_and_blocks_further_growth() {
+        let root = temp_root("retention-debt");
+        let bundle_one = temp_root("retention-debt-one");
+        let bundle_two = temp_root("retention-debt-two");
+        let bundle_three = temp_root("retention-debt-three");
+        setup(&root).unwrap();
+
+        let current = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+        let release_one = write_release(&bundle_one, &current.to_string(), b"one");
+        let release_two = write_release(
+            &bundle_two,
+            &Version::new(current.major, current.minor, current.patch + 1).to_string(),
+            b"two",
+        );
+        let release_three = write_release(
+            &bundle_three,
+            &Version::new(current.major, current.minor, current.patch + 2).to_string(),
+            b"three",
+        );
+        install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_one,
+            &release_one,
+            false,
+            InstallMode::Install,
+        )
+        .unwrap();
+        install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_two,
+            &release_two,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap();
+
+        let interrupted = install_or_update_lifecycle_mechanics_fixture_with_checkpoint(
+            &root,
+            &release_three,
+            &release_three,
+            false,
+            InstallMode::Update,
+            PublicationCheckpoint::InterruptAfterStatePublication,
+        );
+        assert!(interrupted.is_err());
+
+        let before = load_state(&root).unwrap();
+        let retired = before
+            .generations
+            .iter()
+            .find(|generation| {
+                Some(generation.generation_id.as_str()) != before.active_generation.as_deref()
+                    && Some(generation.generation_id.as_str())
+                        != before.previous_generation.as_deref()
+            })
+            .unwrap();
+        let asset = retired.assets.first().unwrap();
+        let asset_path = root
+            .join(GENERATIONS_DIR)
+            .join(&retired.generation_id)
+            .join("assets")
+            .join(&asset.path);
+        let exact_bytes = fs::read(&asset_path).unwrap();
+        fs::write(&asset_path, b"operator-modified").unwrap();
+
+        let blocked = install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_three,
+            &release_three,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap_err();
+        assert_eq!(blocked.exit_reason, ExitReason::RejectedByGate);
+        let blocked_state = load_state(&root).unwrap();
+        assert_eq!(blocked_state.active_generation, before.active_generation);
+        assert_eq!(
+            blocked_state.previous_generation,
+            before.previous_generation
+        );
+        assert_eq!(blocked_state.generations.len(), 3);
+
+        fs::write(&asset_path, exact_bytes).unwrap();
+        let retired_root = root.join(GENERATIONS_DIR).join(&retired.generation_id);
+        let unknown_path = retired_root.join("operator-note.txt");
+        fs::write(&unknown_path, b"not owned by forge").unwrap();
+        let unknown_blocked = install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_three,
+            &release_three,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap_err();
+        assert_eq!(unknown_blocked.exit_reason, ExitReason::RejectedByGate);
+        assert_eq!(fs::read(&unknown_path).unwrap(), b"not owned by forge");
+        fs::remove_file(&unknown_path).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let outside = bundle_one.join("outside-owned-by-operator.txt");
+            fs::write(&outside, b"outside").unwrap();
+            let linked = retired_root.join("operator-link");
+            symlink(&outside, &linked).unwrap();
+            let link_blocked = install_or_update_lifecycle_mechanics_fixture(
+                &root,
+                &release_three,
+                &release_three,
+                false,
+                InstallMode::Update,
+            )
+            .unwrap_err();
+            assert_eq!(link_blocked.exit_reason, ExitReason::RejectedByGate);
+            assert!(fs::symlink_metadata(&linked)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+            assert_eq!(fs::read(&outside).unwrap(), b"outside");
+            fs::remove_file(&linked).unwrap();
+        }
+
+        let recovered = install_or_update_lifecycle_mechanics_fixture(
+            &root,
+            &release_three,
+            &release_three,
+            false,
+            InstallMode::Update,
+        )
+        .unwrap();
+        assert_eq!(recovered.status, ProductLifecycleStatus::AlreadyInstalled);
+        assert!(!recovered.storage.cleanup_pending);
+        assert_eq!(load_state(&root).unwrap().generations.len(), 2);
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(bundle_one);
+        let _ = fs::remove_dir_all(bundle_two);
+        let _ = fs::remove_dir_all(bundle_three);
     }
 
     #[test]

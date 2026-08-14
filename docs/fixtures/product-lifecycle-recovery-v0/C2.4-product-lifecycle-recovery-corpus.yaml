@@ -74,7 +74,7 @@ cases:
       candidate_version: "2.5.0"
     interruption_or_input: "Process ends after fresh staging creation and before complete generation, receipt, and active-state publication."
     requested_operation: "doctor_then_retry_update"
-    expected_result: "retain_generation-a_as_active; staged_candidate_is_not_active; retry_reverifies_input"
+    expected_result: "retain_generation-a_as_active; unknown_staging_blocks_growth; operator_cleanup_allows_retry"
     required_observations:
       active_generation: "generation-a"
       previous_generation: "generation-previous"
