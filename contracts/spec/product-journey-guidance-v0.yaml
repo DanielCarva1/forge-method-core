@@ -56,6 +56,17 @@ proportional_cycle_model:
     Cycle: every lifecycle stage is visited, but its closeout is compressed into
     one small durable record. Evidence can expand the affected stage without
     restarting or expanding the whole cycle by default.
+  artifact_hygiene:
+    rule: >-
+      Exploration is ephemeral by default. Forge promotes only an agreed result,
+      decision-relevant constraint, or required evidence into durable project
+      state, and the host updates the existing canonical source before creating
+      another document for the same concern.
+    cleanup_boundary:
+      - "ordinary ideas, unused research, and facilitation techniques are not durable artifacts"
+      - "a rejected direction is retained only when its reason prevents a known product mistake"
+      - "destructive cleanup requires explicit approval unless it removes a Forge-owned temporary created by the current operation"
+      - "startup does not scan or rewrite the project's documentation tree"
   quick_cycle_record:
     purpose: "preserve the complete reasoning path for small work without producing a stack of documents"
     fields:

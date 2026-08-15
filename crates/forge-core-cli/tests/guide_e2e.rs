@@ -97,6 +97,44 @@ fn e2e_full_agent_loop_describe_status_decide() {
             && activity.contains("analogy")
             && activity.contains("constraint shift")
     }));
+    assert!(capability
+        .activities
+        .iter()
+        .any(|activity| activity.contains("ordinary exploration ephemeral")));
+    assert!(capability
+        .handoff
+        .iter()
+        .all(|item| !item.contains("rejected patterns")));
+    assert!(capability
+        .outputs
+        .iter()
+        .filter(|output| output.contains("idea set") || output.contains("clusters"))
+        .all(|output| output.contains("ephemeral")));
+
+    let creative = run_detail(Some(&catalog_dir()), "creative-session");
+    let creative = creative.data.as_ref().expect("creative-session detail");
+    assert!(creative
+        .done_when
+        .iter()
+        .any(|condition| condition.contains("no durable artifact was created before agreement")));
+    assert!(creative
+        .outputs
+        .iter()
+        .all(|output| output != "creative artifact"));
+
+    let docs = run_detail(Some(&catalog_dir()), "doc-index");
+    let docs = docs.data.as_ref().expect("doc-index detail");
+    assert!(docs
+        .activities
+        .iter()
+        .any(|activity| activity.contains("avoid creating an index")));
+    assert!(docs.activities.iter().any(|activity| {
+        activity.contains("explicit preserve, archive, or delete disposition")
+    }));
+    assert!(docs
+        .activities
+        .iter()
+        .all(|activity| !activity.contains("run artifact doc-")));
 
     // STEP 3a: host proposes a LEGAL operational decision in discovery.
     let legal = decision_file("brainstorming", "1-discovery", None, "begin");
