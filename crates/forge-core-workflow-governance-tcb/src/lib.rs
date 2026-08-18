@@ -16,6 +16,7 @@ use forge_core_contracts::workflow_governance::{
     WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION,
@@ -30,9 +31,11 @@ use forge_core_contracts::{
     WorkflowCooperativeEvidenceObservedEvent, WorkflowCooperativeObjectiveInput,
     WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
     WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
-    WorkflowRuntimeBundleIdentity, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
-    MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
-    MAX_WORKFLOW_INTENT_TOTAL_BYTES, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    WorkflowRuntimeBundleIdentity, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
+    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
+    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_TOTAL_BYTES, MAX_WORK_FOCUS_EVENT_BYTES,
+    MAX_WORK_FOCUS_LIST_ITEMS, MAX_WORK_FOCUS_TEXT_BYTES,
+    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION,
@@ -264,6 +267,26 @@ impl WorkflowGovernanceLedgerProjection {
                 _ => None,
             })
     }
+
+    fn contains_work_focus(&self) -> bool {
+        self.records
+            .iter()
+            .any(|record| matches!(record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_)))
+    }
+
+    fn latest_work_focus_record(
+        &self,
+    ) -> Option<(
+        &WorkflowGovernanceLedgerRecord,
+        &WorkflowWorkFocusRecordedEvent,
+    )> {
+        self.records.iter().rev().find_map(|record| {
+            let WorkflowGovernanceEvent::WorkFocusRecorded(event) = &record.event else {
+                return None;
+            };
+            Some((record, event))
+        })
+    }
     fn contains_native_host_provenance(&self) -> bool {
         self.records.iter().any(|record| {
             matches!(
@@ -425,6 +448,9 @@ impl WorkflowGovernanceLedgerBatch<'_> {
                 WorkflowGovernanceLedgerError::CooperativeEvidenceRequiresDedicatedAuthority,
             );
         }
+        if matches!(event, WorkflowGovernanceEvent::WorkFocusRecorded(_)) {
+            return Err(WorkflowGovernanceLedgerError::WorkFocusRequiresDedicatedAuthority);
+        }
         if matches!(event, WorkflowGovernanceEvent::ProjectImported(_)) {
             return Err(WorkflowGovernanceLedgerError::ProjectImportedAfterInitialization);
         }
@@ -565,6 +591,44 @@ impl WorkflowGovernanceLedgerBatch<'_> {
             &self.identity,
             state_version,
             WorkflowGovernanceEvent::CooperativeEvidenceObserved(event),
+            recorded_at_unix,
+        )?;
+        ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
+        self.prepared_wal.extend_from_slice(&line);
+        self.projection.head_digest = Some(record.record_digest.clone());
+        self.projection.next_sequence = record.sequence.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::SequenceOverflow {
+                current: record.sequence,
+            },
+        )?;
+        self.projection.next_state_version = state_version.checked_add(1).ok_or(
+            WorkflowGovernanceLedgerError::StateVersionOverflow {
+                current: state_version,
+            },
+        )?;
+        self.projection.records.push(record.clone());
+        Ok(record)
+    }
+
+    /// Prepare one bounded continuity snapshot beneath the exact current head.
+    #[doc(hidden)]
+    pub fn push_work_focus_unchecked_tcb(
+        &mut self,
+        state_version: u64,
+        event: WorkflowWorkFocusRecordedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        validate_work_focus_event(
+            &self.projection,
+            state_version,
+            &event,
+            self.projection.records.len() + 1,
+        )?;
+        let recorded_at_unix = event.recorded_at_unix;
+        let (record, line) = build_record_line_at(
+            &self.projection,
+            &self.identity,
+            state_version,
+            WorkflowGovernanceEvent::WorkFocusRecorded(event),
             recorded_at_unix,
         )?;
         ensure_prepared_capacity(&self.projection, self.prepared_wal.len(), line.len())?;
@@ -1196,6 +1260,21 @@ impl LockedWorkflowGovernanceLedger {
         Ok(record)
     }
 
+    /// Append one advisory Work Focus snapshot under an exact ledger-head CAS.
+    #[doc(hidden)]
+    pub fn record_work_focus_unchecked_tcb(
+        &mut self,
+        expected_head_digest: &str,
+        identity: &WorkflowGovernanceLedgerIdentity,
+        state_version: u64,
+        event: WorkflowWorkFocusRecordedEvent,
+    ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceLedgerError> {
+        let mut batch = self.begin_unchecked_tcb_batch(expected_head_digest, identity)?;
+        let record = batch.push_work_focus_unchecked_tcb(state_version, event)?;
+        batch.commit()?;
+        Ok(record)
+    }
+
     /// Append one structurally validated C5.2 episode route. Candidate
     /// validation and gate admission remain kernel-owned; this boundary enforces
     /// exact ledger, release, phase, generation, and event-shape continuity.
@@ -1444,6 +1523,11 @@ pub enum WorkflowGovernanceLedgerError {
         line: Option<usize>,
         reason: &'static str,
     },
+    WorkFocusRequiresDedicatedAuthority,
+    WorkFocusInvalid {
+        line: Option<usize>,
+        reason: &'static str,
+    },
     InvalidBrokerActionBinding {
         reason: &'static str,
     },
@@ -1606,6 +1690,15 @@ impl fmt::Display for WorkflowGovernanceLedgerError {
             Self::CooperativeEvidenceInvalid { line, reason } => write!(
                 formatter,
                 "cooperative evidence{} is invalid: {reason}",
+                line.map_or_else(String::new, |value| format!(" at ledger line {value}")),
+            ),
+            Self::WorkFocusRequiresDedicatedAuthority => write!(
+                formatter,
+                "work_focus_recorded requires the dedicated continuity TCB API"
+            ),
+            Self::WorkFocusInvalid { line, reason } => write!(
+                formatter,
+                "Work Focus{} is invalid: {reason}",
                 line.map_or_else(String::new, |value| format!(" at ledger line {value}")),
             ),
             Self::InvalidBrokerActionBinding { reason } => {
@@ -1928,6 +2021,7 @@ fn recover_from_reader(
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -1974,6 +2068,7 @@ fn recover_from_reader(
         );
         let is_prior_cooperative_evidence =
             event_contains_prior_cooperative_evidence(&record.event);
+        let is_work_focus = matches!(&record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_));
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -2002,9 +2097,9 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_prior_cooperative_evidence
-            || identity_state.prior_cooperative_evidence_seen
-        {
+        let expected_schema = if is_work_focus || identity_state.work_focus_seen {
+            WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
+        } else if is_prior_cooperative_evidence || identity_state.prior_cooperative_evidence_seen {
             WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
         } else if is_legacy_solo_adoption || identity_state.legacy_solo_adoption_seen {
             WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION
@@ -2133,9 +2228,12 @@ struct RecoveredIdentityState {
     cooperative_objective_revision_seen: bool,
     cooperative_evidence_seen: bool,
     prior_cooperative_evidence_seen: bool,
+    work_focus_seen: bool,
     latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     latest_cooperative_objective_record_digest: Option<String>,
     latest_cooperative_objective_record_sequence: Option<u64>,
+    latest_work_focus: Option<WorkflowWorkFocusRecordedEvent>,
+    latest_work_focus_record_digest: Option<String>,
     cooperative_offer_by_id: BTreeMap<String, String>,
     current_phase: Option<StableId>,
     last_post_build_verify_episode_by_id: BTreeMap<String, (u64, String)>,
@@ -2342,6 +2440,9 @@ fn validate_recovered_semantics(
         }
         validate_cooperative_evidence_shape(event, Some(line))?;
     }
+    if let WorkflowGovernanceEvent::WorkFocusRecorded(event) = &record.event {
+        validate_recovered_work_focus_event(record, line, identity, event)?;
+    }
     if matches!(
         &record.event,
         WorkflowGovernanceEvent::HumanIntentRevisionAccepted(_)
@@ -2360,6 +2461,11 @@ fn validate_recovered_semantics(
         WorkflowGovernanceEvent::CooperativeEvidenceObserved(_)
     ) {
         identity.cooperative_evidence_seen = true;
+    }
+    if let WorkflowGovernanceEvent::WorkFocusRecorded(event) = &record.event {
+        identity.work_focus_seen = true;
+        identity.latest_work_focus = Some(event.clone());
+        identity.latest_work_focus_record_digest = Some(record.record_digest.clone());
     }
     identity.prior_cooperative_evidence_seen |=
         event_contains_prior_cooperative_evidence(&record.event);
@@ -2793,7 +2899,11 @@ fn ledger_wire_schema(
     projection: &WorkflowGovernanceLedgerProjection,
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
-    if event_contains_prior_cooperative_evidence(event)
+    if matches!(event, WorkflowGovernanceEvent::WorkFocusRecorded(_))
+        || projection.contains_work_focus()
+    {
+        WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
+    } else if event_contains_prior_cooperative_evidence(event)
         || projection.contains_prior_cooperative_evidence()
     {
         WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
@@ -3902,6 +4012,277 @@ fn validate_record_fields(
     }
     if let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = &record.event {
         validate_cooperative_evidence_shape(event, line)?;
+    }
+    if let WorkflowGovernanceEvent::WorkFocusRecorded(event) = &record.event {
+        validate_work_focus_shape(event, line)?;
+    }
+    Ok(())
+}
+
+fn validate_work_focus_event(
+    projection: &WorkflowGovernanceLedgerProjection,
+    state_version: u64,
+    event: &WorkflowWorkFocusRecordedEvent,
+    line: usize,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    validate_work_focus_shape(event, Some(line))?;
+    if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus requires the solo_cooperative readiness profile",
+        });
+    }
+    let Some((objective_record, objective)) = projection.records.iter().rev().find_map(|record| {
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
+            return None;
+        };
+        Some((record, event))
+    }) else {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus requires an accepted cooperative objective",
+        });
+    };
+    if projection.head_digest.as_deref() != Some(event.admission_ledger_head_digest.as_str())
+        || projection.current_state_version() != Some(event.admission_state_version)
+        || state_version != event.admission_state_version
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus admission coordinates are stale",
+        });
+    }
+    validate_work_focus_current_bindings(
+        event,
+        objective,
+        &objective_record.record_digest,
+        objective_record.sequence,
+        projection_current_phase(projection).as_ref(),
+        projection
+            .latest_work_focus_record()
+            .map(|(record, event)| (record.record_digest.as_str(), event)),
+        Some(line),
+    )
+}
+
+fn validate_recovered_work_focus_event(
+    record: &WorkflowGovernanceLedgerRecord,
+    line: usize,
+    identity: &RecoveredIdentityState,
+    event: &WorkflowWorkFocusRecordedEvent,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    if identity.readiness_profile != Some(WorkflowReadinessProfile::SoloCooperative) {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus requires the solo_cooperative readiness profile",
+        });
+    }
+    let Some(objective) = identity.latest_cooperative_objective.as_ref() else {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus requires an accepted cooperative objective",
+        });
+    };
+    if record.previous_record_digest.as_deref() != Some(event.admission_ledger_head_digest.as_str())
+        || record.state_version != event.admission_state_version
+        || record.recorded_at_unix != event.recorded_at_unix
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line: Some(line),
+            reason: "Work Focus admission coordinates do not match its ledger record",
+        });
+    }
+    validate_work_focus_current_bindings(
+        event,
+        objective,
+        identity
+            .latest_cooperative_objective_record_digest
+            .as_deref()
+            .unwrap_or_default(),
+        identity
+            .latest_cooperative_objective_record_sequence
+            .unwrap_or_default(),
+        identity.current_phase.as_ref(),
+        identity.latest_work_focus.as_ref().map(|previous| {
+            (
+                identity
+                    .latest_work_focus_record_digest
+                    .as_deref()
+                    .unwrap_or_default(),
+                previous,
+            )
+        }),
+        Some(line),
+    )
+}
+
+fn validate_work_focus_current_bindings(
+    event: &WorkflowWorkFocusRecordedEvent,
+    objective: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
+    objective_record_digest: &str,
+    objective_record_sequence: u64,
+    current_phase: Option<&StableId>,
+    previous: Option<(&str, &WorkflowWorkFocusRecordedEvent)>,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    if event.objective.objective_id != objective.objective_id
+        || event.objective.objective_revision != objective.revision
+        || event.objective.objective_digest != objective.objective_digest
+        || event.objective.assurance_epoch != objective.assurance_epoch
+        || event.objective.accepted_objective_record_digest != objective_record_digest
+        || event.objective.accepted_objective_record_sequence != objective_record_sequence
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus is not bound to the latest accepted objective",
+        });
+    }
+    let expected_phase = event.phase.to_string();
+    if current_phase.map(|phase| phase.0.as_str()) != Some(expected_phase.as_str()) {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus phase does not match the recovered current phase",
+        });
+    }
+    match previous {
+        None => {
+            if event.previous_work_focus_record_digest.is_some()
+                || event.state != WorkflowWorkFocusState::Active
+            {
+                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                    line,
+                    reason: "the first Work Focus must be active and have no predecessor",
+                });
+            }
+        }
+        Some((previous_record_digest, previous_event)) => {
+            if event.previous_work_focus_record_digest.as_deref() != Some(previous_record_digest) {
+                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                    line,
+                    reason: "Work Focus predecessor does not match the latest focus record",
+                });
+            }
+            let previous_is_terminal = matches!(
+                previous_event.state,
+                WorkflowWorkFocusState::Completed | WorkflowWorkFocusState::Abandoned
+            );
+            if (previous_is_terminal || event.focus_id != previous_event.focus_id)
+                && (event.focus_id == previous_event.focus_id
+                    || event.state != WorkflowWorkFocusState::Active)
+            {
+                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                    line,
+                    reason:
+                        "a terminal or superseded Work Focus must continue as a new active focus",
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_work_focus_shape(
+    event: &WorkflowWorkFocusRecordedEvent,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    let bounded_nonblank = |value: &str| {
+        !value.trim().is_empty() && value.as_bytes().len() <= MAX_WORK_FOCUS_TEXT_BYTES
+    };
+    if !bounded_nonblank(&event.focus_id.0)
+        || !bounded_nonblank(&event.title)
+        || !bounded_nonblank(&event.intended_outcome)
+        || !bounded_nonblank(&event.acceptance_summary)
+        || !bounded_nonblank(&event.current_activity)
+        || !bounded_nonblank(&event.next_step)
+        || !bounded_nonblank(&event.recorded_by.0)
+        || event.recorded_at_unix == 0
+        || event.host_provenance.observed_at_unix == 0
+        || event.host_provenance.observed_at_unix > event.recorded_at_unix
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus required text and ordered clocks must satisfy their bounds",
+        });
+    }
+    if event.non_goals.len() > MAX_WORK_FOCUS_LIST_ITEMS
+        || event.canonical_refs.len() > MAX_WORK_FOCUS_LIST_ITEMS
+        || event.affected_area_refs.len() > MAX_WORK_FOCUS_LIST_ITEMS
+        || event.non_goals.iter().any(|value| !bounded_nonblank(value))
+        || event.canonical_refs.iter().any(|value| {
+            !bounded_nonblank(&value.0) || !cooperative_source_basis_path_is_normalized(&value.0)
+        })
+        || event.affected_area_refs.iter().any(|value| {
+            !bounded_nonblank(&value.0) || !cooperative_source_basis_path_is_normalized(&value.0)
+        })
+        || event
+            .external_work_item_ref
+            .as_deref()
+            .is_some_and(|value| !bounded_nonblank(value))
+        || event
+            .selected_practice_ref
+            .as_ref()
+            .is_some_and(|value| !bounded_nonblank(&value.0))
+        || event
+            .selected_practice_reason
+            .as_deref()
+            .is_some_and(|value| !bounded_nonblank(value))
+        || event.selected_practice_ref.is_some() != event.selected_practice_reason.is_some()
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus lists or optional references exceed their bounds",
+        });
+    }
+    for digest in [
+        event.objective.objective_digest.as_str(),
+        event.objective.accepted_objective_record_digest.as_str(),
+        event.admission_ledger_head_digest.as_str(),
+        event.host_provenance.conversation_digest.as_str(),
+    ] {
+        if !is_lower_sha256(digest) {
+            return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                line,
+                reason: "Work Focus contains a non-canonical digest",
+            });
+        }
+    }
+    if event
+        .previous_work_focus_record_digest
+        .as_deref()
+        .is_some_and(|digest| !is_lower_sha256(digest))
+        || event.objective.objective_revision == 0
+        || event.objective.accepted_objective_record_sequence == 0
+        || event.objective.assurance_epoch == 0
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus revision, sequence, epoch, state, or predecessor is invalid",
+        });
+    }
+    for value in [
+        event.objective.objective_id.0.as_str(),
+        event.host_provenance.host_id.0.as_str(),
+        event.host_provenance.host_version.as_str(),
+        event.host_provenance.session_ref.as_str(),
+        event.host_provenance.interaction_ref.as_str(),
+    ] {
+        if !bounded_nonblank(value) {
+            return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                line,
+                reason: "Work Focus identity or host provenance exceeds its bound",
+            });
+        }
+    }
+    let encoded = to_canonical_json(event).map_err(|error| {
+        WorkflowGovernanceLedgerError::Canonicalization {
+            source: error.to_string(),
+        }
+    })?;
+    if encoded.len() > MAX_WORK_FOCUS_EVENT_BYTES {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus event exceeds its total byte bound",
+        });
     }
     Ok(())
 }
@@ -5380,10 +5761,11 @@ mod replacement_protocol_tests {
     use super::*;
     use forge_core_contracts::{
         CooperativeObjectiveAcceptedEvent, HumanIntentRevisionAcceptedEvent, PhaseAdvancedEvent,
-        PrincipalId, ProjectImportedEvent, SignalChangedEvent, WorkflowCooperativeHostProvenance,
-        WorkflowCooperativeObjectiveProposal, WorkflowGovernanceSignal,
-        WorkflowHumanIntentRevision, WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof,
-        WorkflowReleaseRegistryProvenance,
+        PrincipalId, ProjectImportedEvent, RepoPath, SignalChangedEvent,
+        WorkflowCooperativeHostProvenance, WorkflowCooperativeObjectiveProposal,
+        WorkflowCurrentWorkAuthority, WorkflowGovernanceSignal, WorkflowHumanIntentRevision,
+        WorkflowReceiptCarryover, WorkflowReleaseAdmissionProof, WorkflowReleaseRegistryProvenance,
+        WorkflowWorkFocusObjectiveBinding,
     };
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -6240,6 +6622,17 @@ mod replacement_protocol_tests {
         WorkflowGovernanceLedgerRecord,
         Vec<u8>,
     ) {
+        initialize_solo_profile_at(root, StableId("discover".to_owned()))
+    }
+
+    fn initialize_solo_profile_at(
+        root: &Path,
+        initial_phase: StableId,
+    ) -> (
+        WorkflowGovernanceLedgerProjection,
+        WorkflowGovernanceLedgerRecord,
+        Vec<u8>,
+    ) {
         let mut ledger = lock_workflow_governance_ledger_tcb(root).expect("solo ledger");
         let genesis = ledger
             .initialize_unchecked_tcb(
@@ -6249,7 +6642,7 @@ mod replacement_protocol_tests {
                     source_ref: "project/state.yaml".to_owned(),
                     source_digest: sha256_digest(b"solo-source"),
                     snapshot_digest: sha256_digest(b"solo-snapshot"),
-                    initial_phase: StableId("discover".to_owned()),
+                    initial_phase,
                     readiness_profile: Some(WorkflowReadinessProfile::SoloCooperative),
                 }),
             )
@@ -6304,6 +6697,344 @@ mod replacement_protocol_tests {
         event.objective_digest =
             cooperative_objective_digest(&event).expect("canonical cooperative objective");
         event
+    }
+
+    fn work_focus_event(
+        projection: &WorkflowGovernanceLedgerProjection,
+        objective_record: &WorkflowGovernanceLedgerRecord,
+    ) -> WorkflowWorkFocusRecordedEvent {
+        let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(objective) =
+            &objective_record.event
+        else {
+            panic!("work focus fixture requires an objective record");
+        };
+        WorkflowWorkFocusRecordedEvent {
+            focus_id: StableId("focus.current-work-continuity".to_owned()),
+            objective: WorkflowWorkFocusObjectiveBinding {
+                objective_id: objective.objective_id.clone(),
+                objective_revision: objective.revision,
+                objective_digest: objective.objective_digest.clone(),
+                accepted_objective_record_digest: objective_record.record_digest.clone(),
+                accepted_objective_record_sequence: objective_record.sequence,
+                assurance_epoch: objective.assurance_epoch,
+            },
+            phase: Phase::Discovery,
+            state: WorkflowWorkFocusState::Active,
+            title: "Restore current work continuity".to_owned(),
+            intended_outcome: "A replacement agent can continue without chat history".to_owned(),
+            acceptance_summary: "The bounded focus is recoverable from the ledger".to_owned(),
+            non_goals: vec!["Do not classify every message".to_owned()],
+            canonical_refs: vec![RepoPath(
+                "contracts/spec/product-journey-guidance-v0.yaml".to_owned(),
+            )],
+            affected_area_refs: vec![RepoPath("crates/forge-core-contracts".to_owned())],
+            external_work_item_ref: Some("github:DanielCarva1/forge-method-core#32".to_owned()),
+            selected_practice_ref: Some(StableId("investigation".to_owned())),
+            selected_practice_reason: Some(
+                "Map the current state before changing the contract".to_owned(),
+            ),
+            current_activity: "Define the ledger contract".to_owned(),
+            next_step: "Project the focus through resume".to_owned(),
+            previous_work_focus_record_digest: None,
+            admission_ledger_head_digest: projection.head_digest.clone().expect("objective head"),
+            admission_state_version: projection.current_state_version().expect("objective state"),
+            recorded_by: PrincipalId("principal.same-owner".to_owned()),
+            host_provenance: WorkflowCooperativeHostProvenance {
+                host_id: StableId("host.tcb-test".to_owned()),
+                host_version: "0.12.0-test".to_owned(),
+                session_ref: "session.work-focus".to_owned(),
+                interaction_ref: "interaction.work-focus".to_owned(),
+                conversation_digest: sha256_digest(b"work-focus-conversation"),
+                observed_at_unix: 110,
+            },
+            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+            recorded_at_unix: 110,
+        }
+    }
+
+    #[test]
+    fn work_focus_advances_to_0_15_and_recovers_without_rewriting_history() {
+        let root = test_root("work-focus-wire");
+        let (projection, genesis, _) =
+            initialize_solo_profile_at(&root, StableId("1-discovery".to_owned()));
+        let objective = cooperative_objective_event(
+            &genesis.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        let objective_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("objective ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &genesis.record_digest,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                objective,
+            )
+            .expect("accept objective");
+        let historical =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("historical WAL");
+        let projection = recover_under_lock(&root).expect("recover objective");
+        let event = work_focus_event(&projection, &objective_record);
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("generic event ledger")
+                .append_unchecked_tcb_event(
+                    projection.head_digest.as_deref().expect("objective head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("objective state"),
+                    WorkflowGovernanceEvent::WorkFocusRecorded(event.clone()),
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusRequiresDedicatedAuthority)
+        ));
+        let focus_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                event,
+            )
+            .expect("record focus");
+
+        let complete =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("0.15 WAL");
+        assert_eq!(&complete[..historical.len()], historical.as_slice());
+        let last = complete
+            .split_inclusive(|byte| *byte == b'\n')
+            .last()
+            .expect("0.15 record");
+        assert_eq!(
+            schema_from_line(last),
+            WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
+        );
+        let recovered = recover_under_lock(&root).expect("recover 0.15");
+        assert_eq!(recovered.head_digest, Some(focus_record.record_digest));
+
+        let downgraded = String::from_utf8(last.to_vec())
+            .expect("0.15 UTF-8")
+            .replacen(
+                &format!(
+                "\"schema_version\":\"{WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION}\""
+            ),
+                &format!(
+                "\"schema_version\":\"{WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION}\""
+            ),
+                1,
+            );
+        let mut downgraded_wal = historical;
+        downgraded_wal.extend_from_slice(downgraded.as_bytes());
+        fs::write(
+            root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH),
+            downgraded_wal,
+        )
+        .expect("install downgraded focus");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn work_focus_rejects_stale_conflicting_and_oversized_updates() {
+        let root = test_root("work-focus-conflicts");
+        let (projection, genesis, _) =
+            initialize_solo_profile_at(&root, StableId("1-discovery".to_owned()));
+        let objective = cooperative_objective_event(
+            &genesis.record_digest,
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        let initial_objective_digest = objective.objective_digest.clone();
+        let objective_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("objective ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &genesis.record_digest,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                objective,
+            )
+            .expect("accept objective");
+        let projection = recover_under_lock(&root).expect("recover objective");
+        let mut wrong_phase = work_focus_event(&projection, &objective_record);
+        wrong_phase.phase = Phase::Specification;
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("wrong phase ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection.head_digest.as_deref().expect("objective head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("objective state"),
+                    wrong_phase,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+        let mut oversized = work_focus_event(&projection, &objective_record);
+        oversized.title = "x".repeat(MAX_WORK_FOCUS_TEXT_BYTES + 1);
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("oversized ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection.head_digest.as_deref().expect("objective head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("objective state"),
+                    oversized,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+
+        let mut oversized_total = work_focus_event(&projection, &objective_record);
+        oversized_total.non_goals = (0..MAX_WORK_FOCUS_LIST_ITEMS)
+            .map(|index| format!("{index:02}{}", "x".repeat(MAX_WORK_FOCUS_TEXT_BYTES - 2)))
+            .collect();
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("total-bound ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection.head_digest.as_deref().expect("objective head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("objective state"),
+                    oversized_total,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+
+        let first = work_focus_event(&projection, &objective_record);
+        let first_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("first focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                first,
+            )
+            .expect("first focus");
+        let projection = recover_under_lock(&root).expect("recover first focus");
+        let mut update = work_focus_event(&projection, &objective_record);
+        update.previous_work_focus_record_digest = Some(sha256_digest(b"wrong predecessor"));
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("conflict ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection.head_digest.as_deref().expect("focus head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("focus state"),
+                    update,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+
+        let mut stale_cas = work_focus_event(&projection, &objective_record);
+        stale_cas.previous_work_focus_record_digest = Some(first_record.record_digest.clone());
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("stale CAS ledger")
+                .record_work_focus_unchecked_tcb(
+                    &genesis.record_digest,
+                    &test_identity(),
+                    projection.current_state_version().expect("focus state"),
+                    stale_cas,
+                ),
+            Err(WorkflowGovernanceLedgerError::HeadMismatch { .. })
+        ));
+
+        let mut revision = cooperative_objective_event(
+            projection.head_digest.as_deref().expect("focus head"),
+            "objective.workflow.project-protocol-test".to_owned(),
+            "principal.same-owner".to_owned(),
+            111,
+            112,
+        );
+        revision.revision = 2;
+        revision.assurance_epoch = 2;
+        revision.proposal.outcome = "Dogfood Forge with durable current work continuity".to_owned();
+        revision.previous_objective_digest = Some(initial_objective_digest);
+        revision.revision_kind = WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession;
+        revision.revision_reason = Some("The accepted product objective changed".to_owned());
+        revision.objective_digest =
+            cooperative_objective_digest(&revision).expect("revised objective digest");
+        revision.revision_input_digest = Some(
+            cooperative_revision_input_digest(
+                &WorkflowCooperativeObjectiveInput::MaterialSupersession {
+                    proposal: revision.proposal.clone(),
+                    supersession_reason: revision.revision_reason.clone().expect("revision reason"),
+                    carrying_principal: revision.carrying_principal.clone(),
+                    host_provenance: revision.host_provenance.clone(),
+                },
+            )
+            .expect("revision input digest"),
+        );
+        let revision_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("revision ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                projection.head_digest.as_deref().expect("focus head"),
+                &test_identity(),
+                projection.current_state_version().expect("focus state"),
+                revision,
+            )
+            .expect("accept objective revision");
+        let revised = recover_under_lock(&root).expect("recover revised objective");
+        let stale_objective_focus = work_focus_event(&revised, &objective_record);
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("stale objective ledger")
+                .record_work_focus_unchecked_tcb(
+                    revised.head_digest.as_deref().expect("revised head"),
+                    &test_identity(),
+                    revised.current_state_version().expect("revised state"),
+                    stale_objective_focus,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+
+        let mut superseding = work_focus_event(&revised, &revision_record);
+        superseding.focus_id = StableId("focus.current-work-projection".to_owned());
+        superseding.previous_work_focus_record_digest = Some(first_record.record_digest);
+        let superseding_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("superseding focus ledger")
+            .record_work_focus_unchecked_tcb(
+                revised.head_digest.as_deref().expect("revised head"),
+                &test_identity(),
+                revised.current_state_version().expect("revised state"),
+                superseding,
+            )
+            .expect("explicitly supersede stale focus");
+
+        let projection = recover_under_lock(&root).expect("recover superseding focus");
+        let mut completed = work_focus_event(&projection, &revision_record);
+        completed.focus_id = StableId("focus.current-work-projection".to_owned());
+        completed.state = WorkflowWorkFocusState::Completed;
+        completed.previous_work_focus_record_digest = Some(superseding_record.record_digest);
+        let completed_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("completed focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("superseding head"),
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("superseding state"),
+                completed,
+            )
+            .expect("complete focus");
+
+        let projection = recover_under_lock(&root).expect("recover completed focus");
+        let mut restarted = work_focus_event(&projection, &revision_record);
+        restarted.focus_id = StableId("focus.next-deliverable".to_owned());
+        restarted.previous_work_focus_record_digest = Some(completed_record.record_digest);
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("restart focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("completed head"),
+                &test_identity(),
+                projection.current_state_version().expect("completed state"),
+                restarted,
+            )
+            .expect("start a new focus after terminal state");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub mod checkpoint;
 pub mod completion;
 pub mod cooperative_evidence;
 pub mod coordination_eval;
+pub mod current_work;
 pub mod decision;
 pub mod domain_pack;
 pub mod domain_pack_acquisition;
@@ -209,6 +210,7 @@ pub use tool_effect::{ToolEffectContract, ToolEffectContractDocument};
 pub use verification_goal::{VerificationGoalContract, VerificationGoalContractDocument};
 
 pub use catalog::{Catalog, CatalogDocument, CatalogEntry};
+pub use current_work::*;
 pub use envelope::{CliEnvelope, CliError, ExitReason, ENVELOPE_SCHEMA_VERSION};
 pub use guide_decision::{GuideDecision, GuideDecisionDocument};
 pub use guide_protocol::{GuideProtocol, GuideProtocolDocument, GUIDE_PROTOCOL_SCHEMA_VERSION};
@@ -262,6 +264,7 @@ pub use workflow_governance::{
     MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION, WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,

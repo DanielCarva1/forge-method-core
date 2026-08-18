@@ -92,6 +92,13 @@ as product drift rather than asking the solo developer to provision them.
   through Product Planning, Solution Definition, Implementation, and Validation
   and Delivery. Every greenfield, brownfield, or material-change cycle follows
   this path with proportional depth.
+- **Work Focus**: the currently accepted, bounded piece of work inside the active
+  objective. It can point to an external issue, but the issue tracker is not
+  Forge authority.
+- **Current Work Context**: a compact read-only view composed from durable Forge
+  state. It tells a host agent what is being pursued, where the work is, what was
+  agreed, what blocks progress, and what should happen next without replaying the
+  full history.
 - **Quick Cycle**: the compact form of the Product Lifecycle for clear, bounded,
   reversible work. It visits every lifecycle stage in one small durable record
   instead of silently skipping stages or creating a document for each one.

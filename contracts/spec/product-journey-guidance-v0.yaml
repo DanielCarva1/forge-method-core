@@ -308,6 +308,174 @@ host_adapter_behavior:
     - "A host that receives workflow_resume_summary_v6 follows the v6 compatibility behavior and may use existing guide diagnostics as a temporary fallback."
     - "A host must not invent v7 fields or assume the installed catalog matches its skill text."
 
+current_work_continuity:
+  problem: >-
+    The current resume can recover the active objective, lifecycle stage,
+    governance policy, evidence, blockers, and available actions, but it cannot
+    identify the bounded piece of product work the human and host agent are
+    currently pursuing. A replacement agent must reconstruct that link from
+    chat memory, GitHub, files, or guesses.
+  historical_precedent:
+    old_behavior: >-
+      The pre-Rust host entry reran a route/context preflight, interpreted the
+      latest substantive human message, and carried active story, task,
+      checkpoint, and operation guidance.
+    useful_property: "continuation started from durable project truth instead of conversation memory"
+    rejected_restoration:
+      - "do not rerun a semantic classifier for every human message"
+      - "do not restore the monolithic Python runtime or its last-writer-wins state"
+      - "do not reuse the current preflight name, which now owns readiness and quality checks"
+      - "do not turn a work description into mutation or completion authority"
+  concepts:
+    work_focus: >-
+      The currently accepted, bounded piece of work inside the active objective.
+      It states the intended outcome and acceptance boundary and may reference an
+      external issue without making that tracker Forge authority.
+    current_work_context: >-
+      A compact read-only projection composed from the active objective, Phase,
+      active Work Focus, accepted practice, durable decisions, blockers,
+      evidence summaries, and ranked next action.
+  architecture:
+    module: "Current Work Continuity"
+    interface: >-
+      One bounded current_work summary in workflow resume plus one progressive
+      detail operation. The summary is enough to continue ordinary work; detail
+      resolves the accepted Work Focus and its references without replaying the
+      ledger or scanning project documentation.
+    seam: "workflow-governance durable continuity projected through workflow resume"
+    implementation: >-
+      Persist only accepted semantic changes as append-only Work Focus events.
+      Compose the readback from existing objective, phase, decisions, blockers,
+      evidence, and actions rather than copying those records into the Work
+      Focus. Keep semantic interpretation in the host agent and deterministic
+      binding, freshness, bounds, and authority validation in Forge.
+    adapters:
+      - "forge-core-cli workflow resume summary"
+      - "one CLI detail readback used only when the summary is insufficient"
+      - "start-forge host adapter"
+      - "future host adapters consuming the same contract"
+    locality: >-
+      Work-focus persistence and composition live with workflow continuity;
+      lifecycle wording stays in Product Journey Guidance, catalog choice stays
+      with the host agent, and execution authority stays in its existing kernel.
+  progressive_readback:
+    summary_fields:
+      - "status: absent, current, stale, blocked, or completed"
+      - "focus_ref and record_digest"
+      - "bounded title and intended outcome"
+      - "objective revision and Phase bindings"
+      - "optional external_work_item_ref"
+      - "optional selected_practice_ref"
+      - "bounded current_activity and next_step"
+      - "counts and references for open decisions, blockers, and evidence instead of copied bodies"
+      - "exact detail argv"
+    detail_fields:
+      - "acceptance summary and non-goals"
+      - "canonical product or specification references"
+      - "optional affected-area and external-work-item references"
+      - "accepted practice and reason"
+      - "durable decision, blocker, and evidence references"
+      - "supersession and freshness bindings"
+    bounds:
+      - "ordinary resume includes at most one active Work Focus"
+      - "summary contains no transcript, full issue body, full evidence, full decision history, or catalog body"
+      - "detail is bounded and uses references for larger canonical material"
+      - "absence is valid before a focus is accepted; the host asks one useful product question instead of inventing work"
+  update_triggers:
+    persist:
+      - "the human and host accept a new bounded focus inside the active objective"
+      - "the intended outcome, acceptance boundary, or non-goals materially change"
+      - "the lifecycle Phase changes and the old activity no longer describes the work"
+      - "an accepted practice changes"
+      - "a durable decision or blocker changes what should happen next"
+      - "the focus completes, is superseded, or is explicitly abandoned"
+      - "a replacement/context-recovery boundary needs an explicit continuation checkpoint"
+    do_not_persist:
+      - "ordinary conversation that does not change the accepted meaning"
+      - "raw brainstorm options, rejected facilitation ideas, or unused research"
+      - "read-only inspection whose result does not alter the focus or next step"
+      - "progress narration that is already observable from canonical evidence"
+    host_rule: >-
+      The host agent decides whether the latest message changes meaning. Forge
+      validates the proposed event against the current objective, Phase,
+      expected state, bounds, and allowed references; Forge does not classify
+      every message itself.
+  freshness_and_conflict:
+    - "a Work Focus is current only for its exact active objective revision and compatible Phase"
+    - "updates use expected-state comparison so two agents cannot silently overwrite the focus"
+    - "objective replacement makes the prior focus stale until explicitly carried forward or superseded"
+    - "a stale, missing, or conflicting focus is reported; it is never silently repaired from chat or filesystem guesses"
+  authority:
+    classification: "advisory_read_only"
+    rules:
+      - "Work Focus does not authorize file mutation, phase transition, evidence admission, completion, merge, publication, or release"
+      - "selected_practice_ref is guidance and cannot be confused with selected_policy_ref"
+      - "external_work_item_ref is a navigation link, not proof of issue state or human acceptance"
+      - "current_work next_step is advice composed from current state; exact governed actions remain separate"
+  reuse_and_non_owners:
+    reuse:
+      - "active cooperative objective and its revision"
+      - "canonical Phase and Product Journey Guidance"
+      - "durable decision and blocker records"
+      - "cooperative evidence summaries and ranked governed actions"
+      - "GuideDecision validation when a catalog practice is proposed"
+    do_not_use_as_owner:
+      - id: "OperationContract"
+        reason: "it carries execution authority and is much heavier than continuity readback"
+      - id: "CheckpointContract"
+        reason: "it models run rewind/resume anchors and is currently parse-only, not the normal product journey"
+      - id: "AgentRun.current_task"
+        reason: "it describes an agent run, not the user-facing product work shared across agents"
+      - id: "GitHub Issue"
+        reason: "Forge must remain host- and tracker-neutral; an issue may be referenced but not required"
+  acceptance_journeys:
+    - id: "same-agent-ordinary-message"
+      expected: "no durable write and no extra semantic preflight"
+    - id: "same-agent-material-correction"
+      expected: "the host proposes one bounded update; Forge rejects stale expected state and accepts an exact current update"
+    - id: "replacement-agent"
+      expected: "one start/resume explains the objective, stage, active focus, accepted practice, blockers, and next step without chat history"
+    - id: "external-issue"
+      expected: "the focus can reference a GitHub issue, local ticket, or no tracker while preserving identical Forge semantics"
+    - id: "objective-replaced"
+      expected: "the old focus becomes visibly stale and is not carried into the new objective by accident"
+    - id: "two-agents-conflict"
+      expected: "concurrent focus updates use exact expected state; one wins and the other receives a typed conflict"
+  performance_budget:
+    - "no filesystem documentation scan during start or resume"
+    - "no model call inside Forge core"
+    - "no semantic reroute on every message"
+    - "one bounded summary during ordinary resume; detail only on demand"
+    - "focused tests must measure payload bounds and prove that unchanged conversation causes no write"
+  delivery_slices:
+    - id: "PJ-005A"
+      name: "Current Work contract and ledger design"
+      done_when:
+        - "typed Work Focus event and Current Work readback shapes are bounded and deny unknown fields"
+        - "epoch, backward read compatibility, supersession, and expected-state rules are explicit"
+        - "no CLI behavior changes"
+    - id: "PJ-005B"
+      name: "Current Work projection in resume"
+      depends_on: ["PJ-005A"]
+      done_when:
+        - "resume composes one bounded summary from existing durable owners"
+        - "missing, current, stale, and conflicting states are distinguished"
+        - "the public resume schema and exact consumers advance together"
+    - id: "PJ-005C"
+      name: "Event-driven focus update and progressive detail"
+      depends_on: ["PJ-005B"]
+      done_when:
+        - "the host can propose an accepted semantic update with exact expected state"
+        - "ordinary unchanged conversation requires no update"
+        - "one detail command resolves the bounded focus and references"
+    - id: "PJ-005D"
+      name: "Replacement-agent dogfood journey"
+      depends_on: ["PJ-005C"]
+      done_when:
+        - "an isolated replacement agent continues Forge's own active issue without chat history"
+        - "the journey proves no every-message preflight and no project documentation scan"
+        - "focused timings and payload sizes stay within the accepted budgets"
+
 first_vertical_slice:
   name: "Discovery guidance through normal resume"
   scope:
@@ -397,10 +565,14 @@ implementation_slices:
       - "v6 compatibility stays honest"
       - "the four acceptance journeys have focused evidence"
   - id: "PJ-005"
-    name: "Durable selected-practice continuity"
+    name: "Current Work Continuity"
     depends_on: ["PJ-004"]
     deferred_from_first_slice: true
-    objective: "let a replacement agent recover which practice is active without turning the choice into authority"
+    objective: >-
+      let a replacement agent recover the bounded work in progress, including
+      an accepted practice when present, without replaying chat or turning
+      continuity into authority
+    split_into: ["PJ-005A", "PJ-005B", "PJ-005C", "PJ-005D"]
   - id: "PJ-006"
     name: "Evolve reentry"
     depends_on: ["PJ-004"]
@@ -445,10 +617,6 @@ open_decisions_before_implementation:
     question: "Should guide detail use the installed embedded catalog unconditionally, or preserve the current explicit local --catalog-dir developer override?"
     recommendation: "preserve the explicit developer override while defaulting to the embedded installed catalog"
     blocking: false
-  - id: "OD-003"
-    question: "Should durable selected-practice continuity extend GuideDecision or use a smaller advisory selection record?"
-    blocking: false
-    deferred_to: "PJ-005"
   - id: "OD-004"
     question: "Which admitted transition implements Evolve reentry without weakening ReadyOperate and release gates?"
     blocking: false
@@ -457,6 +625,14 @@ open_decisions_before_implementation:
     question: "Which existing append-only record should own Quick Cycle closeouts and expansion history without creating a second project-state authority?"
     blocking: false
     deferred_to: "a focused persistence design after the read-only guidance slice"
+  - id: "OD-006"
+    question: "Which workflow-governance wire epoch carries Work Focus events while preserving read compatibility with ledgers that predate them?"
+    blocking: true
+    deferred_to: "PJ-005A"
+  - id: "OD-007"
+    question: "Which exact payload-size limits are safe for Current Work summary and detail across supported Windows and Linux project roots?"
+    blocking: true
+    deferred_to: "PJ-005A"
 
 resolved_product_decisions:
   - id: "PD-001"
@@ -474,6 +650,14 @@ resolved_product_decisions:
       record instead of skipping stages. Concrete uncertainty, impact, risk, or
       review evidence expands only the affected stage by default, and failures
       return to the stage where the misunderstanding originated.
+  - id: "PD-003"
+    accepted_at: "2026-08-16"
+    decision: >-
+      Continuity is restored as an event-driven Current Work Context, not as a
+      semantic preflight on every message. Forge persists only accepted changes
+      to a bounded Work Focus, composes existing durable state into a progressive
+      readback, and leaves interpretation to the host agent. Selected practice
+      is one optional part of that context, never authority.
 
 acceptance_boundary: >-
   This draft specifies the intended product interface and implementation

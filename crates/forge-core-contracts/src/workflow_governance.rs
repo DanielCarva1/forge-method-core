@@ -86,6 +86,10 @@ pub const WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION: &str =
 /// Ledger records written after a source assessment first cites current prior
 /// Solo Cooperative evidence. Frozen `0.12` and `0.13` history remains readable.
 pub const WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION: &str = "0.14";
+/// Ledger records written from the first accepted Work Focus snapshot.
+/// Frozen `0.1` through `0.14` histories remain readable; the new event and
+/// every successor record require `0.15` so older readers fail closed.
+pub const WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION: &str = "0.15";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs
@@ -434,6 +438,7 @@ pub enum WorkflowGovernanceEvent {
     HumanIntentRevisionAccepted(HumanIntentRevisionAcceptedEvent),
     CooperativeObjectiveAccepted(CooperativeObjectiveAcceptedEvent),
     CooperativeEvidenceObserved(WorkflowCooperativeEvidenceObservedEvent),
+    WorkFocusRecorded(crate::current_work::WorkflowWorkFocusRecordedEvent),
     ReleaseUpgraded(ReleaseUpgradedEvent),
     DomainPackGenerationTransitioned(DomainPackGenerationTransitionedEvent),
     CoreDomainPackRebased(Box<CoreDomainPackRebasedEvent>),
