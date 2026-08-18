@@ -8,8 +8,10 @@ pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
 pub const MAX_WORK_FOCUS_LIST_ITEMS: usize = 16;
 pub const MAX_WORK_FOCUS_EVENT_BYTES: usize = 16 * 1_024;
 pub const MAX_CURRENT_WORK_SUMMARY_BYTES: usize = 8 * 1_024;
-pub const MAX_CURRENT_WORK_DETAIL_BYTES: usize = 16 * 1_024;
+pub const MAX_CURRENT_WORK_DETAIL_BYTES: usize = 20 * 1_024;
 pub const MAX_CURRENT_WORK_REFERENCE_ITEMS: usize = 16;
+pub const MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS: usize = 4;
+pub const MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES: usize = 256;
 pub const MAX_CURRENT_WORK_ARGV_ITEMS: usize = 16;
 pub const MAX_CURRENT_WORK_ARG_BYTES: usize = 1_024;
 
@@ -81,7 +83,6 @@ pub enum WorkflowCurrentWorkStatus {
     Absent,
     Current,
     Stale,
-    Conflicting,
     Blocked,
     Completed,
     Abandoned,
@@ -205,10 +206,7 @@ impl WorkflowCurrentWorkDetail {
         if self.schema_version != CURRENT_WORK_DETAIL_SCHEMA_VERSION {
             return Err(WorkflowCurrentWorkValidationError::WrongSchema);
         }
-        if matches!(
-            self.status,
-            WorkflowCurrentWorkStatus::Absent | WorkflowCurrentWorkStatus::Conflicting
-        ) {
+        if self.status == WorkflowCurrentWorkStatus::Absent {
             return Err(WorkflowCurrentWorkValidationError::StatusFocusMismatch);
         }
         let state_matches = match self.status {
@@ -224,7 +222,7 @@ impl WorkflowCurrentWorkDetail {
             // Stale describes the binding to current project state, independently
             // of the last recorded lifecycle state of that focus.
             WorkflowCurrentWorkStatus::Stale => true,
-            WorkflowCurrentWorkStatus::Absent | WorkflowCurrentWorkStatus::Conflicting => false,
+            WorkflowCurrentWorkStatus::Absent => false,
         };
         if !state_matches {
             return Err(WorkflowCurrentWorkValidationError::StatusFocusMismatch);
@@ -292,7 +290,9 @@ fn validate_detail_focus(
     validate_objective(&focus.objective)?;
     validate_digest(&focus.record_digest)?;
     validate_digest(&focus.admission_ledger_head_digest)?;
-    if focus.admission_state_version == 0 || focus.recorded_at_unix == 0 {
+    // State version zero is the valid first append coordinate. Time zero is
+    // not a valid accepted observation.
+    if focus.recorded_at_unix == 0 {
         return Err(WorkflowCurrentWorkValidationError::FieldBound);
     }
     if let Some(digest) = focus.previous_work_focus_record_digest.as_deref() {

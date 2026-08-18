@@ -19,7 +19,7 @@ use forge_core_contracts::{
     WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
-    WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
+    WorkflowCurrentWorkContext, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
 };
 use forge_core_decisions::{
     derive_product_journey_guidance, load_accepted_product_journey, load_embedded_catalog,
@@ -63,7 +63,7 @@ struct WorkflowCliArgs {
 /// Panics only if a repository-owned typed workflow response unexpectedly
 /// fails JSON serialization, which would violate its derived serde contract.
 pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
-    let normalized_profile_args;
+    let normalized_nested_args;
     let args = if args.get(1).is_some_and(|value| value == "profile") {
         let Some(action) = args.get(2) else {
             return emit_failure(
@@ -73,11 +73,25 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
                 wants_json(args),
             );
         };
-        normalized_profile_args = std::iter::once("workflow".to_owned())
+        normalized_nested_args = std::iter::once("workflow".to_owned())
             .chain(std::iter::once(format!("profile-{action}")))
             .chain(args.iter().skip(3).cloned())
             .collect::<Vec<_>>();
-        normalized_profile_args.as_slice()
+        normalized_nested_args.as_slice()
+    } else if args.get(1).is_some_and(|value| value == "current-work") {
+        let Some(action) = args.get(2) else {
+            return emit_failure(
+                "workflow.current_work",
+                ExitReason::InvalidDecisionShape,
+                "workflow current-work requires: detail".to_owned(),
+                wants_json(args),
+            );
+        };
+        normalized_nested_args = std::iter::once("workflow".to_owned())
+            .chain(std::iter::once(format!("current-work-{action}")))
+            .chain(args.iter().skip(3).cloned())
+            .collect::<Vec<_>>();
+        normalized_nested_args.as_slice()
     } else {
         args
     };
@@ -234,6 +248,23 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             ),
         };
     }
+    if parsed.subcommand == "current-work-detail" {
+        return match adapter.current_work_detail() {
+            Ok(value) => emit_envelope(
+                CliEnvelope::ok(
+                    &command,
+                    serde_json::to_value(value).expect("serializable Current Work detail"),
+                ),
+                parsed.want_json,
+            ),
+            Err(error) => emit_failure(
+                &command,
+                classify_error(&error),
+                error.to_string(),
+                parsed.want_json,
+            ),
+        };
+    }
     let result = match parsed.subcommand.as_str() {
         "init" => adapter
             .initialize_with_readiness_profile(
@@ -304,7 +335,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v7";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v8";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -331,6 +362,7 @@ struct WorkflowResumeSummary<'a> {
     applicability: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     active_objective: Option<&'a WorkflowActiveCooperativeObjective>,
+    current_work: &'a WorkflowCurrentWorkContext,
     agent_autonomy: &'a WorkflowAgentAutonomyGuidance,
     current_evaluation: &'a WorkflowGovernanceSimulation,
     boundary_rechecks: &'a [WorkflowGovernanceBoundaryRecheck],
@@ -529,6 +561,12 @@ fn workflow_resume_summary<'a>(
     guidance: &'a WorkflowGovernanceGuidance,
     project_root: &std::path::Path,
 ) -> Result<WorkflowResumeSummary<'a>, String> {
+    let current_work = guidance.current_work.as_ref().ok_or_else(|| {
+        "kernel resume omitted the required bounded Current Work projection".to_owned()
+    })?;
+    current_work
+        .validate()
+        .map_err(|error| format!("kernel published invalid Current Work context: {error:?}"))?;
     let phase = Phase::parse(&guidance.current_phase).ok_or_else(|| {
         format!(
             "kernel published invalid workflow phase '{}'",
@@ -770,6 +808,7 @@ fn workflow_resume_summary<'a>(
         compatibility_workflow_id: &guidance.compatibility_workflow_id,
         applicability: guidance.applicability,
         active_objective: guidance.active_cooperative_objective.as_ref(),
+        current_work,
         agent_autonomy: &guidance.agent_autonomy,
         current_evaluation: &guidance.simulation,
         boundary_rechecks: &guidance.boundary_rechecks,
@@ -1286,7 +1325,11 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             requested_readiness_profile(args).map(|_| ())
         }
-        "action-packets" | "release-status" | "retirement-status" | "profile-status"
+        "action-packets"
+        | "release-status"
+        | "retirement-status"
+        | "profile-status"
+        | "current-work-detail"
             if !args.flags.is_empty() =>
         {
             Err(format!(
@@ -1511,6 +1554,26 @@ mod tests {
         let retired = parse_args(&argv(&["workflow", "resume", "--full"]))
             .expect_err("resume no longer exposes a second detail mode");
         assert_eq!(retired, "unrecognized workflow argument '--full'");
+    }
+
+    #[test]
+    fn current_work_detail_is_a_read_only_nested_command() {
+        let nested = argv(&[
+            "workflow",
+            "current-work",
+            "detail",
+            "--root",
+            "D:\\product",
+            "--json",
+        ]);
+        let normalized = std::iter::once("workflow".to_owned())
+            .chain(std::iter::once("current-work-detail".to_owned()))
+            .chain(nested.iter().skip(3).cloned())
+            .collect::<Vec<_>>();
+        let parsed = parse_args(&normalized).expect("Current Work detail arguments parse");
+        validate_release_args(&parsed).expect("Current Work detail remains read-only");
+        assert_eq!(parsed.subcommand, "current-work-detail");
+        assert_eq!(parsed.root, PathBuf::from("D:\\product"));
     }
 
     #[test]

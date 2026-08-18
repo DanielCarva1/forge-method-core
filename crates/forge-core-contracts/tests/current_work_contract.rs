@@ -169,6 +169,10 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
     );
     let mut zero_coordinates = detail.clone();
     zero_coordinates.focus.admission_state_version = 0;
+    zero_coordinates
+        .validate()
+        .expect("the first valid ledger state version is zero");
+    zero_coordinates.focus.recorded_at_unix = 0;
     assert_eq!(
         zero_coordinates.validate(),
         Err(WorkflowCurrentWorkValidationError::FieldBound)

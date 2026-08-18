@@ -129,7 +129,7 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow_resume_summary_v7` exposes an active
+Once `workflow_resume_summary_v8` exposes an active
 `agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
@@ -145,6 +145,14 @@ promoting, or publishing it remains governed by the existing evidence and
 effect boundaries. The only human decision classes are product-objective
 change, material trade-off, material risk acceptance, and
 irreversible/external effect.
+
+`data.current_work` is the bounded product-work checkpoint. Read it before
+reconstructing work from chat or scanning project documentation. `absent` means
+no Work Focus has been accepted; `stale` means its objective revision or Phase
+no longer matches. The field is advisory and cannot authorize mutation,
+completion, merge, publication, or release. When a present focus needs more
+context, execute its exact `detail_argv`; ordinary continuation should not load
+the larger detail projection.
 
 The host does not wait for the human to request research. When a doubt may
 change the accepted outcome, expose an unacceptable outcome, alter material
@@ -249,12 +257,13 @@ Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
 The current executable returns the concise, versioned
-`workflow_resume_summary_v7` activation view by default. V7 is the complete
+`workflow_resume_summary_v8` activation view by default. V8 is the complete
 current-state contract for the agent: it carries the current objective; the
 full autonomy projection; every current evaluation, blocker, warning, active
 isolation, recoverable promotion, cooperative evidence item, authorization
 packet, and exact gap. Counts identify only older audit history omitted from
-the activation view.
+the activation view. `current_work` adds only the bounded accepted work focus;
+it does not copy transcript, issue body, evidence body, or catalog content.
 
 V6 keeps `actions.recommended` as the explicit user-journey priority. A published
 Solo Cooperative evidence packet outranks abstract capability acquisition and
@@ -345,7 +354,7 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 For a `solo_cooperative` objective, agents use the one existing public command,
 `forge-core workflow evidence admit-cooperative`, with the closed packet from
-`workflow_resume_summary_v7.actions.cooperative_evidence_packet`. The offer is
+`workflow_resume_summary_v8.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
 claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this

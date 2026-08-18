@@ -112,7 +112,7 @@ GOVERNED_FILE_SHA256 = {
     "distribution/release-payload.txt": "55b9ae8e5de1c1df7dde0df5c6c11f7f09e232b670b90ac6b1fce0bb419ee666",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
-    "scripts/smoke-release-install.py": "abcf8c901953965751198fdfc9c0fec336a2beafcb61fc6cfb389d8068b36c01",
+    "scripts/smoke-release-install.py": "a11387b312281961cf53ff245a2951786b1f93102e3d1ef0cd4db7bda8d31b63",
     "scripts/build-release-set-manifest.py": "ca00140321cb565af9694b39729dc7fb3156140b41d4293d910bc5aff1196d83",
     "scripts/test-release-set-manifest.py": "466d73c1a2afafdaa240fbedf777969db58dcad0dd10b4d9ceeb7b0c3d975a7b",
     "distribution/forge": "6b151926a6b69e514d6542ff93974c1251f9a597a246ab49d8c04649f8a5f25b",

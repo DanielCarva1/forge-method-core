@@ -221,11 +221,10 @@ authority_split:
     - "selected_policy_ref remains a governance concern and must not be relabeled as the current product-development practice"
 
 resume_interface:
-  containing_schema: "workflow_resume_summary_v7"
+  containing_schema: "workflow_resume_summary_v8"
   migration: >-
-    Adding journey_guidance changes the public summary shape, so implementation
-    advances v6 to v7 and updates exact schema consumers. It must not silently
-    add the field while continuing to claim v6.
+    Journey guidance advanced v6 to v7. Current Work advances the containing
+    summary to v8 while preserving the journey_guidance_v1 field unchanged.
   field: "data.journey_guidance"
   value_schema: "product_journey_guidance_v1"
   required_shape:
@@ -404,7 +403,8 @@ current_work_continuity:
     - "a Work Focus is current only for its exact active objective revision and compatible Phase"
     - "updates use expected-state comparison so two agents cannot silently overwrite the focus"
     - "objective replacement makes the prior focus stale until explicitly carried forward or superseded"
-    - "a stale, missing, or conflicting focus is reported; it is never silently repaired from chat or filesystem guesses"
+    - "a stale or missing focus is reported; it is never silently repaired from chat or filesystem guesses"
+    - "a conflicting update is rejected before it becomes durable state and returns a typed conflict diagnostic"
   authority:
     classification: "advisory_read_only"
     rules:
@@ -459,15 +459,17 @@ current_work_continuity:
       depends_on: ["PJ-005A"]
       done_when:
         - "resume composes one bounded summary from existing durable owners"
-        - "missing, current, stale, and conflicting states are distinguished"
-        - "the public resume schema and exact consumers advance together"
+        - "absent, current, stale, completed, and abandoned states are projected without selected-policy influence"
+        - "blocked remains a closed contract state but is not emitted until PJ-005C binds exact blocker records to the accepted focus"
+        - "a present summary publishes one exact argv for bounded read-only detail on demand"
+        - "workflow_resume_summary_v8 and its exact consumers advance together"
     - id: "PJ-005C"
-      name: "Event-driven focus update and progressive detail"
+      name: "Event-driven focus update and reference diagnostics"
       depends_on: ["PJ-005B"]
       done_when:
         - "the host can propose an accepted semantic update with exact expected state"
         - "ordinary unchanged conversation requires no update"
-        - "one detail command resolves the bounded focus and references"
+        - "the existing detail readback resolves explicitly bound decision, blocker, and evidence references"
     - id: "PJ-005D"
       name: "Replacement-agent dogfood journey"
       depends_on: ["PJ-005C"]

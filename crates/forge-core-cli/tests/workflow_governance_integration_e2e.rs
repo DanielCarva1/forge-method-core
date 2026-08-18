@@ -987,9 +987,14 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v7"
+        "workflow_resume_summary_v8"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
+    assert_eq!(
+        summary["data"]["current_work"]["schema_version"],
+        "current_work_context_v1"
+    );
+    assert_eq!(summary["data"]["current_work"]["status"], "absent");
     assert_eq!(
         summary["data"]["forge_core_version"],
         env!("CARGO_PKG_VERSION")
@@ -2089,7 +2094,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v7"
+        "workflow_resume_summary_v8"
     );
     let selected_policy_evidence = resumed["data"]["selected_policy_evidence"]
         .as_array()

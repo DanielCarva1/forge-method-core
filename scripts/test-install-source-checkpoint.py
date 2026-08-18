@@ -14,7 +14,7 @@ import unittest
 
 
 SCRIPT = Path(__file__).with_name("install-source-checkpoint.py")
-VERSION = "0.12.0-alpha.18"
+VERSION = "0.12.0-alpha.19"
 
 
 def run(

@@ -102,7 +102,7 @@ class GuidedActivationContractTests(unittest.TestCase):
 
     def test_resume_refresh_is_bounded_by_real_state_changes(self) -> None:
         self.assert_contract_contains(
-            "reuse the same v7 response",
+            "reuse the same v8 response",
             "Never run two resume commands consecutively",
             "a successful operation that can change workflow evaluation must intervene",
             "Do not refresh after repository inspection, validation, tests, status, report, or help",
@@ -116,9 +116,9 @@ class GuidedActivationContractTests(unittest.TestCase):
             with self.subTest(integration=expected):
                 self.assertIn(expected, integration)
 
-    def test_v7_uses_progressive_product_journey_guidance(self) -> None:
+    def test_v8_uses_progressive_product_journey_and_current_work(self) -> None:
         self.assert_contract_contains(
-            "workflow_resume_summary_v7",
+            "workflow_resume_summary_v8",
             "data.journey_guidance",
             "contact_density",
             "Expansion Signal",
@@ -130,6 +130,10 @@ class GuidedActivationContractTests(unittest.TestCase):
             "catalog.detail_argv.argv",
             "Do not load every detail",
             "do not force research or a large document",
+            "data.current_work",
+            "absent",
+            "stale",
+            "read-only advice",
         )
 
     def test_solo_work_uses_concrete_executable_steps_before_human_escalation(self) -> None:

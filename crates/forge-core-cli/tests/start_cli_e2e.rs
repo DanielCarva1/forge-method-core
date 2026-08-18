@@ -439,9 +439,34 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         serde_json::from_slice(&resume_output.stdout).expect("parse resume envelope");
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v7"
+        "workflow_resume_summary_v8"
     );
     assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        resumed["data"]["current_work"]["schema_version"],
+        "current_work_context_v1"
+    );
+    assert_eq!(resumed["data"]["current_work"]["status"], "absent");
+    assert!(resumed["data"]["current_work"]["focus"].is_null());
+
+    // Exercise the public nested command and its canonical failure envelope,
+    // not only the in-process adapter. With no accepted focus, detail must be
+    // read-only and fail honestly instead of inventing work.
+    let detail_output = bin()
+        .args(["workflow", "current-work", "detail", "--root"])
+        .arg(&app)
+        .arg("--json")
+        .output()
+        .expect("run Current Work detail through the public binary");
+    assert!(!detail_output.status.success());
+    let detail: Value =
+        serde_json::from_slice(&detail_output.stdout).expect("parse Current Work detail envelope");
+    assert_eq!(detail["command"], "workflow.current_work_detail");
+    assert_eq!(detail["ok"], false);
+    assert_eq!(detail["exit_reason"], "rejected_by_gate");
+    assert!(detail["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("no accepted Work Focus")));
     assert_eq!(
         resumed["data"]["journey_guidance"]["schema_version"],
         "product_journey_guidance_v1"

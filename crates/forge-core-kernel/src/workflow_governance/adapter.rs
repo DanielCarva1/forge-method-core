@@ -88,6 +88,8 @@ use forge_core_contracts::{
     WorkflowCooperativeHostProvenance, WorkflowCooperativeMaterialScenarioKind,
     WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
     WorkflowCooperativePriorEvidenceCandidate, WorkflowCooperativePriorEvidenceReference,
+    WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
+    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
@@ -97,13 +99,15 @@ use forge_core_contracts::{
     WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
     WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
-    COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
+    WorkflowWorkFocusState, COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION,
     COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
-    COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION, MAX_REPRESENTATIVE_SLICE_ITEMS,
+    COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
+    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
+    MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
     MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES,
     MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_ITEMS,
@@ -3111,9 +3115,231 @@ impl WorkflowGovernanceProjectAdapter {
                     ),
                 );
             }
+            guidance.current_work = Some(self.current_work_context(
+                &guidance,
+                &projection,
+                &continuity,
+            )?);
             guidance.replacement_continuity = Some(continuity);
             Ok(guidance)
         })
+    }
+
+    /// Resolve bounded detail for the Work Focus published by `resume`.
+    /// The operation is read-only. `resume` performs the project snapshot
+    /// validation; this method then rechecks the smaller durable ledger head
+    /// before projecting detail, avoiding a second full project scan.
+    pub fn current_work_detail(
+        &self,
+    ) -> Result<WorkflowCurrentWorkDetail, WorkflowGovernanceAdapterError> {
+        let guidance = self.resume()?;
+        let context = guidance.current_work.as_ref().ok_or(
+            WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                "resume omitted the Current Work projection",
+            ),
+        )?;
+        let summary = context.focus.as_ref().ok_or(
+            WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                "no accepted Work Focus is available for detail",
+            ),
+        )?;
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        if projection.head_digest.as_deref() != Some(guidance.ledger_head_digest.as_str())
+            || projection.current_state_version() != Some(guidance.state_version)
+        {
+            return Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "durable workflow state changed before Current Work detail inspection",
+                ),
+            );
+        }
+        let (record, focus) = projection.latest_work_focus_record().ok_or(
+            WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                "the accepted Work Focus disappeared before detail inspection",
+            ),
+        )?;
+        if record.record_digest != summary.record_digest {
+            return Err(
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "Current Work detail no longer matches the resume summary",
+                ),
+            );
+        }
+        let detail = WorkflowCurrentWorkDetail {
+            schema_version: CURRENT_WORK_DETAIL_SCHEMA_VERSION.to_owned(),
+            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+            status: context.status,
+            focus: WorkflowCurrentWorkDetailFocus {
+                focus_id: focus.focus_id.clone(),
+                record_digest: record.record_digest.clone(),
+                objective: focus.objective.clone(),
+                phase: focus.phase,
+                state: focus.state,
+                title: focus.title.clone(),
+                intended_outcome: focus.intended_outcome.clone(),
+                acceptance_summary: focus.acceptance_summary.clone(),
+                non_goals: focus.non_goals.clone(),
+                canonical_refs: focus.canonical_refs.clone(),
+                affected_area_refs: focus.affected_area_refs.clone(),
+                external_work_item_ref: focus.external_work_item_ref.clone(),
+                selected_practice_ref: focus.selected_practice_ref.clone(),
+                selected_practice_reason: focus.selected_practice_reason.clone(),
+                current_activity: focus.current_activity.clone(),
+                next_step: focus.next_step.clone(),
+                previous_work_focus_record_digest: focus.previous_work_focus_record_digest.clone(),
+                admission_ledger_head_digest: focus.admission_ledger_head_digest.clone(),
+                admission_state_version: focus.admission_state_version,
+                recorded_at_unix: focus.recorded_at_unix,
+            },
+            open_decision_refs: summary.open_decision_refs.clone(),
+            blocker_refs: summary.blocker_refs.clone(),
+            evidence_refs: summary.evidence_refs.clone(),
+        };
+        detail.validate().map_err(|error| {
+            WorkflowGovernanceAdapterError::InvalidObservation(format!(
+                "the bounded Current Work detail projection is invalid: {error:?}; admission_state_version={}, recorded_at_unix={}, objective_revision={}, objective_sequence={}, assurance_epoch={}",
+                detail.focus.admission_state_version,
+                detail.focus.recorded_at_unix,
+                detail.focus.objective.objective_revision,
+                detail.focus.objective.accepted_objective_record_sequence,
+                detail.focus.objective.assurance_epoch,
+            ))
+        })?;
+        Ok(detail)
+    }
+
+    fn current_work_context(
+        &self,
+        guidance: &WorkflowGovernanceGuidance,
+        projection: &WorkflowGovernanceLedgerProjection,
+        continuity: &WorkflowReplacementContinuity,
+    ) -> Result<WorkflowCurrentWorkContext, WorkflowGovernanceAdapterError> {
+        let Some((record, focus)) = projection.latest_work_focus_record() else {
+            let context = WorkflowCurrentWorkContext {
+                schema_version: CURRENT_WORK_CONTEXT_SCHEMA_VERSION.to_owned(),
+                authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+                status: WorkflowCurrentWorkStatus::Absent,
+                focus: None,
+            };
+            context.validate().map_err(|_| {
+                WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "the bounded Current Work absence projection is invalid",
+                )
+            })?;
+            return Ok(context);
+        };
+
+        let objective_is_current =
+            guidance
+                .active_cooperative_objective
+                .as_ref()
+                .is_some_and(|objective| {
+                    focus.objective.objective_id == objective.objective_id
+                        && focus.objective.objective_revision == objective.revision
+                        && focus.objective.objective_digest == objective.objective_digest
+                        && focus.objective.assurance_epoch == objective.assurance_epoch
+                        && focus.objective.accepted_objective_record_digest
+                            == objective.accepted_record_digest
+                        && focus.objective.accepted_objective_record_sequence
+                            == objective.accepted_sequence
+                });
+        let phase_is_current = focus.phase.to_string() == guidance.current_phase;
+        // A Current Work blocker must come from durable product-work state.
+        // Replacement isolation/worktree gaps belong to a different concern
+        // and selected-policy simulation must not rewrite this context.
+        // Work Focus v1 does not own blocker bindings yet. Selected-policy
+        // status and old unresolved decisions are not reliable substitutes:
+        // either could describe different work. PJ-005C can make `blocked`
+        // live after an accepted focus update binds exact blocker records.
+        let blocker_count = 0;
+        let status = Self::current_work_status(
+            objective_is_current,
+            phase_is_current,
+            focus.state,
+            blocker_count,
+        );
+
+        let open_decision_count = continuity.durable_pending_decisions.len();
+        let open_decision_refs = continuity
+            .durable_pending_decisions
+            .iter()
+            .take(MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS)
+            .map(|decision| decision.need_record_digest.clone())
+            .collect();
+        // Work Focus v1 does not own evidence bindings yet. Publishing global
+        // evaluator observations here would guess relevance and could attach
+        // stale, rejected, or another objective's evidence. Keep this honest
+        // and empty until an accepted focus update binds evidence explicitly.
+        let evidence_count = 0;
+        let evidence_refs = Vec::new();
+        let context = WorkflowCurrentWorkContext {
+            schema_version: CURRENT_WORK_CONTEXT_SCHEMA_VERSION.to_owned(),
+            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+            status,
+            focus: Some(WorkflowCurrentWorkSummary {
+                focus_id: focus.focus_id.clone(),
+                record_digest: record.record_digest.clone(),
+                objective: focus.objective.clone(),
+                phase: focus.phase,
+                title: compact_current_work_summary_text(&focus.title),
+                intended_outcome: compact_current_work_summary_text(&focus.intended_outcome),
+                external_work_item_ref: compact_current_work_summary_ref(
+                    focus.external_work_item_ref.as_deref(),
+                ),
+                selected_practice_ref: focus
+                    .selected_practice_ref
+                    .as_ref()
+                    .filter(|value| value.0.as_bytes().len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES)
+                    .cloned(),
+                current_activity: compact_current_work_summary_text(&focus.current_activity),
+                next_step: compact_current_work_summary_text(&focus.next_step),
+                open_decision_count,
+                blocker_count,
+                evidence_count,
+                open_decision_refs,
+                // Durable assurance blockers currently expose typed codes and
+                // summaries, not ledger record digests. Count them honestly;
+                // do not duplicate unrelated open-decision refs as blockers.
+                blocker_refs: Vec::new(),
+                evidence_refs,
+                detail_argv: vec![
+                    "forge-core".to_owned(),
+                    "workflow".to_owned(),
+                    "current-work".to_owned(),
+                    "detail".to_owned(),
+                    "--root".to_owned(),
+                    self.binding.project_root.display().to_string(),
+                    "--json".to_owned(),
+                ],
+            }),
+        };
+        context.validate().map_err(|_| {
+            WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                "the bounded Current Work projection is invalid",
+            )
+        })?;
+        Ok(context)
+    }
+
+    fn current_work_status(
+        objective_is_current: bool,
+        phase_is_current: bool,
+        state: WorkflowWorkFocusState,
+        blocker_count: usize,
+    ) -> WorkflowCurrentWorkStatus {
+        if !objective_is_current || !phase_is_current {
+            WorkflowCurrentWorkStatus::Stale
+        } else {
+            match state {
+                WorkflowWorkFocusState::Completed => WorkflowCurrentWorkStatus::Completed,
+                WorkflowWorkFocusState::Abandoned => WorkflowCurrentWorkStatus::Abandoned,
+                WorkflowWorkFocusState::Active if blocker_count > 0 => {
+                    WorkflowCurrentWorkStatus::Blocked
+                }
+                WorkflowWorkFocusState::Active => WorkflowCurrentWorkStatus::Current,
+            }
+        }
     }
 
     fn replacement_continuity(
@@ -6165,6 +6391,7 @@ impl WorkflowGovernanceProjectAdapter {
                 objective_management_packet: None,
             },
             replacement_continuity: None,
+            current_work: None,
         };
         let (action_packets, objective_management_packet) =
             if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
@@ -6595,6 +6822,9 @@ pub struct WorkflowGovernanceGuidance {
     /// historical field and action packet retains its exact public shape.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replacement_continuity: Option<WorkflowReplacementContinuity>,
+    /// Bounded product-work continuity, populated only by read-only resume.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_work: Option<WorkflowCurrentWorkContext>,
 }
 
 pub const WORKFLOW_REPLACEMENT_CONTINUITY_SCHEMA_VERSION: &str =
@@ -12169,6 +12399,24 @@ fn replacement_evidence_history(
         .collect()
 }
 
+fn compact_current_work_summary_text(value: &str) -> String {
+    if value.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES {
+        return value.to_owned();
+    }
+    const SUFFIX: &str = "…";
+    let mut end = MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES - SUFFIX.len();
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{}", &value[..end], SUFFIX)
+}
+
+fn compact_current_work_summary_ref(value: Option<&str>) -> Option<String> {
+    value
+        .filter(|value| value.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES)
+        .map(str::to_owned)
+}
+
 fn replacement_projection_digest(
     domain: &str,
     value: &impl Serialize,
@@ -14052,6 +14300,211 @@ mod tests {
     };
     use forge_core_store::workflow_action_replay::WorkflowActionReplayState;
     use std::fmt::Write as _;
+
+    #[test]
+    fn current_work_status_is_bounded_to_focus_freshness_and_lifecycle() {
+        let derive = |objective_is_current, phase_is_current, state, blockers| {
+            WorkflowGovernanceProjectAdapter::current_work_status(
+                objective_is_current,
+                phase_is_current,
+                state,
+                blockers,
+            )
+        };
+
+        assert_eq!(
+            derive(true, true, WorkflowWorkFocusState::Active, 0),
+            WorkflowCurrentWorkStatus::Current
+        );
+        assert_eq!(
+            derive(true, true, WorkflowWorkFocusState::Active, 1),
+            WorkflowCurrentWorkStatus::Blocked
+        );
+        assert_eq!(
+            derive(false, true, WorkflowWorkFocusState::Active, 0),
+            WorkflowCurrentWorkStatus::Stale
+        );
+        assert_eq!(
+            derive(true, false, WorkflowWorkFocusState::Completed, 0),
+            WorkflowCurrentWorkStatus::Stale
+        );
+        assert_eq!(
+            derive(true, true, WorkflowWorkFocusState::Completed, 0),
+            WorkflowCurrentWorkStatus::Completed
+        );
+        assert_eq!(
+            derive(true, true, WorkflowWorkFocusState::Abandoned, 0),
+            WorkflowCurrentWorkStatus::Abandoned
+        );
+    }
+
+    #[test]
+    fn resume_and_detail_project_one_accepted_work_focus() {
+        let (root, state) = temp_project("current-work-resume-detail");
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.current-work-resume-detail".to_owned()),
+            &root,
+            &state,
+        )
+        .expect("adapter");
+        adapter.initialize().expect("initialize");
+        let packet = adapter
+            .next()
+            .expect("objective guidance")
+            .authorization
+            .action_packets[0]
+            .clone();
+        let accepted = adapter
+            .accept_cooperative_objective(&packet.packet_digest, cooperative_objective_input())
+            .expect("accept objective");
+        let WorkflowCooperativeObjectiveAcceptance::Accepted {
+            objective_record,
+            active_objective,
+            next,
+        } = accepted
+        else {
+            panic!("unambiguous objective must be accepted");
+        };
+        let recorded_at_unix = unix_time().expect("clock");
+        // These fields are valid at the Work Focus boundary but would make a
+        // naive copy exceed the compact 8 KiB resume budget. Detail keeps the
+        // full values while resume emits bounded excerpts.
+        let long_focus_id = "f".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_title = "t".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_outcome = "o".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_activity = "a".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_next_step = "n".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_external_ref = "e".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let long_practice_ref = "p".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let focus = forge_core_contracts::WorkflowWorkFocusRecordedEvent {
+            focus_id: StableId(long_focus_id.clone()),
+            objective: forge_core_contracts::WorkflowWorkFocusObjectiveBinding {
+                objective_id: active_objective.objective_id.clone(),
+                objective_revision: active_objective.revision,
+                objective_digest: active_objective.objective_digest.clone(),
+                accepted_objective_record_digest: active_objective.accepted_record_digest.clone(),
+                accepted_objective_record_sequence: active_objective.accepted_sequence,
+                assurance_epoch: active_objective.assurance_epoch,
+            },
+            phase: Phase::Discovery,
+            state: WorkflowWorkFocusState::Active,
+            title: long_title.clone(),
+            intended_outcome: long_outcome.clone(),
+            acceptance_summary: "Resume and detail expose one bounded focus".to_owned(),
+            non_goals: vec!["Do not authorize execution".to_owned()],
+            canonical_refs: vec![RepoPath(
+                "contracts/spec/product-journey-guidance-v0.yaml".to_owned(),
+            )],
+            affected_area_refs: vec![RepoPath("crates/forge-core-kernel".to_owned())],
+            external_work_item_ref: Some(long_external_ref.clone()),
+            selected_practice_ref: Some(StableId(long_practice_ref.clone())),
+            selected_practice_reason: Some("Keep the slice small and auditable".to_owned()),
+            current_activity: long_activity.clone(),
+            next_step: long_next_step.clone(),
+            previous_work_focus_record_digest: None,
+            admission_ledger_head_digest: next.ledger_head_digest.clone(),
+            admission_state_version: next.state_version,
+            recorded_by: PrincipalId("principal.agent.test".to_owned()),
+            host_provenance: cooperative_input_host_provenance(&cooperative_objective_input())
+                .expect("host provenance")
+                .clone(),
+            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+            recorded_at_unix,
+        };
+        let mut ledger = lock_workflow_governance_ledger_tcb(&state).expect("focus ledger");
+        let identity = ledger
+            .recover()
+            .expect("focus projection")
+            .identity()
+            .expect("active ledger identity");
+        let record = ledger
+            .record_work_focus_unchecked_tcb(
+                &objective_record.record_digest,
+                &identity,
+                next.state_version,
+                focus,
+            )
+            .expect("record focus");
+        drop(ledger);
+
+        let resumed = adapter.resume().expect("resume focus");
+        let current = resumed.current_work.as_ref().expect("Current Work summary");
+        assert_eq!(current.status, WorkflowCurrentWorkStatus::Current);
+        let summary = current.focus.as_ref().expect("focus summary");
+        assert_eq!(summary.record_digest, record.record_digest);
+        assert_eq!(summary.focus_id.0, long_focus_id);
+        assert!(summary.title.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES);
+        assert!(summary.intended_outcome.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES);
+        assert!(summary.current_activity.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES);
+        assert!(summary.next_step.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES);
+        assert!(summary.external_work_item_ref.is_none());
+        assert!(summary.selected_practice_ref.is_none());
+        assert_eq!(summary.detail_argv[2..4], ["current-work", "detail"]);
+        current.validate().expect("bounded summary");
+
+        let ledger =
+            observe_existing_workflow_governance_ledger(&state).expect("read focus ledger");
+        let projection = ledger.recover().expect("recover focus ledger");
+        drop(ledger);
+        let continuity = resumed
+            .replacement_continuity
+            .as_ref()
+            .expect("replacement continuity");
+        let baseline = adapter
+            .current_work_context(&resumed, &projection, continuity)
+            .expect("baseline Current Work");
+        let mut different_policy = resumed.clone();
+        different_policy.selected_policy_ref = StableId("policy.unrelated".to_owned());
+        different_policy.status = WorkflowGovernanceGuidanceStatus::Blocked;
+        assert_eq!(
+            adapter
+                .current_work_context(&different_policy, &projection, continuity)
+                .expect("policy-independent Current Work"),
+            baseline,
+            "selected policy and its status must not rewrite Current Work"
+        );
+
+        let detail = adapter.current_work_detail().expect("focus detail");
+        assert_eq!(detail.status, WorkflowCurrentWorkStatus::Current);
+        assert_eq!(detail.focus.record_digest, record.record_digest);
+        assert_eq!(detail.focus.title, long_title);
+        assert_eq!(detail.focus.intended_outcome, long_outcome);
+        assert_eq!(detail.focus.current_activity, long_activity);
+        assert_eq!(detail.focus.next_step, long_next_step);
+        assert_eq!(detail.focus.external_work_item_ref, Some(long_external_ref));
+        assert_eq!(
+            detail.focus.selected_practice_ref,
+            Some(StableId(long_practice_ref))
+        );
+        assert_eq!(
+            detail.focus.acceptance_summary,
+            "Resume and detail expose one bounded focus"
+        );
+        detail.validate().expect("bounded detail");
+
+        let revision_packet = adapter
+            .next()
+            .expect("fresh objective revision guidance")
+            .authorization
+            .objective_management_packet
+            .expect("objective revision packet");
+        adapter
+            .accept_cooperative_objective(
+                &revision_packet.packet_digest,
+                cooperative_material_supersession_input(),
+            )
+            .expect("replace objective");
+        let stale = adapter.resume().expect("resume replaced objective");
+        let stale_context = stale.current_work.expect("stale Current Work");
+        assert_eq!(stale_context.status, WorkflowCurrentWorkStatus::Stale);
+        assert_eq!(
+            stale_context
+                .focus
+                .expect("stale focus remains visible")
+                .record_digest,
+            record.record_digest
+        );
+    }
 
     #[test]
     fn durable_promotion_makes_only_stale_claim_liveness_non_blocking() {

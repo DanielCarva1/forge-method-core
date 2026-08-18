@@ -274,7 +274,10 @@ impl WorkflowGovernanceLedgerProjection {
             .any(|record| matches!(record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_)))
     }
 
-    fn latest_work_focus_record(
+    /// Latest Work Focus event after the ledger has passed full recovery
+    /// validation. Callers receive no append authority through this view.
+    #[must_use]
+    pub fn latest_work_focus_record(
         &self,
     ) -> Option<(
         &WorkflowGovernanceLedgerRecord,
