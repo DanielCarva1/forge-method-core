@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v1";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v1";
+pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
+pub const MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
 pub const MAX_WORK_FOCUS_LIST_ITEMS: usize = 16;
 pub const MAX_WORK_FOCUS_EVENT_BYTES: usize = 16 * 1_024;
@@ -33,6 +35,49 @@ pub enum WorkflowWorkFocusState {
     Active,
     Completed,
     Abandoned,
+}
+
+/// Exact Work Focus state observed by the host before proposing a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowExpectedWorkFocus {
+    Absent,
+    Current { record_digest: String },
+}
+
+/// Host-authored meaning only. Objective, phase, clocks, admission coordinates,
+/// lifecycle state, and advisory authority remain kernel-derived.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowWorkFocusDraft {
+    pub focus_id: StableId,
+    pub title: String,
+    pub intended_outcome: String,
+    pub acceptance_summary: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub non_goals: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub canonical_refs: Vec<RepoPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affected_area_refs: Vec<RepoPath>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_work_item_ref: Option<String>,
+    pub current_activity: String,
+    pub next_step: String,
+}
+
+/// Closed public input for the first accepted Work Focus.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowWorkFocusAcceptInput {
+    pub schema_version: String,
+    pub expected_snapshot_digest: String,
+    pub expected_ledger_head_digest: String,
+    pub expected_state_version: u64,
+    pub expected_work_focus: WorkflowExpectedWorkFocus,
+    pub focus: WorkflowWorkFocusDraft,
+    pub recorded_by: PrincipalId,
+    pub host_provenance: WorkflowCooperativeHostProvenance,
 }
 
 /// Work Focus is continuity guidance only. It grants no mutation authority.

@@ -430,6 +430,22 @@ fn run_cooperative_input(consumer: &Consumer, packet_digest: &str, input_path: &
         .expect("run cooperative objective command")
 }
 
+fn run_current_work_accept(consumer: &Consumer, input_path: &Path) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "current-work",
+            "accept",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--input-file",
+            &input_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run Current Work acceptance command")
+}
+
 fn run_cooperative_evidence(consumer: &Consumer, input_path: &Path) -> Output {
     bin()
         .args([
@@ -1400,6 +1416,108 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
     assert_eq!(
         after_edit["data"]["selected_policy_ref"], "policy.workflow.domain-scan",
         "ordinary project edits must not reopen an objective-anchored completion"
+    );
+}
+
+#[test]
+fn current_work_accepts_one_exact_focus_and_resume_reads_it_back() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet digest");
+    let objective_input = consumer.write_json(
+        "current-work objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Use Forge to improve Forge through dogfooding",
+                "constraints": ["keep slices small and testable"],
+                "unacceptable_outcomes": ["depend on chat memory"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.accept-objective",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        packet_digest,
+        &objective_input,
+    ));
+
+    let before = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(before["data"]["current_work"]["status"], "absent");
+    let focus_input = consumer.write_json(
+        "current-work accept.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_accept_input_v1",
+            "expected_snapshot_digest": before["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": before["data"]["ledger_head_digest"],
+            "expected_state_version": before["data"]["state_version"],
+            "expected_work_focus": { "status": "absent" },
+            "focus": {
+                "focus_id": "focus.issue-34.slice-1",
+                "title": "Publish accepted Work Focus updates",
+                "intended_outcome": "A replacement agent can see the active issue after one resume",
+                "acceptance_summary": "The public command records one exact focus and resume reads it back",
+                "non_goals": ["bind blockers in this slice"],
+                "canonical_refs": ["contracts/spec/product-journey-guidance-v0.yaml"],
+                "affected_area_refs": ["crates/forge-core-cli"],
+                "external_work_item_ref": "https://github.com/DanielCarva1/forge-method-core/issues/34",
+                "current_activity": "Add the first public Work Focus write path",
+                "next_step": "Dogfood the command on Forge itself"
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.accept-current-work",
+                "conversation_digest": format!("sha256:{}", "b".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+
+    let accepted = assert_ok(&run_current_work_accept(&consumer, &focus_input));
+    assert_eq!(accepted["command"], "workflow.current_work_accept");
+    assert_eq!(accepted["data"]["current_work"]["status"], "current");
+    assert_eq!(
+        accepted["data"]["current_work"]["focus"]["focus_id"],
+        "focus.issue-34.slice-1"
+    );
+
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let accepted_wal = fs::read(&wal).expect("WAL after accepted Work Focus");
+    let stale_retry = run_current_work_accept(&consumer, &focus_input);
+    assert_eq!(stale_retry.status.code(), Some(4));
+    let stale_retry = json(&stale_retry);
+    assert_eq!(stale_retry["command"], "workflow.current_work_accept");
+    assert_eq!(stale_retry["exit_reason"], "conflict");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after rejected stale Work Focus retry"),
+        accepted_wal,
+        "a stale retry must not append another Work Focus record"
+    );
+
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["current_work"]["status"], "current");
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["external_work_item_ref"],
+        "https://github.com/DanielCarva1/forge-method-core/issues/34"
+    );
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["next_step"],
+        "Dogfood the command on Forge itself"
     );
 }
 

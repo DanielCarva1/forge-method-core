@@ -93,13 +93,15 @@ use forge_core_contracts::{
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
-    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
-    WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
-    WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
-    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
+    WorkflowEvidenceSubjectKind, WorkflowExpectedWorkFocus, WorkflowGovernanceBundleDocument,
+    WorkflowGovernanceEvaluation, WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
+    WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
+    WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
+    WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
-    WorkflowWorkFocusState, COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
+    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusObjectiveBinding,
+    WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
+    COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
@@ -122,7 +124,7 @@ use forge_core_contracts::{
     SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
     SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
-    WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION,
+    WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     evaluate_agent_autonomy, evaluate_cooperative_evidence, evaluate_post_build_verify_episode,
@@ -3122,6 +3124,131 @@ impl WorkflowGovernanceProjectAdapter {
             )?);
             guidance.replacement_continuity = Some(continuity);
             Ok(guidance)
+        })
+    }
+
+    /// Accept the first bounded Work Focus beneath exact project and ledger
+    /// state. The host supplies meaning and provenance; the kernel derives the
+    /// objective, phase, lifecycle state, admission coordinates, and authority.
+    pub fn accept_work_focus(
+        &self,
+        input: WorkflowWorkFocusAcceptInput,
+    ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
+        if input.schema_version != WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus acceptance input has an unsupported schema version".to_owned(),
+            ));
+        }
+        if !is_lower_sha256_text(&input.expected_snapshot_digest)
+            || !is_lower_sha256_text(&input.expected_ledger_head_digest)
+            || input.host_provenance.observed_at_unix == 0
+        {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus expected digests and host observation must be canonical".to_owned(),
+            ));
+        }
+        if let WorkflowExpectedWorkFocus::Current { record_digest } = &input.expected_work_focus {
+            if !is_lower_sha256_text(record_digest) {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus expected record digest must be canonical".to_owned(),
+                ));
+            }
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "workflow current-work accept requires expected_work_focus.status=absent"
+                    .to_owned(),
+            ));
+        }
+
+        let now = unix_time()?;
+        if input.host_provenance.observed_at_unix > now {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus host observation cannot be in the future".to_owned(),
+            ));
+        }
+        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let effective = domain.admit_effective(admitted)?;
+        self.require_effective_epoch_current(admitted, &effective, &projection)?;
+
+        let head = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        if snapshot.digest() != input.expected_snapshot_digest
+            || head != input.expected_ledger_head_digest
+            || state_version != input.expected_state_version
+            || projection.latest_work_focus_record().is_some()
+        {
+            return Err(WorkflowGovernanceAdapterError::WorkFocusCasMismatch);
+        }
+        let (objective_record, objective) =
+            accepted_cooperative_objective_record(&projection.records)?.ok_or_else(|| {
+                WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus requires an active cooperative objective".to_owned(),
+                )
+            })?;
+        let phase_id = current_phase(&projection)?;
+        let phase = Phase::parse(&phase_id.0)
+            .ok_or_else(|| WorkflowGovernanceAdapterError::InvalidPhase(phase_id.0.clone()))?;
+        let event = WorkflowWorkFocusRecordedEvent {
+            focus_id: input.focus.focus_id,
+            objective: WorkflowWorkFocusObjectiveBinding {
+                objective_id: objective.objective_id.clone(),
+                objective_revision: objective.revision,
+                objective_digest: objective.objective_digest.clone(),
+                accepted_objective_record_digest: objective_record.record_digest.clone(),
+                accepted_objective_record_sequence: objective_record.sequence,
+                assurance_epoch: objective.assurance_epoch,
+            },
+            phase,
+            state: WorkflowWorkFocusState::Active,
+            title: input.focus.title,
+            intended_outcome: input.focus.intended_outcome,
+            acceptance_summary: input.focus.acceptance_summary,
+            non_goals: input.focus.non_goals,
+            canonical_refs: input.focus.canonical_refs,
+            affected_area_refs: input.focus.affected_area_refs,
+            external_work_item_ref: input.focus.external_work_item_ref,
+            selected_practice_ref: None,
+            selected_practice_reason: None,
+            current_activity: input.focus.current_activity,
+            next_step: input.focus.next_step,
+            previous_work_focus_record_digest: None,
+            admission_ledger_head_digest: head.clone(),
+            admission_state_version: state_version,
+            recorded_by: input.recorded_by,
+            host_provenance: input.host_provenance,
+            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+            recorded_at_unix: now,
+        };
+        snapshot.revalidate()?;
+        let focus_record = ledger.record_work_focus_unchecked_tcb(
+            &head,
+            &self.identity(admitted),
+            state_version,
+            event,
+        )?;
+        let committed = ledger.recover()?;
+        let mut guidance = self.guidance_from_projection_with_snapshot(
+            &registry, admitted, &effective, &committed, now, &snapshot,
+        )?;
+        let continuity = self.replacement_continuity(&guidance, &committed, now)?;
+        let current_work = self.current_work_context(&guidance, &committed, &continuity)?;
+        guidance.current_work = Some(current_work.clone());
+        Ok(WorkflowWorkFocusAcceptance {
+            focus_record,
+            current_work,
+            ledger_head_digest: guidance.ledger_head_digest,
+            snapshot_digest: guidance.snapshot_digest,
+            state_version: guidance.state_version,
         })
     }
 
@@ -7202,6 +7329,18 @@ pub struct WorkflowGovernanceCompletionReceipt {
     pub next: WorkflowGovernanceGuidance,
 }
 
+/// Compact receipt for the first accepted Work Focus. It reports the durable
+/// record and the same bounded readback a replacement host will receive.
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowWorkFocusAcceptance {
+    pub focus_record: WorkflowGovernanceLedgerRecord,
+    pub current_work: WorkflowCurrentWorkContext,
+    pub ledger_head_digest: String,
+    pub snapshot_digest: String,
+    pub state_version: u64,
+}
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum WorkflowGovernanceAdapterError {
@@ -7252,6 +7391,7 @@ pub enum WorkflowGovernanceAdapterError {
     CooperativeObjectiveAlreadyAccepted,
     CooperativeObjectiveRetryConflict,
     StaleCooperativeObjectiveManagementPacket,
+    WorkFocusCasMismatch,
     UnknownRelease(String),
     ReleaseNotAdjacent,
     ReleasePolicyDrift,
@@ -7377,6 +7517,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             ),
             Self::StaleCooperativeObjectiveManagementPacket => f.write_str(
                 "stale cooperative objective-management packet; run workflow next and retry with the current packet",
+            ),
+            Self::WorkFocusCasMismatch => f.write_str(
+                "Work Focus expected state is stale; run workflow resume and retry with the current snapshot, ledger head, state version, and focus record",
             ),
             Self::UnknownRelease(id) => write!(f, "unknown admitted workflow release {id}"),
             Self::ReleaseNotAdjacent => f.write_str("target workflow release is not the exact adjacent successor"),

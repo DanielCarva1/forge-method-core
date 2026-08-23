@@ -20,6 +20,7 @@ use forge_core_contracts::{
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
     WorkflowCurrentWorkContext, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
+    WorkflowWorkFocusAcceptInput, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
 };
 use forge_core_decisions::{
     derive_product_journey_guidance, load_accepted_product_journey, load_embedded_catalog,
@@ -83,7 +84,7 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             return emit_failure(
                 "workflow.current_work",
                 ExitReason::InvalidDecisionShape,
-                "workflow current-work requires: detail".to_owned(),
+                "workflow current-work requires one of: accept, detail".to_owned(),
                 wants_json(args),
             );
         };
@@ -257,6 +258,56 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
                 ),
                 parsed.want_json,
             ),
+            Err(error) => emit_failure(
+                &command,
+                classify_error(&error),
+                error.to_string(),
+                parsed.want_json,
+            ),
+        };
+    }
+    if parsed.subcommand == "current-work-accept" {
+        let input_path = match required_path(&parsed, "input-file") {
+            Ok(path) => path,
+            Err(message) => {
+                return emit_failure(
+                    &command,
+                    ExitReason::InvalidDecisionShape,
+                    message,
+                    parsed.want_json,
+                );
+            }
+        };
+        let raw = match crate::io_util::read_regular_file_no_follow_bounded(
+            &input_path,
+            MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+        ) {
+            Ok(raw) => raw,
+            Err(error) => {
+                return emit_failure(
+                    &command,
+                    ExitReason::InvalidDecisionShape,
+                    format!("invalid Work Focus acceptance input: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        let input: WorkflowWorkFocusAcceptInput = match serde_json::from_slice(&raw) {
+            Ok(input) => input,
+            Err(error) => {
+                return emit_failure(
+                    &command,
+                    ExitReason::InvalidDecisionShape,
+                    format!(
+                        "parse Work Focus acceptance input {}: {error}",
+                        input_path.display()
+                    ),
+                    parsed.want_json,
+                );
+            }
+        };
+        return match adapter.accept_work_focus(input) {
+            Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
             Err(error) => emit_failure(
                 &command,
                 classify_error(&error),
@@ -1223,6 +1274,7 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             | "--expected-head-digest"
             | "--expected-rebase-plan-digest"
             | "--expected-snapshot-digest"
+            | "--input-file"
             | "--readiness-profile" => {
                 index += 1;
                 let value = args
@@ -1337,6 +1389,15 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
                 args.subcommand
             ))
         }
+        "current-work-accept" => {
+            if args.flags.keys().any(|flag| flag != "input-file") {
+                return Err(
+                    "workflow current-work accept accepts only --root, --input-file, and the JSON output switch"
+                        .to_owned(),
+                );
+            }
+            required(args, "input-file").map(|_| ())
+        }
         "profile-adopt-solo" => {
             let expected = ["expected-head-digest", "expected-snapshot-digest"];
             if let Some(flag) = args
@@ -1436,6 +1497,7 @@ pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReas
         | WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted
         | WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict
         | WorkflowGovernanceAdapterError::StaleCooperativeObjectiveManagementPacket
+        | WorkflowGovernanceAdapterError::WorkFocusCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate
