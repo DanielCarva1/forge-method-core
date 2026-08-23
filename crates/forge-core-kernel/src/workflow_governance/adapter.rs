@@ -99,9 +99,9 @@ use forge_core_contracts::{
     WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
     WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
-    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusObjectiveBinding,
-    WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
-    COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
+    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusChange, WorkflowWorkFocusDraft,
+    WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
+    WorkflowWorkFocusUpdateInput, COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
@@ -125,6 +125,7 @@ use forge_core_contracts::{
     SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_EXECUTION_POLICY_VERSION, WORKFLOW_GOVERNANCE_SCHEMA_VERSION,
     WORKFLOW_REPRESENTATIVE_SLICE_SCHEMA_VERSION, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
 };
 use forge_core_decisions::{
     evaluate_agent_autonomy, evaluate_cooperative_evidence, evaluate_post_build_verify_episode,
@@ -3139,28 +3140,99 @@ impl WorkflowGovernanceProjectAdapter {
                 "Work Focus acceptance input has an unsupported schema version".to_owned(),
             ));
         }
-        if !is_lower_sha256_text(&input.expected_snapshot_digest)
-            || !is_lower_sha256_text(&input.expected_ledger_head_digest)
-            || input.host_provenance.observed_at_unix == 0
-        {
-            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                "Work Focus expected digests and host observation must be canonical".to_owned(),
-            ));
-        }
-        if let WorkflowExpectedWorkFocus::Current { record_digest } = &input.expected_work_focus {
-            if !is_lower_sha256_text(record_digest) {
-                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                    "Work Focus expected record digest must be canonical".to_owned(),
-                ));
-            }
+        if !matches!(
+            &input.expected_work_focus,
+            WorkflowExpectedWorkFocus::Absent
+        ) {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                 "workflow current-work accept requires expected_work_focus.status=absent"
                     .to_owned(),
             ));
         }
+        self.record_work_focus_change(
+            input.expected_snapshot_digest,
+            input.expected_ledger_head_digest,
+            input.expected_state_version,
+            input.expected_work_focus,
+            WorkFocusAdmissionChange::Start(input.focus),
+            input.recorded_by,
+            input.host_provenance,
+        )
+    }
+
+    /// Supersede or complete the exact Work Focus observed by the host. The
+    /// expected record digest prevents a concurrent host from being silently
+    /// overwritten.
+    pub fn update_work_focus(
+        &self,
+        input: WorkflowWorkFocusUpdateInput,
+    ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
+        if input.schema_version != WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus update input has an unsupported schema version".to_owned(),
+            ));
+        }
+        if !matches!(
+            &input.expected_work_focus,
+            WorkflowExpectedWorkFocus::Current { .. }
+        ) {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "workflow current-work update requires expected_work_focus.status=current"
+                    .to_owned(),
+            ));
+        }
+        let change = match input.change {
+            WorkflowWorkFocusChange::Supersede { focus } => {
+                WorkFocusAdmissionChange::Supersede(focus)
+            }
+            WorkflowWorkFocusChange::Complete {
+                completion_summary,
+                next_step,
+            } => WorkFocusAdmissionChange::Complete {
+                completion_summary,
+                next_step,
+            },
+        };
+        self.record_work_focus_change(
+            input.expected_snapshot_digest,
+            input.expected_ledger_head_digest,
+            input.expected_state_version,
+            input.expected_work_focus,
+            change,
+            input.recorded_by,
+            input.host_provenance,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_work_focus_change(
+        &self,
+        expected_snapshot_digest: String,
+        expected_ledger_head_digest: String,
+        expected_state_version: u64,
+        expected_work_focus: WorkflowExpectedWorkFocus,
+        change: WorkFocusAdmissionChange,
+        recorded_by: PrincipalId,
+        host_provenance: forge_core_contracts::WorkflowCooperativeHostProvenance,
+    ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
+        if !is_lower_sha256_text(&expected_snapshot_digest)
+            || !is_lower_sha256_text(&expected_ledger_head_digest)
+            || host_provenance.observed_at_unix == 0
+        {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus expected digests and host observation must be canonical".to_owned(),
+            ));
+        }
+        if let WorkflowExpectedWorkFocus::Current { record_digest } = &expected_work_focus {
+            if !is_lower_sha256_text(record_digest) {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus expected record digest must be canonical".to_owned(),
+                ));
+            }
+        }
 
         let now = unix_time()?;
-        if input.host_provenance.observed_at_unix > now {
+        if host_provenance.observed_at_unix > now {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                 "Work Focus host observation cannot be in the future".to_owned(),
             ));
@@ -3182,13 +3254,27 @@ impl WorkflowGovernanceProjectAdapter {
             .clone()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
         let state_version = projection.current_state_version().unwrap_or_default();
-        if snapshot.digest() != input.expected_snapshot_digest
-            || head != input.expected_ledger_head_digest
-            || state_version != input.expected_state_version
-            || projection.latest_work_focus_record().is_some()
+        if snapshot.digest() != expected_snapshot_digest
+            || head != expected_ledger_head_digest
+            || state_version != expected_state_version
         {
             return Err(WorkflowGovernanceAdapterError::WorkFocusCasMismatch);
         }
+        let previous = match (
+            &expected_work_focus,
+            &change,
+            projection.latest_work_focus_record(),
+        ) {
+            (WorkflowExpectedWorkFocus::Absent, WorkFocusAdmissionChange::Start(_), None) => None,
+            (
+                WorkflowExpectedWorkFocus::Current { record_digest },
+                WorkFocusAdmissionChange::Supersede(_) | WorkFocusAdmissionChange::Complete { .. },
+                Some((record, event)),
+            ) if &record.record_digest == record_digest => {
+                Some((record.record_digest.clone(), event.clone()))
+            }
+            _ => return Err(WorkflowGovernanceAdapterError::WorkFocusCasMismatch),
+        };
         let (objective_record, objective) =
             accepted_cooperative_objective_record(&projection.records)?.ok_or_else(|| {
                 WorkflowGovernanceAdapterError::InvalidObservation(
@@ -3198,36 +3284,75 @@ impl WorkflowGovernanceProjectAdapter {
         let phase_id = current_phase(&projection)?;
         let phase = Phase::parse(&phase_id.0)
             .ok_or_else(|| WorkflowGovernanceAdapterError::InvalidPhase(phase_id.0.clone()))?;
-        let event = WorkflowWorkFocusRecordedEvent {
-            focus_id: input.focus.focus_id,
-            objective: WorkflowWorkFocusObjectiveBinding {
-                objective_id: objective.objective_id.clone(),
-                objective_revision: objective.revision,
-                objective_digest: objective.objective_digest.clone(),
-                accepted_objective_record_digest: objective_record.record_digest.clone(),
-                accepted_objective_record_sequence: objective_record.sequence,
-                assurance_epoch: objective.assurance_epoch,
-            },
-            phase,
-            state: WorkflowWorkFocusState::Active,
-            title: input.focus.title,
-            intended_outcome: input.focus.intended_outcome,
-            acceptance_summary: input.focus.acceptance_summary,
-            non_goals: input.focus.non_goals,
-            canonical_refs: input.focus.canonical_refs,
-            affected_area_refs: input.focus.affected_area_refs,
-            external_work_item_ref: input.focus.external_work_item_ref,
-            selected_practice_ref: None,
-            selected_practice_reason: None,
-            current_activity: input.focus.current_activity,
-            next_step: input.focus.next_step,
-            previous_work_focus_record_digest: None,
-            admission_ledger_head_digest: head.clone(),
-            admission_state_version: state_version,
-            recorded_by: input.recorded_by,
-            host_provenance: input.host_provenance,
-            authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
-            recorded_at_unix: now,
+        let objective_binding = WorkflowWorkFocusObjectiveBinding {
+            objective_id: objective.objective_id.clone(),
+            objective_revision: objective.revision,
+            objective_digest: objective.objective_digest.clone(),
+            accepted_objective_record_digest: objective_record.record_digest.clone(),
+            accepted_objective_record_sequence: objective_record.sequence,
+            assurance_epoch: objective.assurance_epoch,
+        };
+        let event = match change {
+            WorkFocusAdmissionChange::Start(focus) => work_focus_event_from_draft(
+                focus,
+                objective_binding,
+                phase,
+                None,
+                &head,
+                state_version,
+                recorded_by,
+                host_provenance,
+                now,
+            ),
+            WorkFocusAdmissionChange::Supersede(focus) => {
+                let (previous_digest, previous_event) = previous
+                    .as_ref()
+                    .expect("supersede requires an exact current focus");
+                if focus.focus_id == previous_event.focus_id {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "superseding Work Focus requires a new focus_id".to_owned(),
+                    ));
+                }
+                work_focus_event_from_draft(
+                    focus,
+                    objective_binding,
+                    phase,
+                    Some(previous_digest.clone()),
+                    &head,
+                    state_version,
+                    recorded_by,
+                    host_provenance,
+                    now,
+                )
+            }
+            WorkFocusAdmissionChange::Complete {
+                completion_summary,
+                next_step,
+            } => {
+                let (previous_digest, previous_event) = previous
+                    .as_ref()
+                    .expect("complete requires an exact current focus");
+                if previous_event.state != WorkflowWorkFocusState::Active
+                    || previous_event.objective != objective_binding
+                    || previous_event.phase != phase
+                {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "only the active Work Focus bound to the current objective and phase can be completed; supersede stale or terminal work instead"
+                            .to_owned(),
+                    ));
+                }
+                let mut completed = previous_event.clone();
+                completed.state = WorkflowWorkFocusState::Completed;
+                completed.current_activity = completion_summary;
+                completed.next_step = next_step;
+                completed.previous_work_focus_record_digest = Some(previous_digest.clone());
+                completed.admission_ledger_head_digest = head.clone();
+                completed.admission_state_version = state_version;
+                completed.recorded_by = recorded_by;
+                completed.host_provenance = host_provenance;
+                completed.recorded_at_unix = now;
+                completed
+            }
         };
         snapshot.revalidate()?;
         let focus_record = ledger.record_work_focus_unchecked_tcb(
@@ -7329,7 +7454,54 @@ pub struct WorkflowGovernanceCompletionReceipt {
     pub next: WorkflowGovernanceGuidance,
 }
 
-/// Compact receipt for the first accepted Work Focus. It reports the durable
+enum WorkFocusAdmissionChange {
+    Start(WorkflowWorkFocusDraft),
+    Supersede(WorkflowWorkFocusDraft),
+    Complete {
+        completion_summary: String,
+        next_step: String,
+    },
+}
+
+#[allow(clippy::too_many_arguments)]
+fn work_focus_event_from_draft(
+    focus: WorkflowWorkFocusDraft,
+    objective: WorkflowWorkFocusObjectiveBinding,
+    phase: Phase,
+    previous_work_focus_record_digest: Option<String>,
+    admission_ledger_head_digest: &str,
+    admission_state_version: u64,
+    recorded_by: PrincipalId,
+    host_provenance: forge_core_contracts::WorkflowCooperativeHostProvenance,
+    recorded_at_unix: u64,
+) -> WorkflowWorkFocusRecordedEvent {
+    WorkflowWorkFocusRecordedEvent {
+        focus_id: focus.focus_id,
+        objective,
+        phase,
+        state: WorkflowWorkFocusState::Active,
+        title: focus.title,
+        intended_outcome: focus.intended_outcome,
+        acceptance_summary: focus.acceptance_summary,
+        non_goals: focus.non_goals,
+        canonical_refs: focus.canonical_refs,
+        affected_area_refs: focus.affected_area_refs,
+        external_work_item_ref: focus.external_work_item_ref,
+        selected_practice_ref: None,
+        selected_practice_reason: None,
+        current_activity: focus.current_activity,
+        next_step: focus.next_step,
+        previous_work_focus_record_digest,
+        admission_ledger_head_digest: admission_ledger_head_digest.to_owned(),
+        admission_state_version,
+        recorded_by,
+        host_provenance,
+        authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
+        recorded_at_unix,
+    }
+}
+
+/// Compact receipt for an accepted Work Focus change. It reports the durable
 /// record and the same bounded readback a replacement host will receive.
 #[derive(Debug, Clone, Serialize)]
 #[serde(deny_unknown_fields)]

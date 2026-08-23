@@ -307,6 +307,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow intent record --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
         "       forge-core workflow current-work accept --root <path> --input-file <focus.json> [--json|--no-json]",
+        "       forge-core workflow current-work update --root <path> --input-file <change.json> [--json|--no-json]",
         "       forge-core workflow current-work detail [--root <path>] [--json|--no-json]",
         "       forge-core workflow report [--root <path>] [--json|--no-json]",
         "       forge-core workflow release-status [--root <path>] [--json|--no-json]",

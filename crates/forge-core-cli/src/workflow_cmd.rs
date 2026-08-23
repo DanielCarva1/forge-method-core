@@ -20,7 +20,8 @@ use forge_core_contracts::{
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
     WorkflowCurrentWorkContext, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
-    WorkflowWorkFocusAcceptInput, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusUpdateInput, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
 };
 use forge_core_decisions::{
     derive_product_journey_guidance, load_accepted_product_journey, load_embedded_catalog,
@@ -84,7 +85,7 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             return emit_failure(
                 "workflow.current_work",
                 ExitReason::InvalidDecisionShape,
-                "workflow current-work requires one of: accept, detail".to_owned(),
+                "workflow current-work requires one of: accept, update, detail".to_owned(),
                 wants_json(args),
             );
         };
@@ -278,35 +279,59 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
                 );
             }
         };
-        let raw = match crate::io_util::read_regular_file_no_follow_bounded(
+        let input: WorkflowWorkFocusAcceptInput = match load_bounded_json(
             &input_path,
             MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+            "Work Focus acceptance",
         ) {
-            Ok(raw) => raw,
-            Err(error) => {
-                return emit_failure(
-                    &command,
-                    ExitReason::InvalidDecisionShape,
-                    format!("invalid Work Focus acceptance input: {error}"),
-                    parsed.want_json,
-                );
-            }
-        };
-        let input: WorkflowWorkFocusAcceptInput = match serde_json::from_slice(&raw) {
             Ok(input) => input,
-            Err(error) => {
+            Err(message) => {
                 return emit_failure(
                     &command,
                     ExitReason::InvalidDecisionShape,
-                    format!(
-                        "parse Work Focus acceptance input {}: {error}",
-                        input_path.display()
-                    ),
+                    message,
                     parsed.want_json,
                 );
             }
         };
         return match adapter.accept_work_focus(input) {
+            Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
+            Err(error) => emit_failure(
+                &command,
+                classify_error(&error),
+                error.to_string(),
+                parsed.want_json,
+            ),
+        };
+    }
+    if parsed.subcommand == "current-work-update" {
+        let input_path = match required_path(&parsed, "input-file") {
+            Ok(path) => path,
+            Err(message) => {
+                return emit_failure(
+                    &command,
+                    ExitReason::InvalidDecisionShape,
+                    message,
+                    parsed.want_json,
+                );
+            }
+        };
+        let input: WorkflowWorkFocusUpdateInput = match load_bounded_json(
+            &input_path,
+            MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
+            "Work Focus update",
+        ) {
+            Ok(input) => input,
+            Err(message) => {
+                return emit_failure(
+                    &command,
+                    ExitReason::InvalidDecisionShape,
+                    message,
+                    parsed.want_json,
+                );
+            }
+        };
+        return match adapter.update_work_focus(input) {
             Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
             Err(error) => emit_failure(
                 &command,
@@ -1217,6 +1242,17 @@ fn load_json<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
     serde_json::from_str(&raw).map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
+fn load_bounded_json<T: DeserializeOwned>(
+    path: &Path,
+    maximum_bytes: u64,
+    input_name: &str,
+) -> Result<T, String> {
+    let raw = crate::io_util::read_regular_file_no_follow_bounded(path, maximum_bytes)
+        .map_err(|error| format!("invalid {input_name} input: {error}"))?;
+    serde_json::from_slice(&raw)
+        .map_err(|error| format!("parse {input_name} input {}: {error}", path.display()))
+}
+
 pub(crate) fn resolve_adapter(root: &Path) -> Result<WorkflowGovernanceProjectAdapter, String> {
     let project = crate::project_cmd::resolve_project(root)
         .map_err(|error| format!("project resolve failed: {error}"))?;
@@ -1389,12 +1425,12 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
                 args.subcommand
             ))
         }
-        "current-work-accept" => {
+        "current-work-accept" | "current-work-update" => {
             if args.flags.keys().any(|flag| flag != "input-file") {
-                return Err(
-                    "workflow current-work accept accepts only --root, --input-file, and the JSON output switch"
-                        .to_owned(),
-                );
+                return Err(format!(
+                    "workflow {} accepts only --root, --input-file, and the JSON output switch",
+                    args.subcommand.replace('-', " ")
+                ));
             }
             required(args, "input-file").map(|_| ())
         }

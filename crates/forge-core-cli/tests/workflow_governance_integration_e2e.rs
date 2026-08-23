@@ -446,6 +446,22 @@ fn run_current_work_accept(consumer: &Consumer, input_path: &Path) -> Output {
         .expect("run Current Work acceptance command")
 }
 
+fn run_current_work_update(consumer: &Consumer, input_path: &Path) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "current-work",
+            "update",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--input-file",
+            &input_path.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run Current Work update command")
+}
+
 fn run_cooperative_evidence(consumer: &Consumer, input_path: &Path) -> Output {
     bin()
         .args([
@@ -1420,7 +1436,7 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
 }
 
 #[test]
-fn current_work_accepts_one_exact_focus_and_resume_reads_it_back() {
+fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
     let next = assert_ok(&consumer.run(&["next"]));
@@ -1518,6 +1534,100 @@ fn current_work_accepts_one_exact_focus_and_resume_reads_it_back() {
     assert_eq!(
         resumed["data"]["current_work"]["focus"]["next_step"],
         "Dogfood the command on Forge itself"
+    );
+
+    let supersede_input = consumer.write_json(
+        "current-work supersede.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v1",
+            "expected_snapshot_digest": accepted["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": accepted["data"]["ledger_head_digest"],
+            "expected_state_version": accepted["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": accepted["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "supersede",
+                "focus": {
+                    "focus_id": "focus.issue-34.slice-2",
+                    "title": "Finish Work Focus lifecycle transitions",
+                    "intended_outcome": "A replacement agent sees the newly accepted slice",
+                    "acceptance_summary": "Supersede and complete are exact conflict-safe transitions",
+                    "non_goals": ["bind blockers in this slice"],
+                    "canonical_refs": ["contracts/spec/product-journey-guidance-v0.yaml"],
+                    "affected_area_refs": ["crates/forge-core-cli"],
+                    "external_work_item_ref": "https://github.com/DanielCarva1/forge-method-core/issues/34",
+                    "current_activity": "Exercise the supersede transition",
+                    "next_step": "Complete this focus"
+                }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.supersede-current-work",
+                "conversation_digest": format!("sha256:{}", "c".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let superseded = assert_ok(&run_current_work_update(&consumer, &supersede_input));
+    assert_eq!(superseded["command"], "workflow.current_work_update");
+    assert_eq!(
+        superseded["data"]["current_work"]["focus"]["focus_id"],
+        "focus.issue-34.slice-2"
+    );
+
+    let superseded_wal = fs::read(&wal).expect("WAL after superseded Work Focus");
+    let stale_retry = run_current_work_update(&consumer, &supersede_input);
+    assert_eq!(stale_retry.status.code(), Some(4));
+    assert_eq!(json(&stale_retry)["exit_reason"], "conflict");
+    assert_eq!(
+        fs::read(&wal).expect("WAL after rejected stale supersede retry"),
+        superseded_wal
+    );
+
+    let complete_input = consumer.write_json(
+        "current-work complete.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v1",
+            "expected_snapshot_digest": superseded["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": superseded["data"]["ledger_head_digest"],
+            "expected_state_version": superseded["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": superseded["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "complete",
+                "completion_summary": "The focused lifecycle transition proof passed",
+                "next_step": "Bind blockers and evidence explicitly"
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.complete-current-work",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let completed = assert_ok(&run_current_work_update(&consumer, &complete_input));
+    assert_eq!(completed["data"]["current_work"]["status"], "completed");
+
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["current_work"]["status"], "completed");
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["current_activity"],
+        "The focused lifecycle transition proof passed"
+    );
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["next_step"],
+        "Bind blockers and evidence explicitly"
     );
 }
 

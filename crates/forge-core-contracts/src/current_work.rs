@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v1";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v1";
 pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
+pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
 pub const MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES: u64 = 16 * 1_024;
+pub const MAX_WORK_FOCUS_UPDATE_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
 pub const MAX_WORK_FOCUS_LIST_ITEMS: usize = 16;
 pub const MAX_WORK_FOCUS_EVENT_BYTES: usize = 16 * 1_024;
@@ -76,6 +78,33 @@ pub struct WorkflowWorkFocusAcceptInput {
     pub expected_state_version: u64,
     pub expected_work_focus: WorkflowExpectedWorkFocus,
     pub focus: WorkflowWorkFocusDraft,
+    pub recorded_by: PrincipalId,
+    pub host_provenance: WorkflowCooperativeHostProvenance,
+}
+
+/// One explicit lifecycle change to the exact Work Focus observed by the host.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkflowWorkFocusChange {
+    Supersede {
+        focus: WorkflowWorkFocusDraft,
+    },
+    Complete {
+        completion_summary: String,
+        next_step: String,
+    },
+}
+
+/// Closed public input for an exact Work Focus lifecycle transition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowWorkFocusUpdateInput {
+    pub schema_version: String,
+    pub expected_snapshot_digest: String,
+    pub expected_ledger_head_digest: String,
+    pub expected_state_version: u64,
+    pub expected_work_focus: WorkflowExpectedWorkFocus,
+    pub change: WorkflowWorkFocusChange,
     pub recorded_by: PrincipalId,
     pub host_provenance: WorkflowCooperativeHostProvenance,
 }
