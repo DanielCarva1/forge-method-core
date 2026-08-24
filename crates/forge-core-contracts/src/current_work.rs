@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v3";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v3";
+pub const CURRENT_WORK_PREPARATION_SCHEMA_VERSION: &str = "current_work_preparation_v1";
 pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
 pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
 pub const QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
@@ -14,6 +15,8 @@ pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_inpu
 pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v3";
 pub const MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_UPDATE_INPUT_BYTES: u64 = 16 * 1_024;
+pub const MAX_CURRENT_WORK_PREPARATION_BYTES: usize = 16 * 1_024;
+pub const CURRENT_WORK_INPUT_FILE_TOKEN: &str = "${CURRENT_WORK_INPUT_FILE}";
 pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
 pub const MAX_WORK_FOCUS_LIST_ITEMS: usize = 16;
 pub const MAX_WORK_FOCUS_EVENT_BYTES: usize = 16 * 1_024;
@@ -304,6 +307,64 @@ pub enum WorkflowCurrentWorkStatus {
     Blocked,
     Completed,
     Abandoned,
+}
+
+/// A prepared Current Work candidate has no authority to mutate Forge state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkPreparationAuthority {
+    CandidatePreparationOnly,
+}
+
+/// Existing public mutation path selected from the observed Current Work state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkPreparationOperation {
+    Accept,
+    Supersede,
+}
+
+impl WorkflowCurrentWorkPreparationOperation {
+    #[must_use]
+    pub const fn for_status(status: WorkflowCurrentWorkStatus) -> Self {
+        match status {
+            WorkflowCurrentWorkStatus::Absent
+            | WorkflowCurrentWorkStatus::Completed
+            | WorkflowCurrentWorkStatus::Abandoned => Self::Accept,
+            WorkflowCurrentWorkStatus::Current
+            | WorkflowCurrentWorkStatus::Stale
+            | WorkflowCurrentWorkStatus::Blocked => Self::Supersede,
+        }
+    }
+}
+
+/// Exact optimistic-concurrency bindings copied into the prepared input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkPreparationBinding {
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+    pub expected_work_focus: WorkflowExpectedWorkFocus,
+}
+
+/// Bounded, read-only candidate template for the existing accept/update API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkPreparationPacket {
+    pub schema_version: String,
+    pub authority: WorkflowCurrentWorkPreparationAuthority,
+    pub current_work_status: WorkflowCurrentWorkStatus,
+    pub operation: WorkflowCurrentWorkPreparationOperation,
+    pub binding: WorkflowCurrentWorkPreparationBinding,
+    pub apply_input_schema_version: String,
+    pub apply_argv: Vec<String>,
+    pub input_file_token: String,
+    pub maximum_input_bytes: u64,
+    pub input_file_must_be_outside_project_snapshot: bool,
+    pub apply_input_template: serde_json::Value,
+    pub required_replacements: Vec<String>,
+    pub readback_contract: String,
 }
 
 /// Compact readback intended for ordinary workflow resume.
@@ -610,6 +671,60 @@ impl WorkflowCurrentWorkContext {
             validate_summary(focus)?;
         }
         validate_total(self, MAX_CURRENT_WORK_SUMMARY_BYTES)
+    }
+}
+
+impl WorkflowCurrentWorkPreparationPacket {
+    pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
+        if self.schema_version != CURRENT_WORK_PREPARATION_SCHEMA_VERSION
+            || self.input_file_token != CURRENT_WORK_INPUT_FILE_TOKEN
+            || !self.input_file_must_be_outside_project_snapshot
+        {
+            return Err(WorkflowCurrentWorkValidationError::WrongSchema);
+        }
+        validate_digest(&self.binding.snapshot_digest)?;
+        validate_digest(&self.binding.ledger_head_digest)?;
+        validate_optional_argv(Some(&self.apply_argv))?;
+        if self.required_replacements.is_empty()
+            || self.required_replacements.len() > MAX_WORK_FOCUS_LIST_ITEMS
+            || self.required_replacements.iter().any(|marker| {
+                marker.as_bytes().len() > MAX_CURRENT_WORK_ARG_BYTES
+                    || !marker.starts_with("${")
+                    || !marker.ends_with('}')
+            })
+        {
+            return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+        let shape_matches = match self.operation {
+            WorkflowCurrentWorkPreparationOperation::Accept => {
+                matches!(
+                    self.current_work_status,
+                    WorkflowCurrentWorkStatus::Absent
+                        | WorkflowCurrentWorkStatus::Completed
+                        | WorkflowCurrentWorkStatus::Abandoned
+                ) && matches!(
+                    &self.binding.expected_work_focus,
+                    WorkflowExpectedWorkFocus::Absent
+                ) && self.apply_input_schema_version == WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION
+                    && self.maximum_input_bytes == MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES
+            }
+            WorkflowCurrentWorkPreparationOperation::Supersede => {
+                matches!(
+                    self.current_work_status,
+                    WorkflowCurrentWorkStatus::Current
+                        | WorkflowCurrentWorkStatus::Blocked
+                        | WorkflowCurrentWorkStatus::Stale
+                ) && matches!(
+                    &self.binding.expected_work_focus,
+                    WorkflowExpectedWorkFocus::Current { .. }
+                ) && self.apply_input_schema_version == WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION
+                    && self.maximum_input_bytes == MAX_WORK_FOCUS_UPDATE_INPUT_BYTES
+            }
+        };
+        if !shape_matches {
+            return Err(WorkflowCurrentWorkValidationError::StatusFocusMismatch);
+        }
+        validate_total(self, MAX_CURRENT_WORK_PREPARATION_BYTES)
     }
 }
 

@@ -7,6 +7,7 @@ use forge_core_contracts::{
     WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationOwnerDetail,
     WorkflowCurrentWorkCollaborationPromotionState, WorkflowCurrentWorkCollaborationSummary,
     WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
+    WorkflowCurrentWorkPreparationOperation, WorkflowCurrentWorkPreparationPacket,
     WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
     WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowCurrentWorkValidationError,
     WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion, WorkflowQuickCycleSnapshot,
@@ -677,4 +678,71 @@ fn current_work_readback_rejects_invalid_state_and_bounds() {
     absent_without_focus
         .validate()
         .expect("absence is represented without contradictory focus data");
+}
+
+#[test]
+fn current_work_preparation_selects_one_existing_mutation_path_for_every_status() {
+    for status in [
+        WorkflowCurrentWorkStatus::Absent,
+        WorkflowCurrentWorkStatus::Completed,
+        WorkflowCurrentWorkStatus::Abandoned,
+    ] {
+        assert_eq!(
+            WorkflowCurrentWorkPreparationOperation::for_status(status),
+            WorkflowCurrentWorkPreparationOperation::Accept
+        );
+    }
+    for status in [
+        WorkflowCurrentWorkStatus::Current,
+        WorkflowCurrentWorkStatus::Blocked,
+        WorkflowCurrentWorkStatus::Stale,
+    ] {
+        assert_eq!(
+            WorkflowCurrentWorkPreparationOperation::for_status(status),
+            WorkflowCurrentWorkPreparationOperation::Supersede
+        );
+    }
+}
+
+#[test]
+fn current_work_preparation_packet_rejects_unknown_authority_fields() {
+    let mut packet = serde_json::json!({
+        "schema_version": "current_work_preparation_v1",
+        "authority": "candidate_preparation_only",
+        "current_work_status": "absent",
+        "operation": "accept",
+        "binding": {
+            "snapshot_digest": format!("sha256:{}", "a".repeat(64)),
+            "ledger_head_digest": format!("sha256:{}", "b".repeat(64)),
+            "state_version": 1,
+            "expected_work_focus": {"status": "absent"}
+        },
+        "apply_input_schema_version": "work_focus_accept_input_v3",
+        "apply_argv": ["forge-core", "workflow", "current-work", "accept"],
+        "input_file_token": "${CURRENT_WORK_INPUT_FILE}",
+        "maximum_input_bytes": 16384,
+        "input_file_must_be_outside_project_snapshot": true,
+        "apply_input_template": {},
+        "required_replacements": ["${FOCUS_ID}"],
+        "readback_contract": "Preparation writes no Forge state."
+    });
+    let parsed = serde_json::from_value::<WorkflowCurrentWorkPreparationPacket>(packet.clone())
+        .expect("closed preparation packet parses");
+    parsed.validate().expect("bounded preparation packet");
+    let mut oversized = parsed;
+    oversized.apply_argv.push("x".repeat(1_025));
+    assert_eq!(
+        oversized.validate(),
+        Err(WorkflowCurrentWorkValidationError::ListBound)
+    );
+    packet
+        .as_object_mut()
+        .expect("packet object")
+        .insert("mutation_authority".into(), serde_json::json!(true));
+    assert!(
+        serde_json::from_value::<WorkflowCurrentWorkPreparationPacket>(packet)
+            .expect_err("unknown authority-like fields must fail closed")
+            .to_string()
+            .contains("unknown field")
+    );
 }

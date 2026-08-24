@@ -21,9 +21,10 @@ use forge_core_contracts::{
     WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
     WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
     WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_DETAIL_BYTES,
-    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
-    MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
-    WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+    MAX_CURRENT_WORK_PREPARATION_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES,
+    MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerIdentity,
@@ -554,6 +555,84 @@ fn run_current_work_accept(consumer: &Consumer, input_path: &Path) -> Output {
         ])
         .output()
         .expect("run Current Work acceptance command")
+}
+
+fn run_current_work_prepare(consumer: &Consumer) -> Output {
+    bin()
+        .args(["workflow", "current-work", "prepare", "--root"])
+        .arg(&consumer.app)
+        .arg("--json")
+        .output()
+        .expect("prepare Current Work input")
+}
+
+fn replace_exact_json_marker(value: &mut Value, marker: &str, replacement: &Value) {
+    match value {
+        Value::String(current) if current == marker => *value = replacement.clone(),
+        Value::Array(items) => {
+            for item in items {
+                replace_exact_json_marker(item, marker, replacement);
+            }
+        }
+        Value::Object(fields) => {
+            for item in fields.values_mut() {
+                replace_exact_json_marker(item, marker, replacement);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn fill_prepared_current_work(template: &Value, focus_id: &str, title: &str) -> Value {
+    let mut input = template.clone();
+    for (marker, replacement) in [
+        ("${FOCUS_ID}", serde_json::json!(focus_id)),
+        ("${TITLE}", serde_json::json!(title)),
+        (
+            "${INTENDED_OUTCOME}",
+            serde_json::json!("A replacement host can continue the accepted work"),
+        ),
+        (
+            "${ACCEPTANCE_SUMMARY}",
+            serde_json::json!("Prepared input applies through the existing public command"),
+        ),
+        ("${NON_GOALS_JSON}", serde_json::json!([])),
+        ("${CANONICAL_REFS_JSON}", serde_json::json!(["CONTEXT.md"])),
+        (
+            "${AFFECTED_AREA_REFS_JSON}",
+            serde_json::json!(["crates/forge-core-cli"]),
+        ),
+        ("${EXTERNAL_WORK_ITEM_REF_JSON}", Value::Null),
+        ("${SELECTED_PRACTICE_REF_JSON}", Value::Null),
+        ("${SELECTED_PRACTICE_REASON_JSON}", Value::Null),
+        (
+            "${CURRENT_ACTIVITY}",
+            serde_json::json!("Apply the prepared candidate"),
+        ),
+        (
+            "${NEXT_STEP}",
+            serde_json::json!("Read Current Work back from Forge"),
+        ),
+        ("${CONTINUITY_JSON}", Value::Null),
+        (
+            "${RECORDED_BY}",
+            serde_json::json!("principal.agent.cli-e2e"),
+        ),
+        (
+            "${HOST_PROVENANCE_JSON}",
+            serde_json::json!({
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-prepare-e2e",
+                "interaction_ref": format!("turn.{focus_id}"),
+                "conversation_digest": format!("sha256:{}", "c".repeat(64)),
+                "observed_at_unix": 2
+            }),
+        ),
+    ] {
+        replace_exact_json_marker(&mut input, marker, &replacement);
+    }
+    input
 }
 
 fn run_current_work_update(consumer: &Consumer, input_path: &Path) -> Output {
@@ -1591,6 +1670,155 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
     assert_eq!(
         after_edit["data"]["selected_policy_ref"], "policy.workflow.domain-scan",
         "ordinary project edits must not reopen an objective-anchored completion"
+    );
+}
+
+#[test]
+fn current_work_prepare_is_read_only_and_selects_the_existing_accept_path() {
+    let consumer = Consumer::new_with_prefix("forge-current-work-prepare-e2e");
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet digest");
+    let objective_input = consumer.write_json(
+        "prepare objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Let a replacement host prepare Current Work without source knowledge",
+                "constraints": ["keep preparation read-only and on demand"],
+                "unacceptable_outcomes": ["duplicate the Work Focus schema in the host"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-prepare-e2e",
+                "interaction_ref": "turn.accept-objective",
+                "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        packet_digest,
+        &objective_input,
+    ));
+
+    let state_before = state_tree_snapshot(&consumer.state);
+    let records_before = work_focus_record_count(&consumer.state);
+    let prepared = assert_ok(&run_current_work_prepare(&consumer));
+    assert_eq!(prepared["command"], "workflow.current_work_prepare");
+    assert_eq!(
+        prepared["data"]["schema_version"],
+        "current_work_preparation_v1"
+    );
+    assert_eq!(prepared["data"]["authority"], "candidate_preparation_only");
+    assert_eq!(prepared["data"]["current_work_status"], "absent");
+    assert_eq!(prepared["data"]["operation"], "accept");
+    assert_eq!(
+        prepared["data"]["apply_input_schema_version"],
+        "work_focus_accept_input_v3"
+    );
+    assert_eq!(
+        prepared["data"]["binding"]["expected_work_focus"]["status"],
+        "absent"
+    );
+    assert_eq!(
+        prepared["data"]["maximum_input_bytes"],
+        MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES
+    );
+    assert_eq!(
+        prepared["data"]["input_file_token"],
+        "${CURRENT_WORK_INPUT_FILE}"
+    );
+    assert_eq!(
+        prepared["data"]["apply_argv"]
+            .as_array()
+            .expect("apply argv array")
+            .iter()
+            .take(4)
+            .cloned()
+            .collect::<Vec<_>>(),
+        serde_json::json!(["forge-core", "workflow", "current-work", "accept"])
+            .as_array()
+            .expect("expected argv array")
+            .clone()
+    );
+    assert_eq!(
+        prepared["data"]["apply_input_template"]["schema_version"],
+        "work_focus_accept_input_v3"
+    );
+    assert_eq!(
+        prepared["data"]["apply_input_template"]["expected_snapshot_digest"],
+        prepared["data"]["binding"]["snapshot_digest"]
+    );
+    assert_eq!(
+        prepared["data"]["input_file_must_be_outside_project_snapshot"],
+        true
+    );
+    assert!(prepared["data"]["required_replacements"]
+        .as_array()
+        .is_some_and(|items| !items.is_empty()));
+    assert!(
+        serde_json::to_vec(&prepared["data"])
+            .expect("preparation packet bytes")
+            .len()
+            <= MAX_CURRENT_WORK_PREPARATION_BYTES
+    );
+    assert!(prepared["data"]["readback_contract"]
+        .as_str()
+        .is_some_and(|value| value.contains("writes no Forge state")));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before);
+    assert_eq!(state_tree_snapshot(&consumer.state), state_before);
+
+    let accept_input = fill_prepared_current_work(
+        &prepared["data"]["apply_input_template"],
+        "focus.prepared-first",
+        "Prepared first focus",
+    );
+    let accept_path = consumer.write_json("prepared-current-work-accept.json", &accept_input);
+    assert_ok(&run_current_work_accept(&consumer, &accept_path));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 1);
+
+    let state_after_accept = state_tree_snapshot(&consumer.state);
+    let prepared_update = assert_ok(&run_current_work_prepare(&consumer));
+    assert_eq!(prepared_update["data"]["current_work_status"], "current");
+    assert_eq!(prepared_update["data"]["operation"], "supersede");
+    assert_eq!(
+        prepared_update["data"]["apply_input_schema_version"],
+        "work_focus_update_input_v3"
+    );
+    assert_eq!(
+        prepared_update["data"]["binding"]["expected_work_focus"]["record_digest"],
+        prepared_update["data"]["apply_input_template"]["expected_work_focus"]["record_digest"]
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), state_after_accept);
+
+    let update_input = fill_prepared_current_work(
+        &prepared_update["data"]["apply_input_template"],
+        "focus.prepared-second",
+        "Prepared replacement focus",
+    );
+    let update_path = consumer.write_json("prepared-current-work-update.json", &update_input);
+    assert_ok(&run_current_work_update(&consumer, &update_path));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 2);
+    let state_after_update = state_tree_snapshot(&consumer.state);
+    let stale_update = run_current_work_update(&consumer, &update_path);
+    assert_eq!(stale_update.status.code(), Some(4));
+    assert_eq!(json(&stale_update)["exit_reason"], "conflict");
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_after_update,
+        "stale prepared bindings must not alter WAL or state"
+    );
+    let resume = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        resume["data"]["current_work"]["focus"]["focus_id"],
+        "focus.prepared-second"
     );
 }
 

@@ -122,6 +122,15 @@ silently reused. `completed` and `abandoned` are terminal: a terminal
 accepted detail without scanning project documentation. This block is
 read-only advice and never authorizes edits or completion.
 
+Only after the host and human have accepted the meaning of a new or replacement
+Work Focus, run `forge-core workflow current-work prepare --root <path> --json`.
+This is an on-demand helper, not a pre-flight step: never run it for every
+message or ordinary resume. Replace every marker in its candidate template,
+write the temporary input outside the project snapshot, execute the exact
+`apply_argv`, then delete the temporary file. Preparation is read-only; only a
+successful existing `current-work accept` or `current-work update` operation
+makes the saved resume response stale.
+
 When Discovery follows an accepted `material_supersession` and
 `data.active_objective.previous_objective_digest` is present, treat this as an
 Evolve reentry that needs progressive context recovery. Start with the current

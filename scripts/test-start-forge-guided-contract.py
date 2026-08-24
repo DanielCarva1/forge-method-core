@@ -218,6 +218,16 @@ class GuidedActivationContractTests(unittest.TestCase):
             with self.subTest(integration=expected):
                 self.assertIn(expected.casefold(), integration)
 
+    def test_current_work_preparation_is_on_demand_and_reuses_existing_writers(self) -> None:
+        self.assert_contract_contains(
+            "workflow current-work prepare",
+            "on-demand helper, not a pre-flight step",
+            "temporary input outside the project snapshot",
+            "Preparation is read-only",
+            "current-work accept",
+            "current-work update",
+        )
+
     def test_collaboration_uses_progressive_detail_and_safe_worktrees(self) -> None:
         self.assert_contract_contains(
             "focus.collaboration",

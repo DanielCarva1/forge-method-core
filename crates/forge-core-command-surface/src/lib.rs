@@ -309,6 +309,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow episode finalize --input-file <episode-candidate.json> [--json|--no-json]",
         "       forge-core workflow episode apply --root <path> --input-file <episode-apply.json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
+        "       forge-core workflow current-work prepare --root <path> [--json|--no-json]",
         "       forge-core workflow current-work accept --root <path> --input-file <focus.json> [--json|--no-json]",
         "       forge-core workflow current-work update --root <path> --input-file <change.json> [--json|--no-json]",
         "       forge-core workflow current-work detail [--root <path>] --expected-head-digest <sha256> [--record-digest <sha256>] [--json|--no-json]",

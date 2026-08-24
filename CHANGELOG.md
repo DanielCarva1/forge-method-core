@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.40` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.41` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-admission.
 
 ### Added
+- **On-demand Current Work preparation for replacement hosts.** The read-only
+  `workflow current-work prepare` command selects the existing accept or
+  supersede path, returns exact concurrency bindings and a bounded candidate
+  template, and leaves the existing accept/update commands as the only writers.
+  Ordinary start and resume payloads are unchanged.
 - **Safe reuse of current Solo Cooperative evidence during research closeout.**
   A source assessment may now cite an earlier current supporting receipt instead
   of naming a dummy repository file. Forge still requires a new summary and

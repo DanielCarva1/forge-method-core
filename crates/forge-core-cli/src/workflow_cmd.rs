@@ -85,7 +85,7 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             return emit_failure(
                 "workflow.current_work",
                 ExitReason::InvalidDecisionShape,
-                "workflow current-work requires one of: accept, update, detail".to_owned(),
+                "workflow current-work requires one of: prepare, accept, update, detail".to_owned(),
                 wants_json(args),
             );
         };
@@ -245,6 +245,17 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
                     emit_failure(&command, ExitReason::EnvConfig, message, parsed.want_json)
                 }
             },
+            Err(error) => emit_failure(
+                &command,
+                classify_error(&error),
+                error.to_string(),
+                parsed.want_json,
+            ),
+        };
+    }
+    if parsed.subcommand == "current-work-prepare" {
+        return match adapter.prepare_work_focus() {
+            Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
             Err(error) => emit_failure(
                 &command,
                 classify_error(&error),
@@ -1427,7 +1438,11 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             requested_readiness_profile(args).map(|_| ())
         }
-        "action-packets" | "release-status" | "retirement-status" | "profile-status"
+        "action-packets"
+        | "release-status"
+        | "retirement-status"
+        | "profile-status"
+        | "current-work-prepare"
             if !args.flags.is_empty() =>
         {
             Err(format!(
@@ -1718,6 +1733,26 @@ mod tests {
         let parsed = parse_args(&normalized).expect("Current Work detail arguments parse");
         validate_release_args(&parsed).expect("Current Work detail remains read-only");
         assert_eq!(parsed.subcommand, "current-work-detail");
+        assert_eq!(parsed.root, PathBuf::from("D:\\product"));
+    }
+
+    #[test]
+    fn current_work_prepare_is_a_read_only_nested_command() {
+        let nested = argv(&[
+            "workflow",
+            "current-work",
+            "prepare",
+            "--root",
+            "D:\\product",
+            "--json",
+        ]);
+        let normalized = std::iter::once("workflow".to_owned())
+            .chain(std::iter::once("current-work-prepare".to_owned()))
+            .chain(nested.iter().skip(3).cloned())
+            .collect::<Vec<_>>();
+        let parsed = parse_args(&normalized).expect("Current Work prepare arguments parse");
+        validate_release_args(&parsed).expect("Current Work prepare remains read-only");
+        assert_eq!(parsed.subcommand, "current-work-prepare");
         assert_eq!(parsed.root, PathBuf::from("D:\\product"));
     }
 

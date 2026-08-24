@@ -95,6 +95,8 @@ use forge_core_contracts::{
     WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationOwnerDetail,
     WorkflowCurrentWorkCollaborationPromotionState, WorkflowCurrentWorkCollaborationSummary,
     WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
+    WorkflowCurrentWorkPreparationAuthority, WorkflowCurrentWorkPreparationBinding,
+    WorkflowCurrentWorkPreparationOperation, WorkflowCurrentWorkPreparationPacket,
     WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
     WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowEffectiveBundleIdentity,
     WorkflowEvaluatorProvider, WorkflowEvidenceFreshness, WorkflowEvidenceKind,
@@ -116,7 +118,8 @@ use forge_core_contracts::{
     COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION,
     COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
-    CURRENT_WORK_DETAIL_SCHEMA_VERSION, LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    CURRENT_WORK_DETAIL_SCHEMA_VERSION, CURRENT_WORK_INPUT_FILE_TOKEN,
+    CURRENT_WORK_PREPARATION_SCHEMA_VERSION, LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
     LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
     MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
@@ -128,8 +131,10 @@ use forge_core_contracts::{
     MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
     MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
     MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
-    MAX_WORK_FOCUS_LIST_ITEMS, POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS, PROJECT_LINK_FILE_NAME,
-    PROJECT_LINK_SCHEMA_VERSION, QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_LIST_ITEMS,
+    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS,
+    PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
+    QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
     QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
@@ -3341,6 +3346,156 @@ impl WorkflowGovernanceProjectAdapter {
             guidance.replacement_continuity = Some(continuity);
             Ok(guidance)
         })
+    }
+
+    /// Prepare a bounded candidate for the existing Work Focus accept/update
+    /// APIs. This observer writes no Forge state and leaves all host-owned
+    /// meaning and provenance as explicit replacement markers.
+    pub fn prepare_work_focus(
+        &self,
+    ) -> Result<WorkflowCurrentWorkPreparationPacket, WorkflowGovernanceAdapterError> {
+        let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        drop(ledger);
+        if accepted_cooperative_objective_record(&projection.records)?.is_none() {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus requires an active cooperative objective".to_owned(),
+            ));
+        }
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
+        let ledger_head_digest = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        let latest = projection.latest_work_focus_record();
+        let current_work_status = match latest {
+            Some((_, focus)) => Self::current_work_projection(&projection, focus)?.status,
+            None => WorkflowCurrentWorkStatus::Absent,
+        };
+        let operation = WorkflowCurrentWorkPreparationOperation::for_status(current_work_status);
+        let expected_work_focus = match operation {
+            WorkflowCurrentWorkPreparationOperation::Accept => WorkflowExpectedWorkFocus::Absent,
+            WorkflowCurrentWorkPreparationOperation::Supersede => {
+                WorkflowExpectedWorkFocus::Current {
+                    record_digest: latest
+                        .expect("a supersede operation requires an observed Work Focus")
+                        .0
+                        .record_digest
+                        .clone(),
+                }
+            }
+        };
+        let focus_template = serde_json::json!({
+            "focus_id": "${FOCUS_ID}",
+            "title": "${TITLE}",
+            "intended_outcome": "${INTENDED_OUTCOME}",
+            "acceptance_summary": "${ACCEPTANCE_SUMMARY}",
+            "non_goals": "${NON_GOALS_JSON}",
+            "canonical_refs": "${CANONICAL_REFS_JSON}",
+            "affected_area_refs": "${AFFECTED_AREA_REFS_JSON}",
+            "external_work_item_ref": "${EXTERNAL_WORK_ITEM_REF_JSON}",
+            "selected_practice_ref": "${SELECTED_PRACTICE_REF_JSON}",
+            "selected_practice_reason": "${SELECTED_PRACTICE_REASON_JSON}",
+            "current_activity": "${CURRENT_ACTIVITY}",
+            "next_step": "${NEXT_STEP}"
+        });
+        let mut apply_input_template = serde_json::json!({
+            "expected_snapshot_digest": snapshot_digest,
+            "expected_ledger_head_digest": ledger_head_digest,
+            "expected_state_version": state_version,
+            "expected_work_focus": expected_work_focus,
+            "recorded_by": "${RECORDED_BY}",
+            "host_provenance": "${HOST_PROVENANCE_JSON}"
+        });
+        let (action, apply_input_schema_version, maximum_input_bytes) = match operation {
+            WorkflowCurrentWorkPreparationOperation::Accept => {
+                apply_input_template["schema_version"] =
+                    serde_json::json!(WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION);
+                apply_input_template["focus"] = focus_template;
+                apply_input_template["continuity"] = serde_json::json!("${CONTINUITY_JSON}");
+                (
+                    "accept",
+                    WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+                    MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+                )
+            }
+            WorkflowCurrentWorkPreparationOperation::Supersede => {
+                apply_input_template["schema_version"] =
+                    serde_json::json!(WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION);
+                apply_input_template["change"] = serde_json::json!({
+                    "kind": "supersede",
+                    "focus": focus_template,
+                    "continuity": "${CONTINUITY_JSON}"
+                });
+                (
+                    "update",
+                    WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
+                    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
+                )
+            }
+        };
+        fn collect_replacement_markers(value: &serde_json::Value, markers: &mut BTreeSet<String>) {
+            match value {
+                serde_json::Value::String(value)
+                    if value.starts_with("${") && value.ends_with('}') =>
+                {
+                    markers.insert(value.clone());
+                }
+                serde_json::Value::Array(values) => {
+                    for value in values {
+                        collect_replacement_markers(value, markers);
+                    }
+                }
+                serde_json::Value::Object(values) => {
+                    for value in values.values() {
+                        collect_replacement_markers(value, markers);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut required_replacements = BTreeSet::new();
+        collect_replacement_markers(&apply_input_template, &mut required_replacements);
+        project_snapshot.revalidate()?;
+        let packet = WorkflowCurrentWorkPreparationPacket {
+            schema_version: CURRENT_WORK_PREPARATION_SCHEMA_VERSION.to_owned(),
+            authority: WorkflowCurrentWorkPreparationAuthority::CandidatePreparationOnly,
+            current_work_status,
+            operation,
+            binding: WorkflowCurrentWorkPreparationBinding {
+                snapshot_digest,
+                ledger_head_digest,
+                state_version,
+                expected_work_focus,
+            },
+            apply_input_schema_version: apply_input_schema_version.to_owned(),
+            apply_argv: vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "current-work".to_owned(),
+                action.to_owned(),
+                "--root".to_owned(),
+                self.binding.project_root.display().to_string(),
+                "--input-file".to_owned(),
+                CURRENT_WORK_INPUT_FILE_TOKEN.to_owned(),
+                "--json".to_owned(),
+            ],
+            input_file_token: CURRENT_WORK_INPUT_FILE_TOKEN.to_owned(),
+            maximum_input_bytes,
+            input_file_must_be_outside_project_snapshot: true,
+            apply_input_template,
+            required_replacements: required_replacements.into_iter().collect(),
+            readback_contract: "Preparation writes no Forge state or file. Replace every marker with host-owned meaning and provenance, write the candidate input outside the project snapshot, use the exact apply argv, delete the temporary input, and trust only successful accept/update readback as a Current Work change.".to_owned(),
+        };
+        packet.validate().map_err(|error| {
+            WorkflowGovernanceAdapterError::InvalidObservation(format!(
+                "the bounded Current Work preparation packet is invalid: {error:?}"
+            ))
+        })?;
+        Ok(packet)
     }
 
     /// Accept the first bounded Work Focus beneath exact project and ledger
