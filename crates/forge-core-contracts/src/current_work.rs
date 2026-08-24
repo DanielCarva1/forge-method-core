@@ -64,6 +64,10 @@ pub struct WorkflowWorkFocusDraft {
     pub affected_area_refs: Vec<RepoPath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub external_work_item_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_practice_ref: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_practice_reason: Option<String>,
     pub current_activity: String,
     pub next_step: String,
 }

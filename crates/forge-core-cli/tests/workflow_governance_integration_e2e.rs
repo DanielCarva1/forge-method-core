@@ -20,7 +20,8 @@ use forge_core_contracts::{
     WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
     WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
     WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
-    WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
+    WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_DETAIL_BYTES,
+    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
     WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
@@ -1505,6 +1506,8 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
                 "canonical_refs": ["contracts/spec/product-journey-guidance-v0.yaml"],
                 "affected_area_refs": ["crates/forge-core-cli"],
                 "external_work_item_ref": "https://github.com/DanielCarva1/forge-method-core/issues/34",
+                "selected_practice_ref": "edge-case-review",
+                "selected_practice_reason": "Stress the replacement-host journey without adding another workflow",
                 "current_activity": "Add the first public Work Focus write path",
                 "next_step": "Dogfood the command on Forge itself"
             },
@@ -1541,7 +1544,19 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
         "a stale retry must not append another Work Focus record"
     );
 
+    let state_before_ordinary_resume = state_tree_snapshot(&consumer.state);
     let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_ordinary_resume,
+        "ordinary continuation through read-only resume must not append a Work Focus event"
+    );
+    assert!(
+        serde_json::to_vec(&resumed["data"]["current_work"])
+            .expect("serialize Current Work summary")
+            .len()
+            <= MAX_CURRENT_WORK_SUMMARY_BYTES
+    );
     assert_eq!(resumed["data"]["current_work"]["status"], "current");
     assert_eq!(
         resumed["data"]["current_work"]["focus"]["external_work_item_ref"],
@@ -1550,6 +1565,10 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
     assert_eq!(
         resumed["data"]["current_work"]["focus"]["next_step"],
         "Dogfood the command on Forge itself"
+    );
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["selected_practice_ref"],
+        "edge-case-review"
     );
 
     let supersede_input = consumer.write_json(
@@ -1574,6 +1593,8 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
                     "canonical_refs": ["contracts/spec/product-journey-guidance-v0.yaml"],
                     "affected_area_refs": ["crates/forge-core-cli"],
                     "external_work_item_ref": "https://github.com/DanielCarva1/forge-method-core/issues/34",
+                    "selected_practice_ref": "edge-case-review",
+                    "selected_practice_reason": "Stress the replacement-host journey without adding another workflow",
                     "current_activity": "Exercise the supersede transition",
                     "next_step": "Complete this focus"
                 }
@@ -1723,6 +1744,16 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
     assert_eq!(
         detail["data"]["blocker_refs"],
         serde_json::json!(blocker_digests)
+    );
+    assert!(
+        serde_json::to_vec(&detail["data"])
+            .expect("serialize Current Work detail")
+            .len()
+            <= MAX_CURRENT_WORK_DETAIL_BYTES
+    );
+    assert_eq!(
+        detail["data"]["focus"]["selected_practice_reason"],
+        "Stress the replacement-host journey without adding another workflow"
     );
     let state_before_stale_detail = state_tree_snapshot(&consumer.state);
     let stale_detail = run_current_work_detail(
