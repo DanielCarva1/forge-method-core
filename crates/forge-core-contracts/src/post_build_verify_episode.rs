@@ -97,6 +97,38 @@ pub enum PostBuildVerifyPolicyRole {
     EvolveProject,
 }
 
+/// Canonical identities of the five existing workflow records reused by a
+/// post-BuildVerify episode. Keeping the mapping beside the episode contract
+/// prevents CLI or adapter layers from growing their own catalogs.
+pub const POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS: [(PostBuildVerifyPolicyRole, &str, &str);
+    POST_BUILD_VERIFY_POLICY_REFERENCE_COUNT] = [
+    (
+        PostBuildVerifyPolicyRole::Readiness,
+        "release-readiness",
+        "contracts/evidence/workflow-retirement/legacy-catalog/release-readiness.yaml",
+    ),
+    (
+        PostBuildVerifyPolicyRole::ReadyRelease,
+        "ready-release",
+        "contracts/evidence/workflow-retirement/legacy-catalog/ready-release.yaml",
+    ),
+    (
+        PostBuildVerifyPolicyRole::RealityEvidence,
+        "reality-evidence-gate",
+        "contracts/evidence/workflow-retirement/legacy-catalog/reality-evidence-gate.yaml",
+    ),
+    (
+        PostBuildVerifyPolicyRole::ContextRecovery,
+        "context-recovery",
+        "contracts/evidence/workflow-retirement/legacy-catalog/context-recovery.yaml",
+    ),
+    (
+        PostBuildVerifyPolicyRole::EvolveProject,
+        "evolve-project",
+        "contracts/evidence/workflow-retirement/legacy-catalog/evolve-project.yaml",
+    ),
+];
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PostBuildVerifyPolicyReference {

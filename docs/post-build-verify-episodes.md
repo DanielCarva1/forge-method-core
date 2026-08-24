@@ -97,6 +97,7 @@ admission that originally produced it.
 Host agents apply one closed candidate through:
 
 ```text
+forge-core workflow episode prepare --root <project>
 forge-core workflow episode apply --root <project> --input-file <episode-apply.json>
 ```
 
@@ -107,6 +108,11 @@ gate or ledger path: it forwards the exact bindings to
 `WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode`. Stale bindings fail
 without a second append. The host must record honest observations in the candidate; the
 command never manufactures deployment or operational evidence.
+
+`episode prepare` is read-only. It fills current release, phase, snapshot, ledger, state,
+lineage, rollback snapshot, and the five canonical policy references. Host-owned facts
+remain visible replacement markers. Preparation creates no file, appends no event, and
+does not run from `start` or `resume`; `episode apply` remains the only mutation.
 
 ## Durable coordination lifecycle
 

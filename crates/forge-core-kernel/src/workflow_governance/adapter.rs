@@ -122,8 +122,8 @@ use forge_core_contracts::{
     MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
     MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
     MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
-    MAX_WORK_FOCUS_LIST_ITEMS, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
-    SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
+    MAX_WORK_FOCUS_LIST_ITEMS, POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS, PROJECT_LINK_FILE_NAME,
+    PROJECT_LINK_SCHEMA_VERSION, SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
     SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
@@ -930,6 +930,51 @@ pub struct PostBuildVerifyEpisodeApplyRequest<'a> {
     pub expected_state_version: u64,
 }
 
+pub const MAX_POST_BUILD_VERIFY_EPISODE_APPLY_INPUT_BYTES: usize = 256 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PostBuildVerifyEpisodePreparationAuthority {
+    CandidatePreparationOnly,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyEpisodePreparationBinding {
+    pub snapshot_digest: String,
+    pub ledger_head_digest: String,
+    pub state_version: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyEpisodePreparationLineage {
+    pub episode_id: StableId,
+    pub generation: u64,
+    pub episode_digest: String,
+}
+
+/// Read-only material for preparing the existing episode apply input. Values
+/// owned by the host remain explicit replacement markers and therefore cannot
+/// be mistaken for observed deployment or operational evidence.
+#[derive(Debug, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PostBuildVerifyEpisodePreparationPacket {
+    pub schema_version: &'static str,
+    pub authority: PostBuildVerifyEpisodePreparationAuthority,
+    pub current_phase: StableId,
+    pub applicable_now: bool,
+    pub binding: PostBuildVerifyEpisodePreparationBinding,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_episode: Option<PostBuildVerifyEpisodePreparationLineage>,
+    pub apply_argv: Vec<String>,
+    pub input_file_token: &'static str,
+    pub maximum_input_bytes: usize,
+    pub apply_input_template: serde_json::Value,
+    pub required_replacements: Vec<String>,
+    pub readback_contract: &'static str,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PostBuildVerifyEpisodeApplyReceipt {
@@ -1204,6 +1249,127 @@ impl WorkflowGovernanceProjectAdapter {
     #[must_use]
     pub const fn binding(&self) -> &WorkflowGovernanceProjectBinding {
         &self.binding
+    }
+
+    /// Build one bounded candidate template from current trusted bindings.
+    /// This acquires only read locks, writes no Forge state, and never invents
+    /// host observations, operational evidence, feedback, or evolution intent.
+    pub fn prepare_post_build_verify_episode(
+        &self,
+    ) -> Result<PostBuildVerifyEpisodePreparationPacket, WorkflowGovernanceAdapterError> {
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
+        let projection = ledger.recover()?;
+        let admitted = self.resolve_active_release(&registry, &projection)?;
+        let current_phase = current_phase(&projection)?;
+        let parsed_phase = Phase::parse(&current_phase.0)
+            .ok_or_else(|| WorkflowGovernanceAdapterError::InvalidPhase(current_phase.0.clone()))?;
+        let project_snapshot =
+            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot_digest = project_snapshot.digest().to_owned();
+        let ledger_head_digest = projection
+            .head_digest
+            .clone()
+            .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+        let state_version = projection.current_state_version().unwrap_or_default();
+        let latest_episode = projection.records.iter().rev().find_map(|record| {
+            if let WorkflowGovernanceEvent::PostBuildVerifyEpisodeApplied(event) = &record.event {
+                (event.release_subject == *admitted.release()).then(|| {
+                    PostBuildVerifyEpisodePreparationLineage {
+                        episode_id: event.episode_id.clone(),
+                        generation: event.generation,
+                        episode_digest: event.episode_digest.clone(),
+                    }
+                })
+            } else {
+                None
+            }
+        });
+        let (episode_id, generation, previous_episode_digest, mut required_replacements) =
+            if let Some(previous) = latest_episode.as_ref() {
+                (
+                    serde_json::Value::String(previous.episode_id.0.clone()),
+                    previous
+                        .generation
+                        .checked_add(1)
+                        .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?,
+                    serde_json::Value::String(previous.episode_digest.clone()),
+                    Vec::new(),
+                )
+            } else {
+                required_episode_preparation_replacements()
+            };
+        required_replacements.extend([
+            "${DEPLOYMENT_OBSERVATIONS_JSON}".to_owned(),
+            "${OPERATIONAL_EVIDENCE_JSON}".to_owned(),
+            "${EVOLUTION_JSON}".to_owned(),
+            "${CONTINUITY_JSON}".to_owned(),
+            "${EPISODE_DIGEST_AFTER_REPLACEMENTS}".to_owned(),
+        ]);
+        let release_subject = admitted.release().clone();
+        let snapshot_reference = serde_json::json!({
+            "subject_ref": "forge://project-snapshot",
+            "subject_digest": snapshot_digest,
+        });
+        let apply_input_template = serde_json::json!({
+            "document": {
+                "schema_version": forge_core_contracts::POST_BUILD_VERIFY_EPISODE_SCHEMA_VERSION,
+                "post_build_verify_episode": {
+                    "episode_id": episode_id,
+                    "generation": generation,
+                    "previous_episode_digest": previous_episode_digest,
+                    "authority": "candidate_only",
+                    "release_subject": release_subject,
+                    "build_verify_snapshot": snapshot_reference,
+                    "rollback_baseline": {
+                        "kind": "build_verify_snapshot",
+                        "snapshot": snapshot_reference,
+                    },
+                    "policy_references": canonical_post_build_verify_policy_references(),
+                    "deployment_observations": "${DEPLOYMENT_OBSERVATIONS_JSON}",
+                    "operational_evidence": "${OPERATIONAL_EVIDENCE_JSON}",
+                    "feedback": [],
+                    "intake": [],
+                    "evolution": "${EVOLUTION_JSON}",
+                    "continuity": "${CONTINUITY_JSON}",
+                    "episode_digest": "${EPISODE_DIGEST_AFTER_REPLACEMENTS}",
+                }
+            },
+            "expected_snapshot_digest": snapshot_digest,
+            "expected_ledger_head_digest": ledger_head_digest,
+            "expected_state_version": state_version,
+        });
+        Ok(PostBuildVerifyEpisodePreparationPacket {
+            schema_version: "post_build_verify_episode_preparation_v1",
+            authority: PostBuildVerifyEpisodePreparationAuthority::CandidatePreparationOnly,
+            current_phase,
+            applicable_now: matches!(
+                parsed_phase,
+                Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
+            ),
+            binding: PostBuildVerifyEpisodePreparationBinding {
+                snapshot_digest,
+                ledger_head_digest,
+                state_version,
+            },
+            latest_episode,
+            apply_argv: vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "episode".to_owned(),
+                "apply".to_owned(),
+                "--root".to_owned(),
+                self.binding.project_root.display().to_string(),
+                "--input-file".to_owned(),
+                "${EPISODE_APPLY_INPUT_FILE}".to_owned(),
+                "--json".to_owned(),
+            ],
+            input_file_token: "${EPISODE_APPLY_INPUT_FILE}",
+            maximum_input_bytes: MAX_POST_BUILD_VERIFY_EPISODE_APPLY_INPUT_BYTES,
+            apply_input_template,
+            required_replacements,
+            readback_contract: "Preparation writes no Forge state. Replace every marker with observed host facts, recompute the canonical episode digest, then use episode apply; apply remains the only mutation.",
+        })
     }
 
     /// Admit and atomically record one exact C5.2 route from a candidate-only
@@ -10332,6 +10498,31 @@ fn current_phase(
         }
     }
     phase.ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)
+}
+
+fn required_episode_preparation_replacements(
+) -> (serde_json::Value, u64, serde_json::Value, Vec<String>) {
+    (
+        serde_json::Value::String("${EPISODE_ID}".to_owned()),
+        1,
+        serde_json::Value::Null,
+        vec!["${EPISODE_ID}".to_owned()],
+    )
+}
+
+fn canonical_post_build_verify_policy_references() -> serde_json::Value {
+    serde_json::Value::Array(
+        POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS
+            .iter()
+            .map(|(role, policy_id, policy_ref)| {
+                serde_json::json!({
+                    "role": role,
+                    "policy_id": policy_id,
+                    "policy_ref": policy_ref,
+                })
+            })
+            .collect(),
+    )
 }
 
 fn validate_identity(

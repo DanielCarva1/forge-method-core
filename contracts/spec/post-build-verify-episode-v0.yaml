@@ -88,6 +88,7 @@ pure_decision_composition:
 
 c5_2_runtime_admission:
   api: "WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode"
+  preparation_cli: "forge-core workflow episode prepare --root <path>"
   public_cli: "forge-core workflow episode apply --root <path> --input-file <episode-apply.json>"
   public_cli_boundary: >-
     The host agent supplies one bounded closed JSON wrapper containing the

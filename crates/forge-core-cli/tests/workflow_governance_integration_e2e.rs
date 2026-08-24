@@ -137,6 +137,15 @@ impl Consumer {
             .expect("apply workflow episode")
     }
 
+    fn prepare_episode(&self) -> Output {
+        bin()
+            .args(["workflow", "episode", "prepare", "--root"])
+            .arg(&self.app)
+            .arg("--json")
+            .output()
+            .expect("prepare workflow episode")
+    }
+
     fn write_json<T: Serialize>(&self, name: &str, value: &T) -> PathBuf {
         let path = self.parent.join(name);
         fs::write(
@@ -3624,6 +3633,15 @@ fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
         .to_owned();
     append_test_phase_transition(&consumer, "1-discovery", "5-ready-operate", &snapshot);
 
+    let prepared = assert_ok(&consumer.prepare_episode());
+    assert_eq!(prepared["command"], "workflow.episode.prepare");
+    assert_eq!(prepared["data"]["current_phase"], "5-ready-operate");
+    assert_eq!(prepared["data"]["applicable_now"], true);
+    assert_eq!(
+        prepared["data"]["apply_input_template"]["expected_snapshot_digest"],
+        prepared["data"]["binding"]["snapshot_digest"]
+    );
+
     let (applied, input) = loop {
         let status = assert_ok(&consumer.run(&["release-status"]));
         let document = post_build_verify_episode_document(
@@ -3663,6 +3681,19 @@ fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(resumed["data"]["current_phase"], "6-evolve");
     let evolve_head = resumed["data"]["ledger_head_digest"].clone();
+
+    let follow_on = assert_ok(&consumer.prepare_episode());
+    assert_eq!(follow_on["data"]["latest_episode"]["generation"], 1);
+    assert_eq!(
+        follow_on["data"]["apply_input_template"]["document"]["post_build_verify_episode"]
+            ["generation"],
+        2
+    );
+    assert_eq!(
+        follow_on["data"]["apply_input_template"]["document"]["post_build_verify_episode"]
+            ["previous_episode_digest"],
+        follow_on["data"]["latest_episode"]["episode_digest"]
+    );
 
     let retry = consumer.apply_episode(&input);
     let retry_envelope = json(&retry);
