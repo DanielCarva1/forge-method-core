@@ -29,12 +29,22 @@ pub fn sha256_digest(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
+/// Canonically encode and digest one serializable value.
+///
+/// # Errors
+///
+/// Returns an error when the value cannot be encoded as canonical JSON.
 pub fn canonical_json_sha256<T: serde::Serialize>(value: &T) -> Result<String, String> {
     let bytes = serde_json_canonicalizer::to_vec(value)
         .map_err(|error| format!("cannot canonicalize conformance data: {error}"))?;
     Ok(sha256_digest(&bytes))
 }
 
+/// Validate the complete Solo host conformance corpus.
+///
+/// # Errors
+///
+/// Returns an error when the corpus schema, cases, or capability coverage is invalid.
 pub fn validate_solo_host_corpus(corpus: &SoloHostConformanceCorpusDocument) -> Result<(), String> {
     if corpus.schema_version != SOLO_HOST_CONFORMANCE_SCHEMA_VERSION {
         return Err("unsupported solo host corpus schema_version".to_owned());
@@ -71,6 +81,11 @@ pub fn validate_solo_host_corpus(corpus: &SoloHostConformanceCorpusDocument) -> 
     Ok(())
 }
 
+/// Validate the bindings shared by a Solo host conformance request and response.
+///
+/// # Errors
+///
+/// Returns an error when a required binding is empty, malformed, or inconsistent.
 pub fn validate_solo_host_bindings(bindings: &SoloHostConformanceBindings) -> Result<(), String> {
     for (field, value) in [
         ("host_id", &bindings.declared.host_id),
@@ -174,6 +189,11 @@ pub fn validate_solo_host_bindings(bindings: &SoloHostConformanceBindings) -> Re
     Ok(())
 }
 
+/// Normalize a host response against the exact conformance request.
+///
+/// # Errors
+///
+/// Returns an error when bindings or case results are invalid, missing, duplicated, or unexpected.
 pub fn normalize_solo_host_response(
     request: &SoloHostConformanceRequestDocument,
     response: &SoloHostConformanceResponseDocument,
@@ -270,6 +290,11 @@ pub fn normalize_solo_host_response(
     })
 }
 
+/// Validate a host response and derive the core-owned conformance result.
+///
+/// # Errors
+///
+/// Returns an error when the response cannot be normalized or the request corpus is invalid.
 pub fn validate_and_derive_solo_host_result(
     request: &SoloHostConformanceRequestDocument,
     response: &SoloHostConformanceResponseDocument,
@@ -389,6 +414,11 @@ fn adapter_claim_result(passed: bool) -> (SoloHostAssertionStatus, SoloHostProof
     )
 }
 
+/// Digest a Solo host bundle manifest without its self-referential bundle digest.
+///
+/// # Errors
+///
+/// Returns an error when the manifest cannot be encoded as canonical JSON.
 pub fn solo_host_manifest_digest(
     manifest: &SoloHostConformanceBundleManifest,
 ) -> Result<String, String> {
@@ -397,6 +427,11 @@ pub fn solo_host_manifest_digest(
     canonical_json_sha256(&unsigned)
 }
 
+/// Validate the structure and self-digest of a Solo host bundle manifest.
+///
+/// # Errors
+///
+/// Returns an error when the manifest is malformed or its declared digest does not match.
 pub fn validate_solo_host_manifest(
     manifest: &SoloHostConformanceBundleManifest,
 ) -> Result<(), String> {

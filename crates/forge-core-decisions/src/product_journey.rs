@@ -43,6 +43,11 @@ pub enum ProductJourneyIssueCode {
     GuidanceTooLarge,
 }
 
+/// Load and validate the product journey compiled into the binary.
+///
+/// # Errors
+///
+/// Returns a rejection when the embedded YAML cannot be parsed or fails journey validation.
 pub fn load_accepted_product_journey(
 ) -> Result<&'static ProductJourneyDocument, ProductJourneyRejection> {
     match ACCEPTED_JOURNEY.get_or_init(|| {
@@ -64,6 +69,11 @@ pub fn load_accepted_product_journey(
     }
 }
 
+/// Validate a product journey against the accepted lifecycle and autonomy funnel.
+///
+/// # Errors
+///
+/// Returns a rejection containing every detected schema, phase, density, or stage issue.
 pub fn validate_product_journey(
     document: &ProductJourneyDocument,
 ) -> Result<(), ProductJourneyRejection> {
@@ -144,6 +154,11 @@ pub fn validate_product_journey(
     }
 }
 
+/// Project the descriptor for one phase from a valid product journey.
+///
+/// # Errors
+///
+/// Returns a rejection when the journey is invalid or the requested phase is missing.
 pub fn project_product_stage(
     document: &ProductJourneyDocument,
     phase: Phase,
@@ -164,6 +179,11 @@ pub fn project_product_stage(
         })
 }
 
+/// Derive bounded, advisory guidance for one product journey phase.
+///
+/// # Errors
+///
+/// Returns a rejection when the journey is invalid or the resulting guidance exceeds its bound.
 pub fn derive_product_journey_guidance(
     document: &ProductJourneyDocument,
     catalog: &Catalog,

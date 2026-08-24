@@ -60,6 +60,10 @@ impl std::error::Error for PromotionPlanningError {}
 ///
 /// Input order is irrelevant. File metadata and empty-directory changes are
 /// visible as unsupported effects and are never smuggled into the write set.
+///
+/// # Errors
+///
+/// Returns an error when an inventory path or digest is invalid or duplicated.
 pub fn derive_promotion_diff(
     source_files: &[PromotionInventoryFile],
     destination_files: &[PromotionInventoryFile],
@@ -361,6 +365,11 @@ pub fn evaluate_promotion_readiness(
     }
 }
 
+/// Produce a domain-separated canonical digest for promotion material.
+///
+/// # Errors
+///
+/// Returns an error when the supplied value cannot be encoded as canonical JSON.
 pub fn promotion_domain_digest(
     domain: &'static str,
     value: &impl Serialize,

@@ -98,6 +98,11 @@ pub fn workflow_human_intent_digest(
 /// The digest covers kernel-derived identity/revision/epoch together with the
 /// bounded semantic proposal. Host provenance and carrying identity remain
 /// separately visible on the event and cannot alter objective identity.
+///
+/// # Errors
+///
+/// Returns an assurance projection error when the proposal is invalid or the
+/// digest subject cannot be canonically encoded.
 pub fn workflow_cooperative_objective_digest(
     objective_id: &StableId,
     revision: u64,
@@ -342,6 +347,11 @@ struct DurableAssuranceProjectionDigestSubject<'a> {
 /// The complete immutable predecessor chain is validated; only its latest
 /// record becomes active. `HumanIntentRevisionAccepted` is never consumed as
 /// cooperative authority.
+///
+/// # Errors
+///
+/// Returns an assurance projection error when any cooperative objective record
+/// or predecessor binding is invalid.
 pub fn project_cooperative_durable_assurance(
     records: &[WorkflowGovernanceLedgerRecord],
 ) -> Result<Option<DurableAssuranceProjection>, AssuranceProjectionError> {

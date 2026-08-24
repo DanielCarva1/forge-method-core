@@ -39,6 +39,11 @@ impl std::error::Error for AgentAutonomyEvaluationError {}
 
 /// Evaluate one closed work description against current kernel-derived binding.
 /// This function is pure: it has no clock, filesystem, ledger, network, or host dependency.
+///
+/// # Errors
+///
+/// Returns an error for an unsupported schema, stale binding, invalid summary,
+/// or a decision identity that cannot be canonically encoded.
 pub fn evaluate_agent_autonomy(
     current_binding: &AgentAutonomyBinding,
     input: &AgentAutonomyAssessmentInput,
