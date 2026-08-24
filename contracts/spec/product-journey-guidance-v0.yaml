@@ -69,8 +69,16 @@ proportional_cycle_model:
       - "startup does not scan or rewrite the project's documentation tree"
   quick_cycle_record:
     purpose: "preserve the complete reasoning path for small work without producing a stack of documents"
+    owner: "Current Work Continuity through the existing Work Focus event chain"
+    ownership_rules:
+      - "focus_id identifies one task-local cycle; same-focus successors form its immutable previous-record-digest chain"
+      - "a new focus_id starts a new cycle even when its predecessor, objective, and Phase are unchanged"
+      - "the Work Focus objective and Phase are freshness bindings, not cycle identity, and the Quick Cycle payload does not copy them"
+      - "the workflow-governance WAL remains the only durable store and expected-state comparison remains the only write path"
+      - "canonical Phase remains global transition authority; a task-local closeout never advances Phase or completes a policy"
+      - "decision and evidence bodies remain with their current owners and are referenced by digest rather than copied"
     fields:
-      objective: "one user-facing outcome"
+      objective: "the one user-facing outcome already bound by the owning Work Focus"
       compactness_reason: "why a compact treatment is currently safe"
       stage_closeouts:
         analysis_discovery: "current behavior, problem evidence, relevant uncertainty, and why deeper discovery is unnecessary"
@@ -84,6 +92,33 @@ proportional_cycle_model:
       - "closeouts are summaries backed by referenced evidence, not replacements for evidence"
       - "a stage may close immediately only when the host can explain why additional work cannot reasonably change the decision"
       - "compactness never removes a required authority, safety, evidence, or release gate"
+      - "the complete Work Focus event remains within the existing 16 KiB bound and Current Work detail remains within 20 KiB"
+      - "compactness_reason is at most 512 UTF-8 bytes"
+      - "each of the five closeout summaries is at most 768 UTF-8 bytes"
+      - "expansion_history contains at most four entries and each reason is at most 512 UTF-8 bytes"
+      - "each closeout or expansion may cite at most two evidence digests, each already present in the owning Work Focus evidence set"
+      - "when a fifth expansion is accepted, one superseding Work Focus with a new focus_id records that reason as its first expansion and links to the prior partial cycle; it does not invent terminal closeouts or copy the first four entries"
+      - "implementation must fit these sub-bounds inside current total budgets; it must not raise a budget merely to fit copied prose"
+    write_model:
+      ordinary_compact_task: >-
+        Accept one Work Focus with the compactness reason, then write all five
+        closeouts together in the same terminal Work Focus update. Do not write
+        one event per stage.
+      legitimate_intermediate_write:
+        - "an accepted Expansion Signal changes the treatment or sends work back to an earlier stage"
+        - "a real replacement or context-recovery boundary needs accepted partial closeouts"
+      new_cycle_triggers:
+        - "a Cooperative Objective revision changes through its existing owner and makes the old Work Focus stale"
+        - "a material correction supersedes the Work Focus with a new focus_id rather than rewriting the prior cycle"
+        - "the bounded expansion history is full and one atomic superseding event carries the next accepted expansion as the first entry of a new focus_id"
+      forbidden_write_triggers:
+        - "ordinary messages, narration, tool calls, repository reads, or test progress"
+        - "automatic stage bookkeeping when accepted meaning did not change"
+      expansion_rule: >-
+        Each same-focus successor may only preserve the existing ordered
+        expansion-history prefix and append new entries. It cannot rewrite or
+        remove an accepted expansion reason. A successor with a new focus_id
+        starts a new cycle and links to, but never copies, the prior history.
   expansion_signals:
     - id: "unclear-intent"
       return_to: "analysis-discovery"
@@ -357,6 +392,42 @@ current_work_continuity:
       Work-focus persistence and composition live with workflow continuity;
       lifecycle wording stays in Product Journey Guidance, catalog choice stays
       with the host agent, and execution authority stays in its existing kernel.
+  quick_cycle_continuity:
+    owner: "Work Focus"
+    representation: >-
+      An optional bounded Quick Cycle snapshot inside each Work Focus event.
+      Historical or expanded work without that snapshot remains valid and is
+      reported as not recorded; hosts must not reconstruct it from prose.
+    identity:
+      - "focus_id is the cycle identity"
+      - "previous_work_focus_record_digest proves ordered same-focus successors but also links a new focus to its predecessor for navigation"
+      - "objective and Phase remain freshness bindings and never merge cycles that have different focus_id values"
+    active_shape:
+      - "compactness reason accepted when the bounded focus starts"
+      - "zero or more accepted partial closeouts only at a legitimate intermediate-write boundary"
+      - "ordered append-only expansion entries identifying the canonical Phase, reason, and a subset of existing Work Focus evidence references"
+    terminal_shape:
+      - "all five lifecycle closeouts are present"
+      - "validation and delivery states the user-journey result, remaining limits, and delivery state"
+      - "the terminal Work Focus update carries the complete Quick Cycle snapshot in the same WAL record"
+      - "the same terminal change carries the final top-level blocker and evidence sets, so binding references does not require a write before completion"
+    bounded_overflow:
+      - "a full four-entry expansion history remains a valid partial cycle and is never relabeled terminal"
+      - "the next accepted Expansion Signal uses the existing atomic Work Focus supersession path"
+      - "the superseding focus records the triggering reason as its first expansion and links the predecessor by digest"
+      - "the same superseding input carries the new snapshot and final top-level blocker and evidence sets; nested references are validated as their subset"
+      - "the supersession does not require a separate completion write, synthetic closeouts, or copied history"
+    derived_values:
+      - "compact when expansion history is empty; expanded when at least one accepted expansion exists"
+      - "closed-stage and expansion counts are derived from the snapshot rather than separately authored"
+    non_authority:
+      - "a closeout is continuity evidence, not PhaseAdvanced, PolicyCompleted, release, merge, or mutation authority"
+      - "a referenced evidence digest remains subject to its existing admission and claim semantics"
+    reference_rule: >-
+      Nested closeout or expansion evidence digests are indices into the final
+      top-level Work Focus evidence set. The kernel rejects any nested digest
+      absent from that set; nested references never admit evidence or create a
+      second canonical list.
   progressive_readback:
     summary_fields:
       - "status: absent, current, stale, blocked, or completed"
@@ -367,6 +438,7 @@ current_work_continuity:
       - "optional selected_practice_ref"
       - "bounded current_activity and next_step"
       - "counts and references for open decisions, blockers, and evidence instead of copied bodies"
+      - "optional bounded Quick Cycle state, closed-stage count, and expansion count without closeout prose"
       - "exact detail argv"
     detail_fields:
       - "acceptance summary and non-goals"
@@ -375,6 +447,8 @@ current_work_continuity:
       - "accepted practice and reason"
       - "durable decision, blocker, and evidence references"
       - "supersession and freshness bindings"
+      - "compactness reason, five closeouts, and ordered expansion history when explicitly recorded"
+      - "an exact bounded predecessor-detail argv when a prior Work Focus record exists"
     bounds:
       - "ordinary resume includes at most one active Work Focus"
       - "summary contains no transcript, full issue body, full evidence, full decision history, or catalog body"
@@ -389,11 +463,13 @@ current_work_continuity:
       - "a durable decision or blocker changes what should happen next"
       - "the focus completes, is superseded, or is explicitly abandoned"
       - "a replacement/context-recovery boundary needs an explicit continuation checkpoint"
+      - "an accepted Expansion Signal changes the treatment or owning stage"
     do_not_persist:
       - "ordinary conversation that does not change the accepted meaning"
       - "raw brainstorm options, rejected facilitation ideas, or unused research"
       - "read-only inspection whose result does not alter the focus or next step"
       - "progress narration that is already observable from canonical evidence"
+      - "passing from one compact lifecycle stage to the next without a material semantic change"
     host_rule: >-
       The host agent decides whether the latest message changes meaning. Forge
       validates the proposed event against the current objective, Phase,
@@ -435,6 +511,8 @@ current_work_continuity:
       expected: "the host proposes one bounded update; Forge rejects stale expected state and accepts an exact current update"
     - id: "replacement-agent"
       expected: "one start/resume explains the objective, stage, active focus, accepted practice, blockers, and next step without chat history"
+    - id: "replacement-agent-quick-cycle"
+      expected: "one resume plus progressive Current Work detail recovers the compactness reason, five accepted closeouts, and expansion history; exact predecessor detail is followed only when the current focus links to a prior cycle"
     - id: "external-issue"
       expected: "the focus can reference a GitHub issue, local ticket, or no tracker while preserving identical Forge semantics"
     - id: "objective-replaced"
@@ -477,6 +555,46 @@ current_work_continuity:
         - "an isolated replacement agent continues Forge's own active issue without chat history"
         - "the journey proves no every-message preflight and no project documentation scan"
         - "focused timings and payload sizes stay within the accepted budgets"
+    - id: "PJ-008A"
+      name: "Quick Cycle ownership and bounded contract"
+      depends_on: ["PJ-005D"]
+      done_when:
+        - "OD-005 resolves Work Focus as the single task-local owner"
+        - "write triggers, append-only expansion, compatibility, authority, and unchanged budgets are explicit"
+        - "no runtime or CLI behavior changes"
+    - id: "PJ-008B1"
+      name: "Quick Cycle typed contract and wire compatibility"
+      depends_on: ["PJ-008A"]
+      done_when:
+        - "typed Work Focus start, update, completion, and supersession inputs and event snapshots remain bounded and deny unknown fields"
+        - "the typed supersession input can atomically carry the new Quick Cycle snapshot and final top-level blocker and evidence sets"
+        - "old ledger bytes and hashes remain unchanged and old events project Quick Cycle as not recorded"
+        - "the first Quick Cycle-bearing Work Focus selects the next ledger wire after 0.16"
+    - id: "PJ-008B2"
+      name: "Quick Cycle kernel persistence"
+      depends_on: ["PJ-008B1"]
+      done_when:
+        - "a normal compact task uses accept plus one atomic terminal closeout and final-reference write"
+        - "same-focus updates preserve expansion-history prefix under exact expected state"
+        - "a new focus_id starts a new cycle and objective replacement leaves the prior focus stale"
+        - "the fifth accepted expansion atomically supersedes the full partial cycle, becomes entry one of the new cycle, and carries final top-level references without a completion or bind-reference write"
+    - id: "PJ-008B3"
+      name: "Quick Cycle progressive readback"
+      depends_on: ["PJ-008B2"]
+      done_when:
+        - "resume adds only bounded derived Quick Cycle state and counts"
+        - "existing Current Work detail returns the full explicitly recorded closeouts and expansion history"
+        - "detail can resolve one exact predecessor record by published digest without listing or replaying history"
+        - "resume, detail, installed skill, and exact consumers advance versions together"
+    - id: "PJ-008C"
+      name: "Quick Cycle installed dogfood"
+      depends_on: ["PJ-008B3"]
+      done_when:
+        - "one real small Forge task completes without per-stage writes or large artifacts"
+        - "one local-looking task records an Expansion Signal and expands only the affected stage"
+        - "one bounded-overflow case preserves the fifth reason through a single supersession without synthetic closeouts"
+        - "an isolated replacement host recovers compact and expanded work, following exact predecessor detail only when published"
+        - "timings, payloads, WAL events, staging, backups, temporary files, and build-cache effects are audited"
 
 first_vertical_slice:
   name: "Discovery guidance through normal resume"
@@ -585,6 +703,13 @@ implementation_slices:
     depends_on: ["PJ-004"]
     deferred_from_first_slice: true
     objective: "connect lifecycle work to agent ownership, dependencies, integration, and merge evidence"
+  - id: "PJ-008"
+    name: "Quick Cycle Continuity"
+    depends_on: ["PJ-005"]
+    objective: >-
+      preserve proportional lifecycle closeouts and accepted expansion history
+      inside Work Focus without another state authority or per-stage overhead
+    split_into: ["PJ-008A", "PJ-008B1", "PJ-008B2", "PJ-008B3", "PJ-008C"]
 
 compatibility_and_rollout:
   - "Keep current Phase tags and ranks byte-for-byte stable."
@@ -594,6 +719,10 @@ compatibility_and_rollout:
   - "Update release smoke and its governed hash together with the shipped start-forge consumer."
   - "Do not edit a content-addressed workflow-governance bundle merely to add advisory journey wording."
   - "Roll back by removing the new read-only projection and returning adapters to v6; no persisted-data migration is required in the first slice."
+  - "The first Work Focus event carrying Quick Cycle data advances the ledger wire after 0.16; frozen earlier records and digests remain byte-identical."
+  - "Quick Cycle is optional on historical Work Focus events and absence means not recorded, never inferred from current_activity or acceptance_summary."
+  - "Adding required Quick Cycle summary fields advances workflow resume beyond v8; adding full closeouts advances Current Work detail beyond v1, and exact consumers update together."
+  - "No separate migration writes old Quick Cycle history; replacement hosts receive an honest not-recorded result."
 
 success_metrics:
   product:
@@ -623,18 +752,6 @@ open_decisions_before_implementation:
     question: "Which admitted transition implements Evolve reentry without weakening ReadyOperate and release gates?"
     blocking: false
     deferred_to: "PJ-006"
-  - id: "OD-005"
-    question: "Which existing append-only record should own Quick Cycle closeouts and expansion history without creating a second project-state authority?"
-    blocking: false
-    deferred_to: "a focused persistence design after the read-only guidance slice"
-  - id: "OD-006"
-    question: "Which workflow-governance wire epoch carries Work Focus events while preserving read compatibility with ledgers that predate them?"
-    blocking: true
-    deferred_to: "PJ-005A"
-  - id: "OD-007"
-    question: "Which exact payload-size limits are safe for Current Work summary and detail across supported Windows and Linux project roots?"
-    blocking: true
-    deferred_to: "PJ-005A"
 
 resolved_product_decisions:
   - id: "PD-001"
@@ -660,6 +777,34 @@ resolved_product_decisions:
       to a bounded Work Focus, composes existing durable state into a progressive
       readback, and leaves interpretation to the host agent. Selected practice
       is one optional part of that context, never authority.
+  - id: "PD-004"
+    accepted_at: "2026-08-24"
+    resolves: "OD-005"
+    decision: >-
+      Work Focus owns the bounded task-local Quick Cycle snapshot in the
+      existing workflow-governance WAL. Ordinary compact work records the five
+      closeouts together in its terminal Work Focus update; intermediate writes
+      occur only for an accepted Expansion Signal or real replacement boundary.
+      A material correction starts a new focus_id and objective revisions remain
+      owned by Cooperative Objective. Canonical Phase, decisions, evidence,
+      policies, and release authority remain separate owners and are never
+      copied or implied.
+  - id: "PD-005"
+    accepted_at: "2026-08-24"
+    resolves: "OD-006"
+    decision: >-
+      Work Focus entered the workflow-governance ledger at 0.15 and explicit
+      blocker/evidence bindings advance successors to 0.16. Frozen older bytes
+      remain readable and unchanged; the first Quick Cycle-bearing record must
+      select a new wire after 0.16.
+  - id: "PD-006"
+    accepted_at: "2026-08-24"
+    resolves: "OD-007"
+    decision: >-
+      Current Work summary remains bounded to 8 KiB, detail to 20 KiB, and a
+      Work Focus event to 16 KiB. Quick Cycle allocates sub-bounds inside those
+      limits and may not increase them without new measured installed-runtime
+      evidence and an explicit product decision.
 
 acceptance_boundary: >-
   This draft specifies the intended product interface and implementation
