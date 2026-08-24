@@ -2268,6 +2268,7 @@ struct RecoveredIdentityState {
     latest_coordination_request_by_id: BTreeMap<String, CoordinationRequestState>,
 }
 
+#[allow(clippy::too_many_lines)] // Keep the recovered ledger proof in one auditable event match.
 fn validate_recovered_semantics(
     record: &WorkflowGovernanceLedgerRecord,
     line: usize,
@@ -4329,7 +4330,7 @@ fn validate_quick_cycle_transition(
                     next_cycle.stage_closeouts.validation_delivery.as_ref(),
                 ]
                 .iter()
-                .any(|closeout| closeout.is_none())
+                .any(Option::is_none)
             {
                 return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
                     line,
@@ -4341,6 +4342,7 @@ fn validate_quick_cycle_transition(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // Work Focus bounds are checked together as one wire-shape proof.
 fn validate_work_focus_shape(
     event: &WorkflowWorkFocusRecordedEvent,
     line: Option<usize>,
@@ -4657,6 +4659,7 @@ fn cooperative_source_basis_path_is_normalized(path: &str) -> bool {
         && components.all(|component| !component.is_empty() && !matches!(component, "." | ".."))
 }
 
+#[allow(clippy::too_many_lines)] // Evidence bindings remain one linear fail-closed validation chain.
 fn validate_cooperative_evidence_shape(
     event: &WorkflowCooperativeEvidenceObservedEvent,
     line: Option<usize>,
@@ -4976,6 +4979,7 @@ fn validate_cooperative_objective_event(
     )
 }
 
+#[allow(clippy::too_many_lines)] // Revision invariants are easier to audit in one ordered transition proof.
 fn validate_cooperative_objective_transition(
     previous: Option<&forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     event: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
@@ -5130,6 +5134,7 @@ fn cooperative_revision_input_digest(
     Ok(format_sha256(Sha256::digest(canonical)))
 }
 
+#[allow(clippy::too_many_lines)] // Objective wire bounds stay visible in one structural validation pass.
 fn validate_cooperative_objective_shape(
     event: &forge_core_contracts::CooperativeObjectiveAcceptedEvent,
     line: Option<usize>,
@@ -6318,7 +6323,7 @@ mod replacement_protocol_tests {
         };
         match case {
             "genesis" => {
-                event.legacy_project_import_record_digest = sha256_digest(b"other-genesis")
+                event.legacy_project_import_record_digest = sha256_digest(b"other-genesis");
             }
             "head" => event.prior_ledger_head_digest = sha256_digest(b"other-head"),
             "snapshot" => event.snapshot_digest = "sha256:NOT-CANONICAL".to_owned(),
@@ -7600,6 +7605,7 @@ mod replacement_protocol_tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One test keeps the complete append-only history scenario visible.
     fn quick_cycle_same_focus_preserves_expansion_history_prefix() {
         let root = test_root("quick-cycle-append-only-history");
         let (projection, objective_record) =
@@ -7801,6 +7807,7 @@ mod replacement_protocol_tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // Conflict and size boundaries share one retained-ledger setup.
     fn work_focus_rejects_stale_conflicting_and_oversized_updates() {
         let root = test_root("work-focus-conflicts");
         let (projection, genesis, _) =
@@ -8664,6 +8671,7 @@ mod replacement_protocol_tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // The adversarial matrix is clearer as one fail-closed scenario.
     fn cooperative_objective_adversarial_metadata_digests_and_clarifications_fail_closed() {
         for (field, value) in [
             ("revision_kind", serde_json::json!("initial")),

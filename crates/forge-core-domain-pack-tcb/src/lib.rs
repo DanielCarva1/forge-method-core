@@ -559,6 +559,11 @@ impl AdmittedActiveDomainPackGeneration {
     ///
     /// Store-owned completion anchors may remain present, but their link count,
     /// metadata, namespace, identities, and exact bytes must not drift.
+    ///
+    /// # Errors
+    ///
+    /// Returns `E` when the active generation cannot be verified, the callback
+    /// fails, or the final retained Project Snapshot validation detects drift.
     pub fn with_verified_view<T, E>(
         &self,
         inspect: impl for<'view> FnOnce(AdmittedActiveDomainPackGenerationView<'view>) -> Result<T, E>,
@@ -1298,6 +1303,11 @@ impl LockedCoreOnlyDomainPackLifecycleObservation {
     /// No target placeholder is created. The absence, protocol sidecars,
     /// lifecycle namespace, project snapshot, and residue directories are
     /// checked again before the borrowed view is returned.
+    ///
+    /// # Errors
+    ///
+    /// Fails closed when the core-only lifecycle state or its retained Project
+    /// Snapshot cannot be verified without an active generation.
     pub fn verified_core_only_view(
         &self,
     ) -> Result<AdmittedCoreOnlyDomainPackLifecycleView<'_>, DomainPackLifecycleStoreError> {
@@ -1310,6 +1320,11 @@ impl LockedCoreOnlyDomainPackLifecycleObservation {
     /// The callback cannot return a successful result without the final project
     /// validation succeeding. This lets a higher-level operation reuse the exact
     /// project handles without weakening the lifecycle's fail-closed guarantee.
+    ///
+    /// # Errors
+    ///
+    /// Returns `E` when the core-only view cannot be verified, the callback
+    /// fails, or the final retained Project Snapshot validation detects drift.
     pub fn with_verified_core_only_view<T, E>(
         &self,
         inspect: impl for<'view> FnOnce(AdmittedCoreOnlyDomainPackLifecycleView<'view>) -> Result<T, E>,
