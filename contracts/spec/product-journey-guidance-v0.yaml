@@ -151,6 +151,42 @@ proportional_cycle_model:
     - "route a failed review back to the stage that introduced the mistake instead of repeatedly patching code"
     - "record unrelated findings as deferred work rather than silently expanding the active objective"
 
+collaboration_model:
+  purpose: >-
+    Let one developer use cooperating agents without turning conversation,
+    heartbeats, or tool calls into durable project state.
+  routing_rule: >-
+    Split only work that is independent and has a coherent outcome. Keep work
+    with overlapping ownership or unresolved dependencies sequential.
+  plan_owner: "the optional bounded collaboration plan inside Work Focus"
+  lane_shape:
+    required: ["lane_id", "outcome", "depends_on"]
+    optional: ["isolation_id"]
+    deliberately_derived:
+      - "agent, branch, worktree, and path ownership from isolation and claim"
+      - "readiness and blocking from dependencies plus current claims, isolations, and promotions"
+      - "integration evidence from the existing promotion receipt"
+  bounds:
+    max_lanes: 8
+    max_dependencies_per_lane: 7
+    max_outcome_bytes: 256
+    work_focus_event_budget_bytes: 16384
+  write_model:
+    - "accept or replace the bounded plan atomically under exact expected Work Focus state"
+    - "write only when lane meaning, dependencies, assignment, or integration boundary materially changes"
+    - "do not write for messages, model calls, tool calls, tests, progress narration, or heartbeats"
+  progressive_readback:
+    resume: "bounded counts plus the next ready lane, derived from owners already loaded for resume"
+    detail: "exact lanes, dependencies, links, and derived owner state on demand"
+    no_extra_scan: true
+  worktree_guidance:
+    safe_shape: "../.forge-worktrees/<agent>/<task>"
+    rule: "reject or clearly flag a promotion-ineligible worktree path before active work begins"
+  compatibility:
+    - "absence means no collaboration plan and adds no ordinary Work Focus payload"
+    - "AgentRunContract remains validation-only compatibility material, not a second runtime owner"
+    - "claims, isolation, promotion, and Work Focus keep their current authority boundaries"
+
 canonical_stage_mapping:
   source_of_phase_identity: "forge_core_contracts::Phase"
   no_second_phase_enum: true
@@ -598,6 +634,39 @@ current_work_continuity:
         - "one bounded-overflow case preserves the fifth reason through a single supersession without synthetic closeouts"
         - "an isolated replacement host recovers compact and expanded work, following exact predecessor detail only when published"
         - "timings, payloads, WAL events, staging, backups, temporary files, and build-cache effects are audited"
+    - id: "PJ-007A"
+      name: "Bounded collaboration plan contract"
+      depends_on: ["PJ-005D"]
+      done_when:
+        - "Work Focus optionally owns only lane outcomes, dependencies, and isolation links"
+        - "lane count, dependency count, outcome bytes, identifiers, and the unchanged Work Focus event budget are explicit"
+        - "claim, isolation, promotion, and AgentRun are not duplicated as collaboration state"
+        - "historical Work Focus events remain valid when the plan is absent"
+    - id: "PJ-007B"
+      name: "Atomic collaboration persistence"
+      depends_on: ["PJ-007A"]
+      done_when:
+        - "typed start, update, completion, and supersession inputs can carry the complete bounded plan atomically"
+        - "updates use exact expected Work Focus state and validate dependency and isolation references"
+        - "ordinary messages, tests, tool calls, progress narration, and heartbeats create no writes"
+        - "the first collaboration-bearing Work Focus selects the next ledger wire while frozen records keep their bytes and hashes"
+    - id: "PJ-007C"
+      name: "Progressive collaboration readback and guidance"
+      depends_on: ["PJ-007B"]
+      done_when:
+        - "resume adds only bounded lane counts and one derived next-ready lane"
+        - "Current Work detail returns exact lanes, dependencies, links, and state derived from claims, isolations, and promotions"
+        - "readback reuses state already loaded for resume and adds no repository or documentation scan"
+        - "start-forge parallelizes only independent work and uses promotion-safe worktree paths"
+        - "promotion-ineligible worktree paths are rejected or clearly flagged before active work begins"
+    - id: "PJ-007D"
+      name: "Installed multi-agent dogfood"
+      depends_on: ["PJ-007C"]
+      done_when:
+        - "two isolated agents complete disjoint Forge lanes while a conflicting cross-lane write is blocked"
+        - "a dependent lane stays unready until its predecessor is integrated"
+        - "promotion receipts and a fresh replacement host recover the same collaboration result"
+        - "timings, payloads, WAL events, staging, worktrees, temporary files, and build-cache effects are audited"
 
 first_vertical_slice:
   name: "Discovery guidance through normal resume"
@@ -706,6 +775,7 @@ implementation_slices:
     depends_on: ["PJ-004"]
     deferred_from_first_slice: true
     objective: "connect lifecycle work to agent ownership, dependencies, integration, and merge evidence"
+    split_into: ["PJ-007A", "PJ-007B", "PJ-007C", "PJ-007D"]
   - id: "PJ-008"
     name: "Quick Cycle Continuity"
     depends_on: ["PJ-005"]
