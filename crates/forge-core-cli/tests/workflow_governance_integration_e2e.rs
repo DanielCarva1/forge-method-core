@@ -3562,7 +3562,7 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
 }
 
 #[test]
-fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
+fn public_episode_apply_routes_evolve_changes_and_resume_context() {
     let consumer = Consumer::new_with_prefix("forge-public-episode-e2e");
     assert_ok(&consumer.run(&["init", "--readiness-profile", "solo_cooperative"]));
     let discovery = assert_ok(&consumer.run(&["next"]));
@@ -3596,6 +3596,10 @@ fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
         &packet_digest,
         &objective,
     ));
+    let initial_digest = accepted["data"]["active_objective"]["objective_digest"]
+        .as_str()
+        .expect("initial objective digest")
+        .to_owned();
     let snapshot = accepted["data"]["next"]["snapshot_digest"]
         .as_str()
         .expect("stable snapshot")
@@ -3676,58 +3680,9 @@ fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
     let after_retry = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(after_retry["data"]["current_phase"], "6-evolve");
     assert_eq!(after_retry["data"]["ledger_head_digest"], evolve_head);
-}
 
-#[test]
-fn objective_changes_in_evolve_preserve_or_reopen_the_cycle_by_materiality() {
-    let consumer = Consumer::new();
-    assert_ok(&consumer.run(&["init"]));
-    let initial_next = assert_ok(&consumer.run(&["next"]));
-    let initial_packet = initial_next["data"]["authorization"]["action_packets"][0]
-        ["packet_digest"]
-        .as_str()
-        .expect("initial objective packet")
-        .to_owned();
-    let initial_input = consumer.write_json(
-        "evolve initial objective.json",
-        &serde_json::json!({
-            "kind": "unambiguous",
-            "proposal": {
-                "outcome": "Keep the released notes app useful for one family",
-                "constraints": ["preserve existing notes"],
-                "unacceptable_outcomes": ["silently lose prior product context"],
-                "open_uncertainties": []
-            },
-            "carrying_principal": "principal.agent.cli-e2e",
-            "host_provenance": {
-                "host_id": "host.cli-e2e",
-                "host_version": "test",
-                "session_ref": "session.evolve-reentry",
-                "interaction_ref": "turn.initial-product",
-                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
-                "observed_at_unix": 1
-            }
-        }),
-    );
-    let initial = assert_ok(&run_cooperative_input(
-        &consumer,
-        &initial_packet,
-        &initial_input,
-    ));
-    let initial_digest = initial["data"]["active_objective"]["objective_digest"]
-        .as_str()
-        .expect("initial objective digest")
-        .to_owned();
-    let snapshot = initial["data"]["next"]["snapshot_digest"]
-        .as_str()
-        .expect("stable project snapshot")
-        .to_owned();
-    append_test_phase_transition(&consumer, "1-discovery", "6-evolve", &snapshot);
-
-    let evolve = assert_ok(&consumer.run(&["next"]));
-    assert_eq!(evolve["data"]["current_phase"], "6-evolve");
-    let clarification_packet = evolve["data"]["authorization"]["objective_management_packet"]
-        ["packet_digest"]
+    let clarification_packet = after_retry["data"]["authorization"]
+        ["objective_management_packet"]["packet_digest"]
         .as_str()
         .expect("Evolve objective-management packet")
         .to_owned();
@@ -3739,11 +3694,11 @@ fn objective_changes_in_evolve_preserve_or_reopen_the_cycle_by_materiality() {
             "added_unacceptable_outcomes": [],
             "added_open_uncertainties": [],
             "clarification_reason": "The owner added execution detail without changing product direction",
-            "carrying_principal": "principal.agent.cli-e2e",
+            "carrying_principal": "principal.agent.episode-e2e",
             "host_provenance": {
-                "host_id": "host.cli-e2e",
+                "host_id": "host.episode-e2e",
                 "host_version": "test",
-                "session_ref": "session.evolve-reentry",
+                "session_ref": "session.episode-e2e",
                 "interaction_ref": "turn.non-material-clarification",
                 "conversation_digest": format!("sha256:{}", "c".repeat(64)),
                 "observed_at_unix": 1
@@ -3808,11 +3763,11 @@ fn objective_changes_in_evolve_preserve_or_reopen_the_cycle_by_materiality() {
                 "open_uncertainties": ["which notes are shareable"]
             },
             "supersession_reason": "The owner requested a new sharing capability for the stable product",
-            "carrying_principal": "principal.agent.cli-e2e",
+            "carrying_principal": "principal.agent.episode-e2e",
             "host_provenance": {
-                "host_id": "host.cli-e2e",
+                "host_id": "host.episode-e2e",
                 "host_version": "test",
-                "session_ref": "session.evolve-reentry",
+                "session_ref": "session.episode-e2e",
                 "interaction_ref": "turn.material-change",
                 "conversation_digest": format!("sha256:{}", "e".repeat(64)),
                 "observed_at_unix": 1
@@ -3823,41 +3778,40 @@ fn objective_changes_in_evolve_preserve_or_reopen_the_cycle_by_materiality() {
         .expect("WAL before Evolve reentry")
         .lines()
         .count();
-
-    let accepted = assert_ok(&run_cooperative_input(
+    let material = assert_ok(&run_cooperative_input(
         &consumer,
         &material_packet,
         &material_input,
     ));
-    assert_eq!(accepted["data"]["next"]["current_phase"], "1-discovery");
-    assert_eq!(accepted["data"]["active_objective"]["revision"], 3);
+    assert_eq!(material["data"]["next"]["current_phase"], "1-discovery");
+    assert_eq!(material["data"]["active_objective"]["revision"], 3);
     assert_eq!(
-        accepted["data"]["active_objective"]["previous_objective_digest"],
+        material["data"]["active_objective"]["previous_objective_digest"],
         clarified_digest
     );
-    let accepted_wal = fs::read(&wal).expect("WAL after Evolve reentry");
+    let material_wal = fs::read(&wal).expect("WAL after Evolve reentry");
     assert_eq!(
-        String::from_utf8_lossy(&accepted_wal).lines().count(),
+        String::from_utf8_lossy(&material_wal).lines().count(),
         before_lines + 2,
         "one bounded transaction should append only the objective and Evolve-to-Discovery records"
     );
-
-    let retry = assert_ok(&run_cooperative_input(
+    let material_retry = assert_ok(&run_cooperative_input(
         &consumer,
         &material_packet,
         &material_input,
     ));
-    assert_eq!(retry["data"], accepted["data"]);
+    assert_eq!(material_retry["data"], material["data"]);
     assert_eq!(
         fs::read(&wal).expect("WAL after exact Evolve retry"),
-        accepted_wal,
+        material_wal,
         "an exact retry must not duplicate the objective or phase transition"
     );
 
-    let resumed = assert_ok(&consumer.run(&["resume"]));
-    assert_eq!(resumed["data"]["current_phase"], "1-discovery");
+    let replacement_resume = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(replacement_resume["data"]["current_phase"], "1-discovery");
     assert_eq!(
-        resumed["data"]["active_objective"]["previous_objective_digest"], clarified_digest,
+        replacement_resume["data"]["active_objective"]["previous_objective_digest"],
+        clarified_digest,
         "replacement-agent readback must keep the previous product direction as context"
     );
 }
