@@ -2815,14 +2815,19 @@ impl<'lock> RetainedEffectStoreIo<'lock> {
             ));
         }
         let state_relative = self.directory_relative_path.join(relative);
-        let state_text = state_relative.to_str().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "retained effect-store I/O path is not UTF-8",
-            )
-        })?;
+        let state_text = state_relative
+            .iter()
+            .map(|component| component.to_str())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "retained effect-store I/O path is not UTF-8",
+                )
+            })?
+            .join("/");
         if state_relative == self.lock.state_lock_relative_path
-            || reject_reserved_state_mutation(state_text).is_err()
+            || reject_reserved_state_mutation(&state_text).is_err()
             || state_relative.file_name().is_some_and(|name| {
                 let name = name.to_string_lossy();
                 ["forge-next", "forge-previous", "forge-transaction"]
@@ -9884,6 +9889,25 @@ mod tests {
         drop(observer);
         let after = byte_state(&root);
         assert_eq!(before, after);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_store_io_accepts_its_own_nested_windows_path() {
+        let root = temp_root("retained-store-nested-windows-path");
+        let lock = acquire_effect_store_lock(&root, "promotion/apply.lock")
+            .expect("acquire promotion lock");
+        let io = lock.retained_store_io().expect("retain promotion store");
+        let receipts = io
+            .retain_subdirectory(Path::new("receipts"))
+            .expect("retain Store-owned receipts directory");
+
+        receipts.validate().expect("revalidate retained receipts");
+        assert!(root.join("promotion/receipts").is_dir());
+        drop(receipts);
+        drop(io);
+        drop(lock);
+        fs::remove_dir_all(root).expect("cleanup retained Store fixture");
     }
 
     #[cfg(any(

@@ -132,6 +132,8 @@ never to list or reconstruct deeper history.
 When `focus.collaboration` is present, use its bounded counts and
 `next_ready_lane` first. Execute `focus.detail_argv` only when exact lane,
 dependency, owner, claim, isolation, or promotion information is needed.
+A dependent lane becomes ready only after every predecessor has a completed
+promotion receipt.
 Parallelize only independent lanes. Before active work begins, run
 `forge-core isolation propose` with a promotion-safe path shaped as
 `../.forge-worktrees/<agent>/<task>`. Never run `git worktree add` first: Forge

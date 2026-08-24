@@ -777,9 +777,8 @@ impl RetainedProjectTree {
     /// Prove that one exact admitted regular file can be mutated through a
     /// retained read/write handle without reopening the project root.
     ///
-    /// Ticket 10 deliberately supports Unix only. Other platforms fail before
-    /// durable intent until their exact-handle metadata-preserving write path
-    /// has equivalent evidence.
+    /// Platforms without an exact-handle metadata-preserving write path fail
+    /// before durable intent.
     pub fn preflight_exact_regular_file_write(
         &self,
         relative_path: &str,
@@ -823,6 +822,12 @@ impl RetainedProjectTree {
                 "writable handle bytes differ from the exact admitted destination",
             ));
         }
+        #[cfg(windows)]
+        platform::restore_file_attributes(
+            &writable,
+            retained.metadata.file_information.file_attributes,
+        )
+        .map_err(|error| io_error(&display_path, error))?;
         self.revalidate()
     }
 
@@ -859,6 +864,13 @@ impl RetainedProjectTree {
             .and_then(|_| writable.set_len(u64::try_from(replacement.len()).unwrap_or(u64::MAX)))
             .and_then(|_| writable.sync_all())
             .map_err(|error| io_error(&display_path, error))?;
+        #[cfg(windows)]
+        platform::restore_file_attributes(
+            &writable,
+            before_metadata.file_information.file_attributes,
+        )
+        .and_then(|_| writable.sync_all())
+        .map_err(|error| io_error(&display_path, error))?;
         let after_metadata = RetainedMetadata::capture(&writable, &display_path)?;
         validate_file_metadata(&after_metadata, &display_path, self.file_alias_policy)?;
         if !same_exact_file_and_admitted_metadata_after_mutation(
@@ -2527,7 +2539,23 @@ fn same_exact_file_and_admitted_metadata_after_mutation(
         && (file_alias_policy.allows_alias_metadata_changes() || before.nlink() == after.nlink())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn same_exact_file_and_admitted_metadata_after_mutation(
+    before: &RetainedMetadata,
+    after: &RetainedMetadata,
+    file_alias_policy: RetainedFileAliasPolicy,
+) -> bool {
+    before.file_information.volume_serial_number == after.file_information.volume_serial_number
+        && before.file_information.file_index == after.file_information.file_index
+        && before.file_information.file_attributes == after.file_information.file_attributes
+        && before.file_information.creation_time == after.file_information.creation_time
+        && (file_alias_policy.allows_alias_metadata_changes()
+            || before.file_information.number_of_links == after.file_information.number_of_links)
+        && !is_reparse(before)
+        && !is_reparse(after)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn same_exact_file_and_admitted_metadata_after_mutation(
     _before: &RetainedMetadata,
     _after: &RetainedMetadata,
@@ -2645,6 +2673,7 @@ mod platform {
     const INVALID_HANDLE_VALUE: Handle = -1_isize as Handle;
     const OBJ_CASE_INSENSITIVE: u32 = 0x40;
     const GENERIC_READ: u32 = 0x8000_0000;
+    const GENERIC_WRITE: u32 = 0x4000_0000;
     const SYNCHRONIZE: u32 = 0x0010_0000;
     const FILE_READ_ATTRIBUTES: u32 = 0x80;
     const FILE_SHARE_READ: u32 = 0x1;
@@ -2653,6 +2682,7 @@ mod platform {
     const FILE_OPEN: u32 = 1;
     const OPEN_EXISTING: u32 = 3;
     const FILE_DIRECTORY_FILE: u32 = 0x1;
+    const FILE_NON_DIRECTORY_FILE: u32 = 0x40;
     const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x20;
     const FILE_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
@@ -2745,6 +2775,65 @@ mod platform {
 
     #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
     pub(super) fn open_child(parent: &File, name: &OsStr) -> io::Result<File> {
+        open_child_with_access(
+            parent,
+            name,
+            GENERIC_READ | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            0,
+        )
+    }
+
+    pub(super) fn open_child_for_mutation(parent: &File, name: &OsStr) -> io::Result<File> {
+        open_child_with_access(
+            parent,
+            name,
+            GENERIC_READ | GENERIC_WRITE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_NON_DIRECTORY_FILE,
+        )
+    }
+
+    pub(super) fn restore_file_attributes(file: &File, attributes: u64) -> io::Result<()> {
+        use windows_sys::Win32::Storage::FileSystem::{
+            FileBasicInfo, SetFileInformationByHandle, FILE_BASIC_INFO,
+        };
+
+        let information = FILE_BASIC_INFO {
+            CreationTime: 0,
+            LastAccessTime: 0,
+            LastWriteTime: 0,
+            ChangeTime: 0,
+            FileAttributes: u32::try_from(attributes).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Windows file attributes exceed u32",
+                )
+            })?,
+        };
+        // SAFETY: `file` owns a live exact-file handle and `information` has the
+        // documented FILE_BASIC_INFO layout for the duration of the call.
+        let result = unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle().cast(),
+                FileBasicInfo,
+                (&raw const information).cast(),
+                u32::try_from(std::mem::size_of::<FILE_BASIC_INFO>())
+                    .expect("FILE_BASIC_INFO size fits u32"),
+            )
+        };
+        if result == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    }
+
+    #[allow(clippy::cast_possible_wrap)] // RtlNtStatusToDosError returns a Win32 DOS error code (u32) that is documented to fit i32 for io::Error::from_raw_os_error.
+    fn open_child_with_access(
+        parent: &File,
+        name: &OsStr,
+        desired_access: u32,
+        required_type: u32,
+    ) -> io::Result<File> {
         let mut wide = name.encode_wide().collect::<Vec<_>>();
         let byte_len = wide
             .len()
@@ -2774,14 +2863,14 @@ mod platform {
         let status = unsafe {
             NtCreateFile(
                 std::ptr::from_mut(&mut handle),
-                GENERIC_READ | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                desired_access,
                 std::ptr::from_mut(&mut attributes),
                 std::ptr::from_mut(&mut io_status),
                 std::ptr::null_mut(),
                 0,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                 FILE_OPEN,
-                FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+                FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | required_type,
                 std::ptr::null_mut(),
                 0,
             )
@@ -2795,13 +2884,6 @@ mod platform {
             // SAFETY: successful NtCreateFile returned one newly-owned handle.
             Ok(unsafe { File::from_raw_handle(handle as RawHandle) })
         }
-    }
-
-    pub(super) fn open_child_for_mutation(_parent: &File, _name: &OsStr) -> io::Result<File> {
-        Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "exact metadata-preserving promotion mutation is not admitted on Windows yet",
-        ))
     }
 
     #[allow(clippy::cast_ptr_alignment)]
@@ -3287,6 +3369,61 @@ mod tests {
         );
         fs::write(&leaf, b"changed!").unwrap();
         assert!(retained.exact_regular_file_bytes("README.md").is_err());
+        drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_write_preserves_identity_and_attributes() {
+        let root = project_root("windows-exact-write");
+        fs::create_dir_all(&root).unwrap();
+        let leaf = root.join("README.md");
+        fs::write(&leaf, b"before\n").unwrap();
+        let status = std::process::Command::new("attrib")
+            .arg("-A")
+            .arg(&leaf)
+            .status()
+            .expect("clear Windows archive attribute");
+        assert!(status.success());
+
+        let mut retained = RetainedProjectTree::capture(&root, 8, 32).unwrap();
+        let file_index = retained.exact_regular_file_index("README.md").unwrap();
+        let before = retained.files[file_index].metadata.clone();
+        assert_eq!(before.file_information.file_attributes & 0x20, 0);
+
+        retained
+            .preflight_exact_regular_file_write("README.md", b"before\n")
+            .unwrap();
+        retained
+            .apply_exact_regular_file_write("README.md", b"before\n", b"after, safely\n")
+            .unwrap();
+
+        let after = &retained.files[file_index].metadata;
+        assert_eq!(fs::read(&leaf).unwrap(), b"after, safely\n");
+        assert_eq!(
+            before.file_information.volume_serial_number,
+            after.file_information.volume_serial_number
+        );
+        assert_eq!(
+            before.file_information.file_index,
+            after.file_information.file_index
+        );
+        assert_eq!(
+            before.file_information.file_attributes,
+            after.file_information.file_attributes
+        );
+        assert_eq!(
+            before.file_information.creation_time,
+            after.file_information.creation_time
+        );
+        assert_eq!(
+            before.file_information.number_of_links,
+            after.file_information.number_of_links
+        );
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        retained.revalidate().unwrap();
+
         drop(retained);
         fs::remove_dir_all(root).unwrap();
     }

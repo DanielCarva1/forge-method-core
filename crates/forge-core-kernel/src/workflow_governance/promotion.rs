@@ -63,6 +63,7 @@ use forge_core_store::{
     SplitRootEffectTransactionStage,
 };
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::Read as _;
@@ -5271,11 +5272,7 @@ impl SyntheticGitObservation {
             repository_info_exclude_bytes,
         };
         let common_config_path = observation.git_dir.join("observed-common-config");
-        let common_config_path = common_config_path.to_str().ok_or_else(|| {
-            PromotionPreviewError::GitWorktree(
-                "private Git config path is not valid UTF-8".to_owned(),
-            )
-        })?;
+        let common_config_path = git_subprocess_path(&common_config_path)?;
         let common_config = run_bounded_git(
             source_root,
             &observation,
@@ -5284,7 +5281,7 @@ impl SyntheticGitObservation {
                 "--no-includes",
                 "--null",
                 "--file",
-                common_config_path,
+                common_config_path.as_ref(),
                 "--list",
             ],
             "safe repository Git config observation",
@@ -5295,11 +5292,7 @@ impl SyntheticGitObservation {
         if worktree_config_enabled {
             if worktree_config_bytes.is_some() {
                 let worktree_config_path = observation.git_dir.join("observed-worktree-config");
-                let worktree_config_path = worktree_config_path.to_str().ok_or_else(|| {
-                    PromotionPreviewError::GitWorktree(
-                        "private worktree Git config path is not valid UTF-8".to_owned(),
-                    )
-                })?;
+                let worktree_config_path = git_subprocess_path(&worktree_config_path)?;
                 let worktree_config = run_bounded_git(
                     source_root,
                     &observation,
@@ -5308,7 +5301,7 @@ impl SyntheticGitObservation {
                         "--no-includes",
                         "--null",
                         "--file",
-                        worktree_config_path,
+                        worktree_config_path.as_ref(),
                         "--list",
                     ],
                     "safe worktree Git config observation",
@@ -5372,6 +5365,81 @@ fn run_bounded_git(
     run_bounded_git_with_input(source_root, synthetic, args, &[], label)
 }
 
+fn git_subprocess_path(path: &Path) -> Result<Cow<'_, str>, PromotionPreviewError> {
+    let raw = path.to_str().ok_or_else(|| {
+        PromotionPreviewError::GitWorktree(
+            "private Git subprocess path is not valid UTF-8".to_owned(),
+        )
+    })?;
+    #[cfg(windows)]
+    {
+        if let Some(unc) = raw.strip_prefix(r"\\?\UNC\") {
+            return Ok(Cow::Owned(format!(r"\\{unc}")));
+        }
+        if let Some(local) = raw.strip_prefix(r"\\?\") {
+            return Ok(Cow::Borrowed(local));
+        }
+    }
+    Ok(Cow::Borrowed(raw))
+}
+
+#[cfg(all(test, windows))]
+mod git_subprocess_path_tests {
+    use super::*;
+
+    struct TemporaryGitConfig {
+        directory: PathBuf,
+        path: PathBuf,
+    }
+
+    impl Drop for TemporaryGitConfig {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.path);
+            let _ = fs::remove_dir(&self.directory);
+        }
+    }
+
+    #[test]
+    fn git_for_windows_reads_canonical_private_config_path() {
+        let mut nonce = [0_u8; 16];
+        getrandom::fill(&mut nonce).expect("generate temporary config nonce");
+        let name = format!(
+            "forge-promotion-git-path-test-{}",
+            nonce
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        );
+        let directory = std::env::temp_dir().join(name);
+        fs::create_dir(&directory).expect("create temporary Git config directory");
+        let path = directory.join("config");
+        let fixture = TemporaryGitConfig { directory, path };
+        fs::write(&fixture.path, b"[core]\n\tautoCrlf = false\n")
+            .expect("write temporary Git config");
+        let canonical = fs::canonicalize(&fixture.path).expect("canonicalize temporary Git config");
+        assert!(
+            canonical.to_string_lossy().starts_with(r"\\?\"),
+            "Windows canonicalization must exercise the verbatim path form: {}",
+            canonical.display()
+        );
+
+        let git_path = git_subprocess_path(&canonical).expect("translate private Git config path");
+        let output = Command::new("git")
+            .args(["config", "--no-includes", "--null", "--file"])
+            .arg(git_path.as_ref())
+            .arg("--list")
+            .output()
+            .expect("run Git against private config");
+
+        assert!(
+            output.status.success(),
+            "Git for Windows rejected the translated canonical path: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout, b"core.autocrlf\nfalse\0");
+    }
+}
+
 fn run_bounded_git_with_input(
     source_root: &Path,
     synthetic: &SyntheticGitObservation,
@@ -5384,6 +5452,10 @@ fn run_bounded_git_with_input(
             "{label} exceeds the bounded {MAX_PROMOTION_GIT_INPUT_BYTES} byte input limit"
         )));
     }
+    let git_dir = git_subprocess_path(&synthetic.git_dir)?;
+    let git_work_tree = git_subprocess_path(source_root)?;
+    let git_index_file = git_subprocess_path(&synthetic.index_file)?;
+    let git_object_directory = git_subprocess_path(&synthetic.object_directory)?;
     let mut command = Command::new("git");
     command
         .arg("--no-optional-locks")
@@ -5399,10 +5471,10 @@ fn run_bounded_git_with_input(
         ])
         .args(args)
         .current_dir(source_root)
-        .env("GIT_DIR", &synthetic.git_dir)
-        .env("GIT_WORK_TREE", source_root)
-        .env("GIT_INDEX_FILE", &synthetic.index_file)
-        .env("GIT_OBJECT_DIRECTORY", &synthetic.object_directory)
+        .env("GIT_DIR", git_dir.as_ref())
+        .env("GIT_WORK_TREE", git_work_tree.as_ref())
+        .env("GIT_INDEX_FILE", git_index_file.as_ref())
+        .env("GIT_OBJECT_DIRECTORY", git_object_directory.as_ref())
         .env("GIT_ATTR_SOURCE", &synthetic.canonical_head_oid)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")

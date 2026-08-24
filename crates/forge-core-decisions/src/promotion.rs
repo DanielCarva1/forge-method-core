@@ -340,9 +340,12 @@ pub fn evaluate_promotion_readiness(
             .cmp(&right.code)
             .then_with(|| left.subject_ref.cmp(&right.subject_ref))
     });
+    let has_blocking_gap = gaps
+        .iter()
+        .any(|gap| gap.code != PromotionGapCode::OpenObjectiveUncertainties);
     let status = if input.diff.is_empty() && input.unsupported_effects.is_empty() {
         GovernedPromotionPreviewStatus::NoChanges
-    } else if gaps.is_empty() {
+    } else if !has_blocking_gap {
         GovernedPromotionPreviewStatus::Reviewable
     } else {
         GovernedPromotionPreviewStatus::Blocked
@@ -478,7 +481,7 @@ mod tests {
     }
 
     #[test]
-    fn carried_assurance_gap_does_not_block_local_reversible_eligibility() {
+    fn open_objective_uncertainty_does_not_block_local_reversible_eligibility() {
         let changed = PromotionDiffEntry {
             path: RepoPath("src/lib.rs".to_owned()),
             effect: PromotionDiffEffect::WriteRegularFile,
@@ -499,7 +502,7 @@ mod tests {
             supporting_cooperative_evidence: 1,
             blocking_source_claim_refs: &[],
             has_linked_claim_principal: true,
-            open_objective_uncertainties: 0,
+            open_objective_uncertainties: 2,
         });
         assert_eq!(
             evaluation.status,
@@ -509,7 +512,11 @@ mod tests {
             evaluation.apply_eligibility,
             PromotionApplyEligibility::EligibleLocalReversible
         );
-        assert!(evaluation.unresolved_gaps.is_empty());
+        assert_eq!(evaluation.unresolved_gaps.len(), 1);
+        assert_eq!(
+            evaluation.unresolved_gaps[0].code,
+            PromotionGapCode::OpenObjectiveUncertainties
+        );
     }
 
     #[test]

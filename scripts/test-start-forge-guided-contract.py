@@ -164,6 +164,7 @@ class GuidedActivationContractTests(unittest.TestCase):
         self.assert_contract_contains(
             "focus.collaboration",
             "next_ready_lane",
+            "A dependent lane becomes ready only after every predecessor has a completed promotion receipt.",
             "parallelize only independent lanes",
             "../.forge-worktrees/<agent>/<task>",
             "isolation propose",

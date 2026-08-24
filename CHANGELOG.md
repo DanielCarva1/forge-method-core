@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.13` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.40` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mandatory second pass. Read-only Forge commands no longer trigger another
   continuity refresh.
 ### Fixed
+- **Governed promotion now completes on native Windows without ambiguous writes.**
+  Git subprocess paths translate Windows verbatim paths only at the Git boundary,
+  Store-owned nested paths keep portable separators, local reversible promotion
+  remains reviewable while objective uncertainties stay visible, and exact-handle
+  writes restore admitted file attributes before readback.
 - **Solo Cooperative development no longer dead-ends on strict-only universal
   assurance.** The Strict External independent-review policy is now excluded
   consistently from Solo policy selection, phase completion, boundary-target
