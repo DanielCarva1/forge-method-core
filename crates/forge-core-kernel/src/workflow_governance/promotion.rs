@@ -1366,7 +1366,22 @@ pub(super) fn recover_promotion_under_lock(
         .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
         (true, SplitRootEffectTransactionStage::ReplayConsumed)
     };
-    if stage != SplitRootEffectTransactionStage::ReplayConsumed {
+    if stage == SplitRootEffectTransactionStage::ReplayConsumed {
+        verify_consumed_replay_key_hash_under_effect_lock(
+            &binding.state_root,
+            effect_lock,
+            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
+            &intent.replay.key_hash,
+            &intent.replay.intent_digest,
+            &intent.replay.commit_digest,
+            intent.replay.reservation_revision,
+        )
+        .map_err(|error| {
+            PromotionApplyError::RecoveryRequired(format!(
+                "effect replay completion contradicts replay WAL: {error}"
+            ))
+        })?;
+    } else {
         let replay_result = consume_replay_key_hash_under_effect_lock(
             &binding.state_root,
             effect_lock,
@@ -1394,21 +1409,6 @@ pub(super) fn recover_promotion_under_lock(
             true,
         )
         .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
-    } else {
-        verify_consumed_replay_key_hash_under_effect_lock(
-            &binding.state_root,
-            effect_lock,
-            PROMOTION_EFFECT_LOCK_RELATIVE_PATH,
-            &intent.replay.key_hash,
-            &intent.replay.intent_digest,
-            &intent.replay.commit_digest,
-            intent.replay.reservation_revision,
-        )
-        .map_err(|error| {
-            PromotionApplyError::RecoveryRequired(format!(
-                "effect replay completion contradicts replay WAL: {error}"
-            ))
-        })?;
     }
 
     destination_tree.revalidate().map_err(|error| {
@@ -2830,7 +2830,7 @@ fn verify_promotion_receipt(
     let mut expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
         .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
     if receipt.replay.intent_digest != expected_intent {
-        intent.schema_version = "governed_promotion_intent_v1".to_owned();
+        "governed_promotion_intent_v1".clone_into(&mut intent.schema_version);
         intent.preview = None;
         expected_intent = promotion_domain_digest("promotion.intent.v1", &intent)
             .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
@@ -3626,7 +3626,7 @@ fn inspect_replacement_promotions(
                             &effect_lock,
                             &intent,
                             preview,
-                            inspection,
+                            inspection.as_ref(),
                             &expected_digest,
                         )
                     });
@@ -3908,7 +3908,7 @@ fn validate_recoverable_promotion(
     effect_lock: &EffectStoreLock,
     intent: &PromotionReplayIntent,
     preview: GovernedPromotionPreview,
-    inspection: Option<SplitRootEffectTransactionInspection>,
+    inspection: Option<&SplitRootEffectTransactionInspection>,
     expected_preview_digest: &str,
 ) -> Result<(), PromotionApplyError> {
     let isolation_id = preview.source.isolation_id.clone();
@@ -3946,7 +3946,7 @@ fn validate_recoverable_promotion(
         intent.replay.commit_digest.clone(),
         intent.replay.reservation_revision,
     );
-    if let Some(inspection) = &inspection {
+    if let Some(inspection) = inspection {
         if inspection.effect_id != effect.tool_effect_contract.id
             || inspection.replay_binding != replay_binding
         {
@@ -3996,12 +3996,11 @@ fn validate_recoverable_promotion(
             && reservation.revision == intent.replay.reservation_revision.saturating_add(1)
             && reservation.consumed_seq.is_some()
     });
-    let replay_is_safe = match inspection.as_ref().map(|inspection| inspection.stage) {
+    let replay_is_safe = match inspection.map(|inspection| inspection.stage) {
         None => replay.is_none() || exact_reserved,
         Some(SplitRootEffectTransactionStage::Begun) => exact_reserved,
         Some(SplitRootEffectTransactionStage::Committed) => exact_reserved || exact_consumed,
         Some(SplitRootEffectTransactionStage::ReplayConsumed) => exact_consumed,
-        Some(SplitRootEffectTransactionStage::RolledBack) => false,
         Some(_) => false,
     };
     if !replay_is_safe {
@@ -4766,15 +4765,15 @@ fn apply_safe_core_settings(
             .to_ascii_lowercase();
         let normalized = match key.as_str() {
             "core.autocrlf" if value == "input" => value,
-            "core.autocrlf" => normalize_safe_git_boolean(&key, &value)?,
             "core.safecrlf" if value == "warn" => value,
-            "core.safecrlf" => normalize_safe_git_boolean(&key, &value)?,
-            "core.eol" => normalize_safe_git_enum(&key, &value, &["lf", "crlf", "native"])?,
-            "core.filemode"
+            "core.autocrlf"
+            | "core.safecrlf"
+            | "core.filemode"
             | "core.ignorecase"
             | "core.precomposeunicode"
             | "core.symlinks"
             | "extensions.worktreeconfig" => normalize_safe_git_boolean(&key, &value)?,
+            "core.eol" => normalize_safe_git_enum(&key, &value, &["lf", "crlf", "native"])?,
             _ => unreachable!("relevant Git setting"),
         };
         if key == "extensions.worktreeconfig" {
@@ -5110,6 +5109,17 @@ fn observe_promotion_git_change_set(
     })
 }
 
+fn lowercase_hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(
+        String::with_capacity(bytes.len().saturating_mul(2)),
+        |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(output, "{byte:02x}").expect("writing to String cannot fail");
+            output
+        },
+    )
+}
+
 impl SyntheticGitObservation {
     fn create(
         source_root: &Path,
@@ -5166,14 +5176,8 @@ impl SyntheticGitObservation {
                     "Git observation nonce generation failed: {error}"
                 ))
             })?;
-            let name = format!(
-                "forge-promotion-git-{}-{}",
-                std::process::id(),
-                nonce
-                    .iter()
-                    .map(|byte| format!("{byte:02x}"))
-                    .collect::<String>()
-            );
+            let nonce_hex = lowercase_hex(&nonce);
+            let name = format!("forge-promotion-git-{}-{nonce_hex}", std::process::id());
             let candidate = temporary_parent.join(name);
             let mut builder = fs::DirBuilder::new();
             #[cfg(unix)]
@@ -5207,7 +5211,7 @@ impl SyntheticGitObservation {
                 64 => "\n[extensions]\n\tobjectFormat = sha256",
                 _ => unreachable!("validated Git oid length"),
             };
-            let repository_format = if canonical_head_oid.len() == 64 { 1 } else { 0 };
+            let repository_format = i32::from(canonical_head_oid.len() == 64);
             let file_mode = if cfg!(unix) { "true" } else { "false" };
             let config = format!(
                 "[core]\n\trepositoryFormatVersion = {repository_format}\n\tbare = false\n\tfileMode = {file_mode}\n\tautoCrlf = false\n\tsafeCrlf = false{object_format}\n"
@@ -5403,13 +5407,7 @@ mod git_subprocess_path_tests {
     fn git_for_windows_reads_canonical_private_config_path() {
         let mut nonce = [0_u8; 16];
         getrandom::fill(&mut nonce).expect("generate temporary config nonce");
-        let name = format!(
-            "forge-promotion-git-path-test-{}",
-            nonce
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>()
-        );
+        let name = format!("forge-promotion-git-path-test-{}", lowercase_hex(&nonce));
         let directory = std::env::temp_dir().join(name);
         fs::create_dir(&directory).expect("create temporary Git config directory");
         let path = directory.join("config");
@@ -5596,14 +5594,12 @@ fn run_bounded_git_with_input(
         })?;
     if stdout.len() > MAX_PROMOTION_GIT_OUTPUT_BYTES {
         return Err(PromotionPreviewError::GitWorktree(format!(
-            "{label} exceeds the bounded {} byte output limit",
-            MAX_PROMOTION_GIT_OUTPUT_BYTES
+            "{label} exceeds the bounded {MAX_PROMOTION_GIT_OUTPUT_BYTES} byte output limit"
         )));
     }
     if stderr.len() > MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES {
         return Err(PromotionPreviewError::GitWorktree(format!(
-            "{label} diagnostics exceed the bounded {} byte limit",
-            MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES
+            "{label} diagnostics exceed the bounded {MAX_PROMOTION_GIT_DIAGNOSTIC_BYTES} byte limit"
         )));
     }
     if !status.success() {
