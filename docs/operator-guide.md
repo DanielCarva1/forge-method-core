@@ -388,6 +388,11 @@ Resume exposes only derived Quick Cycle state and counts. Use detail for its
 accepted closeouts or expansion history. If detail publishes
 `predecessor_detail_argv`, it points only to the direct prior Work Focus and is
 not a general history browser.
+For a collaboration-bearing focus, resume stays compact with lane counts and
+one next ready lane. Detail returns the exact accepted lanes, dependencies, and
+links plus state joined from the existing claim, isolation, and promotion
+stores. It does not persist another owner/worktree/receipt record, capture the
+project tree, or scan project documentation.
 Run `workflow report --root <project>
 --json` only when an explicit historical audit or continuity diagnosis needs
 older records. Run a `recover_promotion` argv before new work, preserving every

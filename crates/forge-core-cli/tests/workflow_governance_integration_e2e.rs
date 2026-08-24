@@ -2247,7 +2247,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
     ));
     assert_eq!(
         current_detail["data"]["schema_version"],
-        "current_work_detail_v2"
+        "current_work_detail_v3"
     );
     let predecessor_argv = current_detail["data"]["predecessor_detail_argv"]
         .as_array()
@@ -2402,6 +2402,41 @@ fn collaboration_v3_replaces_the_complete_plan_with_one_write_per_change() {
         state_tree_snapshot(&consumer.state),
         state_after_accept,
         "collaboration resume readback must not write state"
+    );
+    let detail = assert_ok(&run_current_work_detail_record(
+        &consumer,
+        accepted["data"]["ledger_head_digest"]
+            .as_str()
+            .expect("accepted ledger head"),
+        accepted["data"]["focus_record"]["record_digest"]
+            .as_str()
+            .expect("accepted focus record"),
+    ));
+    assert_eq!(detail["data"]["schema_version"], "current_work_detail_v3");
+    assert_eq!(
+        detail["data"]["focus"]["collaboration"]["plan"],
+        initial_plan
+    );
+    assert_eq!(
+        detail["data"]["focus"]["collaboration"]["lanes"][0]["lane_id"],
+        "lane.contract"
+    );
+    assert_eq!(
+        detail["data"]["focus"]["collaboration"]["lanes"][0]["state"],
+        "ready"
+    );
+    assert_eq!(
+        detail["data"]["focus"]["collaboration"]["lanes"][1]["lane_id"],
+        "lane.persistence"
+    );
+    assert_eq!(
+        detail["data"]["focus"]["collaboration"]["lanes"][1]["state"],
+        "blocked"
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_after_accept,
+        "collaboration detail readback must not write state"
     );
 
     let assigned_plan = serde_json::json!({

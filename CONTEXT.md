@@ -13,7 +13,7 @@ Use evidence in this order:
 4. explanatory prose;
 5. retained historical notes.
 
-The active source line is **`0.12.0-alpha.37`**. `Cargo.toml` is the package
+The active source line is **`0.12.0-alpha.38`**. `Cargo.toml` is the package
 version authority; `forge-core --version` identifies the executable actually on
 `PATH`. `README.md` owns the canonical identity table. Historical prerelease
 numbers belong in `CHANGELOG.md` and audit evidence, not in current guidance.
@@ -99,6 +99,10 @@ as product drift rather than asking the solo developer to provision them.
   state. It tells a host agent what is being pursued, where the work is, what was
   agreed, what blocks progress, and what should happen next without replaying the
   full history.
+- **Collaboration Plan**: an optional bounded list inside Work Focus. Resume
+  shows only counts and the next ready lane; on-demand Current Work detail joins
+  exact lanes to existing claim, isolation, and promotion state without owning a
+  second copy of that state.
 - **Quick Cycle**: the compact form of the Product Lifecycle for clear, bounded,
   reversible work. It visits every lifecycle stage in one small durable record
   instead of silently skipping stages or creating a document for each one.

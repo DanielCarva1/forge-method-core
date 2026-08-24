@@ -281,6 +281,13 @@ accepted Quick Cycle closeouts and expansion history stay behind the existing
 `detail_argv`. Detail can publish one exact `predecessor_detail_argv` for the
 direct prior Work Focus; it does not offer a history listing or a chain walk.
 
+When Work Focus has a collaboration plan, ordinary resume still returns only
+bounded lane counts and the next ready lane. Follow `detail_argv` only when the
+exact plan is needed. Its `focus.collaboration` joins each accepted lane to the
+existing claim, isolation, and promotion state; it does not create a second
+collaboration registry. This detail path reads those bounded state stores
+directly and does not capture the project tree or scan project documentation.
+
 `actions.recommended` remains the preferred exact governed Forge operation, but
 the host executes it only when it is compatible with the accepted product step.
 `current_evaluation.candidate_next_actions` is raw simulation or fallback

@@ -1,7 +1,11 @@
 use forge_core_contracts::{
-    Phase, PrincipalId, RepoPath, StableId, WorkflowCollaborationLane, WorkflowCollaborationPlan,
-    WorkflowCooperativeHostProvenance, WorkflowCurrentWorkAuthority,
-    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationSummary,
+    IsolationStatus, Phase, PrincipalId, RepoPath, StableId, WorkflowCollaborationLane,
+    WorkflowCollaborationPlan, WorkflowCooperativeHostProvenance, WorkflowCurrentWorkAuthority,
+    WorkflowCurrentWorkCollaborationClaimState, WorkflowCurrentWorkCollaborationDetail,
+    WorkflowCurrentWorkCollaborationIsolationValidation,
+    WorkflowCurrentWorkCollaborationLaneDetail, WorkflowCurrentWorkCollaborationLaneState,
+    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationOwnerDetail,
+    WorkflowCurrentWorkCollaborationPromotionState, WorkflowCurrentWorkCollaborationSummary,
     WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
     WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
     WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowCurrentWorkValidationError,
@@ -463,7 +467,7 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
         "current_work_context_v3"
     );
-    assert_eq!(CURRENT_WORK_DETAIL_SCHEMA_VERSION, "current_work_detail_v2");
+    assert_eq!(CURRENT_WORK_DETAIL_SCHEMA_VERSION, "current_work_detail_v3");
     let mut event = sample_event();
     event.quick_cycle = Some(sample_quick_cycle());
     let summary = WorkflowCurrentWorkSummary {
@@ -526,6 +530,14 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         serde_json::from_slice(&summary_bytes).expect("summary round trips");
     assert_eq!(decoded, context);
 
+    let detail_plan = WorkflowCollaborationPlan {
+        lanes: vec![WorkflowCollaborationLane {
+            lane_id: StableId("lane.contract".into()),
+            outcome: "Define the bounded contract".into(),
+            depends_on: Vec::new(),
+            isolation_id: Some(StableId("isolation.contract".into())),
+        }],
+    };
     let detail_focus = WorkflowCurrentWorkDetailFocus {
         focus_id: event.focus_id,
         record_digest: summary.record_digest,
@@ -548,6 +560,26 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         admission_state_version: event.admission_state_version,
         recorded_at_unix: event.recorded_at_unix,
         quick_cycle: event.quick_cycle,
+        collaboration: Some(WorkflowCurrentWorkCollaborationDetail {
+            plan: detail_plan,
+            lanes: vec![WorkflowCurrentWorkCollaborationLaneDetail {
+                lane_id: StableId("lane.contract".into()),
+                state: WorkflowCurrentWorkCollaborationLaneState::Integrated,
+                owner: Some(WorkflowCurrentWorkCollaborationOwnerDetail {
+                    isolation_id: StableId("isolation.contract".into()),
+                    agent_id: StableId("agent.contract".into()),
+                    branch_name: "agent/contract".into(),
+                    worktree_path: RepoPath("../.forge-worktrees/agent/contract".into()),
+                    isolation_status: IsolationStatus::Merged,
+                    isolation_validation:
+                        WorkflowCurrentWorkCollaborationIsolationValidation::RetiredWorktreeAbsent,
+                    claim_id: Some(StableId("claim.contract".into())),
+                    claim_state: Some(WorkflowCurrentWorkCollaborationClaimState::NonActive),
+                }),
+                promotion_status: Some(WorkflowCurrentWorkCollaborationPromotionState::Completed),
+                promotion_receipt_digest: Some(format!("sha256:{}", "a".repeat(64))),
+            }],
+        }),
     };
     let detail = WorkflowCurrentWorkDetail {
         schema_version: CURRENT_WORK_DETAIL_SCHEMA_VERSION.into(),

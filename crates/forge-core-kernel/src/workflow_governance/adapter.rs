@@ -89,7 +89,11 @@ use forge_core_contracts::{
     WorkflowCooperativeMaterialScenarioKind, WorkflowCooperativeObjectiveInput,
     WorkflowCooperativeObjectiveProposal, WorkflowCooperativePriorEvidenceCandidate,
     WorkflowCooperativePriorEvidenceReference, WorkflowCurrentWorkAuthority,
-    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationSummary,
+    WorkflowCurrentWorkCollaborationClaimState, WorkflowCurrentWorkCollaborationDetail,
+    WorkflowCurrentWorkCollaborationIsolationValidation,
+    WorkflowCurrentWorkCollaborationLaneDetail, WorkflowCurrentWorkCollaborationLaneState,
+    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationOwnerDetail,
+    WorkflowCurrentWorkCollaborationPromotionState, WorkflowCurrentWorkCollaborationSummary,
     WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
     WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
     WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowEffectiveBundleIdentity,
@@ -3888,6 +3892,7 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
         let projection = ledger.recover()?;
+        drop(ledger);
         if projection.head_digest.as_deref() != Some(expected_head_digest) {
             return Err(
                 WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
@@ -3940,6 +3945,48 @@ impl WorkflowGovernanceProjectAdapter {
             }
         };
         let observation = Self::current_work_projection(&projection, focus)?;
+        let collaboration = if let Some(plan) = focus.collaboration.as_ref() {
+            let now = unix_time()?;
+            let readiness_profile = projection
+                .readiness_profile()
+                .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
+            let claims = replacement_claims_from_existing_state(&self.binding.state_root, now)?;
+            let workspace = super::promotion::inspect_replacement_workspace(
+                &self.binding,
+                readiness_profile,
+                None,
+                now,
+            );
+            let detail =
+                current_work_collaboration_detail_from_existing_state(plan, &claims, &workspace);
+            let final_claims =
+                replacement_claims_from_existing_state(&self.binding.state_root, now)?;
+            let final_workspace = super::promotion::inspect_replacement_workspace(
+                &self.binding,
+                readiness_profile,
+                None,
+                now,
+            );
+            if final_claims != claims || final_workspace != workspace {
+                return Err(
+                    WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                        "claim, isolation, or promotion state changed while collaboration detail was observed",
+                    ),
+                );
+            }
+            let final_ledger =
+                observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
+            if final_ledger.recover()?.head_digest.as_deref() != Some(expected_head_digest) {
+                return Err(
+                    WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                        "durable workflow state changed while collaboration detail was observed",
+                    ),
+                );
+            }
+            Some(detail)
+        } else {
+            None
+        };
         let detail = WorkflowCurrentWorkDetail {
             schema_version: CURRENT_WORK_DETAIL_SCHEMA_VERSION.to_owned(),
             authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
@@ -3966,6 +4013,7 @@ impl WorkflowGovernanceProjectAdapter {
                 admission_state_version: focus.admission_state_version,
                 recorded_at_unix: focus.recorded_at_unix,
                 quick_cycle: focus.quick_cycle.clone(),
+                collaboration,
             },
             open_decision_refs: observation.open_decision_refs,
             blocker_refs: observation.blocker_refs,
@@ -4234,7 +4282,7 @@ impl WorkflowGovernanceProjectAdapter {
         let workspace = super::promotion::inspect_replacement_workspace(
             &self.binding,
             guidance.readiness_profile,
-            guidance,
+            Some(guidance),
             now,
         );
         let workspace_binding = workspace.clone();
@@ -4488,7 +4536,7 @@ impl WorkflowGovernanceProjectAdapter {
         let final_workspace = super::promotion::inspect_replacement_workspace(
             &self.binding,
             guidance.readiness_profile,
-            guidance,
+            Some(guidance),
             now,
         );
         if final_workspace != workspace_binding {
@@ -13415,6 +13463,24 @@ fn current_work_collaboration_summary(
     plan: &WorkflowCollaborationPlan,
     continuity: &WorkflowReplacementContinuity,
 ) -> WorkflowCurrentWorkCollaborationSummary {
+    let owners = current_work_collaboration_owner_sets(continuity);
+    current_work_collaboration_summary_from_owner_sets(
+        plan,
+        &owners.integrated_isolations,
+        &owners.active_isolations,
+        &owners.blocked_isolations,
+    )
+}
+
+struct CurrentWorkCollaborationOwnerSets {
+    integrated_isolations: BTreeSet<StableId>,
+    active_isolations: BTreeSet<StableId>,
+    blocked_isolations: BTreeSet<StableId>,
+}
+
+fn current_work_collaboration_owner_sets(
+    continuity: &WorkflowReplacementContinuity,
+) -> CurrentWorkCollaborationOwnerSets {
     let integrated_isolations = continuity
         .promotions
         .iter()
@@ -13463,13 +13529,11 @@ fn current_work_collaboration_summary(
             })
             .map(|isolation| isolation.contract.id.clone()),
     );
-
-    current_work_collaboration_summary_from_owner_sets(
-        plan,
-        &integrated_isolations,
-        &active_isolations,
-        &blocked_isolations,
-    )
+    CurrentWorkCollaborationOwnerSets {
+        integrated_isolations,
+        active_isolations,
+        blocked_isolations,
+    }
 }
 
 fn current_work_collaboration_summary_from_owner_sets(
@@ -13496,35 +13560,25 @@ fn current_work_collaboration_summary_from_owner_sets(
     let mut next_ready_lane = None;
 
     for lane in &plan.lanes {
-        let integrated = integrated_lanes.contains(&lane.lane_id);
-        let dependencies_integrated = lane
-            .depends_on
-            .iter()
-            .all(|dependency| integrated_lanes.contains(dependency));
-        let active = lane
-            .isolation_id
-            .as_ref()
-            .is_some_and(|isolation_id| active_isolations.contains(isolation_id));
-        let owner_blocked = lane
-            .isolation_id
-            .as_ref()
-            .is_some_and(|isolation_id| blocked_isolations.contains(isolation_id));
-
-        if integrated {
-            integrated_lane_count += 1;
-        } else if !dependencies_integrated || owner_blocked {
-            blocked_lane_count += 1;
-        } else if active {
-            active_lane_count += 1;
-        } else {
-            ready_lane_count += 1;
-            if next_ready_lane.is_none() {
-                next_ready_lane = Some(WorkflowCurrentWorkCollaborationLaneSummary {
-                    lane_id: lane.lane_id.clone(),
-                    outcome: lane.outcome.clone(),
-                    isolation_id: lane.isolation_id.clone(),
-                });
+        match current_work_collaboration_lane_state(
+            lane,
+            &integrated_lanes,
+            active_isolations,
+            blocked_isolations,
+        ) {
+            WorkflowCurrentWorkCollaborationLaneState::Ready => {
+                ready_lane_count += 1;
+                if next_ready_lane.is_none() {
+                    next_ready_lane = Some(WorkflowCurrentWorkCollaborationLaneSummary {
+                        lane_id: lane.lane_id.clone(),
+                        outcome: lane.outcome.clone(),
+                        isolation_id: lane.isolation_id.clone(),
+                    });
+                }
             }
+            WorkflowCurrentWorkCollaborationLaneState::Active => active_lane_count += 1,
+            WorkflowCurrentWorkCollaborationLaneState::Blocked => blocked_lane_count += 1,
+            WorkflowCurrentWorkCollaborationLaneState::Integrated => integrated_lane_count += 1,
         }
     }
 
@@ -13535,6 +13589,218 @@ fn current_work_collaboration_summary_from_owner_sets(
         blocked_lane_count,
         integrated_lane_count,
         next_ready_lane,
+    }
+}
+
+fn current_work_collaboration_lane_state(
+    lane: &forge_core_contracts::WorkflowCollaborationLane,
+    integrated_lanes: &BTreeSet<StableId>,
+    active_isolations: &BTreeSet<StableId>,
+    blocked_isolations: &BTreeSet<StableId>,
+) -> WorkflowCurrentWorkCollaborationLaneState {
+    if integrated_lanes.contains(&lane.lane_id) {
+        WorkflowCurrentWorkCollaborationLaneState::Integrated
+    } else if !lane
+        .depends_on
+        .iter()
+        .all(|dependency| integrated_lanes.contains(dependency))
+        || lane
+            .isolation_id
+            .as_ref()
+            .is_some_and(|isolation_id| blocked_isolations.contains(isolation_id))
+    {
+        WorkflowCurrentWorkCollaborationLaneState::Blocked
+    } else if lane
+        .isolation_id
+        .as_ref()
+        .is_some_and(|isolation_id| active_isolations.contains(isolation_id))
+    {
+        WorkflowCurrentWorkCollaborationLaneState::Active
+    } else {
+        WorkflowCurrentWorkCollaborationLaneState::Ready
+    }
+}
+
+fn current_work_collaboration_detail_from_existing_state(
+    plan: &WorkflowCollaborationPlan,
+    claims: &[ReplacementClaimProjection],
+    workspace: &super::promotion::ReplacementWorkspaceInspection,
+) -> WorkflowCurrentWorkCollaborationDetail {
+    let integrated_isolations = workspace
+        .promotions
+        .iter()
+        .filter(|promotion| {
+            promotion.status == super::promotion::ReplacementPromotionStatus::Completed
+        })
+        .map(|promotion| promotion.isolation_id.clone())
+        .collect::<BTreeSet<_>>();
+    let active_isolations = workspace
+        .isolations
+        .iter()
+        .filter(|isolation| {
+            matches!(
+                isolation.contract.status,
+                IsolationStatus::Active | IsolationStatus::Merging
+            )
+        })
+        .map(|isolation| isolation.contract.id.clone())
+        .collect::<BTreeSet<_>>();
+    let mut blocked_isolations = workspace
+        .gaps
+        .iter()
+        .filter(|gap| gap.blocking)
+        .filter_map(|gap| gap.isolation_id.clone())
+        .collect::<BTreeSet<_>>();
+    blocked_isolations.extend(
+        workspace
+            .promotions
+            .iter()
+            .filter(|promotion| {
+                matches!(
+                    promotion.status,
+                    super::promotion::ReplacementPromotionStatus::Recoverable
+                        | super::promotion::ReplacementPromotionStatus::BlockedCorrupt
+                )
+            })
+            .map(|promotion| promotion.isolation_id.clone()),
+    );
+    for isolation in &workspace.isolations {
+        if matches!(
+            isolation.contract.status,
+            IsolationStatus::Merged | IsolationStatus::Abandoned
+        ) {
+            blocked_isolations.insert(isolation.contract.id.clone());
+            continue;
+        }
+        let Some(claim_id) = isolation.contract.claim_id.as_ref() else {
+            continue;
+        };
+        let claim = claims.iter().find(|claim| claim.claim.id.0 == claim_id.0);
+        let claim_blocks = match claim {
+            None => true,
+            Some(claim) if claim.claim.claim.claimant_agent_id != isolation.contract.agent_id => {
+                true
+            }
+            Some(claim) if claim.liveness == ReplacementClaimLiveness::Live => false,
+            Some(_) => linked_claim_liveness_gap_is_blocking(
+                isolation.contract.status,
+                workspace
+                    .promotions
+                    .iter()
+                    .find(|promotion| promotion.isolation_id == isolation.contract.id)
+                    .map(|promotion| promotion.status),
+            ),
+        };
+        if claim_blocks {
+            blocked_isolations.insert(isolation.contract.id.clone());
+        }
+    }
+    let integrated_lanes = plan
+        .lanes
+        .iter()
+        .filter(|lane| {
+            lane.isolation_id
+                .as_ref()
+                .is_some_and(|id| integrated_isolations.contains(id))
+        })
+        .map(|lane| lane.lane_id.clone())
+        .collect::<BTreeSet<_>>();
+    let lanes = plan
+        .lanes
+        .iter()
+        .map(|lane| {
+            let isolation = lane.isolation_id.as_ref().and_then(|id| {
+                workspace
+                    .isolations
+                    .iter()
+                    .find(|isolation| isolation.contract.id == *id)
+            });
+            let promotion = lane.isolation_id.as_ref().and_then(|id| {
+                workspace
+                    .promotions
+                    .iter()
+                    .find(|promotion| promotion.isolation_id == *id)
+            });
+            WorkflowCurrentWorkCollaborationLaneDetail {
+                lane_id: lane.lane_id.clone(),
+                state: current_work_collaboration_lane_state(
+                    lane,
+                    &integrated_lanes,
+                    &active_isolations,
+                    &blocked_isolations,
+                ),
+                owner: isolation.map(|isolation| {
+                    let claim_state = isolation.contract.claim_id.as_ref().map(|claim_id| {
+                        claims
+                            .iter()
+                            .find(|claim| claim.claim.id.0 == claim_id.0)
+                            .map_or(
+                                WorkflowCurrentWorkCollaborationClaimState::Missing,
+                                |claim| match claim.liveness {
+                                    ReplacementClaimLiveness::Live => {
+                                        WorkflowCurrentWorkCollaborationClaimState::Live
+                                    }
+                                    ReplacementClaimLiveness::Expired => {
+                                        WorkflowCurrentWorkCollaborationClaimState::Expired
+                                    }
+                                    ReplacementClaimLiveness::NonActive => {
+                                        WorkflowCurrentWorkCollaborationClaimState::NonActive
+                                    }
+                                },
+                            )
+                    });
+                    WorkflowCurrentWorkCollaborationOwnerDetail {
+                        isolation_id: isolation.contract.id.clone(),
+                        agent_id: isolation.contract.agent_id.clone(),
+                        branch_name: isolation.contract.branch_name.clone(),
+                        worktree_path: isolation.contract.worktree_path.clone(),
+                        isolation_status: isolation.contract.status,
+                        isolation_validation: match isolation.validation {
+                            super::promotion::ReplacementIsolationValidation::Valid => {
+                                WorkflowCurrentWorkCollaborationIsolationValidation::Valid
+                            }
+                            super::promotion::ReplacementIsolationValidation::ProposedNotCreated => {
+                                WorkflowCurrentWorkCollaborationIsolationValidation::ProposedNotCreated
+                            }
+                            super::promotion::ReplacementIsolationValidation::RetiredWorktreeAbsent => {
+                                WorkflowCurrentWorkCollaborationIsolationValidation::RetiredWorktreeAbsent
+                            }
+                            super::promotion::ReplacementIsolationValidation::Missing => {
+                                WorkflowCurrentWorkCollaborationIsolationValidation::Missing
+                            }
+                            super::promotion::ReplacementIsolationValidation::Mismatched => {
+                                WorkflowCurrentWorkCollaborationIsolationValidation::Mismatched
+                            }
+                        },
+                        claim_id: isolation.contract.claim_id.clone(),
+                        claim_state,
+                    }
+                }),
+                promotion_status: promotion.map(|promotion| match promotion.status {
+                    super::promotion::ReplacementPromotionStatus::NotStarted => {
+                        WorkflowCurrentWorkCollaborationPromotionState::NotStarted
+                    }
+                    super::promotion::ReplacementPromotionStatus::Recoverable => {
+                        WorkflowCurrentWorkCollaborationPromotionState::Recoverable
+                    }
+                    super::promotion::ReplacementPromotionStatus::Completed => {
+                        WorkflowCurrentWorkCollaborationPromotionState::Completed
+                    }
+                    super::promotion::ReplacementPromotionStatus::BlockedCorrupt => {
+                        WorkflowCurrentWorkCollaborationPromotionState::BlockedCorrupt
+                    }
+                }),
+                promotion_receipt_digest: promotion.and_then(|promotion| {
+                    (promotion.status == super::promotion::ReplacementPromotionStatus::Completed)
+                        .then(|| promotion.receipt_digest.clone())
+                        .flatten()
+                }),
+            }
+        })
+        .collect();
+    WorkflowCurrentWorkCollaborationDetail {
+        plan: plan.clone(),
+        lanes,
     }
 }
 
@@ -15553,6 +15819,78 @@ mod tests {
             summary.next_ready_lane.expect("one ready lane").lane_id.0,
             "lane.ready"
         );
+    }
+
+    #[test]
+    fn collaboration_detail_joins_lane_owner_claim_and_promotion_once() {
+        let claim = coordination_claim_document().claim_contract;
+        let isolation_id = StableId("isolation.owned".to_owned());
+        let plan = WorkflowCollaborationPlan {
+            lanes: vec![forge_core_contracts::WorkflowCollaborationLane {
+                lane_id: StableId("lane.owned".to_owned()),
+                outcome: "Continue work in the linked isolation".to_owned(),
+                depends_on: Vec::new(),
+                isolation_id: Some(isolation_id.clone()),
+            }],
+        };
+        let claims = vec![ReplacementClaimProjection {
+            claim: claim.clone(),
+            last_sequence: 1,
+            liveness: ReplacementClaimLiveness::Live,
+        }];
+        let workspace = super::super::promotion::ReplacementWorkspaceInspection {
+            isolations: vec![super::super::promotion::ReplacementIsolationInspection {
+                contract_path: "contracts/isolations/isolation-owned.yaml".to_owned(),
+                contract_digest: format!("sha256:{}", "7".repeat(64)),
+                contract: forge_core_contracts::IsolationContract {
+                    id: isolation_id.clone(),
+                    agent_id: claim.claim.claimant_agent_id,
+                    branch_name: "agent/owned".to_owned(),
+                    worktree_path: RepoPath("../.forge-worktrees/agent/owned".to_owned()),
+                    base_ref: "main".to_owned(),
+                    created_at: "2026-08-24T12:00:00Z".to_owned(),
+                    status: IsolationStatus::Active,
+                    merge_policy: forge_core_contracts::MergePolicy::Rebase,
+                    claim_id: Some(StableId(claim.id.0.clone())),
+                },
+                declared_worktree: "../.forge-worktrees/agent/owned".to_owned(),
+                validation: super::super::promotion::ReplacementIsolationValidation::Valid,
+                git: None,
+                gap_codes: Vec::new(),
+            }],
+            promotions: vec![super::super::promotion::ReplacementPromotionInspection {
+                isolation_id,
+                status: super::super::promotion::ReplacementPromotionStatus::NotStarted,
+                preview_digest: None,
+                receipt_digest: None,
+                summary: "No promotion has started".to_owned(),
+            }],
+            gaps: Vec::new(),
+        };
+
+        let detail =
+            current_work_collaboration_detail_from_existing_state(&plan, &claims, &workspace);
+        let lane = detail.lanes.first().expect("one collaboration lane");
+        let owner = lane.owner.as_ref().expect("linked owner");
+
+        assert_eq!(
+            lane.state,
+            WorkflowCurrentWorkCollaborationLaneState::Active
+        );
+        assert_eq!(owner.isolation_id.0, "isolation.owned");
+        assert_eq!(
+            owner.claim_id.as_ref().map(|id| id.0.as_str()),
+            Some(claim.id.0.as_str())
+        );
+        assert_eq!(
+            owner.claim_state,
+            Some(WorkflowCurrentWorkCollaborationClaimState::Live)
+        );
+        assert_eq!(
+            lane.promotion_status,
+            Some(WorkflowCurrentWorkCollaborationPromotionState::NotStarted)
+        );
+        assert!(lane.promotion_receipt_digest.is_none());
     }
 
     #[test]

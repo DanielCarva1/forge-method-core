@@ -1,9 +1,11 @@
-use crate::{Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProvenance};
+use crate::{
+    IsolationStatus, Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProvenance,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v3";
-pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v2";
+pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v3";
 pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
 pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
 pub const QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
@@ -440,6 +442,82 @@ pub struct WorkflowCurrentWorkDetailFocus {
     pub recorded_at_unix: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collaboration: Option<WorkflowCurrentWorkCollaborationDetail>,
+}
+
+/// Exact accepted collaboration plan plus read-only state joined from its
+/// existing claim, isolation, and promotion owners.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkCollaborationDetail {
+    pub plan: WorkflowCollaborationPlan,
+    pub lanes: Vec<WorkflowCurrentWorkCollaborationLaneDetail>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkCollaborationLaneDetail {
+    pub lane_id: StableId,
+    pub state: WorkflowCurrentWorkCollaborationLaneState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<WorkflowCurrentWorkCollaborationOwnerDetail>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promotion_status: Option<WorkflowCurrentWorkCollaborationPromotionState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promotion_receipt_digest: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkCollaborationLaneState {
+    Ready,
+    Active,
+    Blocked,
+    Integrated,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkCollaborationOwnerDetail {
+    pub isolation_id: StableId,
+    pub agent_id: StableId,
+    pub branch_name: String,
+    pub worktree_path: RepoPath,
+    pub isolation_status: IsolationStatus,
+    pub isolation_validation: WorkflowCurrentWorkCollaborationIsolationValidation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim_id: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim_state: Option<WorkflowCurrentWorkCollaborationClaimState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkCollaborationClaimState {
+    Live,
+    Expired,
+    NonActive,
+    Missing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkCollaborationIsolationValidation {
+    Valid,
+    ProposedNotCreated,
+    RetiredWorktreeAbsent,
+    Missing,
+    Mismatched,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkCollaborationPromotionState {
+    NotStarted,
+    Recoverable,
+    Completed,
+    BlockedCorrupt,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -683,6 +761,55 @@ fn validate_detail_focus(
     }
     if let Some(quick_cycle) = focus.quick_cycle.as_ref() {
         validate_quick_cycle_readback(quick_cycle)?;
+    }
+    if let Some(collaboration) = focus.collaboration.as_ref() {
+        collaboration.plan.validate()?;
+        if collaboration.lanes.len() != collaboration.plan.lanes.len() {
+            return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+        for (lane, accepted) in collaboration.lanes.iter().zip(&collaboration.plan.lanes) {
+            if lane.lane_id != accepted.lane_id {
+                return Err(WorkflowCurrentWorkValidationError::FieldBound);
+            }
+            if let Some(owner) = lane.owner.as_ref() {
+                if accepted.isolation_id.as_ref() != Some(&owner.isolation_id) {
+                    return Err(WorkflowCurrentWorkValidationError::FieldBound);
+                }
+                validate_collaboration_id(
+                    &owner.isolation_id,
+                    MAX_COLLABORATION_ISOLATION_ID_BYTES,
+                )?;
+                validate_collaboration_id(&owner.agent_id, MAX_COLLABORATION_ISOLATION_ID_BYTES)?;
+                if owner.branch_name.trim().is_empty()
+                    || owner.branch_name.as_bytes().len() > MAX_WORK_FOCUS_TEXT_BYTES
+                    || owner.worktree_path.0.trim().is_empty()
+                    || owner.worktree_path.0.as_bytes().len() > MAX_WORK_FOCUS_TEXT_BYTES
+                {
+                    return Err(WorkflowCurrentWorkValidationError::FieldBound);
+                }
+                if owner.claim_id.is_some() != owner.claim_state.is_some() {
+                    return Err(WorkflowCurrentWorkValidationError::FieldBound);
+                }
+                if let Some(claim_id) = owner.claim_id.as_ref() {
+                    validate_collaboration_id(claim_id, MAX_COLLABORATION_ISOLATION_ID_BYTES)?;
+                }
+            }
+            if lane.promotion_receipt_digest.is_some()
+                != (lane.promotion_status
+                    == Some(WorkflowCurrentWorkCollaborationPromotionState::Completed))
+            {
+                return Err(WorkflowCurrentWorkValidationError::FieldBound);
+            }
+            if let Some(receipt) = lane.promotion_receipt_digest.as_deref() {
+                validate_digest(receipt)?;
+            }
+            if lane.state == WorkflowCurrentWorkCollaborationLaneState::Integrated
+                && lane.promotion_status
+                    != Some(WorkflowCurrentWorkCollaborationPromotionState::Completed)
+            {
+                return Err(WorkflowCurrentWorkValidationError::FieldBound);
+            }
+        }
     }
     validate_optional_text(focus.external_work_item_ref.as_deref())?;
     validate_optional_text(

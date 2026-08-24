@@ -3097,7 +3097,7 @@ fn debug_test_promotion_crash(_point: &str) {}
 pub(super) fn inspect_replacement_workspace(
     binding: &WorkflowGovernanceProjectBinding,
     readiness_profile: WorkflowReadinessProfile,
-    guidance: &WorkflowGovernanceGuidance,
+    guidance: Option<&WorkflowGovernanceGuidance>,
     now: u64,
 ) -> ReplacementWorkspaceInspection {
     let mut result = ReplacementWorkspaceInspection::default();
@@ -3353,7 +3353,7 @@ const fn replacement_promotion_status_rank(status: ReplacementPromotionStatus) -
 fn inspect_replacement_promotions(
     binding: &WorkflowGovernanceProjectBinding,
     readiness_profile: WorkflowReadinessProfile,
-    guidance: &WorkflowGovernanceGuidance,
+    guidance: Option<&WorkflowGovernanceGuidance>,
     now: u64,
     selections: &[IsolationSelection],
     result: &mut ReplacementWorkspaceInspection,
@@ -3555,8 +3555,18 @@ fn inspect_replacement_promotions(
                         continue;
                     }
                     if legacy_previews.is_none() {
-                        legacy_previews = Some(reconstruct_legacy_v1_previews(
-                            binding, guidance, now, selections,
+                        legacy_previews = Some(guidance.map_or_else(
+                            || {
+                                Err(PromotionApplyError::RecoveryRequired(
+                                    "legacy promotion recovery needs the explicit workflow resume scan"
+                                        .to_owned(),
+                                ))
+                            },
+                            |guidance| {
+                                reconstruct_legacy_v1_previews(
+                                    binding, guidance, now, selections,
+                                )
+                            },
                         ));
                     }
                     preview = legacy_previews
