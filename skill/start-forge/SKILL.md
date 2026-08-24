@@ -112,13 +112,26 @@ checkpoints, and low for mostly autonomous agent work. It never creates a
 required approval.
 
 Read `data.current_work` before reconstructing work from chat or repository
-files. `absent` means Forge has no accepted Work Focus yet, so ask one useful
-product question instead of inventing one. `current` and `blocked` carry the
-accepted activity and next step; `stale` means the objective or Phase changed
-and the old focus must not be silently reused. `completed` and `abandoned` are
-terminal. Execute `focus.detail_argv` only when the bounded summary is not
-enough; it returns accepted detail without scanning project documentation.
-This block is read-only advice and never authorizes edits or completion.
+files. It is the accepted product-work continuity. `absent` means Forge has no
+accepted Work Focus yet, so ask one useful product question instead of
+inventing one. `current` and `blocked` carry the accepted activity and next
+step; `stale` means the objective or Phase changed and the old focus must not be
+silently reused. `completed` and `abandoned` are terminal: a terminal
+`next_step` is a handoff toward a new Work Focus, not active work. Execute
+`focus.detail_argv` only when the bounded summary is not enough; it returns
+accepted detail without scanning project documentation. This block is
+read-only advice and never authorizes edits or completion.
+
+Keep signal scope and priority clear. `data.current_work.focus.blocker_count`
+and its blocker references are focus-bound: they describe only blockers
+explicitly attached to that Work Focus. Top-level `data.blockers` and evaluation
+blockers are workflow-wide diagnostics, so a focus can have zero blockers while
+the wider workflow still reports gaps. `actions.recommended` is the preferred
+exact governed Forge operation, but execute it only when it is compatible with
+the accepted product step. `current_evaluation.candidate_next_actions` is a raw
+simulation or fallback diagnostic, not a competing recommendation. The Host
+Agent must synthesize one primary next step from these scopes instead of
+presenting several unrelated choices to the human.
 
 Start with a short pass through the stage. When the work is already clear,
 local, reversible, and easy to verify, do not force research or a large document.

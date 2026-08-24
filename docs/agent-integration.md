@@ -268,10 +268,21 @@ packet, and exact gap. Counts identify only older audit history omitted from
 the activation view. `current_work` adds only the bounded accepted work focus;
 it does not copy transcript, issue body, evidence body, or catalog content.
 
-V6 keeps `actions.recommended` as the explicit user-journey priority. A published
-Solo Cooperative evidence packet outranks abstract capability acquisition and
-human escalation. The recommendation points at the authoritative packet or gap
-rather than copying it, so the activation response stays small and unambiguous.
+In V8, `current_work` is the accepted product-work continuity. For an active or
+blocked focus, its `next_step` is the product step to continue. For a completed
+or abandoned focus, that field is only a handoff toward a new Work Focus. Its
+blocker count and references are focus-bound; top-level blockers and evaluation
+blockers remain workflow-wide diagnostics. A zero focus blocker count therefore
+does not claim that the whole workflow has no gaps.
+
+`actions.recommended` remains the preferred exact governed Forge operation, but
+the host executes it only when it is compatible with the accepted product step.
+`current_evaluation.candidate_next_actions` is raw simulation or fallback
+diagnostic data, not a competing recommendation. The host combines these scopes
+into one primary next step instead of presenting unrelated choices. A published
+Solo Cooperative evidence packet still outranks abstract capability acquisition
+and human escalation inside its governance lane. References keep the activation
+response small instead of copying packet or gap bodies.
 
 `workflow_resume_summary_v1` through `workflow_resume_summary_v6` are legacy
 views. V6 adds `selected_policy_evidence`, containing only current assessments

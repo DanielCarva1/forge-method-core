@@ -145,6 +145,19 @@ class GuidedActivationContractTests(unittest.TestCase):
             "must not be replaced by an unrelated validation command",
         )
 
+    def test_work_focus_and_governed_actions_have_one_clear_priority(self) -> None:
+        self.assert_contract_contains(
+            "product-work continuity",
+            "a terminal `next_step` is a handoff",
+            "focus-bound",
+            "workflow-wide",
+            "actions.recommended",
+            "compatible with the accepted product step",
+            "candidate_next_actions",
+            "not a competing recommendation",
+            "one primary next step",
+        )
+
     def test_all_primary_activation_journeys_have_closed_behavior(self) -> None:
         matrix = marked_section(self.contract, "guided-activation-journeys")
         rows: dict[str, tuple[str, str, str]] = {}
