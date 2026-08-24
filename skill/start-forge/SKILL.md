@@ -210,7 +210,7 @@ recommended project step.
 1. **Resolve the project root.** Default to the current working directory. If
    the user names a path, use it as `--root`.
 
-2. **Locate `forge-core`** from PATH or Cargo bin.
+2. **Locate `forge-core`** from supported native candidates.
 
    ```bash
    forge-core --version 2>/dev/null \
@@ -218,6 +218,15 @@ recommended project step.
      || ~/.cargo/bin/forge-core --version 2>/dev/null \
      || echo "NOT_FOUND"
    ```
+
+   On Windows, if PATH and Cargo bin have no working native candidate, check
+   only the source installer's canonical default binary at
+   `%LOCALAPPDATA%\Programs\forge-core\bin\forge-core.exe`. Require a regular
+   file and a successful `--version` invocation before selecting it. Do not scan
+   the filesystem, compare arbitrary installed copies, install or build a
+   binary, or edit `PATH` during activation. An explicit non-default
+   `--install-root` remains the operator's responsibility to expose through
+   PATH.
 
    On Windows only, when no native binary is found, the agent may prove and
    retain one Windows-to-WSL bridge for the rest of this chat. A Windows drive

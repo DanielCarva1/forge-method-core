@@ -63,6 +63,39 @@ class GuidedActivationContractTests(unittest.TestCase):
             with self.subTest(term=term):
                 self.assertIn(term.casefold(), self.contract_normalized)
 
+    def test_windows_default_source_install_precedes_wsl_fallback(self) -> None:
+        workflow = normalized(
+            self.skill.split("## Workflow", maxsplit=1)[1].split(
+                "## Safety checks", maxsplit=1
+            )[0]
+        )
+        path_candidate = "forge-core --version 2>/dev/null".casefold()
+        cargo_candidate = "~/.cargo/bin/forge-core --version 2>/dev/null".casefold()
+        native_candidate = (
+            r"%LOCALAPPDATA%\Programs\forge-core\bin\forge-core.exe".casefold()
+        )
+        wsl_fallback = "On Windows only, when no native binary is found".casefold()
+
+        self.assertIn(path_candidate, workflow)
+        self.assertIn(cargo_candidate, workflow)
+        self.assertIn(native_candidate, workflow)
+        self.assertIn(wsl_fallback, workflow)
+        self.assertLess(workflow.index(path_candidate), workflow.index(cargo_candidate))
+        self.assertLess(workflow.index(cargo_candidate), workflow.index(native_candidate))
+        self.assertLess(workflow.index(native_candidate), workflow.index(wsl_fallback))
+        for safeguard in (
+            "Require a regular file",
+            "a successful `--version` invocation",
+            "Do not scan the filesystem",
+            "compare arbitrary installed copies",
+            "install or build a binary",
+            "or edit `PATH` during activation",
+            "An explicit non-default `--install-root`",
+            "responsibility to expose through PATH",
+        ):
+            with self.subTest(safeguard=safeguard):
+                self.assertIn(safeguard.casefold(), workflow)
+
     def test_orientation_is_evidence_backed_and_complete(self) -> None:
         self.assert_contract_contains(
             "greenfield",
