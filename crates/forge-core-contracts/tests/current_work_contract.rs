@@ -36,6 +36,8 @@ fn sample_event() -> WorkflowWorkFocusRecordedEvent {
         selected_practice_reason: Some("The current state had to be mapped before editing.".into()),
         current_activity: "Define the ledger contract.".into(),
         next_step: "Add the bounded event and compatibility tests.".into(),
+        blocker_record_digests: Vec::new(),
+        evidence_record_digests: Vec::new(),
         previous_work_focus_record_digest: None,
         admission_ledger_head_digest:
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".into(),

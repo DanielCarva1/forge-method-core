@@ -118,8 +118,9 @@ use forge_core_contracts::{
     MAX_WORKFLOW_COOPERATIVE_EVIDENCE_TEXT_BYTES, MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
     MAX_WORKFLOW_COOPERATIVE_INPUT_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
     MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
-    MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES, PROJECT_LINK_FILE_NAME,
-    PROJECT_LINK_SCHEMA_VERSION, SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
+    MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
+    MAX_WORK_FOCUS_LIST_ITEMS, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION,
+    SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
     SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
@@ -3192,6 +3193,13 @@ impl WorkflowGovernanceProjectAdapter {
                 completion_summary,
                 next_step,
             },
+            WorkflowWorkFocusChange::BindReferences {
+                blocker_record_digests,
+                evidence_record_digests,
+            } => WorkFocusAdmissionChange::BindReferences {
+                blocker_record_digests,
+                evidence_record_digests,
+            },
         };
         self.record_work_focus_change(
             input.expected_snapshot_digest,
@@ -3227,6 +3235,28 @@ impl WorkflowGovernanceProjectAdapter {
             if !is_lower_sha256_text(record_digest) {
                 return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                     "Work Focus expected record digest must be canonical".to_owned(),
+                ));
+            }
+        }
+        if let WorkFocusAdmissionChange::BindReferences {
+            blocker_record_digests,
+            evidence_record_digests,
+        } = &change
+        {
+            let blocker_set = blocker_record_digests.iter().collect::<BTreeSet<_>>();
+            let evidence_set = evidence_record_digests.iter().collect::<BTreeSet<_>>();
+            if blocker_record_digests.len() > MAX_WORK_FOCUS_LIST_ITEMS
+                || evidence_record_digests.len() > MAX_WORK_FOCUS_LIST_ITEMS
+                || blocker_set.len() != blocker_record_digests.len()
+                || evidence_set.len() != evidence_record_digests.len()
+                || blocker_record_digests
+                    .iter()
+                    .chain(evidence_record_digests.iter())
+                    .any(|digest| !is_lower_sha256_text(digest))
+            {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus bindings must be unique bounded canonical record digests"
+                        .to_owned(),
                 ));
             }
         }
@@ -3268,7 +3298,9 @@ impl WorkflowGovernanceProjectAdapter {
             (WorkflowExpectedWorkFocus::Absent, WorkFocusAdmissionChange::Start(_), None) => None,
             (
                 WorkflowExpectedWorkFocus::Current { record_digest },
-                WorkFocusAdmissionChange::Supersede(_) | WorkFocusAdmissionChange::Complete { .. },
+                WorkFocusAdmissionChange::Supersede(_)
+                | WorkFocusAdmissionChange::Complete { .. }
+                | WorkFocusAdmissionChange::BindReferences { .. },
                 Some((record, event)),
             ) if &record.record_digest == record_digest => {
                 Some((record.record_digest.clone(), event.clone()))
@@ -3352,6 +3384,33 @@ impl WorkflowGovernanceProjectAdapter {
                 completed.host_provenance = host_provenance;
                 completed.recorded_at_unix = now;
                 completed
+            }
+            WorkFocusAdmissionChange::BindReferences {
+                blocker_record_digests,
+                evidence_record_digests,
+            } => {
+                let (previous_digest, previous_event) = previous
+                    .as_ref()
+                    .expect("binding references requires an exact current focus");
+                if previous_event.state != WorkflowWorkFocusState::Active
+                    || previous_event.objective != objective_binding
+                    || previous_event.phase != phase
+                {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "only the active Work Focus bound to the current objective and phase can bind references; supersede stale or terminal work instead"
+                            .to_owned(),
+                    ));
+                }
+                let mut bound = previous_event.clone();
+                bound.blocker_record_digests = blocker_record_digests;
+                bound.evidence_record_digests = evidence_record_digests;
+                bound.previous_work_focus_record_digest = Some(previous_digest.clone());
+                bound.admission_ledger_head_digest = head.clone();
+                bound.admission_state_version = state_version;
+                bound.recorded_by = recorded_by;
+                bound.host_provenance = host_provenance;
+                bound.recorded_at_unix = now;
+                bound
             }
         };
         snapshot.revalidate()?;
@@ -3500,11 +3559,21 @@ impl WorkflowGovernanceProjectAdapter {
         // A Current Work blocker must come from durable product-work state.
         // Replacement isolation/worktree gaps belong to a different concern
         // and selected-policy simulation must not rewrite this context.
-        // Work Focus v1 does not own blocker bindings yet. Selected-policy
-        // status and old unresolved decisions are not reliable substitutes:
-        // either could describe different work. PJ-005C can make `blocked`
-        // live after an accepted focus update binds exact blocker records.
-        let blocker_count = 0;
+        // Only exact blocker records accepted by this Work Focus participate.
+        // Selected-policy status and unrelated unresolved decisions cannot
+        // rewrite product-work continuity.
+        let blocker_refs = focus
+            .blocker_record_digests
+            .iter()
+            .filter(|digest| {
+                continuity
+                    .durable_pending_decisions
+                    .iter()
+                    .any(|decision| decision.need_record_digest.as_str() == digest.as_str())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let blocker_count = blocker_refs.len();
         let status = Self::current_work_status(
             objective_is_current,
             phase_is_current,
@@ -3519,12 +3588,16 @@ impl WorkflowGovernanceProjectAdapter {
             .take(MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS)
             .map(|decision| decision.need_record_digest.clone())
             .collect();
-        // Work Focus v1 does not own evidence bindings yet. Publishing global
-        // evaluator observations here would guess relevance and could attach
-        // stale, rejected, or another objective's evidence. Keep this honest
-        // and empty until an accepted focus update binds evidence explicitly.
-        let evidence_count = 0;
-        let evidence_refs = Vec::new();
+        // Evidence is projected only from exact admitted ledger records already
+        // accepted by this Work Focus. Global evaluator observations are never
+        // guessed into the relation.
+        let evidence_count = focus.evidence_record_digests.len();
+        let evidence_refs = focus
+            .evidence_record_digests
+            .iter()
+            .take(MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS)
+            .cloned()
+            .collect();
         let context = WorkflowCurrentWorkContext {
             schema_version: CURRENT_WORK_CONTEXT_SCHEMA_VERSION.to_owned(),
             authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
@@ -3550,10 +3623,13 @@ impl WorkflowGovernanceProjectAdapter {
                 blocker_count,
                 evidence_count,
                 open_decision_refs,
-                // Durable assurance blockers currently expose typed codes and
-                // summaries, not ledger record digests. Count them honestly;
-                // do not duplicate unrelated open-decision refs as blockers.
-                blocker_refs: Vec::new(),
+                // Keep only the exact unresolved Decision Need records bound
+                // to this focus; unrelated open decisions stay separate.
+                blocker_refs: blocker_refs
+                    .iter()
+                    .take(MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS)
+                    .cloned()
+                    .collect(),
                 evidence_refs,
                 detail_argv: vec![
                     "forge-core".to_owned(),
@@ -7461,6 +7537,10 @@ enum WorkFocusAdmissionChange {
         completion_summary: String,
         next_step: String,
     },
+    BindReferences {
+        blocker_record_digests: Vec<String>,
+        evidence_record_digests: Vec<String>,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -7491,6 +7571,8 @@ fn work_focus_event_from_draft(
         selected_practice_reason: None,
         current_activity: focus.current_activity,
         next_step: focus.next_step,
+        blocker_record_digests: Vec::new(),
+        evidence_record_digests: Vec::new(),
         previous_work_focus_record_digest,
         admission_ledger_head_digest: admission_ledger_head_digest.to_owned(),
         admission_state_version,
@@ -14716,6 +14798,8 @@ mod tests {
             selected_practice_reason: Some("Keep the slice small and auditable".to_owned()),
             current_activity: long_activity.clone(),
             next_step: long_next_step.clone(),
+            blocker_record_digests: Vec::new(),
+            evidence_record_digests: Vec::new(),
             previous_work_focus_record_digest: None,
             admission_ledger_head_digest: next.ledger_head_digest.clone(),
             admission_state_version: next.state_version,
@@ -14768,6 +14852,48 @@ mod tests {
         let baseline = adapter
             .current_work_context(&resumed, &projection, continuity)
             .expect("baseline Current Work");
+        let blocker_digest = format!("sha256:{}", "7".repeat(64));
+        let evidence_digest = format!("sha256:{}", "8".repeat(64));
+        let mut bound_projection = projection.clone();
+        let bound_focus = bound_projection
+            .records
+            .iter_mut()
+            .rev()
+            .find_map(|record| match &mut record.event {
+                WorkflowGovernanceEvent::WorkFocusRecorded(focus) => Some(focus),
+                _ => None,
+            })
+            .expect("bound focus fixture");
+        bound_focus.blocker_record_digests = vec![blocker_digest.clone()];
+        bound_focus.evidence_record_digests = vec![evidence_digest.clone()];
+        let mut unresolved = continuity.clone();
+        unresolved
+            .durable_pending_decisions
+            .push(WorkflowReplacementDecisionAudit {
+                policy_ref: StableId("policy.bound-focus".to_owned()),
+                decision_ref: StableId("decision.bound-focus".to_owned()),
+                status: WorkflowReplacementDecisionStatus::Unresolved,
+                need_record_digest: blocker_digest.clone(),
+                need_sequence: 1,
+                resolution_record_digest: None,
+                selected_alternative_ref: None,
+            });
+        let blocked = adapter
+            .current_work_context(&resumed, &bound_projection, &unresolved)
+            .expect("bound blocker projection");
+        let blocked_focus = blocked.focus.expect("blocked focus");
+        assert_eq!(blocked.status, WorkflowCurrentWorkStatus::Blocked);
+        assert_eq!(blocked_focus.blocker_refs, vec![blocker_digest]);
+        assert_eq!(blocked_focus.evidence_refs, vec![evidence_digest.clone()]);
+
+        let resolved = adapter
+            .current_work_context(&resumed, &bound_projection, continuity)
+            .expect("resolved blocker projection");
+        let resolved_focus = resolved.focus.expect("resolved focus");
+        assert_eq!(resolved.status, WorkflowCurrentWorkStatus::Current);
+        assert_eq!(resolved_focus.blocker_count, 0);
+        assert_eq!(resolved_focus.evidence_count, 1);
+        assert_eq!(resolved_focus.evidence_refs, vec![evidence_digest]);
         let mut different_policy = resumed.clone();
         different_policy.selected_policy_ref = StableId("policy.unrelated".to_owned());
         different_policy.status = WorkflowGovernanceGuidanceStatus::Blocked;

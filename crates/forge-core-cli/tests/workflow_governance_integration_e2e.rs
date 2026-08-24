@@ -12,9 +12,9 @@ use forge_core_authority::{
     WORKFLOW_BROKER_EVENT_SCHEMA_VERSION,
 };
 use forge_core_contracts::{
-    workflow_broker_expected_audience, GovernedPromotionReceipt, PhaseAdvancedEvent,
-    PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ReadinessTarget, RuntimeKind,
-    StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
+    workflow_broker_expected_audience, DecisionNeedRaisedEvent, GovernedPromotionReceipt,
+    PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ReadinessTarget,
+    RuntimeKind, StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
     WorkflowBrokerCredentialPurpose, WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind,
     WorkflowBrokerHostBinding, WorkflowBrokerHostInteractionKind,
     WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
@@ -1589,16 +1589,113 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
         superseded_wal
     );
 
+    let blocker_record = {
+        let mut ledger = lock_workflow_governance_ledger_tcb(&consumer.state)
+            .expect("open ledger for canonical blocker fixture");
+        let projection = ledger.recover().expect("recover blocker fixture state");
+        let identity = projection
+            .identity()
+            .expect("active blocker fixture identity");
+        ledger
+            .append_unchecked_tcb_event(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("blocker fixture head"),
+                &identity,
+                projection
+                    .current_state_version()
+                    .expect("blocker fixture state version"),
+                WorkflowGovernanceEvent::DecisionNeedRaised(DecisionNeedRaisedEvent {
+                    policy_ref: StableId("policy.workflow.domain-scan".to_owned()),
+                    decision_ref: StableId("decision.current-work.blocker".to_owned()),
+                    authority_scope: StableId("workflow.decision.resolve".to_owned()),
+                    question_digest: format!("sha256:{}", "e".repeat(64)),
+                }),
+            )
+            .expect("append canonical blocker fixture")
+    };
+    let after_blocker = assert_ok(&consumer.run(&["resume"]));
+    let wrong_type_input = consumer.write_json(
+        "current-work reject wrong reference type.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v1",
+            "expected_snapshot_digest": after_blocker["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": after_blocker["data"]["ledger_head_digest"],
+            "expected_state_version": after_blocker["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": superseded["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "bind_references",
+                "blocker_record_digests": [],
+                "evidence_record_digests": [blocker_record.record_digest]
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.reject-wrong-current-work-binding",
+                "conversation_digest": format!("sha256:{}", "9".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let before_wrong_type = fs::read(&wal).expect("WAL before wrong binding type");
+    let wrong_type = run_current_work_update(&consumer, &wrong_type_input);
+    assert!(!wrong_type.status.success());
+    assert_eq!(
+        fs::read(&wal).expect("WAL after wrong binding type"),
+        before_wrong_type,
+        "a record of the wrong canonical kind must not be written as evidence"
+    );
+    let bind_input = consumer.write_json(
+        "current-work bind references.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v1",
+            "expected_snapshot_digest": after_blocker["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": after_blocker["data"]["ledger_head_digest"],
+            "expected_state_version": after_blocker["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": superseded["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "bind_references",
+                "blocker_record_digests": [blocker_record.record_digest],
+                "evidence_record_digests": []
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.bind-current-work",
+                "conversation_digest": format!("sha256:{}", "f".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let bound = assert_ok(&run_current_work_update(&consumer, &bind_input));
+    assert_eq!(bound["data"]["current_work"]["status"], "blocked");
+    assert_eq!(bound["data"]["current_work"]["focus"]["blocker_count"], 1);
+    assert_eq!(
+        bound["data"]["current_work"]["focus"]["blocker_refs"],
+        serde_json::json!([blocker_record.record_digest])
+    );
+
     let complete_input = consumer.write_json(
         "current-work complete.json",
         &serde_json::json!({
             "schema_version": "work_focus_update_input_v1",
-            "expected_snapshot_digest": superseded["data"]["snapshot_digest"],
-            "expected_ledger_head_digest": superseded["data"]["ledger_head_digest"],
-            "expected_state_version": superseded["data"]["state_version"],
+            "expected_snapshot_digest": bound["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": bound["data"]["ledger_head_digest"],
+            "expected_state_version": bound["data"]["state_version"],
             "expected_work_focus": {
                 "status": "current",
-                "record_digest": superseded["data"]["focus_record"]["record_digest"]
+                "record_digest": bound["data"]["focus_record"]["record_digest"]
             },
             "change": {
                 "kind": "complete",

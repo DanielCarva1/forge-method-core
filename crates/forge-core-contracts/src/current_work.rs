@@ -93,6 +93,14 @@ pub enum WorkflowWorkFocusChange {
         completion_summary: String,
         next_step: String,
     },
+    /// Replace the complete set of canonical ledger records explicitly related
+    /// to the current focus. Empty lists intentionally clear prior bindings.
+    BindReferences {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        blocker_record_digests: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        evidence_record_digests: Vec<String>,
+    },
 }
 
 /// Closed public input for an exact Work Focus lifecycle transition.
@@ -141,6 +149,14 @@ pub struct WorkflowWorkFocusRecordedEvent {
     pub selected_practice_reason: Option<String>,
     pub current_activity: String,
     pub next_step: String,
+    /// Exact `DecisionNeedRaised` ledger records accepted as blockers for this
+    /// focus. Resolution is derived from later canonical ledger state.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocker_record_digests: Vec<String>,
+    /// Exact admitted `CooperativeEvidenceObserved` ledger records accepted as
+    /// evidence for this focus. Evidence bytes remain owned by the ledger.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_record_digests: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_work_focus_record_digest: Option<String>,
     pub admission_ledger_head_digest: String,
