@@ -8,6 +8,7 @@ use forge_core_contracts::{
     validate_markdown_allowlist_entry, validate_markdown_policy, MarkdownDebtDisposition,
     MarkdownLoadAudience, MarkdownLoadError, MarkdownRetirementDocument,
 };
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::{self, Read};
@@ -15,6 +16,79 @@ use std::path::Path;
 
 pub const MARKDOWN_RETIREMENT_AUTHORITY_PATH: &str =
     "contracts/migration/markdown-debt-inventory.yaml";
+
+const FORGEIGNORE_FILE_NAME: &str = ".forgeignore";
+const MAX_FORGEIGNORE_BYTES: u64 = 64 * 1024;
+
+struct MarkdownScanExclusions {
+    local: Option<Gitignore>,
+}
+
+impl MarkdownScanExclusions {
+    fn load(root: &Path) -> Result<Self, String> {
+        let path = root.join(FORGEIGNORE_FILE_NAME);
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(Self { local: None })
+            }
+            Err(error) => return Err(format!("cannot inspect {}: {error}", path.display())),
+        };
+        if !metadata.file_type().is_file() {
+            return Err(format!(
+                "{} must be a regular file and may not be a symlink",
+                path.display()
+            ));
+        }
+        if metadata.len() > MAX_FORGEIGNORE_BYTES {
+            return Err(format!(
+                "{} exceeds the {} byte limit",
+                path.display(),
+                MAX_FORGEIGNORE_BYTES
+            ));
+        }
+
+        let capacity = usize::try_from(metadata.len()).map_err(|_| {
+            format!(
+                "{} size cannot be represented on this platform",
+                path.display()
+            )
+        })?;
+        let mut bytes = Vec::with_capacity(capacity);
+        fs::File::open(&path)
+            .map_err(|error| format!("cannot open {}: {error}", path.display()))?
+            .take(MAX_FORGEIGNORE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        if bytes.len() as u64 > MAX_FORGEIGNORE_BYTES {
+            return Err(format!(
+                "{} changed while reading and exceeds the {} byte limit",
+                path.display(),
+                MAX_FORGEIGNORE_BYTES
+            ));
+        }
+        let contents = String::from_utf8(bytes)
+            .map_err(|_| format!("{} must contain valid UTF-8", path.display()))?;
+        let mut builder = GitignoreBuilder::new(root);
+        for line in contents.lines() {
+            builder
+                .add_line(Some(path.clone()), line)
+                .map_err(|error| format!("invalid {} pattern: {error}", path.display()))?;
+        }
+        let matcher = builder
+            .build()
+            .map_err(|error| format!("cannot compile {}: {error}", path.display()))?;
+        Ok(Self {
+            local: Some(matcher),
+        })
+    }
+
+    fn excludes(&self, path: &Path, is_dir: bool) -> bool {
+        self.local
+            .as_ref()
+            .is_some_and(|matcher| matcher.matched(path, is_dir).is_ignore())
+    }
+}
 
 const HISTORICAL_DEBT_PATHS: [&str; 12] = [
     "CONTEXT.md",
@@ -279,6 +353,7 @@ pub fn validate_markdown_retirement(
 
 fn collect_markdown_paths(root: &Path, scan_roots: &[String]) -> Result<BTreeSet<String>, String> {
     let mut discovered = BTreeSet::new();
+    let exclusions = MarkdownScanExclusions::load(root)?;
     for scan_root in scan_roots {
         if scan_root != "." {
             return Err(format!("invalid scan root: {scan_root}"));
@@ -287,7 +362,7 @@ fn collect_markdown_paths(root: &Path, scan_roots: &[String]) -> Result<BTreeSet
         if !absolute.exists() {
             return Err(format!("scan root does not exist: {scan_root}"));
         }
-        collect_markdown_under(root, &absolute, &mut discovered)?;
+        collect_markdown_under(root, &absolute, &exclusions, &mut discovered)?;
     }
     Ok(discovered)
 }
@@ -295,6 +370,7 @@ fn collect_markdown_paths(root: &Path, scan_roots: &[String]) -> Result<BTreeSet
 fn collect_markdown_under(
     root: &Path,
     path: &Path,
+    exclusions: &MarkdownScanExclusions,
     discovered: &mut BTreeSet<String>,
 ) -> Result<(), String> {
     if is_excluded_scan_path(root, path) {
@@ -315,13 +391,16 @@ fn collect_markdown_under(
         }
         return Ok(());
     }
+    if exclusions.excludes(path, metadata.is_dir()) {
+        return Ok(());
+    }
     if metadata.is_dir() {
         let entries = fs::read_dir(path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         for entry in entries {
             let entry =
                 entry.map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-            collect_markdown_under(root, &entry.path(), discovered)?;
+            collect_markdown_under(root, &entry.path(), exclusions, discovered)?;
         }
     } else if path
         .extension()
@@ -509,6 +588,103 @@ mod tests {
         assert!(report.diagnostics().iter().any(|diagnostic| {
             diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
                 && diagnostic.path == "docs/target-audit/new-authority.md"
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn forgeignore_prunes_local_tool_markdown_without_weakening_nested_scan() {
+        let root = temp_root("forgeignore-prune");
+        write_allowed(&root);
+        fs::create_dir_all(root.join(".agent-tool/session")).expect("create local tool state");
+        fs::write(root.join(".agent-tool/session/notes.md"), "scratch")
+            .expect("write local tool Markdown");
+        fs::write(root.join("docs/new-authority.md"), "new").expect("write unknown");
+        fs::write(root.join(".forgeignore"), "/.agent-tool/\n").expect("write local ignore file");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(!report
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.path.starts_with(".agent-tool/")));
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
+                && diagnostic.path == "docs/new-authority.md"
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn absent_forgeignore_preserves_local_tool_scan() {
+        let root = temp_root("forgeignore-absent");
+        write_allowed(&root);
+        fs::create_dir_all(root.join(".agent-tool/session")).expect("create local tool state");
+        fs::write(root.join(".agent-tool/session/notes.md"), "scratch")
+            .expect("write local tool Markdown");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownNotAllowlisted
+                && diagnostic.path == ".agent-tool/session/notes.md"
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn non_regular_forgeignore_fails_the_scan_closed() {
+        let root = temp_root("forgeignore-non-regular");
+        write_allowed(&root);
+        fs::create_dir_all(root.join(".forgeignore")).expect("create invalid ignore directory");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownScanFailed
+                && diagnostic.message.contains(".forgeignore")
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn oversized_forgeignore_fails_before_pattern_compilation() {
+        let root = temp_root("forgeignore-oversized");
+        write_allowed(&root);
+        let oversized_len =
+            usize::try_from(MAX_FORGEIGNORE_BYTES).expect("test byte limit fits usize") + 1;
+        fs::write(root.join(".forgeignore"), vec![b'a'; oversized_len])
+            .expect("write oversized ignore file");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownScanFailed
+                && diagnostic.message.contains("65536 byte limit")
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn non_utf8_forgeignore_fails_the_scan_closed() {
+        let root = temp_root("forgeignore-non-utf8");
+        write_allowed(&root);
+        fs::write(root.join(".forgeignore"), [0xff]).expect("write invalid UTF-8");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownScanFailed
+                && diagnostic.message.contains("valid UTF-8")
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn invalid_forgeignore_pattern_fails_the_scan_closed() {
+        let root = temp_root("forgeignore-invalid-pattern");
+        write_allowed(&root);
+        fs::write(root.join(".forgeignore"), "\\").expect("write invalid pattern");
+
+        let report = validate_markdown_retirement(&root, &document());
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.code == DiagnosticCode::MarkdownScanFailed
+                && diagnostic.message.contains("invalid")
         }));
         fs::remove_dir_all(root).expect("cleanup");
     }

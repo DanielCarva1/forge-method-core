@@ -444,6 +444,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-deque"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-utils"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
+
+[[package]]
 name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -781,7 +806,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "forge-contract-validator"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-cli",
  "yaml_serde",
@@ -789,7 +814,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-authority"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "ed25519-dalek",
  "forge-core-command-surface",
@@ -807,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-cli"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "asn1-rs",
  "assert_cmd",
@@ -859,11 +884,11 @@ dependencies = [
 
 [[package]]
 name = "forge-core-command-surface"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 
 [[package]]
 name = "forge-core-contracts"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "schemars",
  "serde",
@@ -875,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-crypto"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "asn1-rs",
  "base64",
@@ -906,7 +931,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-decisions"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-authority",
  "forge-core-contracts",
@@ -922,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-domain-pack-learning-store"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",
@@ -935,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-domain-pack-tcb"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "ed25519-dalek",
  "forge-core-authority",
@@ -952,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-eval"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-validate",
@@ -962,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-eval-harness"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eval",
@@ -974,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-eventlog"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",
@@ -988,14 +1013,14 @@ dependencies = [
 
 [[package]]
 name = "forge-core-governance"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-eventlog",
 ]
 
 [[package]]
 name = "forge-core-graph"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-validate",
@@ -1005,7 +1030,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-kernel"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "ed25519-dalek",
  "forge-core-authority",
@@ -1029,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-memory"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
@@ -1038,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-protocol-mcp"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "ed25519-dalek",
  "forge-core-authority",
@@ -1062,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-research"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eventlog",
@@ -1074,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-schema"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "schemars",
@@ -1084,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-store"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "crc32c",
  "criterion",
@@ -1109,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-trace"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "serde",
  "serde_json",
@@ -1117,10 +1142,11 @@ dependencies = [
 
 [[package]]
 name = "forge-core-validate"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "criterion",
  "forge-core-contracts",
+ "ignore",
  "regex",
  "serde",
  "serde_json",
@@ -1134,7 +1160,7 @@ dependencies = [
 
 [[package]]
 name = "forge-core-workflow-governance-tcb"
-version = "0.12.0-alpha.28"
+version = "0.12.0-alpha.29"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",
@@ -1307,6 +1333,19 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+]
+
+[[package]]
+name = "globset"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e47d37d2ae4464254884b60ab7071be2b876a9c35b696bd018ddcc76847309cd"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -1576,6 +1615,22 @@ checksum = "3acae9609540aa318d1bc588455225fb2085b9ed0c4f6bd0d9d5bcd86f1a0344"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ignore"
+version = "0.4.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d89fd380afde86567dfba715db065673989d6253f42b88179abd3eae47bda4b"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
 ]
 
 [[package]]
@@ -2910,7 +2965,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

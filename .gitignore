@@ -51,3 +51,6 @@ forge-fabrica-de-jogos/
 # `validate --root .` smoke test fails when it resolves an external sidecar
 # that is absent from the checkout.
 .forge-method.yaml
+# Optional local validator exclusions. This is operator-local scope, not
+# repository policy, and must not be shared as product authority.
+.forgeignore

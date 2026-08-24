@@ -43,6 +43,21 @@ WAL/recovery, and receipt cover it. Direct editor/shell/host writes remain
 ungoverned. Same-principal access can bypass Forge, so mediation is a protocol
 property, not filesystem-wide enforcement.
 
+## Local Markdown scan exclusions
+
+An optional `.forgeignore` beside the Project Link lets an operator exclude
+local agent-tool or scratch paths from the Markdown retirement scan without
+adding tool names to Forge. It uses gitignore-style patterns, is ignored by Git
+in this repository, and affects only that scan. It is not project authority and
+does not change any other validation or runtime boundary.
+
+Forge reads this file once per scan, requires a regular UTF-8 file no larger
+than 64 KiB, and stops with a validation error when it cannot be read or parsed.
+When the file is absent, scan behavior is unchanged. Ignored directories are
+pruned before their contents are visited. For example, an operator may add
+`/.agent-tool/` for local scratch while leaving repository paths under `docs/`
+governed normally.
+
 ## Explicit limitations
 
 Local filesystem confinement is cooperative between processes running as the
