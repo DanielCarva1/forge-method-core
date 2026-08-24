@@ -479,6 +479,28 @@ fn run_current_work_detail(consumer: &Consumer, expected_head_digest: &str) -> O
         .expect("run Current Work detail command")
 }
 
+fn run_current_work_detail_record(
+    consumer: &Consumer,
+    expected_head_digest: &str,
+    record_digest: &str,
+) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "current-work",
+            "detail",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--expected-head-digest",
+            expected_head_digest,
+            "--record-digest",
+            record_digest,
+            "--json",
+        ])
+        .output()
+        .expect("run exact Current Work detail command")
+}
+
 fn work_focus_record_count(state_root: &Path) -> usize {
     lock_workflow_governance_ledger_tcb(state_root)
         .expect("open ledger for Work Focus count")
@@ -1047,12 +1069,12 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v8"
+        "workflow_resume_summary_v9"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
         summary["data"]["current_work"]["schema_version"],
-        "current_work_context_v1"
+        "current_work_context_v2"
     );
     assert_eq!(summary["data"]["current_work"]["status"], "absent");
     assert_eq!(
@@ -2043,6 +2065,111 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
         records_before_accept + 2,
         "normal Quick Cycle persistence is exactly accept plus complete"
     );
+
+    let state_before_completed_resume = state_tree_snapshot(&consumer.state);
+    let completed_resume = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        completed_resume["data"]["schema_version"],
+        "workflow_resume_summary_v9"
+    );
+    assert_eq!(
+        completed_resume["data"]["current_work"]["focus"]["quick_cycle"],
+        serde_json::json!({
+            "state": "completed",
+            "stage_closeout_count": 5,
+            "expansion_count": 0
+        })
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_completed_resume,
+        "ordinary resume must derive Quick Cycle state without writing"
+    );
+
+    let successor_input = consumer.write_json(
+        "quick-cycle successor.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_accept_input_v2",
+            "expected_snapshot_digest": completed["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": completed["data"]["ledger_head_digest"],
+            "expected_state_version": completed["data"]["state_version"],
+            "expected_work_focus": { "status": "absent" },
+            "focus": {
+                "focus_id": "focus.quick-cycle.readback-successor",
+                "title": "Read the completed predecessor progressively",
+                "intended_outcome": "Resume stays compact and detail opens one exact predecessor",
+                "acceptance_summary": "The public read path does not list or rewrite history",
+                "current_activity": "Inspect the bounded resume summary",
+                "next_step": "Open predecessor detail only if needed"
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.quick-cycle-e2e",
+                "interaction_ref": "turn.accept-readback-successor",
+                "conversation_digest": format!("sha256:{}", "5".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let successor = assert_ok(&run_current_work_accept(&consumer, &successor_input));
+    let state_before_readback = state_tree_snapshot(&consumer.state);
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        resumed["data"]["schema_version"],
+        "workflow_resume_summary_v9"
+    );
+    assert_eq!(
+        resumed["data"]["current_work"]["schema_version"],
+        "current_work_context_v2"
+    );
+    assert!(resumed["data"]["current_work"]["focus"]
+        .get("quick_cycle")
+        .is_none());
+    let current_detail = assert_ok(&run_current_work_detail_record(
+        &consumer,
+        successor["data"]["ledger_head_digest"]
+            .as_str()
+            .expect("successor head"),
+        successor["data"]["focus_record"]["record_digest"]
+            .as_str()
+            .expect("successor record"),
+    ));
+    assert_eq!(
+        current_detail["data"]["schema_version"],
+        "current_work_detail_v2"
+    );
+    let predecessor_argv = current_detail["data"]["predecessor_detail_argv"]
+        .as_array()
+        .expect("published predecessor argv");
+    assert_eq!(predecessor_argv[8], "--record-digest");
+    assert_eq!(
+        predecessor_argv[9],
+        completed["data"]["focus_record"]["record_digest"]
+    );
+    let predecessor_detail = assert_ok(&run_current_work_detail_record(
+        &consumer,
+        successor["data"]["ledger_head_digest"]
+            .as_str()
+            .expect("successor head"),
+        completed["data"]["focus_record"]["record_digest"]
+            .as_str()
+            .expect("completed predecessor record"),
+    ));
+    assert_eq!(
+        predecessor_detail["data"]["focus"]["quick_cycle"]["stage_closeouts"]
+            ["validation_delivery"]["summary"],
+        "The focused contract, transition, and CLI journey passed"
+    );
+    assert!(predecessor_detail["data"]
+        .get("predecessor_detail_argv")
+        .is_none());
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_readback,
+        "resume and both detail reads must not write state"
+    );
 }
 
 #[test]
@@ -2736,7 +2863,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v8"
+        "workflow_resume_summary_v9"
     );
     let selected_policy_evidence = resumed["data"]["selected_policy_evidence"]
         .as_array()

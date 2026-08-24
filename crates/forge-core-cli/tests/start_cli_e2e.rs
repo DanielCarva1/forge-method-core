@@ -439,12 +439,12 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         serde_json::from_slice(&resume_output.stdout).expect("parse resume envelope");
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v8"
+        "workflow_resume_summary_v9"
     );
     assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(
         resumed["data"]["current_work"]["schema_version"],
-        "current_work_context_v1"
+        "current_work_context_v2"
     );
     assert_eq!(resumed["data"]["current_work"]["status"], "absent");
     assert!(resumed["data"]["current_work"]["focus"].is_null());

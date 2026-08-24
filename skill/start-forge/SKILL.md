@@ -97,14 +97,14 @@ material risk acceptance, or irreversible/external effect. Before asking,
 explain the context, options, consequences, and recommendation, then ask exactly
 one concise question. If no human input is needed, say so plainly and continue.
 
-Treat the current `workflow_resume_summary_v8` as the working continuity view and
-reuse the same v8 response until durable workflow state changes. Never run two
+Treat the current `workflow_resume_summary_v9` as the working continuity view and
+reuse the same v9 response until durable workflow state changes. Never run two
 resume commands consecutively: a successful operation that can change workflow
 evaluation must intervene. Do not refresh after repository inspection,
 validation, tests, status, report, or help. A read-only command does not make the
 current response stale.
 
-Read `data.journey_guidance` in `workflow_resume_summary_v8` as compact,
+Read `data.journey_guidance` in `workflow_resume_summary_v9` as compact,
 read-only advice about the current product-development stage. Explain its
 objective in the human's language. `contact_density` means how much conversation
 is normally useful: high for active product discussion, medium for focused
@@ -121,6 +121,13 @@ silently reused. `completed` and `abandoned` are terminal: a terminal
 `focus.detail_argv` only when the bounded summary is not enough; it returns
 accepted detail without scanning project documentation. This block is
 read-only advice and never authorizes edits or completion.
+
+When `focus.quick_cycle` is present, resume exposes only its derived state and
+counts. Absence means "not recorded"; never rebuild a Quick Cycle from prose.
+Use `focus.detail_argv` only when the accepted compactness reason, closeouts, or
+expansion history are actually needed. Detail may publish one exact
+`predecessor_detail_argv`; follow it only to recover that direct prior Work Focus,
+never to list or reconstruct deeper history.
 
 Keep signal scope and priority clear. `data.current_work.focus.blocker_count`
 and its blocker references are focus-bound: they describe only blockers
@@ -353,14 +360,15 @@ proves integrity, not native host authenticity.
 
    `/start-forge` runs once per chat, not once per task. The current activation
    capability is present only when resume returns
-   `data.schema_version=workflow_resume_summary_v8`. V8 contains everything
+   `data.schema_version=workflow_resume_summary_v9`. V9 contains everything
    needed for the current agent step: effective Domain Pack identity, objective,
    autonomy projection, current evaluation, boundary rechecks, human decisions,
    blockers and warnings, ranked actions, active isolations, recoverable
    promotions, current evidence, current selected-policy assessments,
    authorization packets, the cooperative packet or exact gap, and compact
    `data.journey_guidance` for the product-development stage plus bounded
-   `data.current_work` continuity.
+    `data.current_work` continuity, including bounded Quick Cycle state and
+    counts when explicitly recorded.
    `data.omitted_history` counts older records only; it does not hide current
    obligations.
 
@@ -370,7 +378,7 @@ proves integrity, not native host authenticity.
    The referenced packet or gap remains the executable/detail authority; the
    recommendation only makes the intended journey order explicit.
 
-   `workflow_resume_summary_v1` through `workflow_resume_summary_v7` are legacy
+   `workflow_resume_summary_v1` through `workflow_resume_summary_v8` are legacy
    activation responses. Use only fields they actually publish and never infer
    that a missing current field means no obligation exists. Report that the
    installed runtime needs updating when those fields are necessary; do not

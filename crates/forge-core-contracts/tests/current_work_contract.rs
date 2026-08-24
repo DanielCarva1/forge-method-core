@@ -1,7 +1,8 @@
 use forge_core_contracts::{
     Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProvenance,
     WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
-    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
+    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
+    WorkflowCurrentWorkQuickCycleSummary, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
     WorkflowCurrentWorkValidationError, WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion,
     WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts, WorkflowWorkFocusAcceptInput,
     WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
@@ -249,7 +250,13 @@ fn work_focus_event_rejects_unknown_fields() {
 
 #[test]
 fn current_work_readback_is_bounded_advisory_and_closed() {
-    let event = sample_event();
+    assert_eq!(
+        CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
+        "current_work_context_v2"
+    );
+    assert_eq!(CURRENT_WORK_DETAIL_SCHEMA_VERSION, "current_work_detail_v2");
+    let mut event = sample_event();
+    event.quick_cycle = Some(sample_quick_cycle());
     let summary = WorkflowCurrentWorkSummary {
         focus_id: event.focus_id.clone(),
         record_digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
@@ -272,6 +279,11 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         evidence_refs: vec![
             "sha256:9999999999999999999999999999999999999999999999999999999999999999".into(),
         ],
+        quick_cycle: Some(WorkflowCurrentWorkQuickCycleSummary {
+            state: WorkflowCurrentWorkQuickCycleState::ActiveExpanded,
+            stage_closeout_count: 1,
+            expansion_count: 1,
+        }),
         detail_argv: vec![
             "forge-core".into(),
             "workflow".into(),
@@ -314,6 +326,7 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         admission_ledger_head_digest: event.admission_ledger_head_digest,
         admission_state_version: event.admission_state_version,
         recorded_at_unix: event.recorded_at_unix,
+        quick_cycle: event.quick_cycle,
     };
     let detail = WorkflowCurrentWorkDetail {
         schema_version: CURRENT_WORK_DETAIL_SCHEMA_VERSION.into(),
@@ -323,6 +336,7 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
         open_decision_refs: summary.open_decision_refs,
         blocker_refs: summary.blocker_refs,
         evidence_refs: summary.evidence_refs,
+        predecessor_detail_argv: None,
     };
     let mut detail_value = serde_json::to_value(&detail).expect("detail serializes");
     detail.validate().expect("detail contract validates");
@@ -384,6 +398,7 @@ fn current_work_readback_rejects_invalid_state_and_bounds() {
             open_decision_refs: Vec::new(),
             blocker_refs: Vec::new(),
             evidence_refs: Vec::new(),
+            quick_cycle: None,
             detail_argv: vec!["forge-core".into()],
         }),
     };

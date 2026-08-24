@@ -129,7 +129,7 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow_resume_summary_v8` exposes an active
+Once `workflow_resume_summary_v9` exposes an active
 `agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
@@ -260,7 +260,7 @@ Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
 The current executable returns the concise, versioned
-`workflow_resume_summary_v8` activation view by default. V8 is the complete
+`workflow_resume_summary_v9` activation view by default. V9 is the complete
 current-state contract for the agent: it carries the current objective; the
 full autonomy projection; every current evaluation, blocker, warning, active
 isolation, recoverable promotion, cooperative evidence item, authorization
@@ -268,12 +268,18 @@ packet, and exact gap. Counts identify only older audit history omitted from
 the activation view. `current_work` adds only the bounded accepted work focus;
 it does not copy transcript, issue body, evidence body, or catalog content.
 
-In V8, `current_work` is the accepted product-work continuity. For an active or
+In V9, `current_work` is the accepted product-work continuity. For an active or
 blocked focus, its `next_step` is the product step to continue. For a completed
 or abandoned focus, that field is only a handoff toward a new Work Focus. Its
 blocker count and references are focus-bound; top-level blockers and evaluation
 blockers remain workflow-wide diagnostics. A zero focus blocker count therefore
 does not claim that the whole workflow has no gaps.
+
+An optional `current_work.focus.quick_cycle` keeps ordinary resume small: it
+contains only derived state, closed-stage count, and expansion count. Full
+accepted Quick Cycle closeouts and expansion history stay behind the existing
+`detail_argv`. Detail can publish one exact `predecessor_detail_argv` for the
+direct prior Work Focus; it does not offer a history listing or a chain walk.
 
 `actions.recommended` remains the preferred exact governed Forge operation, but
 the host executes it only when it is compatible with the accepted product step.
@@ -368,7 +374,7 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 For a `solo_cooperative` objective, agents use the one existing public command,
 `forge-core workflow evidence admit-cooperative`, with the closed packet from
-`workflow_resume_summary_v8.actions.cooperative_evidence_packet`. The offer is
+`workflow_resume_summary_v9.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
 claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this

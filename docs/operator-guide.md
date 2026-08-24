@@ -374,7 +374,7 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
-For a replacement agent, inspect the default `workflow_resume_summary_v8`
+For a replacement agent, inspect the default `workflow_resume_summary_v9`
 response first. It carries every current blocker, warning, active work item,
 recoverable promotion, ranked action, and current selected-policy assessment.
 The bounded `data.current_work` block reports `absent`, `current`, `stale`,
@@ -384,6 +384,10 @@ project documentation. A present focus publishes an exact read-only
 continuity advice, not execution authority. Preserve its
 `--expected-head-digest` exactly: the binding lets detail avoid a second project
 capture and reject concurrent state instead of silently showing another focus.
+Resume exposes only derived Quick Cycle state and counts. Use detail for its
+accepted closeouts or expansion history. If detail publishes
+`predecessor_detail_argv`, it points only to the direct prior Work Focus and is
+not a general history browser.
 Run `workflow report --root <project>
 --json` only when an explicit historical audit or continuity diagnosis needs
 older records. Run a `recover_promotion` argv before new work, preserving every

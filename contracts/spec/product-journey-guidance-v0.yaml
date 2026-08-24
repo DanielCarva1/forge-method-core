@@ -256,10 +256,11 @@ authority_split:
     - "selected_policy_ref remains a governance concern and must not be relabeled as the current product-development practice"
 
 resume_interface:
-  containing_schema: "workflow_resume_summary_v8"
+  containing_schema: "workflow_resume_summary_v9"
   migration: >-
     Journey guidance advanced v6 to v7. Current Work advances the containing
-    summary to v8 while preserving the journey_guidance_v1 field unchanged.
+    summary to v8. Quick Cycle progressive readback advances it to v9 while
+    preserving the journey_guidance_v1 field unchanged.
   field: "data.journey_guidance"
   value_schema: "product_journey_guidance_v1"
   required_shape:

@@ -291,24 +291,24 @@ def resume_summary_and_report(
     data = summary.get("data")
     require(isinstance(data, dict), "workflow resume summary lacks data")
     require(
-        data.get("schema_version") == "workflow_resume_summary_v8",
-        "workflow resume default lacks workflow_resume_summary_v8",
+        data.get("schema_version") == "workflow_resume_summary_v9",
+        "workflow resume default lacks workflow_resume_summary_v9",
     )
     require(
         isinstance(data.get("selected_policy_evidence"), list),
-        "workflow resume v8 lacks selected_policy_evidence",
+        "workflow resume v9 lacks selected_policy_evidence",
     )
     current_work = data.get("current_work")
-    require(isinstance(current_work, dict), "workflow resume v8 lacks current_work")
+    require(isinstance(current_work, dict), "workflow resume v9 lacks current_work")
     require(
-        current_work.get("schema_version") == "current_work_context_v1",
-        "workflow resume v8 has unsupported current_work",
+        current_work.get("schema_version") == "current_work_context_v2",
+        "workflow resume v9 has unsupported current_work",
     )
     journey = data.get("journey_guidance")
-    require(isinstance(journey, dict), "workflow resume v8 lacks journey_guidance")
+    require(isinstance(journey, dict), "workflow resume v9 lacks journey_guidance")
     require(
         journey.get("schema_version") == "product_journey_guidance_v1",
-        "workflow resume v8 has unsupported journey guidance",
+        "workflow resume v9 has unsupported journey guidance",
     )
     require(
         "detail_argv" not in data,

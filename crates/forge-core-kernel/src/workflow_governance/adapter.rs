@@ -89,7 +89,8 @@ use forge_core_contracts::{
     WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
     WorkflowCooperativePriorEvidenceCandidate, WorkflowCooperativePriorEvidenceReference,
     WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
-    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
+    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
+    WorkflowCurrentWorkQuickCycleSummary, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
     WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
     WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
     WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
@@ -3561,6 +3562,7 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn current_work_detail(
         &self,
         expected_head_digest: &str,
+        requested_record_digest: Option<&str>,
     ) -> Result<WorkflowCurrentWorkDetail, WorkflowGovernanceAdapterError> {
         if !is_lower_sha256_text(expected_head_digest) {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
@@ -3577,11 +3579,50 @@ impl WorkflowGovernanceProjectAdapter {
                 ),
             );
         }
-        let (record, focus) = projection.latest_work_focus_record().ok_or(
+        if requested_record_digest.is_some_and(|digest| !is_lower_sha256_text(digest)) {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Current Work detail record must be a canonical lowercase sha256 digest".to_owned(),
+            ));
+        }
+        let (latest_record, latest_focus) = projection.latest_work_focus_record().ok_or(
             WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
-                "the accepted Work Focus disappeared before detail inspection",
+                "no accepted Work Focus is available for detail inspection",
             ),
         )?;
+        let (record, focus, publish_predecessor) = match requested_record_digest {
+            None => (latest_record, latest_focus, true),
+            Some(digest) if digest == latest_record.record_digest => {
+                (latest_record, latest_focus, true)
+            }
+            Some(digest)
+                if latest_focus.previous_work_focus_record_digest.as_deref() == Some(digest) =>
+            {
+                let predecessor = projection
+                    .records
+                    .iter()
+                    .find(|record| record.record_digest == digest)
+                    .ok_or(
+                        WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                            "the published Work Focus predecessor is unavailable",
+                        ),
+                    )?;
+                let WorkflowGovernanceEvent::WorkFocusRecorded(predecessor_focus) =
+                    &predecessor.event
+                else {
+                    return Err(
+                        WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                            "the published predecessor digest does not identify a Work Focus",
+                        ),
+                    );
+                };
+                (predecessor, predecessor_focus, false)
+            }
+            Some(_) => {
+                return Err(WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                    "Current Work detail can resolve only the current focus or its published direct predecessor",
+                ));
+            }
+        };
         let observation = Self::current_work_projection(&projection, focus)?;
         let detail = WorkflowCurrentWorkDetail {
             schema_version: CURRENT_WORK_DETAIL_SCHEMA_VERSION.to_owned(),
@@ -3608,10 +3649,19 @@ impl WorkflowGovernanceProjectAdapter {
                 admission_ledger_head_digest: focus.admission_ledger_head_digest.clone(),
                 admission_state_version: focus.admission_state_version,
                 recorded_at_unix: focus.recorded_at_unix,
+                quick_cycle: focus.quick_cycle.clone(),
             },
             open_decision_refs: observation.open_decision_refs,
             blocker_refs: observation.blocker_refs,
             evidence_refs: observation.evidence_refs,
+            predecessor_detail_argv: if publish_predecessor {
+                focus
+                    .previous_work_focus_record_digest
+                    .as_deref()
+                    .map(|digest| self.current_work_detail_argv(expected_head_digest, digest))
+            } else {
+                None
+            },
         };
         detail.validate().map_err(|error| {
             WorkflowGovernanceAdapterError::InvalidObservation(format!(
@@ -3690,20 +3740,14 @@ impl WorkflowGovernanceProjectAdapter {
                     .take(MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS)
                     .cloned()
                     .collect(),
-                detail_argv: vec![
-                    "forge-core".to_owned(),
-                    "workflow".to_owned(),
-                    "current-work".to_owned(),
-                    "detail".to_owned(),
-                    "--root".to_owned(),
-                    self.binding.project_root.display().to_string(),
-                    "--expected-head-digest".to_owned(),
+                quick_cycle: Self::current_work_quick_cycle_summary(focus),
+                detail_argv: self.current_work_detail_argv(
                     projection
                         .head_digest
-                        .clone()
+                        .as_deref()
                         .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?,
-                    "--json".to_owned(),
-                ],
+                    &record.record_digest,
+                ),
             }),
         };
         context.validate().map_err(|_| {
@@ -3712,6 +3756,56 @@ impl WorkflowGovernanceProjectAdapter {
             )
         })?;
         Ok(context)
+    }
+
+    fn current_work_detail_argv(
+        &self,
+        expected_head_digest: &str,
+        record_digest: &str,
+    ) -> Vec<String> {
+        vec![
+            "forge-core".to_owned(),
+            "workflow".to_owned(),
+            "current-work".to_owned(),
+            "detail".to_owned(),
+            "--root".to_owned(),
+            self.binding.project_root.display().to_string(),
+            "--expected-head-digest".to_owned(),
+            expected_head_digest.to_owned(),
+            "--record-digest".to_owned(),
+            record_digest.to_owned(),
+            "--json".to_owned(),
+        ]
+    }
+
+    fn current_work_quick_cycle_summary(
+        focus: &WorkflowWorkFocusRecordedEvent,
+    ) -> Option<WorkflowCurrentWorkQuickCycleSummary> {
+        let quick_cycle = focus.quick_cycle.as_ref()?;
+        let stage_closeout_count = [
+            quick_cycle.stage_closeouts.analysis_discovery.as_ref(),
+            quick_cycle.stage_closeouts.product_planning.as_ref(),
+            quick_cycle.stage_closeouts.solution_definition.as_ref(),
+            quick_cycle.stage_closeouts.implementation.as_ref(),
+            quick_cycle.stage_closeouts.validation_delivery.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .count();
+        let expansion_count = quick_cycle.expansion_history.len();
+        let state = match focus.state {
+            WorkflowWorkFocusState::Completed => WorkflowCurrentWorkQuickCycleState::Completed,
+            WorkflowWorkFocusState::Abandoned => WorkflowCurrentWorkQuickCycleState::Abandoned,
+            WorkflowWorkFocusState::Active if expansion_count > 0 => {
+                WorkflowCurrentWorkQuickCycleState::ActiveExpanded
+            }
+            WorkflowWorkFocusState::Active => WorkflowCurrentWorkQuickCycleState::ActiveCompact,
+        };
+        Some(WorkflowCurrentWorkQuickCycleSummary {
+            state,
+            stage_closeout_count,
+            expansion_count,
+        })
     }
 
     fn current_work_projection(
@@ -14925,6 +15019,24 @@ mod tests {
         let long_next_step = "n".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
         let long_external_ref = "e".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
         let long_practice_ref = "p".repeat(forge_core_contracts::MAX_WORK_FOCUS_TEXT_BYTES);
+        let quick_cycle = forge_core_contracts::WorkflowQuickCycleSnapshot {
+            compactness_reason: "The readback change is bounded to Current Work".to_owned(),
+            stage_closeouts: forge_core_contracts::WorkflowQuickCycleStageCloseouts {
+                analysis_discovery: Some(forge_core_contracts::WorkflowQuickCycleCloseout {
+                    summary: "The existing read path owns the behavior".to_owned(),
+                    evidence_record_digests: Vec::new(),
+                }),
+                product_planning: None,
+                solution_definition: None,
+                implementation: None,
+                validation_delivery: None,
+            },
+            expansion_history: vec![forge_core_contracts::WorkflowQuickCycleExpansion {
+                phase: Phase::Discovery,
+                reason: "The predecessor lookup needed an explicit contract".to_owned(),
+                evidence_record_digests: Vec::new(),
+            }],
+        };
         let focus = forge_core_contracts::WorkflowWorkFocusRecordedEvent {
             focus_id: StableId(long_focus_id.clone()),
             objective: forge_core_contracts::WorkflowWorkFocusObjectiveBinding {
@@ -14952,7 +15064,7 @@ mod tests {
             next_step: long_next_step.clone(),
             blocker_record_digests: Vec::new(),
             evidence_record_digests: Vec::new(),
-            quick_cycle: None,
+            quick_cycle: Some(quick_cycle.clone()),
             previous_work_focus_record_digest: None,
             admission_ledger_head_digest: next.ledger_head_digest.clone(),
             admission_state_version: next.state_version,
@@ -14991,9 +15103,19 @@ mod tests {
         assert!(summary.next_step.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES);
         assert!(summary.external_work_item_ref.is_none());
         assert!(summary.selected_practice_ref.is_none());
+        assert_eq!(
+            summary.quick_cycle,
+            Some(WorkflowCurrentWorkQuickCycleSummary {
+                state: WorkflowCurrentWorkQuickCycleState::ActiveExpanded,
+                stage_closeout_count: 1,
+                expansion_count: 1,
+            })
+        );
         assert_eq!(summary.detail_argv[2..4], ["current-work", "detail"]);
         assert_eq!(summary.detail_argv[6], "--expected-head-digest");
         assert_eq!(summary.detail_argv[7], record.record_digest);
+        assert_eq!(summary.detail_argv[8], "--record-digest");
+        assert_eq!(summary.detail_argv[9], record.record_digest);
         current.validate().expect("bounded summary");
 
         let ledger =
@@ -15049,7 +15171,7 @@ mod tests {
         assert_eq!(baseline.status, WorkflowCurrentWorkStatus::Current);
 
         let detail = adapter
-            .current_work_detail(&record.record_digest)
+            .current_work_detail(&record.record_digest, None)
             .expect("focus detail");
         assert_eq!(detail.status, WorkflowCurrentWorkStatus::Current);
         assert_eq!(detail.focus.record_digest, record.record_digest);
@@ -15066,7 +15188,58 @@ mod tests {
             detail.focus.acceptance_summary,
             "Resume and detail expose one bounded focus"
         );
+        assert_eq!(detail.focus.quick_cycle, Some(quick_cycle.clone()));
+        assert!(detail.predecessor_detail_argv.is_none());
         detail.validate().expect("bounded detail");
+
+        let mut ledger = lock_workflow_governance_ledger_tcb(&state).expect("successor ledger");
+        let projection = ledger.recover().expect("successor projection");
+        let identity = projection.identity().expect("successor ledger identity");
+        let (_, previous_focus) = projection
+            .latest_work_focus_record()
+            .expect("previous focus");
+        let mut successor = previous_focus.clone();
+        successor.focus_id = StableId("focus.current-work-successor".to_owned());
+        successor.title = "Continue the bounded readback slice".to_owned();
+        successor.quick_cycle = None;
+        successor.previous_work_focus_record_digest = Some(record.record_digest.clone());
+        successor.admission_ledger_head_digest = record.record_digest.clone();
+        successor.admission_state_version = projection
+            .current_state_version()
+            .expect("successor state version");
+        let successor_record = ledger
+            .record_work_focus_unchecked_tcb(
+                &record.record_digest,
+                &identity,
+                projection
+                    .current_state_version()
+                    .expect("successor state version"),
+                successor,
+            )
+            .expect("record successor focus");
+        drop(ledger);
+
+        let successor_detail = adapter
+            .current_work_detail(&successor_record.record_digest, None)
+            .expect("successor detail");
+        let predecessor_argv = successor_detail
+            .predecessor_detail_argv
+            .as_ref()
+            .expect("published predecessor argv");
+        assert_eq!(predecessor_argv[8], "--record-digest");
+        assert_eq!(predecessor_argv[9], record.record_digest);
+        let predecessor_detail = adapter
+            .current_work_detail(&successor_record.record_digest, Some(&record.record_digest))
+            .expect("exact predecessor detail");
+        assert_eq!(predecessor_detail.focus.record_digest, record.record_digest);
+        assert_eq!(predecessor_detail.focus.quick_cycle, Some(quick_cycle));
+        assert!(predecessor_detail.predecessor_detail_argv.is_none());
+        assert!(adapter
+            .current_work_detail(
+                &successor_record.record_digest,
+                Some(&format!("sha256:{}", "0".repeat(64))),
+            )
+            .is_err());
 
         let revision_packet = adapter
             .next()
@@ -15088,7 +15261,7 @@ mod tests {
                 .focus
                 .expect("stale focus remains visible")
                 .record_digest,
-            record.record_digest
+            successor_record.record_digest
         );
     }
 

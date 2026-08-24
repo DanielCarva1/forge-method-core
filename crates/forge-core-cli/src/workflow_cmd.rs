@@ -256,7 +256,12 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
             .get("expected-head-digest")
             .and_then(|values| values.first())
             .expect("validated Current Work detail head");
-        return match adapter.current_work_detail(expected_head_digest) {
+        let record_digest = parsed
+            .flags
+            .get("record-digest")
+            .and_then(|values| values.first())
+            .map(String::as_str);
+        return match adapter.current_work_detail(expected_head_digest, record_digest) {
             Ok(value) => emit_envelope(
                 CliEnvelope::ok(
                     &command,
@@ -416,7 +421,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v8";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v9";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1313,6 +1318,7 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             | "--target-release-id"
             | "--expected-current-release-digest"
             | "--expected-head-digest"
+            | "--record-digest"
             | "--expected-rebase-plan-digest"
             | "--expected-snapshot-digest"
             | "--input-file"
@@ -1427,9 +1433,13 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             ))
         }
         "current-work-detail" => {
-            if args.flags.keys().any(|flag| flag != "expected-head-digest") {
+            if args
+                .flags
+                .keys()
+                .any(|flag| flag != "expected-head-digest" && flag != "record-digest")
+            {
                 return Err(
-                    "workflow current-work detail accepts only --root, --expected-head-digest, and the JSON output switch"
+                    "workflow current-work detail accepts only --root, --expected-head-digest, optional --record-digest, and the JSON output switch"
                         .to_owned(),
                 );
             }
@@ -1439,6 +1449,18 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
                     "--expected-head-digest must be a canonical lowercase sha256:<64-hex> digest"
                         .to_owned(),
                 );
+            }
+            if let Some(record_digest) = args
+                .flags
+                .get("record-digest")
+                .and_then(|values| values.first())
+            {
+                if !is_lowercase_sha256(record_digest) {
+                    return Err(
+                        "--record-digest must be a canonical lowercase sha256:<64-hex> digest"
+                            .to_owned(),
+                    );
+                }
             }
             Ok(())
         }
@@ -1681,6 +1703,8 @@ mod tests {
             "D:\\product",
             "--expected-head-digest",
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--record-digest",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "--json",
         ]);
         let normalized = std::iter::once("workflow".to_owned())

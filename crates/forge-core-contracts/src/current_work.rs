@@ -2,8 +2,8 @@ use crate::{Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProve
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v1";
-pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v1";
+pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v2";
+pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v2";
 pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
 pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
 pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
@@ -300,7 +300,28 @@ pub struct WorkflowCurrentWorkSummary {
     pub blocker_refs: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_cycle: Option<WorkflowCurrentWorkQuickCycleSummary>,
     pub detail_argv: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowCurrentWorkQuickCycleState {
+    ActiveCompact,
+    ActiveExpanded,
+    Completed,
+    Abandoned,
+}
+
+/// Small derived Quick Cycle view for ordinary resume. Full accepted meaning
+/// remains available only through Current Work detail.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkQuickCycleSummary {
+    pub state: WorkflowCurrentWorkQuickCycleState,
+    pub stage_closeout_count: usize,
+    pub expansion_count: usize,
 }
 
 /// Bounded progressive readback used only when the resume summary is insufficient.
@@ -317,6 +338,8 @@ pub struct WorkflowCurrentWorkDetail {
     pub blocker_refs: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predecessor_detail_argv: Option<Vec<String>>,
 }
 
 /// Public detail projection. Ledger provenance and admission internals stay out
@@ -351,6 +374,8 @@ pub struct WorkflowCurrentWorkDetailFocus {
     pub admission_ledger_head_digest: String,
     pub admission_state_version: u64,
     pub recorded_at_unix: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -408,6 +433,12 @@ impl WorkflowCurrentWorkDetail {
         validate_record_refs(&self.open_decision_refs)?;
         validate_record_refs(&self.blocker_refs)?;
         validate_record_refs(&self.evidence_refs)?;
+        validate_optional_argv(self.predecessor_detail_argv.as_deref())?;
+        if self.predecessor_detail_argv.is_some()
+            && self.focus.previous_work_focus_record_digest.is_none()
+        {
+            return Err(WorkflowCurrentWorkValidationError::StatusFocusMismatch);
+        }
         validate_total(self, MAX_CURRENT_WORK_DETAIL_BYTES)
     }
 }
@@ -436,6 +467,25 @@ fn validate_summary(
     validate_record_refs(&focus.open_decision_refs)?;
     validate_record_refs(&focus.blocker_refs)?;
     validate_record_refs(&focus.evidence_refs)?;
+    if let Some(quick_cycle) = focus.quick_cycle.as_ref() {
+        if quick_cycle.stage_closeout_count > 5
+            || quick_cycle.expansion_count > MAX_QUICK_CYCLE_EXPANSION_ITEMS
+            || matches!(
+                quick_cycle.state,
+                WorkflowCurrentWorkQuickCycleState::ActiveCompact
+            ) && quick_cycle.expansion_count != 0
+            || matches!(
+                quick_cycle.state,
+                WorkflowCurrentWorkQuickCycleState::ActiveExpanded
+            ) && quick_cycle.expansion_count == 0
+            || matches!(
+                quick_cycle.state,
+                WorkflowCurrentWorkQuickCycleState::Completed
+            ) && quick_cycle.stage_closeout_count != 5
+        {
+            return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+    }
     if focus.open_decision_refs.len() > focus.open_decision_count
         || focus.blocker_refs.len() > focus.blocker_count
         || focus.evidence_refs.len() > focus.evidence_count
@@ -475,6 +525,9 @@ fn validate_detail_focus(
     if let Some(digest) = focus.previous_work_focus_record_digest.as_deref() {
         validate_digest(digest)?;
     }
+    if let Some(quick_cycle) = focus.quick_cycle.as_ref() {
+        validate_quick_cycle_readback(quick_cycle)?;
+    }
     validate_optional_text(focus.external_work_item_ref.as_deref())?;
     validate_optional_text(
         focus
@@ -489,6 +542,70 @@ fn validate_detail_focus(
     validate_text_list(&focus.non_goals)?;
     validate_repo_refs(&focus.canonical_refs)?;
     validate_repo_refs(&focus.affected_area_refs)
+}
+
+fn validate_optional_argv(
+    argv: Option<&[String]>,
+) -> Result<(), WorkflowCurrentWorkValidationError> {
+    let Some(argv) = argv else {
+        return Ok(());
+    };
+    if argv.len() > MAX_CURRENT_WORK_ARGV_ITEMS
+        || argv.iter().any(|value| {
+            value.trim().is_empty() || value.as_bytes().len() > MAX_CURRENT_WORK_ARG_BYTES
+        })
+    {
+        return Err(WorkflowCurrentWorkValidationError::ListBound);
+    }
+    Ok(())
+}
+
+fn validate_quick_cycle_readback(
+    quick_cycle: &WorkflowQuickCycleSnapshot,
+) -> Result<(), WorkflowCurrentWorkValidationError> {
+    if quick_cycle.compactness_reason.trim().is_empty()
+        || quick_cycle.compactness_reason.as_bytes().len()
+            > MAX_QUICK_CYCLE_COMPACTNESS_REASON_BYTES
+        || quick_cycle.expansion_history.len() > MAX_QUICK_CYCLE_EXPANSION_ITEMS
+    {
+        return Err(WorkflowCurrentWorkValidationError::ListBound);
+    }
+    let closeouts = [
+        quick_cycle.stage_closeouts.analysis_discovery.as_ref(),
+        quick_cycle.stage_closeouts.product_planning.as_ref(),
+        quick_cycle.stage_closeouts.solution_definition.as_ref(),
+        quick_cycle.stage_closeouts.implementation.as_ref(),
+        quick_cycle.stage_closeouts.validation_delivery.as_ref(),
+    ];
+    for closeout in closeouts.into_iter().flatten() {
+        validate_quick_cycle_text_and_evidence(
+            &closeout.summary,
+            &closeout.evidence_record_digests,
+            MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES,
+        )?;
+    }
+    for expansion in &quick_cycle.expansion_history {
+        validate_quick_cycle_text_and_evidence(
+            &expansion.reason,
+            &expansion.evidence_record_digests,
+            MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_quick_cycle_text_and_evidence(
+    text: &str,
+    evidence: &[String],
+    max_text_bytes: usize,
+) -> Result<(), WorkflowCurrentWorkValidationError> {
+    if text.trim().is_empty()
+        || text.as_bytes().len() > max_text_bytes
+        || evidence.len() > MAX_QUICK_CYCLE_EVIDENCE_ITEMS
+    {
+        return Err(WorkflowCurrentWorkValidationError::ListBound);
+    }
+    validate_record_refs(evidence)
 }
 
 fn validate_objective(
