@@ -3679,7 +3679,7 @@ fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
 }
 
 #[test]
-fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context() {
+fn objective_changes_in_evolve_preserve_or_reopen_the_cycle_by_materiality() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
     let initial_next = assert_ok(&consumer.run(&["next"]));
@@ -3726,10 +3726,76 @@ fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context
 
     let evolve = assert_ok(&consumer.run(&["next"]));
     assert_eq!(evolve["data"]["current_phase"], "6-evolve");
-    let material_packet = evolve["data"]["authorization"]["objective_management_packet"]
+    let clarification_packet = evolve["data"]["authorization"]["objective_management_packet"]
         ["packet_digest"]
         .as_str()
         .expect("Evolve objective-management packet")
+        .to_owned();
+    let clarification_input = consumer.write_json(
+        "evolve non material clarification.json",
+        &serde_json::json!({
+            "kind": "non_material_clarification",
+            "added_constraints": ["use focused verification for each accepted change"],
+            "added_unacceptable_outcomes": [],
+            "added_open_uncertainties": [],
+            "clarification_reason": "The owner added execution detail without changing product direction",
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.evolve-reentry",
+                "interaction_ref": "turn.non-material-clarification",
+                "conversation_digest": format!("sha256:{}", "c".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let before_clarification_lines = fs::read_to_string(&wal)
+        .expect("WAL before Evolve clarification")
+        .lines()
+        .count();
+    let clarified = assert_ok(&run_cooperative_input(
+        &consumer,
+        &clarification_packet,
+        &clarification_input,
+    ));
+    assert_eq!(clarified["data"]["next"]["current_phase"], "6-evolve");
+    assert_eq!(clarified["data"]["active_objective"]["revision"], 2);
+    assert_eq!(
+        clarified["data"]["active_objective"]["revision_kind"],
+        "non_material_clarification"
+    );
+    assert_eq!(
+        clarified["data"]["active_objective"]["previous_objective_digest"],
+        initial_digest
+    );
+    let clarified_digest = clarified["data"]["active_objective"]["objective_digest"]
+        .as_str()
+        .expect("clarified objective digest")
+        .to_owned();
+    let clarified_wal = fs::read(&wal).expect("WAL after Evolve clarification");
+    assert_eq!(
+        String::from_utf8_lossy(&clarified_wal).lines().count(),
+        before_clarification_lines + 1,
+        "a non-material clarification should append only its objective revision"
+    );
+    let clarification_retry = assert_ok(&run_cooperative_input(
+        &consumer,
+        &clarification_packet,
+        &clarification_input,
+    ));
+    assert_eq!(clarification_retry["data"], clarified["data"]);
+    assert_eq!(
+        fs::read(&wal).expect("WAL after exact clarification retry"),
+        clarified_wal,
+        "an exact clarification retry must not duplicate the objective revision"
+    );
+
+    let material_packet = clarified["data"]["next"]["authorization"]
+        ["objective_management_packet"]["packet_digest"]
+        .as_str()
+        .expect("fresh Evolve objective-management packet")
         .to_owned();
     let material_input = consumer.write_json(
         "evolve material change.json",
@@ -3753,7 +3819,6 @@ fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context
             }
         }),
     );
-    let wal = consumer.state.join("wal/workflow-governance.ndjson");
     let before_lines = fs::read_to_string(&wal)
         .expect("WAL before Evolve reentry")
         .lines()
@@ -3765,10 +3830,10 @@ fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context
         &material_input,
     ));
     assert_eq!(accepted["data"]["next"]["current_phase"], "1-discovery");
-    assert_eq!(accepted["data"]["active_objective"]["revision"], 2);
+    assert_eq!(accepted["data"]["active_objective"]["revision"], 3);
     assert_eq!(
         accepted["data"]["active_objective"]["previous_objective_digest"],
-        initial_digest
+        clarified_digest
     );
     let accepted_wal = fs::read(&wal).expect("WAL after Evolve reentry");
     assert_eq!(
@@ -3792,7 +3857,7 @@ fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(resumed["data"]["current_phase"], "1-discovery");
     assert_eq!(
-        resumed["data"]["active_objective"]["previous_objective_digest"], initial_digest,
+        resumed["data"]["active_objective"]["previous_objective_digest"], clarified_digest,
         "replacement-agent readback must keep the previous product direction as context"
     );
 }
