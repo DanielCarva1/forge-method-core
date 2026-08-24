@@ -1230,6 +1230,25 @@ impl LockedWorkflowDomainPackContext {
     }
 }
 
+fn collect_replacement_markers(value: &serde_json::Value, markers: &mut BTreeSet<String>) {
+    match value {
+        serde_json::Value::String(value) if value.starts_with("${") && value.ends_with('}') => {
+            markers.insert(value.clone());
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_replacement_markers(value, markers);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for value in values.values() {
+                collect_replacement_markers(value, markers);
+            }
+        }
+        _ => {}
+    }
+}
+
 impl WorkflowGovernanceProjectAdapter {
     /// Bind an existing project and its `.forge-method` state root.
     ///
@@ -1909,7 +1928,7 @@ impl WorkflowGovernanceProjectAdapter {
         if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
             return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
         }
-        let objective = active_cooperative_objective_from_ledger(&projection.records)?
+        let objective = active_cooperative_objective_from_ledger(&projection.records)
             .ok_or(WorkflowGovernanceAdapterError::AgentAutonomyObjectiveRequired)?;
         let current_binding = AgentAutonomyBinding {
             objective_id: objective.objective_id,
@@ -2185,7 +2204,7 @@ impl WorkflowGovernanceProjectAdapter {
             .clone()
             .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?;
         let state_version = projection.current_state_version().unwrap_or_default();
-        let objective = active_cooperative_objective_from_ledger(&projection.records)?
+        let objective = active_cooperative_objective_from_ledger(&projection.records)
             .ok_or(WorkflowGovernanceAdapterError::AgentAutonomyObjectiveRequired)?;
         let current = WorkflowCooperativeEvidenceBinding {
             objective_id: objective.objective_id.clone(),
@@ -2617,7 +2636,7 @@ impl WorkflowGovernanceProjectAdapter {
         }
 
         if let Some((objective_record, accepted_event)) =
-            accepted_cooperative_objective_record(&projection.records)?
+            accepted_cooperative_objective_record(&projection.records)
         {
             if packet_digest == accepted_event.acceptance_action_packet_digest {
                 if !cooperative_retry_matches(accepted_event, &input)? {
@@ -2657,8 +2676,7 @@ impl WorkflowGovernanceProjectAdapter {
         } else if project_durable_assurance(&projection.records)?.is_some() {
             return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveAlreadyAccepted);
         }
-        let objective_active =
-            accepted_cooperative_objective_record(&projection.records)?.is_some();
+        let objective_active = accepted_cooperative_objective_record(&projection.records).is_some();
 
         if let WorkflowCooperativeObjectiveInput::DecisionRequired { decision_request } = input {
             self.require_effective_epoch_current(admitted, &effective, &projection)?;
@@ -2710,7 +2728,7 @@ impl WorkflowGovernanceProjectAdapter {
             &snapshot,
         )?;
         let previous =
-            accepted_cooperative_objective_record(&projection.records)?.map(|(_, event)| event);
+            accepted_cooperative_objective_record(&projection.records).map(|(_, event)| event);
         let (packet, objective_id, next_objective_revision, next_assurance_epoch) =
             match validated_cooperative_objective_packet(&guidance, packet_digest) {
                 Ok(packet) => packet,
@@ -3351,13 +3369,18 @@ impl WorkflowGovernanceProjectAdapter {
     /// Prepare a bounded candidate for the existing Work Focus accept/update
     /// APIs. This observer writes no Forge state and leaves all host-owned
     /// meaning and provenance as explicit replacement markers.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the preparation operation reports `Supersede` without
+    /// the Work Focus record used to derive that operation.
     pub fn prepare_work_focus(
         &self,
     ) -> Result<WorkflowCurrentWorkPreparationPacket, WorkflowGovernanceAdapterError> {
         let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
         let projection = ledger.recover()?;
         drop(ledger);
-        if accepted_cooperative_objective_record(&projection.records)?.is_none() {
+        if accepted_cooperative_objective_record(&projection.records).is_none() {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                 "Work Focus requires an active cooperative objective".to_owned(),
             ));
@@ -3437,26 +3460,6 @@ impl WorkflowGovernanceProjectAdapter {
                 )
             }
         };
-        fn collect_replacement_markers(value: &serde_json::Value, markers: &mut BTreeSet<String>) {
-            match value {
-                serde_json::Value::String(value)
-                    if value.starts_with("${") && value.ends_with('}') =>
-                {
-                    markers.insert(value.clone());
-                }
-                serde_json::Value::Array(values) => {
-                    for value in values {
-                        collect_replacement_markers(value, markers);
-                    }
-                }
-                serde_json::Value::Object(values) => {
-                    for value in values.values() {
-                        collect_replacement_markers(value, markers);
-                    }
-                }
-                _ => {}
-            }
-        }
         let mut required_replacements = BTreeSet::new();
         collect_replacement_markers(&apply_input_template, &mut required_replacements);
         project_snapshot.revalidate()?;
@@ -3830,7 +3833,7 @@ impl WorkflowGovernanceProjectAdapter {
             _ => return Err(WorkflowGovernanceAdapterError::WorkFocusCasMismatch),
         };
         let (objective_record, objective) =
-            accepted_cooperative_objective_record(&projection.records)?.ok_or_else(|| {
+            accepted_cooperative_objective_record(&projection.records).ok_or_else(|| {
                 WorkflowGovernanceAdapterError::InvalidObservation(
                     "Work Focus requires an active cooperative objective".to_owned(),
                 )
@@ -3909,7 +3912,7 @@ impl WorkflowGovernanceProjectAdapter {
                     completed.collaboration = continuity.collaboration;
                 }
                 completed.previous_work_focus_record_digest = Some(previous_digest.clone());
-                completed.admission_ledger_head_digest = head.clone();
+                completed.admission_ledger_head_digest.clone_from(&head);
                 completed.admission_state_version = state_version;
                 completed.recorded_by = recorded_by;
                 completed.host_provenance = host_provenance;
@@ -3941,7 +3944,7 @@ impl WorkflowGovernanceProjectAdapter {
                 checkpoint.quick_cycle = continuity.quick_cycle;
                 checkpoint.collaboration = continuity.collaboration;
                 checkpoint.previous_work_focus_record_digest = Some(previous_digest.clone());
-                checkpoint.admission_ledger_head_digest = head.clone();
+                checkpoint.admission_ledger_head_digest.clone_from(&head);
                 checkpoint.admission_state_version = state_version;
                 checkpoint.recorded_by = recorded_by;
                 checkpoint.host_provenance = host_provenance;
@@ -3973,7 +3976,7 @@ impl WorkflowGovernanceProjectAdapter {
                 checkpoint.quick_cycle = continuity.quick_cycle;
                 checkpoint.collaboration = continuity.collaboration;
                 checkpoint.previous_work_focus_record_digest = Some(previous_digest.clone());
-                checkpoint.admission_ledger_head_digest = head.clone();
+                checkpoint.admission_ledger_head_digest.clone_from(&head);
                 checkpoint.admission_state_version = state_version;
                 checkpoint.recorded_by = recorded_by;
                 checkpoint.host_provenance = host_provenance;
@@ -4000,7 +4003,7 @@ impl WorkflowGovernanceProjectAdapter {
                 bound.blocker_record_digests = blocker_record_digests;
                 bound.evidence_record_digests = evidence_record_digests;
                 bound.previous_work_focus_record_digest = Some(previous_digest.clone());
-                bound.admission_ledger_head_digest = head.clone();
+                bound.admission_ledger_head_digest.clone_from(&head);
                 bound.admission_state_version = state_version;
                 bound.recorded_by = recorded_by;
                 bound.host_provenance = host_provenance;
@@ -4425,7 +4428,7 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let claims = replacement_claims_from_existing_state(&self.binding.state_root, now)?;
         let (objective_history, active_objective_digest, active_objective_revision, active_epoch) =
-            replacement_objective_history(&projection.records, guidance.readiness_profile)?;
+            replacement_objective_history(&projection.records, guidance.readiness_profile);
         let decision_history = replacement_decision_history(&projection.records);
         let durable_pending_decisions = decision_history
             .iter()
@@ -7167,7 +7170,7 @@ impl WorkflowGovernanceProjectAdapter {
             WorkflowReadinessProfile::StrictExternal => strict_assurance_projection,
         };
         let active_cooperative_objective =
-            active_cooperative_objective_from_ledger(&projection.records)?;
+            active_cooperative_objective_from_ledger(&projection.records);
         let mut assurance_facts = if let Some(base) = base_assurance_projection.as_ref() {
             derive_governed_assurance_facts(
                 effective.document(),
@@ -8889,7 +8892,6 @@ fn derive_receipts(
     let active_cooperative_objective = (projection.readiness_profile()
         == Some(WorkflowReadinessProfile::SoloCooperative))
     .then(|| active_cooperative_objective_from_ledger(&projection.records))
-    .transpose()?
     .flatten();
     let mut current_evidence_receipt_digests = BTreeSet::new();
     if let Some(objective) = active_cooperative_objective.as_ref() {
@@ -9658,8 +9660,6 @@ fn derive_governed_assurance_facts(
                     representative_slice_definition_digest,
                 });
             }
-            // Cooperative observations are never governed-assurance facts.
-            WorkflowGovernanceEvent::CooperativeEvidenceObserved(_) => {}
             WorkflowGovernanceEvent::CapabilityProbed(event) => {
                 let authority = receipt_trust_root(
                     receipt_records,
@@ -9788,6 +9788,8 @@ fn derive_governed_assurance_facts(
                     });
                 }
             }
+            // Cooperative observations and unrelated events are never
+            // governed-assurance facts.
             _ => {}
         }
     }
@@ -12363,7 +12365,7 @@ fn cooperative_source_evidence_is_current(
         return Ok(false);
     };
     let bundle_digest = workflow_runtime_bundle_digest(bundle)
-        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
+        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.clone()))?;
     let objective_current = admitted.binding.objective_id == active_objective.objective_id
         && admitted.binding.objective_revision == active_objective.revision
         && admitted.binding.objective_digest == active_objective.objective_digest
@@ -12528,7 +12530,7 @@ fn cooperative_applicability_evidence_is_current(
         return Ok(false);
     };
     let bundle_digest = workflow_runtime_bundle_digest(bundle)
-        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
+        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.clone()))?;
     let objective_current = admitted.binding.objective_id == active_objective.objective_id
         && admitted.binding.objective_revision == active_objective.revision
         && admitted.binding.objective_digest == active_objective.objective_digest
@@ -12605,7 +12607,7 @@ fn cooperative_evidence_audit(
 ) -> Result<Vec<WorkflowCooperativeEvidenceAudit>, WorkflowGovernanceAdapterError> {
     let snapshot_digest = snapshot.digest();
     let effective_bundle_digest = workflow_runtime_bundle_digest(bundle)
-        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.to_string()))?;
+        .map_err(|error| WorkflowGovernanceAdapterError::Canonicalization(error.clone()))?;
     let latest_source_assessments = latest_cooperative_source_assessment_records(records);
     let latest_applicability = latest_cooperative_applicability_records(records);
     let mut audits = Vec::new();
@@ -13416,17 +13418,14 @@ fn replacement_claims_from_existing_state(
 fn replacement_objective_history(
     records: &[WorkflowGovernanceLedgerRecord],
     readiness_profile: WorkflowReadinessProfile,
-) -> Result<
-    (
-        Vec<WorkflowReplacementObjectiveRevision>,
-        Option<String>,
-        Option<u64>,
-        Option<u64>,
-    ),
-    WorkflowGovernanceAdapterError,
-> {
+) -> (
+    Vec<WorkflowReplacementObjectiveRevision>,
+    Option<String>,
+    Option<u64>,
+    Option<u64>,
+) {
     let active_cooperative = if readiness_profile == WorkflowReadinessProfile::SoloCooperative {
-        active_cooperative_objective_from_ledger(records)?
+        active_cooperative_objective_from_ledger(records)
             .map(|objective| objective.accepted_record_digest)
     } else {
         None
@@ -13501,7 +13500,7 @@ fn replacement_objective_history(
             _ => {}
         }
     }
-    Ok((history, active_digest, active_revision, active_epoch))
+    (history, active_digest, active_revision, active_epoch)
 }
 
 fn replacement_decision_history(
@@ -13603,10 +13602,11 @@ fn replacement_evidence_history(
 }
 
 fn compact_current_work_summary_text(value: &str) -> String {
+    const SUFFIX: &str = "…";
+
     if value.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES {
         return value.to_owned();
     }
-    const SUFFIX: &str = "…";
     let mut end = MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES - SUFFIX.len();
     while !value.is_char_boundary(end) {
         end -= 1;
@@ -13621,16 +13621,16 @@ fn current_work_collaboration_summary(
     let owners = current_work_collaboration_owner_sets(continuity);
     current_work_collaboration_summary_from_owner_sets(
         plan,
-        &owners.integrated_isolations,
-        &owners.active_isolations,
-        &owners.blocked_isolations,
+        &owners.integrated,
+        &owners.active,
+        &owners.blocked,
     )
 }
 
 struct CurrentWorkCollaborationOwnerSets {
-    integrated_isolations: BTreeSet<StableId>,
-    active_isolations: BTreeSet<StableId>,
-    blocked_isolations: BTreeSet<StableId>,
+    integrated: BTreeSet<StableId>,
+    active: BTreeSet<StableId>,
+    blocked: BTreeSet<StableId>,
 }
 
 fn current_work_collaboration_owner_sets(
@@ -13685,9 +13685,9 @@ fn current_work_collaboration_owner_sets(
             .map(|isolation| isolation.contract.id.clone()),
     );
     CurrentWorkCollaborationOwnerSets {
-        integrated_isolations,
-        active_isolations,
-        blocked_isolations,
+        integrated: integrated_isolations,
+        active: active_isolations,
+        blocked: blocked_isolations,
     }
 }
 
@@ -14090,19 +14090,19 @@ fn current_cooperative_objective_grounding_anchor<'a>(
 
 fn active_cooperative_objective_from_ledger(
     records: &[WorkflowGovernanceLedgerRecord],
-) -> Result<Option<WorkflowActiveCooperativeObjective>, WorkflowGovernanceAdapterError> {
+) -> Option<WorkflowActiveCooperativeObjective> {
     let Some((record, event)) = records.iter().rev().find_map(|record| {
         let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
             return None;
         };
         Some((record, event))
     }) else {
-        return Ok(None);
+        return None;
     };
     if receipt_record_is_revoked(records, record) {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(WorkflowActiveCooperativeObjective {
+    Some(WorkflowActiveCooperativeObjective {
         objective_id: event.objective_id.clone(),
         revision: event.revision,
         assurance_epoch: event.assurance_epoch,
@@ -14121,18 +14121,15 @@ fn active_cooperative_objective_from_ledger(
         host_provenance: event.host_provenance.clone(),
         authority_basis: event.authority_basis,
         accepted_at_unix: event.accepted_at_unix,
-    }))
+    })
 }
 
 fn accepted_cooperative_objective_record(
     records: &[WorkflowGovernanceLedgerRecord],
-) -> Result<
-    Option<(
-        &WorkflowGovernanceLedgerRecord,
-        &CooperativeObjectiveAcceptedEvent,
-    )>,
-    WorkflowGovernanceAdapterError,
-> {
+) -> Option<(
+    &WorkflowGovernanceLedgerRecord,
+    &CooperativeObjectiveAcceptedEvent,
+)> {
     let mut accepted = None;
     for record in records {
         let WorkflowGovernanceEvent::CooperativeObjectiveAccepted(event) = &record.event else {
@@ -14140,7 +14137,7 @@ fn accepted_cooperative_objective_record(
         };
         accepted = Some((record, event));
     }
-    Ok(accepted)
+    accepted
 }
 
 fn cooperative_objective_evolve_reentry_tail_matches(
@@ -15394,7 +15391,8 @@ fn authorization_setup_gaps(
     packets: &[WorkflowAuthorizationActionPacket],
 ) -> Vec<WorkflowAuthorizationSetupGap> {
     let (code, state_label) = match broker_status {
-        WorkflowAuthorizationRegistrySetupStatus::NotApplicable => return Vec::new(),
+        WorkflowAuthorizationRegistrySetupStatus::NotApplicable
+        | WorkflowAuthorizationRegistrySetupStatus::Ready => return Vec::new(),
         WorkflowAuthorizationRegistrySetupStatus::Missing => (
             WorkflowAuthorizationSetupGapCode::BrokerRegistryMissing,
             "the project has no external workflow broker registry",
@@ -15407,7 +15405,6 @@ fn authorization_setup_gaps(
             WorkflowAuthorizationSetupGapCode::BrokerRegistryNoActiveIssuer,
             "the external workflow broker registry has no active issuer",
         ),
-        WorkflowAuthorizationRegistrySetupStatus::Ready => return Vec::new(),
     };
     if packets.is_empty() {
         return Vec::new();
@@ -16321,8 +16318,8 @@ mod tests {
                 cooperative_material_supersession_input(),
             )
             .expect("replace objective");
-        let stale = adapter.resume().expect("resume replaced objective");
-        let stale_context = stale.current_work.expect("stale Current Work");
+        let replaced_guidance = adapter.resume().expect("resume replaced objective");
+        let stale_context = replaced_guidance.current_work.expect("stale Current Work");
         assert_eq!(stale_context.status, WorkflowCurrentWorkStatus::Stale);
         assert_eq!(
             stale_context
@@ -18218,9 +18215,7 @@ mod tests {
                 },
             ),
         });
-        assert!(active_cooperative_objective_from_ledger(&revoked.records)
-            .expect("active objective projection")
-            .is_none());
+        assert!(active_cooperative_objective_from_ledger(&revoked.records).is_none());
         assert!(derive(&revoked, u64::MAX).groundings.is_empty());
     }
 
@@ -19359,7 +19354,6 @@ mod tests {
             .find(|policy| policy.id == route_policy_ref)
             .expect("selected source policy");
         let active_objective = active_cooperative_objective_from_ledger(&projection.records)
-            .expect("active objective projection")
             .expect("accepted active objective");
         let selected_claim = selected_policy
             .claims
@@ -19593,8 +19587,8 @@ mod tests {
 
         fs::write(root.join("README.md"), b"project snapshot changed\n")
             .expect("make supporting cooperative evidence stale");
-        let stale = adapter.next().expect("stale evidence guidance");
-        let stale_audit = stale
+        let changed_guidance = adapter.next().expect("stale evidence guidance");
+        let stale_audit = changed_guidance
             .cooperative_evidence
             .iter()
             .find(|entry| entry.record_digest == admitted.record_digest)
@@ -19604,8 +19598,8 @@ mod tests {
             WorkflowCooperativeEvidenceCurrentStatus::Stale
         );
         assert!(stale_audit.valid_through_unix.is_none());
-        assert!(stale.cooperative_evidence_action_gap.is_none());
-        let mut rejected_offer = stale
+        assert!(changed_guidance.cooperative_evidence_action_gap.is_none());
+        let mut rejected_offer = changed_guidance
             .cooperative_evidence_action_packet
             .expect("snapshot drift must rearm the cooperative packet")
             .offer_template;
@@ -19950,7 +19944,7 @@ mod tests {
         fs::write(root.join("README.md"), b"basis changed after admission\n").expect("basis drift");
         let drifted_snapshot =
             RetainedWorkflowProjectSnapshot::capture(&root).expect("drifted snapshot");
-        let stale = derive_receipts(
+        let drifted_receipts = derive_receipts(
             bundle,
             &projection,
             &root,
@@ -19960,11 +19954,11 @@ mod tests {
             None,
         )
         .expect("derive stale source receipt");
-        assert!(!stale
+        assert!(!drifted_receipts
             .evidence
             .iter()
             .any(|evidence| evidence.claim_ref == claim.id));
-        assert!(!stale.completed_policy_refs.contains(&policy.id));
+        assert!(!drifted_receipts.completed_policy_refs.contains(&policy.id));
     }
 
     #[test]
