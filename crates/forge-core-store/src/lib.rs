@@ -9600,6 +9600,10 @@ fn effect_state_relative_path(relative_path: &Path, legacy_sidecar: bool) -> Opt
     }
 }
 
+// These private flags keep orthogonal lock-safety controls explicit at the
+// small set of typed public wrappers. Changing this security-sensitive path
+// only to satisfy a style lint would add structure without changing behavior.
+#[allow(clippy::fn_params_excessive_bools)]
 fn acquire_effect_store_lock_inner(
     root: &Path,
     lock_relative_path: &str,
@@ -9842,7 +9846,7 @@ mod tests {
                 .expect("read byte-state directory")
                 .map(|entry| entry.expect("read byte-state entry"))
                 .collect::<Vec<_>>();
-            entries.sort_by_key(|entry| entry.file_name());
+            entries.sort_by_key(fs::DirEntry::file_name);
             for entry in entries {
                 let path = entry.path();
                 let relative = path

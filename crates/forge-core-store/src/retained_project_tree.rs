@@ -39,9 +39,8 @@ enum RetainedProjectCapturePolicy {
 
 impl RetainedProjectCapturePolicy {
     fn includes_root_name(self, name: &str) -> bool {
-        !EXCLUDED_ROOT_NAMES.contains(&name)
-            && !(matches!(self, Self::WorkflowLocalRootExcluded)
-                && name == WORKFLOW_LOCAL_ROOT_NAME)
+        !(EXCLUDED_ROOT_NAMES.contains(&name)
+            || matches!(self, Self::WorkflowLocalRootExcluded) && name == WORKFLOW_LOCAL_ROOT_NAME)
     }
 
     const fn honors_git_ignored_paths(self) -> bool {
@@ -861,15 +860,15 @@ impl RetainedProjectTree {
         writable
             .seek(SeekFrom::Start(0))
             .and_then(|_| writable.write_all(replacement))
-            .and_then(|_| writable.set_len(u64::try_from(replacement.len()).unwrap_or(u64::MAX)))
-            .and_then(|_| writable.sync_all())
+            .and_then(|()| writable.set_len(u64::try_from(replacement.len()).unwrap_or(u64::MAX)))
+            .and_then(|()| writable.sync_all())
             .map_err(|error| io_error(&display_path, error))?;
         #[cfg(windows)]
         platform::restore_file_attributes(
             &writable,
             before_metadata.file_information.file_attributes,
         )
-        .and_then(|_| writable.sync_all())
+        .and_then(|()| writable.sync_all())
         .map_err(|error| io_error(&display_path, error))?;
         let after_metadata = RetainedMetadata::capture(&writable, &display_path)?;
         validate_file_metadata(&after_metadata, &display_path, self.file_alias_policy)?;
