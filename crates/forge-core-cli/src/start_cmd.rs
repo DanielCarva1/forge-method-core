@@ -895,13 +895,19 @@ mod tests {
         parts.iter().map(|part| (*part).to_string()).collect()
     }
 
+    fn expected_project_root(root: &Path) -> String {
+        resolve_project(root)
+            .expect("resolved project root")
+            .project_root
+    }
+
     fn expected_workflow_init_argv(root: &Path) -> Vec<String> {
         vec![
             "forge-core".to_string(),
             "workflow".to_string(),
             "init".to_string(),
             "--root".to_string(),
-            root.display().to_string(),
+            expected_project_root(root),
         ]
     }
     fn expected_workflow_resume_argv(root: &Path) -> Vec<String> {
@@ -910,7 +916,7 @@ mod tests {
             "workflow".to_string(),
             "resume".to_string(),
             "--root".to_string(),
-            root.display().to_string(),
+            expected_project_root(root),
             "--json".to_string(),
         ]
     }
@@ -928,7 +934,7 @@ mod tests {
             "workflow".to_string(),
             "resume".to_string(),
             "--root".to_string(),
-            root.display().to_string(),
+            expected_project_root(root),
             "--json".to_string(),
         ]);
         assert!(
