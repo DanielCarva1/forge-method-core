@@ -381,7 +381,9 @@ The bounded `data.current_work` block reports `absent`, `current`, `stale`,
 `blocked`, `completed`, or `abandoned` without replaying chat or scanning
 project documentation. A present focus publishes an exact read-only
 `detail_argv` for the uncommon case where its summary is insufficient. It is
-continuity advice, not execution authority.
+continuity advice, not execution authority. Preserve its
+`--expected-head-digest` exactly: the binding lets detail avoid a second project
+capture and reject concurrent state instead of silently showing another focus.
 Run `workflow report --root <project>
 --json` only when an explicit historical audit or continuity diagnosis needs
 older records. Run a `recover_promotion` argv before new work, preserving every

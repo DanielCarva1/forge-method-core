@@ -20,8 +20,8 @@ use forge_core_contracts::{
     WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
     WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
     WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
-    WorkflowGovernanceReceiptDocument, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
-    WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+    WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
+    WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerIdentity,
@@ -460,6 +460,22 @@ fn run_current_work_update(consumer: &Consumer, input_path: &Path) -> Output {
         ])
         .output()
         .expect("run Current Work update command")
+}
+
+fn run_current_work_detail(consumer: &Consumer, expected_head_digest: &str) -> Output {
+    bin()
+        .args([
+            "workflow",
+            "current-work",
+            "detail",
+            "--root",
+            &consumer.app.display().to_string(),
+            "--expected-head-digest",
+            expected_head_digest,
+            "--json",
+        ])
+        .output()
+        .expect("run Current Work detail command")
 }
 
 fn run_cooperative_evidence(consumer: &Consumer, input_path: &Path) -> Output {
@@ -1589,32 +1605,42 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
         superseded_wal
     );
 
-    let blocker_record = {
+    let blocker_records = {
         let mut ledger = lock_workflow_governance_ledger_tcb(&consumer.state)
             .expect("open ledger for canonical blocker fixture");
-        let projection = ledger.recover().expect("recover blocker fixture state");
-        let identity = projection
-            .identity()
-            .expect("active blocker fixture identity");
-        ledger
-            .append_unchecked_tcb_event(
-                projection
-                    .head_digest
-                    .as_deref()
-                    .expect("blocker fixture head"),
-                &identity,
-                projection
-                    .current_state_version()
-                    .expect("blocker fixture state version"),
-                WorkflowGovernanceEvent::DecisionNeedRaised(DecisionNeedRaisedEvent {
-                    policy_ref: StableId("policy.workflow.domain-scan".to_owned()),
-                    decision_ref: StableId("decision.current-work.blocker".to_owned()),
-                    authority_scope: StableId("workflow.decision.resolve".to_owned()),
-                    question_digest: format!("sha256:{}", "e".repeat(64)),
-                }),
-            )
-            .expect("append canonical blocker fixture")
+        (0..5)
+            .map(|index| {
+                let projection = ledger.recover().expect("recover blocker fixture state");
+                let identity = projection
+                    .identity()
+                    .expect("active blocker fixture identity");
+                ledger
+                    .append_unchecked_tcb_event(
+                        projection
+                            .head_digest
+                            .as_deref()
+                            .expect("blocker fixture head"),
+                        &identity,
+                        projection
+                            .current_state_version()
+                            .expect("blocker fixture state version"),
+                        WorkflowGovernanceEvent::DecisionNeedRaised(DecisionNeedRaisedEvent {
+                            policy_ref: StableId("policy.workflow.domain-scan".to_owned()),
+                            decision_ref: StableId(format!(
+                                "decision.current-work.blocker-{index}"
+                            )),
+                            authority_scope: StableId("workflow.decision.resolve".to_owned()),
+                            question_digest: format!("sha256:{index:x}{}", "e".repeat(63)),
+                        }),
+                    )
+                    .expect("append canonical blocker fixture")
+            })
+            .collect::<Vec<_>>()
     };
+    let blocker_digests = blocker_records
+        .iter()
+        .map(|record| record.record_digest.clone())
+        .collect::<Vec<_>>();
     let after_blocker = assert_ok(&consumer.run(&["resume"]));
     let wrong_type_input = consumer.write_json(
         "current-work reject wrong reference type.json",
@@ -1630,7 +1656,7 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
             "change": {
                 "kind": "bind_references",
                 "blocker_record_digests": [],
-                "evidence_record_digests": [blocker_record.record_digest]
+                "evidence_record_digests": [blocker_digests[0]]
             },
             "recorded_by": "principal.agent.cli-e2e",
             "host_provenance": {
@@ -1664,7 +1690,7 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
             },
             "change": {
                 "kind": "bind_references",
-                "blocker_record_digests": [blocker_record.record_digest],
+                "blocker_record_digests": blocker_digests,
                 "evidence_record_digests": []
             },
             "recorded_by": "principal.agent.cli-e2e",
@@ -1680,10 +1706,35 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
     );
     let bound = assert_ok(&run_current_work_update(&consumer, &bind_input));
     assert_eq!(bound["data"]["current_work"]["status"], "blocked");
-    assert_eq!(bound["data"]["current_work"]["focus"]["blocker_count"], 1);
+    assert_eq!(bound["data"]["current_work"]["focus"]["blocker_count"], 5);
     assert_eq!(
-        bound["data"]["current_work"]["focus"]["blocker_refs"],
-        serde_json::json!([blocker_record.record_digest])
+        bound["data"]["current_work"]["focus"]["blocker_refs"]
+            .as_array()
+            .expect("bounded blocker summary")
+            .len(),
+        MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS
+    );
+    let detail = assert_ok(&run_current_work_detail(
+        &consumer,
+        bound["data"]["ledger_head_digest"]
+            .as_str()
+            .expect("bound ledger head"),
+    ));
+    assert_eq!(
+        detail["data"]["blocker_refs"],
+        serde_json::json!(blocker_digests)
+    );
+    let state_before_stale_detail = state_tree_snapshot(&consumer.state);
+    let stale_detail = run_current_work_detail(
+        &consumer,
+        after_blocker["data"]["ledger_head_digest"]
+            .as_str()
+            .expect("pre-binding ledger head"),
+    );
+    assert!(!stale_detail.status.success());
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_stale_detail
     );
 
     let complete_input = consumer.write_json(

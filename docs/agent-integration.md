@@ -152,7 +152,10 @@ no Work Focus has been accepted; `stale` means its objective revision or Phase
 no longer matches. The field is advisory and cannot authorize mutation,
 completion, merge, publication, or release. When a present focus needs more
 context, execute its exact `detail_argv`; ordinary continuation should not load
-the larger detail projection.
+the larger detail projection. The argv carries the ledger head observed by
+`resume`, so detail reads only that bounded durable state instead of capturing
+the project again. If the head changed, run `resume` again rather than removing
+or rewriting the expected digest.
 
 The host does not wait for the human to request research. When a doubt may
 change the accepted outcome, expose an unacceptable outcome, alter material

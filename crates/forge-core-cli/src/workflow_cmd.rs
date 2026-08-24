@@ -251,7 +251,12 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         };
     }
     if parsed.subcommand == "current-work-detail" {
-        return match adapter.current_work_detail() {
+        let expected_head_digest = parsed
+            .flags
+            .get("expected-head-digest")
+            .and_then(|values| values.first())
+            .expect("validated Current Work detail head");
+        return match adapter.current_work_detail(expected_head_digest) {
             Ok(value) => emit_envelope(
                 CliEnvelope::ok(
                     &command,
@@ -1413,17 +1418,29 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             requested_readiness_profile(args).map(|_| ())
         }
-        "action-packets"
-        | "release-status"
-        | "retirement-status"
-        | "profile-status"
-        | "current-work-detail"
+        "action-packets" | "release-status" | "retirement-status" | "profile-status"
             if !args.flags.is_empty() =>
         {
             Err(format!(
                 "workflow {} accepts only --root and the JSON output switch",
                 args.subcommand
             ))
+        }
+        "current-work-detail" => {
+            if args.flags.keys().any(|flag| flag != "expected-head-digest") {
+                return Err(
+                    "workflow current-work detail accepts only --root, --expected-head-digest, and the JSON output switch"
+                        .to_owned(),
+                );
+            }
+            let expected_head_digest = required(args, "expected-head-digest")?;
+            if !is_lowercase_sha256(&expected_head_digest) {
+                return Err(
+                    "--expected-head-digest must be a canonical lowercase sha256:<64-hex> digest"
+                        .to_owned(),
+                );
+            }
+            Ok(())
         }
         "current-work-accept" | "current-work-update" => {
             if args.flags.keys().any(|flag| flag != "input-file") {
@@ -1662,6 +1679,8 @@ mod tests {
             "detail",
             "--root",
             "D:\\product",
+            "--expected-head-digest",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "--json",
         ]);
         let normalized = std::iter::once("workflow".to_owned())

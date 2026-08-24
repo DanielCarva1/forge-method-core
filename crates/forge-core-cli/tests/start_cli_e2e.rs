@@ -455,6 +455,12 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     let detail_output = bin()
         .args(["workflow", "current-work", "detail", "--root"])
         .arg(&app)
+        .arg("--expected-head-digest")
+        .arg(
+            resumed["data"]["ledger_head_digest"]
+                .as_str()
+                .expect("resume ledger head"),
+        )
         .arg("--json")
         .output()
         .expect("run Current Work detail through the public binary");
